@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireAdmin } from "../lib/auth";
-import { createKey, listKeys } from "../lib/keys";
+import { createKey, listKeys, revokeKey } from "../lib/keys";
 
 const adminKeys = new Hono<{ Bindings: Env }>();
 
 adminKeys.post("/", async (c) => {
-  const denied = requireAdmin(c);
+  const denied = await requireAdmin(c);
   if (denied) return denied;
 
   let body: { domain?: string; label?: string };
@@ -43,11 +43,28 @@ adminKeys.post("/", async (c) => {
 });
 
 adminKeys.get("/", async (c) => {
-  const denied = requireAdmin(c);
+  const denied = await requireAdmin(c);
   if (denied) return denied;
 
   const keys = await listKeys(c.env.KEYS);
   return c.json({ keys });
+});
+
+adminKeys.delete("/:id", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const id = c.req.param("id")?.trim();
+  if (!id) {
+    return c.json({ error: "id is required" }, 400);
+  }
+
+  const deleted = await revokeKey(c.env.KEYS, id);
+  if (!deleted) {
+    return c.json({ error: "Key not found" }, 404);
+  }
+
+  return c.json({ ok: true, id });
 });
 
 export { adminKeys };

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireApiKey } from "../lib/auth";
 import { emailMatchesDomain } from "../lib/crypto";
-import { createCloudflareClient } from "../lib/keys";
+import { createCloudflareClient } from "../lib/cloudflare-config";
 
 const send = new Hono<{ Bindings: Env }>();
 
@@ -42,7 +42,7 @@ send.post("/", async (c) => {
   }
 
   try {
-    const cf = createCloudflareClient(c.env);
+    const cf = await createCloudflareClient(c.env);
     const result = await cf.sendEmail({
       from,
       to,

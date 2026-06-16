@@ -1,5 +1,3 @@
-import type { Env } from "../env";
-import { CloudflareClient } from "./cloudflare-client";
 import {
   generateApiKey,
   isValidApiKeyFormat,
@@ -94,9 +92,12 @@ export async function resolveKey(
   return record;
 }
 
-export function createCloudflareClient(env: Env): CloudflareClient {
-  return new CloudflareClient({
-    accountId: env.CF_ACCOUNT_ID,
-    apiToken: env.CF_API_TOKEN,
-  });
+export async function revokeKey(kv: KVNamespace, id: string): Promise<boolean> {
+  const raw = await kv.get(idKvKey(id));
+  if (!raw) return false;
+
+  const stored = JSON.parse(raw) as StoredKeyRecord;
+  await kv.delete(keyKvKey(stored.keyHash));
+  await kv.delete(idKvKey(id));
+  return true;
 }

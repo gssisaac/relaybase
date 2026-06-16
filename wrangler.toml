@@ -1,10 +1,9 @@
 name = "flare-email-sender"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
+account_id = "3adf03d991843094a7343eebc0a98007"
 
 [[kv_namespaces]]
 binding = "KEYS"
-# Run: wrangler kv namespace create KEYS
-# Then replace the id below with the returned id.
-id = "00000000000000000000000000000000"
-preview_id = "00000000000000000000000000000001"
+id = "341bf6e6f3c943a8a4f73128a98eb795"
+preview_id = "fe42e6d5f04741f7a09516f25504581a"

@@ -140,14 +140,19 @@ export class CloudflareClient {
 
   async sendEmail(params: {
     from: string;
+    fromName?: string;
     to: string;
     subject: string;
     text: string;
     html?: string;
     replyTo?: string;
   }): Promise<CfEmailSendResult> {
-    const body: Record<string, string> = {
-      from: params.from.trim(),
+    const fromAddress = params.from.trim();
+    const fromName = params.fromName?.trim();
+    const body: Record<string, unknown> = {
+      from: fromName
+        ? { address: fromAddress, name: fromName }
+        : fromAddress,
       to: params.to.trim(),
       subject: params.subject,
       text: params.text,

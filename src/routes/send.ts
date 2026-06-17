@@ -13,6 +13,7 @@ send.post("/", async (c) => {
 
   let body: {
     from?: string;
+    fromName?: string;
     to?: string;
     subject?: string;
     text?: string;
@@ -45,6 +46,7 @@ send.post("/", async (c) => {
     const cf = await createCloudflareClient(c.env);
     const result = await cf.sendEmail({
       from,
+      fromName: body.fromName,
       to,
       subject,
       text,

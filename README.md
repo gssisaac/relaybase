@@ -116,6 +116,7 @@ curl -X POST "https://flare-email-sender.<account>.workers.dev/v1/send" \
   -H "Content-Type: application/json" \
   -d '{
     "from": "billing@yourdomain.com",
+    "fromName": "Your App",
     "to": "customer@example.com",
     "subject": "Invoice #1234",
     "text": "Your invoice is ready. View it at https://yourdomain.com/invoices/1234"
@@ -150,6 +151,7 @@ export async function sendBillingEmail(params: {
     },
     body: JSON.stringify({
       from: "billing@yourdomain.com",
+      fromName: "Your App",
       to: params.to,
       subject: params.subject,
       text: params.text,
@@ -171,6 +173,7 @@ export async function sendBillingEmail(params: {
 | Field | Required | Description |
 |-------|----------|-------------|
 | `from` | Yes | Sender address. Must be `*@<key-domain>` (e.g. `billing@yourdomain.com`) |
+| `fromName` | No | Sender display name shown in the recipient's inbox (e.g. `MacPurity` instead of `billing`) |
 | `to` | Yes | Recipient email address |
 | `subject` | Yes | Email subject |
 | `text` | Yes | Plain-text body |

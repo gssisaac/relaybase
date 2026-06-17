@@ -104,6 +104,51 @@ Response (`200`):
 }
 ```
 
+### List send logs
+
+Every `/v1/send` attempt is recorded in Workers KV (success and failure). Use this for ops monitoring.
+
+```bash
+curl "https://flare-email-sender.<account>.workers.dev/admin/logs?limit=100&status=failed" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+Query parameters:
+
+| Param | Default | Description |
+|-------|---------|-------------|
+| `limit` | `100` | Max entries to return (up to 500) |
+| `status` | `all` | `all`, `failed`, or `success` |
+| `domain` | — | Filter by sending domain |
+
+Response (`200`):
+
+```json
+{
+  "logs": [
+    {
+      "id": "…",
+      "at": "2026-06-17T12:00:00.000Z",
+      "ok": false,
+      "status": 502,
+      "domain": "yourdomain.com",
+      "keyId": "…",
+      "keyPrefix": "xxxxxxxx",
+      "keyLabel": "billing-service",
+      "from": "billing@yourdomain.com",
+      "to": "customer@example.com",
+      "subject": "Invoice #1234",
+      "error": "Cloudflare Email Sending API error …"
+    }
+  ],
+  "summary": {
+    "total": 42,
+    "failed": 3,
+    "failedLast24h": 1
+  }
+}
+```
+
 ## Send email (consumer integration)
 
 Use a domain-scoped API key in the `Authorization` header.
@@ -218,4 +263,5 @@ curl "https://flare-email-sender.<account>.workers.dev/health"
 | `GET` | `/health` | None | Health check |
 | `POST` | `/admin/keys` | `ADMIN_TOKEN` | Issue a new API key |
 | `GET` | `/admin/keys` | `ADMIN_TOKEN` | List issued keys |
+| `GET` | `/admin/logs` | `ADMIN_TOKEN` | List send attempt logs |
 | `POST` | `/v1/send` | API key | Send an email |

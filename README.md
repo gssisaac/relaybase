@@ -242,6 +242,48 @@ export async function sendBillingEmail(params: {
 | `404` | Unknown route |
 | `502` | Cloudflare Email Sending API failure (see `error` message for hints) |
 
+## Inbound email (Worker + R2/KV)
+
+Inbound mail is handled by the Worker's `email()` handler — no Gmail forwarding.
+
+```
+Sender ──MX──▶ Cloudflare Email Routing ──Worker──▶ flare-email-sender ──▶ R2
+```
+
+Objects are stored under `inbound/{domain}/{id}/meta.json`, `raw.eml` (body-only when attachments exist), and `attachments/` for binary files.
+
+### Route addresses to the Worker
+
+From ops-dashboard: **MacPurity → Email → Settings → Domain → Route to Worker (R2)**
+
+Or via API:
+
+```bash
+curl -X POST "https://flare-email-sender.<account>.workers.dev/admin/inbox/routing" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "macpurity.com",
+    "addresses": ["support@macpurity.com"]
+  }'
+```
+
+Requires Email Routing enabled on the zone and API token with **Zone → Email Routing Rules → Edit**.
+
+### List received mail
+
+```bash
+curl "https://flare-email-sender.<account>.workers.dev/admin/inbox?domain=macpurity.com&limit=50" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+```bash
+curl "https://flare-email-sender.<account>.workers.dev/admin/inbox/<message-id>" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+ops-dashboard **MacPurity → Email → Received** reads these endpoints when flare-email-sender is configured.
+
 ## Security
 
 - Never commit API keys or `ADMIN_TOKEN` to source control.
@@ -264,4 +306,7 @@ curl "https://flare-email-sender.<account>.workers.dev/health"
 | `POST` | `/admin/keys` | `ADMIN_TOKEN` | Issue a new API key |
 | `GET` | `/admin/keys` | `ADMIN_TOKEN` | List issued keys |
 | `GET` | `/admin/logs` | `ADMIN_TOKEN` | List send attempt logs |
+| `GET` | `/admin/inbox` | `ADMIN_TOKEN` | List received mail (`?domain=`) |
+| `GET` | `/admin/inbox/:id` | `ADMIN_TOKEN` | Get received mail with body |
+| `POST` | `/admin/inbox/routing` | `ADMIN_TOKEN` | Route addresses to this Worker |
 | `POST` | `/v1/send` | API key | Send an email |

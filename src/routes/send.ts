@@ -129,7 +129,7 @@ send.post("/", async (c) => {
     const cf = await createCloudflareClient(c.env);
     const result = await cf.sendEmail({
       from,
-      fromName: body.fromName,
+      fromName: body.fromName?.trim() || undefined,
       to,
       subject,
       text,

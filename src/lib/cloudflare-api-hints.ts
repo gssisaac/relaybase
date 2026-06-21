@@ -15,6 +15,27 @@ export function cloudflarePermissionHint(
     ].join("\n");
   }
 
+  if (p.includes("/email/routing/enable")) {
+    return [
+      `Endpoint: ${m} /zones/{{zone_id}}/email/routing/enable`,
+      "Required: Zone → Zone Settings → Edit",
+    ].join("\n");
+  }
+
+  if (p.includes("/email/routing/rules")) {
+    return [
+      `Endpoint: ${m} /zones/{{zone_id}}/email/routing/rules`,
+      "Required: Zone → Email Routing Rules → Edit",
+    ].join("\n");
+  }
+
+  if (p.includes("/zones") && !p.includes("/email/")) {
+    return [
+      `Endpoint: ${m} /zones`,
+      "Required: Zone → Zone → Read",
+    ].join("\n");
+  }
+
   return null;
 }
 

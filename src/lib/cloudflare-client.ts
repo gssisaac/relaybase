@@ -2,6 +2,7 @@ import {
   cloudflarePermissionHint,
   cloudflareSendingErrorHint,
 } from "./cloudflare-api-hints";
+import { buildMimeMessage } from "./mime";
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 
@@ -50,6 +51,28 @@ export type CfEmailSendResult = {
   delivered: string[];
   permanentBounces: string[];
   queued: string[];
+};
+
+export type CfEmailRoutingSettings = {
+  enabled: boolean;
+};
+
+export type CfEmailRoutingAction = {
+  type: "forward" | "drop" | "worker";
+  value?: string[];
+};
+
+export type CfEmailRoutingMatcher = {
+  type: "literal" | "all";
+  field?: "to";
+  value?: string;
+};
+
+export type CfEmailRoutingRule = {
+  id: string;
+  enabled: boolean;
+  matchers: CfEmailRoutingMatcher[];
+  actions: CfEmailRoutingAction[];
 };
 
 export type CloudflareClientCredentials = {
@@ -138,7 +161,46 @@ export class CloudflareClient {
     throw this.formatCfError(res, data, path, init?.method ?? "GET");
   }
 
-  async sendEmail(params: {
+  private async sendWithRetry<T>(
+    path: string,
+    init: RequestInit,
+  ): Promise<CfResponse<T>> {
+    const maxAttempts = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await this.request<T>(path, init);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const retryable =
+          lastError.message.includes("[10002]") ||
+          lastError.message.includes("[10100]");
+        if (!retryable || attempt === maxAttempts - 1) throw lastError;
+        await this.sleep(1500 * (attempt + 1));
+      }
+    }
+
+    throw lastError ?? new Error("Cloudflare Email Sending request failed");
+  }
+
+  private mapSendResult(data: CfResponse<{
+    message_id: string;
+    delivered: string[];
+    permanent_bounces: string[];
+    queued: string[];
+  }>): CfEmailSendResult {
+    return {
+      messageId:
+        data.result.message_id ??
+        `cf-${data.result.delivered?.[0] ?? data.result.queued?.[0] ?? "sent"}-${Date.now()}`,
+      delivered: data.result.delivered ?? [],
+      permanentBounces: data.result.permanent_bounces ?? [],
+      queued: data.result.queued ?? [],
+    };
+  }
+
+  private async sendStructuredEmail(params: {
     from: string;
     fromName?: string;
     to: string;
@@ -163,38 +225,142 @@ export class CloudflareClient {
     if (replyTo) body.reply_to = replyTo;
 
     const path = `/accounts/${this.accountId}/email/sending/send`;
-    const maxAttempts = 3;
-    let lastError: Error | null = null;
+    const data = await this.sendWithRetry<{
+      message_id: string;
+      delivered: string[];
+      permanent_bounces: string[];
+      queued: string[];
+    }>(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    return this.mapSendResult(data);
+  }
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const data = await this.request<{
-          message_id: string;
-          delivered: string[];
-          permanent_bounces: string[];
-          queued: string[];
-        }>(path, {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
-        return {
-          messageId:
-            data.result.message_id ??
-            `cf-${data.result.delivered?.[0] ?? data.result.queued?.[0] ?? "sent"}-${Date.now()}`,
-          delivered: data.result.delivered ?? [],
-          permanentBounces: data.result.permanent_bounces ?? [],
-          queued: data.result.queued ?? [],
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        const retryable =
-          lastError.message.includes("[10002]") ||
-          lastError.message.includes("[10100]");
-        if (!retryable || attempt === maxAttempts - 1) throw lastError;
-        await this.sleep(1500 * (attempt + 1));
-      }
+  private async sendRawEmail(params: {
+    from: string;
+    fromName?: string;
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    replyTo?: string;
+  }): Promise<CfEmailSendResult> {
+    const fromAddress = params.from.trim();
+    const to = params.to.trim();
+    const mimeMessage = buildMimeMessage({
+      from: fromAddress,
+      fromName: params.fromName,
+      to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+      replyTo: params.replyTo,
+    });
+
+    const path = `/accounts/${this.accountId}/email/sending/send_raw`;
+    const data = await this.sendWithRetry<{
+      message_id: string;
+      delivered: string[];
+      permanent_bounces: string[];
+      queued: string[];
+    }>(path, {
+      method: "POST",
+      body: JSON.stringify({
+        from: fromAddress,
+        recipients: [to],
+        mime_message: mimeMessage,
+      }),
+    });
+    return this.mapSendResult(data);
+  }
+
+  async sendEmail(params: {
+    from: string;
+    fromName?: string;
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    replyTo?: string;
+  }): Promise<CfEmailSendResult> {
+    const fromName = params.fromName?.trim();
+    if (fromName) {
+      return this.sendRawEmail({ ...params, fromName });
     }
+    return this.sendStructuredEmail(params);
+  }
 
-    throw lastError ?? new Error("Cloudflare Email Sending request failed");
+  async resolveZoneId(domain: string): Promise<string | null> {
+    const data = await this.request<Array<{ id: string; name: string }>>(
+      `/zones?name=${encodeURIComponent(domain.trim())}`,
+    );
+    const zone = data.result?.find(
+      (item) => item.name.toLowerCase() === domain.trim().toLowerCase(),
+    );
+    return zone?.id ?? data.result?.[0]?.id ?? null;
+  }
+
+  async getEmailRoutingSettings(zoneId: string): Promise<CfEmailRoutingSettings> {
+    const data = await this.request<{ enabled: boolean }>(
+      `/zones/${zoneId}/email/routing`,
+    );
+    return { enabled: Boolean(data.result?.enabled) };
+  }
+
+  async enableEmailRouting(zoneId: string): Promise<CfEmailRoutingSettings> {
+    const data = await this.request<{ enabled: boolean }>(
+      `/zones/${zoneId}/email/routing/enable`,
+      { method: "POST" },
+    );
+    return { enabled: Boolean(data.result?.enabled) };
+  }
+
+  async listEmailRoutingRules(zoneId: string): Promise<CfEmailRoutingRule[]> {
+    const data = await this.request<CfEmailRoutingRule[]>(
+      `/zones/${zoneId}/email/routing/rules`,
+    );
+    return data.result ?? [];
+  }
+
+  async createEmailRoutingRule(
+    zoneId: string,
+    rule: {
+      name?: string;
+      enabled?: boolean;
+      priority?: number;
+      actions: CfEmailRoutingAction[];
+      matchers: CfEmailRoutingMatcher[];
+    },
+  ): Promise<CfEmailRoutingRule> {
+    const data = await this.request<CfEmailRoutingRule>(
+      `/zones/${zoneId}/email/routing/rules`,
+      {
+        method: "POST",
+        body: JSON.stringify(rule),
+      },
+    );
+    return data.result;
+  }
+
+  async updateEmailRoutingRule(
+    zoneId: string,
+    ruleId: string,
+    rule: {
+      name?: string;
+      enabled?: boolean;
+      priority?: number;
+      actions?: CfEmailRoutingAction[];
+      matchers?: CfEmailRoutingMatcher[];
+    },
+  ): Promise<CfEmailRoutingRule> {
+    const data = await this.request<CfEmailRoutingRule>(
+      `/zones/${zoneId}/email/routing/rules/${ruleId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(rule),
+      },
+    );
+    return data.result;
   }
 }

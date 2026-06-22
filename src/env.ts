@@ -5,4 +5,5 @@ export type Env = {
   CF_API_TOKEN: string;
   ADMIN_TOKEN: string;
   WORKER_SCRIPT_NAME: string;
+  INBOUND_BUCKET_NAME: string;
 };

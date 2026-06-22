@@ -5,6 +5,7 @@ account_id = "3adf03d991843094a7343eebc0a98007"
 
 [vars]
 WORKER_SCRIPT_NAME = "flare-email-sender"
+INBOUND_BUCKET_NAME = "flare-email-inbound"
 
 [[kv_namespaces]]
 binding = "KEYS"

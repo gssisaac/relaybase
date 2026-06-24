@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <rect width="1200" height="630" fill="#fafbfc"/>
+  <rect width="1200" height="630" fill="url(#dots)" opacity="0.4"/>
+  <defs>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#cbd5e1"/>
+    </pattern>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e85d2a"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+  </defs>
+  <rect x="80" y="80" width="64" height="64" rx="14" fill="#e85d2a"/>
+  <path d="M96 104h32v4H96v-4zm0 10h32v3H96v-3zm0 9h20v3H96v-3z" fill="white"/>
+  <text x="168" y="128" font-family="system-ui, sans-serif" font-size="48" font-weight="700" fill="#0f172a">Relaybase</text>
+  <text x="80" y="220" font-family="system-ui, sans-serif" font-size="56" font-weight="700" fill="#0f172a">Every product email.</text>
+  <text x="80" y="290" font-family="system-ui, sans-serif" font-size="56" font-weight="700" fill="url(#brand)">One flat $10/month.</text>
+  <text x="80" y="360" font-family="system-ui, sans-serif" font-size="28" fill="#64748b">billing � support � privacy � noreply � hello � admin</text>
+  <rect x="80" y="420" width="280" height="56" rx="10" fill="#e85d2a"/>
+  <text x="120" y="456" font-family="system-ui, sans-serif" font-size="22" font-weight="600" fill="white">Powered by Cloudflare</text>
+</svg>

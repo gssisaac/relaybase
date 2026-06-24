@@ -11,34 +11,58 @@ import {
   getInboundEmail,
   listInboundEmails,
 } from "../lib/inbound-store";
-import { decodeMimeHeader } from "../lib/mime-parse";
+import {
+  ackPendingEvents,
+  listPendingEvents,
+} from "../lib/inbound-events";
+import {
+  serializeInboundListItem,
+  serializeInboundMessage,
+} from "../lib/inbound-serialize";
 
 const adminInbox = new Hono<{ Bindings: Env }>();
 
-function decodeSubject(subject: string): string {
-  return decodeMimeHeader(subject) || subject || "(no subject)";
-}
+adminInbox.get("/notifications", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const domain = c.req.query("domain")?.trim().toLowerCase();
+  if (!domain) {
+    return c.json({ error: "domain query parameter is required" }, 400);
+  }
+
+  const limit = Number(c.req.query("limit") ?? "25");
+  const events = await listPendingEvents(c.env.KEYS, domain, limit);
+  return c.json({ events });
+});
+
+adminInbox.post("/notifications/ack", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  let body: { domain?: string; ids?: string[] };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const domain = body.domain?.trim().toLowerCase();
+  const ids = body.ids?.filter((id) => typeof id === "string" && id.trim());
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  if (!ids?.length) {
+    return c.json({ error: "ids must be a non-empty array" }, 400);
+  }
+
+  const acked = await ackPendingEvents(c.env.KEYS, domain, ids);
+  return c.json({ acked });
+});
 
 function serializeMessage(message: Awaited<ReturnType<typeof getInboundEmail>>) {
   if (!message) return null;
-  return {
-    key: message.id,
-    fromEmail: message.fromEmail,
-    toEmail: message.toEmail,
-    subject: decodeSubject(message.subject),
-    status: "stored",
-    action: "worker",
-    receivedAt: message.receivedAt,
-    bodyPreview: message.bodyPreview,
-    bodyText: message.bodyText,
-    bodyHtml: message.bodyHtml,
-    messageId: message.messageId,
-    size: message.size,
-    attachments: message.attachments.map((attachment) => ({
-      ...attachment,
-      filename: decodeMimeHeader(attachment.filename) || attachment.filename,
-    })),
-  };
+  return serializeInboundMessage(message);
 }
 
 adminInbox.get("/", async (c) => {
@@ -57,19 +81,7 @@ adminInbox.get("/", async (c) => {
   });
 
   return c.json({
-    messages: messages.map((message) => ({
-      key: message.id,
-      fromEmail: message.fromEmail,
-      toEmail: message.toEmail,
-      subject: decodeSubject(message.subject),
-      status: "stored",
-      action: "worker",
-      receivedAt: message.receivedAt,
-      bodyPreview: message.bodyPreview,
-      attachmentCount: message.attachments.length,
-      messageId: message.messageId,
-      size: message.size,
-    })),
+    messages: messages.map(serializeInboundListItem),
   });
 });
 

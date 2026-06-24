@@ -1,12 +1,12 @@
 import type { Env } from "./env";
-import { storeInboundEmail } from "./lib/inbound-store";
+import { storeInboundEmail, type InboundEmailMeta } from "./lib/inbound-store";
 
 export async function handleInboundEmail(
   message: ForwardableEmailMessage,
   env: Env,
-): Promise<void> {
+): Promise<InboundEmailMeta> {
   const raw = await new Response(message.raw).arrayBuffer();
-  await storeInboundEmail(env.INBOUND, {
+  return storeInboundEmail(env.INBOUND, {
     fromEmail: message.from,
     toEmail: message.to,
     subject: message.headers.get("subject")?.trim() || "(no subject)",

@@ -149,9 +149,9 @@ async function postWebhook(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Flare-Signature": `t=${timestamp},v1=${signature}`,
-      "X-Flare-Event-Id": event.id,
-      "X-Flare-Event-Type": event.type,
+      "X-Relaybase-Signature": `t=${timestamp},v1=${signature}`,
+      "X-Relaybase-Event-Id": event.id,
+      "X-Relaybase-Event-Type": event.type,
     },
     body,
   });

@@ -1,11 +1,11 @@
-name = "flare-email-sender"
+name = "relaybase"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
 account_id = "3adf03d991843094a7343eebc0a98007"
 
 [vars]
-WORKER_SCRIPT_NAME = "flare-email-sender"
-INBOUND_BUCKET_NAME = "flare-email-inbound"
+WORKER_SCRIPT_NAME = "relaybase"
+INBOUND_BUCKET_NAME = "relaybase-inbound"
 
 [[kv_namespaces]]
 binding = "KEYS"
@@ -14,4 +14,4 @@ preview_id = "fe42e6d5f04741f7a09516f25504581a"
 
 [[r2_buckets]]
 binding = "INBOUND"
-bucket_name = "flare-email-inbound"
+bucket_name = "relaybase-inbound"

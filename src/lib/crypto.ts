@@ -1,5 +1,16 @@
-const API_KEY_PREFIX = "fes_";
+const API_KEY_PREFIX = "rb_";
+const LEGACY_API_KEY_PREFIX = "fes_";
 const KEY_PREFIX_LENGTH = 8;
+
+function stripApiKeyPrefix(apiKey: string): string {
+  if (apiKey.startsWith(API_KEY_PREFIX)) {
+    return apiKey.slice(API_KEY_PREFIX.length);
+  }
+  if (apiKey.startsWith(LEGACY_API_KEY_PREFIX)) {
+    return apiKey.slice(LEGACY_API_KEY_PREFIX.length);
+  }
+  return apiKey;
+}
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -22,14 +33,15 @@ export function generateApiKey(): string {
 }
 
 export function keyPrefixFromApiKey(apiKey: string): string {
-  const raw = apiKey.startsWith(API_KEY_PREFIX)
-    ? apiKey.slice(API_KEY_PREFIX.length)
-    : apiKey;
-  return raw.slice(0, KEY_PREFIX_LENGTH);
+  return stripApiKeyPrefix(apiKey).slice(0, KEY_PREFIX_LENGTH);
 }
 
 export function isValidApiKeyFormat(apiKey: string): boolean {
-  return apiKey.startsWith(API_KEY_PREFIX) && apiKey.length > API_KEY_PREFIX.length + KEY_PREFIX_LENGTH;
+  const hasKnownPrefix =
+    apiKey.startsWith(API_KEY_PREFIX) ||
+    apiKey.startsWith(LEGACY_API_KEY_PREFIX);
+  if (!hasKnownPrefix) return false;
+  return stripApiKeyPrefix(apiKey).length > KEY_PREFIX_LENGTH;
 }
 
 export function isValidDomain(domain: string): boolean {

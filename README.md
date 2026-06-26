@@ -1,4 +1,4 @@
-# flare-email-sender
+# Relaybase
 
 A lightweight Cloudflare Worker that issues domain-scoped API keys and sends transactional email via [Cloudflare Email Sending](https://developers.cloudflare.com/email-routing/email-workers/send-email/).
 
@@ -7,7 +7,7 @@ Use this service from your apps when you need to send email from addresses like 
 ## Overview
 
 ```
-Your app  ──Bearer API key──▶  flare-email-sender Worker  ──▶  Cloudflare Email Sending API
+Your app  ──Bearer API key──▶  relaybase Worker  ──▶  Cloudflare Email Sending API
 Admin     ──Bearer ADMIN_TOKEN──▶  /admin/keys  ──▶  Workers KV (key ↔ domain mapping)
 ```
 
@@ -22,7 +22,7 @@ Each API key is bound to exactly one sending domain. The `from` address on every
 ## Deploy
 
 ```bash
-cd flare-email-sender
+cd relaybase
 npm install
 
 # Create KV namespace for production and preview
@@ -39,7 +39,7 @@ wrangler secret put ADMIN_TOKEN
 wrangler deploy
 ```
 
-After deploy, note your Worker URL (e.g. `https://flare-email-sender.<account>.workers.dev`).
+After deploy, note your Worker URL (e.g. `https://relaybase.<account>.workers.dev` or `https://api.relaybase.com`).
 
 ## Local development
 
@@ -57,7 +57,7 @@ Admin routes require `Authorization: Bearer <ADMIN_TOKEN>`.
 ### Issue an API key
 
 ```bash
-curl -X POST "https://flare-email-sender.<account>.workers.dev/admin/keys" \
+curl -X POST "https://api.relaybase.com/admin/keys" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -71,7 +71,7 @@ Response (`201`):
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "apiKey": "fes_xxxxxxxxxxxxxxxxxxxxxxxx",
+  "apiKey": "rb_xxxxxxxxxxxxxxxxxxxxxxxx",
   "domain": "yourdomain.com",
   "label": "billing-service",
   "createdAt": "2026-06-16T12:00:00.000Z"
@@ -83,7 +83,7 @@ Response (`201`):
 ### List issued keys
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/admin/keys" \
+curl "https://api.relaybase.com/admin/keys" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -109,7 +109,7 @@ Response (`200`):
 Every `/v1/send` attempt is recorded in Workers KV (success and failure). Use this for ops monitoring.
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/admin/logs?limit=100&status=failed" \
+curl "https://api.relaybase.com/admin/logs?limit=100&status=failed" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -156,8 +156,8 @@ Use a domain-scoped API key in the `Authorization` header.
 ### cURL
 
 ```bash
-curl -X POST "https://flare-email-sender.<account>.workers.dev/v1/send" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY" \
+curl -X POST "https://api.relaybase.com/v1/send" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "from": "billing@yourdomain.com",
@@ -179,8 +179,8 @@ Response (`200`):
 ### Node.js / TypeScript
 
 ```ts
-const FLARE_EMAIL_SENDER_URL = process.env.FLARE_EMAIL_SENDER_URL!;
-const FLARE_EMAIL_API_KEY = process.env.FLARE_EMAIL_API_KEY!;
+const RELAYBASE_URL = process.env.RELAYBASE_URL!;
+const RELAYBASE_API_KEY = process.env.RELAYBASE_API_KEY!;
 
 export async function sendBillingEmail(params: {
   to: string;
@@ -188,10 +188,10 @@ export async function sendBillingEmail(params: {
   text: string;
   html?: string;
 }) {
-  const res = await fetch(`${FLARE_EMAIL_SENDER_URL}/v1/send`, {
+  const res = await fetch(`${RELAYBASE_URL}/v1/send`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${FLARE_EMAIL_API_KEY}`,
+      Authorization: `Bearer ${RELAYBASE_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -229,8 +229,8 @@ export async function sendBillingEmail(params: {
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `FLARE_EMAIL_API_KEY` | Yes | Domain-scoped API key issued via `/admin/keys` |
-| `FLARE_EMAIL_SENDER_URL` | Yes | Worker base URL (no trailing slash) |
+| `RELAYBASE_API_KEY` | Yes | Domain-scoped API key issued via `/admin/keys` |
+| `RELAYBASE_URL` | Yes | Worker base URL (no trailing slash) |
 
 ## Error reference
 
@@ -247,10 +247,10 @@ export async function sendBillingEmail(params: {
 Inbound mail is handled by the Worker's `email()` handler — no Gmail forwarding.
 
 ```
-Sender ──MX──▶ Cloudflare Email Routing ──Worker──▶ flare-email-sender ──▶ R2
+Sender ──MX──▶ Cloudflare Email Routing ──Worker──▶ relaybase ──▶ R2
 ```
 
-Objects are stored in the shared R2 bucket `flare-email-inbound` under `inbound/{domain}/{id}/` — `meta.json`, `raw.eml` (body-only when attachments exist), and `attachments/` for binary files.
+Objects are stored in the shared R2 bucket `relaybase-inbound` under `inbound/{domain}/{id}/` — `meta.json`, `raw.eml` (body-only when attachments exist), and `attachments/` for binary files.
 
 ### Route addresses to the Worker
 
@@ -259,7 +259,7 @@ From ops-dashboard: **MacPurity → Email → Settings → Domain → Route to W
 Or via API:
 
 ```bash
-curl -X POST "https://flare-email-sender.<account>.workers.dev/admin/inbox/routing" \
+curl -X POST "https://api.relaybase.com/admin/inbox/routing" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -273,16 +273,16 @@ Requires Email Routing enabled on the zone and API token with **Zone → Email R
 ### List received mail
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/admin/inbox?domain=macpurity.com&limit=50" \
+curl "https://api.relaybase.com/admin/inbox?domain=macpurity.com&limit=50" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/admin/inbox/<message-id>" \
+curl "https://api.relaybase.com/admin/inbox/<message-id>" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-ops-dashboard **MacPurity → Email → Received** reads these endpoints when flare-email-sender is configured.
+ops-dashboard **MacPurity → Email → Received** reads these endpoints when relaybase is configured.
 
 ### Inbound events (API key — poll for new mail)
 
@@ -290,8 +290,8 @@ When mail arrives, the Worker enqueues a lightweight event in KV. Poll with your
 
 ```bash
 # Poll pending events (run on a schedule, e.g. every 60s)
-curl "https://flare-email-sender.<account>.workers.dev/v1/inbox/events?limit=25" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY"
+curl "https://api.relaybase.com/v1/inbox/events?limit=25" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY"
 ```
 
 Response (`200`):
@@ -321,8 +321,8 @@ Response (`200`):
 Acknowledge consumed events:
 
 ```bash
-curl -X POST "https://flare-email-sender.<account>.workers.dev/v1/inbox/events/ack" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY" \
+curl -X POST "https://api.relaybase.com/v1/inbox/events/ack" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"ids":["evt_550e8400-e29b-41d4-a716-446655440000"]}'
 ```
@@ -330,15 +330,15 @@ curl -X POST "https://flare-email-sender.<account>.workers.dev/v1/inbox/events/a
 Fetch full message body after receiving an event:
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/v1/inbox/messages/<messageId>" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY"
+curl "https://api.relaybase.com/v1/inbox/messages/<messageId>" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY"
 ```
 
 List messages without polling events:
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/v1/inbox/messages?limit=50" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY"
+curl "https://api.relaybase.com/v1/inbox/messages?limit=50" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY"
 ```
 
 The API key's domain scopes all `/v1/inbox/*` and `/v1/webhooks` routes — no `domain` query parameter needed.
@@ -348,10 +348,10 @@ The API key's domain scopes all `/v1/inbox/*` and `/v1/webhooks` routes — no `
 Register a URL to receive `inbound.email.received` events immediately when mail arrives. Up to 3 webhooks per domain.
 
 ```bash
-curl -X POST "https://flare-email-sender.<account>.workers.dev/v1/webhooks" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY" \
+curl -X POST "https://api.relaybase.com/v1/webhooks" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://myapp.com/hooks/flare-email"}'
+  -d '{"url":"https://myapp.com/hooks/relaybase"}'
 ```
 
 Response (`201`):
@@ -361,7 +361,7 @@ Response (`201`):
   "webhook": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "domain": "yourdomain.com",
-    "url": "https://myapp.com/hooks/flare-email",
+    "url": "https://myapp.com/hooks/relaybase",
     "createdAt": "2026-06-23T12:00:00.000Z",
     "active": true
   },
@@ -369,10 +369,10 @@ Response (`201`):
 }
 ```
 
-**Store `secret` immediately** — it is shown only once. Use it to verify `X-Flare-Signature` on each delivery:
+**Store `secret` immediately** — it is shown only once. Use it to verify `X-Relaybase-Signature` on each delivery:
 
 ```
-X-Flare-Signature: t=<unix_timestamp>,v1=<hmac_sha256_hex>
+X-Relaybase-Signature: t=<unix_timestamp>,v1=<hmac_sha256_hex>
 ```
 
 Signed payload: `{timestamp}.{raw_json_body}` (same pattern as Stripe webhooks).
@@ -380,7 +380,7 @@ Signed payload: `{timestamp}.{raw_json_body}` (same pattern as Stripe webhooks).
 ```typescript
 import crypto from "crypto";
 
-function verifyFlareSignature(
+function verifyRelaybaseSignature(
   secret: string,
   body: string,
   header: string,
@@ -407,11 +407,11 @@ function verifyFlareSignature(
 List or remove webhooks:
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/v1/webhooks" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY"
+curl "https://api.relaybase.com/v1/webhooks" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY"
 
-curl -X DELETE "https://flare-email-sender.<account>.workers.dev/v1/webhooks/<id>" \
-  -H "Authorization: Bearer $FLARE_EMAIL_API_KEY"
+curl -X DELETE "https://api.relaybase.com/v1/webhooks/<id>" \
+  -H "Authorization: Bearer $RELAYBASE_API_KEY"
 ```
 
 **n8n / Zapier**: use the Webhooks node with your registered URL; verify the signature in a Function node if needed.
@@ -432,7 +432,7 @@ curl -X DELETE "https://flare-email-sender.<account>.workers.dev/v1/webhooks/<id
 ## Health check
 
 ```bash
-curl "https://flare-email-sender.<account>.workers.dev/health"
+curl "https://api.relaybase.com/health"
 # {"ok":true}
 ```
 

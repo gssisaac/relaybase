@@ -8,7 +8,7 @@ function hmacSha256Hex(secret, payload) {
   return crypto.createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-function verifyFlareSignature(secret, body, header) {
+function verifyRelaybaseSignature(secret, body, header) {
   const parts = Object.fromEntries(
     header.split(",").map((p) => p.trim().split("=")),
   );
@@ -44,7 +44,7 @@ const timestamp = Math.floor(Date.now() / 1000).toString();
 const signature = hmacSha256Hex(secret, `${timestamp}.${body}`);
 const header = `t=${timestamp},v1=${signature}`;
 
-if (!verifyFlareSignature(secret, body, header)) {
+if (!verifyRelaybaseSignature(secret, body, header)) {
   console.error("FAIL: signature verification");
   process.exit(1);
 }

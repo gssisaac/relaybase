@@ -45,7 +45,7 @@ export async function createCloudflareClient(env: Env): Promise<CloudflareClient
   const config = await readCloudflareRuntimeConfig(env);
   if (!config) {
     throw new Error(
-      "Cloudflare Email Sending is not configured on this worker — set account ID and API token in the ops-dashboard Email Sender settings",
+      "Cloudflare Email Sending is not configured on this worker — set account ID and API token in the ops-dashboard Relaybase settings",
     );
   }
   return new CloudflareClient({

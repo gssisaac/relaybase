@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Provision a domain-scoped API key in the flare-email-sender KV namespace.
+ * Provision a domain-scoped API key in the relaybase KV namespace.
  * Usage: node scripts/provision-domain-key.mjs macpurity.com macpurity-website
  */
 import { createHash, randomBytes } from "node:crypto";
 import { execSync } from "node:child_process";
 
-const API_KEY_PREFIX = "fes_";
+const API_KEY_PREFIX = "rb_";
 const KEY_PREFIX_LENGTH = 8;
 const NAMESPACE_ID = "341bf6e6f3c943a8a4f73128a98eb795";
 

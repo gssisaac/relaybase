@@ -32,7 +32,7 @@ export function buildMimeMessage(params: {
 
   const html = params.html?.trim();
   if (html) {
-    const boundary = `flare-${Date.now().toString(36)}`;
+    const boundary = `relaybase-${Date.now().toString(36)}`;
     return [
       ...headers,
       `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -90,10 +90,10 @@ export function buildStrippedInboundMime(params: {
   const insertAt = mimeVersionIdx >= 0 ? mimeVersionIdx : 0;
   const extra = [
     ...(params.messageId ? [`Message-ID: ${params.messageId}`] : []),
-    "X-Flare-Stripped: 1",
+    "X-Relaybase-Stripped: 1",
     ...params.attachments.map(
       (attachment) =>
-        `X-Flare-Attachment: id=${attachment.id}; filename="${attachment.filename.replace(/"/g, '\\"')}"; type=${attachment.contentType}; size=${attachment.size}`,
+        `X-Relaybase-Attachment: id=${attachment.id}; filename="${attachment.filename.replace(/"/g, '\\"')}"; type=${attachment.contentType}; size=${attachment.size}`,
     ),
   ];
   lines.splice(insertAt, 0, ...extra);

@@ -3,7 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useState } from "react";
 
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import { EmailSenderAlerts } from "@/relaybase/components/EmailSenderShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,7 +59,7 @@ export function UserBrandingSection({
       setError(null);
       setMessage(null);
       try {
-        const res = await fetch(`${EMAIL_SENDER_API}/branding`, {
+        const res = await fetch(`${RELAYBASE_API}/branding`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ domain, applyDmarc, applyBimi }),

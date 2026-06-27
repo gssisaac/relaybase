@@ -18,7 +18,7 @@ import {
   clearDashboardCache,
   readCachedOrStale,
 } from "@/lib/dashboard/shared/dashboard-client-cache";
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import type {
   EmailSenderConfigStatus,
   EmailSenderKeyRow,
@@ -27,7 +27,10 @@ import type {
   EmailSenderSentEmail,
 } from "@/relaybase/components/types";
 
-export const EMAIL_SENDER_CACHE_ID = "relaybase";
+export const RELAYBASE_CACHE_ID = "relaybase";
+
+/** @deprecated Use RELAYBASE_CACHE_ID */
+export const EMAIL_SENDER_CACHE_ID = RELAYBASE_CACHE_ID;
 const CACHE_NS = "relaybase";
 
 type ConfigPayload = EmailSenderConfigStatus;
@@ -73,11 +76,11 @@ const EmailSenderContext = createContext<EmailSenderContextValue | null>(null);
 
 export function EmailSenderProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = useState<ConfigPayload | null>(() =>
-    readCachedOrStale<ConfigPayload>(EMAIL_SENDER_CACHE_ID, CACHE_NS, "config:v3"),
+    readCachedOrStale<ConfigPayload>(RELAYBASE_CACHE_ID, CACHE_NS, "config:v3"),
   );
   const [keys, setKeys] = useState<EmailSenderKeyRow[]>(() => {
     const cached = readCachedOrStale<KeysPayload>(
-      EMAIL_SENDER_CACHE_ID,
+      RELAYBASE_CACHE_ID,
       CACHE_NS,
       "keys",
     );
@@ -96,7 +99,7 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
     if (!isRefresh) {
       setLoading((prev) => {
         const hasCache = readCachedOrStale<ConfigPayload>(
-          EMAIL_SENDER_CACHE_ID,
+          RELAYBASE_CACHE_ID,
           CACHE_NS,
           "config:v3",
         );
@@ -105,11 +108,14 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
     }
     setError(null);
     try {
+      const configUrl = isRefresh
+        ? `${RELAYBASE_API}/config?diagnostics=1`
+        : `${RELAYBASE_API}/config`;
       const { data, meta } = await fetchCachedApi<ConfigPayload>(
-        EMAIL_SENDER_CACHE_ID,
+        RELAYBASE_CACHE_ID,
         CACHE_NS,
         "config:v3",
-        `${EMAIL_SENDER_API}/config`,
+        configUrl,
         {
           refresh: isRefresh,
           onUpdate: (next) => setConfig(next),
@@ -135,10 +141,10 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
     setError(null);
     try {
       const { data, meta } = await fetchCachedApi<KeysPayload>(
-        EMAIL_SENDER_CACHE_ID,
+        RELAYBASE_CACHE_ID,
         CACHE_NS,
         "keys",
-        `${EMAIL_SENDER_API}/keys`,
+        `${RELAYBASE_API}/keys`,
         {
           refresh: isRefresh,
           onUpdate: (next) => setKeys(next.keys ?? []),
@@ -159,10 +165,10 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
       onUpdate?: (data: SentPayload) => void;
     }) => {
       return fetchCachedApi<SentPayload>(
-        EMAIL_SENDER_CACHE_ID,
+        RELAYBASE_CACHE_ID,
         CACHE_NS,
         "sent",
-        `${EMAIL_SENDER_API}/sent`,
+        `${RELAYBASE_API}/sent`,
         options,
       );
     },
@@ -179,10 +185,10 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
       },
     ) => {
       return fetchCachedApi<LogsPayload>(
-        EMAIL_SENDER_CACHE_ID,
+        RELAYBASE_CACHE_ID,
         CACHE_NS,
         `logs:${queryKey}`,
-        `${EMAIL_SENDER_API}/logs?${query}`,
+        `${RELAYBASE_API}/logs?${query}`,
         options,
       );
     },
@@ -190,8 +196,8 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
   );
 
   const invalidateConfig = useCallback(() => {
-    clearDashboardCache(EMAIL_SENDER_CACHE_ID, CACHE_NS, "config:v3");
-    clearDashboardCache(EMAIL_SENDER_CACHE_ID, CACHE_NS, "keys");
+    clearDashboardCache(RELAYBASE_CACHE_ID, CACHE_NS, "config:v3");
+    clearDashboardCache(RELAYBASE_CACHE_ID, CACHE_NS, "keys");
   }, []);
 
   useEffect(() => {

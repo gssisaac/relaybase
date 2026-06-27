@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users } from "lucide-react";
 
-import { useEmailSenderPaths } from "@/relaybase/components/useEmailSenderPaths";
+import { useRelaybasePaths } from "@/relaybase/components/useEmailSenderPaths";
 import { cn } from "@/lib/utils";
 
 function isActive(href: string, pathname: string) {
@@ -13,7 +13,7 @@ function isActive(href: string, pathname: string) {
 
 export function AdminSidebar() {
   const pathname = usePathname();
-  const { tabs } = useEmailSenderPaths();
+  const { tabs } = useRelaybasePaths();
 
   const nav = [
     { href: "/status", label: "Dashboard", icon: LayoutDashboard },

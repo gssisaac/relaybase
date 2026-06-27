@@ -3,7 +3,7 @@
 import { Check, Copy, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import { EmailSenderAlerts } from "@/relaybase/components/EmailSenderShared";
 import type { RelaybaseDashboardAuthTokenRow } from "@/relaybase/components/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -57,7 +57,7 @@ export function UserAuthTokensSection({
     setTokenMessage(null);
     setIssuedToken(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/auth-tokens`, {
+      const res = await fetch(`${RELAYBASE_API}/auth-tokens`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -94,7 +94,7 @@ export function UserAuthTokensSection({
     setTokenError(null);
     setTokenMessage(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/auth-tokens/${id}`, {
+      const res = await fetch(`${RELAYBASE_API}/auth-tokens/${id}`, {
         method: "DELETE",
       });
       const data = (await res.json()) as { error?: string };

@@ -1,4 +1,4 @@
-import { EMAIL_SENDER_DEFAULT_TAB } from "@/relaybase/components/constants";
+import { RELAYBASE_DEFAULT_TAB } from "@/relaybase/components/constants";
 import { EmailSenderPanelView } from "@/relaybase/panel";
 
 export const dynamic = "force-dynamic";

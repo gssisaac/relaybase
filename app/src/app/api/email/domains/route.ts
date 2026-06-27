@@ -10,7 +10,33 @@ import {
   requireSessionUserId,
   setActiveUserDomain,
 } from "@/lib/dev-email-store";
+import {
+  classifyProvisionFailure,
+  duplicateDomainError,
+  DomainProvisionError,
+  logDomainProvisionFailure,
+  validationDomainError,
+} from "@/lib/relaybase/domain-provision-errors";
 import { provisionDomainInboundR2 } from "@/lib/relaybase/provision-domain-r2";
+
+function isPlaceholderDomain(domain: string): boolean {
+  return !domain || domain === "example.com";
+}
+
+function provisionErrorResponse(
+  userId: string,
+  domain: string,
+  error: DomainProvisionError,
+) {
+  logDomainProvisionFailure({ userId, domain, error });
+  return NextResponse.json(
+    {
+      error: error.userMessage,
+      code: error.kind,
+    },
+    { status: error.status },
+  );
+}
 
 export async function GET() {
   try {
@@ -27,51 +53,69 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  let userId = "";
+  let domain = "";
+
   try {
-    const userId = await requireSessionUserId();
+    userId = await requireSessionUserId();
     const body = (await request.json()) as { domain?: string };
-    const domain = normalizeDomain(body.domain ?? "");
-    addUserDomain(userId, domain);
+    domain = normalizeDomain(body.domain ?? "");
 
-    let r2Message: string | null = null;
-    let r2Error: string | null = null;
-    let r2: Awaited<ReturnType<typeof provisionDomainInboundR2>> | null = null;
-
-    try {
-      r2 = await provisionDomainInboundR2(domain);
-      markDomainR2Provisioned(userId, r2);
-      r2Message = r2.message;
-    } catch (error) {
-      r2Error =
-        error instanceof Error
-          ? error.message
-          : "Failed to provision inbound R2 bucket";
+    if (!domain || isPlaceholderDomain(domain)) {
+      throw validationDomainError("Enter a valid domain, such as example.com.");
     }
+
+    const existing = readUserEmailData(userId);
+    if (existing.domains.includes(domain)) {
+      throw duplicateDomainError(domain);
+    }
+
+    const r2 = await provisionDomainInboundR2(domain);
+    addUserDomain(userId, domain);
+    markDomainR2Provisioned(userId, r2);
 
     const data = readUserEmailData(userId);
     return NextResponse.json({
       domains: listDomainSummaries(data),
       activeDomain: data.config.activeDomain,
-      r2: r2
-        ? {
-            bucketName: r2.bucketName,
-            objectPrefix: r2.objectPrefix,
-            created: r2.bucketCreated,
-            workerReady: r2.workerReady,
-            workerBucketName: r2.workerBucketName,
-          }
-        : null,
-      r2Error,
-      message: r2Message
-        ? `Domain added. ${r2Message}`
-        : r2Error
-          ? `Domain added, but R2 provisioning failed: ${r2Error}`
-          : "Domain added",
+      r2: {
+        bucketName: r2.bucketName,
+        objectPrefix: r2.objectPrefix,
+        created: r2.bucketCreated,
+        workerReady: r2.workerReady,
+        workerBucketName: r2.workerBucketName,
+      },
+      message: r2.bucketCreated
+        ? `Added ${domain}. Created inbound storage bucket ${r2.bucketName}.`
+        : `Added ${domain}. Inbound storage on ${r2.bucketName} is ready.`,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed";
-    const status = message.includes("required") ? 400 : 401;
-    return NextResponse.json({ error: message }, { status });
+    if (userId && domain) {
+      try {
+        const data = readUserEmailData(userId);
+        if (data.domains.includes(domain)) {
+          removeUserDomain(userId, domain);
+        }
+      } catch (rollbackError) {
+        console.error("[domain-provision] rollback failed", {
+          userId,
+          domain,
+          error:
+            rollbackError instanceof Error
+              ? rollbackError.message
+              : rollbackError,
+        });
+      }
+    }
+
+    const classified = classifyProvisionFailure(error);
+    if (userId && domain) {
+      return provisionErrorResponse(userId, domain, classified);
+    }
+
+    const message = classified.userMessage;
+    const status = classified.status;
+    return NextResponse.json({ error: message, code: classified.kind }, { status });
   }
 }
 

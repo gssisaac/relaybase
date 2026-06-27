@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import type { StatsRange } from "@/lib/admin/stats";
 
 type AdminStatsResponse = {
@@ -124,7 +124,7 @@ export function AdminDashboardView() {
     setError(null);
     try {
       const res = await fetch(
-        `${EMAIL_SENDER_API}/stats?range=${nextRange}`,
+        `${RELAYBASE_API}/stats?range=${nextRange}`,
         { cache: "no-store" },
       );
       const data = (await res.json()) as AdminStatsResponse & { error?: string };

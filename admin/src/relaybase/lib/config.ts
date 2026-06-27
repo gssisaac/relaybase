@@ -1,5 +1,6 @@
 import {
   generateWorkerServiceToken,
+  isPlaceholderWorkerServiceToken,
   looksLikeCloudflareApiToken,
   mergeEmailSenderSettings,
   readEmailSenderSettings,
@@ -13,7 +14,11 @@ export type EmailSenderConfig = {
 /** Internal worker bridge token — auto-provisioned on save, not user-facing. */
 export function ensureWorkerServiceToken(): string {
   const existing = resolveWorkerServiceToken();
-  if (existing && !looksLikeCloudflareApiToken(existing)) {
+  if (
+    existing &&
+    !looksLikeCloudflareApiToken(existing) &&
+    !isPlaceholderWorkerServiceToken(existing)
+  ) {
     return existing;
   }
   const token = generateWorkerServiceToken();

@@ -7,7 +7,7 @@ import {
   useEmailSender,
   useEmailSenderCacheHint,
 } from "@/relaybase/components/EmailSenderContext";
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import {
   EmailSenderAlerts,
   EmailSenderToolbar,
@@ -68,7 +68,7 @@ export function EmailSenderKeysView() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/keys`, {
+      const res = await fetch(`${RELAYBASE_API}/keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -109,7 +109,7 @@ export function EmailSenderKeysView() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/keys/${key.id}`, {
+      const res = await fetch(`${RELAYBASE_API}/keys/${key.id}`, {
         method: "DELETE",
       });
       const data = (await res.json()) as { error?: string };
@@ -160,9 +160,9 @@ export function EmailSenderKeysView() {
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="email-sender-domain">Domain</Label>
+                  <Label htmlFor="relaybase-domain">Domain</Label>
                   <Input
-                    id="email-sender-domain"
+                    id="relaybase-domain"
                     value={domain}
                     onChange={(e) => setDomain(e.target.value)}
                     placeholder="yourdomain.com"
@@ -170,9 +170,9 @@ export function EmailSenderKeysView() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="email-sender-label">Label (optional)</Label>
+                  <Label htmlFor="relaybase-label">Label (optional)</Label>
                   <Input
-                    id="email-sender-label"
+                    id="relaybase-label"
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
                     placeholder="billing-product"

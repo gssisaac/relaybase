@@ -239,8 +239,13 @@ export async function syncWorkerRuntimeConfig(params: {
   const bootstrapToken = params.bootstrapToken?.trim();
   if (!bootstrapToken) {
     throw new Error(
-      primary.data.error ??
-        `Failed to sync worker Cloudflare config (${primary.status})`,
+      formatWorkerSyncFailure({
+        step: "admin/cloudflare",
+        status: primary.status,
+        workerError: primary.data.error,
+        adminTokenRejected: primary.status === 401,
+        bootstrapAttempted: false,
+      }),
     );
   }
 
@@ -252,8 +257,49 @@ export async function syncWorkerRuntimeConfig(params: {
   );
   if (!bootstrap.ok) {
     throw new Error(
-      bootstrap.data.error ??
-        `Failed to bootstrap worker config (${bootstrap.status})`,
+      formatWorkerSyncFailure({
+        step: "admin/bootstrap",
+        status: bootstrap.status,
+        workerError: bootstrap.data.error,
+        adminTokenRejected: primary.status === 401,
+        bootstrapAttempted: true,
+        bootstrapStatus: bootstrap.status,
+        bootstrapError: bootstrap.data.error,
+      }),
     );
   }
+}
+
+function formatWorkerSyncFailure(params: {
+  step: string;
+  status: number;
+  workerError?: string;
+  adminTokenRejected: boolean;
+  bootstrapAttempted: boolean;
+  bootstrapStatus?: number;
+  bootstrapError?: string;
+}): string {
+  const parts: string[] = [];
+
+  if (params.bootstrapAttempted) {
+    parts.push(
+      "Could not sync credentials to the Relaybase worker.",
+      `Worker rejected the admin service token (${params.adminTokenRejected ? "401 Unauthorized" : `HTTP ${params.status}`}).`,
+      `Bootstrap via /admin/bootstrap also failed (${params.bootstrapStatus ?? "unknown"}${params.bootstrapError ? `: ${params.bootstrapError}` : ""}).`,
+      "Fix: ensure the Cloudflare API token in admin/.env.local matches the worker secret CF_API_TOKEN (run `wrangler secret put CF_API_TOKEN` from the relaybase worker project), then click Sync to worker again.",
+    );
+  } else if (params.adminTokenRejected) {
+    parts.push(
+      "Worker rejected the admin service token (401 Unauthorized).",
+      "No bootstrap token was available.",
+      "Fix: set RELAYBASE_CF_API_TOKEN in admin/.env.local to match the worker CF_API_TOKEN secret, then click Sync to worker.",
+    );
+  } else {
+    parts.push(
+      `Worker sync failed on ${params.step} (HTTP ${params.status}${params.workerError ? `: ${params.workerError}` : ""}).`,
+      "Check RELAYBASE_URL and worker logs, then try Sync to worker again.",
+    );
+  }
+
+  return parts.join(" ");
 }

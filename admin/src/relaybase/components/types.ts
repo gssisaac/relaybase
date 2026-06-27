@@ -12,6 +12,15 @@ export type EmailSenderConfigStatus = {
   cloudflareZoneId?: string | null;
   cloudflareApiToken?: string;
   cloudflareDnsApiToken?: string;
+  diagnostics?: {
+    checkedAt: string;
+    checks: Array<{
+      id: string;
+      ok: boolean;
+      summary: string;
+      detail?: string;
+    }>;
+  };
   envSources?: {
     workerUrl: boolean;
     cloudflareAccountId: boolean;
@@ -87,7 +96,7 @@ export function integrationSnippet(workerUrl: string, domain: string) {
   return `await fetch("${workerUrl}/v1/send", {
   method: "POST",
   headers: {
-    Authorization: \`Bearer \${process.env.FLARE_EMAIL_API_KEY}\`,
+    Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\`,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({

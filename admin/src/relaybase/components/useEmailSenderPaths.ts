@@ -4,12 +4,12 @@ import type { LucideIcon } from "lucide-react";
 import { KeyRound, Mail, Palette, ScrollText, Settings } from "lucide-react";
 
 import {
-  EMAIL_SENDER_API,
-  EMAIL_SENDER_SERVICE_BASE,
+  RELAYBASE_API,
+  RELAYBASE_SERVICE_BASE,
 } from "@/relaybase/components/constants";
 
-export function useEmailSenderPaths() {
-  const base = EMAIL_SENDER_SERVICE_BASE;
+export function useRelaybasePaths() {
+  const base = RELAYBASE_SERVICE_BASE;
   const status = `${base}/status`;
   const logs = `${base}/logs`;
   const keys = `${base}/keys`;
@@ -27,7 +27,7 @@ export function useEmailSenderPaths() {
   ];
 
   return {
-    apiBase: EMAIL_SENDER_API,
+    apiBase: RELAYBASE_API,
     base,
     status,
     logs,
@@ -39,3 +39,6 @@ export function useEmailSenderPaths() {
     tabs,
   };
 }
+
+/** @deprecated Use useRelaybasePaths */
+export const useEmailSenderPaths = useRelaybasePaths;

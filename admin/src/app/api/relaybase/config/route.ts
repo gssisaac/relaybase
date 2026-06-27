@@ -5,6 +5,7 @@ import {
   fetchEmailSenderHealth,
   syncWorkerRuntimeConfig,
 } from "@/relaybase/lib/client";
+import { runRelaybaseDiagnostics } from "@/relaybase/lib/diagnostics";
 import { ensureWorkerServiceToken, resolveEmailSenderConfig } from "@/relaybase/lib/config";
 import { readRelaybaseEnvSettings } from "@/relaybase/lib/env-settings";
 import {
@@ -21,14 +22,27 @@ function resolveWorkerUrlForHealth(
   return detail.workerUrl?.trim() || readRelaybaseEnvSettings().workerUrl.trim();
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+    const includeDiagnostics = url.searchParams.get("diagnostics") === "1";
     const detail = getEmailSenderAdminSettingsDetail();
     const workerUrl = resolveWorkerUrlForHealth(detail);
     const health = workerUrl
       ? await fetchEmailSenderHealth(workerUrl)
       : { ok: false };
     const cfg = resolveEmailSenderConfig();
+    const diagnostics = includeDiagnostics
+      ? await runRelaybaseDiagnostics()
+      : undefined;
+
+    if (diagnostics) {
+      for (const check of diagnostics.checks) {
+        if (!check.ok && check.logDetail) {
+          console.error("[relaybase-diagnostics]", check.id, check.logDetail);
+        }
+      }
+    }
 
     return NextResponse.json({
       ...detail,
@@ -43,6 +57,7 @@ export async function GET() {
           health.inbound.bucketName.toLowerCase() !==
             detail.inboundR2BucketName.toLowerCase(),
       ),
+      diagnostics,
     });
   } catch (error) {
     return apiError(error);
@@ -128,8 +143,13 @@ export async function PUT(request: Request) {
         : ` R2 bucket ${r2.bucketName} is ready.`;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      console.error("[relaybase-config] R2 provisioning failed", {
+        bucketName,
+        message,
+      });
       if (/authentication error|unauthorized|9109|10000/i.test(message)) {
-        r2Message = ` Skipped R2 bucket check (${message}). Create ${bucketName} manually or use a token with R2 read/write.`;
+        r2Message =
+          " R2 check failed: Cloudflare API token lacks R2 permissions. Create a token with Account → R2 → Edit, update admin/.env.local, restart admin, and sync again.";
       } else {
         throw error;
       }
@@ -149,6 +169,8 @@ export async function PUT(request: Request) {
       message: `Settings saved and synced to worker.${r2Message}`,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[relaybase-config] save failed", { message, cause: error });
     return apiError(error);
   }
 }

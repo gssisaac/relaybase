@@ -23,7 +23,7 @@ type DomainContextValue = {
   error: string | null;
   refresh: () => Promise<void>;
   setActiveDomain: (domain: string) => Promise<void>;
-  addDomain: (domain: string) => Promise<{ message: string; r2Error?: string | null }>;
+  addDomain: (domain: string) => Promise<{ message: string }>;
   removeDomain: (domain: string) => Promise<void>;
   domainQuery: (extra?: Record<string, string>) => string;
 };
@@ -93,15 +93,14 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
       domains?: DomainSummary[];
       activeDomain?: string | null;
       message?: string;
-      r2Error?: string | null;
       error?: string;
+      code?: string;
     };
     if (!res.ok) throw new Error(data.error ?? "Failed to add domain");
     setDomains(data.domains ?? []);
     setActiveDomainState(data.activeDomain ?? null);
     return {
       message: data.message ?? "Domain added",
-      r2Error: data.r2Error ?? null,
     };
   }, []);
 

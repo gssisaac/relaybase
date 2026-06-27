@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useEmailSender } from "@/relaybase/components/EmailSenderContext";
 import { EmailSenderComposeForm } from "@/relaybase/components/EmailSenderComposeForm";
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import type { EmailSenderKeyOption } from "@/relaybase/components/types";
 import { useEmailSenderPaths } from "@/relaybase/components/useEmailSenderPaths";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -63,7 +63,7 @@ export function EmailSenderComposeView() {
     setSending(true);
     setError(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/send`, {
+      const res = await fetch(`${RELAYBASE_API}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

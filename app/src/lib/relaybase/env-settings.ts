@@ -40,10 +40,12 @@ export function readRelaybaseEnvSettings(): RelaybaseEnvSettings {
     trimUrl(process.env.FLARE_EMAIL_SENDER_URL),
   );
   const cloudflareAccountId = firstNonEmpty(
+    process.env.RELAYBASE_CF_ACCOUNT_ID,
     process.env.FLARE_EMAIL_SENDER_CF_ACCOUNT_ID,
     process.env.CLOUDFLARE_ACCOUNT_ID,
   );
   const cloudflareApiToken = firstNonEmpty(
+    process.env.RELAYBASE_CF_API_TOKEN,
     process.env.FLARE_EMAIL_SENDER_CF_API_TOKEN,
     process.env.CLOUDFLARE_API_TOKEN,
   );

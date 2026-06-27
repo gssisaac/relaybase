@@ -3,7 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import { EmailSenderAlerts } from "@/relaybase/components/EmailSenderShared";
 import type { UserApiKeySummary } from "@/lib/admin/user-profile";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +53,7 @@ export function UserApiKeysSection({
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/keys`, {
+      const res = await fetch(`${RELAYBASE_API}/keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -86,7 +86,7 @@ export function UserApiKeysSection({
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/keys/${key.id}`, {
+      const res = await fetch(`${RELAYBASE_API}/keys/${key.id}`, {
         method: "DELETE",
       });
       const data = (await res.json()) as { error?: string };

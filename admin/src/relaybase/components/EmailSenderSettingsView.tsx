@@ -6,7 +6,7 @@ import {
   useEmailSender,
   useEmailSenderCacheHint,
 } from "@/relaybase/components/EmailSenderContext";
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import {
   EmailSenderAlerts,
   EmailSenderToolbar,
@@ -78,41 +78,41 @@ function SettingField({
 const FIELD_DEFS = [
   {
     key: "workerUrl" as const,
-    id: "email-sender-worker-url",
+    id: "relaybase-worker-url",
     label: "Worker URL",
     placeholder: "https://relaybase.example.workers.dev",
   },
   {
     key: "cloudflareAccountId" as const,
-    id: "email-sender-cf-account",
+    id: "relaybase-cf-account",
     label: "Cloudflare account ID",
     placeholder: "32-character account ID",
   },
   {
     key: "cloudflareApiToken" as const,
-    id: "email-sender-cf-token",
+    id: "relaybase-cf-token",
     label: "Cloudflare API token",
     placeholder: "Token with Account → Email Sending → Edit",
     secret: true,
   },
   {
     key: "cloudflareZoneId" as const,
-    id: "email-sender-cf-zone",
+    id: "relaybase-cf-zone",
     label: "Cloudflare zone ID (optional)",
     placeholder: "Auto-resolve from domain in Branding",
   },
   {
     key: "cloudflareDnsApiToken" as const,
-    id: "email-sender-cf-dns-token",
+    id: "relaybase-cf-dns-token",
     label: "Cloudflare DNS API token (optional)",
     placeholder: "Zone → DNS → Edit (for Branding tab)",
     secret: true,
   },
   {
     key: "inboundR2BucketName" as const,
-    id: "email-sender-inbound-r2-bucket",
+    id: "relaybase-inbound-r2-bucket",
     label: "Inbound R2 bucket (shared)",
-    placeholder: "flare-email-inbound",
+    placeholder: "relaybase-inbound",
     description:
       "Created automatically on save if missing. Mail is organized by domain under inbound/<domain>/ inside this bucket.",
   },
@@ -206,7 +206,7 @@ export function EmailSenderSettingsView() {
         body[field.key] = value || undefined;
       }
 
-      const res = await fetch(`${EMAIL_SENDER_API}/config`, {
+      const res = await fetch(`${RELAYBASE_API}/config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -283,6 +283,26 @@ export function EmailSenderSettingsView() {
               Worker URL, Cloudflare credentials, and inbound bucket are configured
               via environment variables.
             </p>
+          ) : null}
+
+          {config?.diagnostics?.checks.some((check) => !check.ok) ? (
+            <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm font-medium text-destructive">
+                Configuration issues
+              </p>
+              <ul className="space-y-2 text-sm">
+                {config.diagnostics.checks
+                  .filter((check) => !check.ok)
+                  .map((check) => (
+                    <li key={check.id}>
+                      <p className="font-medium">{check.summary}</p>
+                      {check.detail ? (
+                        <p className="text-muted-foreground">{check.detail}</p>
+                      ) : null}
+                    </li>
+                  ))}
+              </ul>
+            </div>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-2">

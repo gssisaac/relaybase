@@ -161,6 +161,17 @@ export function looksLikeRelaybaseAuthToken(value: string): boolean {
   return trimmed.startsWith("rb-auth-") || trimmed.startsWith("rb-admin-");
 }
 
+export function isPlaceholderWorkerServiceToken(value: string): boolean {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return true;
+  return (
+    trimmed === "rb-admin-temp-replace-me" ||
+    trimmed.includes("replace-me") ||
+    trimmed.includes("temp-replace") ||
+    trimmed.includes("changeme")
+  );
+}
+
 function migrateCloudflareFromMacPurity(): Pick<
   EmailSenderSettings,
   "cloudflareAccountId" | "cloudflareApiToken"

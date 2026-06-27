@@ -51,9 +51,6 @@ export function DomainsView() {
       const result = await addDomain(domainInput);
       setDomainInput("");
       setMessage(result.message);
-      if (result.r2Error) {
-        setLocalError(result.r2Error);
-      }
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Failed to add domain");
     } finally {

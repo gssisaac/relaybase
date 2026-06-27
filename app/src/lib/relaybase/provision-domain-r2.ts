@@ -8,6 +8,7 @@ import {
   inboundR2ObjectPrefix,
   resolveInboundR2BucketName,
 } from "@/lib/relaybase/r2-inbound";
+import { platformNotConfiguredError } from "@/lib/relaybase/domain-provision-errors";
 
 const RELAYBASE_STORE_ID = "relaybase";
 const SETTINGS_FILE = "settings.json";
@@ -109,9 +110,7 @@ export async function provisionDomainInboundR2(
 
   const platform = readRelaybasePlatformConfig();
   if (!platform.cloudflareConfigured) {
-    throw new Error(
-      "Relaybase Cloudflare credentials are not configured — ask your operator to finish Relaybase setup",
-    );
+    throw platformNotConfiguredError();
   }
 
   const r2 = await ensureInboundR2Bucket({

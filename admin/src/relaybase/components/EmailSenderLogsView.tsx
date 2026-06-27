@@ -15,7 +15,7 @@ import type {
   EmailSenderLogSummary,
 } from "@/relaybase/components/types";
 import { readCachedOrStale } from "@/lib/dashboard/shared/dashboard-client-cache";
-import { EMAIL_SENDER_CACHE_ID } from "@/relaybase/components/EmailSenderContext";
+import { RELAYBASE_CACHE_ID } from "@/relaybase/components/EmailSenderContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,7 +105,7 @@ export function EmailSenderLogsView() {
     const cached = readCachedOrStale<{
       logs?: EmailSenderLogEntry[];
       summary?: EmailSenderLogSummary;
-    }>(EMAIL_SENDER_CACHE_ID, "relaybase", `logs:${queryKey}`);
+    }>(RELAYBASE_CACHE_ID, "relaybase", `logs:${queryKey}`);
     if (cached) {
       setLogs(cached.logs ?? []);
       setSummary(cached.summary ?? null);

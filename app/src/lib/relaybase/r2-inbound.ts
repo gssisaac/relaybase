@@ -1,7 +1,7 @@
 const API_BASE = "https://api.cloudflare.com/client/v4";
 
 /** Shared R2 bucket — domains are separated by object key prefix, not bucket name. */
-export const INBOUND_R2_BUCKET_NAME = "flare-email-inbound";
+export const INBOUND_R2_BUCKET_NAME = "relaybase-inbound";
 
 export function defaultInboundR2BucketName(_serviceId?: string): string {
   return INBOUND_R2_BUCKET_NAME;
@@ -12,7 +12,11 @@ export function resolveInboundR2BucketName(
   stored?: string | null,
 ): string {
   const trimmed = stored?.trim();
-  if (!trimmed || trimmed.startsWith("flare-email-inbound-")) {
+  if (
+    !trimmed ||
+    trimmed === "flare-email-inbound" ||
+    trimmed.startsWith("flare-email-inbound-")
+  ) {
     return INBOUND_R2_BUCKET_NAME;
   }
   return trimmed;

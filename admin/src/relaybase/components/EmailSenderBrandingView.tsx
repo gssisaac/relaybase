@@ -6,9 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useEmailSender,
   useEmailSenderCacheHint,
-  EMAIL_SENDER_CACHE_ID,
+  RELAYBASE_CACHE_ID,
 } from "@/relaybase/components/EmailSenderContext";
-import { EMAIL_SENDER_API } from "@/relaybase/components/constants";
+import { RELAYBASE_API } from "@/relaybase/components/constants";
 import {
   EmailSenderAlerts,
   EmailSenderToolbar,
@@ -111,10 +111,10 @@ export function EmailSenderBrandingView() {
 
   const loadBranding = useCallback(async (targetDomain: string, force?: boolean) => {
     const { data } = await fetchCachedApi<BrandingStatus>(
-      EMAIL_SENDER_CACHE_ID,
+      RELAYBASE_CACHE_ID,
       "relaybase",
       `branding:${targetDomain}`,
-      `${EMAIL_SENDER_API}/branding?domain=${encodeURIComponent(targetDomain)}`,
+      `${RELAYBASE_API}/branding?domain=${encodeURIComponent(targetDomain)}`,
       {
         refresh: force,
         onUpdate: (next) => {
@@ -192,7 +192,7 @@ export function EmailSenderBrandingView() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/branding`, {
+      const res = await fetch(`${RELAYBASE_API}/branding`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -219,7 +219,7 @@ export function EmailSenderBrandingView() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${EMAIL_SENDER_API}/branding`, {
+      const res = await fetch(`${RELAYBASE_API}/branding`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

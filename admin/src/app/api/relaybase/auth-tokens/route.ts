@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 
 import {
-  issueRelaybaseDashboardAdminToken,
-  listRelaybaseDashboardAdminTokens,
+  issueRelaybaseDashboardAuthToken,
+  listRelaybaseDashboardAuthTokens,
 } from "@/relaybase/lib/settings";
 import { apiError } from "@/lib/api/api-error";
 
 export async function GET() {
   try {
     return NextResponse.json({
-      tokens: listRelaybaseDashboardAdminTokens(),
+      tokens: listRelaybaseDashboardAuthTokens(),
     });
   } catch (error) {
     return apiError(error);
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       label?: string;
       productId?: string;
     };
-    const { record, token } = issueRelaybaseDashboardAdminToken({
+    const { record, token } = issueRelaybaseDashboardAuthToken({
       label: body.label,
       productId: body.productId,
     });
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         createdAt: record.createdAt,
         token,
         message:
-          "Dashboard admin token issued — copy it now; it will not be shown again.",
+          "Auth token issued — copy it now; it will not be shown again.",
       },
       { status: 201 },
     );

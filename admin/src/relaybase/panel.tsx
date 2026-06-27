@@ -8,7 +8,7 @@ import { EmailSenderKeysView } from "@/relaybase/components/EmailSenderKeysView"
 import { EmailSenderLogsView } from "@/relaybase/components/EmailSenderLogsView";
 import { EmailSenderSettingsView } from "@/relaybase/components/EmailSenderSettingsView";
 import { EmailSenderShell } from "@/relaybase/components/EmailSenderShell";
-import { EmailSenderStatusView } from "@/relaybase/components/EmailSenderStatusView";
+import { AdminDashboardView } from "@/components/dashboard/AdminDashboardView";
 
 function EmailSenderView({ subPath }: PanelViewProps) {
   const [head, second] = subPath;
@@ -21,7 +21,7 @@ function EmailSenderView({ subPath }: PanelViewProps) {
     return <EmailSenderEmailsView />;
   }
   if (head === "settings") return <EmailSenderSettingsView />;
-  return <EmailSenderStatusView />;
+  return <AdminDashboardView />;
 }
 
 export function EmailSenderPanelView({ subPath }: PanelViewProps) {

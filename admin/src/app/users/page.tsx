@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,15 +20,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { UserSummary } from "@/lib/admin/user-profile";
 
-type UserRow = {
-  id: string;
-  createdAt: string;
-  lastSeenAt: string;
-};
+function BrandingBadge({
+  branding,
+}: {
+  branding: UserSummary["branding"];
+}) {
+  if (!branding) {
+    return <Badge variant="secondary">No domain</Badge>;
+  }
+  if (branding.dmarcEnforced && branding.bimiReady) {
+    return <Badge variant="default">Ready</Badge>;
+  }
+  if (branding.dnsConfigured) {
+    return <Badge variant="secondary">Partial</Badge>;
+  }
+  return <Badge variant="secondary">Pending</Badge>;
+}
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const router = useRouter();
+  const [users, setUsers] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +49,7 @@ export default function UsersPage() {
     void (async () => {
       try {
         const res = await fetch("/api/users", { cache: "no-store" });
-        const data = (await res.json()) as { users?: UserRow[]; error?: string };
+        const data = (await res.json()) as { users?: UserSummary[]; error?: string };
         if (!res.ok) throw new Error(data.error ?? "Failed to load users");
         setUsers(data.users ?? []);
       } catch (e) {
@@ -46,12 +61,12 @@ export default function UsersPage() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4 p-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4">
       <Card>
         <CardHeader>
           <CardTitle>Users</CardTitle>
           <CardDescription>
-            Accounts created via the user dashboard (dev auth — id only).
+            Platform accounts — click a row for detail, stats, and management.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -65,24 +80,56 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Created</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Domain</TableHead>
+                  <TableHead>Auth</TableHead>
+                  <TableHead>API keys</TableHead>
+                  <TableHead>7d activity</TableHead>
+                  <TableHead>Branding</TableHead>
                   <TableHead>Last seen</TableHead>
-                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-mono text-sm">{user.id}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(user.createdAt).toLocaleString()}
+                  <TableRow
+                    key={user.id}
+                    className="cursor-pointer"
+                    onClick={() =>
+                      router.push(`/users/${encodeURIComponent(user.id)}`)
+                    }
+                  >
+                    <TableCell>
+                      <Link
+                        href={`/users/${encodeURIComponent(user.id)}`}
+                        className="font-mono text-sm font-medium hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {user.id}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {user.domain ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{user.authTokenCount}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{user.apiKeyCount}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <span className="tabular-nums">{user.requests7d}</span> req
+                      {user.errors7d > 0 ? (
+                        <span className="ml-2 text-destructive tabular-nums">
+                          {user.errors7d} err
+                        </span>
+                      ) : null}
+                      <span className="ml-2 tabular-nums">{user.emails7d} sent</span>
+                    </TableCell>
+                    <TableCell>
+                      <BrandingBadge branding={user.branding} />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                       {new Date(user.lastSeenAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">Active</Badge>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -37,7 +37,7 @@ export function useEmailSettings() {
   const [cfApiEmail, setCfApiEmail] = useState("");
   const [cfGlobalKey, setCfGlobalKey] = useState("");
   const [relaybaseApiKey, setRelaybaseApiKey] = useState("");
-  const [relaybaseAdminToken, setRelaybaseAdminToken] = useState("");
+  const [relaybaseAuthToken, setRelaybaseAuthToken] = useState("");
   const [inboundR2BucketName, setInboundR2BucketName] = useState("");
   const [credentialSource, setCredentialSource] = useState<
     "integration" | "manual"
@@ -57,7 +57,7 @@ export function useEmailSettings() {
     setCfApiEmail(s.cloudflareApiEmail ?? "");
     setCfGlobalKey(s.cloudflareGlobalApiKey ?? "");
     setRelaybaseApiKey(s.relaybaseApiKey ?? "");
-    setRelaybaseAdminToken(s.relaybaseAdminToken ?? "");
+    setRelaybaseAuthToken(s.relaybaseAuthToken ?? "");
     setInboundR2BucketName(s.inboundR2BucketName ?? "");
   }, []);
 
@@ -167,7 +167,7 @@ export function useEmailSettings() {
     }
   }
 
-  async function saveRelaybaseAdminToken() {
+  async function saveRelaybaseAuthToken() {
     setMessage(null);
     setError(null);
     setSaving(true);
@@ -176,13 +176,13 @@ export function useEmailSettings() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          relaybaseAdminToken: relaybaseAdminToken.trim(),
+          relaybaseAuthToken: relaybaseAuthToken.trim(),
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       applyConfig(data);
-      setMessage(data.message ?? "Relaybase admin token saved");
+      setMessage(data.message ?? "Relaybase auth token saved");
       clearEmailCache(productId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
@@ -246,7 +246,7 @@ export function useEmailSettings() {
   }
 
   const relaybaseOk = config?.relaybaseConfigured ?? false;
-  const relaybaseAdminOk = config?.relaybaseAdminConfigured ?? false;
+  const relaybaseAuthOk = config?.relaybaseAuthConfigured ?? false;
   const cloudflareOk = config?.cloudflareConfigured ?? false;
   const canConnect = cloudflareOk && Boolean(emailDomain.trim());
 
@@ -275,8 +275,8 @@ export function useEmailSettings() {
     setCfGlobalKey,
     relaybaseApiKey,
     setRelaybaseApiKey,
-    relaybaseAdminToken,
-    setRelaybaseAdminToken,
+    relaybaseAuthToken,
+    setRelaybaseAuthToken,
     inboundR2BucketName,
     setInboundR2BucketName,
     credentialSource,
@@ -285,13 +285,13 @@ export function useEmailSettings() {
     refresh,
     saveCredentialSource,
     saveDomainSettings,
-    saveRelaybaseAdminToken,
+    saveRelaybaseAuthToken,
     connectDomain,
     connectSending,
     connectRouting,
     connectWorkerInbound,
     relaybaseOk,
-    relaybaseAdminOk,
+    relaybaseAuthOk,
     cloudflareOk,
     canConnect,
     cacheHint,

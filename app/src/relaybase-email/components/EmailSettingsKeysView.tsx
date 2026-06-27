@@ -186,36 +186,36 @@ export function EmailSettingsKeysView() {
         error={s.error ?? keysError}
         message={s.message ?? keysMessage}
       />
-      <RelaybaseConfigAlert show={!s.relaybaseAdminOk} />
+      <RelaybaseConfigAlert show={!s.relaybaseAuthOk} />
 
-      {!s.relaybaseAdminOk ? (
+      {!s.relaybaseAuthOk ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Relaybase admin token</CardTitle>
+            <CardTitle className="text-sm">Relaybase auth token</CardTitle>
             <CardDescription>
-              Paste the <code className="text-xs">rb-admin-…</code> token issued
+              Paste the <code className="text-xs">rb-auth-…</code> token issued
               from Relaybase → Status. This is not a Cloudflare API token (
               <code className="text-xs">cfut_…</code>).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="relaybase-admin-token">Admin token</Label>
+              <Label htmlFor="relaybase-auth-token">Auth token</Label>
               <CredentialInput
-                id="relaybase-admin-token"
-                value={s.relaybaseAdminToken}
-                onChange={(e) => s.setRelaybaseAdminToken(e.target.value)}
-                placeholder="rb-admin-…"
+                id="relaybase-auth-token"
+                value={s.relaybaseAuthToken}
+                onChange={(e) => s.setRelaybaseAuthToken(e.target.value)}
+                placeholder="rb-auth-…"
                 disabled={s.saving}
                 className="font-mono text-xs"
               />
             </div>
             <Button
               size="sm"
-              onClick={() => void s.saveRelaybaseAdminToken()}
-              disabled={s.saving || !s.relaybaseAdminToken.trim()}
+              onClick={() => void s.saveRelaybaseAuthToken()}
+              disabled={s.saving || !s.relaybaseAuthToken.trim()}
             >
-              {s.saving ? "Saving…" : "Save admin token"}
+              {s.saving ? "Saving…" : "Save auth token"}
             </Button>
           </CardContent>
         </Card>
@@ -244,7 +244,7 @@ export function EmailSettingsKeysView() {
         </Alert>
       ) : null}
 
-      {relaybaseReady && s.relaybaseAdminOk && domain ? (
+      {relaybaseReady && s.relaybaseAuthOk && domain ? (
         <>
           <Card>
             <CardHeader>

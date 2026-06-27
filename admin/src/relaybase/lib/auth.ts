@@ -1,11 +1,11 @@
 import {
   requireEmailSenderConfig,
-  resolveAdminTokenFromSettings,
+  resolveWorkerServiceToken,
   resolveEmailSenderConfig,
   type EmailSenderConfig,
 } from "./config";
 import {
-  findRelaybaseDashboardAdminToken,
+  findRelaybaseDashboardAuthToken,
   looksLikeCloudflareApiToken,
   readEmailSenderSettings,
 } from "./settings";
@@ -19,13 +19,7 @@ function bearerToken(request: Request): string | null {
 }
 
 function resolveWorkerBaseUrl(): string {
-  const settings = readEmailSenderSettings();
-  return (
-    settings.workerUrl.trim() ||
-    process.env.RELAYBASE_URL?.trim().replace(/\/$/, "") ||
-    process.env.FLARE_EMAIL_SENDER_URL?.trim().replace(/\/$/, "") ||
-    ""
-  );
+  return readEmailSenderSettings().workerUrl.trim();
 }
 
 export class RelaybaseAuthError extends Error {
@@ -35,12 +29,12 @@ export class RelaybaseAuthError extends Error {
   }
 }
 
-function isDashboardAccessToken(token: string): boolean {
-  return findRelaybaseDashboardAdminToken(token) !== null;
+function isDashboardAuthToken(token: string): boolean {
+  return findRelaybaseDashboardAuthToken(token) !== null;
 }
 
 function resolveWorkerServiceTokenForCalls(): string {
-  const configured = resolveAdminTokenFromSettings().trim();
+  const configured = resolveWorkerServiceToken().trim();
   if (configured) return configured;
 
   throw new RelaybaseAuthError(
@@ -48,27 +42,30 @@ function resolveWorkerServiceTokenForCalls(): string {
   );
 }
 
-/** Dashboard tokens issued from Status — not the internal worker service token. */
-export async function resolveRelaybaseAdminCredential(
+/** Auth tokens issued from Status — not the internal worker service token. */
+export async function resolveRelaybaseAuthCredential(
   token: string,
 ): Promise<boolean> {
   const trimmed = token.trim();
   if (!trimmed || looksLikeCloudflareApiToken(trimmed)) return false;
-  return isDashboardAccessToken(trimmed);
+  return isDashboardAuthToken(trimmed);
 }
 
+/** @deprecated Use resolveRelaybaseAuthCredential */
+export const resolveRelaybaseAdminCredential = resolveRelaybaseAuthCredential;
+
 /**
- * Authenticate Relaybase admin API calls from the Relaybase product UI.
+ * Authenticate Relaybase API calls from the product UI.
  */
-export async function requireRelaybaseAdminAuth(
+export async function requireRelaybaseAuth(
   request: Request,
 ): Promise<EmailSenderConfig> {
   const token = bearerToken(request);
 
   if (token) {
-    if (!(await resolveRelaybaseAdminCredential(token))) {
+    if (!(await resolveRelaybaseAuthCredential(token))) {
       throw new RelaybaseAuthError(
-        "Invalid Relaybase admin token — use rb-admin-… from Relaybase Status, not a Cloudflare API token (cfut_…)",
+        "Invalid Relaybase auth token — use rb-auth-… from Relaybase Admin → Users, not a Cloudflare API token (cfut_…)",
       );
     }
     const baseUrl = resolveWorkerBaseUrl();
@@ -84,37 +81,40 @@ export async function requireRelaybaseAdminAuth(
   return requireEmailSenderConfig();
 }
 
+/** @deprecated Use requireRelaybaseAuth */
+export const requireRelaybaseAdminAuth = requireRelaybaseAuth;
+
 /**
  * Authenticate relaybase-email dashboard calls for a product.
- * Dashboard tokens authorize the product UI; worker calls use an internal service token.
+ * Auth tokens authorize the product UI; worker calls use an internal service token.
  */
-export async function requireDashboardRelaybaseAdminAuth(
+export async function requireDashboardRelaybaseAuth(
   productId: string,
   request: Request,
 ): Promise<EmailSenderConfig> {
   const bearer = bearerToken(request);
-  const stored = readEmailSettings(productId).relaybaseAdminToken.trim();
+  const stored = readEmailSettings(productId).relaybaseAuthToken.trim();
   const dashboardToken = bearer || stored;
 
   if (!dashboardToken) {
     throw new RelaybaseAuthError(
-      "Relaybase admin token is required — issue one in Relaybase → Status and paste it in Email settings",
+      "Relaybase auth token is required — issue one in Relaybase Admin → Users",
     );
   }
 
-  if (!(await resolveRelaybaseAdminCredential(dashboardToken))) {
+  if (!(await resolveRelaybaseAuthCredential(dashboardToken))) {
     throw new RelaybaseAuthError(
-      "Invalid Relaybase admin token — issue a fresh rb-admin-… token in Relaybase → Status. Cloudflare API tokens (cfut_…) are not accepted.",
+        "Invalid Relaybase auth token — issue a fresh rb-auth-… token in Relaybase Admin → Users. Cloudflare API tokens (cfut_…) are not accepted.",
     );
   }
 
-  const dashboardRecord = findRelaybaseDashboardAdminToken(dashboardToken);
+  const dashboardRecord = findRelaybaseDashboardAuthToken(dashboardToken);
   if (
     dashboardRecord?.productId &&
     dashboardRecord.productId !== productId.trim()
   ) {
     throw new RelaybaseAuthError(
-      "This Relaybase admin token is not authorized for this product",
+      "This Relaybase auth token is not authorized for this product",
     );
   }
 
@@ -128,3 +128,6 @@ export async function requireDashboardRelaybaseAdminAuth(
   const adminToken = resolveWorkerServiceTokenForCalls();
   return { baseUrl, adminToken };
 }
+
+/** @deprecated Use requireDashboardRelaybaseAuth */
+export const requireDashboardRelaybaseAdminAuth = requireDashboardRelaybaseAuth;

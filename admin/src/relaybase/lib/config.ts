@@ -1,5 +1,5 @@
 import {
-  generateRelaybaseAdminToken,
+  generateWorkerServiceToken,
   looksLikeCloudflareApiToken,
   mergeEmailSenderSettings,
   readEmailSenderSettings,
@@ -12,37 +12,31 @@ export type EmailSenderConfig = {
 
 /** Internal worker bridge token — auto-provisioned on save, not user-facing. */
 export function ensureWorkerServiceToken(): string {
-  const existing = resolveAdminTokenFromSettings();
+  const existing = resolveWorkerServiceToken();
   if (existing && !looksLikeCloudflareApiToken(existing)) {
     return existing;
   }
-  const token = generateRelaybaseAdminToken();
+  const token = generateWorkerServiceToken();
   mergeEmailSenderSettings({ adminToken: token });
   return token;
 }
 
-export function resolveAdminTokenFromSettings(): string {
+export function resolveWorkerServiceToken(): string {
   const settings = readEmailSenderSettings();
   const fromSettings = settings.adminToken.trim();
-  const fromEnv =
-    process.env.RELAYBASE_ADMIN_TOKEN?.trim() ??
-    process.env.FLARE_EMAIL_SENDER_ADMIN_TOKEN?.trim() ??
-    "";
-
   if (fromSettings && !looksLikeCloudflareApiToken(fromSettings)) {
     return fromSettings;
   }
-  return fromEnv || fromSettings;
+  return fromSettings;
 }
+
+/** @deprecated Use resolveWorkerServiceToken */
+export const resolveAdminTokenFromSettings = resolveWorkerServiceToken;
 
 export function resolveEmailSenderConfig(): EmailSenderConfig | null {
   const settings = readEmailSenderSettings();
-  const baseUrl =
-    settings.workerUrl.trim() ||
-    process.env.RELAYBASE_URL?.trim().replace(/\/$/, "") ||
-    process.env.FLARE_EMAIL_SENDER_URL?.trim().replace(/\/$/, "") ||
-    "";
-  const adminToken = resolveAdminTokenFromSettings();
+  const baseUrl = settings.workerUrl.trim();
+  const adminToken = resolveWorkerServiceToken();
   if (!baseUrl || !adminToken) return null;
   return { baseUrl, adminToken };
 }

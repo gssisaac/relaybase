@@ -73,7 +73,7 @@ const EmailSenderContext = createContext<EmailSenderContextValue | null>(null);
 
 export function EmailSenderProvider({ children }: { children: React.ReactNode }) {
   const [config, setConfig] = useState<ConfigPayload | null>(() =>
-    readCachedOrStale<ConfigPayload>(EMAIL_SENDER_CACHE_ID, CACHE_NS, "config"),
+    readCachedOrStale<ConfigPayload>(EMAIL_SENDER_CACHE_ID, CACHE_NS, "config:v3"),
   );
   const [keys, setKeys] = useState<EmailSenderKeyRow[]>(() => {
     const cached = readCachedOrStale<KeysPayload>(
@@ -98,7 +98,7 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
         const hasCache = readCachedOrStale<ConfigPayload>(
           EMAIL_SENDER_CACHE_ID,
           CACHE_NS,
-          "config",
+          "config:v3",
         );
         return hasCache === null;
       });
@@ -108,7 +108,7 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
       const { data, meta } = await fetchCachedApi<ConfigPayload>(
         EMAIL_SENDER_CACHE_ID,
         CACHE_NS,
-        "config",
+        "config:v3",
         `${EMAIL_SENDER_API}/config`,
         {
           refresh: isRefresh,
@@ -126,7 +126,7 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const refreshKeys = useCallback(async (options?: { refresh?: boolean }) => {
-    if (!config?.configured && !options?.refresh) {
+    if (!config?.workerLinked && !options?.refresh) {
       setKeys([]);
       return;
     }
@@ -151,7 +151,7 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
     } finally {
       setRefreshing(false);
     }
-  }, [config?.configured]);
+  }, [config?.workerLinked]);
 
   const fetchSent = useCallback(
     async (options?: {
@@ -190,7 +190,7 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
   );
 
   const invalidateConfig = useCallback(() => {
-    clearDashboardCache(EMAIL_SENDER_CACHE_ID, CACHE_NS, "config");
+    clearDashboardCache(EMAIL_SENDER_CACHE_ID, CACHE_NS, "config:v3");
     clearDashboardCache(EMAIL_SENDER_CACHE_ID, CACHE_NS, "keys");
   }, []);
 
@@ -199,9 +199,9 @@ export function EmailSenderProvider({ children }: { children: React.ReactNode })
   }, [refreshConfig]);
 
   useEffect(() => {
-    if (config?.configured) void refreshKeys();
+    if (config?.workerLinked) void refreshKeys();
     else setKeys([]);
-  }, [config?.configured, refreshKeys]);
+  }, [config?.workerLinked, refreshKeys]);
 
   const value = useMemo(
     () => ({

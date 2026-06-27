@@ -267,9 +267,9 @@ export function RelaybaseConfigAlert({ show }: { show: boolean }) {
   if (!show) return null;
   return (
     <Alert>
-      <AlertTitle>Relaybase admin token required</AlertTitle>
+      <AlertTitle>Relaybase auth token required</AlertTitle>
       <AlertDescription>
-        Issue an admin token in Relaybase → Status, paste it below, then issue
+        Request an auth token in Relaybase → Status, paste it below, then issue
         domain API keys in{" "}
         <Link href={settingsKeys} className="font-medium underline">
           API Keys

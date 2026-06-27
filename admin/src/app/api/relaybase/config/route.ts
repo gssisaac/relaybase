@@ -6,23 +6,35 @@ import {
   syncWorkerRuntimeConfig,
 } from "@/relaybase/lib/client";
 import { ensureWorkerServiceToken, resolveEmailSenderConfig } from "@/relaybase/lib/config";
+import { readRelaybaseEnvSettings } from "@/relaybase/lib/env-settings";
 import {
   getEmailSenderAdminSettingsDetail,
   getEmailSenderConnectionView,
   mergeEmailSenderSettings,
+  readEmailSenderSettings,
 } from "@/relaybase/lib/settings";
 import { apiError } from "@/lib/api/api-error";
+
+function resolveWorkerUrlForHealth(
+  detail: ReturnType<typeof getEmailSenderAdminSettingsDetail>,
+): string {
+  return detail.workerUrl?.trim() || readRelaybaseEnvSettings().workerUrl.trim();
+}
 
 export async function GET() {
   try {
     const detail = getEmailSenderAdminSettingsDetail();
+    const workerUrl = resolveWorkerUrlForHealth(detail);
+    const health = workerUrl
+      ? await fetchEmailSenderHealth(workerUrl)
+      : { ok: false };
     const cfg = resolveEmailSenderConfig();
-    const health = cfg ? await fetchEmailSenderHealth(cfg.baseUrl) : { ok: false };
 
     return NextResponse.json({
       ...detail,
       healthy: health.ok,
-      workerUrl: cfg?.baseUrl ?? detail.workerUrl ?? null,
+      workerUrl: workerUrl || null,
+      workerLinked: Boolean(cfg),
       inboundR2WorkerReady: health.inbound?.r2Configured === true,
       inboundR2WorkerBucketName: health.inbound?.bucketName ?? null,
       inboundR2Mismatch: Boolean(
@@ -47,7 +59,11 @@ export async function PUT(request: Request) {
       cloudflareDnsApiToken?: string;
       inboundR2BucketName?: string;
     };
-    const workerUrl = body.workerUrl?.trim();
+    const env = readRelaybaseEnvSettings();
+
+    const workerUrl = env.sources.workerUrl
+      ? env.workerUrl
+      : body.workerUrl?.trim();
     if (!workerUrl) {
       return NextResponse.json(
         { error: "workerUrl is required" },
@@ -55,13 +71,23 @@ export async function PUT(request: Request) {
       );
     }
 
-    const settings = mergeEmailSenderSettings({
-      workerUrl,
-      cloudflareAccountId: body.cloudflareAccountId,
-      cloudflareApiToken: body.cloudflareApiToken,
-      cloudflareZoneId: body.cloudflareZoneId,
-      cloudflareDnsApiToken: body.cloudflareDnsApiToken,
-      inboundR2BucketName: body.inboundR2BucketName,
+    mergeEmailSenderSettings({
+      ...(env.sources.workerUrl ? {} : { workerUrl }),
+      ...(env.sources.cloudflareAccountId
+        ? {}
+        : { cloudflareAccountId: body.cloudflareAccountId }),
+      ...(env.sources.cloudflareApiToken
+        ? {}
+        : { cloudflareApiToken: body.cloudflareApiToken }),
+      ...(env.sources.cloudflareZoneId
+        ? {}
+        : { cloudflareZoneId: body.cloudflareZoneId }),
+      ...(env.sources.cloudflareDnsApiToken
+        ? {}
+        : { cloudflareDnsApiToken: body.cloudflareDnsApiToken }),
+      ...(env.sources.inboundR2BucketName
+        ? {}
+        : { inboundR2BucketName: body.inboundR2BucketName }),
     });
 
     const view = getEmailSenderConnectionView();
@@ -72,38 +98,52 @@ export async function PUT(request: Request) {
       );
     }
 
-    const bucketName = resolveInboundR2BucketName(
-      "relaybase",
-      settings.inboundR2BucketName,
-    );
-    const r2 = await ensureInboundR2Bucket({
-      accountId: settings.cloudflareAccountId,
-      apiToken: settings.cloudflareApiToken,
-      bucketName,
-    });
-    mergeEmailSenderSettings({ inboundR2BucketName: r2.bucketName });
-
+    const resolved = readEmailSenderSettings();
     const serviceToken = ensureWorkerServiceToken();
 
     await syncWorkerRuntimeConfig({
-      baseUrl: settings.workerUrl,
+      baseUrl: resolved.workerUrl,
       adminToken: serviceToken,
-      cloudflareAccountId: settings.cloudflareAccountId,
-      cloudflareApiToken: settings.cloudflareApiToken,
-      bootstrapToken: settings.cloudflareApiToken,
+      cloudflareAccountId: resolved.cloudflareAccountId,
+      cloudflareApiToken: resolved.cloudflareApiToken,
+      bootstrapToken: resolved.cloudflareApiToken,
     });
 
-    const health = await fetchEmailSenderHealth(settings.workerUrl);
+    const bucketName = resolveInboundR2BucketName(
+      "relaybase",
+      resolved.inboundR2BucketName,
+    );
+    let r2Message = "";
+    try {
+      const r2 = await ensureInboundR2Bucket({
+        accountId: resolved.cloudflareAccountId,
+        apiToken: resolved.cloudflareApiToken,
+        bucketName,
+      });
+      if (!env.sources.inboundR2BucketName) {
+        mergeEmailSenderSettings({ inboundR2BucketName: r2.bucketName });
+      }
+      r2Message = r2.created
+        ? ` Created R2 bucket ${r2.bucketName}.`
+        : ` R2 bucket ${r2.bucketName} is ready.`;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/authentication error|unauthorized|9109|10000/i.test(message)) {
+        r2Message = ` Skipped R2 bucket check (${message}). Create ${bucketName} manually or use a token with R2 read/write.`;
+      } else {
+        throw error;
+      }
+    }
+
+    const health = await fetchEmailSenderHealth(resolved.workerUrl);
     const detail = getEmailSenderAdminSettingsDetail();
-    const r2Message = r2.created
-      ? ` Created R2 bucket ${r2.bucketName}.`
-      : ` R2 bucket ${r2.bucketName} is ready.`;
 
     return NextResponse.json({
       ...detail,
       healthy: health.ok,
-      workerUrl: settings.workerUrl,
-      inboundR2BucketName: r2.bucketName,
+      workerUrl: resolved.workerUrl,
+      workerLinked: true,
+      inboundR2BucketName: bucketName,
       inboundR2WorkerReady: health.inbound?.r2Configured === true,
       inboundR2WorkerBucketName: health.inbound?.bucketName ?? null,
       message: `Settings saved and synced to worker.${r2Message}`,

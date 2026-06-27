@@ -1,8 +1,8 @@
 export type EmailSenderConfigStatus = {
   workerUrl: string;
-  adminTokenConfigured: boolean;
   cloudflareConfigured: boolean;
   configured: boolean;
+  workerLinked?: boolean;
   healthy: boolean;
   inboundR2BucketName?: string;
   inboundR2WorkerReady?: boolean;
@@ -12,9 +12,17 @@ export type EmailSenderConfigStatus = {
   cloudflareZoneId?: string | null;
   cloudflareApiToken?: string;
   cloudflareDnsApiToken?: string;
+  envSources?: {
+    workerUrl: boolean;
+    cloudflareAccountId: boolean;
+    cloudflareApiToken: boolean;
+    cloudflareZoneId: boolean;
+    cloudflareDnsApiToken: boolean;
+    inboundR2BucketName: boolean;
+  };
 };
 
-export type RelaybaseDashboardAdminTokenRow = {
+export type RelaybaseDashboardAuthTokenRow = {
   id: string;
   label: string | null;
   productId: string | null;

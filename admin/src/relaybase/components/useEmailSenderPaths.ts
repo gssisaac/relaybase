@@ -1,14 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import {
-  Activity,
-  KeyRound,
-  Mail,
-  Palette,
-  ScrollText,
-  Settings,
-} from "lucide-react";
+import { KeyRound, Mail, Palette, ScrollText, Settings } from "lucide-react";
 
 import {
   EMAIL_SENDER_API,
@@ -26,7 +19,6 @@ export function useEmailSenderPaths() {
   const branding = `${base}/branding`;
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
-    { href: status, label: "Status", icon: Activity },
     { href: logs, label: "Logs", icon: ScrollText },
     { href: keys, label: "API Keys", icon: KeyRound },
     { href: branding, label: "Branding", icon: Palette },

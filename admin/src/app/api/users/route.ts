@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { listUsers } from "@/lib/users-store";
+import { listUserSummaries } from "@/lib/admin/user-profile";
+import { apiError } from "@/lib/api/api-error";
 
 export async function GET() {
-  return NextResponse.json({ users: listUsers() });
+  try {
+    const users = await listUserSummaries();
+    return NextResponse.json({ users });
+  } catch (error) {
+    return apiError(error);
+  }
 }

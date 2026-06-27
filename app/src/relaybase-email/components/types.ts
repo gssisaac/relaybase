@@ -2,7 +2,7 @@ export type EmailConfig = {
   emailDomain: string;
   emailZoneId: string;
   relaybaseApiKey: string;
-  relaybaseAdminToken: string;
+  relaybaseAuthToken: string;
   relaybaseKeyId: string;
   cloudflareAccountId: string;
   cloudflareApiToken: string;
@@ -23,7 +23,7 @@ export type EmailConfig = {
   }>;
   configured: boolean;
   relaybaseConfigured: boolean;
-  relaybaseAdminConfigured: boolean;
+  relaybaseAuthConfigured: boolean;
   cloudflareConfigured: boolean;
   relaybaseWorkerUrl: string;
   credentialSource: "integration" | "manual";

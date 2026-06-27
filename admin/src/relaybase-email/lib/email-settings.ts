@@ -7,7 +7,7 @@ export function readEmailSettings(_productId: string) {
     cloudflareDnsApiToken: "",
     cloudflareApiEmail: "",
     cloudflareGlobalApiKey: "",
-    relaybaseAdminToken: "",
+    relaybaseAuthToken: "",
   };
 }
 

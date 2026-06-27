@@ -30,6 +30,12 @@ export function listUsers(): UserRecord[] {
   );
 }
 
+export function getUser(id: string): UserRecord | null {
+  const trimmed = id.trim();
+  if (!trimmed) return null;
+  return readAll().find((user) => user.id === trimmed) ?? null;
+}
+
 export function upsertUser(id: string): UserRecord {
   const trimmed = id.trim();
   if (!trimmed) throw new Error("User id is required");

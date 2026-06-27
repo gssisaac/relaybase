@@ -6,6 +6,11 @@ import {
 } from "@/lib/config/product-store";
 import { defaultInboundR2BucketName, resolveInboundR2BucketName } from "@/relaybase-email/lib/r2-inbound";
 import { readEmailSettings } from "@/relaybase-email/lib/email-settings";
+import {
+  readRelaybaseEnvSettings,
+  resolveSettingValue,
+  type RelaybaseEnvSources,
+} from "@/relaybase/lib/env-settings";
 
 export const RELAYBASE_STORE_ID = "relaybase";
 
@@ -37,8 +42,8 @@ export type EmailSenderSentRecord = {
   sentAt: string;
 };
 
-/** Dashboard access token issued from Relaybase — not a Cloudflare API token (cfut_…). */
-export type RelaybaseDashboardAdminTokenRecord = {
+/** Per-user auth token issued from Relaybase Status — not a Cloudflare API token (cfut_…). */
+export type RelaybaseDashboardAuthTokenRecord = {
   id: string;
   label: string | null;
   productId: string | null;
@@ -47,8 +52,16 @@ export type RelaybaseDashboardAdminTokenRecord = {
   createdAt: string;
 };
 
+/** @deprecated Use RelaybaseDashboardAuthTokenRecord */
+export type RelaybaseDashboardAdminTokenRecord = RelaybaseDashboardAuthTokenRecord;
+
+type StoredEmailSenderSettings = EmailSenderSettings & {
+  dashboardAdminTokens?: RelaybaseDashboardAuthTokenRecord[];
+};
+
 export type EmailSenderSettings = {
   workerUrl: string;
+  /** Internal worker bridge token — auto-provisioned on save, not user-facing. */
   adminToken: string;
   cloudflareAccountId: string;
   cloudflareApiToken: string;
@@ -61,7 +74,7 @@ export type EmailSenderSettings = {
   domainBranding: Record<string, DomainBrandingConfig>;
   apiKeyVault: EmailSenderApiKeyRecord[];
   sentEmails: EmailSenderSentRecord[];
-  dashboardAdminTokens: RelaybaseDashboardAdminTokenRecord[];
+  dashboardAuthTokens: RelaybaseDashboardAuthTokenRecord[];
 };
 
 export type DomainBrandingConfig = {
@@ -72,9 +85,11 @@ export type DomainBrandingConfig = {
 
 export type EmailSenderSettingsView = {
   workerUrl: string;
-  adminTokenConfigured: boolean;
   cloudflareConfigured: boolean;
+  /** Worker URL + Cloudflare credentials are set (env or stored). */
   configured: boolean;
+  /** Internal worker bridge token provisioned and worker accepts it. */
+  workerLinked: boolean;
 };
 
 function emptySettings(): EmailSenderSettings {
@@ -89,7 +104,27 @@ function emptySettings(): EmailSenderSettings {
     domainBranding: {},
     apiKeyVault: [],
     sentEmails: [],
-    dashboardAdminTokens: [],
+    dashboardAuthTokens: [],
+  };
+}
+
+function normalizeStoredSettings(raw: StoredEmailSenderSettings): EmailSenderSettings {
+  return {
+    workerUrl: raw.workerUrl?.trim().replace(/\/$/, "") ?? "",
+    adminToken: raw.adminToken?.trim() ?? "",
+    cloudflareAccountId: raw.cloudflareAccountId?.trim() ?? "",
+    cloudflareApiToken: raw.cloudflareApiToken?.trim() ?? "",
+    cloudflareZoneId: raw.cloudflareZoneId?.trim() ?? "",
+    cloudflareDnsApiToken: raw.cloudflareDnsApiToken?.trim() ?? "",
+    inboundR2BucketName: resolveInboundR2BucketName(
+      RELAYBASE_STORE_ID,
+      raw.inboundR2BucketName,
+    ),
+    domainBranding: raw.domainBranding ?? {},
+    apiKeyVault: raw.apiKeyVault ?? [],
+    sentEmails: raw.sentEmails ?? [],
+    dashboardAuthTokens:
+      raw.dashboardAuthTokens ?? raw.dashboardAdminTokens ?? [],
   };
 }
 
@@ -97,16 +132,33 @@ export function looksLikeCloudflareApiToken(value: string): boolean {
   return value.trim().startsWith("cfut_");
 }
 
-export function generateRelaybaseAdminToken(): string {
-  return `rb-admin-${randomBytes(24).toString("hex")}`;
+export function generateRelaybaseAuthToken(): string {
+  return `rb-auth-${randomBytes(24).toString("hex")}`;
 }
 
-function relaybaseAdminTokenPrefix(token: string): string {
+/** Internal worker bridge token — not issued to users. */
+export function generateWorkerServiceToken(): string {
+  return `rb-svc-${randomBytes(24).toString("hex")}`;
+}
+
+/** @deprecated Use generateRelaybaseAuthToken */
+export function generateRelaybaseAdminToken(): string {
+  return generateRelaybaseAuthToken();
+}
+
+function relaybaseAuthTokenPrefix(token: string): string {
   const trimmed = token.trim();
-  if (trimmed.startsWith("rb-admin-")) {
-    return trimmed.slice("rb-admin-".length, "rb-admin-".length + 8);
+  for (const prefix of ["rb-auth-", "rb-admin-"] as const) {
+    if (trimmed.startsWith(prefix)) {
+      return trimmed.slice(prefix.length, prefix.length + 8);
+    }
   }
   return trimmed.slice(0, 8);
+}
+
+export function looksLikeRelaybaseAuthToken(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.startsWith("rb-auth-") || trimmed.startsWith("rb-admin-");
 }
 
 function migrateCloudflareFromMacPurity(): Pick<
@@ -124,97 +176,79 @@ function migrateCloudflareFromMacPurity(): Pick<
   }
 }
 
+function mergeSettingsWithEnv(stored: EmailSenderSettings): EmailSenderSettings {
+  const env = readRelaybaseEnvSettings();
+  return {
+    ...stored,
+    workerUrl: resolveSettingValue("workerUrl", stored.workerUrl, env),
+    cloudflareAccountId: resolveSettingValue(
+      "cloudflareAccountId",
+      stored.cloudflareAccountId,
+      env,
+    ),
+    cloudflareApiToken: resolveSettingValue(
+      "cloudflareApiToken",
+      stored.cloudflareApiToken,
+      env,
+    ),
+    cloudflareZoneId: resolveSettingValue(
+      "cloudflareZoneId",
+      stored.cloudflareZoneId,
+      env,
+    ),
+    cloudflareDnsApiToken: resolveSettingValue(
+      "cloudflareDnsApiToken",
+      stored.cloudflareDnsApiToken,
+      env,
+    ),
+    inboundR2BucketName: resolveInboundR2BucketName(
+      RELAYBASE_STORE_ID,
+      resolveSettingValue(
+        "inboundR2BucketName",
+        stored.inboundR2BucketName,
+        env,
+      ),
+    ),
+  };
+}
+
 function readStoredSettings(): EmailSenderSettings | null {
-  let stored = readProductJson<EmailSenderSettings>(
+  let stored = readProductJson<StoredEmailSenderSettings>(
     RELAYBASE_STORE_ID,
     SETTINGS_FILE,
   );
-  if (stored) return stored;
+  if (stored) return normalizeStoredSettings(stored);
 
   for (const legacyId of LEGACY_STORE_IDS) {
-    stored = readProductJson<EmailSenderSettings>(legacyId, SETTINGS_FILE);
+    stored = readProductJson<StoredEmailSenderSettings>(legacyId, SETTINGS_FILE);
     if (stored) {
-      writeProductJson(RELAYBASE_STORE_ID, SETTINGS_FILE, stored);
-      return stored;
+      const normalized = normalizeStoredSettings(stored);
+      writeEmailSenderSettings(normalized);
+      return normalized;
     }
   }
   return null;
 }
 
-function migrateFromEnvIfNeeded(): EmailSenderSettings | null {
-  const workerUrl =
-    process.env.RELAYBASE_URL?.trim().replace(/\/$/, "") ??
-    process.env.FLARE_EMAIL_SENDER_URL?.trim().replace(/\/$/, "") ??
-    "";
-  const adminToken =
-    process.env.RELAYBASE_ADMIN_TOKEN?.trim() ??
-    process.env.FLARE_EMAIL_SENDER_ADMIN_TOKEN?.trim() ??
-    "";
-  if (!workerUrl && !adminToken) return null;
-  const cfFromEnv = {
-    cloudflareAccountId:
-      process.env.FLARE_EMAIL_SENDER_CF_ACCOUNT_ID?.trim() ??
-      process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ??
-      "",
-    cloudflareApiToken:
-      process.env.FLARE_EMAIL_SENDER_CF_API_TOKEN?.trim() ??
-      process.env.CLOUDFLARE_API_TOKEN?.trim() ??
-      "",
-  };
-  const macpurity = migrateCloudflareFromMacPurity();
-  return {
-    workerUrl,
-    adminToken,
-    cloudflareAccountId:
-      cfFromEnv.cloudflareAccountId || macpurity?.cloudflareAccountId || "",
-    cloudflareApiToken:
-      cfFromEnv.cloudflareApiToken || macpurity?.cloudflareApiToken || "",
-    cloudflareZoneId: "",
-    cloudflareDnsApiToken: "",
-    inboundR2BucketName: defaultInboundR2BucketName(RELAYBASE_STORE_ID),
-    domainBranding: {},
-    apiKeyVault: [],
-    sentEmails: [],
-    dashboardAdminTokens: [],
-  };
-}
-
 export function readEmailSenderSettings(): EmailSenderSettings {
-  let stored = readStoredSettings();
-  if (!stored) {
-    const migrated = migrateFromEnvIfNeeded();
-    if (migrated) {
-      writeEmailSenderSettings(migrated);
-      stored = migrated;
-    }
-  }
+  const stored = readStoredSettings();
   if (stored) {
-    let next: EmailSenderSettings = {
-      workerUrl: stored.workerUrl?.trim().replace(/\/$/, "") ?? "",
-      adminToken: stored.adminToken?.trim() ?? "",
-      cloudflareAccountId: stored.cloudflareAccountId?.trim() ?? "",
-      cloudflareApiToken: stored.cloudflareApiToken?.trim() ?? "",
-      cloudflareZoneId: stored.cloudflareZoneId?.trim() ?? "",
-      cloudflareDnsApiToken: stored.cloudflareDnsApiToken?.trim() ?? "",
-      inboundR2BucketName: resolveInboundR2BucketName(
-        RELAYBASE_STORE_ID,
-        stored.inboundR2BucketName,
-      ),
-      domainBranding: stored.domainBranding ?? {},
-      apiKeyVault: stored.apiKeyVault ?? [],
-      sentEmails: stored.sentEmails ?? [],
-      dashboardAdminTokens: stored.dashboardAdminTokens ?? [],
-    };
-    if (!next.cloudflareAccountId || !next.cloudflareApiToken) {
+    let next = stored;
+    const env = readRelaybaseEnvSettings();
+    if (
+      (!next.cloudflareAccountId || !next.cloudflareApiToken) &&
+      !env.sources.cloudflareAccountId &&
+      !env.sources.cloudflareApiToken
+    ) {
       const macpurity = migrateCloudflareFromMacPurity();
       if (macpurity) {
         next = { ...next, ...macpurity };
         writeEmailSenderSettings(next);
       }
     }
-    return next;
+    return mergeSettingsWithEnv(next);
   }
-  return emptySettings();
+  return mergeSettingsWithEnv(emptySettings());
 }
 
 export function writeEmailSenderSettings(
@@ -231,7 +265,7 @@ export function writeEmailSenderSettings(
     domainBranding: settings.domainBranding,
     apiKeyVault: settings.apiKeyVault,
     sentEmails: settings.sentEmails,
-    dashboardAdminTokens: settings.dashboardAdminTokens,
+    dashboardAuthTokens: settings.dashboardAuthTokens,
   });
 }
 
@@ -329,6 +363,9 @@ export function mergeEmailSenderSettings(
   if (patch.domainBranding !== undefined) {
     next.domainBranding = patch.domainBranding;
   }
+  if (patch.dashboardAuthTokens !== undefined) {
+    next.dashboardAuthTokens = patch.dashboardAuthTokens;
+  }
   writeEmailSenderSettings(next);
   return next;
 }
@@ -337,15 +374,17 @@ export function toEmailSenderSettingsView(
   settings: EmailSenderSettings,
 ): EmailSenderSettingsView {
   const workerUrl = settings.workerUrl.trim();
-  const adminTokenConfigured = Boolean(settings.adminToken.trim());
   const cloudflareConfigured = Boolean(
     settings.cloudflareAccountId.trim() && settings.cloudflareApiToken.trim(),
   );
+  const workerLinked = Boolean(
+    settings.adminToken.trim() && !looksLikeCloudflareApiToken(settings.adminToken),
+  );
   return {
     workerUrl,
-    adminTokenConfigured,
     cloudflareConfigured,
-    configured: Boolean(workerUrl && adminTokenConfigured && cloudflareConfigured),
+    configured: Boolean(workerUrl && cloudflareConfigured),
+    workerLinked,
   };
 }
 
@@ -353,32 +392,9 @@ export function getEmailSenderSettingsView(): EmailSenderSettingsView {
   return toEmailSenderSettingsView(readEmailSenderSettings());
 }
 
-/** Settings view with env fallback for dashboard display. */
+/** Settings view with env-first resolution for dashboard display. */
 export function getEmailSenderConnectionView(): EmailSenderSettingsView {
-  const settings = readEmailSenderSettings();
-  const stored = toEmailSenderSettingsView(settings);
-  const workerUrl =
-    stored.workerUrl ||
-    process.env.RELAYBASE_URL?.trim().replace(/\/$/, "") ||
-    process.env.FLARE_EMAIL_SENDER_URL?.trim().replace(/\/$/, "") ||
-    "";
-  const adminToken =
-    (settings.adminToken.trim().startsWith("cfut_")
-      ? ""
-      : settings.adminToken.trim()) ||
-    process.env.RELAYBASE_ADMIN_TOKEN?.trim() ||
-    process.env.FLARE_EMAIL_SENDER_ADMIN_TOKEN?.trim() ||
-    "";
-  const adminTokenConfigured = Boolean(adminToken);
-  const cloudflareConfigured = stored.cloudflareConfigured;
-  return {
-    workerUrl,
-    adminTokenConfigured,
-    cloudflareConfigured,
-    configured: Boolean(
-      workerUrl && adminTokenConfigured && cloudflareConfigured,
-    ),
-  };
+  return toEmailSenderSettingsView(readEmailSenderSettings());
 }
 
 export type EmailSenderAdminConfigDetail = EmailSenderSettingsView & {
@@ -387,12 +403,14 @@ export type EmailSenderAdminConfigDetail = EmailSenderSettingsView & {
   inboundR2BucketName: string;
   cloudflareApiToken: string;
   cloudflareDnsApiToken: string;
+  envSources: RelaybaseEnvSources;
 };
 
 /** Full settings for admin UI — includes stored credentials for confirmation. */
 export function getEmailSenderAdminSettingsDetail(): EmailSenderAdminConfigDetail {
   const settings = readEmailSenderSettings();
   const connection = getEmailSenderConnectionView();
+  const env = readRelaybaseEnvSettings();
   return {
     ...connection,
     cloudflareAccountId: settings.cloudflareAccountId.trim(),
@@ -403,10 +421,11 @@ export function getEmailSenderAdminSettingsDetail(): EmailSenderAdminConfigDetai
     ),
     cloudflareApiToken: settings.cloudflareApiToken.trim(),
     cloudflareDnsApiToken: settings.cloudflareDnsApiToken.trim(),
+    envSources: env.sources,
   };
 }
 
-export type RelaybaseDashboardAdminTokenView = {
+export type RelaybaseDashboardAuthTokenView = {
   id: string;
   label: string | null;
   productId: string | null;
@@ -414,8 +433,11 @@ export type RelaybaseDashboardAdminTokenView = {
   createdAt: string;
 };
 
-export function listRelaybaseDashboardAdminTokens(): RelaybaseDashboardAdminTokenView[] {
-  return readEmailSenderSettings().dashboardAdminTokens.map((entry) => ({
+/** @deprecated Use RelaybaseDashboardAuthTokenView */
+export type RelaybaseDashboardAdminTokenView = RelaybaseDashboardAuthTokenView;
+
+export function listRelaybaseDashboardAuthTokens(): RelaybaseDashboardAuthTokenView[] {
+  return readEmailSenderSettings().dashboardAuthTokens.map((entry) => ({
     id: entry.id,
     label: entry.label,
     productId: entry.productId,
@@ -424,49 +446,63 @@ export function listRelaybaseDashboardAdminTokens(): RelaybaseDashboardAdminToke
   }));
 }
 
-export function issueRelaybaseDashboardAdminToken(params?: {
+/** @deprecated Use listRelaybaseDashboardAuthTokens */
+export const listRelaybaseDashboardAdminTokens = listRelaybaseDashboardAuthTokens;
+
+export function issueRelaybaseDashboardAuthToken(params?: {
   label?: string;
   productId?: string;
-}): { record: RelaybaseDashboardAdminTokenRecord; token: string } {
-  const token = generateRelaybaseAdminToken();
-  const record: RelaybaseDashboardAdminTokenRecord = {
+}): { record: RelaybaseDashboardAuthTokenRecord; token: string } {
+  const token = generateRelaybaseAuthToken();
+  const record: RelaybaseDashboardAuthTokenRecord = {
     id: crypto.randomUUID(),
     label: params?.label?.trim() || null,
     productId: params?.productId?.trim() || null,
-    tokenPrefix: relaybaseAdminTokenPrefix(token),
+    tokenPrefix: relaybaseAuthTokenPrefix(token),
     token,
     createdAt: new Date().toISOString(),
   };
   const current = readEmailSenderSettings();
   writeEmailSenderSettings({
     ...current,
-    dashboardAdminTokens: [...current.dashboardAdminTokens, record],
+    dashboardAuthTokens: [...current.dashboardAuthTokens, record],
   });
   return { record, token };
 }
 
-export function revokeRelaybaseDashboardAdminToken(id: string): boolean {
+/** @deprecated Use issueRelaybaseDashboardAuthToken */
+export const issueRelaybaseDashboardAdminToken = issueRelaybaseDashboardAuthToken;
+
+export function revokeRelaybaseDashboardAuthToken(id: string): boolean {
   const current = readEmailSenderSettings();
-  const next = current.dashboardAdminTokens.filter((entry) => entry.id !== id);
-  if (next.length === current.dashboardAdminTokens.length) return false;
-  writeEmailSenderSettings({ ...current, dashboardAdminTokens: next });
+  const next = current.dashboardAuthTokens.filter((entry) => entry.id !== id);
+  if (next.length === current.dashboardAuthTokens.length) return false;
+  writeEmailSenderSettings({ ...current, dashboardAuthTokens: next });
   return true;
 }
 
-export function findRelaybaseDashboardAdminToken(
+/** @deprecated Use revokeRelaybaseDashboardAuthToken */
+export const revokeRelaybaseDashboardAdminToken = revokeRelaybaseDashboardAuthToken;
+
+export function findRelaybaseDashboardAuthToken(
   token: string,
-): RelaybaseDashboardAdminTokenRecord | null {
+): RelaybaseDashboardAuthTokenRecord | null {
   const trimmed = token.trim();
   if (!trimmed || looksLikeCloudflareApiToken(trimmed)) return null;
+  if (!looksLikeRelaybaseAuthToken(trimmed)) return null;
   return (
-    readEmailSenderSettings().dashboardAdminTokens.find(
+    readEmailSenderSettings().dashboardAuthTokens.find(
       (entry) => entry.token === trimmed,
     ) ?? null
   );
 }
 
-export function isValidRelaybaseAdminCredential(token: string): boolean {
-  const trimmed = token.trim();
-  if (!trimmed || looksLikeCloudflareApiToken(trimmed)) return false;
-  return findRelaybaseDashboardAdminToken(trimmed) !== null;
+/** @deprecated Use findRelaybaseDashboardAuthToken */
+export const findRelaybaseDashboardAdminToken = findRelaybaseDashboardAuthToken;
+
+export function isValidRelaybaseAuthCredential(token: string): boolean {
+  return findRelaybaseDashboardAuthToken(token) !== null;
 }
+
+/** @deprecated Use isValidRelaybaseAuthCredential */
+export const isValidRelaybaseAdminCredential = isValidRelaybaseAuthCredential;

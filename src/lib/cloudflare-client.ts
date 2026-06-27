@@ -203,7 +203,8 @@ export class CloudflareClient {
   private async sendStructuredEmail(params: {
     from: string;
     fromName?: string;
-    to: string;
+    to: string | string[];
+    cc?: string | string[];
     subject: string;
     text: string;
     html?: string;
@@ -215,10 +216,11 @@ export class CloudflareClient {
       from: fromName
         ? { address: fromAddress, name: fromName }
         : fromAddress,
-      to: params.to.trim(),
+      to: params.to,
       subject: params.subject,
       text: params.text,
     };
+    if (params.cc) body.cc = params.cc;
     const html = params.html?.trim();
     if (html) body.html = html;
     const replyTo = params.replyTo?.trim();
@@ -240,18 +242,28 @@ export class CloudflareClient {
   private async sendRawEmail(params: {
     from: string;
     fromName?: string;
-    to: string;
+    to: string | string[];
+    cc?: string | string[];
     subject: string;
     text: string;
     html?: string;
     replyTo?: string;
   }): Promise<CfEmailSendResult> {
     const fromAddress = params.from.trim();
-    const to = params.to.trim();
+    const toList = Array.isArray(params.to) ? params.to : [params.to];
+    const ccList = params.cc
+      ? Array.isArray(params.cc)
+        ? params.cc
+        : [params.cc]
+      : [];
+    const recipients = [...toList, ...ccList]
+      .map((address) => address.trim())
+      .filter(Boolean);
     const mimeMessage = buildMimeMessage({
       from: fromAddress,
       fromName: params.fromName,
-      to,
+      to: params.to,
+      cc: params.cc,
       subject: params.subject,
       text: params.text,
       html: params.html,
@@ -268,7 +280,7 @@ export class CloudflareClient {
       method: "POST",
       body: JSON.stringify({
         from: fromAddress,
-        recipients: [to],
+        recipients,
         mime_message: mimeMessage,
       }),
     });
@@ -278,7 +290,8 @@ export class CloudflareClient {
   async sendEmail(params: {
     from: string;
     fromName?: string;
-    to: string;
+    to: string | string[];
+    cc?: string | string[];
     subject: string;
     text: string;
     html?: string;

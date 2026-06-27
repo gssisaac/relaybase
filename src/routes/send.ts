@@ -4,6 +4,10 @@ import { requireApiKey } from "../lib/auth";
 import { emailMatchesDomain } from "../lib/crypto";
 import { createCloudflareClient } from "../lib/cloudflare-config";
 import { recordSendLog } from "../lib/send-logs";
+import {
+  findInvalidRecipients,
+  normalizeRecipients,
+} from "../lib/recipients";
 import type { KeyRecord } from "../lib/keys";
 
 const send = new Hono<{ Bindings: Env }>();
@@ -11,7 +15,8 @@ const send = new Hono<{ Bindings: Env }>();
 type SendBody = {
   from?: string;
   fromName?: string;
-  to?: string;
+  to?: string | string[];
+  cc?: string | string[];
   subject?: string;
   text?: string;
   html?: string;
@@ -95,20 +100,38 @@ send.post("/", async (c) => {
   }
 
   const from = body.from?.trim();
-  const to = body.to?.trim();
+  const to = normalizeRecipients(body.to);
+  const cc = normalizeRecipients(body.cc);
   const subject = body.subject?.trim();
   const text = body.text?.trim();
 
-  if (!from || !to || !subject || !text) {
+  if (!from || !to.length || !subject || !text) {
     return logAndRespond(c, {
       ok: false,
       status: 400,
       body: { error: "from, to, subject, and text are required" },
       record,
       from: from ?? null,
-      to: to ?? null,
+      to: to.join(", ") || null,
       subject: subject ?? null,
       error: "from, to, subject, and text are required",
+    });
+  }
+
+  const invalid = [
+    ...findInvalidRecipients(to),
+    ...findInvalidRecipients(cc),
+  ];
+  if (invalid.length) {
+    return logAndRespond(c, {
+      ok: false,
+      status: 400,
+      body: { error: `Invalid email address: ${invalid.join(", ")}` },
+      record,
+      from,
+      to: to.join(", "),
+      subject,
+      error: `Invalid email address: ${invalid.join(", ")}`,
     });
   }
 
@@ -119,7 +142,7 @@ send.post("/", async (c) => {
       body: { error: `From address must be on ${record.domain}` },
       record,
       from,
-      to,
+      to: to.join(", "),
       subject,
       error: `From address must be on ${record.domain}`,
     });
@@ -130,7 +153,8 @@ send.post("/", async (c) => {
     const result = await cf.sendEmail({
       from,
       fromName: body.fromName?.trim() || undefined,
-      to,
+      to: to.length === 1 ? to[0] : to,
+      cc: cc.length ? (cc.length === 1 ? cc[0] : cc) : undefined,
       subject,
       text,
       html: body.html,
@@ -142,7 +166,7 @@ send.post("/", async (c) => {
       body: { messageId: result.messageId },
       record,
       from,
-      to,
+      to: to.join(", "),
       subject,
       messageId: result.messageId,
     });
@@ -155,7 +179,7 @@ send.post("/", async (c) => {
       body: { error: message },
       record,
       from,
-      to,
+      to: to.join(", "),
       subject,
       error: message,
     });

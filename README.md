@@ -1,162 +1,266 @@
 # Relaybase
 
-A lightweight Cloudflare Worker that issues domain-scoped API keys and sends transactional email via [Cloudflare Email Sending](https://developers.cloudflare.com/email-routing/email-workers/send-email/).
+Monorepo for **Relaybase** — domain-scoped transactional email (send + receive) on Cloudflare. One API key per domain, built for product teams who need `billing@`, `support@`, and the rest without Google Workspace seat math.
 
-Use this service from your apps when you need to send email from addresses like `billing@yourdomain.com` without embedding Cloudflare credentials in every project.
+| Package | Path | Port | Role |
+|---------|------|------|------|
+| **Worker** | repo root (`src/`) | 8787 (`wrangler dev`) | Send API, inbound storage, webhooks, admin routes |
+| **Admin** | `admin/` | 32829 | Platform operator dashboard (keys, logs, inbox, users) |
+| **User app** | `app/` | 32830 | Customer email dashboard (inbox, compose, broadcasts, settings) |
+| **Website** | `website/` | 32828 | Marketing site (static export → Cloudflare) |
 
-## Overview
+Production API: `https://api.relaybase.com` (or your Worker URL). Marketing: [relaybase.com](https://relaybase.com).
+
+For product positioning and marketer copy, see **[PRODUCT.md](./PRODUCT.md)**.
+
+---
+
+## Architecture
 
 ```
-Your app  ──Bearer API key──▶  relaybase Worker  ──▶  Cloudflare Email Sending API
-Admin     ──Bearer ADMIN_TOKEN──▶  /admin/keys  ──▶  Workers KV (key ↔ domain mapping)
+┌─────────────────┐     Bearer API key      ┌──────────────────┐
+│  Your backend   │ ───────────────────────▶│  relaybase Worker│
+│  (fetch / SDK)  │                         │  Hono on CF       │
+└─────────────────┘                         └────────┬─────────┘
+                                                     │
+         ┌───────────────────────────────────────────┼───────────────────────────┐
+         │                                           │                           │
+         ▼                                           ▼                           ▼
+  CF Email Sending API                         Workers KV                    R2 bucket
+  (outbound)                                   (keys, logs, events)          (inbound mail)
+
+Inbound path:
+
+  Sender ──MX──▶ Cloudflare Email Routing ──email()──▶ Worker ──▶ R2 + KV events ──▶ webhooks / poll
 ```
 
-Each API key is bound to exactly one sending domain. The `from` address on every send request must belong to that domain.
+**Admin** and **user app** are Next.js 16 dashboards. In production they call the Worker and Cloudflare APIs; in local dev they use stub APIs and JSON files under `data/`.
+
+---
 
 ## Prerequisites
 
-1. A Cloudflare account with **Email Sending** enabled.
-2. Your sending domain onboarded in **Cloudflare Dashboard → Email → Email Sending** (DNS verified).
-3. A Cloudflare API token with **Account → Email Sending → Edit**.
+1. Node.js 22 (see `app/.node-version`, `admin/.node-version`)
+2. npm 10.9.2 (`packageManager` in frontend `package.json` files)
+3. Cloudflare account with **Email Sending** enabled and sending domain onboarded
+4. API token with **Account → Email Sending → Edit** (and **Zone → Email Routing Rules → Edit** for inbound routing)
 
-## Deploy
+---
+
+## Quick start (local dev)
+
+### 1. Worker
 
 ```bash
-cd relaybase
 npm install
+cp .dev.vars.example .dev.vars
+# Fill CF_ACCOUNT_ID, CF_API_TOKEN, ADMIN_TOKEN
 
-# Create KV namespace for production and preview
+npm run dev          # wrangler dev → http://127.0.0.1:8787
+```
+
+### 2. Admin dashboard
+
+```bash
+cd admin && npm install
+cp .env.example .env.local
+# Set RELAYBASE_URL to your Worker URL (local or deployed)
+
+npm run dev          # http://localhost:32829
+```
+
+No auth gate in dev. Operator settings persist in `data/products/relaybase/settings.json`.
+
+### 3. User dashboard
+
+```bash
+cd app && npm install && npm run dev   # http://localhost:32830
+```
+
+Sign in with any user id (no password). Accounts live in `data/users.json` and `data/users/<id>.json`. The app uses local stub routes under `/api/email/*` — no Worker or Cloudflare calls unless you wire production env.
+
+### 4. Marketing site
+
+```bash
+cd website && npm install && npm run dev   # http://localhost:32828
+```
+
+From the repo root you can also run:
+
+```bash
+npm run admin:dev
+npm run app:dev
+npm run website:dev
+```
+
+### Diagnostics
+
+```bash
+node scripts/diagnose-relaybase.mjs
+```
+
+Reads `admin/.env.local` and `data/products/relaybase/settings.json`, tests Cloudflare token, R2, and Worker connectivity without printing secrets.
+
+---
+
+## Repo layout
+
+```
+relaybase/
+├── src/                    # Cloudflare Worker (Hono)
+│   ├── index.ts            # fetch + email() handlers
+│   ├── inbound.ts          # R2 storage for received mail
+│   ├── routes/             # send, admin/*, v1/*
+│   └── lib/                # auth, mime, webhooks, KV helpers
+├── admin/                  # Operator Next.js app
+├── app/                    # Customer Next.js app (relaybase-email UI)
+├── website/                # Marketing Next.js (static export)
+├── data/
+│   ├── users.json          # User registry (shared with admin Users)
+│   ├── users/<id>.json     # Per-user domain/email data (dev)
+│   └── products/relaybase/ # Admin product settings + vault (dev)
+├── scripts/                # provision-domain-key, diagnose-relaybase
+├── wrangler.toml           # Worker bindings (KV, R2)
+└── .dev.vars               # Worker secrets (local only, not committed)
+```
+
+---
+
+## Worker — deploy
+
+```bash
+# Create KV namespace (once)
 wrangler kv namespace create KEYS
 wrangler kv namespace create KEYS --preview
+# Update wrangler.toml with id and preview_id
 
-# Update wrangler.toml with the returned id and preview_id values.
-
-# Set secrets
+# Secrets
 wrangler secret put CF_ACCOUNT_ID
 wrangler secret put CF_API_TOKEN
 wrangler secret put ADMIN_TOKEN
 
-wrangler deploy
+npm run deploy    # wrangler deploy
 ```
 
-After deploy, note your Worker URL (e.g. `https://relaybase.<account>.workers.dev` or `https://api.relaybase.com`).
+Bindings in `wrangler.toml`:
 
-## Local development
+| Binding | Resource | Purpose |
+|---------|----------|---------|
+| `KEYS` | Workers KV | API keys, send logs, inbound events, webhook registry |
+| `INBOUND` | R2 `relaybase-inbound` | Raw inbound mail (`meta.json`, `raw.eml`, attachments) |
+
+---
+
+## Environment variables
+
+### Worker (`wrangler.toml` vars + secrets)
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `CF_ACCOUNT_ID` | secret | Cloudflare account ID |
+| `CF_API_TOKEN` | secret | Token with Email Sending edit |
+| `ADMIN_TOKEN` | secret | Bearer token for `/admin/*` routes |
+| `WORKER_SCRIPT_NAME` | var | Worker name for routing helpers |
+| `INBOUND_BUCKET_NAME` | var | R2 bucket name label |
+
+### Admin (`admin/.env.local`)
+
+| Variable | Description |
+|----------|-------------|
+| `RELAYBASE_URL` | Worker base URL |
+| `RELAYBASE_CF_ACCOUNT_ID` | Cloudflare account |
+| `RELAYBASE_CF_API_TOKEN` | Email Sending / account API |
+| `RELAYBASE_CF_ZONE_ID` | Zone for Email Routing |
+| `RELAYBASE_CF_DNS_API_TOKEN` | DNS / routing rules token |
+| `RELAYBASE_INBOUND_R2_BUCKET` | Inbound bucket name |
+
+### Consuming services (your apps)
+
+| Variable | Description |
+|----------|-------------|
+| `RELAYBASE_API_KEY` | Domain-scoped key from `/admin/keys` |
+| `RELAYBASE_URL` | Worker base URL (no trailing slash) |
+
+---
+
+## Admin dashboard
+
+Routes under `admin/src/relaybase/`:
+
+| Section | Path | Purpose |
+|---------|------|---------|
+| Status | `/status` | Platform stats, Worker health |
+| Keys | `/keys` | Issue and list domain API keys |
+| Logs | `/logs` | Send attempt history |
+| Email | `/email`, `/email/compose` | Inbox + manual send (operator) |
+| Branding | `/branding` | Domain display names |
+| Settings | `/settings` | Worker URL, Cloudflare credentials |
+| Users | `/users` | Customer accounts (`data/users.json`) |
+
+Admin API routes proxy to the Worker (`admin/src/app/api/relaybase/*`) using `ADMIN_TOKEN` from product settings.
+
+---
+
+## User app (`relaybase-email`)
+
+Customer-facing mailbox UI in `app/src/relaybase-email/`:
+
+| Section | Purpose |
+|---------|---------|
+| Dashboard | Stats, sparklines, quick links |
+| Inbox / Sent | Mail list and reading |
+| Compose | Send from registered addresses |
+| Accounts | Sender addresses on the domain |
+| Audience | Contacts for broadcasts |
+| Broadcasts | Bulk / campaign sends (dev stubs) |
+| Domains | Domain connection and DNS hints |
+| Metrics | Delivery stats |
+| Settings | API keys, domain config, inbound routing |
+
+Auth: cookie `relaybase_user` after id-only sign-in/register (`/api/auth`). Dev data in `data/users/<id>.json`.
+
+---
+
+## API reference
+
+### Health
 
 ```bash
-cp .dev.vars.example .dev.vars
-# Fill in CF_ACCOUNT_ID, CF_API_TOKEN, and ADMIN_TOKEN
-
-npm run dev
+curl "$RELAYBASE_URL/health"
 ```
 
-## Admin API
+### Admin routes
 
-Admin routes require `Authorization: Bearer <ADMIN_TOKEN>`.
+Require `Authorization: Bearer $ADMIN_TOKEN`.
 
-### Issue an API key
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/admin/keys` | Issue API key (`domain`, `label`) |
+| `GET` | `/admin/keys` | List keys (prefix only, not full secret) |
+| `GET` | `/admin/logs` | Send logs (`?limit`, `?status`, `?domain`) |
+| `GET` | `/admin/inbox` | List inbound (`?domain`, `?limit`) |
+| `GET` | `/admin/inbox/:id` | Full inbound message |
+| `POST` | `/admin/inbox/routing` | Route addresses to Worker |
+| `GET` | `/admin/inbox/notifications` | Pending inbound events |
+| `POST` | `/admin/inbox/notifications/ack` | Ack events |
+
+Issue a key:
 
 ```bash
-curl -X POST "https://api.relaybase.com/admin/keys" \
+curl -X POST "$RELAYBASE_URL/admin/keys" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "domain": "yourdomain.com",
-    "label": "billing-service"
-  }'
+  -d '{"domain":"yourdomain.com","label":"billing-service"}'
 ```
 
-Response (`201`):
+Response includes `apiKey` **once** — store it immediately.
 
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "apiKey": "rb_xxxxxxxxxxxxxxxxxxxxxxxx",
-  "domain": "yourdomain.com",
-  "label": "billing-service",
-  "createdAt": "2026-06-16T12:00:00.000Z"
-}
-```
+### Send (`/v1/send`)
 
-**Store `apiKey` immediately.** It is shown only once and cannot be retrieved later.
-
-### List issued keys
+Bearer domain-scoped API key.
 
 ```bash
-curl "https://api.relaybase.com/admin/keys" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-Response (`200`):
-
-```json
-{
-  "keys": [
-    {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "keyPrefix": "xxxxxxxx",
-      "domain": "yourdomain.com",
-      "label": "billing-service",
-      "createdAt": "2026-06-16T12:00:00.000Z",
-      "active": true
-    }
-  ]
-}
-```
-
-### List send logs
-
-Every `/v1/send` attempt is recorded in Workers KV (success and failure). Use this for ops monitoring.
-
-```bash
-curl "https://api.relaybase.com/admin/logs?limit=100&status=failed" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-Query parameters:
-
-| Param | Default | Description |
-|-------|---------|-------------|
-| `limit` | `100` | Max entries to return (up to 500) |
-| `status` | `all` | `all`, `failed`, or `success` |
-| `domain` | — | Filter by sending domain |
-
-Response (`200`):
-
-```json
-{
-  "logs": [
-    {
-      "id": "…",
-      "at": "2026-06-17T12:00:00.000Z",
-      "ok": false,
-      "status": 502,
-      "domain": "yourdomain.com",
-      "keyId": "…",
-      "keyPrefix": "xxxxxxxx",
-      "keyLabel": "billing-service",
-      "from": "billing@yourdomain.com",
-      "to": "customer@example.com",
-      "subject": "Invoice #1234",
-      "error": "Cloudflare Email Sending API error …"
-    }
-  ],
-  "summary": {
-    "total": 42,
-    "failed": 3,
-    "failedLast24h": 1
-  }
-}
-```
-
-## Send email (consumer integration)
-
-Use a domain-scoped API key in the `Authorization` header.
-
-### cURL
-
-```bash
-curl -X POST "https://api.relaybase.com/v1/send" \
+curl -X POST "$RELAYBASE_URL/v1/send" \
   -H "Authorization: Bearer $RELAYBASE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -164,315 +268,114 @@ curl -X POST "https://api.relaybase.com/v1/send" \
     "fromName": "Your App",
     "to": "customer@example.com",
     "subject": "Invoice #1234",
-    "text": "Your invoice is ready. View it at https://yourdomain.com/invoices/1234"
+    "text": "Your invoice is ready."
   }'
 ```
 
-Response (`200`):
-
-```json
-{
-  "messageId": "abc123"
-}
-```
-
-### Node.js / TypeScript
-
-```ts
-const RELAYBASE_URL = process.env.RELAYBASE_URL!;
-const RELAYBASE_API_KEY = process.env.RELAYBASE_API_KEY!;
-
-export async function sendBillingEmail(params: {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-}) {
-  const res = await fetch(`${RELAYBASE_URL}/v1/send`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RELAYBASE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "billing@yourdomain.com",
-      fromName: "Your App",
-      to: params.to,
-      subject: params.subject,
-      text: params.text,
-      html: params.html,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `Email send failed (${res.status})`);
-  }
-
-  return (await res.json()) as { messageId: string };
-}
-```
-
-### Request body
-
 | Field | Required | Description |
 |-------|----------|-------------|
-| `from` | Yes | Sender address. Must be `*@<key-domain>` (e.g. `billing@yourdomain.com`) |
-| `fromName` | No | Sender display name shown in the recipient's inbox (e.g. `MacPurity` instead of `billing`) |
-| `to` | Yes | Recipient email address |
-| `subject` | Yes | Email subject |
+| `from` | Yes | Must be `*@<key-domain>` |
+| `fromName` | No | Display name in inbox |
+| `to` | Yes | Recipient |
+| `subject` | Yes | Subject line |
 | `text` | Yes | Plain-text body |
 | `html` | No | HTML body |
 | `replyTo` | No | Reply-To address |
 
-## Environment variables for consuming services
+Success: `{"messageId":"..."}`.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `RELAYBASE_API_KEY` | Yes | Domain-scoped API key issued via `/admin/keys` |
-| `RELAYBASE_URL` | Yes | Worker base URL (no trailing slash) |
-
-## Error reference
-
-| Status | Meaning |
-|--------|---------|
-| `400` | Invalid request body or domain format |
-| `401` | Missing/invalid `ADMIN_TOKEN` or API key |
-| `403` | `from` address does not match the key's domain |
-| `404` | Unknown route |
-| `502` | Cloudflare Email Sending API failure (see `error` message for hints) |
-
-## Inbound email (Worker + R2/KV)
-
-Inbound mail is handled by the Worker's `email()` handler — no Gmail forwarding.
-
-```
-Sender ──MX──▶ Cloudflare Email Routing ──Worker──▶ relaybase ──▶ R2
-```
-
-Objects are stored in the shared R2 bucket `relaybase-inbound` under `inbound/{domain}/{id}/` — `meta.json`, `raw.eml` (body-only when attachments exist), and `attachments/` for binary files.
-
-### Route addresses to the Worker
-
-From ops-dashboard: **MacPurity → Email → Settings → Domain → Route to Worker (R2)**
-
-Or via API:
+### Inbound — poll events
 
 ```bash
-curl -X POST "https://api.relaybase.com/admin/inbox/routing" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "domain": "macpurity.com",
-    "addresses": ["support@macpurity.com"]
-  }'
-```
-
-Requires Email Routing enabled on the zone and API token with **Zone → Email Routing Rules → Edit**.
-
-### List received mail
-
-```bash
-curl "https://api.relaybase.com/admin/inbox?domain=macpurity.com&limit=50" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-```bash
-curl "https://api.relaybase.com/admin/inbox/<message-id>" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-ops-dashboard **MacPurity → Email → Received** reads these endpoints when relaybase is configured.
-
-### Inbound events (API key — poll for new mail)
-
-When mail arrives, the Worker enqueues a lightweight event in KV. Poll with your domain-scoped API key (no persistent connection required).
-
-```bash
-# Poll pending events (run on a schedule, e.g. every 60s)
-curl "https://api.relaybase.com/v1/inbox/events?limit=25" \
+curl "$RELAYBASE_URL/v1/inbox/events?limit=25" \
   -H "Authorization: Bearer $RELAYBASE_API_KEY"
 ```
 
-Response (`200`):
-
-```json
-{
-  "events": [
-    {
-      "id": "evt_550e8400-e29b-41d4-a716-446655440000",
-      "type": "inbound.email.received",
-      "createdAt": "2026-06-23T12:00:00.000Z",
-      "data": {
-        "messageId": "550e8400-e29b-41d4-a716-446655440000",
-        "domain": "yourdomain.com",
-        "from": "user@sender.com",
-        "to": "support@yourdomain.com",
-        "subject": "Hello",
-        "preview": "First 200 chars of body…",
-        "receivedAt": "2026-06-23T12:00:00.000Z",
-        "hasAttachments": false
-      }
-    }
-  ]
-}
-```
-
-Acknowledge consumed events:
+Ack:
 
 ```bash
-curl -X POST "https://api.relaybase.com/v1/inbox/events/ack" \
+curl -X POST "$RELAYBASE_URL/v1/inbox/events/ack" \
   -H "Authorization: Bearer $RELAYBASE_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"ids":["evt_550e8400-e29b-41d4-a716-446655440000"]}'
+  -d '{"ids":["evt_..."]}'
 ```
 
-Fetch full message body after receiving an event:
+Fetch full message:
 
 ```bash
-curl "https://api.relaybase.com/v1/inbox/messages/<messageId>" \
+curl "$RELAYBASE_URL/v1/inbox/messages/<messageId>" \
   -H "Authorization: Bearer $RELAYBASE_API_KEY"
 ```
 
-List messages without polling events:
+### Webhooks
+
+Register (up to 3 per domain):
 
 ```bash
-curl "https://api.relaybase.com/v1/inbox/messages?limit=50" \
-  -H "Authorization: Bearer $RELAYBASE_API_KEY"
-```
-
-The API key's domain scopes all `/v1/inbox/*` and `/v1/webhooks` routes — no `domain` query parameter needed.
-
-### Webhooks (API key — push on receive)
-
-Register a URL to receive `inbound.email.received` events immediately when mail arrives. Up to 3 webhooks per domain.
-
-```bash
-curl -X POST "https://api.relaybase.com/v1/webhooks" \
+curl -X POST "$RELAYBASE_URL/v1/webhooks" \
   -H "Authorization: Bearer $RELAYBASE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://myapp.com/hooks/relaybase"}'
 ```
 
-Response (`201`):
+Response includes `secret` once. Verify `X-Relaybase-Signature: t=<unix>,v1=<hmac_sha256_hex>` on `{timestamp}.{raw_body}` (Stripe-style).
 
-```json
-{
-  "webhook": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "domain": "yourdomain.com",
-    "url": "https://myapp.com/hooks/relaybase",
-    "createdAt": "2026-06-23T12:00:00.000Z",
-    "active": true
-  },
-  "secret": "whsec_xxxxxxxx"
-}
-```
+Typical flow: webhook or poll → `GET /v1/inbox/messages/:id` → your app logic.
 
-**Store `secret` immediately** — it is shown only once. Use it to verify `X-Relaybase-Signature` on each delivery:
+### Error codes
 
-```
-X-Relaybase-Signature: t=<unix_timestamp>,v1=<hmac_sha256_hex>
-```
+| Status | Meaning |
+|--------|---------|
+| `400` | Invalid body or domain format |
+| `401` | Missing/invalid admin token or API key |
+| `403` | `from` does not match key domain |
+| `404` | Unknown route or message |
+| `502` | Cloudflare Email Sending API failure |
 
-Signed payload: `{timestamp}.{raw_json_body}` (same pattern as Stripe webhooks).
+---
 
-```typescript
-import crypto from "crypto";
+## Website deploy (Cloudflare)
 
-function verifyRelaybaseSignature(
-  secret: string,
-  body: string,
-  header: string,
-): boolean {
-  const parts = Object.fromEntries(
-    header.split(",").map((p) => p.trim().split("=") as [string, string]),
-  );
-  const timestamp = parts.t;
-  const signature = parts.v1;
-  if (!timestamp || !signature) return false;
-
-  const signed = `${timestamp}.${body}`;
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(signed)
-    .digest("hex");
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected),
-  );
-}
-```
-
-List or remove webhooks:
+`website/` is a standalone npm project (not pnpm). See `website/README.md`.
 
 ```bash
-curl "https://api.relaybase.com/v1/webhooks" \
-  -H "Authorization: Bearer $RELAYBASE_API_KEY"
-
-curl -X DELETE "https://api.relaybase.com/v1/webhooks/<id>" \
-  -H "Authorization: Bearer $RELAYBASE_API_KEY"
+cd website
+npm ci
+npm run build:cf
+npx wrangler deploy
 ```
 
-**n8n / Zapier**: use the Webhooks node with your registered URL; verify the signature in a Function node if needed.
+Cloudflare project settings:
 
-### Typical integration flow
+- Root directory: `website`
+- `SKIP_DEPENDENCY_INSTALL=1`
+- Build: `npm run build:cf`
+- Optional: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`
 
-1. Receive `inbound.email.received` (webhook push **or** events poll)
-2. `GET /v1/inbox/messages/{messageId}` for full body
-3. Run your app logic (ticket creation, Slack notification, etc.)
+---
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/diagnose-relaybase.mjs` | Operator connectivity checks |
+| `scripts/provision-domain-key.mjs` | Issue a domain key via admin API |
+
+---
 
 ## Security
 
-- Never commit API keys or `ADMIN_TOKEN` to source control.
-- Issue one API key per service/domain pair.
-- Rotate keys by issuing a new key and updating the consuming service's env var.
-- `ADMIN_TOKEN` should only be used by trusted operators for key management.
+- Never commit `.dev.vars`, `.env.local`, or real tokens in `data/products/`.
+- Issue one API key per service/domain pair; rotate by re-issuing and updating env.
+- `ADMIN_TOKEN` is operator-only — not for customer apps.
+- Webhook secrets are shown once at registration; verify signatures in production.
 
-## Health check
+---
 
-```bash
-curl "https://api.relaybase.com/health"
-# {"ok":true}
-```
-
-## API routes
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/health` | None | Health check |
-| `POST` | `/admin/keys` | `ADMIN_TOKEN` | Issue a new API key |
-| `GET` | `/admin/keys` | `ADMIN_TOKEN` | List issued keys |
-| `GET` | `/admin/logs` | `ADMIN_TOKEN` | List send attempt logs |
-| `GET` | `/admin/inbox` | `ADMIN_TOKEN` | List received mail (`?domain=`) |
-| `GET` | `/admin/inbox/:id` | `ADMIN_TOKEN` | Get received mail with body |
-| `GET` | `/admin/inbox/notifications` | `ADMIN_TOKEN` | List pending inbound events (`?domain=`) |
-| `POST` | `/admin/inbox/notifications/ack` | `ADMIN_TOKEN` | Acknowledge consumed events |
-| `POST` | `/admin/inbox/routing` | `ADMIN_TOKEN` | Route addresses to this Worker |
-| `GET` | `/v1/inbox/events` | API key | Poll pending inbound events |
-| `POST` | `/v1/inbox/events/ack` | API key | Acknowledge consumed events |
-| `GET` | `/v1/inbox/messages` | API key | List received mail for key domain |
-| `GET` | `/v1/inbox/messages/:id` | API key | Get received mail with body |
-| `POST` | `/v1/webhooks` | API key | Register inbound webhook |
-| `GET` | `/v1/webhooks` | API key | List registered webhooks |
-| `DELETE` | `/v1/webhooks/:id` | API key | Remove a webhook |
-| `POST` | `/v1/send` | API key | Send an email |
-
-## Frontend (development)
-
-Two Next.js apps live beside the Worker and marketing site:
-
-| App | Path | Port | Purpose |
-|-----|------|------|---------|
-| Admin | `admin/` | 32829 | Platform admin (from product-rail `products/relaybase`) — no auth in dev |
-| User dashboard | `app/` | 32830 | Per-user email UI (from `relaybase-email`) — id-only sign-in/register |
+## Typecheck
 
 ```bash
-# Admin — status, keys, logs, settings, user list
-cd admin && npm install && npm run dev
-
-# User app — register/sign in with any id (no password), then use the email dashboard
-cd app && npm install && npm run dev
+npm run typecheck    # Worker TypeScript
 ```
 
-User accounts are stored in `data/users.json` (shared with admin **Users** page). The user app uses local stub APIs under `/api/email/*` — no Cloudflare or Worker calls in dev.
+Frontend apps: `npm run lint` in each of `admin/`, `app/`, `website/`.

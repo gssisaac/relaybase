@@ -11,10 +11,16 @@ export function formatMailboxHeader(
   return `"${escapeDisplayName(name)}" <${address.trim()}>`;
 }
 
+function formatAddressList(addresses: string | string[]): string {
+  const list = Array.isArray(addresses) ? addresses : [addresses];
+  return list.map((address) => address.trim()).filter(Boolean).join(", ");
+}
+
 export function buildMimeMessage(params: {
   from: string;
   fromName?: string;
-  to: string;
+  to: string | string[];
+  cc?: string | string[];
   subject: string;
   text: string;
   html?: string;
@@ -22,7 +28,10 @@ export function buildMimeMessage(params: {
 }): string {
   const headers = [
     `From: ${formatMailboxHeader(params.from, params.fromName)}`,
-    `To: ${params.to.trim()}`,
+    `To: ${formatAddressList(params.to)}`,
+    ...(params.cc && formatAddressList(params.cc)
+      ? [`Cc: ${formatAddressList(params.cc)}`]
+      : []),
     ...(params.replyTo?.trim()
       ? [`Reply-To: ${params.replyTo.trim()}`]
       : []),

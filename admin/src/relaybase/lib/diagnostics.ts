@@ -1,4 +1,9 @@
-import { ensureInboundR2Bucket, resolveInboundR2BucketName } from "@/relaybase-email/lib/r2-inbound";
+import {
+  ensureInboundR2Bucket,
+  isLegacyInboundR2BucketName,
+  resolveInboundR2BucketName,
+  workerInboundR2BucketMismatch,
+} from "@/relaybase-email/lib/r2-inbound";
 import {
   fetchEmailSenderHealth,
   verifyRelaybaseWorkerAdminToken,
@@ -123,16 +128,23 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
     });
 
     if (health.inbound?.bucketName) {
-      const mismatch =
-        health.inbound.bucketName.toLowerCase() !== bucketName.toLowerCase();
+      const mismatch = workerInboundR2BucketMismatch(
+        bucketName,
+        health.inbound.bucketName,
+      );
+      const legacyWorkerName = isLegacyInboundR2BucketName(
+        health.inbound.bucketName,
+      );
       checks.push({
         id: "r2-bucket-match",
         ok: !mismatch,
         summary: mismatch
-          ? `Worker inbound bucket mismatch (worker: ${health.inbound.bucketName}, expected: ${bucketName})`
+          ? legacyWorkerName
+            ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-inbound`
+            : `Worker inbound bucket mismatch (worker: ${health.inbound.bucketName}, expected: ${bucketName})`
           : `Worker inbound bucket matches (${bucketName})`,
         detail: mismatch
-          ? `Redeploy the worker after updating wrangler.toml INBOUND_BUCKET_NAME and the R2 binding, or set RELAYBASE_INBOUND_R2_BUCKET=${health.inbound.bucketName} in admin/.env.local to match the deployed worker.`
+          ? `Redeploy the worker: wrangler.toml must set bucket_name and INBOUND_BUCKET_NAME to ${bucketName}, then run wrangler deploy.`
           : undefined,
       });
     }

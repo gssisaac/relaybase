@@ -54,11 +54,32 @@ const apiToken = firstNonEmpty(
   envFile.FLARE_EMAIL_SENDER_CF_API_TOKEN,
   settings.cloudflareApiToken,
 );
-const bucketName = firstNonEmpty(
-  envFile.RELAYBASE_INBOUND_R2_BUCKET,
-  envFile.FLARE_EMAIL_SENDER_INBOUND_R2_BUCKET,
-  settings.inboundR2BucketName,
-  "relaybase-inbound",
+function resolveInboundR2BucketName(stored) {
+  const trimmed = String(stored ?? "").trim().toLowerCase();
+  if (
+    !trimmed ||
+    trimmed === "flare-email-inbound" ||
+    trimmed.startsWith("flare-email-inbound-")
+  ) {
+    return "relaybase-inbound";
+  }
+  return String(stored ?? "").trim();
+}
+
+function workerInboundR2BucketMismatch(expected, workerReported) {
+  const worker = String(workerReported ?? "").trim();
+  if (!worker) return false;
+  const resolvedExpected = resolveInboundR2BucketName(expected);
+  if (resolveInboundR2BucketName(worker) !== resolvedExpected) return true;
+  return worker.toLowerCase() !== resolvedExpected.toLowerCase();
+}
+
+const bucketName = resolveInboundR2BucketName(
+  firstNonEmpty(
+    envFile.RELAYBASE_INBOUND_R2_BUCKET,
+    envFile.FLARE_EMAIL_SENDER_INBOUND_R2_BUCKET,
+    settings.inboundR2BucketName,
+  ),
 );
 const adminToken = firstNonEmpty(settings.adminToken);
 
@@ -124,16 +145,20 @@ if (workerUrl) {
   );
 
   if (health?.inbound?.bucketName) {
-    const mismatch =
-      health.inbound.bucketName.toLowerCase() !== bucketName.toLowerCase();
+    const mismatch = workerInboundR2BucketMismatch(
+      bucketName,
+      health.inbound.bucketName,
+    );
     printCheck(
       "r2-bucket-match",
       !mismatch,
       mismatch
-        ? `Bucket mismatch — worker: ${health.inbound.bucketName}, config: ${bucketName}`
+        ? health.inbound.bucketName.toLowerCase().startsWith("flare-email-inbound")
+          ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-inbound`
+          : `Bucket mismatch — worker: ${health.inbound.bucketName}, config: ${bucketName}`
         : `Worker bucket matches (${bucketName})`,
       mismatch
-        ? "Redeploy worker with updated wrangler.toml or align RELAYBASE_INBOUND_R2_BUCKET"
+        ? "Redeploy worker: wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-inbound, then wrangler deploy"
         : undefined,
     );
   }

@@ -23,6 +23,8 @@ export function useEmailPaths() {
   const dashboard = usePanelHref("dashboard");
   const domains = usePanelHref("domains");
   const emails = usePanelHref("emails");
+  const inbox = usePanelHref("emails", "inbox");
+  const sent = usePanelHref("emails", "sent");
   const compose = usePanelHref("emails", "compose");
   const settingsBase = usePanelHref("settings");
   const settingsKeys = usePanelHref("settings", "keys");
@@ -52,6 +54,8 @@ export function useEmailPaths() {
     dashboard,
     domains,
     emails,
+    inbox,
+    sent,
     compose,
     settingsBase,
     settingsKeys,

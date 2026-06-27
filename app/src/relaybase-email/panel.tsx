@@ -10,12 +10,17 @@ import { AudienceView } from "@/relaybase-email/components/AudienceView";
 import { BroadcastsView } from "@/relaybase-email/components/BroadcastsView";
 import { ComposeView } from "@/relaybase-email/components/ComposeView";
 import { DomainsView } from "@/relaybase-email/components/DomainsView";
+import { EmailMailboxProvider } from "@/relaybase-email/components/EmailMailboxContext";
+import {
+  EmailMailboxLayout,
+  type EmailMailboxSection,
+} from "@/relaybase-email/components/EmailMailboxLayout";
 import { EmailPageSuspenseFallback } from "@/relaybase-email/components/EmailPageSuspenseFallback";
 import { EmailSettingsKeysView } from "@/relaybase-email/components/EmailSettingsKeysView";
 import { EmailSettingsDomainView } from "@/relaybase-email/components/EmailSettingsDomainView";
 import { EmailSettingsShell } from "@/relaybase-email/components/EmailSettingsShell";
 import { EmailShell } from "@/relaybase-email/components/EmailShell";
-import { EmailsView } from "@/relaybase-email/components/EmailsView";
+import { MailListView } from "@/relaybase-email/components/MailListView";
 import { MetricsView } from "@/relaybase-email/components/MetricsView";
 import { UserDashboardView } from "@/relaybase-email/components/UserDashboardView";
 
@@ -37,10 +42,37 @@ function SettingsIndexRedirect() {
   return null;
 }
 
-function SuspenseEmailsView() {
+function EmailsInboxRedirect() {
+  const router = useRouter();
+  const inbox = usePanelHref("emails", "inbox");
+  useEffect(() => {
+    router.replace(inbox);
+  }, [inbox, router]);
+  return null;
+}
+
+function EmailMailboxPage({
+  section,
+  children,
+}: {
+  section: EmailMailboxSection;
+  children: ReactNode;
+}) {
+  return (
+    <EmailMailboxProvider>
+      <EmailMailboxLayout section={section}>{children}</EmailMailboxLayout>
+    </EmailMailboxProvider>
+  );
+}
+
+function SuspenseMailListView({
+  folder,
+}: {
+  folder: Extract<EmailMailboxSection, "inbox" | "sent">;
+}) {
   return (
     <Suspense fallback={<EmailPageSuspenseFallback />}>
-      <EmailsView />
+      <MailListView folder={folder} />
     </Suspense>
   );
 }
@@ -51,6 +83,38 @@ function SuspenseComposeView() {
       <ComposeView />
     </Suspense>
   );
+}
+
+function EmailMailboxRoutes({ second }: { second?: string }) {
+  if (!second) {
+    return <EmailsInboxRedirect />;
+  }
+
+  if (second === "inbox") {
+    return (
+      <EmailMailboxPage section="inbox">
+        <SuspenseMailListView folder="inbox" />
+      </EmailMailboxPage>
+    );
+  }
+
+  if (second === "sent") {
+    return (
+      <EmailMailboxPage section="sent">
+        <SuspenseMailListView folder="sent" />
+      </EmailMailboxPage>
+    );
+  }
+
+  if (second === "compose") {
+    return (
+      <EmailMailboxPage section="compose">
+        <SuspenseComposeView />
+      </EmailMailboxPage>
+    );
+  }
+
+  return <EmailsInboxRedirect />;
 }
 
 function EmailView({ subPath }: PanelViewProps) {
@@ -68,8 +132,8 @@ function EmailView({ subPath }: PanelViewProps) {
     return <SettingsIndexRedirect />;
   }
 
-  if (root === "emails" && second === "compose") {
-    return <SuspenseComposeView />;
+  if (root === "emails") {
+    return <EmailMailboxRoutes second={second} />;
   }
 
   switch (root) {
@@ -83,8 +147,6 @@ function EmailView({ subPath }: PanelViewProps) {
       return <AudienceView />;
     case "broadcasts":
       return <BroadcastsView />;
-    case "emails":
-      return <SuspenseEmailsView />;
     case "metrics":
       return <MetricsView />;
     default:

@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
 
 import type { InboundAttachment } from "@/relaybase-email/components/types";
+import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -269,6 +270,23 @@ export function RelaybaseConfigAlert({ show }: { show: boolean }) {
       <AlertDescription>
         Sign out and sign in again to refresh your session token, or contact
         your operator if the problem persists.
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+export function NoDomainsAlert({ show }: { show: boolean }) {
+  const { base } = useEmailPaths();
+
+  if (!show) return null;
+  return (
+    <Alert>
+      <AlertTitle>No domains yet</AlertTitle>
+      <AlertDescription>
+        <Link href={`${base}/domains`} className="font-medium underline">
+          Add a domain
+        </Link>{" "}
+        to start using accounts, email, broadcasts, and audience.
       </AlertDescription>
     </Alert>
   );

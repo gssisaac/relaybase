@@ -13,26 +13,28 @@ export function ComposeForm({
   addresses,
   sendTo,
   setSendTo,
+  sendCc,
+  setSendCc,
   sendSubject,
   setSendSubject,
   sendText,
   setSendText,
   sending,
   onSend,
-  emailDomain,
 }: {
   sendFrom: string;
   setSendFrom: (v: string) => void;
   addresses: Address[];
   sendTo: string;
   setSendTo: (v: string) => void;
+  sendCc: string;
+  setSendCc: (v: string) => void;
   sendSubject: string;
   setSendSubject: (v: string) => void;
   sendText: string;
   setSendText: (v: string) => void;
   sending: boolean;
   onSend: () => void;
-  emailDomain?: string;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -57,7 +59,19 @@ export function ComposeForm({
           <Input
             value={sendTo}
             onChange={(e) => setSendTo(e.target.value)}
-            placeholder="recipient@example.com"
+            placeholder="one@example.com, two@example.com"
+            className="h-10"
+          />
+          <p className="text-xs text-muted-foreground">
+            Separate multiple addresses with commas.
+          </p>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label className="text-xs">Cc</Label>
+          <Input
+            value={sendCc}
+            onChange={(e) => setSendCc(e.target.value)}
+            placeholder="cc@example.com, team@example.com"
             className="h-10"
           />
         </div>
@@ -83,7 +97,7 @@ export function ComposeForm({
         <Button
           size="sm"
           onClick={onSend}
-          disabled={sending || !sendFrom || !sendTo || !sendSubject}
+          disabled={sending || !sendFrom || !sendTo.trim() || !sendSubject}
         >
           {sending ? "Sending…" : "Send"}
         </Button>

@@ -7,19 +7,52 @@ export function defaultInboundR2BucketName(_serviceId?: string): string {
   return INBOUND_R2_BUCKET_NAME;
 }
 
+const LEGACY_INBOUND_R2_BUCKET_PREFIX = "flare-email-inbound";
+
+export function isLegacyInboundR2BucketName(name?: string | null): boolean {
+  const trimmed = name?.trim().toLowerCase() ?? "";
+  return (
+    !trimmed ||
+    trimmed === LEGACY_INBOUND_R2_BUCKET_PREFIX ||
+    trimmed.startsWith(`${LEGACY_INBOUND_R2_BUCKET_PREFIX}-`)
+  );
+}
+
 export function resolveInboundR2BucketName(
   _serviceId: string,
   stored?: string | null,
 ): string {
-  const trimmed = stored?.trim();
-  if (
-    !trimmed ||
-    trimmed === "flare-email-inbound" ||
-    trimmed.startsWith("flare-email-inbound-")
-  ) {
+  if (isLegacyInboundR2BucketName(stored)) {
     return INBOUND_R2_BUCKET_NAME;
   }
-  return trimmed;
+  return stored!.trim();
+}
+
+export function inboundR2BucketsMatch(
+  a?: string | null,
+  b?: string | null,
+): boolean {
+  return (
+    resolveInboundR2BucketName("", a).toLowerCase() ===
+    resolveInboundR2BucketName("", b).toLowerCase()
+  );
+}
+
+/** True when the worker binding name differs from the expected bucket (including legacy names until redeploy). */
+export function workerInboundR2BucketMismatch(
+  expected?: string | null,
+  workerReported?: string | null,
+): boolean {
+  const worker = workerReported?.trim();
+  if (!worker) return false;
+  const resolvedExpected = resolveInboundR2BucketName("", expected);
+  if (
+    resolvedExpected.toLowerCase() !==
+    resolveInboundR2BucketName("", worker).toLowerCase()
+  ) {
+    return true;
+  }
+  return worker.toLowerCase() !== resolvedExpected.toLowerCase();
 }
 
 /** Object key prefix inside the shared bucket for one receiving domain. */

@@ -69,7 +69,7 @@ const STAT_CARDS = [
     key: "sent" as const,
     label: "Sent",
     description: "Outbound messages",
-    href: "emails",
+    href: "emails/inbox",
     color: "#22c55e",
   },
 ];

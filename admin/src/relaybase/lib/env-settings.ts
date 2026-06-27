@@ -1,3 +1,5 @@
+import { resolveInboundR2BucketName } from "@/relaybase-email/lib/r2-inbound";
+
 export type RelaybaseSettingField =
   | "workerUrl"
   | "cloudflareAccountId"
@@ -58,9 +60,13 @@ export function readRelaybaseEnvSettings(): RelaybaseEnvSettings {
     process.env.RELAYBASE_CF_DNS_API_TOKEN,
     process.env.FLARE_EMAIL_SENDER_CF_DNS_API_TOKEN,
   );
-  const inboundR2BucketName = firstNonEmpty(
+  const rawInboundR2BucketName = firstNonEmpty(
     process.env.RELAYBASE_INBOUND_R2_BUCKET,
     process.env.FLARE_EMAIL_SENDER_INBOUND_R2_BUCKET,
+  );
+  const inboundR2BucketName = resolveInboundR2BucketName(
+    "relaybase",
+    rawInboundR2BucketName,
   );
 
   const sources: RelaybaseEnvSources = {
@@ -69,7 +75,7 @@ export function readRelaybaseEnvSettings(): RelaybaseEnvSettings {
     cloudflareApiToken: Boolean(cloudflareApiToken),
     cloudflareZoneId: Boolean(cloudflareZoneId),
     cloudflareDnsApiToken: Boolean(cloudflareDnsApiToken),
-    inboundR2BucketName: Boolean(inboundR2BucketName),
+    inboundR2BucketName: Boolean(rawInboundR2BucketName),
   };
 
   return {

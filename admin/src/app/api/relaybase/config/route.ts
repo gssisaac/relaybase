@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { ensureInboundR2Bucket, resolveInboundR2BucketName } from "@/relaybase-email/lib/r2-inbound";
+import { ensureInboundR2Bucket, resolveInboundR2BucketName, workerInboundR2BucketMismatch } from "@/relaybase-email/lib/r2-inbound";
 import {
   fetchEmailSenderHealth,
   syncWorkerRuntimeConfig,
@@ -54,8 +54,10 @@ export async function GET(request: Request) {
       inboundR2Mismatch: Boolean(
         health.inbound?.bucketName &&
           detail.inboundR2BucketName &&
-          health.inbound.bucketName.toLowerCase() !==
-            detail.inboundR2BucketName.toLowerCase(),
+          workerInboundR2BucketMismatch(
+            detail.inboundR2BucketName,
+            health.inbound.bucketName,
+          ),
       ),
       diagnostics,
     });

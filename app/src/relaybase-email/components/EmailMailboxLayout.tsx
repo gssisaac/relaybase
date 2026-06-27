@@ -1,109 +1,124 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Inbox, Send } from "lucide-react";
+import { Inbox, Pencil, RefreshCw, Send } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  EmailAccountSelect,
+} from "@/relaybase-email/components/EmailAccountSelect";
+import { useEmailMailbox } from "@/relaybase-email/components/EmailMailboxContext";
+import { EmailMailboxAlerts } from "@/relaybase-email/components/EmailMailboxAlerts";
+import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
+import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { cn } from "@/lib/utils";
 
-export type EmailFolder = "inbox" | "sent";
+export type EmailMailboxSection = "compose" | "inbox" | "sent";
 
-const FOLDERS: { id: EmailFolder; label: string; icon: LucideIcon }[] = [
-  { id: "inbox", label: "Inbox", icon: Inbox },
-  { id: "sent", label: "Sent", icon: Send },
+const SECTIONS: {
+  id: EmailMailboxSection;
+  label: string;
+  icon: LucideIcon;
+  hrefKey: "compose" | "inbox" | "sent";
+}[] = [
+  { id: "compose", label: "Compose", icon: Pencil, hrefKey: "compose" },
+  { id: "inbox", label: "Inbox", icon: Inbox, hrefKey: "inbox" },
+  { id: "sent", label: "Sent", icon: Send, hrefKey: "sent" },
 ];
 
-type EmailFolderNavProps = {
-  folder: EmailFolder;
-  onFolderChange: (folder: EmailFolder) => void;
-  inboxCount?: number;
-  sentCount?: number;
-  className?: string;
+type EmailMailboxLayoutProps = {
+  section: EmailMailboxSection;
+  children: ReactNode;
 };
 
-export function EmailFolderNav({
-  folder,
-  onFolderChange,
-  inboxCount,
-  sentCount,
-  className,
-}: EmailFolderNavProps) {
-  const counts: Record<EmailFolder, number | undefined> = {
+export function EmailMailboxLayout({ section, children }: EmailMailboxLayoutProps) {
+  const pathname = usePathname();
+  const { compose, inbox, sent } = useEmailPaths();
+  const hrefs = { compose, inbox, sent };
+  const {
+    addresses,
+    accountFilter,
+    setAccountFilter,
+    inboxCount,
+    sentCount,
+    refreshing,
+    refresh,
+  } = useEmailMailbox();
+
+  const counts: Record<EmailMailboxSection, number | undefined> = {
+    compose: undefined,
     inbox: inboxCount,
     sent: sentCount,
   };
 
   return (
-    <nav
-      className={cn(
-        "flex w-44 shrink-0 flex-col gap-1 border-r border-border bg-muted/20 p-3",
-        className,
-      )}
-      aria-label="Mail folders"
-    >
-      {FOLDERS.map((item) => {
-        const Icon = item.icon;
-        const active = folder === item.id;
-        const count = counts[item.id];
-
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onFolderChange(item.id)}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              active
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-            )}
-          >
-            <Icon className="size-4 shrink-0" aria-hidden />
-            <span className="flex-1 text-left">{item.label}</span>
-            {count !== undefined && count > 0 ? (
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {count}
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </nav>
-  );
-}
-
-type EmailMailboxFrameProps = {
-  folder: EmailFolder;
-  onFolderChange: (folder: EmailFolder) => void;
-  inboxCount?: number;
-  sentCount?: number;
-  toolbar: React.ReactNode;
-  alerts?: React.ReactNode;
-  children: React.ReactNode;
-};
-
-export function EmailMailboxFrame({
-  folder,
-  onFolderChange,
-  inboxCount,
-  sentCount,
-  toolbar,
-  alerts,
-  children,
-}: EmailMailboxFrameProps) {
-  return (
-    <div className="flex min-h-[min(70vh,560px)] flex-col gap-4">
-      {toolbar}
-      {alerts}
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10">
-        <EmailFolderNav
-          folder={folder}
-          onFolderChange={onFolderChange}
-          inboxCount={inboxCount}
-          sentCount={sentCount}
-        />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {children}
+    <div className="flex min-h-0 flex-1 overflow-hidden">
+      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-muted/10">
+        <div className="space-y-2 border-b border-border p-3">
+          <CurrentDomainSelect className="h-9 w-full" />
+          <EmailAccountSelect
+            addresses={addresses}
+            value={accountFilter}
+            onChange={setAccountFilter}
+            className="h-9 w-full"
+          />
         </div>
+
+        <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Mail">
+          {SECTIONS.map((item) => {
+            const Icon = item.icon;
+            const href = hrefs[item.hrefKey];
+            const active =
+              section === item.id ||
+              pathname === href ||
+              pathname.startsWith(`${href}/`);
+            const count = counts[item.id];
+
+            return (
+              <Link
+                key={item.id}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4 shrink-0" aria-hidden />
+                <span className="flex-1 text-left">{item.label}</span>
+                {count !== undefined && count > 0 ? (
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {count}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-border p-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => void refresh(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={refreshing ? "size-4 animate-spin" : "size-4"}
+            />
+            Refresh
+          </Button>
+        </div>
+      </aside>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <EmailMailboxAlerts section={section} />
+        {children}
       </div>
     </div>
   );

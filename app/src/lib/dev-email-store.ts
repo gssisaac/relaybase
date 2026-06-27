@@ -12,7 +12,11 @@ import type { DomainR2ProvisionResult } from "@/lib/relaybase/provision-domain-r
 import {
   readRelaybasePlatformConfig,
 } from "@/lib/relaybase/provision-domain-r2";
-import { inboundR2ObjectPrefix } from "@/lib/relaybase/r2-inbound";
+import {
+  inboundR2ObjectPrefix,
+  resolveInboundR2BucketName,
+  workerInboundR2BucketMismatch,
+} from "@/lib/relaybase/r2-inbound";
 import type { EmailConfig } from "@/relaybase-email/components/types";
 
 export type DevEmailConfig = {
@@ -44,7 +48,9 @@ export type DevSent = {
   id: string;
   from: string;
   to: string;
+  cc?: string;
   subject: string;
+  bodyPreview?: string;
   sentAt: string;
   domain: string;
 };
@@ -356,17 +362,17 @@ export function buildUserEmailConfig(userId: string): EmailConfig {
   const authConfigured = Boolean(authToken && isValidAuthToken(authToken));
   const r2 = activeDomain ? data.domainR2?.[activeDomain] : undefined;
   const platform = readRelaybasePlatformConfig();
-  const inboundR2BucketName =
-    r2?.bucketName ?? platform.inboundR2BucketName;
+  const inboundR2BucketName = resolveInboundR2BucketName(
+    "relaybase",
+    r2?.bucketName ?? platform.inboundR2BucketName,
+  );
   const inboundR2WorkerBucketName = r2?.workerBucketName ?? null;
   const inboundR2WorkerReady = r2?.workerReady ?? false;
   const inboundR2BucketExists = Boolean(r2?.provisionedAt);
   const inboundR2WorkerConfigured = Boolean(platform.workerUrl);
-  const inboundR2Mismatch = Boolean(
-    inboundR2WorkerBucketName &&
-      inboundR2BucketName &&
-      inboundR2WorkerBucketName.toLowerCase() !==
-        inboundR2BucketName.toLowerCase(),
+  const inboundR2Mismatch = workerInboundR2BucketMismatch(
+    inboundR2BucketName,
+    inboundR2WorkerBucketName,
   );
   const inboundR2Configured = Boolean(
     inboundR2BucketExists &&

@@ -14,7 +14,8 @@ export async function POST(request: Request) {
       keyId?: string;
       from?: string;
       fromName?: string;
-      to?: string;
+      to?: string | string[];
+      cc?: string | string[];
       subject?: string;
       text?: string;
       html?: string;
@@ -23,11 +24,12 @@ export async function POST(request: Request) {
 
     const keyId = body.keyId?.trim();
     const from = body.from?.trim();
-    const to = body.to?.trim();
+    const toInput = Array.isArray(body.to) ? body.to.join(", ") : (body.to ?? "");
+    const ccInput = Array.isArray(body.cc) ? body.cc.join(", ") : (body.cc ?? "");
     const subject = body.subject?.trim();
     const text = body.text?.trim();
 
-    if (!keyId || !from || !to || !subject || !text) {
+    if (!keyId || !from || !toInput || !subject || !text) {
       return NextResponse.json(
         { error: "keyId, from, to, subject, and text are required" },
         { status: 400 },
@@ -56,7 +58,8 @@ export async function POST(request: Request) {
     const result = await sendEmailWithApiKey(cfg.baseUrl, vaultKey.key, {
       from,
       fromName: body.fromName?.trim() || undefined,
-      to,
+      to: body.to ?? toInput,
+      cc: body.cc ?? (ccInput || undefined),
       subject,
       text,
       html: body.html,
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
       keyLabel: vaultKey.label,
       domain: vaultKey.domain,
       from,
-      to,
+      to: toInput,
       subject,
       bodyPreview: text,
       messageId: result.messageId,

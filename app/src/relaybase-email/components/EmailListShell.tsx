@@ -148,7 +148,7 @@ export function DetailView({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-[400px] min-w-0 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2">
           <ArrowLeft className="size-4" />
@@ -174,7 +174,7 @@ export function EmptyListState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-20 text-center">
       <div className="flex size-12 items-center justify-center rounded-xl border border-border bg-muted/50">
         <Icon className="size-6 text-muted-foreground" aria-hidden />
       </div>

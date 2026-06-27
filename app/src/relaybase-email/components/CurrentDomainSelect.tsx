@@ -1,10 +1,6 @@
 "use client";
 
-import Link from "next/link";
-
 import { useDomain } from "@/lib/dashboard/DomainContext";
-import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -15,7 +11,6 @@ import {
 
 export function CurrentDomainSelect({ className }: { className?: string }) {
   const { domains, activeDomain, loading, setActiveDomain } = useDomain();
-  const { base } = useEmailPaths();
 
   if (loading) {
     return (
@@ -29,15 +24,11 @@ export function CurrentDomainSelect({ className }: { className?: string }) {
 
   if (!domains.length) {
     return (
-      <Alert className={className}>
-        <AlertTitle>No domains yet</AlertTitle>
-        <AlertDescription>
-          <Link href={`${base}/domains`} className="font-medium underline">
-            Add a domain
-          </Link>{" "}
-          to start using accounts, email, broadcasts, and audience.
-        </AlertDescription>
-      </Alert>
+      <Select disabled>
+        <SelectTrigger className={className ?? "h-9 w-[200px]"}>
+          <SelectValue placeholder="No domains" />
+        </SelectTrigger>
+      </Select>
     );
   }
 

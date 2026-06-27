@@ -146,7 +146,8 @@ export async function sendEmailWithApiKey(
   params: {
     from: string;
     fromName?: string;
-    to: string;
+    to: string | string[];
+    cc?: string | string[];
     subject: string;
     text: string;
     html?: string;

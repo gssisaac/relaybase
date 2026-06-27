@@ -113,6 +113,7 @@ export type SentEmail = {
   id: string;
   from: string;
   to: string;
+  cc?: string;
   subject: string;
   bodyPreview: string;
   sentAt: string;

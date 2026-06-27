@@ -1,16 +1,28 @@
 import { NextResponse } from "next/server";
 
-import { requireSessionUserId } from "@/lib/dev-email-store";
+import {
+  buildUserEmailConfig,
+  requireSessionUserId,
+} from "@/lib/dev-email-store";
 
 export async function GET() {
   try {
-    await requireSessionUserId();
+    const userId = await requireSessionUserId();
+    const config = buildUserEmailConfig(userId);
+    const domain = config.emailDomain || config.domain || "";
+
     return NextResponse.json({
-      configured: false,
-      healthy: false,
-      cloudflareConfigured: false,
-      relaybaseConfigured: false,
-      domainStatus: null,
+      domain,
+      zoneId: null,
+      cloudflareConfigured: config.cloudflareConfigured,
+      sendingOnboarded: false,
+      sendingEnabled: false,
+      sendingDnsConfigured: false,
+      routingEnabled: false,
+      sendingSubdomainId: null,
+      returnPathDomain: null,
+      cloudflareSendingUrl: null,
+      dnsRecords: [],
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";

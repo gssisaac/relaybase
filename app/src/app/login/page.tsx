@@ -33,7 +33,7 @@ export default function LoginPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Sign in failed");
-      router.replace("/accounts");
+      router.replace("/dashboard");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign in failed");

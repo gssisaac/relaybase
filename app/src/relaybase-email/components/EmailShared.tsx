@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 
-import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { AlertCircle, Check } from "lucide-react";
 import { useMemo } from "react";
 
@@ -263,18 +262,13 @@ export function EmailAlerts({
 }
 
 export function RelaybaseConfigAlert({ show }: { show: boolean }) {
-  const { settingsKeys } = useEmailPaths();
   if (!show) return null;
   return (
     <Alert>
-      <AlertTitle>Relaybase auth token required</AlertTitle>
+      <AlertTitle>Relaybase not configured</AlertTitle>
       <AlertDescription>
-        Request an auth token in Relaybase → Status, paste it below, then issue
-        domain API keys in{" "}
-        <Link href={settingsKeys} className="font-medium underline">
-          API Keys
-        </Link>
-        .
+        Sign out and sign in again to refresh your session token, or contact
+        your operator if the problem persists.
       </AlertDescription>
     </Alert>
   );

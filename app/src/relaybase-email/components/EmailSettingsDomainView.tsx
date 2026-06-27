@@ -17,12 +17,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export function EmailSettingsDomainView() {
   const s = useEmailSettings();
-  const { settingsKeys } = useEmailPaths();
+  const { domains } = useEmailPaths();
 
   return (
     <div className="min-h-[min(70vh,560px)] space-y-4">
@@ -34,40 +32,24 @@ export function EmailSettingsDomainView() {
       <EmailAlerts error={s.error} message={s.message} />
 
       <Alert>
-        <AlertTitle>Domain for this product</AlertTitle>
+        <AlertTitle>Domains moved</AlertTitle>
         <AlertDescription>
-          Set the sending domain used to scope API keys. Cloudflare Email Sending,
-          routing, DNS, and inbound R2 are managed in Relaybase by your operator.
+          Manage sending domains, set the active domain, and view per-domain
+          counts from the Domains page.
         </AlertDescription>
       </Alert>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Email domain</CardTitle>
+          <CardTitle className="text-sm">Domains</CardTitle>
           <CardDescription>
-            Domain you send from and receive mail on. API keys in{" "}
-            <Link href={settingsKeys} className="underline">
-              API Keys
-            </Link>{" "}
-            are bound to this domain.
+            Add domains, switch the active domain, and scope accounts, email,
+            broadcasts, and audience by domain.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1 sm:max-w-md">
-            <Label className="text-xs">Email domain</Label>
-            <Input
-              value={s.emailDomain}
-              onChange={(e) => s.setEmailDomain(e.target.value)}
-              placeholder="example.com"
-            />
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={s.saveDomainSettings}
-            disabled={s.saving || !s.emailDomain.trim()}
-          >
-            {s.saving ? "Saving…" : "Save domain"}
+        <CardContent>
+          <Button size="sm" render={<Link href={domains} />}>
+            Open Domains
           </Button>
         </CardContent>
       </Card>

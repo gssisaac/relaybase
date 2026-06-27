@@ -33,7 +33,7 @@ export default function RegisterPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Registration failed");
-      router.replace("/accounts");
+      router.replace("/dashboard");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Registration failed");

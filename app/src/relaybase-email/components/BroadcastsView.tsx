@@ -11,12 +11,14 @@ import { Megaphone, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDomain } from "@/lib/dashboard/DomainContext";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   RelaybaseConfigAlert,
   EmailAlerts,
 } from "@/relaybase-email/components/EmailShared";
+import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
   DetailView,
@@ -55,6 +57,8 @@ function statusVariant(
 export function BroadcastsView() {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
+  const { activeDomain, domainQuery } = useDomain();
+  const domainKey = activeDomain ?? "none";
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [broadcasts, setBroadcasts] = useState<EmailBroadcast[]>([]);
@@ -121,8 +125,8 @@ export function BroadcastsView() {
           }),
           fetchEmailCachedOptional<{ addresses?: Address[] }>(
             productId,
-            "addresses",
-            `${apiBase}/addresses`,
+            `addresses:${domainKey}`,
+            `${apiBase}/addresses${domainQuery()}`,
             {
               refresh: force,
               onUpdate: (data) => {
@@ -134,8 +138,8 @@ export function BroadcastsView() {
           ),
           fetchEmailCachedOptional<{ broadcasts?: EmailBroadcast[] }>(
             productId,
-            "broadcasts",
-            `${apiBase}/broadcasts`,
+            `broadcasts:${domainKey}`,
+            `${apiBase}/broadcasts${domainQuery()}`,
             {
               refresh: force,
               onUpdate: (data) => setBroadcasts(data?.broadcasts ?? []),
@@ -143,8 +147,8 @@ export function BroadcastsView() {
           ),
           fetchEmailCachedOptional<{ contacts?: unknown[] }>(
             productId,
-            "audience",
-            `${apiBase}/audience`,
+            `audience:${domainKey}`,
+            `${apiBase}/audience${domainQuery()}`,
             {
               refresh: force,
               onUpdate: (data) => setAudienceCount(data?.contacts?.length ?? 0),
@@ -168,12 +172,12 @@ export function BroadcastsView() {
         setRefreshing(false);
       }
     },
-    [apiBase, productId],
+    [apiBase, domainKey, domainQuery, productId],
   );
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, activeDomain]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -192,7 +196,7 @@ export function BroadcastsView() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${apiBase}/broadcasts`, {
+      const res = await fetch(`${apiBase}/broadcasts${domainQuery()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ from: sendFrom, subject, text: body }),
@@ -204,7 +208,7 @@ export function BroadcastsView() {
       setBody("");
       setSelectedId(data.broadcast.id);
       setMessage(`Sent to ${data.broadcast.recipientCount} recipients`);
-      clearEmailCache(productId, "broadcasts");
+      clearEmailCache(productId, `broadcasts:${domainKey}`);
       await refresh(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Broadcast failed");
@@ -240,10 +244,12 @@ export function BroadcastsView() {
 
   return (
     <div className="min-h-[min(70vh,560px)] space-y-4">
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CurrentDomainSelect />
+        <div className="flex flex-wrap items-center gap-2">
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger>
-            <Button size="sm" disabled={!relaybaseOk || audienceCount === 0}>
+            <Button size="sm" disabled={!relaybaseOk || audienceCount === 0 || !activeDomain}>
               <Megaphone className="size-4" />
               New broadcast
             </Button>
@@ -294,6 +300,7 @@ export function BroadcastsView() {
         <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={refreshing}>
           <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
         </Button>
+        </div>
       </div>
 
       <EmailAlerts error={error} message={message} />

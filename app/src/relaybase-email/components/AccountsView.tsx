@@ -10,11 +10,13 @@ import { Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDomain } from "@/lib/dashboard/DomainContext";
 
 import {
   CloudflareConfigAlert,
   EmailAlerts,
 } from "@/relaybase-email/components/EmailShared";
+import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
   DetailView,
@@ -40,6 +42,7 @@ import { Label } from "@/components/ui/label";
 export function AccountsView() {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
+  const { activeDomain, domainQuery } = useDomain();
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [search, setSearch] = useState("");
@@ -56,7 +59,8 @@ export function AccountsView() {
   const [saving, setSaving] = useState(false);
   const [localPart, setLocalPart] = useState("");
 
-  const domain = config?.domain ?? "";
+  const domain = activeDomain ?? config?.domain ?? "";
+  const domainKey = activeDomain ?? "none";
 
   const dataRef = useRef({ config, addresses });
   dataRef.current = { config, addresses };
@@ -87,8 +91,8 @@ export function AccountsView() {
           }),
           fetchEmailCachedOptional<{ addresses?: Address[] }>(
             productId,
-            "addresses",
-            `${apiBase}/addresses`,
+            `addresses:${domainKey}`,
+            `${apiBase}/addresses${domainQuery()}`,
             {
               refresh: force,
               onUpdate: (data) => setAddresses(data?.addresses ?? []),
@@ -104,12 +108,12 @@ export function AccountsView() {
         setRefreshing(false);
       }
     },
-    [apiBase, productId],
+    [apiBase, domainKey, domainQuery, productId],
   );
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, activeDomain]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -128,7 +132,7 @@ export function AccountsView() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/addresses`, {
+      const res = await fetch(`${apiBase}/addresses${domainQuery()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ localPart }),
@@ -138,7 +142,7 @@ export function AccountsView() {
       setLocalPart("");
       setAddOpen(false);
       setMessage(`Registered ${data.address.email}`);
-      clearEmailCache(productId, "addresses");
+      clearEmailCache(productId, `addresses:${domainKey}`);
       await refresh(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add");
@@ -174,7 +178,9 @@ export function AccountsView() {
 
   return (
     <div className="min-h-[min(70vh,560px)] space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CurrentDomainSelect />
+        <div className="flex flex-wrap items-center gap-2">
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger>
             <Button size="sm">
@@ -209,7 +215,7 @@ export function AccountsView() {
               <Button
                 className="w-full"
                 size="sm"
-                disabled={saving || !localPart.trim()}
+                disabled={saving || !localPart.trim() || !domain}
                 onClick={addSender}
               >
                 {saving ? "Adding…" : "Add"}
@@ -220,6 +226,7 @@ export function AccountsView() {
         <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={refreshing}>
           <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
         </Button>
+        </div>
       </div>
 
       <EmailAlerts error={error} message={message} />

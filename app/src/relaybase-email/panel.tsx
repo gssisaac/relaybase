@@ -9,6 +9,7 @@ import { AccountsView } from "@/relaybase-email/components/AccountsView";
 import { AudienceView } from "@/relaybase-email/components/AudienceView";
 import { BroadcastsView } from "@/relaybase-email/components/BroadcastsView";
 import { ComposeView } from "@/relaybase-email/components/ComposeView";
+import { DomainsView } from "@/relaybase-email/components/DomainsView";
 import { EmailPageSuspenseFallback } from "@/relaybase-email/components/EmailPageSuspenseFallback";
 import { EmailSettingsKeysView } from "@/relaybase-email/components/EmailSettingsKeysView";
 import { EmailSettingsDomainView } from "@/relaybase-email/components/EmailSettingsDomainView";
@@ -16,13 +17,14 @@ import { EmailSettingsShell } from "@/relaybase-email/components/EmailSettingsSh
 import { EmailShell } from "@/relaybase-email/components/EmailShell";
 import { EmailsView } from "@/relaybase-email/components/EmailsView";
 import { MetricsView } from "@/relaybase-email/components/MetricsView";
+import { UserDashboardView } from "@/relaybase-email/components/UserDashboardView";
 
 function EmailIndexRedirect() {
   const router = useRouter();
-  const accounts = usePanelHref("accounts");
+  const dashboard = usePanelHref("dashboard");
   useEffect(() => {
-    router.replace(accounts);
-  }, [router, accounts]);
+    router.replace(dashboard);
+  }, [router, dashboard]);
   return null;
 }
 
@@ -71,6 +73,10 @@ function EmailView({ subPath }: PanelViewProps) {
   }
 
   switch (root) {
+    case "dashboard":
+      return <UserDashboardView />;
+    case "domains":
+      return <DomainsView />;
     case "accounts":
       return <AccountsView />;
     case "audience":

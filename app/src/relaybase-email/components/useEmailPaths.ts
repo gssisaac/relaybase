@@ -4,6 +4,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   AtSign,
   BarChart3,
+  Globe,
+  LayoutDashboard,
   Mail,
   Megaphone,
   Settings,
@@ -18,6 +20,8 @@ import {
 export function useEmailPaths() {
   const apiBase = useProductApiBase("email");
   const base = usePanelHref();
+  const dashboard = usePanelHref("dashboard");
+  const domains = usePanelHref("domains");
   const emails = usePanelHref("emails");
   const compose = usePanelHref("emails", "compose");
   const settingsBase = usePanelHref("settings");
@@ -27,6 +31,8 @@ export function useEmailPaths() {
   const settingsCloudflare = usePanelHref("settings", "aws");
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
+    { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
+    { href: domains, label: "Domains", icon: Globe },
     { href: usePanelHref("accounts"), label: "Accounts", icon: AtSign },
     { href: emails, label: "Emails", icon: Mail },
     { href: usePanelHref("broadcasts"), label: "Broadcasts", icon: Megaphone },
@@ -43,6 +49,8 @@ export function useEmailPaths() {
   return {
     apiBase,
     base,
+    dashboard,
+    domains,
     emails,
     compose,
     settingsBase,

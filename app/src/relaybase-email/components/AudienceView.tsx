@@ -10,11 +10,13 @@ import { Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDomain } from "@/lib/dashboard/DomainContext";
 
 import {
   CloudflareConfigAlert,
   EmailAlerts,
 } from "@/relaybase-email/components/EmailShared";
+import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
   DetailView,
@@ -40,6 +42,8 @@ import { Label } from "@/components/ui/label";
 export function AudienceView() {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
+  const { activeDomain, domainQuery } = useDomain();
+  const domainKey = activeDomain ?? "none";
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [contacts, setContacts] = useState<AudienceContact[]>([]);
   const [search, setSearch] = useState("");
@@ -87,8 +91,8 @@ export function AudienceView() {
           }),
           fetchEmailCachedOptional<{ contacts?: AudienceContact[] }>(
             productId,
-            "audience",
-            `${apiBase}/audience`,
+            `audience:${domainKey}`,
+            `${apiBase}/audience${domainQuery()}`,
             {
               refresh: force,
               onUpdate: (data) => setContacts(data?.contacts ?? []),
@@ -104,12 +108,12 @@ export function AudienceView() {
         setRefreshing(false);
       }
     },
-    [apiBase, productId],
+    [apiBase, domainKey, domainQuery, productId],
   );
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, activeDomain]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -134,7 +138,7 @@ export function AudienceView() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/audience`, {
+      const res = await fetch(`${apiBase}/audience${domainQuery()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -148,7 +152,7 @@ export function AudienceView() {
       setContactName("");
       setAddOpen(false);
       setMessage(`Added ${data.contact.email}`);
-      clearEmailCache(productId, "audience");
+      clearEmailCache(productId, `audience:${domainKey}`);
       await refresh(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add");
@@ -167,7 +171,7 @@ export function AudienceView() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to remove");
       setSelectedKey(null);
-      clearEmailCache(productId, "audience");
+      clearEmailCache(productId, `audience:${domainKey}`);
       await refresh(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to remove");
@@ -212,7 +216,9 @@ export function AudienceView() {
 
   return (
     <div className="min-h-[min(70vh,560px)] space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <CurrentDomainSelect />
+        <div className="flex flex-wrap items-center gap-2">
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger>
             <Button size="sm">
@@ -242,7 +248,7 @@ export function AudienceView() {
               <Button
                 className="w-full"
                 size="sm"
-                disabled={saving || !contactEmail.trim()}
+                disabled={saving || !contactEmail.trim() || !activeDomain}
                 onClick={addSubscriber}
               >
                 {saving ? "Adding…" : "Add"}
@@ -253,6 +259,7 @@ export function AudienceView() {
         <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={refreshing}>
           <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
         </Button>
+        </div>
       </div>
 
       <EmailAlerts error={error} message={message} />

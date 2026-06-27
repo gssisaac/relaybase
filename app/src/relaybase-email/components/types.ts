@@ -29,6 +29,8 @@ export type EmailConfig = {
   credentialSource: "integration" | "manual";
   usesIntegrationCredentials: boolean;
   domain: string;
+  domains?: string[];
+  activeDomain?: string | null;
   inboundR2BucketName?: string;
   inboundR2ObjectPrefix?: string;
   inboundR2BucketExists?: boolean;

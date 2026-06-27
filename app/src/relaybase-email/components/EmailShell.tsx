@@ -3,7 +3,6 @@
 import { usePathname } from "next/navigation";
 
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
-import { EmailTabNav } from "@/relaybase-email/components/EmailTabNav";
 import { cn } from "@/lib/utils";
 
 export function EmailShell({ children }: { children: React.ReactNode }) {
@@ -14,9 +13,6 @@ export function EmailShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      {!isCompose ? (
-        <EmailTabNav className="shrink-0" />
-      ) : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-1 flex-col",

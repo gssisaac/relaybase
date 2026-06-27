@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { ensureUserAuthToken } from "@/lib/dev-email-store";
 import { listUsers, upsertUser } from "@/lib/users-store";
 
 export async function POST(request: Request) {
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     }
 
     upsertUser(id);
+    ensureUserAuthToken(id);
 
     const response = NextResponse.json({ ok: true, id });
     response.cookies.set("relaybase_user", id, {

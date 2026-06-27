@@ -8,7 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-export function EmailListContainer({ children }: { children: ReactNode }) {
+export function EmailListContainer({
+  children,
+  plain,
+}: {
+  children: ReactNode;
+  plain?: boolean;
+}) {
+  if (plain) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="min-w-0 max-w-full overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10">
       {children}

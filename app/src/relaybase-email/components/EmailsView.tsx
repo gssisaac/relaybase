@@ -12,13 +12,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDomain } from "@/lib/dashboard/DomainContext";
 
+import {
+  EmailAccountSelect,
+  type EmailAccountFilter,
+} from "@/relaybase-email/components/EmailAccountSelect";
+import {
+  EmailMailboxFrame,
+  type EmailFolder,
+} from "@/relaybase-email/components/EmailMailboxLayout";
 import {
   RelaybaseConfigAlert,
   EmailAlerts,
   InboundEmailDetail,
   InboundR2ConfigAlert,
 } from "@/relaybase-email/components/EmailShared";
+import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
   DetailView,
@@ -27,7 +37,6 @@ import {
   EmailTableRow,
   EmptyListState,
   ListToolbar,
-  SegmentTabs,
 } from "@/relaybase-email/components/EmailListShell";
 import type {
   Address,
@@ -38,8 +47,6 @@ import type {
 } from "@/relaybase-email/components/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-
-type Segment = "receiving" | "sending";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -54,8 +61,12 @@ function composeReplyHref(
   compose: string,
   event: RoutingActivityEvent,
   addresses: Address[],
+  fromAccount?: EmailAccountFilter,
 ) {
-  const defaultFrom = addresses[0]?.email;
+  const defaultFrom =
+    fromAccount && fromAccount !== "all"
+      ? fromAccount
+      : addresses[0]?.email;
   const subject = event.subject.startsWith("Re:")
     ? event.subject
     : `Re: ${event.subject}`;
@@ -68,9 +79,28 @@ function composeReplyHref(
   return `${compose}?${params.toString()}`;
 }
 
+function composeHref(compose: string, fromAccount: EmailAccountFilter) {
+  if (fromAccount === "all") return compose;
+  return `${compose}?from=${encodeURIComponent(fromAccount)}`;
+}
+
+function matchesAccount(
+  item: MailListItem,
+  account: EmailAccountFilter,
+): boolean {
+  if (account === "all") return true;
+  const needle = account.toLowerCase();
+  if (item.kind === "inbox") {
+    return item.message.toEmail.toLowerCase() === needle;
+  }
+  return item.message.from.toLowerCase() === needle;
+}
+
 export function EmailsView() {
   const productId = useProductId();
   const { apiBase, emails, compose } = useEmailPaths();
+  const { activeDomain, domainQuery } = useDomain();
+  const domainKey = activeDomain ?? "none";
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -78,7 +108,8 @@ export function EmailsView() {
   const [activity, setActivity] = useState<RoutingActivityEvent[]>([]);
   const [sent, setSent] = useState<SentEmail[]>([]);
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [segment, setSegment] = useState<Segment>("receiving");
+  const [folder, setFolder] = useState<EmailFolder>("inbox");
+  const [accountFilter, setAccountFilter] = useState<EmailAccountFilter>("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activityDetail, setActivityDetail] =
@@ -132,8 +163,8 @@ export function EmailsView() {
             }),
             fetchEmailCachedOptional<{ messages?: RoutingActivityEvent[] }>(
               productId,
-              "inbox",
-              `${apiBase}/inbox?limit=100`,
+              `inbox:${domainKey}`,
+              `${apiBase}/inbox${domainQuery({ limit: "100" })}`,
               {
                 refresh: force,
                 onUpdate: (data) => setActivity(data?.messages ?? []),
@@ -141,8 +172,8 @@ export function EmailsView() {
             ),
             fetchEmailCachedOptional<{ sent?: SentEmail[] }>(
               productId,
-              "sent",
-              `${apiBase}/sent`,
+              `sent:${domainKey}`,
+              `${apiBase}/sent${domainQuery()}`,
               {
                 refresh: force,
                 onUpdate: (data) => setSent(data?.sent ?? []),
@@ -150,8 +181,8 @@ export function EmailsView() {
             ),
             fetchEmailCachedOptional<{ addresses?: Address[] }>(
               productId,
-              "addresses",
-              `${apiBase}/addresses`,
+              `addresses:${domainKey}`,
+              `${apiBase}/addresses${domainQuery()}`,
               {
                 refresh: force,
                 onUpdate: (data) => setAddresses(data?.addresses ?? []),
@@ -174,17 +205,32 @@ export function EmailsView() {
         setRefreshing(false);
       }
     },
-    [apiBase, productId],
+    [apiBase, domainKey, domainQuery, productId],
   );
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, activeDomain]);
+
+  useEffect(() => {
+    setAccountFilter("all");
+    setSelectedId(null);
+    setActivityDetail(null);
+  }, [activeDomain]);
+
+  useEffect(() => {
+    if (
+      accountFilter !== "all" &&
+      !addresses.some((a) => a.email === accountFilter)
+    ) {
+      setAccountFilter("all");
+    }
+  }, [accountFilter, addresses]);
 
   useEffect(() => {
     function onUpdatesSynced() {
-      clearEmailCache(productId, "inbox");
-      if (segment === "receiving") {
+      clearEmailCache(productId, `inbox:${domainKey}`);
+      if (folder === "inbox") {
         void refresh(true);
       }
     }
@@ -193,30 +239,51 @@ export function EmailsView() {
     return () => {
       window.removeEventListener("ops-dashboard:updates-synced", onUpdatesSynced);
     };
-  }, [productId, refresh, segment]);
+  }, [domainKey, folder, productId, refresh]);
 
   useEffect(() => {
     if (searchParams.get("sent") === "1") {
-      setSegment("sending");
+      setFolder("sent");
       setMessage("Email sent");
       router.replace(emails);
     }
-  }, [searchParams, router]);
+  }, [emails, router, searchParams]);
+
+  const inboxItems = useMemo(
+    () =>
+      activity
+        .filter((m) => matchesAccount(
+          { kind: "inbox", id: `inbox:${m.key}`, message: m },
+          accountFilter,
+        ))
+        .map((m) => ({
+          kind: "inbox" as const,
+          id: `inbox:${m.key}`,
+          message: m,
+        })),
+    [accountFilter, activity],
+  );
+
+  const sentItems = useMemo(
+    () =>
+      sent
+        .filter((m) =>
+          matchesAccount(
+            { kind: "sent", id: `sent:${m.id}`, message: m },
+            accountFilter,
+          ),
+        )
+        .map((m) => ({
+          kind: "sent" as const,
+          id: `sent:${m.id}`,
+          message: m,
+        })),
+    [accountFilter, sent],
+  );
 
   const items = useMemo((): MailListItem[] => {
     const q = search.trim().toLowerCase();
-    const source =
-      segment === "receiving"
-        ? activity.map((m) => ({
-            kind: "inbox" as const,
-            id: `inbox:${m.key}`,
-            message: m,
-          }))
-        : sent.map((m) => ({
-            kind: "sent" as const,
-            id: `sent:${m.id}`,
-            message: m,
-          }));
+    const source = folder === "inbox" ? inboxItems : sentItems;
 
     return source
       .sort((a, b) => {
@@ -231,21 +298,28 @@ export function EmailsView() {
         if (item.kind === "inbox") {
           return (
             item.message.subject.toLowerCase().includes(q) ||
-            item.message.fromEmail.toLowerCase().includes(q)
+            item.message.fromEmail.toLowerCase().includes(q) ||
+            item.message.toEmail.toLowerCase().includes(q)
           );
         }
         return (
           item.message.subject.toLowerCase().includes(q) ||
-          item.message.to.toLowerCase().includes(q)
+          item.message.to.toLowerCase().includes(q) ||
+          item.message.from.toLowerCase().includes(q)
         );
       });
-  }, [activity, sent, segment, search]);
+  }, [folder, inboxItems, search, sentItems]);
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
 
   function closeDetail() {
     setSelectedId(null);
     setActivityDetail(null);
+  }
+
+  function changeFolder(next: EmailFolder) {
+    setFolder(next);
+    closeDetail();
   }
 
   async function openItem(item: MailListItem) {
@@ -268,13 +342,61 @@ export function EmailsView() {
 
   const relaybaseOk = config?.relaybaseConfigured ?? false;
 
+  const toolbar = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <CurrentDomainSelect />
+        <EmailAccountSelect
+          addresses={addresses}
+          value={accountFilter}
+          onChange={(value) => {
+            setAccountFilter(value);
+            closeDetail();
+          }}
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          disabled={!relaybaseOk || !activeDomain}
+          render={<Link href={composeHref(compose, accountFilter)} />}
+        >
+          <Pencil className="size-4" />
+          Compose
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => refresh(true)}
+          disabled={refreshing}
+        >
+          <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+        </Button>
+      </div>
+    </div>
+  );
+
+  const alerts = (
+    <>
+      <EmailAlerts error={error} message={message} />
+      <RelaybaseConfigAlert show={!config?.relaybaseConfigured} />
+      {folder === "inbox" ? <InboundR2ConfigAlert config={config} /> : null}
+    </>
+  );
+
   if (selected) {
     if (selected.kind === "sent") {
       const m = selected.message;
       return (
-        <div className="space-y-3">
-          <EmailAlerts error={error} message={message} />
-          <EmailListContainer>
+        <EmailMailboxFrame
+          folder={folder}
+          onFolderChange={changeFolder}
+          inboxCount={inboxItems.length}
+          sentCount={sentItems.length}
+          toolbar={toolbar}
+          alerts={alerts}
+        >
+          <EmailListContainer plain>
             <DetailView title={m.subject} onBack={closeDetail}>
               <p className="mb-4 text-xs text-muted-foreground">
                 To {m.to} · From {m.from} · {formatDate(m.sentAt)}
@@ -282,14 +404,20 @@ export function EmailsView() {
               <pre className="whitespace-pre-wrap text-sm">{m.bodyPreview}</pre>
             </DetailView>
           </EmailListContainer>
-        </div>
+        </EmailMailboxFrame>
       );
     }
     if (activityDetail) {
       return (
-        <div className="space-y-3">
-          <EmailAlerts error={error} message={message} />
-          <EmailListContainer>
+        <EmailMailboxFrame
+          folder={folder}
+          onFolderChange={changeFolder}
+          inboxCount={inboxItems.length}
+          sentCount={sentItems.length}
+          toolbar={toolbar}
+          alerts={alerts}
+        >
+          <EmailListContainer plain>
             <DetailView
               title={activityDetail.subject || "(no subject)"}
               onBack={closeDetail}
@@ -298,7 +426,14 @@ export function EmailsView() {
                   size="sm"
                   variant="outline"
                   render={
-                    <Link href={composeReplyHref(compose, activityDetail, addresses)} />
+                    <Link
+                      href={composeReplyHref(
+                        compose,
+                        activityDetail,
+                        addresses,
+                        accountFilter,
+                      )}
+                    />
                   }
                 >
                   Reply
@@ -329,12 +464,18 @@ export function EmailsView() {
                   </div>
                 ) : null}
               </dl>
-              {activityDetail.bodyText || activityDetail.bodyHtml || (activityDetail.attachments?.length ?? 0) > 0 ? (
+              {activityDetail.bodyText ||
+              activityDetail.bodyHtml ||
+              (activityDetail.attachments?.length ?? 0) > 0 ? (
                 <div className="mt-4">
                   <InboundEmailDetail
                     productId={productId}
                     messageKey={activityDetail.key}
-                    bodyText={activityDetail.bodyText ?? activityDetail.bodyPreview ?? ""}
+                    bodyText={
+                      activityDetail.bodyText ??
+                      activityDetail.bodyPreview ??
+                      ""
+                    }
                     bodyHtml={activityDetail.bodyHtml ?? undefined}
                     attachments={activityDetail.attachments ?? []}
                   />
@@ -347,66 +488,44 @@ export function EmailsView() {
               )}
             </DetailView>
           </EmailListContainer>
-        </div>
+        </EmailMailboxFrame>
       );
     }
     return (
-      <div className="min-h-[min(70vh,560px)]">
-        <EmailListContainer>
+      <EmailMailboxFrame
+        folder={folder}
+        onFolderChange={changeFolder}
+        inboxCount={inboxItems.length}
+        sentCount={sentItems.length}
+        toolbar={toolbar}
+        alerts={alerts}
+      >
+        <EmailListContainer plain>
           <div className="min-h-[400px]" />
         </EmailListContainer>
-      </div>
+      </EmailMailboxFrame>
     );
   }
 
   return (
-    <div className="min-h-[min(70vh,560px)] space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SegmentTabs
-          value={segment}
-          onChange={(v) => {
-            setSegment(v);
-            closeDetail();
-          }}
-          options={[
-            { value: "sending", label: "Sending" },
-            { value: "receiving", label: "Received" },
-          ]}
-        />
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            disabled={!relaybaseOk}
-            render={<Link href={compose} />}
-          >
-            <Pencil className="size-4" />
-            Compose
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refresh(true)}
-            disabled={refreshing}
-          >
-            <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-          </Button>
-        </div>
-      </div>
-
-      <EmailAlerts error={error} message={message} />
-      <RelaybaseConfigAlert show={!config?.relaybaseConfigured} />
-      {segment === "receiving" ? <InboundR2ConfigAlert config={config} /> : null}
-
-      <EmailListContainer>
+    <EmailMailboxFrame
+      folder={folder}
+      onFolderChange={changeFolder}
+      inboxCount={inboxItems.length}
+      sentCount={sentItems.length}
+      toolbar={toolbar}
+      alerts={alerts}
+    >
+      <EmailListContainer plain>
         <ListToolbar
           search={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Search…"
+          searchPlaceholder="Search mail…"
         />
         {items.length > 0 ? (
           <>
             <EmailTableHeader>
-              <span>{segment === "receiving" ? "From" : "To"}</span>
+              <span>{folder === "inbox" ? "From" : "To"}</span>
               <span className="hidden sm:block">Subject</span>
               <span className="hidden sm:block">Date</span>
               <span className="text-right">Status</span>
@@ -419,7 +538,9 @@ export function EmailsView() {
                   : item.message.to;
                 const subject = item.message.subject;
                 const attachmentCount = isInbox
-                  ? item.message.attachmentCount ?? item.message.attachments?.length ?? 0
+                  ? item.message.attachmentCount ??
+                    item.message.attachments?.length ??
+                    0
                   : 0;
                 const date = formatDate(
                   isInbox ? item.message.receivedAt : item.message.sentAt,
@@ -430,7 +551,9 @@ export function EmailsView() {
                     onClick={() => openItem(item)}
                     primary={primary}
                     secondary={
-                      isInbox ? `To ${item.message.toEmail}` : `From ${item.message.from}`
+                      isInbox
+                        ? `To ${item.message.toEmail}`
+                        : `From ${item.message.from}`
                     }
                     subject={
                       attachmentCount > 0
@@ -450,23 +573,29 @@ export function EmailsView() {
           </>
         ) : !loading ? (
           <EmptyListState
-            icon={segment === "sending" ? Send : Inbox}
+            icon={folder === "sent" ? Send : Inbox}
             title={
-              segment === "sending"
-                ? "No sent emails yet"
-                : "No routing activity yet"
+              folder === "sent"
+                ? accountFilter === "all"
+                  ? "No sent emails yet"
+                  : `No sent mail for ${accountFilter}`
+                : accountFilter === "all"
+                  ? "Inbox is empty"
+                  : `No mail for ${accountFilter}`
             }
             description={
-              segment === "sending"
+              folder === "sent"
                 ? "Compose an email to start sending from your domain."
-                : "Route inbound mail to Relaybase and store it in R2, or enable Email Routing in settings."
+                : "Inbound mail routed to your domain will appear here."
             }
             action={
-              segment === "sending" ? (
+              folder === "sent" ? (
                 <Button
                   size="sm"
                   disabled={!relaybaseOk}
-                  render={<Link href={compose} />}
+                  render={
+                    <Link href={composeHref(compose, accountFilter)} />
+                  }
                 >
                   Compose email
                 </Button>
@@ -477,6 +606,6 @@ export function EmailsView() {
           <div className="min-h-[200px]" />
         )}
       </EmailListContainer>
-    </div>
+    </EmailMailboxFrame>
   );
 }

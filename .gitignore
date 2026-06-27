@@ -3,3 +3,6 @@ node_modules/
 .dev.vars
 dist/
 *.log
+data/products/
+data/users/*.json
+!data/users.json

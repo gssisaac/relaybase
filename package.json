@@ -5,6 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "admin:dev": "npm run dev --prefix admin",
+    "admin:build": "npm run build --prefix admin",
+    "admin:start": "npm run start --prefix admin",
+    "app:dev": "npm run dev --prefix app",
+    "app:build": "npm run build --prefix app",
+    "app:start": "npm run start --prefix app",
+    "website:dev": "npm run dev --prefix website",
+    "website:build": "npm run build --prefix website",
+    "website:start": "npm run start --prefix website",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit"
   },

@@ -457,3 +457,22 @@ curl "https://api.relaybase.com/health"
 | `GET` | `/v1/webhooks` | API key | List registered webhooks |
 | `DELETE` | `/v1/webhooks/:id` | API key | Remove a webhook |
 | `POST` | `/v1/send` | API key | Send an email |
+
+## Frontend (development)
+
+Two Next.js apps live beside the Worker and marketing site:
+
+| App | Path | Port | Purpose |
+|-----|------|------|---------|
+| Admin | `admin/` | 32829 | Platform admin (from product-rail `products/relaybase`) — no auth in dev |
+| User dashboard | `app/` | 32830 | Per-user email UI (from `relaybase-email`) — id-only sign-in/register |
+
+```bash
+# Admin — status, keys, logs, settings, user list
+cd admin && npm install && npm run dev
+
+# User app — register/sign in with any id (no password), then use the email dashboard
+cd app && npm install && npm run dev
+```
+
+User accounts are stored in `data/users.json` (shared with admin **Users** page). The user app uses local stub APIs under `/api/email/*` — no Cloudflare or Worker calls in dev.

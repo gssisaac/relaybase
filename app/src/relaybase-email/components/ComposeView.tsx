@@ -4,8 +4,11 @@ import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDomain } from "@/lib/dashboard/DomainContext";
 import { ComposeForm } from "@/relaybase-email/components/ComposeForm";
 import { useEmailMailbox } from "@/relaybase-email/components/EmailMailboxContext";
+import { clearEmailCache } from "@/relaybase-email/components/email-cached-fetch";
 import { parseEmailListStrict } from "@/lib/email/parse-recipients";
 
 function defaultFrom(addresses: { email: string }[]) {
@@ -13,6 +16,8 @@ function defaultFrom(addresses: { email: string }[]) {
 }
 
 export function ComposeView() {
+  const productId = useProductId();
+  const { activeDomain } = useDomain();
   const { apiBase, sent } = useEmailPaths();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -24,6 +29,7 @@ export function ComposeView() {
   const {
     addresses,
     accountFilter,
+    refresh,
     setError,
     setMessage,
   } = useEmailMailbox();
@@ -91,6 +97,9 @@ export function ComposeView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Send failed");
+      const domainKey = activeDomain ?? "none";
+      clearEmailCache(productId, `sent:${domainKey}`);
+      await refresh(true);
       router.push(`${sent}?sent=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Send failed");

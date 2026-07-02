@@ -92,6 +92,7 @@ export function MailListView({ folder }: MailListViewProps) {
     addresses,
     accountFilter,
     loading,
+    refresh,
     setMessage,
     setError,
     relaybaseOk,
@@ -105,9 +106,10 @@ export function MailListView({ folder }: MailListViewProps) {
   useEffect(() => {
     if (folder === "sent" && searchParams.get("sent") === "1") {
       setMessage("Email sent");
+      void refresh(true);
       router.replace(sent);
     }
-  }, [folder, router, searchParams, sent, setMessage]);
+  }, [folder, refresh, router, searchParams, sent, setMessage]);
 
   useEffect(() => {
     setSelectedId(null);

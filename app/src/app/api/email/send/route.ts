@@ -8,6 +8,8 @@ import {
   writeUserEmailData,
 } from "@/lib/dev-email-store";
 import { parseEmailListStrict } from "@/lib/email/parse-recipients";
+import { sendViaRelaybaseWorker } from "@/lib/relaybase/send-email";
+import { readRelaybaseWorkerConfig } from "@/lib/relaybase/worker-client";
 
 export async function GET(request: Request) {
   try {
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
         ...entry,
         bodyPreview: entry.bodyPreview ?? "",
       })),
-      items: [],
+      items: sent,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
@@ -66,21 +68,48 @@ export async function POST(request: Request) {
       body.from?.split("@")[1]?.toLowerCase() ??
       getActiveDomain(data) ??
       "example.com";
+    const from = body.from ?? `dev@${domain}`;
+    const subject = body.subject ?? "(no subject)";
+    const text = body.text?.trim() ?? "";
+
+    let messageId = crypto.randomUUID();
+    const workerConfigured = Boolean(readRelaybaseWorkerConfig());
+
+    if (workerConfigured) {
+      const result = await sendViaRelaybaseWorker({
+        domain,
+        from,
+        to: toParsed.emails.length === 1 ? toParsed.emails[0]! : toParsed.emails,
+        cc: ccParsed.emails.length
+          ? ccParsed.emails.length === 1
+            ? ccParsed.emails[0]
+            : ccParsed.emails
+          : undefined,
+        subject,
+        text,
+      });
+      messageId = result.messageId;
+    }
+
     const record = {
       id: crypto.randomUUID(),
-      from: body.from ?? `dev@${domain}`,
+      from,
       to: toParsed.emails.join(", "),
       cc: ccParsed.emails.length ? ccParsed.emails.join(", ") : undefined,
-      subject: body.subject ?? "(no subject)",
-      bodyPreview: body.text?.trim() ?? "",
+      subject,
+      bodyPreview: text,
       sentAt: new Date().toISOString(),
       domain,
+      messageId,
     };
     data.sent.unshift(record);
     writeUserEmailData(userId, data);
-    return NextResponse.json({ messageId: record.id, dev: true });
+    return NextResponse.json({ messageId: record.messageId, sent: record });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
-    return NextResponse.json({ error: message }, { status: 401 });
+    if (message.includes("Unauthorized") || message.includes("401")) {
+      return NextResponse.json({ error: message }, { status: 401 });
+    }
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

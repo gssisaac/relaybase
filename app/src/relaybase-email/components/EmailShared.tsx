@@ -127,7 +127,7 @@ export function InboundEmailDetail({
   bodyHtml?: string | null;
   attachments?: InboundAttachment[];
 }) {
-  const attachmentBaseUrl = `/api/products/${productId}/email/inbox/${encodeURIComponent(messageKey)}/attachments`;
+  const attachmentBaseUrl = `/api/email/inbox/${encodeURIComponent(messageKey)}/attachments`;
 
   const safeHtml = useMemo(() => {
     if (!bodyHtml) return "";

@@ -24,7 +24,10 @@ export async function GET(request: Request) {
 
     const cfg = readRelaybaseWorkerConfig();
     if (!cfg) {
-      return NextResponse.json({ messages: [] });
+      return NextResponse.json(
+        { error: "Relaybase worker is not configured" },
+        { status: 503 },
+      );
     }
 
     const limit = Number(new URL(request.url).searchParams.get("limit") ?? "50");

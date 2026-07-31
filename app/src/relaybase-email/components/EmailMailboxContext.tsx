@@ -52,7 +52,7 @@ const EmailMailboxContext = createContext<EmailMailboxContextValue | null>(null)
 export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { activeDomain, domainQuery } = useDomain();
+  const { activeDomain, domainQuery, loading: domainLoading } = useDomain();
   const domainKey = activeDomain ?? "none";
 
   const [config, setConfig] = useState<EmailConfig | null>(null);
@@ -60,39 +60,57 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const [sent, setSent] = useState<SentEmail[]>([]);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [accountFilter, setAccountFilter] = useState<EmailAccountFilter>("all");
-  const [loading, setLoading] = useState(
-    () =>
-      readEmailStale<EmailConfig>(productId, "config") === null &&
-      readEmailStale<{ messages?: RoutingActivityEvent[] }>(productId, "inbox") ===
-        null,
-  );
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const dataRef = useRef({ config, activity, sent });
   dataRef.current = { config, activity, sent };
+  const refreshGeneration = useRef(0);
 
   useEffect(() => {
     const staleConfig = readEmailStale<EmailConfig>(productId, "config");
     if (staleConfig) setConfig(staleConfig);
-    const staleInbox = readEmailStale<{ messages?: RoutingActivityEvent[] }>(
-      productId,
-      "inbox",
-    );
-    if (staleInbox) setActivity(staleInbox.messages ?? []);
-    const staleSent = readEmailStale<{ sent?: SentEmail[] }>(productId, "sent");
-    if (staleSent) setSent(staleSent.sent ?? []);
-    const staleAddresses = readEmailStale<{ addresses?: Address[] }>(
-      productId,
-      "addresses",
-    );
-    if (staleAddresses) setAddresses(staleAddresses.addresses ?? []);
-    if (staleConfig || staleInbox) setLoading(false);
-  }, [productId]);
+
+    if (activeDomain) {
+      const staleInbox = readEmailStale<{ messages?: RoutingActivityEvent[] }>(
+        productId,
+        `inbox:${domainKey}`,
+      );
+      // Skip hydrating empty inbox — it forces a network refetch next.
+      if ((staleInbox?.messages?.length ?? 0) > 0) {
+        setActivity(staleInbox!.messages ?? []);
+      }
+      const staleSent = readEmailStale<{ sent?: SentEmail[] }>(
+        productId,
+        `sent:${domainKey}`,
+      );
+      if (staleSent) setSent(staleSent.sent ?? []);
+      const staleAddresses = readEmailStale<{ addresses?: Address[] }>(
+        productId,
+        `addresses:${domainKey}`,
+      );
+      if (staleAddresses) setAddresses(staleAddresses.addresses ?? []);
+      if (staleConfig || (staleInbox?.messages?.length ?? 0) > 0) {
+        setLoading(false);
+      }
+    } else if (staleConfig) {
+      setLoading(false);
+    }
+  }, [productId, activeDomain, domainKey]);
 
   const refresh = useCallback(
     async (force?: boolean) => {
+      // Wait for DomainProvider — do not fetch inbox:none or wipe the list.
+      if (domainLoading) return;
+      if (!activeDomain) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const generation = ++refreshGeneration.current;
       const hasData =
         dataRef.current.config !== null ||
         dataRef.current.activity.length > 0 ||
@@ -100,20 +118,30 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
       if (!hasData) setLoading(true);
       setRefreshing(true);
       setError(null);
+
+      // Inbox changes out-of-band (Worker inbound); never trust a long-lived cache hit.
+      const forceInbox = true;
+
       try {
         const [cfgResult, inboxResult, sentResult, addrResult] =
           await Promise.all([
             fetchEmailCached<EmailConfig>(productId, "config", `${apiBase}/config`, {
               refresh: force,
-              onUpdate: (data) => setConfig(data),
+              onUpdate: (data) => {
+                if (refreshGeneration.current === generation) setConfig(data);
+              },
             }),
             fetchEmailCachedOptional<{ messages?: RoutingActivityEvent[] }>(
               productId,
               `inbox:${domainKey}`,
               `${apiBase}/inbox${domainQuery({ limit: "100" })}`,
               {
-                refresh: force,
-                onUpdate: (data) => setActivity(data?.messages ?? []),
+                refresh: forceInbox,
+                onUpdate: (data) => {
+                  if (refreshGeneration.current === generation) {
+                    setActivity(data?.messages ?? []);
+                  }
+                },
               },
             ),
             fetchEmailCachedOptional<{ sent?: SentEmail[] }>(
@@ -122,7 +150,11 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
               `${apiBase}/sent${domainQuery()}`,
               {
                 refresh: force,
-                onUpdate: (data) => setSent(data?.sent ?? []),
+                onUpdate: (data) => {
+                  if (refreshGeneration.current === generation) {
+                    setSent(data?.sent ?? []);
+                  }
+                },
               },
             ),
             fetchEmailCachedOptional<{ addresses?: Address[] }>(
@@ -131,32 +163,43 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
               `${apiBase}/addresses${domainQuery()}`,
               {
                 refresh: force,
-                onUpdate: (data) => setAddresses(data?.addresses ?? []),
+                onUpdate: (data) => {
+                  if (refreshGeneration.current === generation) {
+                    setAddresses(data?.addresses ?? []);
+                  }
+                },
               },
             ),
           ]);
+
+        if (refreshGeneration.current !== generation) return;
+
         setConfig(cfgResult.data);
         if (inboxResult.ok) {
           setActivity(inboxResult.data?.messages ?? []);
         } else {
-          setActivity([]);
           setError("Failed to load received mail from Relaybase");
         }
         if (sentResult.ok) setSent(sentResult.data?.sent ?? []);
         if (addrResult.ok) setAddresses(addrResult.data?.addresses ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Refresh failed");
+        if (refreshGeneration.current === generation) {
+          setError(e instanceof Error ? e.message : "Refresh failed");
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (refreshGeneration.current === generation) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [apiBase, domainKey, domainQuery, productId],
+    [activeDomain, apiBase, domainKey, domainLoading, domainQuery, productId],
   );
 
   useEffect(() => {
+    if (domainLoading) return;
     void refresh();
-  }, [refresh, activeDomain]);
+  }, [refresh, activeDomain, domainLoading]);
 
   useEffect(() => {
     setAccountFilter("all");
@@ -173,6 +216,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function onUpdatesSynced() {
+      if (!activeDomain) return;
       clearEmailCache(productId, `inbox:${domainKey}`);
       void refresh(true);
     }
@@ -181,7 +225,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener("ops-dashboard:updates-synced", onUpdatesSynced);
     };
-  }, [domainKey, productId, refresh]);
+  }, [activeDomain, domainKey, productId, refresh]);
 
   const inboxCount = activity.length;
   const sentCount = sent.length;

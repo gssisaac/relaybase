@@ -121,6 +121,27 @@ export async function createWorkerApiKey(
   });
 }
 
+export type EnsureInboundRoutingResult = {
+  domain: string;
+  zoneId: string;
+  routingEnabled: boolean;
+  rules: Array<{ address: string; ruleId: string; action: "worker" }>;
+};
+
+/** Create/update Cloudflare Email Routing rules that deliver to the Worker. */
+export async function ensureInboundWorkerRouting(
+  cfg: RelaybaseWorkerConfig,
+  params: { domain: string; addresses: string[] },
+): Promise<EnsureInboundRoutingResult> {
+  return workerFetch<EnsureInboundRoutingResult>(cfg, "/admin/inbox/routing", {
+    method: "POST",
+    body: JSON.stringify({
+      domain: params.domain.trim().toLowerCase(),
+      addresses: params.addresses.map((a) => a.trim().toLowerCase()),
+    }),
+  });
+}
+
 export async function sendEmailWithApiKey(
   baseUrl: string,
   apiKey: string,

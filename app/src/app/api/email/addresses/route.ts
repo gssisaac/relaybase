@@ -6,6 +6,10 @@ import {
   resolveRequestDomain,
   writeUserEmailData,
 } from "@/lib/dev-email-store";
+import {
+  ensureInboundWorkerRouting,
+  readRelaybaseWorkerConfig,
+} from "@/lib/relaybase/worker-client";
 
 export async function GET(request: Request) {
   try {
@@ -48,8 +52,35 @@ export async function POST(request: Request) {
       );
     }
 
-    const email = `${localPart}@${domain}`;
-    if (!data.addresses.some((a) => a.email === email)) {
+    const email = `${localPart}@${domain}`.toLowerCase();
+    const cfg = readRelaybaseWorkerConfig();
+    if (!cfg) {
+      return NextResponse.json(
+        {
+          error:
+            "Relaybase worker is not configured. Ask your operator to finish setup before adding senders.",
+        },
+        { status: 503 },
+      );
+    }
+
+    try {
+      await ensureInboundWorkerRouting(cfg, {
+        domain,
+        addresses: [email],
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to configure inbound routing";
+      return NextResponse.json(
+        {
+          error: `Could not enable inbox for ${email}: ${message}`,
+        },
+        { status: 502 },
+      );
+    }
+
+    if (!data.addresses.some((a) => a.email.toLowerCase() === email)) {
       data.addresses.push({ email, domain });
       writeUserEmailData(userId, data);
     }

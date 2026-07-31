@@ -122,7 +122,7 @@ export function AccountsView() {
       .map((a) => ({
         key: a.email,
         primary: a.email,
-        subject: "Registered sender",
+        subject: "Send and receive",
       }));
   }, [addresses, search]);
 
@@ -165,8 +165,8 @@ export function AccountsView() {
                 <dt className="text-xs text-muted-foreground">Address</dt>
                 <dd>{selectedSender.email}</dd>
                 <dd className="mt-1 text-xs text-muted-foreground">
-                  Available for sending once your domain is onboarded on
-                  Cloudflare Email Sending.
+                  Available for sending (Email Sending) and receiving into
+                  Inbox (Email Routing → Worker) once the domain is onboarded.
                 </dd>
               </div>
             </dl>
@@ -195,8 +195,9 @@ export function AccountsView() {
             <div className="space-y-3">
               <Alert>
                 <AlertDescription className="text-xs">
-                  Register addresses on your onboarded domain. Cloudflare does
-                  not require per-address verification once the domain is set up.
+                  Adds a send-from address and creates an Email Routing rule so
+                  replies to this address land in Inbox. No per-address
+                  verification once the domain is onboarded.
                 </AlertDescription>
               </Alert>
               <div className="flex items-end gap-2">
@@ -257,7 +258,7 @@ export function AccountsView() {
         ) : !loading ? (
           <EmptyListState
             title="No senders yet"
-            description="Register a sender address on your domain."
+            description="Add an address to send from and receive mail on your domain."
             action={
               <Button size="sm" onClick={() => setAddOpen(true)}>
                 Add sender

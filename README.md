@@ -52,12 +52,15 @@ Inbound path:
 ### 1. Worker
 
 ```bash
+cd server
 npm install
 cp .dev.vars.example .dev.vars
 # Fill CF_ACCOUNT_ID, CF_API_TOKEN, ADMIN_TOKEN
 
 npm run dev          # wrangler dev → http://127.0.0.1:8787
 ```
+
+From the repo root you can also run `npm run dev` (delegates to `server/`).
 
 ### 2. Admin dashboard
 
@@ -107,11 +110,14 @@ Reads `admin/.env.local` and `data/products/relaybase/settings.json`, tests Clou
 
 ```
 relaybase/
-├── src/                    # Cloudflare Worker (Hono)
-│   ├── index.ts            # fetch + email() handlers
-│   ├── inbound.ts          # R2 storage for received mail
-│   ├── routes/             # send, admin/*, v1/*
-│   └── lib/                # auth, mime, webhooks, KV helpers
+├── server/                 # Cloudflare Worker (Hono)
+│   ├── src/
+│   │   ├── index.ts        # fetch + email() handlers
+│   │   ├── inbound.ts      # R2 storage for received mail
+│   │   ├── routes/         # send, admin/*, v1/*
+│   │   └── lib/            # auth, mime, webhooks, KV helpers
+│   ├── wrangler.toml       # Worker bindings (KV, R2)
+│   └── .dev.vars           # Worker secrets (local only, not committed)
 ├── admin/                  # Operator Next.js app
 ├── app/                    # Customer Next.js app (relaybase-email UI)
 ├── website/                # Marketing Next.js (static export)
@@ -119,9 +125,7 @@ relaybase/
 │   ├── users.json          # User registry (shared with admin Users)
 │   ├── users/<id>.json     # Per-user domain/email data (dev)
 │   └── products/relaybase/ # Admin product settings + vault (dev)
-├── scripts/                # provision-domain-key, diagnose-relaybase
-├── wrangler.toml           # Worker bindings (KV, R2)
-└── .dev.vars               # Worker secrets (local only, not committed)
+└── scripts/                # provision-domain-key, diagnose-relaybase
 ```
 
 ---
@@ -129,20 +133,22 @@ relaybase/
 ## Worker — deploy
 
 ```bash
+cd server
+
 # Create KV namespace (once)
-wrangler kv namespace create KEYS
-wrangler kv namespace create KEYS --preview
-# Update wrangler.toml with id and preview_id
+npx wrangler kv namespace create KEYS
+npx wrangler kv namespace create KEYS --preview
+# Update server/wrangler.toml with id and preview_id
 
 # Secrets
-wrangler secret put CF_ACCOUNT_ID
-wrangler secret put CF_API_TOKEN
-wrangler secret put ADMIN_TOKEN
+npx wrangler secret put CF_ACCOUNT_ID
+npx wrangler secret put CF_API_TOKEN
+npx wrangler secret put ADMIN_TOKEN
 
 npm run deploy    # wrangler deploy
 ```
 
-Bindings in `wrangler.toml`:
+Bindings in `server/wrangler.toml`:
 
 | Binding | Resource | Purpose |
 |---------|----------|---------|
@@ -153,7 +159,7 @@ Bindings in `wrangler.toml`:
 
 ## Environment variables
 
-### Worker (`wrangler.toml` vars + secrets)
+### Worker (`server/wrangler.toml` vars + secrets)
 
 | Variable | Type | Description |
 |----------|------|-------------|

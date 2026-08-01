@@ -158,7 +158,7 @@ if (workerUrl) {
           : `Bucket mismatch — worker: ${health.inbound.bucketName}, config: ${bucketName}`
         : `Worker bucket matches (${bucketName})`,
       mismatch
-        ? "Redeploy worker: wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-inbound, then wrangler deploy"
+        ? "Redeploy worker: server/wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-inbound, then npm run deploy --prefix server"
         : undefined,
     );
   }
@@ -196,7 +196,7 @@ if (workerUrl) {
         : `Bootstrap auth rejected (HTTP ${bootstrapRes.status}: ${bootstrapData.error ?? "Unauthorized"})`,
       bootstrapAuthOk
         ? undefined
-        : "Run: wrangler secret put CF_API_TOKEN — use the same token as RELAYBASE_CF_API_TOKEN",
+        : "Run from server/: npx wrangler secret put CF_API_TOKEN — use the same token as RELAYBASE_CF_API_TOKEN",
     );
   }
 } else {

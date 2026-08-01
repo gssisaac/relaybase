@@ -287,7 +287,7 @@ function formatWorkerSyncFailure(params: {
       "Could not sync credentials to the Relaybase worker.",
       `Worker rejected the admin service token (${params.adminTokenRejected ? "401 Unauthorized" : `HTTP ${params.status}`}).`,
       `Bootstrap via /admin/bootstrap also failed (${params.bootstrapStatus ?? "unknown"}${params.bootstrapError ? `: ${params.bootstrapError}` : ""}).`,
-      "Fix: ensure the Cloudflare API token in admin/.env.local matches the worker secret CF_API_TOKEN (run `wrangler secret put CF_API_TOKEN` from the relaybase worker project), then click Sync to worker again.",
+      "Fix: ensure the Cloudflare API token in admin/.env.local matches the worker secret CF_API_TOKEN (run `npx wrangler secret put CF_API_TOKEN` from server/), then click Sync to worker again.",
     );
   } else if (params.adminTokenRejected) {
     parts.push(

@@ -144,7 +144,7 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
             : `Worker inbound bucket mismatch (worker: ${health.inbound.bucketName}, expected: ${bucketName})`
           : `Worker inbound bucket matches (${bucketName})`,
         detail: mismatch
-          ? `Redeploy the worker: wrangler.toml must set bucket_name and INBOUND_BUCKET_NAME to ${bucketName}, then run wrangler deploy.`
+          ? `Redeploy the worker: server/wrangler.toml must set bucket_name and INBOUND_BUCKET_NAME to ${bucketName}, then run npm run deploy --prefix server.`
           : undefined,
       });
     }
@@ -159,7 +159,7 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
           : "Worker rejected the stored admin service token",
         detail: workerAuth
           ? undefined
-          : 'Click "Sync to worker" to bootstrap. Bootstrap auth must match the worker secret CF_API_TOKEN (wrangler secret put CF_API_TOKEN) or ADMIN_TOKEN.',
+          : 'Click "Sync to worker" to bootstrap. Bootstrap auth must match the worker secret CF_API_TOKEN (`npx wrangler secret put CF_API_TOKEN` in server/) or ADMIN_TOKEN.',
         logDetail: workerAuth ? undefined : `admin token prefix: ${adminToken.slice(0, 12)}…`,
       });
     }

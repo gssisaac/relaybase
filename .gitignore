@@ -1,8 +1,7 @@
 node_modules/
-.wrangler/
-.dev.vars
 dist/
 *.log
+.DS_Store
 data/products/
 data/users/*.json
 !data/users.json

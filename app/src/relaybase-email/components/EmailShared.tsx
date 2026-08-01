@@ -355,7 +355,7 @@ export function InboundR2ConfigAlert({
           <span className="font-mono">{config.inboundR2BucketName}</span> but the
           worker is bound to{" "}
           <span className="font-mono">{config.inboundR2WorkerBucketName}</span>.
-          Update <span className="font-mono">wrangler.toml</span>{" "}
+          Update <span className="font-mono">server/wrangler.toml</span>{" "}
           <span className="font-mono">bucket_name</span> and{" "}
           <span className="font-mono">INBOUND_BUCKET_NAME</span>, then redeploy
           Relaybase.
@@ -371,7 +371,7 @@ export function InboundR2ConfigAlert({
           The R2 bucket exists but the worker binding is not working. Enable R2 on
           your Cloudflare account, confirm{" "}
           <span className="font-mono">{config.inboundR2BucketName}</span> is bound
-          in <span className="font-mono">wrangler.toml</span>, and redeploy
+          in <span className="font-mono">server/wrangler.toml</span>, and redeploy
           Relaybase.
         </AlertDescription>
       </Alert>

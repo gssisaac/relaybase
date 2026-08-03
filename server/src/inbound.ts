@@ -11,6 +11,8 @@ export async function handleInboundEmail(
     toEmail: message.to,
     subject: message.headers.get("subject")?.trim() || "(no subject)",
     messageId: message.headers.get("message-id")?.trim() || null,
+    inReplyTo: message.headers.get("in-reply-to")?.trim() || null,
+    references: message.headers.get("references")?.trim() || null,
     size: message.rawSize,
     raw,
   });

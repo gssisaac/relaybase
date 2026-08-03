@@ -84,7 +84,51 @@ export async function POST(request: Request) {
       data.addresses.push({ email, domain });
       writeUserEmailData(userId, data);
     }
-    return NextResponse.json({ address: { email } });
+    return NextResponse.json({ address: { email, domain } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed";
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const userId = await requireSessionUserId();
+    const body = (await request.json()) as {
+      email?: string;
+      displayName?: string | null;
+    };
+    const email = body.email?.trim().toLowerCase();
+    if (!email) {
+      return NextResponse.json({ error: "email is required" }, { status: 400 });
+    }
+
+    const data = readUserEmailData(userId);
+    const index = data.addresses.findIndex(
+      (a) => a.email.toLowerCase() === email,
+    );
+    if (index < 0) {
+      return NextResponse.json({ error: "Address not found" }, { status: 404 });
+    }
+
+    const displayName =
+      typeof body.displayName === "string"
+        ? body.displayName.trim()
+        : body.displayName === null
+          ? ""
+          : undefined;
+
+    if (displayName !== undefined) {
+      const current = data.addresses[index]!;
+      data.addresses[index] = {
+        email: current.email,
+        domain: current.domain,
+        ...(displayName ? { displayName } : {}),
+      };
+      writeUserEmailData(userId, data);
+    }
+
+    return NextResponse.json({ address: data.addresses[index] });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
     return NextResponse.json({ error: message }, { status: 401 });

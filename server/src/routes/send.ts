@@ -21,6 +21,8 @@ type SendBody = {
   text?: string;
   html?: string;
   replyTo?: string;
+  inReplyTo?: string;
+  references?: string;
 };
 
 function keyFields(record: KeyRecord | null) {
@@ -159,6 +161,8 @@ send.post("/", async (c) => {
       text,
       html: body.html,
       replyTo: body.replyTo,
+      inReplyTo: body.inReplyTo?.trim() || undefined,
+      references: body.references?.trim() || undefined,
     });
     return logAndRespond(c, {
       ok: true,

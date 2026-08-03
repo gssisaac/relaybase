@@ -30,6 +30,7 @@ export async function PUT(request: Request) {
       dmarcPolicy?: "none" | "quarantine" | "reject";
       dmarcRua?: string;
       bimiLogoUrl?: string;
+      vmcUrl?: string | null;
     };
     const domain = body.domain?.trim().toLowerCase();
     if (!domain) {
@@ -47,6 +48,13 @@ export async function PUT(request: Request) {
       dmarcPolicy: body.dmarcPolicy ?? existing.dmarcPolicy,
       dmarcRua: body.dmarcRua?.trim() || existing.dmarcRua,
       bimiLogoUrl: body.bimiLogoUrl?.trim() || existing.bimiLogoUrl,
+      ...(body.vmcUrl !== undefined
+        ? body.vmcUrl?.trim()
+          ? { vmcUrl: body.vmcUrl.trim() }
+          : {}
+        : existing.vmcUrl
+          ? { vmcUrl: existing.vmcUrl }
+          : {}),
     };
 
     mergeEmailSenderSettings({

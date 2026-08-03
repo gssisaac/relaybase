@@ -154,6 +154,8 @@ export async function sendEmailWithApiKey(
     text: string;
     html?: string;
     replyTo?: string;
+    inReplyTo?: string;
+    references?: string;
   },
 ): Promise<{ messageId: string }> {
   const url = `${baseUrl.replace(/\/$/, "")}/v1/send`;

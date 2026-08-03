@@ -75,6 +75,7 @@ export type DomainStatus = {
 
 export type Address = {
   email: string;
+  displayName?: string;
 };
 
 export type RoutingActivityEvent = {
@@ -91,6 +92,9 @@ export type RoutingActivityEvent = {
   bodyHtml?: string | null;
   attachmentCount?: number;
   attachments?: InboundAttachment[];
+  messageId?: string | null;
+  inReplyTo?: string | null;
+  references?: string | null;
 };
 
 export type InboundAttachment = {

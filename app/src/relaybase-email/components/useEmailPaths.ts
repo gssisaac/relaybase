@@ -29,6 +29,7 @@ export function useEmailPaths() {
   const settingsBase = usePanelHref("settings");
   const settingsKeys = usePanelHref("settings", "keys");
   const settingsDomain = usePanelHref("settings", "domain");
+  const settingsBranding = usePanelHref("settings", "branding");
   /** @deprecated Use settingsKeys — legacy route alias */
   const settingsCloudflare = usePanelHref("settings", "aws");
 
@@ -46,6 +47,7 @@ export function useEmailPaths() {
   const settingsNav = [
     { href: settingsKeys, label: "API Keys" },
     { href: settingsDomain, label: "Domain" },
+    { href: settingsBranding, label: "Logo" },
   ] as const;
 
   return {
@@ -61,6 +63,7 @@ export function useEmailPaths() {
     settingsKeys,
     settingsCloudflare,
     settingsDomain,
+    settingsBranding,
     tabs,
     settingsNav,
   };

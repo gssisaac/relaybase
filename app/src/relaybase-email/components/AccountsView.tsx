@@ -58,6 +58,7 @@ export function AccountsView() {
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localPart, setLocalPart] = useState("");
+  const [displayName, setDisplayName] = useState("");
 
   const domain = activeDomain ?? config?.domain ?? "";
   const domainKey = activeDomain ?? "none";
@@ -122,11 +123,41 @@ export function AccountsView() {
       .map((a) => ({
         key: a.email,
         primary: a.email,
-        subject: "Send and receive",
+        subject: a.displayName?.trim() || "Send and receive",
       }));
   }, [addresses, search]);
 
   const selectedSender = addresses.find((a) => a.email === selectedKey);
+
+  useEffect(() => {
+    setDisplayName(selectedSender?.displayName ?? "");
+  }, [selectedSender?.displayName, selectedSender?.email]);
+
+  async function saveDisplayName() {
+    if (!selectedSender) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`${apiBase}/addresses`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: selectedSender.email,
+          displayName,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save");
+      setMessage("Display name saved");
+      clearEmailCache(productId, `addresses:${domainKey}`);
+      await refresh(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function addSender() {
     setSaving(true);
@@ -168,6 +199,26 @@ export function AccountsView() {
                   Available for sending (Email Sending) and receiving into
                   Inbox (Email Routing → Worker) once the domain is onboarded.
                 </dd>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Display name</Label>
+                <Input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="MacPurity Support Team"
+                  className="h-10"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shown as the From name in recipient inboxes when you send
+                  from this address.
+                </p>
+                <Button
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => void saveDisplayName()}
+                >
+                  {saving ? "Saving…" : "Save display name"}
+                </Button>
               </div>
             </dl>
           </DetailView>

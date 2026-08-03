@@ -17,6 +17,8 @@ export function serializeInboundListItem(message: InboundEmailMeta) {
     bodyPreview: message.bodyPreview,
     attachmentCount: message.attachments.length,
     messageId: message.messageId,
+    inReplyTo: message.inReplyTo ?? null,
+    references: message.references ?? null,
     size: message.size,
   };
 }
@@ -34,6 +36,8 @@ export function serializeInboundMessage(message: InboundEmailMeta) {
     bodyText: message.bodyText,
     bodyHtml: message.bodyHtml,
     messageId: message.messageId,
+    inReplyTo: message.inReplyTo ?? null,
+    references: message.references ?? null,
     size: message.size,
     attachments: message.attachments.map((attachment) => ({
       ...attachment,

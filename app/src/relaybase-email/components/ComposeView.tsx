@@ -25,6 +25,8 @@ export function ComposeView() {
   const toParam = searchParams.get("to");
   const subjectParam = searchParams.get("subject");
   const fromParam = searchParams.get("from");
+  const inReplyToParam = searchParams.get("inReplyTo");
+  const referencesParam = searchParams.get("references");
 
   const {
     addresses,
@@ -93,6 +95,8 @@ export function ComposeView() {
             : undefined,
           subject: sendSubject,
           text: sendText,
+          inReplyTo: inReplyToParam?.trim() || undefined,
+          references: referencesParam?.trim() || undefined,
         }),
       });
       const data = await res.json();

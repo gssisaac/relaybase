@@ -37,10 +37,15 @@ async function resolveDomainApiKey(domain: string): Promise<string> {
 export async function sendViaRelaybaseWorker(params: {
   domain: string;
   from: string;
+  fromName?: string;
   to: string | string[];
   cc?: string | string[];
   subject: string;
   text: string;
+  html?: string;
+  replyTo?: string;
+  inReplyTo?: string;
+  references?: string;
 }): Promise<{ messageId: string }> {
   const cfg = readRelaybaseWorkerConfig();
   if (!cfg) {

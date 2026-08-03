@@ -248,6 +248,8 @@ export class CloudflareClient {
     text: string;
     html?: string;
     replyTo?: string;
+    inReplyTo?: string;
+    references?: string;
   }): Promise<CfEmailSendResult> {
     const fromAddress = params.from.trim();
     const toList = Array.isArray(params.to) ? params.to : [params.to];
@@ -268,6 +270,8 @@ export class CloudflareClient {
       text: params.text,
       html: params.html,
       replyTo: params.replyTo,
+      inReplyTo: params.inReplyTo,
+      references: params.references,
     });
 
     const path = `/accounts/${this.accountId}/email/sending/send_raw`;
@@ -296,9 +300,14 @@ export class CloudflareClient {
     text: string;
     html?: string;
     replyTo?: string;
+    inReplyTo?: string;
+    references?: string;
   }): Promise<CfEmailSendResult> {
     const fromName = params.fromName?.trim();
-    if (fromName) {
+    const needsRaw = Boolean(
+      fromName || params.inReplyTo?.trim() || params.references?.trim(),
+    );
+    if (needsRaw) {
       return this.sendRawEmail({ ...params, fromName });
     }
     return this.sendStructuredEmail(params);

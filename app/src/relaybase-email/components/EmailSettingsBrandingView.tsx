@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   clearEmailCache,
   fetchEmailCached,
+  fetchEmailCachedOptional,
 } from "@/relaybase-email/components/email-cached-fetch";
 import {
   CloudflareConfigAlert,
@@ -18,6 +17,7 @@ import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { useEmailSettings } from "@/relaybase-email/components/useEmailSettings";
 import { cacheHintText } from "@/lib/dashboard/shared/cached-fetch";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import type { Address } from "@/relaybase-email/components/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,73 +30,50 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+
+type BrandingUserStatus =
+  | "not_set"
+  | "setting_up"
+  | "needs_verification"
+  | "ready";
 
 type BrandingStatus = {
   domain: string;
-  zoneId: string | null;
-  dnsConfigured: boolean;
   dnsCanApply: boolean;
   dnsApplyHint: string | null;
-  settings: {
-    dmarcPolicy: "none" | "quarantine" | "reject";
-    dmarcRua: string;
-    bimiLogoUrl: string;
-  };
-  dmarc: {
-    name: string;
-    expected: string;
-    current: string | null;
-    found: boolean;
-  };
-  bimi: {
-    name: string;
-    expected: string;
-    current: string | null;
-    found: boolean;
-  };
-  dmarcEnforced: boolean;
-  bimiReady: boolean;
-  notes: string[];
+  logoStoredLocally?: boolean;
+  hasVerificationFile: boolean;
+  userStatus: BrandingUserStatus;
+  userMessage: string;
+};
+
+const STATUS_LABEL: Record<BrandingUserStatus, string> = {
+  not_set: "Logo not set",
+  setting_up: "Setting up…",
+  needs_verification: "Needs verification for Gmail",
+  ready: "Inbox logo ready",
 };
 
 export function EmailSettingsBrandingView() {
   const productId = useProductId();
-  const { apiBase, settingsCloudflare, settingsDomain } = useEmailPaths();
+  const { apiBase } = useEmailPaths();
   const emailSettings = useEmailSettings();
-  const [domain, setDomain] = useState("");
   const [status, setStatus] = useState<BrandingStatus | null>(null);
-  const [dmarcPolicy, setDmarcPolicy] = useState<"none" | "quarantine" | "reject">(
-    "quarantine",
-  );
-  const [dmarcRua, setDmarcRua] = useState("");
-  const [bimiLogoUrl, setBimiLogoUrl] = useState("");
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [showVerifyUpload, setShowVerifyUpload] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [cacheHint, setCacheHint] = useState<string | null>(null);
+  const [logoVersion, setLogoVersion] = useState(0);
 
   const statusRef = useRef(status);
   statusRef.current = status;
 
-  const configuredDomain = useMemo(
+  const domain = useMemo(
     () =>
       (
         emailSettings.emailDomain ||
@@ -106,31 +83,15 @@ export function EmailSettingsBrandingView() {
     [emailSettings.config?.emailDomain, emailSettings.emailDomain],
   );
 
-  const activeDomain = useMemo(
-    () => (domain || configuredDomain).trim().toLowerCase(),
-    [configuredDomain, domain],
-  );
-
   const loadBranding = useCallback(
     async (targetDomain: string, force?: boolean) => {
       const { data, meta } = await fetchEmailCached<BrandingStatus>(
         productId,
         `branding:${targetDomain}`,
         `${apiBase}/branding?domain=${encodeURIComponent(targetDomain)}`,
-        {
-          refresh: force,
-          onUpdate: (d) => {
-            setStatus(d);
-            setDmarcPolicy(d.settings.dmarcPolicy);
-            setDmarcRua(d.settings.dmarcRua);
-            setBimiLogoUrl(d.settings.bimiLogoUrl);
-          },
-        },
+        { refresh: force, onUpdate: (d) => setStatus(d) },
       );
       setStatus(data);
-      setDmarcPolicy(data.settings.dmarcPolicy);
-      setDmarcRua(data.settings.dmarcRua);
-      setBimiLogoUrl(data.settings.bimiLogoUrl);
       setCacheHint(cacheHintText(meta.fromCache, meta.ageMinutes));
       return data;
     },
@@ -138,23 +99,25 @@ export function EmailSettingsBrandingView() {
   );
 
   useEffect(() => {
-    const target = configuredDomain;
-    if (!target) return;
-    const stale = readEmailStale<BrandingStatus>(productId, `branding:${target}`);
-    if (stale) {
-      setDomain(target);
-      setStatus(stale);
-      setDmarcPolicy(stale.settings.dmarcPolicy);
-      setDmarcRua(stale.settings.dmarcRua);
-      setBimiLogoUrl(stale.settings.bimiLogoUrl);
+    if (!domain) return;
+    const staleStatus = readEmailStale<BrandingStatus>(
+      productId,
+      `branding:${domain}`,
+    );
+    if (staleStatus) {
+      setStatus(staleStatus);
       setLoading(false);
     }
-  }, [configuredDomain, productId]);
+    const staleAddresses = readEmailStale<{ addresses?: Address[] }>(
+      productId,
+      `addresses:${domain}`,
+    );
+    if (staleAddresses) setAddresses(staleAddresses.addresses ?? []);
+  }, [domain, productId]);
 
   const refresh = useCallback(
     async (force?: boolean) => {
-      const target = (domain || configuredDomain).trim().toLowerCase();
-      if (!target) {
+      if (!domain) {
         setStatus(null);
         setCacheHint(null);
         setLoading(false);
@@ -165,8 +128,16 @@ export function EmailSettingsBrandingView() {
       setRefreshing(true);
       setError(null);
       try {
-        if (!domain) setDomain(target);
-        await loadBranding(target, force);
+        const [, addrResult] = await Promise.all([
+          loadBranding(domain, force),
+          fetchEmailCachedOptional<{ addresses?: Address[] }>(
+            productId,
+            `addresses:${domain}`,
+            `${apiBase}/addresses?domain=${encodeURIComponent(domain)}`,
+            { refresh: force, onUpdate: (d) => setAddresses(d?.addresses ?? []) },
+          ),
+        ]);
+        if (addrResult.ok) setAddresses(addrResult.data?.addresses ?? []);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Refresh failed");
       } finally {
@@ -174,70 +145,76 @@ export function EmailSettingsBrandingView() {
         setRefreshing(false);
       }
     },
-    [configuredDomain, domain, loadBranding],
+    [apiBase, domain, loadBranding, productId],
   );
 
   useEffect(() => {
-    if (emailSettings.loading && !configuredDomain) return;
+    if (emailSettings.loading && !domain) return;
     void refresh();
-  }, [configuredDomain, emailSettings.loading, refresh]);
+  }, [domain, emailSettings.loading, refresh]);
 
-  async function saveSettings() {
-    if (!activeDomain) return;
-    setSaving(true);
+  async function uploadLogo(file: File | null) {
+    if (!domain || !file) return;
+    setUploading(true);
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(`${apiBase}/branding`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: activeDomain,
-          dmarcPolicy,
-          dmarcRua,
-          bimiLogoUrl,
-        }),
-      });
-      const data = (await res.json()) as BrandingStatus & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Save failed");
-      setStatus(data);
-      clearEmailCache(productId, `branding:${activeDomain}`);
-      setMessage("Branding settings saved");
-      await loadBranding(activeDomain, true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function applyDns(applyDmarc: boolean, applyBimi: boolean) {
-    if (!activeDomain) return;
-    setApplying(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await fetch(`${apiBase}/branding`, {
+      const form = new FormData();
+      form.set("domain", domain);
+      form.set("file", file);
+      const res = await fetch(`${apiBase}/branding/logo`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: activeDomain,
-          applyDmarc,
-          applyBimi,
-        }),
+        body: form,
       });
       const data = (await res.json()) as BrandingStatus & { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Apply failed");
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
       setStatus(data);
-      clearEmailCache(productId, `branding:${activeDomain}`);
-      setMessage("DNS records applied in Cloudflare");
-      await loadBranding(activeDomain, true);
+      setLogoVersion((v) => v + 1);
+      clearEmailCache(productId, `branding:${domain}`);
+      setMessage("Logo updated");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Apply failed");
+      setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
-      setApplying(false);
+      setUploading(false);
     }
   }
+
+  async function uploadVerification(file: File | null) {
+    if (!domain || !file) return;
+    setVerifying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const form = new FormData();
+      form.set("domain", domain);
+      form.set("file", file);
+      const res = await fetch(`${apiBase}/branding/verification`, {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json()) as BrandingStatus & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      setStatus(data);
+      clearEmailCache(productId, `branding:${domain}`);
+      setMessage("Verification saved");
+      setShowVerifyUpload(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  const previewName = useMemo(() => {
+    const withName = addresses.find((a) => a.displayName?.trim());
+    return withName?.displayName?.trim() || domain || "Your business";
+  }, [addresses, domain]);
+
+  const initial = previewName.trim().charAt(0).toUpperCase() || "?";
+  const logoSrc =
+    status?.logoStoredLocally && domain
+      ? `${apiBase}/branding/logo?domain=${encodeURIComponent(domain)}&v=${logoVersion}`
+      : null;
 
   return (
     <div className="flex-none space-y-4 overflow-visible">
@@ -250,209 +227,123 @@ export function EmailSettingsBrandingView() {
       <CloudflareConfigAlert show={!emailSettings.cloudflareOk} />
 
       {status && !status.dnsCanApply && status.dnsApplyHint ? (
-        <Alert variant="destructive">
-          <AlertTitle>DNS write access required</AlertTitle>
-          <AlertDescription className="space-y-2">
-            <p>{status.dnsApplyHint}</p>
-            <p>
-              Update credentials in{" "}
-              <Link href={settingsDomain} className="underline">
-                Domain connection
-              </Link>
-              .
-            </p>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {!emailSettings.cloudflareOk ? (
         <Alert>
-          <AlertTitle>Configure Cloudflare Email first</AlertTitle>
-          <AlertDescription>
-            Set Cloudflare credentials in{" "}
-            <Link href={settingsCloudflare} className="font-medium underline">
-              Cloudflare settings
-            </Link>{" "}
-            and connect your domain in{" "}
-            <Link href={settingsDomain} className="font-medium underline">
-              Domain connection
-            </Link>{" "}
-            before managing DMARC and BIMI.
-          </AlertDescription>
+          <AlertTitle>We can&apos;t finish setup automatically yet</AlertTitle>
+          <AlertDescription>{status.dnsApplyHint}</AlertDescription>
         </Alert>
       ) : null}
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Sender branding (DMARC &amp; BIMI)</CardTitle>
+          <CardTitle className="text-base">Inbox logo</CardTitle>
           <CardDescription>
-            Control inbox display prerequisites and brand logo via DNS. BIMI shows
-            your logo in supporting mail clients once DMARC is enforced and the SVG
-            logo is publicly reachable.
+            Upload once and every address on{" "}
+            <span className="font-medium text-foreground">
+              {domain || "your domain"}
+            </span>{" "}
+            will show this logo in the recipient&apos;s inbox. Sender names
+            are set under Accounts.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[220px] flex-1 space-y-1">
-              <Label className="text-xs">Domain</Label>
-              {configuredDomain ? (
-                <Input value={activeDomain} readOnly className="font-mono text-xs" />
-              ) : (
-                <Input
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  placeholder="example.com"
+        <CardContent className="space-y-6">
+          <div className="flex items-center gap-4 rounded-lg border border-border bg-muted/20 p-4">
+            <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-background text-lg font-semibold text-muted-foreground">
+              {logoSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoSrc}
+                  alt="Logo preview"
+                  className="size-full object-cover"
                 />
+              ) : (
+                initial
               )}
             </div>
-            {!configuredDomain ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void refresh(true)}
-                disabled={refreshing}
-              >
-                <RefreshCw className={`mr-1.5 size-3.5 ${refreshing ? "animate-spin" : ""}`} />
-                Load
-              </Button>
-            ) : null}
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-sm font-medium">
+                  {previewName}
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  2:14 PM
+                </span>
+              </div>
+              <p className="truncate text-xs text-muted-foreground">
+                This is how your emails will look in the inbox
+              </p>
+            </div>
           </div>
 
-          {activeDomain ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">DMARC policy</Label>
-                  <Select
-                    value={dmarcPolicy}
-                    onValueChange={(value) =>
-                      setDmarcPolicy(value as "none" | "quarantine" | "reject")
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">p=none (monitor only)</SelectItem>
-                      <SelectItem value="quarantine">p=quarantine</SelectItem>
-                      <SelectItem value="reject">p=reject</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">DMARC report address</Label>
-                  <Input
-                    value={dmarcRua}
-                    onChange={(e) => setDmarcRua(e.target.value)}
-                    placeholder={`dmarc@${activeDomain}`}
-                  />
-                </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs">BIMI logo URL (HTTPS SVG)</Label>
-                  <Input
-                    value={bimiLogoUrl}
-                    onChange={(e) => setBimiLogoUrl(e.target.value)}
-                    placeholder={`https://${activeDomain}/bimi/logo.svg`}
-                    className="font-mono text-xs"
-                  />
-                  {bimiLogoUrl ? (
-                    <a
-                      href={bimiLogoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Open logo URL
-                      <ExternalLink className="size-3" />
-                    </a>
-                  ) : null}
-                </div>
-              </div>
+          <div className="space-y-2">
+            <Label className="text-xs" htmlFor="branding-logo-upload">
+              Upload logo
+            </Label>
+            <Input
+              id="branding-logo-upload"
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml"
+              className="h-10 cursor-pointer text-xs"
+              disabled={uploading || !domain}
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                void uploadLogo(file);
+                e.target.value = "";
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              PNG, JPG, or SVG. A square image works best.
+              {uploading ? " Uploading…" : ""}
+            </p>
+          </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => void saveSettings()} disabled={saving}>
-                  {saving ? "Saving…" : "Save branding settings"}
-                </Button>
+          {status ? (
+            <div className="space-y-1.5">
+              <Badge variant={status.userStatus === "ready" ? "default" : "secondary"}>
+                {STATUS_LABEL[status.userStatus]}
+              </Badge>
+              <p className="text-sm text-muted-foreground">{status.userMessage}</p>
+            </div>
+          ) : loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : null}
+
+          {status?.userStatus === "needs_verification" ? (
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <p className="text-sm text-muted-foreground">
+                Gmail shows your logo after a one-time brand check. Once that
+                check is approved, upload the verification file you received
+                to finish.
+              </p>
+              {!showVerifyUpload ? (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => void applyDns(true, true)}
-                  disabled={applying || status?.dnsCanApply === false}
+                  onClick={() => setShowVerifyUpload(true)}
                 >
-                  {applying ? "Applying…" : "Apply DMARC + BIMI DNS"}
+                  Verify logo for Gmail
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void applyDns(false, true)}
-                  disabled={applying || status?.dnsCanApply === false}
-                >
-                  Apply BIMI only
-                </Button>
-              </div>
-
-              {status ? (
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={status.dmarcEnforced ? "default" : "secondary"}>
-                    DMARC {status.dmarcEnforced ? "enforced" : "not enforced"}
-                  </Badge>
-                  <Badge variant={status.bimi.found ? "default" : "secondary"}>
-                    BIMI {status.bimi.found ? "record found" : "missing"}
-                  </Badge>
-                  <Badge variant={status.bimiReady ? "default" : "secondary"}>
-                    Logo ready {status.bimiReady ? "yes" : "no"}
-                  </Badge>
-                  {status.zoneId ? (
-                    <Badge variant="outline" className="font-mono text-[10px]">
-                      zone {status.zoneId}
-                    </Badge>
+              ) : (
+                <div className="space-y-2">
+                  <Label className="text-xs" htmlFor="branding-verification-upload">
+                    Upload verification file
+                  </Label>
+                  <Input
+                    id="branding-verification-upload"
+                    type="file"
+                    className="h-10 cursor-pointer text-xs"
+                    disabled={verifying}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      void uploadVerification(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  {verifying ? (
+                    <p className="text-xs text-muted-foreground">Saving…</p>
                   ) : null}
                 </div>
-              ) : null}
-
-              {status ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Record</TableHead>
-                      <TableHead>Expected</TableHead>
-                      <TableHead>Current</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[status.dmarc, status.bimi].map((record) => (
-                      <TableRow key={record.name}>
-                        <TableCell className="font-mono text-xs">
-                          {record.name}
-                        </TableCell>
-                        <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-                          {record.expected}
-                        </TableCell>
-                        <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-                          {record.current ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          {record.found ? (
-                            <Badge variant="default">OK</Badge>
-                          ) : (
-                            <Badge variant="secondary">Missing</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : null}
-
-              {status?.notes.length ? (
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  {status.notes.map((note) => (
-                    <p key={note}>{note}</p>
-                  ))}
-                </div>
-              ) : null}
-            </>
+              )}
+            </div>
           ) : null}
         </CardContent>
       </Card>

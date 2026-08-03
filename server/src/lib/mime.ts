@@ -16,6 +16,41 @@ function formatAddressList(addresses: string | string[]): string {
   return list.map((address) => address.trim()).filter(Boolean).join(", ");
 }
 
+function normalizeMessageId(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("<") && trimmed.endsWith(">")) return trimmed;
+  return `<${trimmed.replace(/^<|>$/g, "")}>`;
+}
+
+function buildReferences(params: {
+  inReplyTo?: string;
+  references?: string;
+}): string | undefined {
+  const inReplyTo = params.inReplyTo?.trim()
+    ? normalizeMessageId(params.inReplyTo)
+    : "";
+  const prior = (params.references ?? "")
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map(normalizeMessageId);
+  const ids: string[] = [];
+  for (const id of [...prior, inReplyTo]) {
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids.length ? ids.join(" ") : undefined;
+}
+
+export function generateMessageId(fromAddress: string): string {
+  const domain =
+    fromAddress.includes("@")
+      ? fromAddress.slice(fromAddress.lastIndexOf("@") + 1).trim().toLowerCase()
+      : "relaybase.local";
+  const random = crypto.randomUUID().replace(/-/g, "");
+  return `<${random}@${domain || "relaybase.local"}>`;
+}
+
 export function buildMimeMessage(params: {
   from: string;
   fromName?: string;
@@ -25,7 +60,22 @@ export function buildMimeMessage(params: {
   text: string;
   html?: string;
   replyTo?: string;
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string;
 }): string {
+  const messageId =
+    params.messageId?.trim()
+      ? normalizeMessageId(params.messageId)
+      : generateMessageId(params.from);
+  const inReplyTo = params.inReplyTo?.trim()
+    ? normalizeMessageId(params.inReplyTo)
+    : undefined;
+  const references = buildReferences({
+    inReplyTo: params.inReplyTo,
+    references: params.references,
+  });
+
   const headers = [
     `From: ${formatMailboxHeader(params.from, params.fromName)}`,
     `To: ${formatAddressList(params.to)}`,
@@ -35,6 +85,9 @@ export function buildMimeMessage(params: {
     ...(params.replyTo?.trim()
       ? [`Reply-To: ${params.replyTo.trim()}`]
       : []),
+    `Message-ID: ${messageId}`,
+    ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`] : []),
+    ...(references ? [`References: ${references}`] : []),
     `Subject: ${params.subject}`,
     "MIME-Version: 1.0",
   ];
@@ -92,13 +145,13 @@ export function buildStrippedInboundMime(params: {
     subject: params.subject,
     text: params.bodyText || "(no text body)",
     html: params.bodyHtml ?? undefined,
+    messageId: params.messageId ?? undefined,
   });
 
   const lines = mime.split("\r\n");
   const mimeVersionIdx = lines.findIndex((line) => line.startsWith("MIME-Version:"));
   const insertAt = mimeVersionIdx >= 0 ? mimeVersionIdx : 0;
   const extra = [
-    ...(params.messageId ? [`Message-ID: ${params.messageId}`] : []),
     "X-Relaybase-Stripped: 1",
     ...params.attachments.map(
       (attachment) =>

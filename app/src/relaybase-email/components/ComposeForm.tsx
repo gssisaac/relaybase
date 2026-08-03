@@ -3,6 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 import type { Address } from "./types";
@@ -36,23 +43,40 @@ export function ComposeForm({
   sending: boolean;
   onSend: () => void;
 }) {
+  const selected = addresses.find((a) => a.email === sendFrom);
+  const displayName = selected?.displayName?.trim();
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-1">
           <Label className="text-xs">From</Label>
-          <select
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-            value={sendFrom}
-            onChange={(e) => setSendFrom(e.target.value)}
+          <Select
+            value={sendFrom || undefined}
+            onValueChange={(value) => setSendFrom(value ?? "")}
           >
-            <option value="">Select sender</option>
-            {addresses.map((a) => (
-              <option key={a.email} value={a.email}>
-                {a.email}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-10 w-full">
+              <SelectValue placeholder="Select sender" />
+            </SelectTrigger>
+            <SelectContent>
+              {addresses.map((a) => (
+                <SelectItem key={a.email} value={a.email}>
+                  {a.displayName?.trim()
+                    ? `${a.displayName.trim()} <${a.email}>`
+                    : a.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {displayName ? (
+            <p className="text-xs text-muted-foreground">
+              Recipients will see: {displayName}
+            </p>
+          ) : sendFrom ? (
+            <p className="text-xs text-muted-foreground">
+              No display name set — edit this account under Accounts.
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1.5 sm:col-span-1">
           <Label className="text-xs">To</Label>

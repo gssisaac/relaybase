@@ -41,6 +41,8 @@ export async function POST(request: Request) {
       cc?: string | string[];
       subject?: string;
       text?: string;
+      inReplyTo?: string;
+      references?: string;
     };
 
     const toInput = Array.isArray(body.to) ? body.to.join(", ") : (body.to ?? "");
@@ -71,6 +73,11 @@ export async function POST(request: Request) {
     const from = body.from ?? `dev@${domain}`;
     const subject = body.subject ?? "(no subject)";
     const text = body.text?.trim() ?? "";
+    const fromName =
+      data.addresses.find((a) => a.email.toLowerCase() === from.toLowerCase())
+        ?.displayName?.trim() || undefined;
+    const inReplyTo = body.inReplyTo?.trim() || undefined;
+    const references = body.references?.trim() || undefined;
 
     let messageId = crypto.randomUUID();
     const workerConfigured = Boolean(readRelaybaseWorkerConfig());
@@ -79,6 +86,7 @@ export async function POST(request: Request) {
       const result = await sendViaRelaybaseWorker({
         domain,
         from,
+        fromName,
         to: toParsed.emails.length === 1 ? toParsed.emails[0]! : toParsed.emails,
         cc: ccParsed.emails.length
           ? ccParsed.emails.length === 1
@@ -87,6 +95,8 @@ export async function POST(request: Request) {
           : undefined,
         subject,
         text,
+        inReplyTo,
+        references,
       });
       messageId = result.messageId;
     }

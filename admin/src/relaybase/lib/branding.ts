@@ -66,7 +66,9 @@ export function buildDmarcContent(config: DomainBrandingConfig): string {
 }
 
 export function buildBimiContent(config: DomainBrandingConfig): string {
-  return `v=BIMI1; l=${config.bimiLogoUrl.trim()};`;
+  const logo = config.bimiLogoUrl.trim();
+  const vmc = config.vmcUrl?.trim();
+  return vmc ? `v=BIMI1; l=${logo}; a=${vmc};` : `v=BIMI1; l=${logo};`;
 }
 
 function txtRecordMatches(

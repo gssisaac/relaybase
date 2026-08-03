@@ -28,7 +28,18 @@ export type DevEmailConfig = {
   relaybaseAuthToken?: string;
 };
 
-export type DevAddress = { email: string; domain: string };
+export type DevAddress = {
+  email: string;
+  domain: string;
+  displayName?: string;
+};
+
+export type DomainBrandingConfig = {
+  dmarcPolicy: "none" | "quarantine" | "reject";
+  dmarcRua: string;
+  bimiLogoUrl: string;
+  vmcUrl?: string;
+};
 
 export type DevAudienceContact = {
   email: string;
@@ -53,6 +64,7 @@ export type DevSent = {
   bodyPreview?: string;
   sentAt: string;
   domain: string;
+  messageId?: string;
 };
 
 export type DomainR2Record = {
@@ -68,6 +80,7 @@ export type DevUserEmailData = {
   config: DevEmailConfig;
   domains: string[];
   domainR2?: Record<string, DomainR2Record>;
+  domainBranding?: Record<string, DomainBrandingConfig>;
   addresses: DevAddress[];
   audience: DevAudienceContact[];
   broadcasts: DevBroadcast[];
@@ -100,6 +113,7 @@ function emptyData(): DevUserEmailData {
     },
     domains: [],
     domainR2: {},
+    domainBranding: {},
     addresses: [],
     audience: [],
     broadcasts: [],
@@ -151,7 +165,8 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
       normalizeDomain(entry.domain ?? "") ||
       email.split("@")[1]?.toLowerCase() ||
       fallbackDomain;
-    return { email, domain };
+    const displayName = entry.displayName?.trim() || undefined;
+    return { email, domain, ...(displayName ? { displayName } : {}) };
   });
 
   const audience = (base.audience ?? []).map((entry) => ({
@@ -172,12 +187,15 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
     id: entry.id,
     from: entry.from,
     to: entry.to,
+    ...(entry.cc ? { cc: entry.cc } : {}),
     subject: entry.subject,
+    ...(entry.bodyPreview ? { bodyPreview: entry.bodyPreview } : {}),
     sentAt: entry.sentAt,
     domain:
       normalizeDomain(entry.domain ?? "") ||
       entry.from.split("@")[1]?.toLowerCase() ||
       fallbackDomain,
+    ...(entry.messageId ? { messageId: entry.messageId } : {}),
   }));
 
   return {
@@ -189,11 +207,29 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
     },
     domains,
     domainR2: base.domainR2 ?? {},
+    domainBranding: base.domainBranding ?? {},
     addresses,
     audience,
     broadcasts,
     sent,
   };
+}
+
+export function defaultDomainBranding(domain: string): DomainBrandingConfig {
+  const normalized = normalizeDomain(domain);
+  return {
+    dmarcPolicy: "quarantine",
+    dmarcRua: `dmarc@${normalized}`,
+    bimiLogoUrl: `https://${normalized}/bimi/logo.svg`,
+  };
+}
+
+export function getDomainBranding(
+  data: DevUserEmailData,
+  domain: string,
+): DomainBrandingConfig {
+  const normalized = normalizeDomain(domain);
+  return data.domainBranding?.[normalized] ?? defaultDomainBranding(normalized);
 }
 
 export function readUserEmailData(userId: string): DevUserEmailData {

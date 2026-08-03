@@ -18,6 +18,8 @@ export type InboundEmailMeta = {
   subject: string;
   receivedAt: string;
   messageId: string | null;
+  inReplyTo: string | null;
+  references: string | null;
   size: number;
   bodyPreview: string;
   bodyText: string;
@@ -107,6 +109,8 @@ export async function storeInboundEmail(
     toEmail: string;
     subject: string;
     messageId: string | null;
+    inReplyTo?: string | null;
+    references?: string | null;
     size: number;
     raw: ArrayBuffer;
   },
@@ -156,6 +160,8 @@ export async function storeInboundEmail(
     subject,
     receivedAt,
     messageId: params.messageId,
+    inReplyTo: params.inReplyTo ?? null,
+    references: params.references ?? null,
     size: params.size,
     bodyPreview: previewText(parsed.bodyText || params.subject),
     bodyText: parsed.bodyText,

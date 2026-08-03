@@ -18,6 +18,7 @@ import {
 import { EmailPageSuspenseFallback } from "@/relaybase-email/components/EmailPageSuspenseFallback";
 import { EmailSettingsKeysView } from "@/relaybase-email/components/EmailSettingsKeysView";
 import { EmailSettingsDomainView } from "@/relaybase-email/components/EmailSettingsDomainView";
+import { EmailSettingsBrandingView } from "@/relaybase-email/components/EmailSettingsBrandingView";
 import { EmailSettingsShell } from "@/relaybase-email/components/EmailSettingsShell";
 import { EmailShell } from "@/relaybase-email/components/EmailShell";
 import { MailListView } from "@/relaybase-email/components/MailListView";
@@ -129,6 +130,7 @@ function EmailView({ subPath }: PanelViewProps) {
       return <EmailSettingsKeysView />;
     }
     if (second === "domain") return <EmailSettingsDomainView />;
+    if (second === "branding") return <EmailSettingsBrandingView />;
     return <SettingsIndexRedirect />;
   }
 

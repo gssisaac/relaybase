@@ -47,7 +47,8 @@ function composeReplyHref(
   const defaultFrom =
     fromAccount && fromAccount !== "all"
       ? fromAccount
-      : addresses[0]?.email;
+      : addresses.find((a) => a.email.toLowerCase() === event.toEmail.toLowerCase())
+          ?.email ?? addresses[0]?.email;
   const subject = event.subject.startsWith("Re:")
     ? event.subject
     : `Re: ${event.subject}`;
@@ -57,6 +58,15 @@ function composeReplyHref(
     subject,
   });
   if (defaultFrom) params.set("from", defaultFrom);
+  const parentId = event.messageId?.trim();
+  if (parentId) {
+    params.set("inReplyTo", parentId);
+    const prior = event.references?.trim();
+    params.set(
+      "references",
+      prior ? `${prior} ${parentId}` : parentId,
+    );
+  }
   return `${compose}?${params.toString()}`;
 }
 

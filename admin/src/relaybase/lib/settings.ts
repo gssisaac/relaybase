@@ -81,6 +81,7 @@ export type DomainBrandingConfig = {
   dmarcPolicy: "none" | "quarantine" | "reject";
   dmarcRua: string;
   bimiLogoUrl: string;
+  vmcUrl?: string;
 };
 
 export type EmailSenderSettingsView = {

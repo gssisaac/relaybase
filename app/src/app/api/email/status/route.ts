@@ -8,7 +8,7 @@ import {
 export async function GET() {
   try {
     const userId = await requireSessionUserId();
-    const config = buildUserEmailConfig(userId);
+    const config = await buildUserEmailConfig(userId);
     const domain = config.emailDomain || config.domain || "";
 
     return NextResponse.json({

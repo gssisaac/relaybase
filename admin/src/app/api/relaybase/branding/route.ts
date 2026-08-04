@@ -29,35 +29,24 @@ export async function PUT(request: Request) {
       domain?: string;
       dmarcPolicy?: "none" | "quarantine" | "reject";
       dmarcRua?: string;
-      bimiLogoUrl?: string;
-      vmcUrl?: string | null;
     };
     const domain = body.domain?.trim().toLowerCase();
     if (!domain) {
       return NextResponse.json({ error: "domain is required" }, { status: 400 });
     }
 
-    const current = readEmailSenderSettings();
+    const current = await readEmailSenderSettings();
     const existing = current.domainBranding[domain] ?? {
       dmarcPolicy: "quarantine" as const,
       dmarcRua: `dmarc@${domain}`,
-      bimiLogoUrl: `https://${domain}/bimi/logo.svg`,
     };
 
     const nextConfig = {
       dmarcPolicy: body.dmarcPolicy ?? existing.dmarcPolicy,
       dmarcRua: body.dmarcRua?.trim() || existing.dmarcRua,
-      bimiLogoUrl: body.bimiLogoUrl?.trim() || existing.bimiLogoUrl,
-      ...(body.vmcUrl !== undefined
-        ? body.vmcUrl?.trim()
-          ? { vmcUrl: body.vmcUrl.trim() }
-          : {}
-        : existing.vmcUrl
-          ? { vmcUrl: existing.vmcUrl }
-          : {}),
     };
 
-    mergeEmailSenderSettings({
+    await mergeEmailSenderSettings({
       domainBranding: {
         ...current.domainBranding,
         [domain]: nextConfig,
@@ -73,21 +62,13 @@ export async function PUT(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
-      domain?: string;
-      applyDmarc?: boolean;
-      applyBimi?: boolean;
-    };
+    const body = (await request.json()) as { domain?: string };
     const domain = body.domain?.trim().toLowerCase();
     if (!domain) {
       return NextResponse.json({ error: "domain is required" }, { status: 400 });
     }
 
-    const status = await applyDomainBrandingDns({
-      domain,
-      applyDmarc: body.applyDmarc,
-      applyBimi: body.applyBimi,
-    });
+    const status = await applyDomainBrandingDns({ domain });
     return NextResponse.json(status);
   } catch (error) {
     return apiError(error);

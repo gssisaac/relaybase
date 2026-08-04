@@ -14,13 +14,13 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const userId = await requireSessionUserId();
     const { key, attachmentId } = await params;
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
     if (!domain) {
       return Response.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    const cfg = readRelaybaseWorkerConfig();
+    const cfg = await readRelaybaseWorkerConfig();
     if (!cfg) {
       return Response.json(
         { error: "Relaybase worker is not configured" },

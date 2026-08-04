@@ -15,7 +15,7 @@ export default async function DashboardLayout({
   const userId = jar.get("relaybase_user")?.value?.trim();
   if (!userId) redirect("/login");
 
-  ensureUserAuthToken(userId);
+  await ensureUserAuthToken(userId);
 
   return (
     <SessionProvider userId={userId}>

@@ -51,7 +51,7 @@ async function verifyCloudflareToken(
 
 export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
   const env = readRelaybaseEnvSettings();
-  const settings = readEmailSenderSettings();
+  const settings = await readEmailSenderSettings();
   const workerUrl = env.workerUrl || settings.workerUrl.trim();
   const accountId = env.cloudflareAccountId || settings.cloudflareAccountId.trim();
   const apiToken = env.cloudflareApiToken || settings.cloudflareApiToken.trim();
@@ -59,7 +59,7 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
     "relaybase",
     env.inboundR2BucketName || settings.inboundR2BucketName,
   );
-  const adminToken = resolveWorkerServiceToken();
+  const adminToken = await resolveWorkerServiceToken();
   const checks: RelaybaseDiagnosticCheck[] = [];
 
   checks.push({

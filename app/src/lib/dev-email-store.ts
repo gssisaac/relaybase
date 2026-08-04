@@ -3,15 +3,14 @@ import path from "path";
 
 import { cookies } from "next/headers";
 
+import { getRelaybaseAppKv } from "@/lib/cloudflare/kv";
 import {
   findAuthTokenForUser,
   isValidAuthToken,
   issueAuthTokenForUser,
 } from "@/lib/relaybase/auth-tokens";
 import type { DomainR2ProvisionResult } from "@/lib/relaybase/provision-domain-r2";
-import {
-  readRelaybasePlatformConfig,
-} from "@/lib/relaybase/provision-domain-r2";
+import { readRelaybasePlatformConfig } from "@/lib/relaybase/provision-domain-r2";
 import {
   inboundR2ObjectPrefix,
   resolveInboundR2BucketName,
@@ -32,13 +31,6 @@ export type DevAddress = {
   email: string;
   domain: string;
   displayName?: string;
-};
-
-export type DomainBrandingConfig = {
-  dmarcPolicy: "none" | "quarantine" | "reject";
-  dmarcRua: string;
-  bimiLogoUrl: string;
-  vmcUrl?: string;
 };
 
 export type DevAudienceContact = {
@@ -80,7 +72,6 @@ export type DevUserEmailData = {
   config: DevEmailConfig;
   domains: string[];
   domainR2?: Record<string, DomainR2Record>;
-  domainBranding?: Record<string, DomainBrandingConfig>;
   addresses: DevAddress[];
   audience: DevAudienceContact[];
   broadcasts: DevBroadcast[];
@@ -99,9 +90,16 @@ export type DomainSummary = {
   r2WorkerReady: boolean;
 };
 
+function safeUserId(userId: string): string {
+  return userId.replace(/[^a-zA-Z0-9@._-]/g, "_");
+}
+
+function userDataKvKey(userId: string): string {
+  return `userdata:${safeUserId(userId)}`;
+}
+
 function dataFile(userId: string): string {
-  const safe = userId.replace(/[^a-zA-Z0-9@._-]/g, "_");
-  return path.join(process.cwd(), "..", "data", "users", `${safe}.json`);
+  return path.join(process.cwd(), "..", "data", "users", `${safeUserId(userId)}.json`);
 }
 
 function emptyData(): DevUserEmailData {
@@ -113,7 +111,6 @@ function emptyData(): DevUserEmailData {
     },
     domains: [],
     domainR2: {},
-    domainBranding: {},
     addresses: [],
     audience: [],
     broadcasts: [],
@@ -207,7 +204,6 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
     },
     domains,
     domainR2: base.domainR2 ?? {},
-    domainBranding: base.domainBranding ?? {},
     addresses,
     audience,
     broadcasts,
@@ -215,24 +211,7 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
   };
 }
 
-export function defaultDomainBranding(domain: string): DomainBrandingConfig {
-  const normalized = normalizeDomain(domain);
-  return {
-    dmarcPolicy: "quarantine",
-    dmarcRua: `dmarc@${normalized}`,
-    bimiLogoUrl: `https://${normalized}/bimi/logo.svg`,
-  };
-}
-
-export function getDomainBranding(
-  data: DevUserEmailData,
-  domain: string,
-): DomainBrandingConfig {
-  const normalized = normalizeDomain(domain);
-  return data.domainBranding?.[normalized] ?? defaultDomainBranding(normalized);
-}
-
-export function readUserEmailData(userId: string): DevUserEmailData {
+function readUserEmailDataFromFs(userId: string): DevUserEmailData {
   const file = dataFile(userId);
   if (!fs.existsSync(file)) return emptyData();
   try {
@@ -244,13 +223,79 @@ export function readUserEmailData(userId: string): DevUserEmailData {
   }
 }
 
-export function writeUserEmailData(
-  userId: string,
-  data: DevUserEmailData,
-): void {
+function userDataLooksEmpty(data: DevUserEmailData): boolean {
+  return (
+    data.domains.length === 0 &&
+    data.addresses.length === 0 &&
+    data.audience.length === 0 &&
+    data.broadcasts.length === 0 &&
+    data.sent.length === 0
+  );
+}
+
+function mergeAuthToken(
+  target: DevUserEmailData,
+  source: DevUserEmailData,
+): DevUserEmailData {
+  const token = source.config.relaybaseAuthToken?.trim();
+  if (!token || target.config.relaybaseAuthToken?.trim()) return target;
+  return {
+    ...target,
+    config: {
+      ...target.config,
+      relaybaseAuthToken: token,
+      relaybaseConfigured: true,
+    },
+  };
+}
+
+function writeUserEmailDataToFs(userId: string, payload: string): void {
   const file = dataFile(userId);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  fs.writeFileSync(file, payload, "utf8");
+}
+
+export async function readUserEmailData(userId: string): Promise<DevUserEmailData> {
+  const kv = await getRelaybaseAppKv();
+  const fromFs = readUserEmailDataFromFs(userId);
+
+  if (kv) {
+    const raw = await kv.get(userDataKvKey(userId), "text");
+    if (raw !== null) {
+      const fromKv = migrateUserData(
+        JSON.parse(raw) as Partial<DevUserEmailData>,
+      );
+      // Local OpenNext can write an empty shell to KV on first login; prefer
+      // monorepo data/users when it still has the real workspace.
+      if (userDataLooksEmpty(fromKv) && !userDataLooksEmpty(fromFs)) {
+        const merged = mergeAuthToken(fromFs, fromKv);
+        await kv.put(
+          userDataKvKey(userId),
+          `${JSON.stringify(merged, null, 2)}\n`,
+        );
+        return merged;
+      }
+      return fromKv;
+    }
+  }
+
+  return fromFs;
+}
+
+export async function writeUserEmailData(
+  userId: string,
+  data: DevUserEmailData,
+): Promise<void> {
+  const payload = `${JSON.stringify(data, null, 2)}\n`;
+  const kv = await getRelaybaseAppKv();
+  if (kv) {
+    await kv.put(userDataKvKey(userId), payload);
+  }
+
+  const dataRoot = path.join(process.cwd(), "..", "data");
+  if (!kv || fs.existsSync(dataRoot)) {
+    writeUserEmailDataToFs(userId, payload);
+  }
 }
 
 export function getActiveDomain(data: DevUserEmailData): string | null {
@@ -290,13 +335,16 @@ export function listDomainSummaries(data: DevUserEmailData): DomainSummary[] {
   });
 }
 
-export function addUserDomain(userId: string, domainInput: string): DevUserEmailData {
+export async function addUserDomain(
+  userId: string,
+  domainInput: string,
+): Promise<DevUserEmailData> {
   const domain = normalizeDomain(domainInput);
   if (!domain || isPlaceholderDomain(domain)) {
     throw new Error("A valid domain is required");
   }
 
-  const data = readUserEmailData(userId);
+  const data = await readUserEmailData(userId);
   if (!data.domains.includes(domain)) {
     data.domains.push(domain);
     data.domains.sort();
@@ -304,13 +352,16 @@ export function addUserDomain(userId: string, domainInput: string): DevUserEmail
   if (!data.config.activeDomain) {
     data.config.activeDomain = domain;
   }
-  writeUserEmailData(userId, data);
+  await writeUserEmailData(userId, data);
   return data;
 }
 
-export function removeUserDomain(userId: string, domainInput: string): DevUserEmailData {
+export async function removeUserDomain(
+  userId: string,
+  domainInput: string,
+): Promise<DevUserEmailData> {
   const domain = normalizeDomain(domainInput);
-  const data = readUserEmailData(userId);
+  const data = await readUserEmailData(userId);
   data.domains = data.domains.filter((d) => d !== domain);
   data.addresses = data.addresses.filter((a) => a.domain !== domain);
   data.audience = data.audience.filter((a) => a.domain !== domain);
@@ -324,26 +375,27 @@ export function removeUserDomain(userId: string, domainInput: string): DevUserEm
 
   const active = getActiveDomain(data);
   data.config.activeDomain = active;
-  writeUserEmailData(userId, data);
+  await writeUserEmailData(userId, data);
   return data;
 }
 
-export function setActiveUserDomain(
+export async function setActiveUserDomain(
   userId: string,
   domainInput: string,
-): DevUserEmailData {
+): Promise<DevUserEmailData> {
   const domain = normalizeDomain(domainInput);
-  const data = readUserEmailData(userId);
+  const data = await readUserEmailData(userId);
   if (!data.domains.includes(domain)) {
     throw new Error("Domain not found");
   }
   data.config.activeDomain = domain;
-  writeUserEmailData(userId, data);
+  await writeUserEmailData(userId, data);
   return data;
 }
 
-export function resolveUserDomain(userId: string): string | null {
-  return getActiveDomain(readUserEmailData(userId));
+export async function resolveUserDomain(userId: string): Promise<string | null> {
+  const data = await readUserEmailData(userId);
+  return getActiveDomain(data);
 }
 
 export async function requireSessionUserId(): Promise<string> {
@@ -353,28 +405,28 @@ export async function requireSessionUserId(): Promise<string> {
   return userId;
 }
 
-export function ensureUserAuthToken(userId: string): string {
-  const data = readUserEmailData(userId);
+export async function ensureUserAuthToken(userId: string): Promise<string> {
+  const data = await readUserEmailData(userId);
   const stored = data.config.relaybaseAuthToken?.trim() ?? "";
 
-  if (stored && isValidAuthToken(stored)) {
+  if (stored && (await isValidAuthToken(stored))) {
     return stored;
   }
 
-  const fromVault = findAuthTokenForUser(userId);
-  const token = fromVault ?? issueAuthTokenForUser(userId);
+  const fromVault = await findAuthTokenForUser(userId);
+  const token = fromVault ?? (await issueAuthTokenForUser(userId));
 
   data.config.relaybaseAuthToken = token;
   data.config.relaybaseConfigured = true;
-  writeUserEmailData(userId, data);
+  await writeUserEmailData(userId, data);
   return token;
 }
 
-export function markDomainR2Provisioned(
+export async function markDomainR2Provisioned(
   userId: string,
   result: DomainR2ProvisionResult,
-): DevUserEmailData {
-  const data = readUserEmailData(userId);
+): Promise<DevUserEmailData> {
+  const data = await readUserEmailData(userId);
   data.domainR2 = {
     ...(data.domainR2 ?? {}),
     [result.domain]: {
@@ -386,18 +438,18 @@ export function markDomainR2Provisioned(
       provisionedAt: new Date().toISOString(),
     },
   };
-  writeUserEmailData(userId, data);
+  await writeUserEmailData(userId, data);
   return data;
 }
 
-export function buildUserEmailConfig(userId: string): EmailConfig {
-  const data = readUserEmailData(userId);
+export async function buildUserEmailConfig(userId: string): Promise<EmailConfig> {
+  const data = await readUserEmailData(userId);
   const activeDomain = getActiveDomain(data);
   const domain = activeDomain ?? "";
   const authToken = data.config.relaybaseAuthToken?.trim() ?? "";
-  const authConfigured = Boolean(authToken && isValidAuthToken(authToken));
+  const authConfigured = Boolean(authToken && (await isValidAuthToken(authToken)));
   const r2 = activeDomain ? data.domainR2?.[activeDomain] : undefined;
-  const platform = readRelaybasePlatformConfig();
+  const platform = await readRelaybasePlatformConfig();
   const inboundR2BucketName = resolveInboundR2BucketName(
     "relaybase",
     r2?.bucketName ?? platform.inboundR2BucketName,
@@ -445,10 +497,14 @@ export function buildUserEmailConfig(userId: string): EmailConfig {
         status: b.status,
       })),
     configured: authConfigured,
-    relaybaseConfigured: data.config.relaybaseConfigured || authConfigured,
+    relaybaseConfigured:
+      data.config.relaybaseConfigured ||
+      authConfigured ||
+      Boolean(platform.workerUrl),
     relaybaseAuthConfigured: authConfigured,
-    cloudflareConfigured: data.config.cloudflareConfigured,
-    relaybaseWorkerUrl: "",
+    cloudflareConfigured:
+      data.config.cloudflareConfigured || platform.cloudflareConfigured,
+    relaybaseWorkerUrl: platform.workerUrl,
     credentialSource: "integration",
     usesIntegrationCredentials: true,
     domain,

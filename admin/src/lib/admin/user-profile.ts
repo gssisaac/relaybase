@@ -27,7 +27,6 @@ export { parseStatsRange } from "@/lib/admin/stats";
 export type UserBrandingSummary = {
   domain: string;
   dmarcEnforced: boolean;
-  bimiReady: boolean;
   dnsConfigured: boolean;
 };
 
@@ -97,9 +96,11 @@ export type UserLogsResult = {
   workerConnected: boolean;
 };
 
-function authTokensForUser(userId: string): RelaybaseDashboardAuthTokenView[] {
+async function authTokensForUser(
+  userId: string,
+): Promise<RelaybaseDashboardAuthTokenView[]> {
   const needle = userId.toLowerCase();
-  return listRelaybaseDashboardAuthTokens().filter((token) => {
+  return (await listRelaybaseDashboardAuthTokens()).filter((token) => {
     if (token.productId === userId) return true;
     if (!token.productId && token.label?.toLowerCase().includes(needle)) {
       return true;
@@ -108,11 +109,11 @@ function authTokensForUser(userId: string): RelaybaseDashboardAuthTokenView[] {
   });
 }
 
-function apiKeysForUser(
+async function apiKeysForUser(
   userId: string,
   keys: EmailSenderKey[],
-): UserApiKeySummary[] {
-  const domain = resolveUserDomain(userId);
+): Promise<UserApiKeySummary[]> {
+  const domain = await resolveUserDomain(userId);
   const needle = userId.toLowerCase();
 
   return keys
@@ -143,7 +144,7 @@ function logBelongsToUser(
 }
 
 async function loadWorkerKeys(): Promise<EmailSenderKey[]> {
-  const cfg = resolveEmailSenderConfig();
+  const cfg = await resolveEmailSenderConfig();
   if (!cfg) return [];
   try {
     return await listEmailSenderKeys(cfg);
@@ -153,7 +154,7 @@ async function loadWorkerKeys(): Promise<EmailSenderKey[]> {
 }
 
 async function loadWorkerLogs(): Promise<EmailSenderLogEntry[]> {
-  const cfg = resolveEmailSenderConfig();
+  const cfg = await resolveEmailSenderConfig();
   if (!cfg) return [];
   try {
     const result = await listEmailSenderLogs(cfg, { limit: 500, status: "all" });
@@ -186,14 +187,14 @@ function countUserLogsInRange(
   return { requests, errors, emails };
 }
 
-function buildUserBehaviorStats(
+async function buildUserBehaviorStats(
   user: UserRecord,
   logs: EmailSenderLogEntry[],
   keyIds: Set<string>,
   domain: string | null,
   range: StatsRange,
   workerConnected: boolean,
-): UserBehaviorStats {
+): Promise<UserBehaviorStats> {
   const now = Date.now();
   const since = now - RANGE_MS[range];
 
@@ -218,7 +219,7 @@ function buildUserBehaviorStats(
   }
 
   if (!workerConnected) {
-    const emailData = readUserEmailData(user.id);
+    const emailData = await readUserEmailData(user.id);
     for (const sent of emailData.sent) {
       const ts = new Date(sent.sentAt).getTime();
       if (ts < since) continue;
@@ -246,21 +247,19 @@ function buildUserBehaviorStats(
 async function brandingSummaryForUser(
   userId: string,
 ): Promise<UserBrandingSummary | null> {
-  const domain = resolveUserDomain(userId);
+  const domain = await resolveUserDomain(userId);
   if (!domain) return null;
   try {
     const status = await fetchDomainBrandingStatus(domain);
     return {
       domain: status.domain,
       dmarcEnforced: status.dmarcEnforced,
-      bimiReady: status.bimiReady,
       dnsConfigured: status.dnsConfigured,
     };
   } catch {
     return {
       domain,
       dmarcEnforced: false,
-      bimiReady: false,
       dnsConfigured: false,
     };
   }
@@ -269,13 +268,13 @@ async function brandingSummaryForUser(
 export async function buildUserSummary(user: UserRecord): Promise<UserSummary> {
   const keys = await loadWorkerKeys();
   const logs = await loadWorkerLogs();
-  const userKeys = apiKeysForUser(user.id, keys);
+  const userKeys = await apiKeysForUser(user.id, keys);
   const keyIds = new Set(userKeys.map((key) => key.id));
-  const domain = resolveUserDomain(user.id);
+  const domain = await resolveUserDomain(user.id);
   const since7d = Date.now() - RANGE_MS["7d"];
   const counts = countUserLogsInRange(logs, user.id, keyIds, domain, since7d);
-  const workerConnected = resolveEmailSenderConfig() !== null;
-  const emailData = readUserEmailData(user.id);
+  const workerConnected = (await resolveEmailSenderConfig()) !== null;
+  const emailData = await readUserEmailData(user.id);
   const localSent7d = workerConnected
     ? 0
     : emailData.sent.filter(
@@ -287,7 +286,7 @@ export async function buildUserSummary(user: UserRecord): Promise<UserSummary> {
     createdAt: user.createdAt,
     lastSeenAt: user.lastSeenAt,
     domain,
-    authTokenCount: authTokensForUser(user.id).length,
+    authTokenCount: (await authTokensForUser(user.id)).length,
     apiKeyCount: userKeys.length,
     requests7d: counts.requests,
     errors7d: counts.errors,
@@ -298,7 +297,7 @@ export async function buildUserSummary(user: UserRecord): Promise<UserSummary> {
 
 export async function listUserSummaries(): Promise<UserSummary[]> {
   const { listUsers } = await import("@/lib/users-store");
-  const users = listUsers();
+  const users = await listUsers();
   return Promise.all(users.map((user) => buildUserSummary(user)));
 }
 
@@ -306,16 +305,16 @@ export async function buildUserDetail(
   userId: string,
   range: StatsRange = "7d",
 ): Promise<UserDetail | null> {
-  const user = getUser(userId);
+  const user = await getUser(userId);
   if (!user) return null;
 
-  const workerConnected = resolveEmailSenderConfig() !== null;
+  const workerConnected = (await resolveEmailSenderConfig()) !== null;
   const keys = await loadWorkerKeys();
   const logs = await loadWorkerLogs();
-  const userKeys = apiKeysForUser(user.id, keys);
+  const userKeys = await apiKeysForUser(user.id, keys);
   const keyIds = new Set(userKeys.map((key) => key.id));
-  const domain = resolveUserDomain(user.id);
-  const emailData = readUserEmailData(user.id);
+  const domain = await resolveUserDomain(user.id);
+  const emailData = await readUserEmailData(user.id);
   const summary = await buildUserSummary(user);
 
   let brandingDetail = null;
@@ -337,10 +336,10 @@ export async function buildUserDetail(
       relaybaseConfigured: emailData.config.relaybaseConfigured,
       cloudflareConfigured: emailData.config.cloudflareConfigured,
     },
-    authTokens: authTokensForUser(user.id),
+    authTokens: await authTokensForUser(user.id),
     apiKeys: userKeys,
     brandingDetail,
-    stats: buildUserBehaviorStats(
+    stats: await buildUserBehaviorStats(
       user,
       logs,
       keyIds,
@@ -368,9 +367,11 @@ function summarizeUserLogs(logs: EmailSenderLogEntry[]): UserLogSummary {
   return { total: logs.length, failed, failedLast24h };
 }
 
-function localSentAsLogs(userId: string): EmailSenderLogEntry[] {
-  const emailData = readUserEmailData(userId);
-  const domain = resolveUserDomain(userId);
+async function localSentAsLogs(
+  userId: string,
+): Promise<EmailSenderLogEntry[]> {
+  const emailData = await readUserEmailData(userId);
+  const domain = await resolveUserDomain(userId);
 
   return emailData.sent.map((sent) => ({
     id: `local:${sent.id}`,
@@ -395,14 +396,14 @@ export async function listUserLogs(
     status?: "all" | "failed" | "success";
   } = {},
 ): Promise<UserLogsResult | null> {
-  const user = getUser(userId);
+  const user = await getUser(userId);
   if (!user) return null;
 
-  const workerConnected = resolveEmailSenderConfig() !== null;
+  const workerConnected = (await resolveEmailSenderConfig()) !== null;
   const keys = await loadWorkerKeys();
-  const userKeys = apiKeysForUser(userId, keys);
+  const userKeys = await apiKeysForUser(userId, keys);
   const keyIds = new Set(userKeys.map((key) => key.id));
-  const domain = resolveUserDomain(userId);
+  const domain = await resolveUserDomain(userId);
 
   const workerLogs = await loadWorkerLogs();
   let logs = workerLogs.filter((log) =>
@@ -410,7 +411,7 @@ export async function listUserLogs(
   );
 
   if (!workerConnected) {
-    logs = [...logs, ...localSentAsLogs(userId)];
+    logs = [...logs, ...(await localSentAsLogs(userId))];
   }
 
   logs.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());

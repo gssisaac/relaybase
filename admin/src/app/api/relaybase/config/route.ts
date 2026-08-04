@@ -13,11 +13,12 @@ import {
   getEmailSenderConnectionView,
   mergeEmailSenderSettings,
   readEmailSenderSettings,
+  type EmailSenderAdminConfigDetail,
 } from "@/relaybase/lib/settings";
 import { apiError } from "@/lib/api/api-error";
 
 function resolveWorkerUrlForHealth(
-  detail: ReturnType<typeof getEmailSenderAdminSettingsDetail>,
+  detail: EmailSenderAdminConfigDetail,
 ): string {
   return detail.workerUrl?.trim() || readRelaybaseEnvSettings().workerUrl.trim();
 }
@@ -26,12 +27,12 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const includeDiagnostics = url.searchParams.get("diagnostics") === "1";
-    const detail = getEmailSenderAdminSettingsDetail();
+    const detail = await getEmailSenderAdminSettingsDetail();
     const workerUrl = resolveWorkerUrlForHealth(detail);
     const health = workerUrl
       ? await fetchEmailSenderHealth(workerUrl)
       : { ok: false };
-    const cfg = resolveEmailSenderConfig();
+    const cfg = await resolveEmailSenderConfig();
     const diagnostics = includeDiagnostics
       ? await runRelaybaseDiagnostics()
       : undefined;
@@ -88,7 +89,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    mergeEmailSenderSettings({
+    await mergeEmailSenderSettings({
       ...(env.sources.workerUrl ? {} : { workerUrl }),
       ...(env.sources.cloudflareAccountId
         ? {}
@@ -107,7 +108,7 @@ export async function PUT(request: Request) {
         : { inboundR2BucketName: body.inboundR2BucketName }),
     });
 
-    const view = getEmailSenderConnectionView();
+    const view = await getEmailSenderConnectionView();
     if (!view.cloudflareConfigured) {
       return NextResponse.json(
         { error: "Cloudflare account ID and API token are required" },
@@ -115,8 +116,8 @@ export async function PUT(request: Request) {
       );
     }
 
-    const resolved = readEmailSenderSettings();
-    const serviceToken = ensureWorkerServiceToken();
+    const resolved = await readEmailSenderSettings();
+    const serviceToken = await ensureWorkerServiceToken();
 
     await syncWorkerRuntimeConfig({
       baseUrl: resolved.workerUrl,
@@ -138,7 +139,7 @@ export async function PUT(request: Request) {
         bucketName,
       });
       if (!env.sources.inboundR2BucketName) {
-        mergeEmailSenderSettings({ inboundR2BucketName: r2.bucketName });
+        await mergeEmailSenderSettings({ inboundR2BucketName: r2.bucketName });
       }
       r2Message = r2.created
         ? ` Created R2 bucket ${r2.bucketName}.`
@@ -158,7 +159,7 @@ export async function PUT(request: Request) {
     }
 
     const health = await fetchEmailSenderHealth(resolved.workerUrl);
-    const detail = getEmailSenderAdminSettingsDetail();
+    const detail = await getEmailSenderAdminSettingsDetail();
 
     return NextResponse.json({
       ...detail,

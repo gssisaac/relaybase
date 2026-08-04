@@ -18,13 +18,13 @@ export type RelaybaseWorkerConfig = {
   adminToken: string;
 };
 
-export function readRelaybaseWorkerConfig(): RelaybaseWorkerConfig | null {
+export async function readRelaybaseWorkerConfig(): Promise<RelaybaseWorkerConfig | null> {
   const env = readRelaybaseEnvSettings();
   const stored =
-    readProductJson<StoredRelaybaseSettings>(
+    (await readProductJson<StoredRelaybaseSettings>(
       RELAYBASE_STORE_ID,
       SETTINGS_FILE,
-    ) ?? {};
+    )) ?? {};
 
   const baseUrl = resolveSettingValue(
     "workerUrl",
@@ -100,6 +100,15 @@ export async function getInboundMessage(
   return data.message;
 }
 
+export type WorkerApiKey = {
+  id: string;
+  keyPrefix: string;
+  domain: string;
+  label: string | null;
+  createdAt: string;
+  active: boolean;
+};
+
 export type CreateWorkerApiKeyResult = {
   id: string;
   apiKey: string;
@@ -107,6 +116,29 @@ export type CreateWorkerApiKeyResult = {
   label: string | null;
   createdAt: string;
 };
+
+export type WorkerSendLogEntry = {
+  id: string;
+  at: string;
+  ok: boolean;
+  status: number;
+  domain: string | null;
+  keyId: string | null;
+  keyPrefix: string | null;
+  keyLabel: string | null;
+  from: string | null;
+  to: string | null;
+  subject: string | null;
+  messageId?: string;
+  error?: string;
+};
+
+export async function listWorkerApiKeys(
+  cfg: RelaybaseWorkerConfig,
+): Promise<WorkerApiKey[]> {
+  const data = await workerFetch<{ keys?: WorkerApiKey[] }>(cfg, "/admin/keys");
+  return data.keys ?? [];
+}
 
 export async function createWorkerApiKey(
   cfg: RelaybaseWorkerConfig,
@@ -119,6 +151,34 @@ export async function createWorkerApiKey(
       label: params.label?.trim() || undefined,
     }),
   });
+}
+
+export async function deleteWorkerApiKey(
+  cfg: RelaybaseWorkerConfig,
+  id: string,
+): Promise<void> {
+  await workerFetch<{ ok: boolean }>(cfg, `/admin/keys/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function listWorkerSendLogs(
+  cfg: RelaybaseWorkerConfig,
+  params?: {
+    limit?: number;
+    status?: "all" | "failed" | "success";
+    domain?: string;
+  },
+): Promise<{ logs: WorkerSendLogEntry[] }> {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.status) search.set("status", params.status);
+  if (params?.domain?.trim()) search.set("domain", params.domain.trim());
+  const qs = search.toString();
+  return workerFetch<{ logs: WorkerSendLogEntry[] }>(
+    cfg,
+    `/admin/logs${qs ? `?${qs}` : ""}`,
+  );
 }
 
 export type EnsureInboundRoutingResult = {

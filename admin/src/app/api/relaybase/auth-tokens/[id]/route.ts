@@ -8,7 +8,7 @@ type Props = { params: Promise<{ id: string }> };
 export async function DELETE(_request: Request, { params }: Props) {
   try {
     const { id: tokenId } = await params;
-    if (!revokeRelaybaseDashboardAuthToken(tokenId)) {
+    if (!(await revokeRelaybaseDashboardAuthToken(tokenId))) {
       return NextResponse.json({ error: "Token not found" }, { status: 404 });
     }
     return NextResponse.json({ ok: true });

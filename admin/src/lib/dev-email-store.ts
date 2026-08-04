@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 
+import { getRelaybaseAppKv } from "@/lib/cloudflare/kv";
+
 export type DevEmailConfig = {
   domain: string;
   cloudflareConfigured: boolean;
@@ -26,9 +28,22 @@ export type DevUserEmailData = {
   }[];
 };
 
+function safeUserId(userId: string): string {
+  return userId.replace(/[^a-zA-Z0-9@._-]/g, "_");
+}
+
+function userdataKvKey(userId: string): string {
+  return `userdata:${safeUserId(userId)}`;
+}
+
 function dataFile(userId: string): string {
-  const safe = userId.replace(/[^a-zA-Z0-9@._-]/g, "_");
-  return path.join(process.cwd(), "..", "data", "users", `${safe}.json`);
+  return path.join(
+    process.cwd(),
+    "..",
+    "data",
+    "users",
+    `${safeUserId(userId)}.json`,
+  );
 }
 
 function emptyData(): DevUserEmailData {
@@ -45,7 +60,7 @@ function emptyData(): DevUserEmailData {
   };
 }
 
-export function readUserEmailData(userId: string): DevUserEmailData {
+function readUserEmailDataFromFs(userId: string): DevUserEmailData {
   const file = dataFile(userId);
   if (!fs.existsSync(file)) return emptyData();
   try {
@@ -55,8 +70,28 @@ export function readUserEmailData(userId: string): DevUserEmailData {
   }
 }
 
-export function resolveUserDomain(userId: string): string | null {
-  const domain = readUserEmailData(userId).config.domain?.trim().toLowerCase();
+export async function readUserEmailData(
+  userId: string,
+): Promise<DevUserEmailData> {
+  const kv = await getRelaybaseAppKv();
+  if (kv) {
+    const raw = await kv.get(userdataKvKey(userId));
+    if (!raw) return emptyData();
+    try {
+      return { ...emptyData(), ...JSON.parse(raw) };
+    } catch {
+      return emptyData();
+    }
+  }
+  return readUserEmailDataFromFs(userId);
+}
+
+export async function resolveUserDomain(
+  userId: string,
+): Promise<string | null> {
+  const domain = (await readUserEmailData(userId)).config.domain
+    ?.trim()
+    .toLowerCase();
   if (!domain || domain === "example.com") return null;
   return domain;
 }

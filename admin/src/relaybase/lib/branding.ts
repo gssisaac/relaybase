@@ -21,6 +21,11 @@ export type BrandingDnsRecordStatus = {
   recordId: string | null;
 };
 
+/**
+ * Sender authentication status for a domain. BIMI/VMC (inbox logo) is not
+ * part of this product — see docs/bimi-vmc-do-not-build.md before adding it
+ * back.
+ */
 export type DomainBrandingStatus = {
   domain: string;
   zoneId: string | null;
@@ -29,18 +34,14 @@ export type DomainBrandingStatus = {
   dnsApplyHint: string | null;
   settings: DomainBrandingConfig;
   dmarc: BrandingDnsRecordStatus;
-  bimi: BrandingDnsRecordStatus;
   dmarcEnforced: boolean;
-  bimiReady: boolean;
   notes: string[];
 };
 
 function defaultBrandingForDomain(domain: string): DomainBrandingConfig {
-  const logoUrl = `https://${domain}/bimi/logo.svg`;
   return {
     dmarcPolicy: "quarantine",
     dmarcRua: `dmarc@${domain}`,
-    bimiLogoUrl: logoUrl,
   };
 }
 
@@ -56,19 +57,14 @@ function dmarcRecordName(domain: string): string {
   return `_dmarc.${domain}`;
 }
 
-function bimiRecordName(domain: string): string {
+/** Only used to find and remove leftover records from the retired BIMI feature. */
+function legacyBimiRecordName(domain: string): string {
   return `default._bimi.${domain}`;
 }
 
 export function buildDmarcContent(config: DomainBrandingConfig): string {
   const rua = config.dmarcRua.trim().replace(/^mailto:/i, "");
   return `v=DMARC1; p=${config.dmarcPolicy}; rua=mailto:${rua}; adkim=s; aspf=s`;
-}
-
-export function buildBimiContent(config: DomainBrandingConfig): string {
-  const logo = config.bimiLogoUrl.trim();
-  const vmc = config.vmcUrl?.trim();
-  return vmc ? `v=BIMI1; l=${logo}; a=${vmc};` : `v=BIMI1; l=${logo};`;
 }
 
 function txtRecordMatches(
@@ -91,10 +87,10 @@ function parseDmarcPolicy(content: string): DmarcPolicy | null {
   return match[1].toLowerCase() as DmarcPolicy;
 }
 
-export function createEmailSenderDnsClient(
+export async function createEmailSenderDnsClient(
   settings?: EmailSenderSettings,
-): CloudflareClient {
-  const creds = resolveBrandingDnsCredentials(settings);
+): Promise<CloudflareClient> {
+  const creds = await resolveBrandingDnsCredentials(settings);
   if (!creds.accountId || !creds.apiToken) {
     throw new Error(
       "Cloudflare account ID and API token are required in Relaybase settings.",
@@ -103,10 +99,10 @@ export function createEmailSenderDnsClient(
   return CloudflareClient.create(creds);
 }
 
-function resolveBrandingDnsCredentials(
+async function resolveBrandingDnsCredentials(
   settings?: EmailSenderSettings,
-): CloudflareClientCredentials {
-  const s = settings ?? readEmailSenderSettings();
+): Promise<CloudflareClientCredentials> {
+  const s = settings ?? (await readEmailSenderSettings());
   let macpurity: ReturnType<typeof resolveEmailCloudflareCredentials> | null =
     null;
   try {
@@ -165,16 +161,14 @@ export async function fetchDomainBrandingStatus(
   domain: string,
   settings?: EmailSenderSettings,
 ): Promise<DomainBrandingStatus> {
-  const s = settings ?? readEmailSenderSettings();
+  const s = settings ?? (await readEmailSenderSettings());
   const normalizedDomain = domain.trim().toLowerCase();
   const config = getDomainBrandingConfig(s, normalizedDomain);
   const dmarcExpected = buildDmarcContent(config);
-  const bimiExpected = buildBimiContent(config);
   const notes: string[] = [
-    "Gmail often requires a Verified Mark Certificate (VMC) before showing a BIMI logo.",
-    "Apple Mail and some other clients may show the logo once DMARC is enforced and the SVG is reachable.",
+    "DMARC authenticates this domain's mail (SPF/DKIM alignment) — it does not control any inbox logo.",
   ];
-  const creds = resolveBrandingDnsCredentials(s);
+  const creds = await resolveBrandingDnsCredentials(s);
   const dnsAccess = dnsApplyAccess(creds);
 
   if (!s.cloudflareAccountId.trim() || !s.cloudflareApiToken.trim()) {
@@ -193,21 +187,12 @@ export async function fetchDomainBrandingStatus(
         found: false,
         recordId: null,
       },
-      bimi: {
-        type: "TXT",
-        name: bimiRecordName(normalizedDomain),
-        expected: bimiExpected,
-        current: null,
-        found: false,
-        recordId: null,
-      },
       dmarcEnforced: false,
-      bimiReady: false,
       notes,
     };
   }
 
-  const cf = createEmailSenderDnsClient(s);
+  const cf = await createEmailSenderDnsClient(s);
   const zoneId = await resolveZoneId(cf, s, normalizedDomain);
   if (!zoneId) {
     return {
@@ -225,16 +210,7 @@ export async function fetchDomainBrandingStatus(
         found: false,
         recordId: null,
       },
-      bimi: {
-        type: "TXT",
-        name: bimiRecordName(normalizedDomain),
-        expected: bimiExpected,
-        current: null,
-        found: false,
-        recordId: null,
-      },
       dmarcEnforced: false,
-      bimiReady: false,
       notes: [
         ...notes,
         "Could not resolve the Cloudflare zone ID. Set it in Relaybase → Settings.",
@@ -247,11 +223,6 @@ export async function fetchDomainBrandingStatus(
     records,
     dmarcRecordName(normalizedDomain),
     "v=DMARC1",
-  );
-  const bimiRecord = txtRecordMatches(
-    records,
-    bimiRecordName(normalizedDomain),
-    "v=BIMI1",
   );
   const dmarcPolicy =
     (dmarcRecord && parseDmarcPolicy(dmarcRecord.content)) ?? null;
@@ -273,36 +244,46 @@ export async function fetchDomainBrandingStatus(
       found: Boolean(dmarcRecord),
       recordId: dmarcRecord?.id ?? null,
     },
-    bimi: {
-      type: "TXT",
-      name: bimiRecordName(normalizedDomain),
-      expected: bimiExpected,
-      current: bimiRecord?.content ?? null,
-      found: Boolean(bimiRecord),
-      recordId: bimiRecord?.id ?? null,
-    },
     dmarcEnforced,
-    bimiReady: dmarcEnforced && Boolean(bimiRecord),
     notes,
   };
+}
+
+/**
+ * Removes any leftover `default._bimi.<domain>` TXT record from the retired
+ * BIMI/inbox-logo feature. Safe to call repeatedly — a no-op once cleaned up.
+ * See docs/bimi-vmc-do-not-build.md for why BIMI is not coming back.
+ */
+async function removeLegacyBimiRecord(
+  cf: CloudflareClient,
+  zoneId: string,
+  domain: string,
+): Promise<void> {
+  const records = await cf.listDnsRecords(zoneId, 200);
+  const bimiRecord = txtRecordMatches(
+    records,
+    legacyBimiRecordName(domain),
+    "v=BIMI1",
+  );
+  if (bimiRecord) {
+    await cf.deleteDnsRecord(zoneId, bimiRecord.id);
+  }
 }
 
 export async function applyDomainBrandingDns(params: {
   domain: string;
   settings?: EmailSenderSettings;
-  applyDmarc?: boolean;
-  applyBimi?: boolean;
 }): Promise<DomainBrandingStatus> {
-  const s = params.settings ?? readEmailSenderSettings();
+  const s = params.settings ?? (await readEmailSenderSettings());
   const normalizedDomain = params.domain.trim().toLowerCase();
   const config = getDomainBrandingConfig(s, normalizedDomain);
-  const creds = resolveBrandingDnsCredentials(s);
+  const creds = await resolveBrandingDnsCredentials(s);
   const dnsAccess = dnsApplyAccess(creds);
   if (!dnsAccess.canApply) {
     throw new Error(dnsAccess.hint ?? "Cloudflare DNS write access is not configured.");
   }
 
-  const cf = createEmailSenderDnsClient(s);
+  const cf = await createEmailSenderDnsClient(s);
   const zoneId = await resolveZoneId(cf, s, normalizedDomain);
   if (!zoneId) {
     throw new Error(
@@ -310,23 +291,14 @@ export async function applyDomainBrandingDns(params: {
     );
   }
 
-  if (params.applyDmarc !== false) {
-    await cf.upsertDnsRecord(zoneId, {
-      type: "TXT",
-      name: dmarcRecordName(normalizedDomain),
-      content: buildDmarcContent(config),
-      ttl: 1,
-    });
-  }
+  await cf.upsertDnsRecord(zoneId, {
+    type: "TXT",
+    name: dmarcRecordName(normalizedDomain),
+    content: buildDmarcContent(config),
+    ttl: 1,
+  });
 
-  if (params.applyBimi !== false) {
-    await cf.upsertDnsRecord(zoneId, {
-      type: "TXT",
-      name: bimiRecordName(normalizedDomain),
-      content: buildBimiContent(config),
-      ttl: 1,
-    });
-  }
+  await removeLegacyBimiRecord(cf, zoneId, normalizedDomain);
 
   return fetchDomainBrandingStatus(normalizedDomain, s);
 }

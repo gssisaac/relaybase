@@ -12,8 +12,8 @@ export type EmailSenderConfig = {
 };
 
 /** Internal worker bridge token — auto-provisioned on save, not user-facing. */
-export function ensureWorkerServiceToken(): string {
-  const existing = resolveWorkerServiceToken();
+export async function ensureWorkerServiceToken(): Promise<string> {
+  const existing = await resolveWorkerServiceToken();
   if (
     existing &&
     !looksLikeCloudflareApiToken(existing) &&
@@ -22,12 +22,12 @@ export function ensureWorkerServiceToken(): string {
     return existing;
   }
   const token = generateWorkerServiceToken();
-  mergeEmailSenderSettings({ adminToken: token });
+  await mergeEmailSenderSettings({ adminToken: token });
   return token;
 }
 
-export function resolveWorkerServiceToken(): string {
-  const settings = readEmailSenderSettings();
+export async function resolveWorkerServiceToken(): Promise<string> {
+  const settings = await readEmailSenderSettings();
   const fromSettings = settings.adminToken.trim();
   if (fromSettings && !looksLikeCloudflareApiToken(fromSettings)) {
     return fromSettings;
@@ -38,16 +38,16 @@ export function resolveWorkerServiceToken(): string {
 /** @deprecated Use resolveWorkerServiceToken */
 export const resolveAdminTokenFromSettings = resolveWorkerServiceToken;
 
-export function resolveEmailSenderConfig(): EmailSenderConfig | null {
-  const settings = readEmailSenderSettings();
+export async function resolveEmailSenderConfig(): Promise<EmailSenderConfig | null> {
+  const settings = await readEmailSenderSettings();
   const baseUrl = settings.workerUrl.trim();
-  const adminToken = resolveWorkerServiceToken();
+  const adminToken = await resolveWorkerServiceToken();
   if (!baseUrl || !adminToken) return null;
   return { baseUrl, adminToken };
 }
 
-export function requireEmailSenderConfig(): EmailSenderConfig {
-  const cfg = resolveEmailSenderConfig();
+export async function requireEmailSenderConfig(): Promise<EmailSenderConfig> {
+  const cfg = await resolveEmailSenderConfig();
   if (!cfg) {
     throw new Error(
       "Relaybase is not configured — set the worker URL and Cloudflare credentials in Settings, then save",

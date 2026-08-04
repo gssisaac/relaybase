@@ -1,7 +1,13 @@
 import fs from "fs";
 import path from "path";
 
+import { getRelaybaseApiKv } from "@/lib/cloudflare/kv";
+
 const DATA_ROOT = path.join(process.cwd(), "..", "data", "products");
+
+function productKvKey(serviceId: string, filename: string): string {
+  return `product:${serviceId}:${filename}`;
+}
 
 export function getProductDataDir(serviceId: string): string {
   return path.join(DATA_ROOT, serviceId);
@@ -17,7 +23,7 @@ export function serviceDataFile(serviceId: string, filename: string): string {
   return path.join(getProductDataDir(serviceId), filename);
 }
 
-export function readProductJson<T>(
+function readProductJsonFromFs<T>(
   serviceId: string,
   filename: string,
 ): T | null {
@@ -27,7 +33,7 @@ export function readProductJson<T>(
   return JSON.parse(raw) as T;
 }
 
-export function writeProductJson<T>(
+function writeProductJsonToFs<T>(
   serviceId: string,
   filename: string,
   data: T,
@@ -39,4 +45,33 @@ export function writeProductJson<T>(
     mode: 0o600,
   });
   return file;
+}
+
+export async function readProductJson<T>(
+  serviceId: string,
+  filename: string,
+): Promise<T | null> {
+  const kv = await getRelaybaseApiKv();
+  if (kv) {
+    const raw = await kv.get(productKvKey(serviceId, filename));
+    if (raw) return JSON.parse(raw) as T;
+    return null;
+  }
+  return readProductJsonFromFs<T>(serviceId, filename);
+}
+
+export async function writeProductJson<T>(
+  serviceId: string,
+  filename: string,
+  data: T,
+): Promise<string> {
+  const kv = await getRelaybaseApiKv();
+  if (kv) {
+    await kv.put(
+      productKvKey(serviceId, filename),
+      `${JSON.stringify(data, null, 2)}\n`,
+    );
+    return productKvKey(serviceId, filename);
+  }
+  return writeProductJsonToFs(serviceId, filename, data);
 }

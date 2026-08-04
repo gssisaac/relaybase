@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -51,7 +51,6 @@ type BrandingStatus = {
   settings: {
     dmarcPolicy: "none" | "quarantine" | "reject";
     dmarcRua: string;
-    bimiLogoUrl: string;
   };
   dmarc: {
     name: string;
@@ -59,14 +58,7 @@ type BrandingStatus = {
     current: string | null;
     found: boolean;
   };
-  bimi: {
-    name: string;
-    expected: string;
-    current: string | null;
-    found: boolean;
-  };
   dmarcEnforced: boolean;
-  bimiReady: boolean;
   notes: string[];
 };
 
@@ -99,7 +91,6 @@ export function EmailSenderBrandingView() {
     "quarantine",
   );
   const [dmarcRua, setDmarcRua] = useState("");
-  const [bimiLogoUrl, setBimiLogoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -121,14 +112,12 @@ export function EmailSenderBrandingView() {
           setStatus(next);
           setDmarcPolicy(next.settings.dmarcPolicy);
           setDmarcRua(next.settings.dmarcRua);
-          setBimiLogoUrl(next.settings.bimiLogoUrl);
         },
       },
     );
     setStatus(data);
     setDmarcPolicy(data.settings.dmarcPolicy);
     setDmarcRua(data.settings.dmarcRua);
-    setBimiLogoUrl(data.settings.bimiLogoUrl);
     return data;
   }, []);
 
@@ -199,13 +188,12 @@ export function EmailSenderBrandingView() {
           domain: activeDomain,
           dmarcPolicy,
           dmarcRua,
-          bimiLogoUrl,
         }),
       });
       const data = (await res.json()) as BrandingStatus & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Save failed");
       setStatus(data);
-      setMessage("Branding settings saved");
+      setMessage("DMARC settings saved");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -213,7 +201,7 @@ export function EmailSenderBrandingView() {
     }
   }
 
-  async function applyDns(applyDmarc: boolean, applyBimi: boolean) {
+  async function applyDns() {
     if (!activeDomain) return;
     setApplying(true);
     setError(null);
@@ -222,16 +210,12 @@ export function EmailSenderBrandingView() {
       const res = await fetch(`${RELAYBASE_API}/branding`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: activeDomain,
-          applyDmarc,
-          applyBimi,
-        }),
+        body: JSON.stringify({ domain: activeDomain }),
       });
       const data = (await res.json()) as BrandingStatus & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Apply failed");
       setStatus(data);
-      setMessage("DNS records applied in Cloudflare");
+      setMessage("DMARC record applied in Cloudflare");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Apply failed");
     } finally {
@@ -251,7 +235,7 @@ export function EmailSenderBrandingView() {
       <EmailSenderAlerts error={error} message={message} />
 
       {ctxLoading && !config ? (
-        <p className="text-sm text-muted-foreground">Loading branding…</p>
+        <p className="text-sm text-muted-foreground">Loading DMARC…</p>
       ) : null}
 
       {status && !status.dnsCanApply && status.dnsApplyHint ? (
@@ -260,7 +244,7 @@ export function EmailSenderBrandingView() {
           <AlertDescription className="space-y-2">
             <p>{status.dnsApplyHint}</p>
             <p>
-              Or add the BIMI record manually in{" "}
+              Or add the DMARC record manually in{" "}
               <a
                 href="https://dash.cloudflare.com"
                 target="_blank"
@@ -271,11 +255,11 @@ export function EmailSenderBrandingView() {
               </a>
               : TXT name{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                default._bimi
+                _dmarc
               </code>
               , content{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                {status.bimi.expected}
+                {status.dmarc.expected}
               </code>
             </p>
           </AlertDescription>
@@ -287,18 +271,22 @@ export function EmailSenderBrandingView() {
           <AlertTitle>Configure Relaybase first</AlertTitle>
           <AlertDescription>
             Set the worker URL and Cloudflare credentials in Settings before
-            managing DMARC and BIMI.
+            managing DMARC.
           </AlertDescription>
         </Alert>
       ) : null}
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Sender branding (DMARC &amp; BIMI)</CardTitle>
+          <CardTitle className="text-sm">Sender authentication (DMARC)</CardTitle>
           <CardDescription>
-            Control the inbox display name prerequisites and brand logo via DNS.
-            BIMI shows your logo in supporting mail clients once DMARC is enforced
-            and the SVG logo is publicly reachable.
+            DMARC authenticates a domain&apos;s mail (SPF/DKIM alignment) and
+            protects against spoofing. It does not control any inbox logo —
+            Relaybase does not offer BIMI/VMC logo display; see{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">
+              docs/bimi-vmc-do-not-build.md
+            </code>{" "}
+            for why.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -371,47 +359,19 @@ export function EmailSenderBrandingView() {
                     placeholder={`dmarc@${activeDomain}`}
                   />
                 </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <Label className="text-xs">BIMI logo URL (HTTPS SVG)</Label>
-                  <Input
-                    value={bimiLogoUrl}
-                    onChange={(e) => setBimiLogoUrl(e.target.value)}
-                    placeholder={`https://${activeDomain}/bimi/logo.svg`}
-                    className="font-mono text-xs"
-                  />
-                  {bimiLogoUrl ? (
-                    <a
-                      href={bimiLogoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Open logo URL
-                      <ExternalLink className="size-3" />
-                    </a>
-                  ) : null}
-                </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => void saveSettings()} disabled={saving}>
-                  {saving ? "Saving…" : "Save branding settings"}
+                  {saving ? "Saving…" : "Save DMARC settings"}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => void applyDns(true, true)}
+                  onClick={() => void applyDns()}
                   disabled={applying || status?.dnsCanApply === false}
                 >
-                  {applying ? "Applying…" : "Apply DMARC + BIMI DNS"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void applyDns(false, true)}
-                  disabled={applying || status?.dnsCanApply === false}
-                >
-                  Apply BIMI only
+                  {applying ? "Applying…" : "Apply DMARC DNS"}
                 </Button>
               </div>
 
@@ -419,12 +379,6 @@ export function EmailSenderBrandingView() {
                 <div className="flex flex-wrap gap-2">
                   <Badge variant={status.dmarcEnforced ? "default" : "secondary"}>
                     DMARC {status.dmarcEnforced ? "enforced" : "not enforced"}
-                  </Badge>
-                  <Badge variant={status.bimi.found ? "default" : "secondary"}>
-                    BIMI {status.bimi.found ? "record found" : "missing"}
-                  </Badge>
-                  <Badge variant={status.bimiReady ? "default" : "secondary"}>
-                    Logo ready {status.bimiReady ? "yes" : "no"}
                   </Badge>
                   {status.zoneId ? (
                     <Badge variant="outline" className="font-mono text-[10px]">
@@ -445,26 +399,24 @@ export function EmailSenderBrandingView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {[status.dmarc, status.bimi].map((record) => (
-                      <TableRow key={record.name}>
-                        <TableCell className="font-mono text-xs">
-                          {record.name}
-                        </TableCell>
-                        <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-                          {record.expected}
-                        </TableCell>
-                        <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-                          {record.current ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          {record.found ? (
-                            <Badge variant="default">OK</Badge>
-                          ) : (
-                            <Badge variant="secondary">Missing</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    <TableRow key={status.dmarc.name}>
+                      <TableCell className="font-mono text-xs">
+                        {status.dmarc.name}
+                      </TableCell>
+                      <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
+                        {status.dmarc.expected}
+                      </TableCell>
+                      <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
+                        {status.dmarc.current ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        {status.dmarc.found ? (
+                          <Badge variant="default">OK</Badge>
+                        ) : (
+                          <Badge variant="secondary">Missing</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
                   </TableBody>
                 </Table>
               ) : null}

@@ -9,7 +9,7 @@ import { apiError } from "@/lib/api/api-error";
 export async function GET() {
   try {
     return NextResponse.json({
-      tokens: listRelaybaseDashboardAuthTokens(),
+      tokens: await listRelaybaseDashboardAuthTokens(),
     });
   } catch (error) {
     return apiError(error);
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       label?: string;
       productId?: string;
     };
-    const { record, token } = issueRelaybaseDashboardAuthToken({
+    const { record, token } = await issueRelaybaseDashboardAuthToken({
       label: body.label,
       productId: body.productId,
     });

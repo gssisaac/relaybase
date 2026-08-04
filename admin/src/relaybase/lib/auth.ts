@@ -18,8 +18,8 @@ function bearerToken(request: Request): string | null {
   return match?.[1]?.trim() || null;
 }
 
-function resolveWorkerBaseUrl(): string {
-  return readEmailSenderSettings().workerUrl.trim();
+async function resolveWorkerBaseUrl(): Promise<string> {
+  return (await readEmailSenderSettings()).workerUrl.trim();
 }
 
 export class RelaybaseAuthError extends Error {
@@ -29,12 +29,12 @@ export class RelaybaseAuthError extends Error {
   }
 }
 
-function isDashboardAuthToken(token: string): boolean {
-  return findRelaybaseDashboardAuthToken(token) !== null;
+async function isDashboardAuthToken(token: string): Promise<boolean> {
+  return (await findRelaybaseDashboardAuthToken(token)) !== null;
 }
 
-function resolveWorkerServiceTokenForCalls(): string {
-  const configured = resolveWorkerServiceToken().trim();
+async function resolveWorkerServiceTokenForCalls(): Promise<string> {
+  const configured = (await resolveWorkerServiceToken()).trim();
   if (configured) return configured;
 
   throw new RelaybaseAuthError(
@@ -68,13 +68,13 @@ export async function requireRelaybaseAuth(
         "Invalid Relaybase auth token — use rb-auth-… from Relaybase Admin → Users, not a Cloudflare API token (cfut_…)",
       );
     }
-    const baseUrl = resolveWorkerBaseUrl();
+    const baseUrl = await resolveWorkerBaseUrl();
     if (!baseUrl) {
       throw new Error(
         "Relaybase worker is not configured — set the worker URL in Relaybase settings",
       );
     }
-    const adminToken = resolveWorkerServiceTokenForCalls();
+    const adminToken = await resolveWorkerServiceTokenForCalls();
     return { baseUrl, adminToken };
   }
 
@@ -108,7 +108,7 @@ export async function requireDashboardRelaybaseAuth(
     );
   }
 
-  const dashboardRecord = findRelaybaseDashboardAuthToken(dashboardToken);
+  const dashboardRecord = await findRelaybaseDashboardAuthToken(dashboardToken);
   if (
     dashboardRecord?.productId &&
     dashboardRecord.productId !== productId.trim()
@@ -118,14 +118,14 @@ export async function requireDashboardRelaybaseAuth(
     );
   }
 
-  const baseUrl = resolveWorkerBaseUrl();
+  const baseUrl = await resolveWorkerBaseUrl();
   if (!baseUrl) {
     throw new Error(
       "Relaybase worker is not configured — set the worker URL in Relaybase settings",
     );
   }
 
-  const adminToken = resolveWorkerServiceTokenForCalls();
+  const adminToken = await resolveWorkerServiceTokenForCalls();
   return { baseUrl, adminToken };
 }
 

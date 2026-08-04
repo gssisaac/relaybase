@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const vaultKey = getEmailSenderVaultKey(keyId);
+    const vaultKey = await getEmailSenderVaultKey(keyId);
     if (!vaultKey?.key) {
       return NextResponse.json(
         {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const cfg = requireEmailSenderConfig();
+    const cfg = await requireEmailSenderConfig();
     const result = await sendEmailWithApiKey(cfg.baseUrl, vaultKey.key, {
       from,
       fromName: body.fromName?.trim() || undefined,
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       replyTo: body.replyTo,
     });
 
-    const sent = recordEmailSenderSentEmail({
+    const sent = await recordEmailSenderSentEmail({
       keyId: vaultKey.id,
       keyLabel: vaultKey.label,
       domain: vaultKey.domain,

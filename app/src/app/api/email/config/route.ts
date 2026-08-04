@@ -12,7 +12,7 @@ import {
 export async function GET() {
   try {
     const userId = await requireSessionUserId();
-    return NextResponse.json(buildUserEmailConfig(userId));
+    return NextResponse.json(await buildUserEmailConfig(userId));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
     return NextResponse.json({ error: message }, { status: 401 });
@@ -28,22 +28,22 @@ export async function PATCH(request: Request) {
       credentialSource?: "integration" | "manual";
     };
 
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
 
     if (body.emailDomain !== undefined) {
       const domain = body.emailDomain.trim();
       if (domain) {
-        addUserDomain(userId, domain);
-        setActiveUserDomain(userId, domain);
+        await addUserDomain(userId, domain);
+        await setActiveUserDomain(userId, domain);
       }
     }
     if (body.relaybaseAuthToken !== undefined) {
       data.config.relaybaseAuthToken = body.relaybaseAuthToken.trim();
       data.config.relaybaseConfigured = Boolean(body.relaybaseAuthToken.trim());
-      writeUserEmailData(userId, data);
+      await writeUserEmailData(userId, data);
     }
 
-    const config = buildUserEmailConfig(userId);
+    const config = await buildUserEmailConfig(userId);
     return NextResponse.json({
       ...config,
       message: "Settings saved",

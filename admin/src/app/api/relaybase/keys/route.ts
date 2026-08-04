@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   try {
     const cfg = await requireRelaybaseAdminAuth(request);
     const keys = await listEmailSenderKeys(cfg);
-    const vault = readEmailSenderSettings().apiKeyVault;
+    const vault = (await readEmailSenderSettings()).apiKeyVault;
     const vaultById = new Map(vault.map((entry) => [entry.id, entry]));
 
     return NextResponse.json({
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       label: body.label,
     });
 
-    addEmailSenderKeyToVault({
+    await addEmailSenderKeyToVault({
       id: result.id,
       domain: result.domain,
       label: result.label,

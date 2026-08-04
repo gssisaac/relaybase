@@ -22,19 +22,19 @@ type RelaybaseSettingsSlice = {
   dashboardAdminTokens?: DashboardAuthTokenRecord[];
 };
 
-function readTokenRecords(): DashboardAuthTokenRecord[] {
-  const stored = readProductJson<RelaybaseSettingsSlice>(
+async function readTokenRecords(): Promise<DashboardAuthTokenRecord[]> {
+  const stored = await readProductJson<RelaybaseSettingsSlice>(
     RELAYBASE_STORE_ID,
     SETTINGS_FILE,
   );
   return stored?.dashboardAuthTokens ?? stored?.dashboardAdminTokens ?? [];
 }
 
-function writeTokenRecords(tokens: DashboardAuthTokenRecord[]): void {
+async function writeTokenRecords(tokens: DashboardAuthTokenRecord[]): Promise<void> {
   const stored =
-    readProductJson<Record<string, unknown>>(RELAYBASE_STORE_ID, SETTINGS_FILE) ??
+    (await readProductJson<Record<string, unknown>>(RELAYBASE_STORE_ID, SETTINGS_FILE)) ??
     {};
-  writeProductJson(RELAYBASE_STORE_ID, SETTINGS_FILE, {
+  await writeProductJson(RELAYBASE_STORE_ID, SETTINGS_FILE, {
     ...stored,
     dashboardAuthTokens: tokens,
   });
@@ -48,13 +48,13 @@ function authTokenPrefix(token: string): string {
   return token.slice("rb-auth-".length, "rb-auth-".length + 8);
 }
 
-export function findAuthTokenForUser(userId: string): string | null {
-  const match = readTokenRecords().find((entry) => entry.productId === userId);
+export async function findAuthTokenForUser(userId: string): Promise<string | null> {
+  const match = (await readTokenRecords()).find((entry) => entry.productId === userId);
   return match?.token ?? null;
 }
 
-export function issueAuthTokenForUser(userId: string): string {
-  const existing = findAuthTokenForUser(userId);
+export async function issueAuthTokenForUser(userId: string): Promise<string> {
+  const existing = await findAuthTokenForUser(userId);
   if (existing) return existing;
 
   const token = generateAuthToken();
@@ -66,12 +66,12 @@ export function issueAuthTokenForUser(userId: string): string {
     token,
     createdAt: new Date().toISOString(),
   };
-  writeTokenRecords([...readTokenRecords(), record]);
+  await writeTokenRecords([...(await readTokenRecords()), record]);
   return token;
 }
 
-export function isValidAuthToken(token: string): boolean {
+export async function isValidAuthToken(token: string): Promise<boolean> {
   const trimmed = token.trim();
   if (!trimmed.startsWith("rb-auth-")) return false;
-  return readTokenRecords().some((entry) => entry.token === trimmed);
+  return (await readTokenRecords()).some((entry) => entry.token === trimmed);
 }

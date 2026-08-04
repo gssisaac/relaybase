@@ -28,10 +28,10 @@ export type RelaybasePlatformConfig = {
   cloudflareConfigured: boolean;
 };
 
-export function readRelaybasePlatformConfig(): RelaybasePlatformConfig {
+export async function readRelaybasePlatformConfig(): Promise<RelaybasePlatformConfig> {
   const env = readRelaybaseEnvSettings();
   const stored =
-    readProductJson<StoredRelaybaseSettings>(RELAYBASE_STORE_ID, SETTINGS_FILE) ??
+    (await readProductJson<StoredRelaybaseSettings>(RELAYBASE_STORE_ID, SETTINGS_FILE)) ??
     {};
 
   const workerUrl = resolveSettingValue(
@@ -108,7 +108,7 @@ export async function provisionDomainInboundR2(
     throw new Error("Domain is required");
   }
 
-  const platform = readRelaybasePlatformConfig();
+  const platform = await readRelaybasePlatformConfig();
   if (!platform.cloudflareConfigured) {
     throw platformNotConfiguredError();
   }

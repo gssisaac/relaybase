@@ -9,12 +9,12 @@ import {
 } from "@/lib/relaybase/worker-client";
 
 async function resolveDomainApiKey(domain: string): Promise<string> {
-  const cfg = readRelaybaseWorkerConfig();
+  const cfg = await readRelaybaseWorkerConfig();
   if (!cfg) {
     throw new Error("Relaybase worker is not configured");
   }
 
-  const existing = findRelaybaseApiKeyForDomain(domain);
+  const existing = await findRelaybaseApiKeyForDomain(domain);
   if (existing?.key) return existing.key;
 
   const created = await createWorkerApiKey(cfg, {
@@ -22,7 +22,7 @@ async function resolveDomainApiKey(domain: string): Promise<string> {
     label: "app-compose",
   });
 
-  upsertRelaybaseApiKeyRecord({
+  await upsertRelaybaseApiKeyRecord({
     id: created.id,
     domain: created.domain,
     label: created.label,
@@ -47,7 +47,7 @@ export async function sendViaRelaybaseWorker(params: {
   inReplyTo?: string;
   references?: string;
 }): Promise<{ messageId: string }> {
-  const cfg = readRelaybaseWorkerConfig();
+  const cfg = await readRelaybaseWorkerConfig();
   if (!cfg) {
     throw new Error("Relaybase worker is not configured");
   }

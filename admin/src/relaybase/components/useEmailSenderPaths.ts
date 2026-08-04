@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { KeyRound, Mail, Palette, ScrollText, Settings } from "lucide-react";
+import { KeyRound, Mail, ScrollText, Settings, ShieldCheck } from "lucide-react";
 
 import {
   RELAYBASE_API,
@@ -21,7 +21,7 @@ export function useRelaybasePaths() {
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: logs, label: "Logs", icon: ScrollText },
     { href: keys, label: "API Keys", icon: KeyRound },
-    { href: branding, label: "Branding", icon: Palette },
+    { href: branding, label: "DMARC", icon: ShieldCheck },
     { href: email, label: "Email", icon: Mail },
     { href: settings, label: "Settings", icon: Settings },
   ];

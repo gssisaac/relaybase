@@ -54,7 +54,7 @@ export function parseStatsRange(value: string | null): StatsRange {
 }
 
 async function loadSendLogs(): Promise<EmailSenderLogEntry[]> {
-  const cfg = resolveEmailSenderConfig();
+  const cfg = await resolveEmailSenderConfig();
   if (!cfg) return [];
   try {
     const result: EmailSenderLogsResult = await listEmailSenderLogs(cfg, {
@@ -73,12 +73,12 @@ export async function collectAdminStats(
   const now = Date.now();
   const since = now - RANGE_MS[range];
 
-  const users = listUsers();
-  const authTokens = listRelaybaseDashboardAuthTokens();
-  const apiKeysIssued = readEmailSenderSettings().apiKeyVault.length;
-  const sentEmails = listEmailSenderSentEmails();
+  const users = await listUsers();
+  const authTokens = await listRelaybaseDashboardAuthTokens();
+  const apiKeysIssued = (await readEmailSenderSettings()).apiKeyVault.length;
+  const sentEmails = await listEmailSenderSentEmails();
   const logs = await loadSendLogs();
-  const workerConnected = resolveEmailSenderConfig() !== null;
+  const workerConnected = (await resolveEmailSenderConfig()) !== null;
 
   const userBuckets = createBuckets(range, now);
   const authTokenBuckets = createBuckets(range, now);

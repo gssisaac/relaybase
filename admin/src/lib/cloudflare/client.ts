@@ -971,6 +971,13 @@ export class CloudflareClient {
     return data.result;
   }
 
+  async deleteDnsRecord(zoneId: string, recordId: string): Promise<void> {
+    await this.requestForPath<{ id: string }>(
+      `/zones/${zoneId}/dns_records/${recordId}`,
+      { method: "DELETE" },
+    );
+  }
+
   /** Match by type + normalized name; update if found, else create. */
   async upsertDnsRecord(
     zoneId: string,

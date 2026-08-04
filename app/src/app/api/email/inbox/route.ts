@@ -13,7 +13,7 @@ import {
 export async function GET(request: Request) {
   try {
     const userId = await requireSessionUserId();
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
     if (new URL(request.url).searchParams.get("domain") && !domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ messages: [] });
     }
 
-    const cfg = readRelaybaseWorkerConfig();
+    const cfg = await readRelaybaseWorkerConfig();
     if (!cfg) {
       return NextResponse.json(
         { error: "Relaybase worker is not configured" },

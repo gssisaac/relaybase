@@ -41,7 +41,7 @@ function provisionErrorResponse(
 export async function GET() {
   try {
     const userId = await requireSessionUserId();
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     return NextResponse.json({
       domains: listDomainSummaries(data),
       activeDomain: data.config.activeDomain,
@@ -65,16 +65,16 @@ export async function POST(request: Request) {
       throw validationDomainError("Enter a valid domain, such as example.com.");
     }
 
-    const existing = readUserEmailData(userId);
+    const existing = await readUserEmailData(userId);
     if (existing.domains.includes(domain)) {
       throw duplicateDomainError(domain);
     }
 
     const r2 = await provisionDomainInboundR2(domain);
-    addUserDomain(userId, domain);
-    markDomainR2Provisioned(userId, r2);
+    await addUserDomain(userId, domain);
+    await markDomainR2Provisioned(userId, r2);
 
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     return NextResponse.json({
       domains: listDomainSummaries(data),
       activeDomain: data.config.activeDomain,
@@ -92,9 +92,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (userId && domain) {
       try {
-        const data = readUserEmailData(userId);
+        const data = await readUserEmailData(userId);
         if (data.domains.includes(domain)) {
-          removeUserDomain(userId, domain);
+          await removeUserDomain(userId, domain);
         }
       } catch (rollbackError) {
         console.error("[domain-provision] rollback failed", {
@@ -130,7 +130,7 @@ export async function PATCH(request: Request) {
         { status: 400 },
       );
     }
-    const data = setActiveUserDomain(userId, activeDomain);
+    const data = await setActiveUserDomain(userId, activeDomain);
     return NextResponse.json({
       domains: listDomainSummaries(data),
       activeDomain: data.config.activeDomain,
@@ -151,7 +151,7 @@ export async function DELETE(request: Request) {
     if (!domain) {
       return NextResponse.json({ error: "domain is required" }, { status: 400 });
     }
-    const data = removeUserDomain(userId, domain);
+    const data = await removeUserDomain(userId, domain);
     return NextResponse.json({
       domains: listDomainSummaries(data),
       activeDomain: data.config.activeDomain,

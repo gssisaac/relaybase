@@ -6,7 +6,7 @@ import { apiError } from "@/lib/api/api-error";
 
 export async function GET(request: Request) {
   try {
-    const cfg = requireEmailSenderConfig();
+    const cfg = await requireEmailSenderConfig();
     const { searchParams } = new URL(request.url);
     const limit = Number(searchParams.get("limit") ?? "100");
     const status = searchParams.get("status") ?? "all";

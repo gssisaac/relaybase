@@ -5,6 +5,7 @@ import {
   AtSign,
   BarChart3,
   Globe,
+  KeyRound,
   LayoutDashboard,
   Mail,
   Megaphone,
@@ -22,20 +23,22 @@ export function useEmailPaths() {
   const base = usePanelHref();
   const dashboard = usePanelHref("dashboard");
   const domains = usePanelHref("domains");
+  const keys = usePanelHref("keys");
   const emails = usePanelHref("emails");
   const inbox = usePanelHref("emails", "inbox");
   const sent = usePanelHref("emails", "sent");
   const compose = usePanelHref("emails", "compose");
   const settingsBase = usePanelHref("settings");
+  /** @deprecated Use `keys` — legacy settings route */
   const settingsKeys = usePanelHref("settings", "keys");
   const settingsDomain = usePanelHref("settings", "domain");
-  const settingsBranding = usePanelHref("settings", "branding");
   /** @deprecated Use settingsKeys — legacy route alias */
   const settingsCloudflare = usePanelHref("settings", "aws");
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
     { href: domains, label: "Domains", icon: Globe },
+    { href: keys, label: "API Keys", icon: KeyRound },
     { href: usePanelHref("accounts"), label: "Accounts", icon: AtSign },
     { href: emails, label: "Emails", icon: Mail },
     { href: usePanelHref("broadcasts"), label: "Broadcasts", icon: Megaphone },
@@ -45,9 +48,7 @@ export function useEmailPaths() {
   ];
 
   const settingsNav = [
-    { href: settingsKeys, label: "API Keys" },
     { href: settingsDomain, label: "Domain" },
-    { href: settingsBranding, label: "Logo" },
   ] as const;
 
   return {
@@ -55,6 +56,7 @@ export function useEmailPaths() {
     base,
     dashboard,
     domains,
+    keys,
     emails,
     inbox,
     sent,
@@ -63,7 +65,6 @@ export function useEmailPaths() {
     settingsKeys,
     settingsCloudflare,
     settingsDomain,
-    settingsBranding,
     tabs,
     settingsNav,
   };

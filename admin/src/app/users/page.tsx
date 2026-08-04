@@ -30,7 +30,7 @@ function BrandingBadge({
   if (!branding) {
     return <Badge variant="secondary">No domain</Badge>;
   }
-  if (branding.dmarcEnforced && branding.bimiReady) {
+  if (branding.dmarcEnforced) {
     return <Badge variant="default">Ready</Badge>;
   }
   if (branding.dnsConfigured) {
@@ -85,7 +85,7 @@ export default function UsersPage() {
                   <TableHead>Auth</TableHead>
                   <TableHead>API keys</TableHead>
                   <TableHead>7d activity</TableHead>
-                  <TableHead>Branding</TableHead>
+                  <TableHead>DMARC</TableHead>
                   <TableHead>Last seen</TableHead>
                 </TableRow>
               </TableHeader>

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    const existing = listUsers().some((u) => u.id === id);
+    const existing = (await listUsers()).some((u) => u.id === id);
     if (body.action === "register" && existing) {
       return NextResponse.json(
         { error: "This ID is already registered — sign in instead" },
@@ -22,8 +22,8 @@ export async function POST(request: Request) {
       );
     }
 
-    upsertUser(id);
-    ensureUserAuthToken(id);
+    await upsertUser(id);
+    await ensureUserAuthToken(id);
 
     const response = NextResponse.json({ ok: true, id });
     response.cookies.set("relaybase_user", id, {

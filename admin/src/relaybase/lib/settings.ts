@@ -77,11 +77,14 @@ export type EmailSenderSettings = {
   dashboardAuthTokens: RelaybaseDashboardAuthTokenRecord[];
 };
 
+/**
+ * Sender authentication (DMARC) config per domain. BIMI/VMC logo display
+ * was removed — see docs/bimi-vmc-do-not-build.md for why it doesn't belong
+ * in this product and must not be reintroduced.
+ */
 export type DomainBrandingConfig = {
   dmarcPolicy: "none" | "quarantine" | "reject";
   dmarcRua: string;
-  bimiLogoUrl: string;
-  vmcUrl?: string;
 };
 
 export type EmailSenderSettingsView = {
@@ -224,26 +227,29 @@ function mergeSettingsWithEnv(stored: EmailSenderSettings): EmailSenderSettings 
   };
 }
 
-function readStoredSettings(): EmailSenderSettings | null {
-  let stored = readProductJson<StoredEmailSenderSettings>(
+async function readStoredSettings(): Promise<EmailSenderSettings | null> {
+  let stored = await readProductJson<StoredEmailSenderSettings>(
     RELAYBASE_STORE_ID,
     SETTINGS_FILE,
   );
   if (stored) return normalizeStoredSettings(stored);
 
   for (const legacyId of LEGACY_STORE_IDS) {
-    stored = readProductJson<StoredEmailSenderSettings>(legacyId, SETTINGS_FILE);
+    stored = await readProductJson<StoredEmailSenderSettings>(
+      legacyId,
+      SETTINGS_FILE,
+    );
     if (stored) {
       const normalized = normalizeStoredSettings(stored);
-      writeEmailSenderSettings(normalized);
+      await writeEmailSenderSettings(normalized);
       return normalized;
     }
   }
   return null;
 }
 
-export function readEmailSenderSettings(): EmailSenderSettings {
-  const stored = readStoredSettings();
+export async function readEmailSenderSettings(): Promise<EmailSenderSettings> {
+  const stored = await readStoredSettings();
   if (stored) {
     let next = stored;
     const env = readRelaybaseEnvSettings();
@@ -255,7 +261,7 @@ export function readEmailSenderSettings(): EmailSenderSettings {
       const macpurity = migrateCloudflareFromMacPurity();
       if (macpurity) {
         next = { ...next, ...macpurity };
-        writeEmailSenderSettings(next);
+        await writeEmailSenderSettings(next);
       }
     }
     return mergeSettingsWithEnv(next);
@@ -263,9 +269,9 @@ export function readEmailSenderSettings(): EmailSenderSettings {
   return mergeSettingsWithEnv(emptySettings());
 }
 
-export function writeEmailSenderSettings(
+export async function writeEmailSenderSettings(
   settings: EmailSenderSettings,
-): string {
+): Promise<string> {
   return writeProductJson(RELAYBASE_STORE_ID, SETTINGS_FILE, {
     workerUrl: settings.workerUrl.trim().replace(/\/$/, ""),
     adminToken: settings.adminToken.trim(),
@@ -281,38 +287,38 @@ export function writeEmailSenderSettings(
   });
 }
 
-export function addEmailSenderKeyToVault(
+export async function addEmailSenderKeyToVault(
   record: EmailSenderApiKeyRecord,
-): EmailSenderSettings {
-  const current = readEmailSenderSettings();
+): Promise<EmailSenderSettings> {
+  const current = await readEmailSenderSettings();
   const vault = [
     ...current.apiKeyVault.filter((k) => k.id !== record.id),
     record,
   ];
   const next = { ...current, apiKeyVault: vault };
-  writeEmailSenderSettings(next);
+  await writeEmailSenderSettings(next);
   return next;
 }
 
-export function removeEmailSenderKeyFromVault(
+export async function removeEmailSenderKeyFromVault(
   keyId: string,
-): EmailSenderSettings {
-  const current = readEmailSenderSettings();
+): Promise<EmailSenderSettings> {
+  const current = await readEmailSenderSettings();
   const next = {
     ...current,
     apiKeyVault: current.apiKeyVault.filter((k) => k.id !== keyId),
   };
-  writeEmailSenderSettings(next);
+  await writeEmailSenderSettings(next);
   return next;
 }
 
-export function recordEmailSenderSentEmail(
+export async function recordEmailSenderSentEmail(
   entry: Omit<EmailSenderSentRecord, "id" | "sentAt"> & {
     id?: string;
     sentAt?: string;
   },
-): EmailSenderSentRecord {
-  const current = readEmailSenderSettings();
+): Promise<EmailSenderSentRecord> {
+  const current = await readEmailSenderSettings();
   const record: EmailSenderSentRecord = {
     id: entry.id ?? crypto.randomUUID(),
     sentAt: entry.sentAt ?? new Date().toISOString(),
@@ -326,27 +332,30 @@ export function recordEmailSenderSentEmail(
     messageId: entry.messageId,
   };
   const sentEmails = [record, ...current.sentEmails].slice(0, 200);
-  writeEmailSenderSettings({ ...current, sentEmails });
+  await writeEmailSenderSettings({ ...current, sentEmails });
   return record;
 }
 
-export function listEmailSenderSentEmails(): EmailSenderSentRecord[] {
-  return readEmailSenderSettings().sentEmails;
+export async function listEmailSenderSentEmails(): Promise<
+  EmailSenderSentRecord[]
+> {
+  return (await readEmailSenderSettings()).sentEmails;
 }
 
-export function getEmailSenderVaultKey(
+export async function getEmailSenderVaultKey(
   keyId: string,
-): EmailSenderApiKeyRecord | null {
+): Promise<EmailSenderApiKeyRecord | null> {
   return (
-    readEmailSenderSettings().apiKeyVault.find((entry) => entry.id === keyId) ??
-    null
+    (await readEmailSenderSettings()).apiKeyVault.find(
+      (entry) => entry.id === keyId,
+    ) ?? null
   );
 }
 
-export function mergeEmailSenderSettings(
+export async function mergeEmailSenderSettings(
   patch: Partial<EmailSenderSettings>,
-): EmailSenderSettings {
-  const current = readEmailSenderSettings();
+): Promise<EmailSenderSettings> {
+  const current = await readEmailSenderSettings();
   const next: EmailSenderSettings = { ...current };
   if (patch.workerUrl !== undefined) {
     next.workerUrl = patch.workerUrl.trim().replace(/\/$/, "");
@@ -378,8 +387,17 @@ export function mergeEmailSenderSettings(
   if (patch.dashboardAuthTokens !== undefined) {
     next.dashboardAuthTokens = patch.dashboardAuthTokens;
   }
-  writeEmailSenderSettings(next);
+  await writeEmailSenderSettings(next);
   return next;
+}
+
+export async function getEmailSenderSettingsView(): Promise<EmailSenderSettingsView> {
+  return toEmailSenderSettingsView(await readEmailSenderSettings());
+}
+
+/** Settings view with env-first resolution for dashboard display. */
+export async function getEmailSenderConnectionView(): Promise<EmailSenderSettingsView> {
+  return toEmailSenderSettingsView(await readEmailSenderSettings());
 }
 
 export function toEmailSenderSettingsView(
@@ -400,15 +418,6 @@ export function toEmailSenderSettingsView(
   };
 }
 
-export function getEmailSenderSettingsView(): EmailSenderSettingsView {
-  return toEmailSenderSettingsView(readEmailSenderSettings());
-}
-
-/** Settings view with env-first resolution for dashboard display. */
-export function getEmailSenderConnectionView(): EmailSenderSettingsView {
-  return toEmailSenderSettingsView(readEmailSenderSettings());
-}
-
 export type EmailSenderAdminConfigDetail = EmailSenderSettingsView & {
   cloudflareAccountId: string;
   cloudflareZoneId: string;
@@ -419,9 +428,9 @@ export type EmailSenderAdminConfigDetail = EmailSenderSettingsView & {
 };
 
 /** Full settings for admin UI — includes stored credentials for confirmation. */
-export function getEmailSenderAdminSettingsDetail(): EmailSenderAdminConfigDetail {
-  const settings = readEmailSenderSettings();
-  const connection = getEmailSenderConnectionView();
+export async function getEmailSenderAdminSettingsDetail(): Promise<EmailSenderAdminConfigDetail> {
+  const settings = await readEmailSenderSettings();
+  const connection = await getEmailSenderConnectionView();
   const env = readRelaybaseEnvSettings();
   return {
     ...connection,
@@ -448,8 +457,10 @@ export type RelaybaseDashboardAuthTokenView = {
 /** @deprecated Use RelaybaseDashboardAuthTokenView */
 export type RelaybaseDashboardAdminTokenView = RelaybaseDashboardAuthTokenView;
 
-export function listRelaybaseDashboardAuthTokens(): RelaybaseDashboardAuthTokenView[] {
-  return readEmailSenderSettings().dashboardAuthTokens.map((entry) => ({
+export async function listRelaybaseDashboardAuthTokens(): Promise<
+  RelaybaseDashboardAuthTokenView[]
+> {
+  return (await readEmailSenderSettings()).dashboardAuthTokens.map((entry) => ({
     id: entry.id,
     label: entry.label,
     productId: entry.productId,
@@ -461,10 +472,10 @@ export function listRelaybaseDashboardAuthTokens(): RelaybaseDashboardAuthTokenV
 /** @deprecated Use listRelaybaseDashboardAuthTokens */
 export const listRelaybaseDashboardAdminTokens = listRelaybaseDashboardAuthTokens;
 
-export function issueRelaybaseDashboardAuthToken(params?: {
+export async function issueRelaybaseDashboardAuthToken(params?: {
   label?: string;
   productId?: string;
-}): { record: RelaybaseDashboardAuthTokenRecord; token: string } {
+}): Promise<{ record: RelaybaseDashboardAuthTokenRecord; token: string }> {
   const token = generateRelaybaseAuthToken();
   const record: RelaybaseDashboardAuthTokenRecord = {
     id: crypto.randomUUID(),
@@ -474,8 +485,8 @@ export function issueRelaybaseDashboardAuthToken(params?: {
     token,
     createdAt: new Date().toISOString(),
   };
-  const current = readEmailSenderSettings();
-  writeEmailSenderSettings({
+  const current = await readEmailSenderSettings();
+  await writeEmailSenderSettings({
     ...current,
     dashboardAuthTokens: [...current.dashboardAuthTokens, record],
   });
@@ -485,25 +496,27 @@ export function issueRelaybaseDashboardAuthToken(params?: {
 /** @deprecated Use issueRelaybaseDashboardAuthToken */
 export const issueRelaybaseDashboardAdminToken = issueRelaybaseDashboardAuthToken;
 
-export function revokeRelaybaseDashboardAuthToken(id: string): boolean {
-  const current = readEmailSenderSettings();
+export async function revokeRelaybaseDashboardAuthToken(
+  id: string,
+): Promise<boolean> {
+  const current = await readEmailSenderSettings();
   const next = current.dashboardAuthTokens.filter((entry) => entry.id !== id);
   if (next.length === current.dashboardAuthTokens.length) return false;
-  writeEmailSenderSettings({ ...current, dashboardAuthTokens: next });
+  await writeEmailSenderSettings({ ...current, dashboardAuthTokens: next });
   return true;
 }
 
 /** @deprecated Use revokeRelaybaseDashboardAuthToken */
 export const revokeRelaybaseDashboardAdminToken = revokeRelaybaseDashboardAuthToken;
 
-export function findRelaybaseDashboardAuthToken(
+export async function findRelaybaseDashboardAuthToken(
   token: string,
-): RelaybaseDashboardAuthTokenRecord | null {
+): Promise<RelaybaseDashboardAuthTokenRecord | null> {
   const trimmed = token.trim();
   if (!trimmed || looksLikeCloudflareApiToken(trimmed)) return null;
   if (!looksLikeRelaybaseAuthToken(trimmed)) return null;
   return (
-    readEmailSenderSettings().dashboardAuthTokens.find(
+    (await readEmailSenderSettings()).dashboardAuthTokens.find(
       (entry) => entry.token === trimmed,
     ) ?? null
   );
@@ -512,8 +525,10 @@ export function findRelaybaseDashboardAuthToken(
 /** @deprecated Use findRelaybaseDashboardAuthToken */
 export const findRelaybaseDashboardAdminToken = findRelaybaseDashboardAuthToken;
 
-export function isValidRelaybaseAuthCredential(token: string): boolean {
-  return findRelaybaseDashboardAuthToken(token) !== null;
+export async function isValidRelaybaseAuthCredential(
+  token: string,
+): Promise<boolean> {
+  return (await findRelaybaseDashboardAuthToken(token)) !== null;
 }
 
 /** @deprecated Use isValidRelaybaseAuthCredential */

@@ -32,7 +32,7 @@ export async function DELETE(
         throw error;
       }
     }
-    removeEmailSenderKeyFromVault(keyId);
+    await removeEmailSenderKeyFromVault(keyId);
     return NextResponse.json({ ok: true, id: keyId });
   } catch (error) {
     return relaybaseApiError(error);

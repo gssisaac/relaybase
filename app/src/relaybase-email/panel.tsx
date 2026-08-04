@@ -18,7 +18,6 @@ import {
 import { EmailPageSuspenseFallback } from "@/relaybase-email/components/EmailPageSuspenseFallback";
 import { EmailSettingsKeysView } from "@/relaybase-email/components/EmailSettingsKeysView";
 import { EmailSettingsDomainView } from "@/relaybase-email/components/EmailSettingsDomainView";
-import { EmailSettingsBrandingView } from "@/relaybase-email/components/EmailSettingsBrandingView";
 import { EmailSettingsShell } from "@/relaybase-email/components/EmailSettingsShell";
 import { EmailShell } from "@/relaybase-email/components/EmailShell";
 import { MailListView } from "@/relaybase-email/components/MailListView";
@@ -36,10 +35,19 @@ function EmailIndexRedirect() {
 
 function SettingsIndexRedirect() {
   const router = useRouter();
-  const settingsKeys = usePanelHref("settings", "keys");
+  const settingsDomain = usePanelHref("settings", "domain");
   useEffect(() => {
-    router.replace(settingsKeys);
-  }, [router, settingsKeys]);
+    router.replace(settingsDomain);
+  }, [router, settingsDomain]);
+  return null;
+}
+
+function KeysRedirect() {
+  const router = useRouter();
+  const keys = usePanelHref("keys");
+  useEffect(() => {
+    router.replace(keys);
+  }, [keys, router]);
   return null;
 }
 
@@ -126,11 +134,11 @@ function EmailView({ subPath }: PanelViewProps) {
   const [root, second] = subPath;
 
   if (root === "settings") {
-    if (!second || second === "keys" || second === "aws") {
-      return <EmailSettingsKeysView />;
+    if (second === "keys" || second === "aws") {
+      return <KeysRedirect />;
     }
+    if (!second) return <SettingsIndexRedirect />;
     if (second === "domain") return <EmailSettingsDomainView />;
-    if (second === "branding") return <EmailSettingsBrandingView />;
     return <SettingsIndexRedirect />;
   }
 
@@ -143,6 +151,8 @@ function EmailView({ subPath }: PanelViewProps) {
       return <UserDashboardView />;
     case "domains":
       return <DomainsView />;
+    case "keys":
+      return <EmailSettingsKeysView />;
     case "accounts":
       return <AccountsView />;
     case "audience":

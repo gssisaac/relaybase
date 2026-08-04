@@ -14,7 +14,7 @@ import {
 export async function GET(request: Request) {
   try {
     const userId = await requireSessionUserId();
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
     if (new URL(request.url).searchParams.get("domain") && !domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
     if (!domain) {
       return NextResponse.json(
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     }
 
     const email = `${localPart}@${domain}`.toLowerCase();
-    const cfg = readRelaybaseWorkerConfig();
+    const cfg = await readRelaybaseWorkerConfig();
     if (!cfg) {
       return NextResponse.json(
         {
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
 
     if (!data.addresses.some((a) => a.email.toLowerCase() === email)) {
       data.addresses.push({ email, domain });
-      writeUserEmailData(userId, data);
+      await writeUserEmailData(userId, data);
     }
     return NextResponse.json({ address: { email, domain } });
   } catch (error) {
@@ -103,7 +103,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "email is required" }, { status: 400 });
     }
 
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     const index = data.addresses.findIndex(
       (a) => a.email.toLowerCase() === email,
     );
@@ -125,7 +125,7 @@ export async function PATCH(request: Request) {
         domain: current.domain,
         ...(displayName ? { displayName } : {}),
       };
-      writeUserEmailData(userId, data);
+      await writeUserEmailData(userId, data);
     }
 
     return NextResponse.json({ address: data.addresses[index] });

@@ -31,10 +31,8 @@ type BrandingDetail = {
   dnsCanApply: boolean;
   dnsApplyHint: string | null;
   dmarcEnforced: boolean;
-  bimiReady: boolean;
   notes: string[];
   dmarc: { name: string; expected: string; found: boolean };
-  bimi: { name: string; expected: string; found: boolean };
 };
 
 type UserBrandingSectionProps = {
@@ -52,36 +50,33 @@ export function UserBrandingSection({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const applyDns = useCallback(
-    async (applyDmarc: boolean, applyBimi: boolean) => {
-      if (!domain) return;
-      setApplying(true);
-      setError(null);
-      setMessage(null);
-      try {
-        const res = await fetch(`${RELAYBASE_API}/branding`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain, applyDmarc, applyBimi }),
-        });
-        const data = (await res.json()) as { error?: string };
-        if (!res.ok) throw new Error(data.error ?? "DNS apply failed");
-        setMessage("Branding DNS updated");
-        onRefresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "DNS apply failed");
-      } finally {
-        setApplying(false);
-      }
-    },
-    [domain, onRefresh],
-  );
+  const applyDns = useCallback(async () => {
+    if (!domain) return;
+    setApplying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`${RELAYBASE_API}/branding`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "DNS apply failed");
+      setMessage("DMARC DNS updated");
+      onRefresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "DNS apply failed");
+    } finally {
+      setApplying(false);
+    }
+  }, [domain, onRefresh]);
 
   if (!domain) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Branding</CardTitle>
+          <CardTitle className="text-sm">DMARC</CardTitle>
           <CardDescription>
             No email domain configured for this user yet.
           </CardDescription>
@@ -94,9 +89,9 @@ export function UserBrandingSection({
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3">
         <div>
-          <CardTitle className="text-sm">Branding</CardTitle>
+          <CardTitle className="text-sm">DMARC</CardTitle>
           <CardDescription>
-            DMARC and BIMI status for{" "}
+            Sender authentication status for{" "}
             <span className="font-mono">{domain}</span>
           </CardDescription>
         </div>
@@ -112,12 +107,6 @@ export function UserBrandingSection({
             <div className="flex flex-wrap gap-2">
               <Badge variant={branding.dmarcEnforced ? "default" : "secondary"}>
                 DMARC {branding.dmarcEnforced ? "enforced" : "not enforced"}
-              </Badge>
-              <Badge variant={branding.bimi.found ? "default" : "secondary"}>
-                BIMI {branding.bimi.found ? "record found" : "missing"}
-              </Badge>
-              <Badge variant={branding.bimiReady ? "default" : "secondary"}>
-                Logo ready {branding.bimiReady ? "yes" : "no"}
               </Badge>
               <Badge variant={branding.dnsConfigured ? "default" : "secondary"}>
                 DNS {branding.dnsConfigured ? "configured" : "pending"}
@@ -137,21 +126,19 @@ export function UserBrandingSection({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[branding.dmarc, branding.bimi].map((record) => (
-                  <TableRow key={record.name}>
-                    <TableCell className="font-mono text-xs">{record.name}</TableCell>
-                    <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
-                      {record.expected}
-                    </TableCell>
-                    <TableCell>
-                      {record.found ? (
-                        <Badge variant="default">OK</Badge>
-                      ) : (
-                        <Badge variant="secondary">Missing</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <TableRow key={branding.dmarc.name}>
+                  <TableCell className="font-mono text-xs">{branding.dmarc.name}</TableCell>
+                  <TableCell className="max-w-[240px] truncate text-xs text-muted-foreground">
+                    {branding.dmarc.expected}
+                  </TableCell>
+                  <TableCell>
+                    {branding.dmarc.found ? (
+                      <Badge variant="default">OK</Badge>
+                    ) : (
+                      <Badge variant="secondary">Missing</Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
 
@@ -166,32 +153,16 @@ export function UserBrandingSection({
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                variant="outline"
                 disabled={applying || branding.dnsCanApply === false}
-                onClick={() => void applyDns(true, false)}
+                onClick={() => void applyDns()}
               >
                 Apply DMARC
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={applying || branding.dnsCanApply === false}
-                onClick={() => void applyDns(false, true)}
-              >
-                Apply BIMI
-              </Button>
-              <Button
-                size="sm"
-                disabled={applying || branding.dnsCanApply === false}
-                onClick={() => void applyDns(true, true)}
-              >
-                Apply both
               </Button>
             </div>
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Branding status unavailable — check Cloudflare credentials in Settings.
+            DMARC status unavailable — check Cloudflare credentials in Settings.
           </p>
         )}
       </CardContent>

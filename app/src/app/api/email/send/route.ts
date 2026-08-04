@@ -14,7 +14,7 @@ import { readRelaybaseWorkerConfig } from "@/lib/relaybase/worker-client";
 export async function GET(request: Request) {
   try {
     const userId = await requireSessionUserId();
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
     const sent = domain
       ? data.sent.filter((s) => s.domain === domain)
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = readUserEmailData(userId);
+    const data = await readUserEmailData(userId);
     const domain =
       resolveRequestDomain(request, data) ??
       body.from?.split("@")[1]?.toLowerCase() ??
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     const references = body.references?.trim() || undefined;
 
     let messageId = crypto.randomUUID();
-    const workerConfigured = Boolean(readRelaybaseWorkerConfig());
+    const workerConfigured = Boolean(await readRelaybaseWorkerConfig());
 
     if (workerConfigured) {
       const result = await sendViaRelaybaseWorker({
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
       messageId,
     };
     data.sent.unshift(record);
-    writeUserEmailData(userId, data);
+    await writeUserEmailData(userId, data);
     return NextResponse.json({ messageId: record.messageId, sent: record });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";

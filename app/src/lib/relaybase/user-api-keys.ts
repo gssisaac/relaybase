@@ -184,7 +184,7 @@ export async function listUserApiKeys(params: {
         label: key.label,
         keyPrefix: key.keyPrefix,
         apiKey: stored?.key ?? null,
-        active: preferred.get(domain) === key.id || (!preferred.has(domain) && key.active),
+        active: preferred.get(domain) === key.id,
         createdAt: key.createdAt,
         requests: 0,
         errors: 0,
@@ -192,6 +192,15 @@ export async function listUserApiKeys(params: {
         requestSeries: createEmptyBuckets(range),
       } satisfies UserApiKeyRow;
     });
+
+  // If no vault preference for a domain, treat the newest key as active.
+  const seenDomains = new Set<string>();
+  for (const key of keys) {
+    const domain = key.domain.trim().toLowerCase();
+    if (preferred.has(domain) || seenDomains.has(domain)) continue;
+    key.active = true;
+    seenDomains.add(domain);
+  }
 
   const keyIds = new Set(keys.map((key) => key.id));
   const now = Date.now();
@@ -297,6 +306,65 @@ export async function activateUserApiKey(params: {
   const ok = await preferRelaybaseApiKeyRecord(params.id);
   if (!ok) throw new Error("Key not found in vault");
   return { message: `Using key for ${key.domain}` };
+}
+
+/** Issue a replacement key, revoke the old one, and prefer the new secret. */
+export async function rotateUserApiKey(params: {
+  domains: string[];
+  id: string;
+}): Promise<{
+  id: string;
+  apiKey: string;
+  domain: string;
+  label: string | null;
+  createdAt: string;
+  revokedId: string;
+  message: string;
+}> {
+  const cfg = await readRelaybaseWorkerConfig();
+  if (!cfg) {
+    throw new Error("Relaybase worker is not configured");
+  }
+
+  const keys = await listWorkerApiKeys(cfg);
+  const existing = keys.find((entry) => entry.id === params.id);
+  if (!existing || !keyBelongsToUser(existing, domainSet(params.domains))) {
+    throw new Error("Key not found");
+  }
+
+  const created = await createWorkerApiKey(cfg, {
+    domain: existing.domain,
+    label: existing.label ?? undefined,
+  });
+
+  await upsertRelaybaseApiKeyRecord({
+    id: created.id,
+    domain: created.domain,
+    label: created.label,
+    keyPrefix: created.apiKey.replace(/^fes_/, "").slice(0, 8),
+    key: created.apiKey,
+    createdAt: created.createdAt,
+  });
+
+  try {
+    await deleteWorkerApiKey(cfg, params.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!message.includes("(404)") && !message.includes("not found")) {
+      throw error;
+    }
+  }
+  await removeRelaybaseApiKeyRecord(params.id);
+
+  return {
+    id: created.id,
+    apiKey: created.apiKey,
+    domain: created.domain,
+    label: created.label,
+    createdAt: created.createdAt,
+    revokedId: params.id,
+    message: `Rotated API key for ${created.domain}${created.label ? ` (${created.label})` : ""}`,
+  };
 }
 
 export async function collectUserApiStats(params: {

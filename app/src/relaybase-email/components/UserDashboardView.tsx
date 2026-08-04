@@ -25,15 +25,25 @@ type StatsRange = "24h" | "7d" | "30d";
 type UserStatsResponse = {
   domain: string | null;
   range: StatsRange;
+  workerConnected?: boolean;
   totals: {
     addresses: number;
     audience: number;
     broadcasts: number;
     drafts: number;
     sent: number;
+    apiKeys: number;
+    apiKeysUsed: number;
+    requests: number;
+    errors: number;
+    apiEmails: number;
   };
   series: {
     sent: { value: number; label: string }[];
+    apiKeysUsed: { value: number; label: string }[];
+    requests: { value: number; label: string }[];
+    errors: { value: number; label: string }[];
+    apiEmails: { value: number; label: string }[];
   };
 };
 
@@ -43,7 +53,7 @@ const RANGE_OPTIONS: { value: StatsRange; label: string }[] = [
   { value: "30d", label: "30 days" },
 ];
 
-const STAT_CARDS = [
+const WORKSPACE_CARDS = [
   {
     key: "addresses" as const,
     label: "Senders",
@@ -71,6 +81,42 @@ const STAT_CARDS = [
     description: "Outbound messages",
     href: "emails/inbox",
     color: "#22c55e",
+    seriesKey: "sent" as const,
+  },
+];
+
+const API_CARDS = [
+  {
+    key: "apiKeys" as const,
+    label: "API keys",
+    description: "Keys issued for this domain",
+    href: "keys",
+    color: "#a78bfa",
+    seriesKey: "apiKeysUsed" as const,
+  },
+  {
+    key: "requests" as const,
+    label: "Requests",
+    description: "Send API calls in range",
+    href: "keys",
+    color: "#22c55e",
+    seriesKey: "requests" as const,
+  },
+  {
+    key: "errors" as const,
+    label: "Errors",
+    description: "Failed sends in range",
+    href: "keys",
+    color: "#ef4444",
+    seriesKey: "errors" as const,
+  },
+  {
+    key: "apiEmails" as const,
+    label: "API emails",
+    description: "Successful sends via API",
+    href: "keys",
+    color: "#34d399",
+    seriesKey: "apiEmails" as const,
   },
 ];
 
@@ -157,7 +203,7 @@ export function UserDashboardView() {
         </Card>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {RANGE_OPTIONS.map((option) => (
           <Button
             key={option.value}
@@ -168,49 +214,106 @@ export function UserDashboardView() {
             {option.label}
           </Button>
         ))}
+        {stats ? (
+          <Badge variant={stats.workerConnected ? "default" : "secondary"}>
+            {stats.workerConnected ? "Worker connected" : "Worker offline"}
+          </Badge>
+        ) : null}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {STAT_CARDS.map((card) => {
-          const value = stats?.totals[card.key] ?? 0;
-          const series = stats?.series.sent.map((b) => b.value) ?? [];
-          const body = (
-            <>
-              <CardHeader className="pb-2">
-                <CardDescription>{card.description}</CardDescription>
-                <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <SparklineChart
-                  data={card.key === "sent" ? series : []}
-                  color={card.color}
-                  className="h-16"
-                />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{card.label}</span>
-                  {card.key === "broadcasts" && stats ? (
-                    <Badge variant="secondary">{stats.totals.drafts} drafts</Badge>
-                  ) : null}
-                </div>
-              </CardContent>
-            </>
-          );
+      <div>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          Workspace
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {WORKSPACE_CARDS.map((card) => {
+            const value = stats?.totals[card.key] ?? 0;
+            const series =
+              "seriesKey" in card && card.seriesKey
+                ? (stats?.series[card.seriesKey]?.map((b) => b.value) ?? [])
+                : [];
+            const body = (
+              <>
+                <CardHeader className="pb-2">
+                  <CardDescription>{card.description}</CardDescription>
+                  <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <SparklineChart
+                    data={series}
+                    color={card.color}
+                    className="h-16"
+                  />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{card.label}</span>
+                    {card.key === "broadcasts" && stats ? (
+                      <Badge variant="secondary">{stats.totals.drafts} drafts</Badge>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </>
+            );
 
-          return (
-            <Card
-              key={card.key}
-              className={cn(card.href && "transition-colors hover:bg-accent/30")}
-            >
-              {card.href ? (
+            return (
+              <Card
+                key={card.key}
+                className={cn(card.href && "transition-colors hover:bg-accent/30")}
+              >
                 <Link href={`${base}/${card.href}`} className="block">
                   {body}
                 </Link>
-              ) : (
-                body
-              )}
-            </Card>
-          );
-        })}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+          API activity
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {API_CARDS.map((card) => {
+            const value = stats?.totals[card.key] ?? 0;
+            const series =
+              stats?.series[card.seriesKey]?.map((b) => b.value) ?? [];
+            return (
+              <Card
+                key={card.key}
+                className="transition-colors hover:bg-accent/30"
+              >
+                <Link href={`${base}/${card.href}`} className="block">
+                  <CardHeader className="pb-2">
+                    <CardDescription>{card.description}</CardDescription>
+                    <CardTitle
+                      className={cn(
+                        "text-2xl tabular-nums",
+                        card.key === "errors" && value > 0 && "text-destructive",
+                      )}
+                    >
+                      {value.toLocaleString()}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <SparklineChart
+                      data={series}
+                      color={card.color}
+                      className="h-16"
+                    />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{card.label}</span>
+                      {card.key === "apiKeys" && stats ? (
+                        <Badge variant="secondary">
+                          {stats.totals.apiKeysUsed} used
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </CardContent>
+                </Link>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

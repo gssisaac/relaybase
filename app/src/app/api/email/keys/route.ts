@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 
 import {
+  collectUserApiStats,
   createUserApiKey,
   listUserApiKeys,
   parseStatsRange,
 } from "@/lib/relaybase/user-api-keys";
+import { readRelaybaseWorkerConfig } from "@/lib/relaybase/worker-client";
 import {
   readUserEmailData,
   requireSessionUserId,
@@ -22,14 +24,36 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    const result = await listUserApiKeys({
-      domains: data.domains,
-      domain,
-      range,
-    });
+    const [result, stats, worker] = await Promise.all([
+      listUserApiKeys({
+        domains: data.domains,
+        domain,
+        range,
+      }),
+      collectUserApiStats({
+        domains: data.domains,
+        domain,
+        range,
+      }),
+      readRelaybaseWorkerConfig(),
+    ]);
 
     return NextResponse.json({
-      keys: result.keys,
+      keys: result.keys.map(
+        ({ requests: _r, errors: _e, emails: _m, requestSeries: _s, ...key }) =>
+          key,
+      ),
+      stats: {
+        totals: {
+          requests: stats.totals.requests,
+          errors: stats.totals.errors,
+          emails: stats.totals.emails,
+        },
+        series: {
+          requests: stats.series.requests,
+        },
+      },
+      workerUrl: worker?.baseUrl ?? null,
       workerConnected: result.workerConnected,
       range,
       domain,

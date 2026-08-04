@@ -19,7 +19,11 @@ export function EmailShell({ children }: { children: React.ReactNode }) {
           isMailbox ? "overflow-hidden" : "overflow-auto p-4",
         )}
       >
-        {children}
+        {isMailbox ? (
+          children
+        ) : (
+          <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+        )}
       </div>
     </div>
   );

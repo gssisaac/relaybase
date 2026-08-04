@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Globe, Plus, Star, Trash2 } from "lucide-react";
+import { Check, Globe, Plus, RefreshCw, Star, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { useDomain } from "@/lib/dashboard/DomainContext";
@@ -14,6 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 export function DomainsView() {
   const {
@@ -36,20 +44,22 @@ export function DomainsView() {
     addDomain,
     removeDomain,
   } = useDomain();
+  const [addOpen, setAddOpen] = useState(false);
   const [domainInput, setDomainInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [workingDomain, setWorkingDomain] = useState<string | null>(null);
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleAdd() {
+    if (!domainInput.trim()) return;
     setSaving(true);
     setLocalError(null);
     setMessage(null);
     try {
       const result = await addDomain(domainInput);
       setDomainInput("");
+      setAddOpen(false);
       setMessage(result.message);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Failed to add domain");
@@ -95,61 +105,90 @@ export function DomainsView() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight">Domains</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage sending domains. Accounts, email, broadcasts, and audience are
-          scoped to the active domain you choose in each section.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">Domains</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage sending domains. Accounts, email, broadcasts, and audience are
+            scoped to the active domain you choose in each section.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Dialog
+            open={addOpen}
+            onOpenChange={(open) => {
+              setAddOpen(open);
+              if (!open) setDomainInput("");
+            }}
+          >
+            <DialogTrigger>
+              <Button size="sm">
+                <Plus className="size-4" />
+                Add domain
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add domain</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Register a domain you send from and receive mail on. Relaybase
+                  will create the shared inbound R2 bucket if it does not exist
+                  yet.
+                </p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="new-domain">Domain</Label>
+                  <Input
+                    id="new-domain"
+                    value={domainInput}
+                    onChange={(e) => setDomainInput(e.target.value)}
+                    placeholder="example.com"
+                    disabled={saving}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAdd();
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  disabled={saving || !domainInput.trim()}
+                  onClick={() => void handleAdd()}
+                >
+                  {saving ? "Adding…" : "Add domain"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void refresh()}
+            disabled={loading}
+          >
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+          </Button>
+        </div>
       </div>
 
       <EmailAlerts error={error ?? localError} message={message} />
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Add domain</CardTitle>
+          <CardTitle className="text-sm">Your domains</CardTitle>
           <CardDescription>
-            Register a domain you send from and receive mail on. Relaybase will
-          create the shared inbound R2 bucket if it does not exist yet.
+            {activeDomain ? (
+              <>
+                Active: <span className="font-mono">{activeDomain}</span>
+              </>
+            ) : (
+              "No active domain selected"
+            )}
           </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAdd} className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[220px] flex-1 space-y-1.5">
-              <Label htmlFor="new-domain">Domain</Label>
-              <Input
-                id="new-domain"
-                value={domainInput}
-                onChange={(e) => setDomainInput(e.target.value)}
-                placeholder="example.com"
-                disabled={saving}
-              />
-            </div>
-            <Button type="submit" size="sm" disabled={saving || !domainInput.trim()}>
-              <Plus className="mr-1.5 size-3.5" />
-              {saving ? "Adding…" : "Add domain"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-sm">Your domains</CardTitle>
-            <CardDescription>
-              {activeDomain ? (
-                <>
-                  Active: <span className="font-mono">{activeDomain}</span>
-                </>
-              ) : (
-                "No active domain selected"
-              )}
-            </CardDescription>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={loading}>
-            Refresh
-          </Button>
         </CardHeader>
         <CardContent>
           {domains.length ? (
@@ -199,7 +238,9 @@ export function DomainsView() {
                           ) : null}
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Not provisioned</span>
+                        <span className="text-xs text-muted-foreground">
+                          Not provisioned
+                        </span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
@@ -235,10 +276,18 @@ export function DomainsView() {
                 ))}
               </TableBody>
             </Table>
+          ) : !loading ? (
+            <div className="space-y-3 py-2">
+              <p className="text-sm text-muted-foreground">
+                No domains yet. Add one to get started.
+              </p>
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="mr-1.5 size-3.5" />
+                Add domain
+              </Button>
+            </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No domains yet. Add one above to get started.
-            </p>
+            <p className="text-sm text-muted-foreground">Loading domains…</p>
           )}
         </CardContent>
       </Card>

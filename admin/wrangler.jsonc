@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "relaybase-admin",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "relaybase-admin"
+    }
+  ]
+}

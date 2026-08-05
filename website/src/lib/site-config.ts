@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 const defaultSiteUrl = "https://relaybase.xyz";
 const defaultApiUrl = "https://api.relaybase.xyz";
 
@@ -66,4 +68,84 @@ export function getMonthlySavings() {
 
 export function getAnnualSavings() {
   return getMonthlySavings() * 12;
+}
+
+/**
+ * Next.js metadata does not deep-merge nested `openGraph` / `twitter` objects —
+ * a page that sets its own `openGraph` without `images` silently loses the root
+ * OG image, and a page without `twitter` inherits the *root* Twitter card
+ * title/description instead of its own. Every page-level metadata export should
+ * build its social tags through this helper so OG + Twitter always stay in sync.
+ */
+export function pageSocialMeta({
+  title,
+  description,
+  path,
+  type = "website",
+  locale = "en_US",
+  image,
+  article,
+}: {
+  title: string;
+  description: string;
+  path: string;
+  type?: "website" | "article";
+  locale?: string;
+  image?: {
+    url: string;
+    width: number;
+    height: number;
+    alt: string;
+    type?: string;
+  };
+  /** Only used when `type` is `"article"` — sets OG article publish/update dates. */
+  article?: {
+    publishedTime: string;
+    modifiedTime?: string;
+  };
+}): Pick<Metadata, "openGraph" | "twitter"> {
+  const ogImage = image ?? siteConfig.ogImage;
+  const url = `${siteConfig.url}${path}`;
+  const images = [
+    {
+      url: ogImage.url,
+      width: ogImage.width,
+      height: ogImage.height,
+      alt: ogImage.alt,
+      type: "type" in ogImage ? ogImage.type : undefined,
+    },
+  ];
+
+  const openGraph: Metadata["openGraph"] =
+    type === "article"
+      ? {
+          title,
+          description,
+          url,
+          siteName: siteConfig.name,
+          locale,
+          type: "article",
+          publishedTime: article?.publishedTime,
+          modifiedTime: article?.modifiedTime,
+          images,
+        }
+      : {
+          title,
+          description,
+          url,
+          siteName: siteConfig.name,
+          locale,
+          type: "website",
+          images,
+        };
+
+  return {
+    openGraph,
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images,
+    },
+  };
 }

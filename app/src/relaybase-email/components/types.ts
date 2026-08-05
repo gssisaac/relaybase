@@ -82,6 +82,10 @@ export type RoutingActivityEvent = {
   key: string;
   fromEmail: string;
   toEmail: string;
+  /** All To recipients from MIME headers when available. */
+  toEmails?: string[];
+  /** Cc recipients from MIME headers when available. */
+  ccEmails?: string[];
   subject: string;
   status: string;
   action?: string;

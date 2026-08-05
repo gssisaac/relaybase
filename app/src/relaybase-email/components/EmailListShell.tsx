@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { ArrowLeft, Inbox, Search } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -72,14 +73,14 @@ export function ListToolbar({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 border-b border-border px-4 py-2 sm:flex-row sm:items-center">
       <div className="relative min-w-0 flex-1">
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={searchPlaceholder}
-          className="h-9 pl-8"
+          className="h-9 border-0 bg-muted/50 pl-8 shadow-none focus-visible:ring-1"
         />
       </div>
       {trailing ? (
@@ -91,69 +92,132 @@ export function ListToolbar({
 
 export function EmailTableHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_auto] gap-4 border-b border-border bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
+    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] gap-3 border-b border-border bg-muted/20 px-4 py-1.5 text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
       {children}
     </div>
   );
 }
 
 export function EmailTableRow({
+  href,
   onClick,
   primary,
   secondary,
   subject,
+  preview,
   date,
   status,
+  selected,
 }: {
-  onClick: () => void;
+  href?: string;
+  onClick?: () => void;
   primary: string;
   secondary?: string;
   subject: string;
+  preview?: string;
   date: string;
   status?: ReactNode;
+  selected?: boolean;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="grid w-full grid-cols-[1fr_auto_auto] gap-4 border-b border-border px-4 py-3 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/40 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]"
-    >
+  const className = cn(
+    "grid w-full gap-3 border-b border-border px-4 py-2.5 text-left text-sm transition-colors last:border-b-0",
+    status
+      ? "grid-cols-[1fr_auto_auto] sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]"
+      : "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]",
+    selected ? "bg-accent/70" : "hover:bg-muted/50",
+  );
+
+  const body = (
+    <>
       <div className="min-w-0">
-        <p className="truncate font-medium">{primary}</p>
+        <p className="truncate font-medium text-foreground">{primary}</p>
         {secondary ? (
           <p className="truncate text-xs text-muted-foreground">{secondary}</p>
         ) : null}
       </div>
-      <p className="hidden min-w-0 truncate text-muted-foreground sm:block">
-        {subject}
-      </p>
-      <span className="hidden text-xs text-muted-foreground sm:block">{date}</span>
-      <div className="flex items-center justify-end gap-2 sm:min-w-[72px]">
-        <span className="text-xs text-muted-foreground sm:hidden">{date}</span>
-        {status}
+      <div className="min-w-0 truncate">
+        <span className="font-medium text-foreground">
+          {subject || "(no subject)"}
+        </span>
+        {preview ? (
+          <span className="text-muted-foreground">
+            {" — "}
+            {preview}
+          </span>
+        ) : null}
       </div>
+      {status ? (
+        <>
+          <span className="hidden text-xs text-muted-foreground sm:block">
+            {date}
+          </span>
+          <div className="flex items-center justify-end gap-2 sm:min-w-[72px]">
+            <span className="text-xs text-muted-foreground sm:hidden">
+              {date}
+            </span>
+            {status}
+          </div>
+        </>
+      ) : (
+        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+          {date}
+        </span>
+      )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {body}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {body}
     </button>
   );
 }
 
 export function DetailView({
   title,
+  backHref,
   onBack,
   actions,
   children,
 }: {
   title: string;
-  onBack: () => void;
+  backHref?: string;
+  onBack?: () => void;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2">
-          <ArrowLeft className="size-4" />
-          Back
-        </Button>
+      <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+        {backHref ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2"
+            render={<Link href={backHref} />}
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="-ml-2"
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </Button>
+        )}
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</h2>
         {actions}
       </div>

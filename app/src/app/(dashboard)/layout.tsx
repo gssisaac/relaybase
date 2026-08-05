@@ -20,7 +20,7 @@ export default async function DashboardLayout({
   return (
     <SessionProvider userId={userId}>
       <DomainProvider>
-        <div className="flex min-h-svh bg-background">
+        <div className="flex h-svh overflow-hidden bg-background">
           <UserSidebar />
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {children}

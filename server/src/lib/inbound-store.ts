@@ -15,6 +15,10 @@ export type InboundEmailMeta = {
   domain: string;
   fromEmail: string;
   toEmail: string;
+  /** All To recipients from the MIME headers (may include more than `toEmail`). */
+  toEmails?: string[];
+  /** Cc recipients from the MIME headers. */
+  ccEmails?: string[];
   subject: string;
   receivedAt: string;
   messageId: string | null;
@@ -152,11 +156,16 @@ export async function storeInboundEmail(
     decodeMimeHeader(params.subject) ||
     "(no subject)";
 
+  const toEmails = parsed.toEmails.length
+    ? parsed.toEmails
+    : [params.toEmail];
   const record: InboundEmailMeta = {
     id,
     domain,
     fromEmail: params.fromEmail,
     toEmail: params.toEmail,
+    toEmails,
+    ccEmails: parsed.ccEmails,
     subject,
     receivedAt,
     messageId: params.messageId,
@@ -178,6 +187,7 @@ export async function storeInboundEmail(
       ? buildStrippedInboundMime({
           fromEmail: params.fromEmail,
           toEmail: params.toEmail,
+          ccEmails: parsed.ccEmails,
           subject,
           messageId: params.messageId,
           bodyText: parsed.bodyText,
@@ -242,6 +252,22 @@ export async function getInboundEmail(
   return null;
 }
 
+function normalizeRecipientLists(meta: InboundEmailMeta): InboundEmailMeta {
+  const toEmails =
+    meta.toEmails && meta.toEmails.length > 0
+      ? meta.toEmails
+      : meta.toEmail
+        ? [meta.toEmail]
+        : [];
+  const ccEmails = meta.ccEmails ?? [];
+  return {
+    ...meta,
+    attachments: meta.attachments ?? [],
+    toEmails,
+    ccEmails,
+  };
+}
+
 async function getInboundEmailForDomain(
   bucket: R2Bucket,
   domain: string,
@@ -251,7 +277,24 @@ async function getInboundEmailForDomain(
   if (!metaObject) return null;
 
   const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
-  return { ...meta, attachments: meta.attachments ?? [] };
+  const normalized = normalizeRecipientLists(meta);
+  if (meta.toEmails?.length || meta.ccEmails?.length) {
+    return normalized;
+  }
+
+  // Backfill To/Cc from archived raw MIME for older messages.
+  const rawObject = await bucket.get(rawObjectKey(domain, id));
+  if (!rawObject) return normalized;
+  try {
+    const parsed = await parseInboundMime(await rawObject.arrayBuffer());
+    return {
+      ...normalized,
+      toEmails: parsed.toEmails.length ? parsed.toEmails : normalized.toEmails,
+      ccEmails: parsed.ccEmails,
+    };
+  } catch {
+    return normalized;
+  }
 }
 
 export async function getInboundAttachment(

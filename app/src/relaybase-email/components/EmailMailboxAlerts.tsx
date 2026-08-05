@@ -18,12 +18,19 @@ export function EmailMailboxAlerts({
   const { domains, loading } = useDomain();
   const { config, error, message } = useEmailMailbox();
 
+  const showNoDomains = !loading && domains.length === 0;
+  const showRelaybase = Boolean(config) && !config?.relaybaseConfigured;
+  const showInbound = section === "inbox" && Boolean(config);
+  const hasContent = showNoDomains || Boolean(error) || Boolean(message) || showRelaybase || showInbound;
+
+  if (!hasContent) return null;
+
   return (
     <div className="shrink-0 space-y-3 border-b border-border px-4 py-3">
-      <NoDomainsAlert show={!loading && domains.length === 0} />
+      <NoDomainsAlert show={showNoDomains} />
       <EmailAlerts error={error} message={message} />
-      <RelaybaseConfigAlert show={!config?.relaybaseConfigured} />
-      {section === "inbox" ? <InboundR2ConfigAlert config={config} /> : null}
+      <RelaybaseConfigAlert show={showRelaybase} />
+      {showInbound ? <InboundR2ConfigAlert config={config} /> : null}
     </div>
   );
 }

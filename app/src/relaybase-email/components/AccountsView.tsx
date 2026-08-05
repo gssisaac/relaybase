@@ -19,7 +19,6 @@ import {
 import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
-  DetailView,
   EmailListContainer,
   EmailTableHeader,
   EmailTableRow,
@@ -41,12 +40,11 @@ import { Label } from "@/components/ui/label";
 
 export function AccountsView() {
   const productId = useProductId();
-  const { apiBase } = useEmailPaths();
+  const { apiBase, accounts } = useEmailPaths();
   const { activeDomain, domainQuery } = useDomain();
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(
     () =>
       readEmailStale<EmailConfig>(productId, "config") === null &&
@@ -58,7 +56,6 @@ export function AccountsView() {
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [localPart, setLocalPart] = useState("");
-  const [displayName, setDisplayName] = useState("");
 
   const domain = activeDomain ?? config?.domain ?? "";
   const domainKey = activeDomain ?? "none";
@@ -127,38 +124,6 @@ export function AccountsView() {
       }));
   }, [addresses, search]);
 
-  const selectedSender = addresses.find((a) => a.email === selectedKey);
-
-  useEffect(() => {
-    setDisplayName(selectedSender?.displayName ?? "");
-  }, [selectedSender?.displayName, selectedSender?.email]);
-
-  async function saveDisplayName() {
-    if (!selectedSender) return;
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await fetch(`${apiBase}/addresses`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: selectedSender.email,
-          displayName,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to save");
-      setMessage("Display name saved");
-      clearEmailCache(productId, `addresses:${domainKey}`);
-      await refresh(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function addSender() {
     setSaving(true);
     setError(null);
@@ -182,102 +147,64 @@ export function AccountsView() {
     }
   }
 
-  if (selectedKey && selectedSender) {
-    return (
-      <div className="space-y-3">
-        <EmailAlerts error={error} message={message} />
-        <EmailListContainer>
-          <DetailView
-            title={selectedSender.email}
-            onBack={() => setSelectedKey(null)}
-          >
-            <dl className="grid gap-4 text-sm">
-              <div>
-                <dt className="text-xs text-muted-foreground">Address</dt>
-                <dd>{selectedSender.email}</dd>
-                <dd className="mt-1 text-xs text-muted-foreground">
-                  Available for sending (Email Sending) and receiving into
-                  Inbox (Email Routing → Worker) once the domain is onboarded.
-                </dd>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Display name</Label>
-                <Input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="MacPurity Support Team"
-                  className="h-10"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Shown as the From name in recipient inboxes when you send
-                  from this address.
-                </p>
-                <Button
-                  size="sm"
-                  disabled={saving}
-                  onClick={() => void saveDisplayName()}
-                >
-                  {saving ? "Saving…" : "Save display name"}
-                </Button>
-              </div>
-            </dl>
-          </DetailView>
-        </EmailListContainer>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-[min(70vh,560px)] space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <CurrentDomainSelect />
         <div className="flex flex-wrap items-center gap-2">
-        <Dialog open={addOpen} onOpenChange={setAddOpen}>
-          <DialogTrigger>
-            <Button size="sm">
-              <Plus className="size-4" />
-              Add sender
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add sender</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <Alert>
-                <AlertDescription className="text-xs">
-                  Adds a send-from address and creates an Email Routing rule so
-                  replies to this address land in Inbox. No per-address
-                  verification once the domain is onboarded.
-                </AlertDescription>
-              </Alert>
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">Local part</Label>
-                  <Input
-                    value={localPart}
-                    onChange={(e) => setLocalPart(e.target.value)}
-                    placeholder="support"
-                  />
-                </div>
-                <span className="pb-2 text-sm text-muted-foreground">
-                  @{domain}
-                </span>
-              </div>
-              <Button
-                className="w-full"
-                size="sm"
-                disabled={saving || !localPart.trim() || !domain}
-                onClick={addSender}
-              >
-                {saving ? "Adding…" : "Add"}
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger>
+              <Button size="sm">
+                <Plus className="size-4" />
+                Add sender
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-        <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={refreshing}>
-          <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-        </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add sender</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <Alert>
+                  <AlertDescription className="text-xs">
+                    Adds a send-from address and creates an Email Routing rule so
+                    replies to this address land in Inbox. No per-address
+                    verification once the domain is onboarded.
+                  </AlertDescription>
+                </Alert>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs">Local part</Label>
+                    <Input
+                      value={localPart}
+                      onChange={(e) => setLocalPart(e.target.value)}
+                      placeholder="support"
+                    />
+                  </div>
+                  <span className="pb-2 text-sm text-muted-foreground">
+                    @{domain}
+                  </span>
+                </div>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  disabled={saving || !localPart.trim() || !domain}
+                  onClick={addSender}
+                >
+                  {saving ? "Adding…" : "Add"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refresh(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={refreshing ? "size-4 animate-spin" : "size-4"}
+            />
+          </Button>
         </div>
       </div>
 
@@ -298,7 +225,7 @@ export function AccountsView() {
               {rows.map((row) => (
                 <EmailTableRow
                   key={row.key}
-                  onClick={() => setSelectedKey(row.key)}
+                  href={`${accounts}/${encodeURIComponent(row.key)}`}
                   primary={row.primary}
                   subject={row.subject}
                   date=""

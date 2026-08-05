@@ -128,6 +128,7 @@ export function buildMimeMessage(params: {
 export function buildStrippedInboundMime(params: {
   fromEmail: string;
   toEmail: string;
+  ccEmails?: string[];
   subject: string;
   messageId: string | null;
   bodyText: string;
@@ -142,6 +143,7 @@ export function buildStrippedInboundMime(params: {
   const mime = buildMimeMessage({
     from: params.fromEmail,
     to: params.toEmail,
+    cc: params.ccEmails?.length ? params.ccEmails : undefined,
     subject: params.subject,
     text: params.bodyText || "(no text body)",
     html: params.bodyHtml ?? undefined,

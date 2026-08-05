@@ -3,20 +3,12 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 import type { Address } from "./types";
 
 export function ComposeForm({
   sendFrom,
-  setSendFrom,
   addresses,
   sendTo,
   setSendTo,
@@ -30,7 +22,6 @@ export function ComposeForm({
   onSend,
 }: {
   sendFrom: string;
-  setSendFrom: (v: string) => void;
   addresses: Address[];
   sendTo: string;
   setSendTo: (v: string) => void;
@@ -45,29 +36,18 @@ export function ComposeForm({
 }) {
   const selected = addresses.find((a) => a.email === sendFrom);
   const displayName = selected?.displayName?.trim();
+  const fromLabel = displayName
+    ? `${displayName} <${sendFrom}>`
+    : sendFrom || "Select an account from the sidebar";
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="grid shrink-0 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-1">
           <Label className="text-xs">From</Label>
-          <Select
-            value={sendFrom || undefined}
-            onValueChange={(value) => setSendFrom(value ?? "")}
-          >
-            <SelectTrigger className="h-10 w-full">
-              <SelectValue placeholder="Select sender" />
-            </SelectTrigger>
-            <SelectContent>
-              {addresses.map((a) => (
-                <SelectItem key={a.email} value={a.email}>
-                  {a.displayName?.trim()
-                    ? `${a.displayName.trim()} <${a.email}>`
-                    : a.email}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex h-10 items-center rounded-lg border border-border bg-muted/30 px-3 text-sm">
+            <span className="truncate">{fromLabel}</span>
+          </div>
           {displayName ? (
             <p className="text-xs text-muted-foreground">
               Recipients will see: {displayName}
@@ -76,7 +56,11 @@ export function ComposeForm({
             <p className="text-xs text-muted-foreground">
               No display name set — edit this account under Accounts.
             </p>
-          ) : null}
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Choose Compose under an account in the sidebar.
+            </p>
+          )}
         </div>
         <div className="space-y-1.5 sm:col-span-1">
           <Label className="text-xs">To</Label>
@@ -99,25 +83,27 @@ export function ComposeForm({
             className="h-10"
           />
         </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label className="text-xs">Subject</Label>
+          <Input
+            value={sendSubject}
+            onChange={(e) => setSendSubject(e.target.value)}
+            className="h-10"
+          />
+        </div>
       </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs">Subject</Label>
-        <Input
-          value={sendSubject}
-          onChange={(e) => setSendSubject(e.target.value)}
-          className="h-10"
-        />
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
-        <Label className="text-xs">Message</Label>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+        <Label className="shrink-0 text-xs">Message</Label>
         <Textarea
           value={sendText}
           onChange={(e) => setSendText(e.target.value)}
-          rows={16}
-          className="min-h-[280px] flex-1 resize-y"
+          className="min-h-0 flex-1 resize-none overflow-y-auto"
+          style={{ fieldSizing: "fixed" }}
         />
       </div>
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+
+      <div className="flex shrink-0 justify-end gap-2 border-t border-border pt-4">
         <Button
           size="sm"
           onClick={onSend}

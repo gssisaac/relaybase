@@ -1,4 +1,4 @@
-import PostalMime, { decodeWords } from "postal-mime";
+import PostalMime, { decodeWords, type Address } from "postal-mime";
 
 export function decodeMimeHeader(value: string | null | undefined): string {
   if (!value?.trim()) return "";
@@ -19,8 +19,32 @@ export type ParsedInboundEmail = {
   subject: string;
   bodyText: string;
   bodyHtml: string | null;
+  toEmails: string[];
+  ccEmails: string[];
   attachments: ParsedAttachment[];
 };
+
+function collectAddresses(entries: Address[] | undefined): string[] {
+  if (!entries?.length) return [];
+  const seen = new Set<string>();
+  const emails: string[] = [];
+  for (const entry of entries) {
+    const mailboxes = entry.group?.length
+      ? entry.group
+      : entry.address
+        ? [{ name: entry.name, address: entry.address }]
+        : [];
+    for (const mailbox of mailboxes) {
+      const address = mailbox.address?.trim();
+      if (!address) continue;
+      const key = address.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      emails.push(address);
+    }
+  }
+  return emails;
+}
 
 function attachmentBytes(content: Uint8Array | ArrayBuffer | string): ArrayBuffer {
   if (typeof content === "string") {
@@ -65,6 +89,8 @@ export async function parseInboundMime(raw: ArrayBuffer): Promise<ParsedInboundE
     subject,
     bodyText: email.text?.trim() ?? "",
     bodyHtml: email.html?.trim() || null,
+    toEmails: collectAddresses(email.to),
+    ccEmails: collectAddresses(email.cc),
     attachments,
   };
 }

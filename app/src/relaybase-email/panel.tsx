@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 
 import type { PanelViewProps } from "@/lib/dashboard/shared/DashboardPageContent";
 import { usePanelHref } from "@/lib/dashboard/shared/ProductContext";
+import { AccountDetailShell, type AccountDetailSection } from "@/relaybase-email/components/AccountDetailShell";
+import { AccountLogsView } from "@/relaybase-email/components/AccountLogsView";
+import { AccountOverviewView } from "@/relaybase-email/components/AccountOverviewView";
+import { AccountSettingsView } from "@/relaybase-email/components/AccountSettingsView";
 import { AccountsView } from "@/relaybase-email/components/AccountsView";
 import { AudienceView } from "@/relaybase-email/components/AudienceView";
 import { BroadcastsView } from "@/relaybase-email/components/BroadcastsView";
@@ -60,28 +64,24 @@ function EmailsInboxRedirect() {
   return null;
 }
 
-function EmailMailboxPage({
-  section,
-  children,
-}: {
-  section: EmailMailboxSection;
-  children: ReactNode;
-}) {
-  return (
-    <EmailMailboxProvider>
-      <EmailMailboxLayout section={section}>{children}</EmailMailboxLayout>
-    </EmailMailboxProvider>
-  );
+function AccountOverviewRedirect({ email }: { email: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(`/accounts/${encodeURIComponent(email)}`);
+  }, [email, router]);
+  return null;
 }
 
 function SuspenseMailListView({
   folder,
+  messageId,
 }: {
   folder: Extract<EmailMailboxSection, "inbox" | "sent">;
+  messageId?: string;
 }) {
   return (
     <Suspense fallback={<EmailPageSuspenseFallback />}>
-      <MailListView folder={folder} />
+      <MailListView folder={folder} messageId={messageId} />
     </Suspense>
   );
 }
@@ -94,36 +94,106 @@ function SuspenseComposeView() {
   );
 }
 
-function EmailMailboxRoutes({ second }: { second?: string }) {
-  if (!second) {
+function mailboxSection(second?: string): EmailMailboxSection | null {
+  if (second === "inbox" || second === "sent" || second === "compose") {
+    return second;
+  }
+  return null;
+}
+
+function EmailMailboxRoutes({
+  second,
+  rest,
+}: {
+  second?: string;
+  rest: string[];
+}) {
+  const section = mailboxSection(second);
+  if (!section) {
     return <EmailsInboxRedirect />;
   }
 
-  if (second === "inbox") {
-    return (
-      <EmailMailboxPage section="inbox">
-        <SuspenseMailListView folder="inbox" />
-      </EmailMailboxPage>
-    );
+  const messageId =
+    rest.length > 0
+      ? rest.map((segment) => decodeURIComponent(segment)).join("/")
+      : undefined;
+
+  let page: ReactNode = null;
+  if (section === "inbox") {
+    page = <SuspenseMailListView folder="inbox" messageId={messageId} />;
+  } else if (section === "sent") {
+    page = <SuspenseMailListView folder="sent" messageId={messageId} />;
+  } else {
+    page = <SuspenseComposeView />;
   }
 
-  if (second === "sent") {
-    return (
-      <EmailMailboxPage section="sent">
-        <SuspenseMailListView folder="sent" />
-      </EmailMailboxPage>
-    );
+  return (
+    <EmailMailboxProvider>
+      <Suspense fallback={<EmailPageSuspenseFallback />}>
+        <EmailMailboxLayout section={section}>{page}</EmailMailboxLayout>
+      </Suspense>
+    </EmailMailboxProvider>
+  );
+}
+
+function parseAccountSection(
+  segment?: string,
+): AccountDetailSection {
+  if (
+    segment === "compose" ||
+    segment === "inbox" ||
+    segment === "sent" ||
+    segment === "logs" ||
+    segment === "settings" ||
+    segment === "overview"
+  ) {
+    return segment === "overview" ? "overview" : segment;
+  }
+  return "overview";
+}
+
+function AccountDetailRoutes({
+  email,
+  rest,
+}: {
+  email: string;
+  rest: string[];
+}) {
+  const [sectionSegment, ...tail] = rest;
+  const section = parseAccountSection(sectionSegment);
+
+  // /accounts/:email/overview → canonicalize to /accounts/:email
+  if (sectionSegment === "overview") {
+    return <AccountOverviewRedirect email={email} />;
   }
 
-  if (second === "compose") {
-    return (
-      <EmailMailboxPage section="compose">
-        <SuspenseComposeView />
-      </EmailMailboxPage>
-    );
+  const messageId =
+    (section === "inbox" || section === "sent") && tail.length > 0
+      ? tail.map((segment) => decodeURIComponent(segment)).join("/")
+      : undefined;
+
+  let page: ReactNode = null;
+  if (section === "overview") {
+    page = <AccountOverviewView email={email} />;
+  } else if (section === "compose") {
+    page = <SuspenseComposeView />;
+  } else if (section === "inbox") {
+    page = <SuspenseMailListView folder="inbox" messageId={messageId} />;
+  } else if (section === "sent") {
+    page = <SuspenseMailListView folder="sent" messageId={messageId} />;
+  } else if (section === "logs") {
+    page = <AccountLogsView email={email} />;
+  } else {
+    page = <AccountSettingsView email={email} />;
   }
 
-  return <EmailsInboxRedirect />;
+  return (
+    <EmailMailboxProvider>
+      <AccountDetailShell email={email} section={section}>
+        {page}
+      </AccountDetailShell>
+    </EmailMailboxProvider>
+  );
 }
 
 function EmailView({ subPath }: PanelViewProps) {
@@ -131,7 +201,7 @@ function EmailView({ subPath }: PanelViewProps) {
     return <EmailIndexRedirect />;
   }
 
-  const [root, second] = subPath;
+  const [root, second, ...rest] = subPath;
 
   if (root === "settings") {
     if (second === "keys" || second === "aws") {
@@ -143,7 +213,14 @@ function EmailView({ subPath }: PanelViewProps) {
   }
 
   if (root === "emails") {
-    return <EmailMailboxRoutes second={second} />;
+    return <EmailMailboxRoutes second={second} rest={rest} />;
+  }
+
+  if (root === "accounts") {
+    if (!second) return <AccountsView />;
+    const email = decodeURIComponent(second);
+    if (!email.includes("@")) return <AccountsView />;
+    return <AccountDetailRoutes email={email} rest={rest} />;
   }
 
   switch (root) {
@@ -153,8 +230,6 @@ function EmailView({ subPath }: PanelViewProps) {
       return <DomainsView />;
     case "keys":
       return <EmailSettingsKeysView />;
-    case "accounts":
-      return <AccountsView />;
     case "audience":
       return <AudienceView />;
     case "broadcasts":
@@ -169,9 +244,11 @@ function EmailView({ subPath }: PanelViewProps) {
 export function RelaybaseEmailPanelView({ subPath }: PanelViewProps) {
   const [root] = subPath;
   const isSettings = root === "settings";
+  const isAccountDetail = root === "accounts" && subPath.length > 1;
+  const isMailbox = root === "emails" || isAccountDetail;
 
   return (
-    <EmailShell>
+    <EmailShell forceFullBleed={isMailbox}>
       {isSettings ? (
         <EmailSettingsShell>
           <EmailView subPath={subPath} />

@@ -5,11 +5,20 @@ import { usePathname } from "next/navigation";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { cn } from "@/lib/utils";
 
-export function EmailShell({ children }: { children: React.ReactNode }) {
+export function EmailShell({
+  children,
+  forceFullBleed,
+}: {
+  children: React.ReactNode;
+  forceFullBleed?: boolean;
+}) {
   const pathname = usePathname();
-  const { emails } = useEmailPaths();
+  const { emails, accounts } = useEmailPaths();
   const isMailbox =
-    pathname === emails || pathname.startsWith(`${emails}/`);
+    forceFullBleed ||
+    pathname === emails ||
+    pathname.startsWith(`${emails}/`) ||
+    (pathname.startsWith(`${accounts}/`) && pathname !== accounts);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

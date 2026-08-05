@@ -19,6 +19,11 @@ import {
   clearEmailCache,
 } from "@/relaybase-email/components/email-cached-fetch";
 import type { EmailAccountFilter } from "@/relaybase-email/components/EmailAccountSelect";
+import {
+  EMAIL_SEND_FAILED,
+  EMAIL_SEND_STARTED,
+  EMAIL_SEND_SUCCEEDED,
+} from "@/relaybase-email/components/email-send-events";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import type {
@@ -28,6 +33,31 @@ import type {
   SentEmail,
 } from "@/relaybase-email/components/types";
 
+const OPEN_ACCOUNTS_KEY = "relaybase:mailbox-open-accounts";
+
+function readStoredOpenAccounts(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = sessionStorage.getItem(OPEN_ACCOUNTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredOpenAccounts(value: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(OPEN_ACCOUNTS_KEY, JSON.stringify(value));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 type EmailMailboxContextValue = {
   config: EmailConfig | null;
   addresses: Address[];
@@ -35,6 +65,10 @@ type EmailMailboxContextValue = {
   sent: SentEmail[];
   accountFilter: EmailAccountFilter;
   setAccountFilter: (value: EmailAccountFilter) => void;
+  openAccounts: string[];
+  setOpenAccounts: (
+    value: string[] | ((prev: string[]) => string[]),
+  ) => void;
   inboxCount: number;
   sentCount: number;
   loading: boolean;
@@ -60,10 +94,24 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const [sent, setSent] = useState<SentEmail[]>([]);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [accountFilter, setAccountFilter] = useState<EmailAccountFilter>("all");
+  const [openAccounts, setOpenAccountsState] = useState<string[]>(
+    readStoredOpenAccounts,
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const setOpenAccounts = useCallback(
+    (value: string[] | ((prev: string[]) => string[])) => {
+      setOpenAccountsState((prev) => {
+        const next = typeof value === "function" ? value(prev) : value;
+        writeStoredOpenAccounts(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   const dataRef = useRef({ config, activity, sent });
   dataRef.current = { config, activity, sent };
@@ -227,6 +275,35 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
     };
   }, [activeDomain, domainKey, productId, refresh]);
 
+  useEffect(() => {
+    function onSendStarted() {
+      setError(null);
+      setMessage("Sending…");
+    }
+
+    function onSendSucceeded() {
+      setError(null);
+      setMessage("Email sent");
+      clearEmailCache(productId, `sent:${domainKey}`);
+      void refresh(true);
+    }
+
+    function onSendFailed(event: Event) {
+      const detail = (event as CustomEvent<{ error?: string }>).detail;
+      setMessage(null);
+      setError(detail?.error || "Send failed");
+    }
+
+    window.addEventListener(EMAIL_SEND_STARTED, onSendStarted);
+    window.addEventListener(EMAIL_SEND_SUCCEEDED, onSendSucceeded);
+    window.addEventListener(EMAIL_SEND_FAILED, onSendFailed);
+    return () => {
+      window.removeEventListener(EMAIL_SEND_STARTED, onSendStarted);
+      window.removeEventListener(EMAIL_SEND_SUCCEEDED, onSendSucceeded);
+      window.removeEventListener(EMAIL_SEND_FAILED, onSendFailed);
+    };
+  }, [domainKey, productId, refresh]);
+
   const inboxCount = activity.length;
   const sentCount = sent.length;
   const relaybaseOk = config?.relaybaseConfigured ?? false;
@@ -239,6 +316,8 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
       sent,
       accountFilter,
       setAccountFilter,
+      openAccounts,
+      setOpenAccounts,
       inboxCount,
       sentCount,
       loading,
@@ -259,11 +338,13 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
       inboxCount,
       loading,
       message,
+      openAccounts,
       refresh,
       refreshing,
       relaybaseOk,
       sent,
       sentCount,
+      setOpenAccounts,
     ],
   );
 

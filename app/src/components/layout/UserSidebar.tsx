@@ -33,7 +33,7 @@ export function UserSidebar() {
   }
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <aside className="flex h-full w-56 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
       <div className="border-b border-sidebar-border px-4 py-4">
         <Link
           href="/dashboard"

@@ -24,6 +24,7 @@ export function useEmailPaths() {
   const dashboard = usePanelHref("dashboard");
   const domains = usePanelHref("domains");
   const keys = usePanelHref("keys");
+  const accounts = usePanelHref("accounts");
   const emails = usePanelHref("emails");
   const inbox = usePanelHref("emails", "inbox");
   const sent = usePanelHref("emails", "sent");
@@ -39,7 +40,7 @@ export function useEmailPaths() {
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
     { href: domains, label: "Domains", icon: Globe },
     { href: keys, label: "API Keys", icon: KeyRound },
-    { href: usePanelHref("accounts"), label: "Accounts", icon: AtSign },
+    { href: accounts, label: "Accounts", icon: AtSign },
     { href: emails, label: "Emails", icon: Mail },
     { href: usePanelHref("broadcasts"), label: "Broadcasts", icon: Megaphone },
     { href: usePanelHref("audience"), label: "Audience", icon: Users },
@@ -57,6 +58,7 @@ export function useEmailPaths() {
     dashboard,
     domains,
     keys,
+    accounts,
     emails,
     inbox,
     sent,

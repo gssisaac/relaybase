@@ -1,10 +1,13 @@
 import type { MetadataRoute } from "next";
 
+import { getAllResources } from "@/lib/resources";
 import { siteConfig } from "@/lib/site-config";
 
 export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
+  const resources = getAllResources();
+
   return [
     {
       url: siteConfig.url,
@@ -18,5 +21,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.9,
     },
+    {
+      url: `${siteConfig.url}/resources`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    ...resources.map((resource) => ({
+      url: `${siteConfig.url}/resources/${resource.slug}`,
+      lastModified: resource.updated ?? resource.date,
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    })),
   ];
 }

@@ -9,7 +9,7 @@ Monorepo for **Relaybase** — domain-scoped transactional email (send + receive
 | **User app** | `app/` | 32830 | Customer email dashboard (inbox, compose, broadcasts, settings) |
 | **Website** | `website/` | 32828 | Marketing site (static export → Cloudflare) |
 
-Production API: `https://api.relaybase.com` (or your Worker URL). Marketing: [relaybase.com](https://relaybase.com).
+Production API: `https://api.relaybase.xyz`. Marketing: [relaybase.xyz](https://relaybase.xyz).
 
 For product positioning and marketer copy, see **[PRODUCT.md](./PRODUCT.md)**.
 

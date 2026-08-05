@@ -4,7 +4,7 @@
 
 **One-liner:** Relaybase gives product teams every standard email address (`billing@`, `support@`, `privacy@`, and more) on their own domain — send transactional mail, receive inbound mail, and wire it into their stack with a simple API. **$10/month per domain.** Built on Cloudflare.
 
-**Website:** [relaybase.com](https://relaybase.com)
+**Website:** [relaybase.xyz](https://relaybase.xyz)
 
 ---
 

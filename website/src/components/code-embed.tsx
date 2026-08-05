@@ -19,7 +19,7 @@ const codeExamples: Record<TabId, { lang: string; code: string }> = {
   send: {
     lang: "typescript",
     code: `// Send a billing email — one fetch call
-const res = await fetch("https://api.relaybase.com/v1/send", {
+const res = await fetch("https://api.relaybase.xyz/v1/send", {
   method: "POST",
   headers: {
     Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\`,
@@ -40,7 +40,7 @@ const { messageId } = await res.json();`,
     lang: "typescript",
     code: `// Poll for new inbound mail (or use webhooks)
 const res = await fetch(
-  "https://api.relaybase.com/v1/inbox/events?limit=25",
+  "https://api.relaybase.xyz/v1/inbox/events?limit=25",
   { headers: { Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\` } },
 );
 
@@ -49,7 +49,7 @@ const { events } = await res.json();
 for (const event of events) {
   if (event.type === "inbound.email.received") {
     const msg = await fetch(
-      \`https://api.relaybase.com/v1/inbox/messages/\${event.data.messageId}\`,
+      \`https://api.relaybase.xyz/v1/inbox/messages/\${event.data.messageId}\`,
       { headers: { Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\` } },
     );
     // Route to your ticket system, Slack, etc.
@@ -59,7 +59,7 @@ for (const event of events) {
   webhook: {
     lang: "typescript",
     code: `// Register a webhook — push on every inbound email
-await fetch("https://api.relaybase.com/v1/webhooks", {
+await fetch("https://api.relaybase.xyz/v1/webhooks", {
   method: "POST",
   headers: {
     Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\`,

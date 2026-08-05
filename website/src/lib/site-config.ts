@@ -1,4 +1,4 @@
-const defaultSiteUrl = "https://relaybase.com";
+const defaultSiteUrl = "https://relaybase.xyz";
 
 export const siteConfig = {
   name: "Relaybase",

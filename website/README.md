@@ -1,6 +1,6 @@
 # Relaybase marketing site
 
-English marketing site for [Relaybase](https://relaybase.com) — product email infrastructure for builders.
+English marketing site for [Relaybase](https://relaybase.xyz) — product email infrastructure for builders.
 
 ## Getting started
 
@@ -20,7 +20,7 @@ In the Cloudflare project (root directory: `website`):
 
 1. **Environment variables:**
    - `SKIP_DEPENDENCY_INSTALL` = `1`
-   - `NEXT_PUBLIC_SITE_URL` = your public site URL (defaults to `https://relaybase.com`)
+   - `NEXT_PUBLIC_SITE_URL` = your public site URL (defaults to `https://relaybase.xyz`)
    - `NEXT_PUBLIC_GA_MEASUREMENT_ID` = GA4 measurement ID (optional)
 
 2. **Build command:** `npm run build:cf`

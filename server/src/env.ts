@@ -2,6 +2,7 @@ export type Env = {
   KEYS: KVNamespace;
   RELAYBASE_API: KVNamespace;
   INBOUND: R2Bucket;
+  RELAYBASE_WAITLIST: D1Database;
   CF_ACCOUNT_ID: string;
   CF_API_TOKEN: string;
   ADMIN_TOKEN: string;

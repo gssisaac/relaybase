@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Check, Minus, TrendingDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -73,9 +74,18 @@ export function PricingComparison() {
                   <span>{item}</span>
                 </div>
               ))}
-              <Button className="mt-6 w-full" size="lg">
-                Get started — ${relaybaseMonthly}/mo
+              <Button
+                render={<Link href={siteConfig.getStartedPath} />}
+                className="mt-6 w-full"
+                size="lg"
+              >
+                Join waitlist — ${siteConfig.waitlist.monthly}/mo
               </Button>
+              <p className="pt-1 text-center text-xs text-muted-foreground">
+                Waitlist: ${relaybaseMonthly} → ${siteConfig.waitlist.monthly}{" "}
+                ({siteConfig.waitlist.discountPercent}% off) for{" "}
+                {siteConfig.waitlist.durationYears} year
+              </p>
             </CardContent>
           </Card>
 

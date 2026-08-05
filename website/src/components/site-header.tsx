@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
 
 const navItems = [
-  { href: "#addresses", label: "Addresses" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#integrate", label: "Integrate" },
-  { href: "#features", label: "Features" },
-  { href: "#infrastructure", label: "Infrastructure" },
+  { href: "/#addresses", label: "Addresses" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#integrate", label: "Integrate" },
+  { href: "/#features", label: "Features" },
+  { href: "/#infrastructure", label: "Infrastructure" },
 ] as const;
 
 export function SiteHeader() {
@@ -42,7 +42,7 @@ export function SiteHeader() {
           <Badge variant="teal" className="hidden sm:inline-flex">
             ${siteConfig.pricing.monthly}/mo per domain
           </Badge>
-          <Button render={<Link href="#pricing" />} size="sm">
+          <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
             Get started
             <ArrowRight data-icon="inline-end" />
           </Button>

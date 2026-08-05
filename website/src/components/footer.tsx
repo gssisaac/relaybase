@@ -24,24 +24,24 @@ export function Footer() {
             by Cloudflare.
           </p>
 
-          <Button render={<Link href="#pricing" />} size="lg">
-            Start for ${siteConfig.pricing.monthly}/mo
+          <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
+            Join the waitlist — ${siteConfig.waitlist.monthly}/mo
           </Button>
 
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-            <Link href="#addresses" className="hover:text-foreground">
+            <Link href="/#addresses" className="hover:text-foreground">
               Addresses
             </Link>
-            <Link href="#pricing" className="hover:text-foreground">
+            <Link href="/#pricing" className="hover:text-foreground">
               Pricing
             </Link>
-            <Link href="#integrate" className="hover:text-foreground">
+            <Link href="/#integrate" className="hover:text-foreground">
               Integrate
             </Link>
-            <Link href="#features" className="hover:text-foreground">
+            <Link href="/#features" className="hover:text-foreground">
               Features
             </Link>
-            <Link href="#infrastructure" className="hover:text-foreground">
+            <Link href="/#infrastructure" className="hover:text-foreground">
               Infrastructure
             </Link>
           </nav>

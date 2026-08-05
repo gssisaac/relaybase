@@ -24,3 +24,9 @@ preview_id = "619ac20c77cc4722bb2339b59fe297ea"
 [[r2_buckets]]
 binding = "INBOUND"
 bucket_name = "relaybase-inbound"
+
+[[d1_databases]]
+binding = "RELAYBASE_WAITLIST"
+database_name = "relaybase-waitlist"
+database_id = "ce28acf3-9eaa-42f9-b89d-9daa6afb00d4"
+migrations_dir = "migrations"

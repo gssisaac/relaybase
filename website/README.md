@@ -21,6 +21,7 @@ In the Cloudflare project (root directory: `website`):
 1. **Environment variables:**
    - `SKIP_DEPENDENCY_INSTALL` = `1`
    - `NEXT_PUBLIC_SITE_URL` = your public site URL (defaults to `https://relaybase.xyz`)
+   - `NEXT_PUBLIC_RELAYBASE_API_URL` = API base URL for waitlist (defaults to `https://api.relaybase.xyz`)
    - `NEXT_PUBLIC_GA_MEASUREMENT_ID` = GA4 measurement ID (optional)
 
 2. **Build command:** `npm run build:cf`

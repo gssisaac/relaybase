@@ -41,12 +41,12 @@ export function Hero() {
           </p>
 
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button render={<Link href="#pricing" />} size="lg">
-              Start for ${siteConfig.pricing.monthly}/mo
+            <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
+              Join the waitlist — ${siteConfig.waitlist.monthly}/mo
               <ArrowRight data-icon="inline-end" />
             </Button>
             <Button
-              render={<Link href="#integrate" />}
+              render={<Link href="/#integrate" />}
               variant="outline"
               size="lg"
             >

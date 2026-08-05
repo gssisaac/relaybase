@@ -1,4 +1,5 @@
 const defaultSiteUrl = "https://relaybase.xyz";
+const defaultApiUrl = "https://api.relaybase.xyz";
 
 export const siteConfig = {
   name: "Relaybase",
@@ -6,9 +7,17 @@ export const siteConfig = {
   description:
     "Spin up billing, support, privacy, no-reply, hello, and admin addresses for every product you ship — send and receive with a few lines of code. $10/month per domain. Built on Cloudflare.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? defaultSiteUrl,
+  apiUrl: process.env.NEXT_PUBLIC_RELAYBASE_API_URL ?? defaultApiUrl,
+  getStartedPath: "/get-started",
   pricing: {
     monthly: 10,
     currency: "USD",
+  },
+  waitlist: {
+    monthly: 5,
+    discountPercent: 50,
+    durationYears: 1,
+    maxDomains: 50,
   },
   keywords: [
     "Relaybase",

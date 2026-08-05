@@ -1,9 +1,24 @@
 "use client";
 
-import { Check, Globe, Plus, RefreshCw, Star, Trash2 } from "lucide-react";
-import { useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Globe,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Star,
+  Trash2,
+} from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import {
+  useDomain,
+  type DomainOnboardingSummary,
+  type DomainSummary,
+  type OnboardingOverallStatus,
+} from "@/lib/dashboard/DomainContext";
 import { EmailAlerts } from "@/relaybase-email/components/EmailShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +48,63 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
+function onboardingBadgeVariant(
+  status: OnboardingOverallStatus | undefined,
+): "default" | "secondary" | "destructive" | "outline" {
+  switch (status) {
+    case "ready":
+      return "default";
+    case "failed":
+      return "destructive";
+    case "waiting":
+      return "outline";
+    case "running":
+      return "secondary";
+    default:
+      return "outline";
+  }
+}
+
+function onboardingLabel(onboarding: DomainOnboardingSummary | null): string {
+  if (!onboarding) return "Not started";
+  switch (onboarding.status) {
+    case "ready":
+      return "Ready";
+    case "running":
+      return onboarding.currentStepLabel
+        ? `Running · ${onboarding.currentStepLabel}`
+        : "Running";
+    case "waiting":
+      return "Waiting for DNS";
+    case "failed":
+      return "Failed";
+    default:
+      return "Idle";
+  }
+}
+
+function stepStatusClass(status: string): string {
+  switch (status) {
+    case "succeeded":
+      return "text-foreground";
+    case "running":
+      return "text-foreground";
+    case "waiting":
+      return "text-amber-700 dark:text-amber-400";
+    case "failed":
+      return "text-destructive";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+function needsPolling(domains: DomainSummary[]): boolean {
+  return domains.some(
+    (d) =>
+      d.onboarding?.status === "running" || d.onboarding?.status === "waiting",
+  );
+}
+
 export function DomainsView() {
   const {
     domains,
@@ -43,6 +115,9 @@ export function DomainsView() {
     setActiveDomain,
     addDomain,
     removeDomain,
+    startOnboarding,
+    advanceOnboarding,
+    retryOnboarding,
   } = useDomain();
   const [addOpen, setAddOpen] = useState(false);
   const [domainInput, setDomainInput] = useState("");
@@ -50,6 +125,34 @@ export function DomainsView() {
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [workingDomain, setWorkingDomain] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const domainsRef = useRef(domains);
+  domainsRef.current = domains;
+  const polling = needsPolling(domains);
+
+  useEffect(() => {
+    if (!polling) return;
+
+    const timer = window.setInterval(() => {
+      void (async () => {
+        const pending = domainsRef.current.filter(
+          (d) =>
+            d.onboarding?.status === "running" ||
+            d.onboarding?.status === "waiting",
+        );
+        for (const entry of pending) {
+          try {
+            await advanceOnboarding(entry.domain);
+          } catch {
+            // Keep polling; next tick may recover.
+          }
+        }
+      })();
+    }, 8000);
+
+    return () => window.clearInterval(timer);
+  }, [polling, advanceOnboarding]);
 
   async function handleAdd() {
     if (!domainInput.trim()) return;
@@ -57,10 +160,15 @@ export function DomainsView() {
     setLocalError(null);
     setMessage(null);
     try {
+      const normalized = domainInput.trim().toLowerCase();
       const result = await addDomain(domainInput);
       setDomainInput("");
       setAddOpen(false);
       setMessage(result.message);
+      setExpanded((prev) => ({
+        ...prev,
+        [normalized]: true,
+      }));
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : "Failed to add domain");
     } finally {
@@ -103,14 +211,48 @@ export function DomainsView() {
     }
   }
 
+  async function handleStart(domain: string) {
+    setWorkingDomain(domain);
+    setLocalError(null);
+    setMessage(null);
+    try {
+      const result = await startOnboarding(domain);
+      setMessage(result.message);
+      setExpanded((prev) => ({ ...prev, [domain]: true }));
+    } catch (err) {
+      setLocalError(
+        err instanceof Error ? err.message : "Failed to start onboarding",
+      );
+    } finally {
+      setWorkingDomain(null);
+    }
+  }
+
+  async function handleRetry(domain: string) {
+    setWorkingDomain(domain);
+    setLocalError(null);
+    setMessage(null);
+    try {
+      const result = await retryOnboarding(domain);
+      setMessage(result.message);
+      setExpanded((prev) => ({ ...prev, [domain]: true }));
+    } catch (err) {
+      setLocalError(
+        err instanceof Error ? err.message : "Failed to retry onboarding",
+      );
+    } finally {
+      setWorkingDomain(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Domains</h1>
           <p className="text-sm text-muted-foreground">
-            Manage sending domains. Accounts, email, broadcasts, and audience are
-            scoped to the active domain you choose in each section.
+            Manage sending domains. Adding a domain starts Cloudflare Email
+            Sending onboarding in the background.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -133,9 +275,9 @@ export function DomainsView() {
               </DialogHeader>
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Register a domain you send from and receive mail on. Relaybase
-                  will create the shared inbound R2 bucket if it does not exist
-                  yet.
+                  The domain must already exist as a zone on the Relaybase
+                  Cloudflare account. Onboarding provisions inbound storage,
+                  Email Sending, and Email Routing step by step.
                 </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="new-domain">Domain</Label>
@@ -196,84 +338,199 @@ export function DomainsView() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Domain</TableHead>
+                  <TableHead>Onboarding</TableHead>
                   <TableHead>Senders</TableHead>
                   <TableHead>Audience</TableHead>
-                  <TableHead>Broadcasts</TableHead>
-                  <TableHead>Sent</TableHead>
                   <TableHead>Inbound R2</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {domains.map((entry) => (
-                  <TableRow key={entry.domain}>
-                    <TableCell className="font-mono text-sm">
-                      <div className="flex items-center gap-2">
-                        <Globe className="size-3.5 text-muted-foreground" />
-                        {entry.domain}
-                        {entry.active ? (
-                          <Badge variant="default" className="text-[10px]">
-                            Active
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>{entry.addressCount}</TableCell>
-                    <TableCell>{entry.audienceCount}</TableCell>
-                    <TableCell>{entry.broadcastCount}</TableCell>
-                    <TableCell>{entry.sentCount}</TableCell>
-                    <TableCell>
-                      {entry.r2Provisioned ? (
-                        <div className="space-y-1">
-                          <Badge
-                            variant={entry.r2WorkerReady ? "default" : "secondary"}
-                            className="text-[10px]"
-                          >
-                            {entry.r2WorkerReady ? "R2 ready" : "R2 provisioned"}
-                          </Badge>
-                          {entry.r2BucketName ? (
-                            <p className="font-mono text-[10px] text-muted-foreground">
-                              {entry.r2BucketName}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          Not provisioned
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {!entry.active ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={workingDomain === entry.domain}
-                            onClick={() => void handleSetActive(entry.domain)}
-                          >
-                            <Star className="mr-1 size-3.5" />
-                            Set active
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="outline" disabled>
-                            <Check className="mr-1 size-3.5" />
-                            Active
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={workingDomain === entry.domain}
-                          onClick={() => void handleRemove(entry.domain)}
-                        >
-                          <Trash2 className="mr-1 size-3.5" />
-                          Remove
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {domains.map((entry) => {
+                  const isExpanded = Boolean(expanded[entry.domain]);
+                  const onboarding = entry.onboarding;
+                  return (
+                    <Fragment key={entry.domain}>
+                      <TableRow>
+                        <TableCell className="font-mono text-sm">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() =>
+                                setExpanded((prev) => ({
+                                  ...prev,
+                                  [entry.domain]: !prev[entry.domain],
+                                }))
+                              }
+                              aria-label={
+                                isExpanded
+                                  ? "Collapse onboarding steps"
+                                  : "Expand onboarding steps"
+                              }
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="size-3.5" />
+                              ) : (
+                                <ChevronRight className="size-3.5" />
+                              )}
+                            </Button>
+                            <Globe className="size-3.5 text-muted-foreground" />
+                            {entry.domain}
+                            {entry.active ? (
+                              <Badge variant="default" className="text-[10px]">
+                                Active
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge
+                              variant={onboardingBadgeVariant(onboarding?.status)}
+                              className="text-[10px]"
+                            >
+                              {onboardingLabel(onboarding)}
+                            </Badge>
+                            {onboarding?.status === "failed" &&
+                            onboarding.lastError ? (
+                              <p className="max-w-[220px] text-[10px] text-destructive">
+                                {onboarding.lastError}
+                              </p>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>{entry.addressCount}</TableCell>
+                        <TableCell>{entry.audienceCount}</TableCell>
+                        <TableCell>
+                          {entry.r2Provisioned ? (
+                            <div className="space-y-1">
+                              <Badge
+                                variant={
+                                  entry.r2WorkerReady ? "default" : "secondary"
+                                }
+                                className="text-[10px]"
+                              >
+                                {entry.r2WorkerReady
+                                  ? "R2 ready"
+                                  : "R2 provisioned"}
+                              </Badge>
+                              {entry.r2BucketName ? (
+                                <p className="font-mono text-[10px] text-muted-foreground">
+                                  {entry.r2BucketName}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Not provisioned
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {!onboarding ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={workingDomain === entry.domain}
+                                onClick={() => void handleStart(entry.domain)}
+                              >
+                                Start onboarding
+                              </Button>
+                            ) : null}
+                            {onboarding?.status === "failed" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={workingDomain === entry.domain}
+                                onClick={() => void handleRetry(entry.domain)}
+                              >
+                                <RotateCcw className="mr-1 size-3.5" />
+                                Retry
+                              </Button>
+                            ) : null}
+                            {!entry.active ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={workingDomain === entry.domain}
+                                onClick={() => void handleSetActive(entry.domain)}
+                              >
+                                <Star className="mr-1 size-3.5" />
+                                Set active
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" disabled>
+                                <Check className="mr-1 size-3.5" />
+                                Active
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={workingDomain === entry.domain}
+                              onClick={() => void handleRemove(entry.domain)}
+                            >
+                              <Trash2 className="mr-1 size-3.5" />
+                              Remove
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="bg-muted/30">
+                            <div className="space-y-2 py-1">
+                              <p className="text-xs font-medium">
+                                Onboarding steps
+                              </p>
+                              {onboarding?.steps?.length ? (
+                                <ol className="space-y-1.5">
+                                  {onboarding.steps.map((step, index) => (
+                                    <li
+                                      key={step.id}
+                                      className={cn(
+                                        "flex items-start gap-2 text-xs",
+                                        stepStatusClass(step.status),
+                                      )}
+                                    >
+                                      <span className="mt-0.5 w-4 shrink-0 text-muted-foreground">
+                                        {index + 1}.
+                                      </span>
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span>{step.label}</span>
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px] capitalize"
+                                          >
+                                            {step.status}
+                                          </Badge>
+                                        </div>
+                                        {step.error ? (
+                                          <p className="mt-0.5 text-[10px] text-destructive">
+                                            {step.error}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  Onboarding has not started for this domain.
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </TableBody>
             </Table>
           ) : !loading ? (

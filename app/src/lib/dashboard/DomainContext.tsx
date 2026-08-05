@@ -4,6 +4,38 @@ import * as React from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 
+export type OnboardingStepStatus =
+  | "pending"
+  | "running"
+  | "waiting"
+  | "succeeded"
+  | "failed";
+
+export type OnboardingOverallStatus =
+  | "idle"
+  | "running"
+  | "waiting"
+  | "ready"
+  | "failed";
+
+export type DomainOnboardingStep = {
+  id: string;
+  label: string;
+  status: OnboardingStepStatus;
+  error?: string | null;
+  updatedAt?: string;
+};
+
+export type DomainOnboardingSummary = {
+  status: OnboardingOverallStatus;
+  currentStep: string | null;
+  currentStepLabel: string | null;
+  lastError: string | null;
+  zoneId: string | null;
+  sendingSubdomainId: string | null;
+  steps: DomainOnboardingStep[];
+};
+
 export type DomainSummary = {
   domain: string;
   active: boolean;
@@ -14,6 +46,7 @@ export type DomainSummary = {
   r2Provisioned: boolean;
   r2BucketName: string | null;
   r2WorkerReady: boolean;
+  onboarding: DomainOnboardingSummary | null;
 };
 
 type DomainContextValue = {
@@ -25,10 +58,40 @@ type DomainContextValue = {
   setActiveDomain: (domain: string) => Promise<void>;
   addDomain: (domain: string) => Promise<{ message: string }>;
   removeDomain: (domain: string) => Promise<void>;
+  startOnboarding: (domain: string) => Promise<{ message: string }>;
+  advanceOnboarding: (domain: string) => Promise<{ message: string }>;
+  retryOnboarding: (domain: string) => Promise<{ message: string }>;
   domainQuery: (extra?: Record<string, string>) => string;
 };
 
 const DomainContext = React.createContext<DomainContextValue | null>(null);
+
+async function postOnboard(
+  domain: string,
+  action: "start" | "advance" | "retry",
+): Promise<{
+  domains: DomainSummary[];
+  activeDomain: string | null;
+  message: string;
+}> {
+  const res = await fetch("/api/email/domains/onboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain, action }),
+  });
+  const data = (await res.json()) as {
+    domains?: DomainSummary[];
+    activeDomain?: string | null;
+    message?: string;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error ?? "Onboarding request failed");
+  return {
+    domains: data.domains ?? [],
+    activeDomain: data.activeDomain ?? null,
+    message: data.message ?? "Onboarding updated",
+  };
+}
 
 export function DomainProvider({ children }: { children: React.ReactNode }) {
   const userId = useProductId();
@@ -120,6 +183,30 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
     setActiveDomainState(data.activeDomain ?? null);
   }, []);
 
+  const startOnboarding = React.useCallback(async (domain: string) => {
+    setError(null);
+    const result = await postOnboard(domain, "start");
+    setDomains(result.domains);
+    setActiveDomainState(result.activeDomain);
+    return { message: result.message };
+  }, []);
+
+  const advanceOnboarding = React.useCallback(async (domain: string) => {
+    setError(null);
+    const result = await postOnboard(domain, "advance");
+    setDomains(result.domains);
+    setActiveDomainState(result.activeDomain);
+    return { message: result.message };
+  }, []);
+
+  const retryOnboarding = React.useCallback(async (domain: string) => {
+    setError(null);
+    const result = await postOnboard(domain, "retry");
+    setDomains(result.domains);
+    setActiveDomainState(result.activeDomain);
+    return { message: result.message };
+  }, []);
+
   const domainQuery = React.useCallback(
     (extra?: Record<string, string>) => {
       const params = new URLSearchParams();
@@ -145,6 +232,9 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
       setActiveDomain,
       addDomain,
       removeDomain,
+      startOnboarding,
+      advanceOnboarding,
+      retryOnboarding,
       domainQuery,
     }),
     [
@@ -156,6 +246,9 @@ export function DomainProvider({ children }: { children: React.ReactNode }) {
       setActiveDomain,
       addDomain,
       removeDomain,
+      startOnboarding,
+      advanceOnboarding,
+      retryOnboarding,
       domainQuery,
     ],
   );

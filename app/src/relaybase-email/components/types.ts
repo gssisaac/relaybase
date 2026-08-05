@@ -71,6 +71,18 @@ export type DomainStatus = {
     expected: string;
     found: boolean;
   }>;
+  onboarding?: {
+    status: string;
+    currentStep: string | null;
+    lastError: string | null;
+    steps: Array<{
+      id: string;
+      label: string;
+      status: string;
+      error?: string | null;
+      updatedAt?: string;
+    }>;
+  } | null;
 };
 
 export type Address = {

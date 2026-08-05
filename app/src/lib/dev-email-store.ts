@@ -68,10 +68,63 @@ export type DomainR2Record = {
   provisionedAt: string;
 };
 
+export type OnboardingStepId =
+  | "resolve_zone"
+  | "inbound_r2"
+  | "sending_onboard"
+  | "sending_dns"
+  | "sending_enabled"
+  | "routing_enable"
+  | "ready";
+
+export type OnboardingStepStatus =
+  | "pending"
+  | "running"
+  | "waiting"
+  | "succeeded"
+  | "failed";
+
+export type OnboardingOverallStatus =
+  | "idle"
+  | "running"
+  | "waiting"
+  | "ready"
+  | "failed";
+
+export type DomainOnboardingStep = {
+  id: OnboardingStepId;
+  label: string;
+  status: OnboardingStepStatus;
+  error?: string | null;
+  updatedAt?: string;
+};
+
+export type DomainOnboardingRecord = {
+  status: OnboardingOverallStatus;
+  currentStep: OnboardingStepId | null;
+  steps: DomainOnboardingStep[];
+  zoneId?: string | null;
+  sendingSubdomainId?: string | null;
+  returnPathDomain?: string | null;
+  lastError?: string | null;
+  updatedAt: string;
+};
+
+export type DomainOnboardingSummary = {
+  status: OnboardingOverallStatus;
+  currentStep: OnboardingStepId | null;
+  currentStepLabel: string | null;
+  lastError: string | null;
+  zoneId: string | null;
+  sendingSubdomainId: string | null;
+  steps: DomainOnboardingStep[];
+};
+
 export type DevUserEmailData = {
   config: DevEmailConfig;
   domains: string[];
   domainR2?: Record<string, DomainR2Record>;
+  domainOnboarding?: Record<string, DomainOnboardingRecord>;
   addresses: DevAddress[];
   audience: DevAudienceContact[];
   broadcasts: DevBroadcast[];
@@ -88,6 +141,7 @@ export type DomainSummary = {
   r2Provisioned: boolean;
   r2BucketName: string | null;
   r2WorkerReady: boolean;
+  onboarding: DomainOnboardingSummary | null;
 };
 
 function safeUserId(userId: string): string {
@@ -102,6 +156,57 @@ function dataFile(userId: string): string {
   return path.join(process.cwd(), "..", "data", "users", `${safeUserId(userId)}.json`);
 }
 
+export const ONBOARDING_STEP_DEFS: Array<{
+  id: OnboardingStepId;
+  label: string;
+}> = [
+  { id: "resolve_zone", label: "Resolve Cloudflare zone" },
+  { id: "inbound_r2", label: "Provision inbound R2" },
+  { id: "sending_onboard", label: "Onboard Email Sending" },
+  { id: "sending_dns", label: "Verify sending DNS" },
+  { id: "sending_enabled", label: "Enable Email Sending" },
+  { id: "routing_enable", label: "Enable Email Routing" },
+  { id: "ready", label: "Ready" },
+];
+
+export function createInitialOnboardingRecord(): DomainOnboardingRecord {
+  const now = new Date().toISOString();
+  return {
+    status: "running",
+    currentStep: "resolve_zone",
+    steps: ONBOARDING_STEP_DEFS.map((step) => ({
+      id: step.id,
+      label: step.label,
+      status: "pending",
+      error: null,
+      updatedAt: now,
+    })),
+    zoneId: null,
+    sendingSubdomainId: null,
+    returnPathDomain: null,
+    lastError: null,
+    updatedAt: now,
+  };
+}
+
+export function summarizeOnboarding(
+  record: DomainOnboardingRecord | undefined,
+): DomainOnboardingSummary | null {
+  if (!record) return null;
+  const current = record.currentStep
+    ? record.steps.find((s) => s.id === record.currentStep)
+    : null;
+  return {
+    status: record.status,
+    currentStep: record.currentStep,
+    currentStepLabel: current?.label ?? null,
+    lastError: record.lastError ?? null,
+    zoneId: record.zoneId ?? null,
+    sendingSubdomainId: record.sendingSubdomainId ?? null,
+    steps: record.steps,
+  };
+}
+
 function emptyData(): DevUserEmailData {
   return {
     config: {
@@ -111,6 +216,7 @@ function emptyData(): DevUserEmailData {
     },
     domains: [],
     domainR2: {},
+    domainOnboarding: {},
     addresses: [],
     audience: [],
     broadcasts: [],
@@ -204,6 +310,7 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
     },
     domains,
     domainR2: base.domainR2 ?? {},
+    domainOnboarding: base.domainOnboarding ?? {},
     addresses,
     audience,
     broadcasts,
@@ -331,6 +438,7 @@ export function listDomainSummaries(data: DevUserEmailData): DomainSummary[] {
       r2Provisioned: Boolean(r2?.provisionedAt),
       r2BucketName: r2?.bucketName ?? null,
       r2WorkerReady: r2?.workerReady ?? false,
+      onboarding: summarizeOnboarding(data.domainOnboarding?.[domain]),
     };
   });
 }
@@ -372,11 +480,56 @@ export async function removeUserDomain(
     delete nextR2[domain];
     data.domainR2 = nextR2;
   }
+  if (data.domainOnboarding?.[domain]) {
+    const nextOnboarding = { ...data.domainOnboarding };
+    delete nextOnboarding[domain];
+    data.domainOnboarding = nextOnboarding;
+  }
 
   const active = getActiveDomain(data);
   data.config.activeDomain = active;
   await writeUserEmailData(userId, data);
   return data;
+}
+
+export async function getDomainOnboarding(
+  userId: string,
+  domainInput: string,
+): Promise<DomainOnboardingRecord | null> {
+  const domain = normalizeDomain(domainInput);
+  const data = await readUserEmailData(userId);
+  return data.domainOnboarding?.[domain] ?? null;
+}
+
+export async function setDomainOnboarding(
+  userId: string,
+  domainInput: string,
+  record: DomainOnboardingRecord,
+): Promise<DevUserEmailData> {
+  const domain = normalizeDomain(domainInput);
+  const data = await readUserEmailData(userId);
+  if (!data.domains.includes(domain)) {
+    throw new Error("Domain not found");
+  }
+  data.domainOnboarding = {
+    ...(data.domainOnboarding ?? {}),
+    [domain]: {
+      ...record,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+  await writeUserEmailData(userId, data);
+  return data;
+}
+
+export async function initDomainOnboarding(
+  userId: string,
+  domainInput: string,
+): Promise<DomainOnboardingRecord> {
+  const domain = normalizeDomain(domainInput);
+  const record = createInitialOnboardingRecord();
+  await setDomainOnboarding(userId, domain, record);
+  return record;
 }
 
 export async function setActiveUserDomain(

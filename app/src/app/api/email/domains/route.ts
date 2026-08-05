@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import {
   addUserDomain,
   listDomainSummaries,
-  markDomainR2Provisioned,
   normalizeDomain,
   readUserEmailData,
   removeUserDomain,
@@ -17,7 +16,7 @@ import {
   logDomainProvisionFailure,
   validationDomainError,
 } from "@/lib/relaybase/domain-provision-errors";
-import { provisionDomainInboundR2 } from "@/lib/relaybase/provision-domain-r2";
+import { startDomainOnboarding } from "@/lib/relaybase/domain-onboard";
 
 function isPlaceholderDomain(domain: string): boolean {
   return !domain || domain === "example.com";
@@ -70,30 +69,22 @@ export async function POST(request: Request) {
       throw duplicateDomainError(domain);
     }
 
-    const r2 = await provisionDomainInboundR2(domain);
     await addUserDomain(userId, domain);
-    await markDomainR2Provisioned(userId, r2);
+    const onboard = await startDomainOnboarding(userId, domain);
 
-    const data = await readUserEmailData(userId);
     return NextResponse.json({
-      domains: listDomainSummaries(data),
-      activeDomain: data.config.activeDomain,
-      r2: {
-        bucketName: r2.bucketName,
-        objectPrefix: r2.objectPrefix,
-        created: r2.bucketCreated,
-        workerReady: r2.workerReady,
-        workerBucketName: r2.workerBucketName,
-      },
-      message: r2.bucketCreated
-        ? `Added ${domain}. Created inbound storage bucket ${r2.bucketName}.`
-        : `Added ${domain}. Inbound storage on ${r2.bucketName} is ready.`,
+      domains: onboard.domains,
+      activeDomain: onboard.activeDomain,
+      onboarding: onboard.onboarding,
+      message: onboard.message.startsWith(domain)
+        ? onboard.message
+        : `Added ${domain}. ${onboard.message}`,
     });
   } catch (error) {
     if (userId && domain) {
       try {
         const data = await readUserEmailData(userId);
-        if (data.domains.includes(domain)) {
+        if (data.domains.includes(domain) && !data.domainOnboarding?.[domain]) {
           await removeUserDomain(userId, domain);
         }
       } catch (rollbackError) {
@@ -113,9 +104,10 @@ export async function POST(request: Request) {
       return provisionErrorResponse(userId, domain, classified);
     }
 
-    const message = classified.userMessage;
-    const status = classified.status;
-    return NextResponse.json({ error: message, code: classified.kind }, { status });
+    return NextResponse.json(
+      { error: classified.userMessage, code: classified.kind },
+      { status: classified.status },
+    );
   }
 }
 

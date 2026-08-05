@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import {
-  getActiveDomain,
   normalizeDomain,
   readUserEmailData,
   requireSessionUserId,
@@ -15,33 +14,24 @@ import {
 export async function POST(request: Request) {
   try {
     const userId = await requireSessionUserId();
-    const body = (await request.json().catch(() => ({}))) as {
+    const body = (await request.json()) as {
       domain?: string;
-      mode?: "sending" | "routing" | "all";
       action?: "start" | "advance" | "retry";
     };
-
-    const data = await readUserEmailData(userId);
-    const requested = normalizeDomain(body.domain ?? "");
-    const domain =
-      (requested && data.domains.includes(requested) ? requested : null) ??
-      getActiveDomain(data);
+    const domain = normalizeDomain(body.domain ?? "");
+    const action = body.action ?? "advance";
 
     if (!domain) {
       return NextResponse.json(
-        { error: "Add a domain before connecting Email Sending." },
+        { error: "domain is required" },
         { status: 400 },
       );
     }
 
-    const existing = data.domainOnboarding?.[domain];
-    const action =
-      body.action ??
-      (existing?.status === "failed"
-        ? "retry"
-        : existing
-          ? "advance"
-          : "start");
+    const data = await readUserEmailData(userId);
+    if (!data.domains.includes(domain)) {
+      return NextResponse.json({ error: "Domain not found" }, { status: 404 });
+    }
 
     const result =
       action === "start"
@@ -51,16 +41,17 @@ export async function POST(request: Request) {
           : await advanceDomainOnboarding(userId, domain);
 
     return NextResponse.json({
-      ok: result.onboarding?.status === "ready",
       domains: result.domains,
       activeDomain: result.activeDomain,
       onboarding: result.onboarding,
       message: result.message,
-      mode: body.mode ?? "all",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
-    const status = message.includes("Not signed in") ? 401 : 500;
+    const status =
+      message.includes("Not signed in") || message.includes("signed in")
+        ? 401
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }

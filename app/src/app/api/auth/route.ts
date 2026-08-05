@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ensureUserAuthToken } from "@/lib/dev-email-store";
-import { listUsers, upsertUser } from "@/lib/users-store";
+import { getUser, upsertUser } from "@/lib/users-store";
 
 export async function POST(request: Request) {
   try {
@@ -9,16 +9,24 @@ export async function POST(request: Request) {
       id?: string;
       action?: "signin" | "register";
     };
+
+    if (body.action === "register") {
+      return NextResponse.json(
+        { error: "Registration is closed" },
+        { status: 403 },
+      );
+    }
+
     const id = body.id?.trim();
     if (!id) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    const existing = (await listUsers()).some((u) => u.id === id);
-    if (body.action === "register" && existing) {
+    const existing = await getUser(id);
+    if (!existing) {
       return NextResponse.json(
-        { error: "This ID is already registered — sign in instead" },
-        { status: 409 },
+        { error: "Account not found" },
+        { status: 404 },
       );
     }
 

@@ -5,6 +5,7 @@ import { UserSidebar } from "@/components/layout/UserSidebar";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { ensureUserAuthToken } from "@/lib/dev-email-store";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
+import { getUser } from "@/lib/users-store";
 
 export default async function DashboardLayout({
   children,
@@ -14,6 +15,9 @@ export default async function DashboardLayout({
   const jar = await cookies();
   const userId = jar.get("relaybase_user")?.value?.trim();
   if (!userId) redirect("/login");
+
+  const user = await getUser(userId);
+  if (!user) redirect("/login");
 
   await ensureUserAuthToken(userId);
 

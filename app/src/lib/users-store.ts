@@ -123,6 +123,12 @@ export async function listUsers(): Promise<UserRecord[]> {
   );
 }
 
+export async function getUser(id: string): Promise<UserRecord | null> {
+  const trimmed = id.trim();
+  if (!trimmed) return null;
+  return readUserRecord(trimmed);
+}
+
 export async function upsertUser(id: string): Promise<UserRecord> {
   const trimmed = id.trim();
   if (!trimmed) throw new Error("User id is required");

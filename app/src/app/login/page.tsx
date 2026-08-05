@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -48,7 +47,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
           <CardDescription>
-            Dev mode — enter your id (email or any text). No password.
+            Enter your existing account id. Registration is closed.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -70,12 +69,6 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading || !id.trim()}>
               {loading ? "Signing in…" : "Sign in"}
             </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              No account?{" "}
-              <Link href="/register" className="text-primary underline-offset-4 hover:underline">
-                Register
-              </Link>
-            </p>
           </form>
         </CardContent>
       </Card>

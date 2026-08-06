@@ -11,10 +11,11 @@ import {
   Settings,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DomainNavSidebar } from "@/relaybase-email/components/DomainNavSidebar";
 import { useEmailMailbox } from "@/relaybase-email/components/EmailMailboxContext";
 import { EmailMailboxAlerts } from "@/relaybase-email/components/EmailMailboxAlerts";
 import {
@@ -57,6 +58,7 @@ export function AccountDetailShell({
   children,
 }: AccountDetailShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { accounts } = useEmailPaths();
   const { addresses, setAccountFilter } = useEmailMailbox();
   const nav = accountMailboxNav(email);
@@ -91,67 +93,74 @@ export function AccountDetailShell({
 
   return (
     <MailboxNavProvider value={nav}>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <header className="shrink-0 border-b border-border">
-          <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="-ml-2"
-              render={<Link href={accounts} />}
-            >
-              <ArrowLeft className="size-4" />
-              Accounts
-            </Button>
-            <div className="flex min-w-0 items-baseline gap-2">
-              <h1 className="truncate text-sm font-semibold">{title}</h1>
-              <span className="truncate text-xs text-muted-foreground">
-                {email}
-              </span>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <DomainNavSidebar
+          onDomainSelect={() => {
+            router.push(accounts);
+          }}
+        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="shrink-0 border-b border-border">
+            <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2"
+                render={<Link href={accounts} />}
+              >
+                <ArrowLeft className="size-4" />
+                Accounts
+              </Button>
+              <div className="flex min-w-0 items-baseline gap-2">
+                <h1 className="truncate text-sm font-semibold">{title}</h1>
+                <span className="truncate text-xs text-muted-foreground">
+                  {email}
+                </span>
+              </div>
             </div>
-          </div>
-          <nav
-            className="flex gap-1 overflow-x-auto px-4 pb-2"
-            aria-label="Account"
-          >
-            {NAV.map((item) => {
-              const href = hrefFor(item.id);
-              const Icon = item.icon;
-              const active =
-                item.id === section ||
-                pathname === href ||
-                (item.id !== "overview" && pathname.startsWith(`${href}/`));
-              return (
-                <Link
-                  key={item.id}
-                  href={href}
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-                  )}
-                >
-                  <Icon className="size-3.5" aria-hidden />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </header>
+            <nav
+              className="flex gap-1 overflow-x-auto px-4 pb-2"
+              aria-label="Account"
+            >
+              {NAV.map((item) => {
+                const href = hrefFor(item.id);
+                const Icon = item.icon;
+                const active =
+                  item.id === section ||
+                  pathname === href ||
+                  (item.id !== "overview" && pathname.startsWith(`${href}/`));
+                return (
+                  <Link
+                    key={item.id}
+                    href={href}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      active
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="size-3.5" aria-hidden />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </header>
 
-        <div
-          className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col",
-            isFullBleed ? "overflow-hidden" : "overflow-auto",
-          )}
-        >
-          {section === "compose" ||
-          section === "inbox" ||
-          section === "sent" ? (
-            <EmailMailboxAlerts section={section} />
-          ) : null}
-          {children}
+          <div
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col",
+              isFullBleed ? "overflow-hidden" : "overflow-auto",
+            )}
+          >
+            {section === "compose" ||
+            section === "inbox" ||
+            section === "sent" ? (
+              <EmailMailboxAlerts section={section} />
+            ) : null}
+            {children}
+          </div>
         </div>
       </div>
     </MailboxNavProvider>

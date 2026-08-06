@@ -91,11 +91,15 @@ export type OnboardingOverallStatus =
   | "ready"
   | "failed";
 
+/** Structured failure reason so the UI can branch without string-matching errors. */
+export type OnboardingFailureCode = "ZONE_NOT_FOUND";
+
 export type DomainOnboardingStep = {
   id: OnboardingStepId;
   label: string;
   status: OnboardingStepStatus;
   error?: string | null;
+  errorCode?: OnboardingFailureCode | null;
   updatedAt?: string;
 };
 
@@ -107,6 +111,7 @@ export type DomainOnboardingRecord = {
   sendingSubdomainId?: string | null;
   returnPathDomain?: string | null;
   lastError?: string | null;
+  lastErrorCode?: OnboardingFailureCode | null;
   updatedAt: string;
 };
 
@@ -115,6 +120,7 @@ export type DomainOnboardingSummary = {
   currentStep: OnboardingStepId | null;
   currentStepLabel: string | null;
   lastError: string | null;
+  lastErrorCode: OnboardingFailureCode | null;
   zoneId: string | null;
   sendingSubdomainId: string | null;
   steps: DomainOnboardingStep[];
@@ -179,12 +185,14 @@ export function createInitialOnboardingRecord(): DomainOnboardingRecord {
       label: step.label,
       status: "pending",
       error: null,
+      errorCode: null,
       updatedAt: now,
     })),
     zoneId: null,
     sendingSubdomainId: null,
     returnPathDomain: null,
     lastError: null,
+    lastErrorCode: null,
     updatedAt: now,
   };
 }
@@ -201,6 +209,7 @@ export function summarizeOnboarding(
     currentStep: record.currentStep,
     currentStepLabel: current?.label ?? null,
     lastError: record.lastError ?? null,
+    lastErrorCode: record.lastErrorCode ?? null,
     zoneId: record.zoneId ?? null,
     sendingSubdomainId: record.sendingSubdomainId ?? null,
     steps: record.steps,
@@ -372,15 +381,11 @@ export async function readUserEmailData(userId: string): Promise<DevUserEmailDat
       const fromKv = migrateUserData(
         JSON.parse(raw) as Partial<DevUserEmailData>,
       );
-      // Local OpenNext can write an empty shell to KV on first login; prefer
-      // monorepo data/users when it still has the real workspace.
+      // Local miniflare can hold an empty shell from first login. Prefer the
+      // monorepo data/users copy for the response, but do not put it back into
+      // KV — with remote bindings that would overwrite production userdata.
       if (userDataLooksEmpty(fromKv) && !userDataLooksEmpty(fromFs)) {
-        const merged = mergeAuthToken(fromFs, fromKv);
-        await kv.put(
-          userDataKvKey(userId),
-          `${JSON.stringify(merged, null, 2)}\n`,
-        );
-        return merged;
+        return mergeAuthToken(fromFs, fromKv);
       }
       return fromKv;
     }

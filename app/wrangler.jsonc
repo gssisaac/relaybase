@@ -21,15 +21,17 @@
   "kv_namespaces": [
     {
       "binding": "RELAYBASE_APP",
-      // Local OpenNext (wrangler dev) uses preview_id — keep it on the same
-      // production namespace so localhost sees the same users/domains as deploy.
+      // Remote bindings: next dev talks to production KV (not local miniflare),
+      // so localhost domains/users match app.relaybase.xyz.
       "id": "dd520e7817004e77aa3f7d01d2ea2fb8",
-      "preview_id": "dd520e7817004e77aa3f7d01d2ea2fb8"
+      "preview_id": "dd520e7817004e77aa3f7d01d2ea2fb8",
+      "remote": true
     },
     {
       "binding": "RELAYBASE_API",
       "id": "605b827fcf4c4f3c80641ec039500c99",
-      "preview_id": "605b827fcf4c4f3c80641ec039500c99"
+      "preview_id": "605b827fcf4c4f3c80641ec039500c99",
+      "remote": true
     }
   ]
 }

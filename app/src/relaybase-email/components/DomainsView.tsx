@@ -15,10 +15,11 @@ import { Fragment, useState } from "react";
 
 import {
   DEFAULT_ADDRESS_LOCAL_PARTS,
+  needsDomainConnect,
   useDomain,
   type DomainOnboardingSummary,
-  type OnboardingOverallStatus,
 } from "@/lib/dashboard/DomainContext";
+import { ConnectDomainDialog } from "@/relaybase-email/components/ConnectDomainDialog";
 import { EmailAlerts } from "@/relaybase-email/components/EmailShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,9 +51,10 @@ import {
 import { cn } from "@/lib/utils";
 
 function onboardingBadgeVariant(
-  status: OnboardingOverallStatus | undefined,
+  onboarding: DomainOnboardingSummary | null,
 ): "default" | "secondary" | "destructive" | "outline" {
-  switch (status) {
+  if (needsDomainConnect(onboarding)) return "outline";
+  switch (onboarding?.status) {
     case "ready":
       return "default";
     case "failed":
@@ -68,6 +70,7 @@ function onboardingBadgeVariant(
 
 function onboardingLabel(onboarding: DomainOnboardingSummary | null): string {
   if (!onboarding) return "Not started";
+  if (needsDomainConnect(onboarding)) return "Connect domain";
   switch (onboarding.status) {
     case "ready":
       return "Ready";
@@ -125,6 +128,17 @@ export function DomainsView() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [workingDomain, setWorkingDomain] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [connectDomain, setConnectDomain] = useState<string | null>(null);
+
+  // The progress banner can request the guide open for a domain (e.g. after
+  // navigating here from another page); the store request takes priority
+  // over any locally-closed dialog until it's explicitly dismissed.
+  const activeConnectDomain = connectDomain ?? store.zoneGuideRequest;
+
+  function closeConnectDomain() {
+    setConnectDomain(null);
+    store.clearZoneGuideRequest();
+  }
 
   function resetAddForm() {
     setDomainInput("");
@@ -232,9 +246,9 @@ export function DomainsView() {
               </DialogHeader>
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  The domain must already exist as a zone on the Relaybase
-                  Cloudflare account. Setup continues in the background — you
-                  can leave this page.
+                  After you add a domain, connect it at your registrar with
+                  the Cloudflare nameservers we&apos;ll show you. Setup
+                  continues in the background — you can leave this page.
                 </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="new-domain">Domain</Label>
@@ -310,36 +324,46 @@ export function DomainsView() {
               </TableHeader>
               <TableBody>
                 {domains.map((entry) => {
-                  const isExpanded = Boolean(expanded[entry.domain]);
                   const onboarding = entry.onboarding;
+                  const awaitingConnect = needsDomainConnect(onboarding);
+                  const isExpanded =
+                    !awaitingConnect &&
+                    (Boolean(expanded[entry.domain]) ||
+                      store.zoneGuideRequest === entry.domain);
+                  const isHardFailed =
+                    onboarding?.status === "failed" && !awaitingConnect;
                   return (
                     <Fragment key={entry.domain}>
                       <TableRow>
                         <TableCell className="font-mono text-sm">
                           <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() =>
-                                setExpanded((prev) => ({
-                                  ...prev,
-                                  [entry.domain]: !prev[entry.domain],
-                                }))
-                              }
-                              aria-label={
-                                isExpanded
-                                  ? "Collapse onboarding steps"
-                                  : "Expand onboarding steps"
-                              }
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="size-3.5" />
-                              ) : (
-                                <ChevronRight className="size-3.5" />
-                              )}
-                            </Button>
+                            {awaitingConnect ? (
+                              <span className="inline-flex h-7 w-7 shrink-0" />
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() =>
+                                  setExpanded((prev) => ({
+                                    ...prev,
+                                    [entry.domain]: !prev[entry.domain],
+                                  }))
+                                }
+                                aria-label={
+                                  isExpanded
+                                    ? "Collapse onboarding steps"
+                                    : "Expand onboarding steps"
+                                }
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="size-3.5" />
+                                ) : (
+                                  <ChevronRight className="size-3.5" />
+                                )}
+                              </Button>
+                            )}
                             <Globe className="size-3.5 text-muted-foreground" />
                             {entry.domain}
                             {entry.active ? (
@@ -350,20 +374,17 @@ export function DomainsView() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <Badge
-                              variant={onboardingBadgeVariant(onboarding?.status)}
-                              className="text-[10px]"
-                            >
-                              {onboardingLabel(onboarding)}
-                            </Badge>
-                            {onboarding?.status === "failed" &&
-                            onboarding.lastError ? (
-                              <p className="max-w-[220px] text-[10px] text-destructive">
-                                {onboarding.lastError}
-                              </p>
-                            ) : null}
-                          </div>
+                          <Badge
+                            variant={onboardingBadgeVariant(onboarding)}
+                            className="text-[10px]"
+                          >
+                            {onboardingLabel(onboarding)}
+                          </Badge>
+                          {isHardFailed && onboarding?.lastError ? (
+                            <p className="mt-1 max-w-[220px] text-[10px] text-destructive">
+                              {onboarding.lastError}
+                            </p>
+                          ) : null}
                         </TableCell>
                         <TableCell>{entry.addressCount}</TableCell>
                         <TableCell>{entry.audienceCount}</TableCell>
@@ -394,7 +415,16 @@ export function DomainsView() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-wrap justify-end gap-2">
-                            {!onboarding ? (
+                            {awaitingConnect ? (
+                              <Button
+                                size="sm"
+                                onClick={() => setConnectDomain(entry.domain)}
+                              >
+                                <Globe className="mr-1 size-3.5" />
+                                Connect domain
+                              </Button>
+                            ) : null}
+                            {!onboarding && !awaitingConnect ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -409,7 +439,7 @@ export function DomainsView() {
                                 Start onboarding
                               </Button>
                             ) : null}
-                            {onboarding?.status === "failed" ? (
+                            {isHardFailed ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -423,6 +453,19 @@ export function DomainsView() {
                               >
                                 <RotateCcw className="mr-1 size-3.5" />
                                 Retry
+                              </Button>
+                            ) : null}
+                            {onboarding &&
+                            onboarding.zoneId &&
+                            onboarding.status !== "ready" &&
+                            !awaitingConnect &&
+                            !isHardFailed ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setConnectDomain(entry.domain)}
+                              >
+                                Nameservers
                               </Button>
                             ) : null}
                             {!entry.active ? (
@@ -521,6 +564,14 @@ export function DomainsView() {
           )}
         </CardContent>
       </Card>
+
+      <ConnectDomainDialog
+        domain={activeConnectDomain ?? ""}
+        open={Boolean(activeConnectDomain)}
+        onOpenChange={(open) => {
+          if (!open) closeConnectDomain();
+        }}
+      />
     </div>
   );
 }

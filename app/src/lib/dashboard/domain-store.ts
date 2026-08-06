@@ -16,11 +16,14 @@ export type OnboardingOverallStatus =
   | "ready"
   | "failed";
 
+export type OnboardingFailureCode = "ZONE_NOT_FOUND";
+
 export type DomainOnboardingStep = {
   id: string;
   label: string;
   status: OnboardingStepStatus;
   error?: string | null;
+  errorCode?: OnboardingFailureCode | null;
   updatedAt?: string;
 };
 
@@ -29,10 +32,38 @@ export type DomainOnboardingSummary = {
   currentStep: string | null;
   currentStepLabel: string | null;
   lastError: string | null;
+  lastErrorCode: OnboardingFailureCode | null;
   zoneId: string | null;
   sendingSubdomainId: string | null;
   steps: DomainOnboardingStep[];
 };
+
+export type ZoneConnectionStatus = {
+  found: boolean;
+  zoneId: string | null;
+  status: string | null;
+  nameServers: string[];
+};
+
+/** Zone missing is a normal "connect domain" state, not a hard failure. */
+export function needsDomainConnect(
+  onboarding: DomainOnboardingSummary | null | undefined,
+): boolean {
+  if (!onboarding) return false;
+  if (onboarding.lastErrorCode === "ZONE_NOT_FOUND") return true;
+  if (onboarding.status !== "failed") return false;
+  const err = onboarding.lastError ?? "";
+  if (err.includes("No Cloudflare zone found")) return true;
+  return Boolean(
+    onboarding.steps?.some(
+      (step) =>
+        step.id === "resolve_zone" &&
+        (step.errorCode === "ZONE_NOT_FOUND" ||
+          (step.status === "failed" &&
+            (step.error ?? "").includes("No Cloudflare zone found"))),
+    ),
+  );
+}
 
 export type DomainSummary = {
   domain: string;
@@ -140,6 +171,8 @@ export class DomainStore {
   loading = true;
   error: string | null = null;
   addJobs: DomainAddJob[] = [];
+  /** Domain the "Connect domain" guide should open for (e.g. from the progress banner). */
+  zoneGuideRequest: string | null = null;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private disposeTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -206,6 +239,10 @@ export class DomainStore {
       }
 
       if (job.phase === "failed") {
+        // Missing Cloudflare site is a normal connect step — don't banner it as Failed.
+        if (needsDomainConnect(onboarding)) {
+          continue;
+        }
         cards.push({
           key: job.id,
           domain: job.domain,
@@ -234,6 +271,9 @@ export class DomainStore {
       }
 
       // onboarding
+      if (needsDomainConnect(onboarding)) {
+        continue;
+      }
       const status =
         onboarding?.status === "waiting"
           ? "waiting"
@@ -507,6 +547,33 @@ export class DomainStore {
     return { message: result.message };
   }
 
+  /** Live Cloudflare zone lookup for the "Connect domain" guide — does not touch onboarding state. */
+  async checkZoneStatus(domain: string): Promise<ZoneConnectionStatus> {
+    const res = await fetch(
+      `/api/email/domains/zone-status?domain=${encodeURIComponent(domain)}`,
+      { cache: "no-store" },
+    );
+    const data = (await res.json()) as ZoneConnectionStatus & {
+      error?: string;
+    };
+    if (!res.ok) throw new Error(data.error ?? "Failed to check domain status");
+    return {
+      found: Boolean(data.found),
+      zoneId: data.zoneId ?? null,
+      status: data.status ?? null,
+      nameServers: data.nameServers ?? [],
+    };
+  }
+
+  /** Ask the Domains page to open the "Connect domain" guide for this domain (e.g. from the progress banner). */
+  requestZoneGuide(domain: string) {
+    this.zoneGuideRequest = domain;
+  }
+
+  clearZoneGuideRequest() {
+    this.zoneGuideRequest = null;
+  }
+
   private async runJob(job: DomainAddJob) {
     try {
       let result: { message: string };
@@ -527,6 +594,13 @@ export class DomainStore {
       const settled = await this.waitForOnboarding(job.domain);
       if (settled === "failed") {
         const summary = this.domains.find((d) => d.domain === job.domain);
+        if (needsDomainConnect(summary?.onboarding)) {
+          // Normal connect-domain state — drop the job quietly (no Failed banner).
+          runInAction(() => {
+            this.addJobs = this.addJobs.filter((j) => j.id !== job.id);
+          });
+          return;
+        }
         throw new Error(
           summary?.onboarding?.lastError ?? "Domain onboarding failed",
         );

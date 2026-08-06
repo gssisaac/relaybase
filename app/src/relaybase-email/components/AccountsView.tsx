@@ -16,7 +16,7 @@ import {
   CloudflareConfigAlert,
   EmailAlerts,
 } from "@/relaybase-email/components/EmailShared";
-import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
+import { DomainScopedLayout } from "@/relaybase-email/components/DomainScopedLayout";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
   EmailListContainer,
@@ -148,9 +148,16 @@ export function AccountsView() {
   }
 
   return (
-    <div className="min-h-[min(70vh,560px)] space-y-4">
+    <DomainScopedLayout>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CurrentDomainSelect />
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            {domain || "Accounts"}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Senders for the selected domain
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger>
@@ -166,8 +173,8 @@ export function AccountsView() {
               <div className="space-y-3">
                 <Alert>
                   <AlertDescription className="text-xs">
-                    Adds a send-from address and creates an Email Routing rule so
-                    replies to this address land in Inbox. No per-address
+                    Adds a send-from address and creates an Email Routing rule
+                    so replies to this address land in Inbox. No per-address
                     verification once the domain is onboarded.
                   </AlertDescription>
                 </Alert>
@@ -247,6 +254,6 @@ export function AccountsView() {
           <div className="min-h-[200px]" />
         )}
       </EmailListContainer>
-    </div>
+    </DomainScopedLayout>
   );
 }

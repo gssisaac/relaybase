@@ -13,12 +13,21 @@ export function EmailShell({
   forceFullBleed?: boolean;
 }) {
   const pathname = usePathname();
-  const { emails, accounts } = useEmailPaths();
+  const { emails, accounts, keys, broadcasts, audience } = useEmailPaths();
+  const domainScoped =
+    pathname === accounts ||
+    pathname.startsWith(`${accounts}/`) ||
+    pathname === keys ||
+    pathname.startsWith(`${keys}/`) ||
+    pathname === broadcasts ||
+    pathname.startsWith(`${broadcasts}/`) ||
+    pathname === audience ||
+    pathname.startsWith(`${audience}/`);
   const isMailbox =
     forceFullBleed ||
     pathname === emails ||
     pathname.startsWith(`${emails}/`) ||
-    (pathname.startsWith(`${accounts}/`) && pathname !== accounts);
+    domainScoped;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

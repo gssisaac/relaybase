@@ -78,6 +78,13 @@ export type CfEmailSendingDnsRecord = {
   ttl?: number;
 };
 
+export type CfZoneInfo = {
+  id: string;
+  name: string;
+  status: string;
+  nameServers: string[];
+};
+
 export type CfEmailRoutingSettings = {
   id?: string;
   enabled: boolean;
@@ -144,10 +151,72 @@ export class CloudflareEmailClient {
   }
 
   async resolveZoneId(domain: string): Promise<string | null> {
-    const data = await this.request<Array<{ id: string; name: string }>>(
-      `/zones?name=${encodeURIComponent(domain)}`,
-    );
-    return data.result?.[0]?.id ?? null;
+    const zone = await this.getZone(domain);
+    return zone?.id ?? null;
+  }
+
+  private normalizeZone(zone: {
+    id: string;
+    name: string;
+    status?: string;
+    name_servers?: string[];
+  }): CfZoneInfo {
+    return {
+      id: zone.id,
+      name: zone.name,
+      status: zone.status ?? "unknown",
+      nameServers: (zone.name_servers ?? []).filter(Boolean),
+    };
+  }
+
+  async getZone(domain: string): Promise<CfZoneInfo | null> {
+    const accountFilter = this.accountId
+      ? `&account.id=${encodeURIComponent(this.accountId)}`
+      : "";
+    const data = await this.request<
+      Array<{
+        id: string;
+        name: string;
+        status?: string;
+        name_servers?: string[];
+      }>
+    >(`/zones?name=${encodeURIComponent(domain)}${accountFilter}`);
+    const zone = data.result?.[0];
+    if (!zone) return null;
+
+    let info = this.normalizeZone(zone);
+    // List responses occasionally omit name_servers — fetch the zone detail.
+    if (!info.nameServers.length) {
+      const detail = await this.request<{
+        id: string;
+        name: string;
+        status?: string;
+        name_servers?: string[];
+      }>(`/zones/${zone.id}`);
+      if (detail.result) {
+        info = this.normalizeZone(detail.result);
+      }
+    }
+    return info;
+  }
+
+  /**
+   * Cloudflare usually assigns the same nameserver pair to every zone on an
+   * account. When a domain's site hasn't been added yet, we still surface
+   * those account nameservers so the user can copy them for their registrar.
+   */
+  async getAccountNameServers(): Promise<string[]> {
+    const accountFilter = this.accountId
+      ? `account.id=${encodeURIComponent(this.accountId)}&`
+      : "";
+    const data = await this.request<
+      Array<{ name_servers?: string[] }>
+    >(`/zones?${accountFilter}per_page=50`);
+    for (const zone of data.result ?? []) {
+      const ns = (zone.name_servers ?? []).filter(Boolean);
+      if (ns.length >= 2) return ns;
+    }
+    return [];
   }
 
   async listSendingSubdomains(zoneId: string): Promise<CfEmailSendingSubdomain[]> {

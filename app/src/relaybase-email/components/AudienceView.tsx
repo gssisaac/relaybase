@@ -16,7 +16,7 @@ import {
   CloudflareConfigAlert,
   EmailAlerts,
 } from "@/relaybase-email/components/EmailShared";
-import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
+import { DomainScopedLayout } from "@/relaybase-email/components/DomainScopedLayout";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
   DetailView,
@@ -180,7 +180,7 @@ export function AudienceView() {
 
   if (selectedKey && selectedContact) {
     return (
-      <div className="space-y-3">
+      <DomainScopedLayout>
         <EmailAlerts error={error} message={message} />
         <EmailListContainer>
           <DetailView
@@ -210,55 +210,69 @@ export function AudienceView() {
             </dl>
           </DetailView>
         </EmailListContainer>
-      </div>
+      </DomainScopedLayout>
     );
   }
 
   return (
-    <div className="min-h-[min(70vh,560px)] space-y-4">
+    <DomainScopedLayout>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CurrentDomainSelect />
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            {activeDomain || "Audience"}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Subscribers for the selected domain
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-        <Dialog open={addOpen} onOpenChange={setAddOpen}>
-          <DialogTrigger>
-            <Button size="sm">
-              <Plus className="size-4" />
-              Add subscriber
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add subscriber</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Email</Label>
-                <Input
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Name (optional)</Label>
-                <Input
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                />
-              </div>
-              <Button
-                className="w-full"
-                size="sm"
-                disabled={saving || !contactEmail.trim() || !activeDomain}
-                onClick={addSubscriber}
-              >
-                {saving ? "Adding…" : "Add"}
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger>
+              <Button size="sm">
+                <Plus className="size-4" />
+                Add subscriber
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-        <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={refreshing}>
-          <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-        </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add subscriber</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Email</Label>
+                  <Input
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Name (optional)</Label>
+                  <Input
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  disabled={saving || !contactEmail.trim() || !activeDomain}
+                  onClick={addSubscriber}
+                >
+                  {saving ? "Adding…" : "Add"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refresh(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={refreshing ? "size-4 animate-spin" : "size-4"}
+            />
+          </Button>
         </div>
       </div>
 
@@ -306,6 +320,6 @@ export function AudienceView() {
           <div className="min-h-[200px]" />
         )}
       </EmailListContainer>
-    </div>
+    </DomainScopedLayout>
   );
 }

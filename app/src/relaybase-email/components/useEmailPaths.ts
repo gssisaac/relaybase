@@ -29,6 +29,9 @@ export function useEmailPaths() {
   const inbox = usePanelHref("emails", "inbox");
   const sent = usePanelHref("emails", "sent");
   const compose = usePanelHref("emails", "compose");
+  const broadcasts = usePanelHref("broadcasts");
+  const audience = usePanelHref("audience");
+  const metrics = usePanelHref("metrics");
   const settingsBase = usePanelHref("settings");
   /** @deprecated Use `keys` — legacy settings route */
   const settingsKeys = usePanelHref("settings", "keys");
@@ -42,9 +45,9 @@ export function useEmailPaths() {
     { href: keys, label: "API Keys", icon: KeyRound },
     { href: accounts, label: "Accounts", icon: AtSign },
     { href: emails, label: "Emails", icon: Mail },
-    { href: usePanelHref("broadcasts"), label: "Broadcasts", icon: Megaphone },
-    { href: usePanelHref("audience"), label: "Audience", icon: Users },
-    { href: usePanelHref("metrics"), label: "Metrics", icon: BarChart3 },
+    { href: broadcasts, label: "Broadcasts", icon: Megaphone },
+    { href: audience, label: "Audience", icon: Users },
+    { href: metrics, label: "Metrics", icon: BarChart3 },
     { href: settingsBase, label: "Settings", icon: Settings },
   ];
 
@@ -63,6 +66,9 @@ export function useEmailPaths() {
     inbox,
     sent,
     compose,
+    broadcasts,
+    audience,
+    metrics,
     settingsBase,
     settingsKeys,
     settingsCloudflare,

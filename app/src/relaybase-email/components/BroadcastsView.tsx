@@ -18,7 +18,7 @@ import {
   RelaybaseConfigAlert,
   EmailAlerts,
 } from "@/relaybase-email/components/EmailShared";
-import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
+import { DomainScopedLayout } from "@/relaybase-email/components/DomainScopedLayout";
 import { readEmailStale } from "@/relaybase-email/components/useEmailViewLoading";
 import {
   DetailView,
@@ -221,7 +221,7 @@ export function BroadcastsView() {
 
   if (selected) {
     return (
-      <div className="space-y-3">
+      <DomainScopedLayout>
         <EmailAlerts error={error} message={message} />
         <EmailListContainer>
           <DetailView
@@ -238,68 +238,92 @@ export function BroadcastsView() {
             <pre className="whitespace-pre-wrap text-sm">{selected.body}</pre>
           </DetailView>
         </EmailListContainer>
-      </div>
+      </DomainScopedLayout>
     );
   }
 
   return (
-    <div className="min-h-[min(70vh,560px)] space-y-4">
+    <DomainScopedLayout>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CurrentDomainSelect />
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            {activeDomain || "Broadcasts"}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Broadcasts for the selected domain
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger>
-            <Button size="sm" disabled={!relaybaseOk || audienceCount === 0 || !activeDomain}>
-              <Megaphone className="size-4" />
-              New broadcast
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>New broadcast</DialogTitle>
-            </DialogHeader>
-            <p className="text-xs text-muted-foreground">
-              Sends to {audienceCount} subscriber
-              {audienceCount === 1 ? "" : "s"}
-            </p>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">From</Label>
-                <select
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                  value={sendFrom}
-                  onChange={(e) => setSendFrom(e.target.value)}
-                >
-                  <option value="">Select sender</option>
-                  {addresses.map((a) => (
-                    <option key={a.email} value={a.email}>
-                      {a.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Subject</Label>
-                <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Body</Label>
-                <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} />
-              </div>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger>
               <Button
-                className="w-full"
                 size="sm"
-                onClick={sendBroadcast}
-                disabled={sending || !sendFrom || !subject || !body}
+                disabled={!relaybaseOk || audienceCount === 0 || !activeDomain}
               >
-                {sending ? "Sending…" : "Send broadcast"}
+                <Megaphone className="size-4" />
+                New broadcast
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-        <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={refreshing}>
-          <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-        </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>New broadcast</DialogTitle>
+              </DialogHeader>
+              <p className="text-xs text-muted-foreground">
+                Sends to {audienceCount} subscriber
+                {audienceCount === 1 ? "" : "s"}
+              </p>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">From</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                    value={sendFrom}
+                    onChange={(e) => setSendFrom(e.target.value)}
+                  >
+                    <option value="">Select sender</option>
+                    {addresses.map((a) => (
+                      <option key={a.email} value={a.email}>
+                        {a.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Subject</Label>
+                  <Input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Body</Label>
+                  <Textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    rows={8}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={sendBroadcast}
+                  disabled={sending || !sendFrom || !subject || !body}
+                >
+                  {sending ? "Sending…" : "Send broadcast"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refresh(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={refreshing ? "size-4 animate-spin" : "size-4"}
+            />
+          </Button>
         </div>
       </div>
 
@@ -311,7 +335,7 @@ export function BroadcastsView() {
           <AlertTitle>No audience</AlertTitle>
           <AlertDescription>
             Add subscribers in{" "}
-            <Link href="/products/macpurity/email/audience" className="underline">
+            <Link href="/audience" className="underline">
               Audience
             </Link>{" "}
             first.
@@ -345,7 +369,10 @@ export function BroadcastsView() {
                     { month: "short", day: "numeric" },
                   )}
                   status={
-                    <Badge variant={statusVariant(b.status)} className="text-[10px]">
+                    <Badge
+                      variant={statusVariant(b.status)}
+                      className="text-[10px]"
+                    >
                       {b.status}
                     </Badge>
                   }
@@ -372,6 +399,6 @@ export function BroadcastsView() {
           <div className="min-h-[200px]" />
         )}
       </EmailListContainer>
-    </div>
+    </DomainScopedLayout>
   );
 }

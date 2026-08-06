@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { SparklineChart } from "@/components/dashboard/SparklineChart";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { EmailAlerts } from "@/relaybase-email/components/EmailShared";
-import { CurrentDomainSelect } from "@/relaybase-email/components/CurrentDomainSelect";
+import { DomainScopedLayout } from "@/relaybase-email/components/DomainScopedLayout";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -344,22 +344,17 @@ export function EmailSettingsKeysView() {
   }
 
   return (
-    <div className="space-y-4">
+    <DomainScopedLayout>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">API Keys</h1>
-          <p className="text-sm text-muted-foreground">
-            Issue and manage send keys
-            {domain ? (
-              <>
-                {" "}
-                for <span className="font-mono">{domain}</span>
-              </>
-            ) : null}
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            {domain || "API Keys"}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Issue and manage send keys for the selected domain
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CurrentDomainSelect />
           <Dialog
             open={addOpen}
             onOpenChange={(open) => {
@@ -679,6 +674,6 @@ export function EmailSettingsKeysView() {
           </Card>
         </>
       ) : null}
-    </div>
+    </DomainScopedLayout>
   );
 }

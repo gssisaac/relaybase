@@ -49,9 +49,17 @@ export function Footer() {
             </Link>
           </nav>
 
-          <p className="text-xs text-muted-foreground">
-            © {year} {siteConfig.name}. All rights reserved.
-          </p>
+          <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
+            <span>
+              © {year} {siteConfig.name}. All rights reserved.
+            </span>
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

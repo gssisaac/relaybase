@@ -34,11 +34,24 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const userId = await requireSessionUserId();
-    const body = (await request.json()) as { localPart?: string };
-    const localPart = body.localPart?.trim();
-    if (!localPart) {
+    const body = (await request.json()) as {
+      localPart?: string;
+      localParts?: string[];
+    };
+
+    const localParts = (
+      Array.isArray(body.localParts) && body.localParts.length
+        ? body.localParts
+        : body.localPart
+          ? [body.localPart]
+          : []
+    )
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (!localParts.length) {
       return NextResponse.json(
-        { error: "localPart is required" },
+        { error: "localPart or localParts is required" },
         { status: 400 },
       );
     }
@@ -52,7 +65,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const email = `${localPart}@${domain}`.toLowerCase();
+    const emails = [
+      ...new Set(localParts.map((part) => `${part}@${domain}`.toLowerCase())),
+    ];
+
     const cfg = await readRelaybaseWorkerConfig();
     if (!cfg) {
       return NextResponse.json(
@@ -67,24 +83,35 @@ export async function POST(request: Request) {
     try {
       await ensureInboundWorkerRouting(cfg, {
         domain,
-        addresses: [email],
+        addresses: emails,
       });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to configure inbound routing";
       return NextResponse.json(
         {
-          error: `Could not enable inbox for ${email}: ${message}`,
+          error: `Could not enable inbox for ${emails.join(", ")}: ${message}`,
         },
         { status: 502 },
       );
     }
 
-    if (!data.addresses.some((a) => a.email.toLowerCase() === email)) {
-      data.addresses.push({ email, domain });
-      await writeUserEmailData(userId, data);
+    const added: { email: string; domain: string }[] = [];
+    for (const email of emails) {
+      if (!data.addresses.some((a) => a.email.toLowerCase() === email)) {
+        const address = { email, domain };
+        data.addresses.push(address);
+        added.push(address);
+      } else {
+        added.push({ email, domain });
+      }
     }
-    return NextResponse.json({ address: { email, domain } });
+    await writeUserEmailData(userId, data);
+
+    if (emails.length === 1) {
+      return NextResponse.json({ address: added[0], addresses: added });
+    }
+    return NextResponse.json({ addresses: added });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
     return NextResponse.json({ error: message }, { status: 401 });

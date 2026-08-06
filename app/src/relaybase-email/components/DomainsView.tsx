@@ -11,12 +11,12 @@ import {
   Star,
   Trash2,
 } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 
 import {
+  DEFAULT_ADDRESS_LOCAL_PARTS,
   useDomain,
   type DomainOnboardingSummary,
-  type DomainSummary,
   type OnboardingOverallStatus,
 } from "@/lib/dashboard/DomainContext";
 import { EmailAlerts } from "@/relaybase-email/components/EmailShared";
@@ -36,6 +36,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { FieldCheck } from "@/components/ui/field-check";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -98,14 +99,12 @@ function stepStatusClass(status: string): string {
   }
 }
 
-function needsPolling(domains: DomainSummary[]): boolean {
-  return domains.some(
-    (d) =>
-      d.onboarding?.status === "running" || d.onboarding?.status === "waiting",
-  );
-}
+const DEFAULT_ADDRESS_PREVIEW = DEFAULT_ADDRESS_LOCAL_PARTS.map(
+  (part) => `${part}@`,
+).join(", ");
 
 export function DomainsView() {
+  const store = useDomain();
   const {
     domains,
     activeDomain,
@@ -113,67 +112,43 @@ export function DomainsView() {
     error,
     refresh,
     setActiveDomain,
-    addDomain,
     removeDomain,
-    startOnboarding,
-    advanceOnboarding,
-    retryOnboarding,
-  } = useDomain();
+    queueAddDomain,
+    queueStartOnboarding,
+    queueRetryOnboarding,
+  } = store;
+
   const [addOpen, setAddOpen] = useState(false);
   const [domainInput, setDomainInput] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [seedDefaults, setSeedDefaults] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [workingDomain, setWorkingDomain] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const domainsRef = useRef(domains);
-  domainsRef.current = domains;
-  const polling = needsPolling(domains);
+  function resetAddForm() {
+    setDomainInput("");
+    setSeedDefaults(true);
+  }
 
-  useEffect(() => {
-    if (!polling) return;
-
-    const timer = window.setInterval(() => {
-      void (async () => {
-        const pending = domainsRef.current.filter(
-          (d) =>
-            d.onboarding?.status === "running" ||
-            d.onboarding?.status === "waiting",
-        );
-        for (const entry of pending) {
-          try {
-            await advanceOnboarding(entry.domain);
-          } catch {
-            // Keep polling; next tick may recover.
-          }
-        }
-      })();
-    }, 8000);
-
-    return () => window.clearInterval(timer);
-  }, [polling, advanceOnboarding]);
-
-  async function handleAdd() {
+  function handleAdd() {
     if (!domainInput.trim()) return;
-    setSaving(true);
     setLocalError(null);
     setMessage(null);
-    try {
-      const normalized = domainInput.trim().toLowerCase();
-      const result = await addDomain(domainInput);
-      setDomainInput("");
-      setAddOpen(false);
-      setMessage(result.message);
-      setExpanded((prev) => ({
-        ...prev,
-        [normalized]: true,
-      }));
-    } catch (err) {
-      setLocalError(err instanceof Error ? err.message : "Failed to add domain");
-    } finally {
-      setSaving(false);
-    }
+
+    const normalized = domainInput.trim().toLowerCase();
+    queueAddDomain(domainInput, seedDefaults);
+    resetAddForm();
+    setAddOpen(false);
+    setExpanded((prev) => ({
+      ...prev,
+      [normalized]: true,
+    }));
+    setMessage(
+      seedDefaults
+        ? `Adding ${normalized} in the background. Standard addresses will be created when onboarding finishes.`
+        : `Adding ${normalized} in the background.`,
+    );
   }
 
   async function handleSetActive(domain: string) {
@@ -211,38 +186,20 @@ export function DomainsView() {
     }
   }
 
-  async function handleStart(domain: string) {
-    setWorkingDomain(domain);
+  function handleStart(domain: string) {
     setLocalError(null);
     setMessage(null);
-    try {
-      const result = await startOnboarding(domain);
-      setMessage(result.message);
-      setExpanded((prev) => ({ ...prev, [domain]: true }));
-    } catch (err) {
-      setLocalError(
-        err instanceof Error ? err.message : "Failed to start onboarding",
-      );
-    } finally {
-      setWorkingDomain(null);
-    }
+    queueStartOnboarding(domain);
+    setExpanded((prev) => ({ ...prev, [domain]: true }));
+    setMessage(`Starting onboarding for ${domain} in the background.`);
   }
 
-  async function handleRetry(domain: string) {
-    setWorkingDomain(domain);
+  function handleRetry(domain: string) {
     setLocalError(null);
     setMessage(null);
-    try {
-      const result = await retryOnboarding(domain);
-      setMessage(result.message);
-      setExpanded((prev) => ({ ...prev, [domain]: true }));
-    } catch (err) {
-      setLocalError(
-        err instanceof Error ? err.message : "Failed to retry onboarding",
-      );
-    } finally {
-      setWorkingDomain(null);
-    }
+    queueRetryOnboarding(domain);
+    setExpanded((prev) => ({ ...prev, [domain]: true }));
+    setMessage(`Retrying onboarding for ${domain} in the background.`);
   }
 
   return (
@@ -260,7 +217,7 @@ export function DomainsView() {
             open={addOpen}
             onOpenChange={(open) => {
               setAddOpen(open);
-              if (!open) setDomainInput("");
+              if (!open) resetAddForm();
             }}
           >
             <DialogTrigger>
@@ -276,8 +233,8 @@ export function DomainsView() {
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
                   The domain must already exist as a zone on the Relaybase
-                  Cloudflare account. Onboarding provisions inbound storage,
-                  Email Sending, and Email Routing step by step.
+                  Cloudflare account. Setup continues in the background — you
+                  can leave this page.
                 </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="new-domain">Domain</Label>
@@ -286,22 +243,28 @@ export function DomainsView() {
                     value={domainInput}
                     onChange={(e) => setDomainInput(e.target.value)}
                     placeholder="example.com"
-                    disabled={saving}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        void handleAdd();
+                        handleAdd();
                       }
                     }}
                   />
                 </div>
+                <FieldCheck
+                  id="seed-default-addresses"
+                  checked={seedDefaults}
+                  onCheckedChange={setSeedDefaults}
+                  label="Add standard addresses"
+                  description={`${DEFAULT_ADDRESS_PREVIEW} — all six at once when onboarding finishes.`}
+                />
                 <Button
                   className="w-full"
                   size="sm"
-                  disabled={saving || !domainInput.trim()}
-                  onClick={() => void handleAdd()}
+                  disabled={!domainInput.trim()}
+                  onClick={handleAdd}
                 >
-                  {saving ? "Adding…" : "Add domain"}
+                  Add domain
                 </Button>
               </div>
             </DialogContent>
@@ -435,8 +398,13 @@ export function DomainsView() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={workingDomain === entry.domain}
-                                onClick={() => void handleStart(entry.domain)}
+                                disabled={store.addJobs.some(
+                                  (j) =>
+                                    j.domain === entry.domain &&
+                                    j.phase !== "done" &&
+                                    j.phase !== "failed",
+                                )}
+                                onClick={() => handleStart(entry.domain)}
                               >
                                 Start onboarding
                               </Button>
@@ -445,8 +413,13 @@ export function DomainsView() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={workingDomain === entry.domain}
-                                onClick={() => void handleRetry(entry.domain)}
+                                disabled={store.addJobs.some(
+                                  (j) =>
+                                    j.domain === entry.domain &&
+                                    j.phase !== "done" &&
+                                    j.phase !== "failed",
+                                )}
+                                onClick={() => handleRetry(entry.domain)}
                               >
                                 <RotateCcw className="mr-1 size-3.5" />
                                 Retry

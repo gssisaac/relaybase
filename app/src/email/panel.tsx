@@ -3,7 +3,6 @@
 import { Suspense, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
-import { EmailMailboxProvider } from "@/email/components/EmailMailboxContext";
 import {
   EmailMailboxLayout,
   type EmailMailboxSection,
@@ -81,11 +80,9 @@ export function EmailMailboxRoutes({
   }
 
   return (
-    <EmailMailboxProvider>
-      <Suspense fallback={<EmailPageSuspenseFallback />}>
-        <EmailMailboxLayout section={section}>{page}</EmailMailboxLayout>
-      </Suspense>
-    </EmailMailboxProvider>
+    <Suspense fallback={<EmailPageSuspenseFallback />}>
+      <EmailMailboxLayout section={section}>{page}</EmailMailboxLayout>
+    </Suspense>
   );
 }
 

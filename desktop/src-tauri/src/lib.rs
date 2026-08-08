@@ -4,8 +4,10 @@ mod worker;
 
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
-    clear_credentials, load_credentials, load_email_prefs, save_credentials,
-    save_email_prefs as write_email_prefs, EmailPrefs, StoredCredentials,
+    clear_credentials, load_credentials, load_email_prefs,
+    load_mail_json as read_mail_json, save_credentials,
+    save_email_prefs as write_email_prefs, save_mail_json as write_mail_json, EmailPrefs,
+    StoredCredentials,
 };
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
@@ -39,6 +41,19 @@ async fn get_email_prefs() -> Result<Option<EmailPrefs>, String> {
 #[tauri::command]
 async fn save_email_prefs(prefs: EmailPrefs) -> Result<(), String> {
     write_email_prefs(&prefs)
+}
+
+#[tauri::command]
+async fn get_mail_json(relative_path: String) -> Result<Option<serde_json::Value>, String> {
+    read_mail_json(&relative_path)
+}
+
+#[tauri::command]
+async fn save_mail_json(
+    relative_path: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    write_mail_json(&relative_path, &value)
 }
 
 #[tauri::command]
@@ -281,6 +296,8 @@ pub fn run() {
             clear_stored_credentials,
             get_email_prefs,
             save_email_prefs,
+            get_mail_json,
+            save_mail_json,
             verify_cf_token,
             list_cf_zones,
             probe_routing_worker,

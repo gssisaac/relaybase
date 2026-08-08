@@ -3,7 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { ArrowLeft, Inbox, Search } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,7 +98,7 @@ export function EmailTableHeader({ children }: { children: ReactNode }) {
   );
 }
 
-export function EmailTableRow({
+export const EmailTableRow = memo(function EmailTableRow({
   href,
   onClick,
   primary,
@@ -181,7 +181,7 @@ export function EmailTableRow({
       {body}
     </button>
   );
-}
+});
 
 export function DetailView({
   title,

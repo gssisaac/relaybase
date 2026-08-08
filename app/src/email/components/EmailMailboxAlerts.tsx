@@ -20,8 +20,14 @@ export function EmailMailboxAlerts({
 
   const showNoDomains = !loading && domains.length === 0;
   const showRelaybase = Boolean(config) && !config?.relaybaseConfigured;
-  const showInbound = section === "inbox" && Boolean(config);
-  const hasContent = showNoDomains || Boolean(error) || Boolean(message) || showRelaybase || showInbound;
+  const showInbound =
+    section === "inbox" && !!config && !config.inboundR2Configured;
+  const hasContent =
+    showNoDomains ||
+    Boolean(error) ||
+    Boolean(message) ||
+    showRelaybase ||
+    showInbound;
 
   if (!hasContent) return null;
 

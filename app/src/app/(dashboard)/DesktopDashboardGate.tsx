@@ -14,6 +14,7 @@ import {
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { DomainProgressBanner } from "@/dashboard/components/DomainProgressBanner";
 import { MailAccountsProvider } from "@/email/components/MailAccountsContext";
+import { EmailMailboxProvider } from "@/email/components/EmailMailboxContext";
 
 function setupPathFor(credentials: {
   workerUrl?: string;
@@ -36,19 +37,21 @@ function DashboardShell({
     <SessionProvider userId={userId}>
       <DomainProvider>
         <MailAccountsProvider>
-          <div className="flex h-svh overflow-hidden bg-background">
-            <Suspense
-              fallback={
-                <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-              }
-            >
-              <UserSidebar />
-            </Suspense>
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <DomainProgressBanner />
-              {children}
-            </main>
-          </div>
+          <EmailMailboxProvider>
+            <div className="flex h-svh overflow-hidden bg-background">
+              <Suspense
+                fallback={
+                  <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                }
+              >
+                <UserSidebar />
+              </Suspense>
+              <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <DomainProgressBanner />
+                {children}
+              </main>
+            </div>
+          </EmailMailboxProvider>
         </MailAccountsProvider>
       </DomainProvider>
     </SessionProvider>

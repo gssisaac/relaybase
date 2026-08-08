@@ -21,7 +21,6 @@ import { EmailSettingsDomainView } from "@/dashboard/components/EmailSettingsDom
 import { EmailSettingsShell } from "@/dashboard/components/EmailSettingsShell";
 import { MetricsView } from "@/dashboard/components/MetricsView";
 import { UserDashboardView } from "@/dashboard/components/UserDashboardView";
-import { EmailMailboxProvider } from "@/email/components/EmailMailboxContext";
 import {
   SuspenseComposeView,
   SuspenseMailListView,
@@ -102,11 +101,9 @@ function AccountDetailRoutes({
   }
 
   return (
-    <EmailMailboxProvider>
-      <AccountDetailShell email={email} section={section}>
-        {page}
-      </AccountDetailShell>
-    </EmailMailboxProvider>
+    <AccountDetailShell email={email} section={section}>
+      {page}
+    </AccountDetailShell>
   );
 }
 

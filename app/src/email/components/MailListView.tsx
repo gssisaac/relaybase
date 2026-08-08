@@ -1,6 +1,7 @@
 "use client";
 
 import { Inbox, Send, Trash2 } from "lucide-react";
+import { observer } from "mobx-react-lite";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -8,10 +9,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
-import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
+import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
 import { useMailboxNav } from "@/email/components/MailboxNavContext";
 import { InboundEmailDetail } from "@/email/components/EmailShared";
-import { useEmailPaths } from "@/email/paths";
 import {
   DetailView,
   EmailListContainer,
@@ -91,11 +91,6 @@ function domainOf(email: string) {
   return at > 0 ? email.slice(at + 1).toLowerCase() : "";
 }
 
-function inboxDetailQuery(domain: string) {
-  if (!domain) return "";
-  return `?domain=${encodeURIComponent(domain)}`;
-}
-
 function composeReplyHref(
   compose: string,
   event: RoutingActivityEvent,
@@ -172,33 +167,38 @@ type MailListViewProps = {
   messageId?: string;
 };
 
-export function MailListView({ folder, messageId }: MailListViewProps) {
+export const MailListView = observer(function MailListView({
+  folder,
+  messageId,
+}: MailListViewProps) {
   const productId = useProductId();
-  const { apiBase } = useEmailPaths();
+  const store = useEmailMailboxStore();
   const { compose, inbox, sent, trash } = useMailboxNav();
   const folderBase =
     folder === "inbox" ? inbox : folder === "sent" ? sent : trash;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const {
-    activity,
-    sent: sentMessages,
-    trashedActivity,
-    trashedSent,
-    addresses,
-    accountFilter,
-    loading,
-    setError,
-    moveToTrash,
-    restoreFromTrash,
-    emptyTrash,
-    relaybaseOk,
-  } = useEmailMailbox();
+
+  const activity = store.visibleActivity;
+  const sentMessages = store.visibleSent;
+  const trashedActivity = store.trashedActivity;
+  const trashedSent = store.trashedSent;
+  const addresses = store.visibleAddresses;
+  const accountFilter = store.accountFilter;
+  const loading = store.loading;
+  const moveToTrash = store.moveToTrash;
+  const restoreFromTrash = store.restoreFromTrash;
+  const emptyTrash = store.emptyTrash;
+  const relaybaseOk = store.relaybaseOk;
 
   const [search, setSearch] = useState("");
-  const [activityDetail, setActivityDetail] =
-    useState<RoutingActivityEvent | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const activityDetail = messageId
+    ? store.getCachedDetail(messageId)
+    : null;
+  const detailLoading =
+    Boolean(messageId) &&
+    store.detailLoadingKey === messageId &&
+    !activityDetail;
 
   useEffect(() => {
     if (folder === "sent" && searchParams.get("sent") === "1") {
@@ -208,7 +208,6 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
   }, [accountFilter, folder, router, searchParams, sent]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearch("");
   }, [folder, accountFilter]);
 
@@ -326,61 +325,22 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
 
   const listHref = `${folderBase}${accountQuery(accountFilter)}`;
 
-  useEffect(() => {
-    if (!messageId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActivityDetail(null);
-      setDetailLoading(false);
-      return;
-    }
+  const detailDomain = useMemo(() => {
+    if (!messageId || folder === "sent") return "";
     const inboxPool = folder === "trash" ? trashedActivity : activity;
     const listHit = inboxPool.find((m) => m.key === messageId);
-    const isInboxMessage =
-      folder === "inbox" ||
-      (folder === "trash" && Boolean(listHit));
-    if (!isInboxMessage) {
-      setActivityDetail(null);
-      setDetailLoading(false);
-      return;
-    }
-
-    const domain =
+    if (folder === "trash" && !listHit) return "";
+    return (
       (listHit ? domainOf(listHit.toEmail) : "") ||
-      (accountFilter !== "all" ? domainOf(accountFilter) : "");
+      (accountFilter !== "all" ? domainOf(accountFilter) : "")
+    );
+  }, [accountFilter, activity, folder, messageId, trashedActivity]);
 
-    let cancelled = false;
-    setDetailLoading(true);
-    setActivityDetail(null);
-
-    void (async () => {
-      try {
-        const res = await fetch(
-          `${apiBase}/inbox/${encodeURIComponent(messageId)}${inboxDetailQuery(domain)}`,
-        );
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load");
-        if (!cancelled) setActivityDetail(data);
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Failed to load event");
-        }
-      } finally {
-        if (!cancelled) setDetailLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    accountFilter,
-    activity,
-    apiBase,
-    folder,
-    messageId,
-    setError,
-    trashedActivity,
-  ]);
+  useEffect(() => {
+    if (!messageId || folder === "sent") return;
+    if (folder === "trash" && !detailDomain) return;
+    void store.loadMessageDetail(messageId, detailDomain);
+  }, [detailDomain, folder, messageId, store]);
 
   function trashActions(kind: "inbox" | "sent", id: string) {
     if (folder === "trash") {
@@ -631,15 +591,6 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
   );
 
   const renderDetailPane = () => {
-    if (!messageId) {
-      return (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground p-8">
-          <Inbox className="size-8 stroke-[1.2] opacity-40" />
-          <p className="text-xs">No conversation selected</p>
-        </div>
-      );
-    }
-
     if (!selected) {
       return (
         <DetailView title="Message not found" backHref={listHref}>
@@ -804,26 +755,23 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
   return (
     <EmailListContainer plain>
       <div className="flex h-full w-full min-w-0 flex-1 overflow-hidden">
-        {/* Left Pane: Email List */}
         <div
           className={cn(
-            "flex h-full flex-col overflow-hidden border-r border-border/30",
-            messageId ? "hidden md:flex md:w-[360px] lg:w-[400px] shrink-0" : "flex flex-1"
+            "flex h-full flex-col overflow-hidden",
+            messageId
+              ? "hidden shrink-0 border-r border-border/30 md:flex md:w-[360px] lg:w-[400px]"
+              : "flex flex-1",
           )}
         >
           {renderListPane()}
         </div>
 
-        {/* Right Pane: Email Detail */}
-        <div
-          className={cn(
-            "flex h-full flex-1 flex-col overflow-hidden bg-card/40",
-            !messageId ? "hidden md:flex" : "flex flex-1"
-          )}
-        >
-          {renderDetailPane()}
-        </div>
+        {messageId ? (
+          <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-card/40">
+            {renderDetailPane()}
+          </div>
+        ) : null}
       </div>
     </EmailListContainer>
   );
-}
+});

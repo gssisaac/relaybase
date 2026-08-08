@@ -6,12 +6,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
-import { useMailboxNav } from "@/email/components/MailboxNavContext";
-import { InboundEmailDetail } from "@/email/components/EmailShared";
 import {
   DetailView,
   EmailListContainer,
@@ -20,12 +19,11 @@ import {
   EmptyListState,
   ListToolbar,
 } from "@/email/components/EmailListShell";
-import type {
-  Address,
-  MailListItem,
-  RoutingActivityEvent,
-} from "@/email/components/types";
-import { Button } from "@/components/ui/button";
+import { InboundEmailDetail } from "@/email/components/EmailShared";
+import { InlineReplyComposer } from "@/email/components/InlineReplyComposer";
+import { useMailboxNav } from "@/email/components/MailboxNavContext";
+import type { MailListItem, RoutingActivityEvent } from "@/email/components/types";
+import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { cn } from "@/lib/utils";
 
 function pad2(n: number) {
@@ -91,41 +89,20 @@ function domainOf(email: string) {
   return at > 0 ? email.slice(at + 1).toLowerCase() : "";
 }
 
-function composeReplyHref(
-  compose: string,
-  event: RoutingActivityEvent,
-  addresses: Address[],
-  fromAccount?: EmailAccountFilter,
-  options?: { replyAll?: boolean },
-) {
-  const defaultFrom =
-    fromAccount && fromAccount !== "all"
-      ? fromAccount
-      : addresses.find((a) => a.email.toLowerCase() === event.toEmail.toLowerCase())
-          ?.email ?? addresses[0]?.email;
-  const subject = event.subject.startsWith("Re:")
-    ? event.subject
-    : `Re: ${event.subject}`;
-  const params = new URLSearchParams({
-    reply: "1",
-    replyKey: event.key,
-    to: event.fromEmail,
-    subject,
-  });
-  if (options?.replyAll) params.set("replyAll", "1");
-  if (defaultFrom) params.set("from", defaultFrom);
-  const parentId = event.messageId?.trim();
-  if (parentId) {
-    params.set("inReplyTo", parentId);
-    const prior = event.references?.trim();
-    params.set("references", prior ? `${prior} ${parentId}` : parentId);
-  }
-  return `${compose}?${params.toString()}`;
-}
-
 function composeHref(compose: string, fromAccount: EmailAccountFilter) {
   if (fromAccount === "all") return compose;
   return `${compose}?from=${encodeURIComponent(fromAccount)}`;
+}
+
+function itemSortAt(item: MailListItem) {
+  if (item.kind === "inbox") return item.message.receivedAt;
+  if (item.kind === "sent") return item.message.sentAt;
+  return item.message.updatedAt;
+}
+
+function itemKey(item: MailListItem) {
+  if (item.kind === "inbox") return item.message.key;
+  return item.message.id;
 }
 
 function matchesAccount(
@@ -137,6 +114,9 @@ function matchesAccount(
   if (item.kind === "inbox") {
     return item.message.toEmail.toLowerCase() === needle;
   }
+  if (item.kind === "draft") {
+    return !item.message.from || item.message.from.toLowerCase() === needle;
+  }
   return item.message.from.toLowerCase() === needle;
 }
 
@@ -144,9 +124,16 @@ function messageHref(
   folderBase: string,
   item: MailListItem,
   account: EmailAccountFilter,
+  compose: string,
 ) {
-  const id =
-    item.kind === "inbox" ? item.message.key : item.message.id;
+  if (item.kind === "draft") {
+    if (item.message.replyKey) {
+      const path = `${folderBase}/${encodeURIComponent(item.message.replyKey)}`;
+      return `${path}${accountQuery(account)}`;
+    }
+    return `${compose}?draft=${encodeURIComponent(item.message.id)}`;
+  }
+  const id = item.kind === "inbox" ? item.message.key : item.message.id;
   const path = `${folderBase}/${encodeURIComponent(id)}`;
   return `${path}${accountQuery(account)}`;
 }
@@ -158,6 +145,9 @@ function previewText(item: MailListItem) {
       item.message.bodyText?.replace(/\s+/g, " ").trim() ||
       ""
     );
+  }
+  if (item.kind === "draft") {
+    return item.message.body.replace(/\s+/g, " ").trim();
   }
   return item.message.bodyPreview?.replace(/\s+/g, " ").trim() || "";
 }
@@ -181,6 +171,7 @@ export const MailListView = observer(function MailListView({
 
   const activity = store.visibleActivity;
   const sentMessages = store.visibleSent;
+  const drafts = store.visibleDrafts;
   const trashedActivity = store.trashedActivity;
   const trashedSent = store.trashedSent;
   const addresses = store.visibleAddresses;
@@ -191,6 +182,10 @@ export const MailListView = observer(function MailListView({
   const relaybaseOk = store.relaybaseOk;
 
   const [search, setSearch] = useState("");
+  const [replyMode, setReplyMode] = useState<"reply" | "replyAll" | null>(
+    null,
+  );
+
   const activityDetail = messageId
     ? store.getCachedDetail(messageId)
     : null;
@@ -198,10 +193,8 @@ export const MailListView = observer(function MailListView({
     Boolean(messageId) &&
     store.detailLoadingKey === messageId &&
     !activityDetail;
-
   useEffect(() => {
     if (folder === "sent" && searchParams.get("sent") === "1") {
-      // Background send already set "Sending…" via event; strip the query.
       router.replace(`${sent}${accountQuery(accountFilter)}`);
     }
   }, [accountFilter, folder, router, searchParams, sent]);
@@ -209,6 +202,33 @@ export const MailListView = observer(function MailListView({
   useEffect(() => {
     setSearch("");
   }, [folder, accountFilter]);
+
+  // When opening a message: restore reply panel from draft or ?reply= query
+  useEffect(() => {
+    if (folder !== "inbox" || !messageId) {
+      setReplyMode(null);
+      return;
+    }
+    const wantsReply = searchParams.get("reply") === "1";
+    const wantsReplyAll = searchParams.get("replyAll") === "1";
+    if (wantsReply || wantsReplyAll) {
+      setReplyMode(wantsReplyAll ? "replyAll" : "reply");
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("reply");
+      params.delete("replyAll");
+      const qs = params.toString();
+      router.replace(
+        `${inbox}/${encodeURIComponent(messageId)}${qs ? `?${qs}` : ""}`,
+      );
+      return;
+    }
+    const draft = store.findDraftByReplyKey(messageId);
+    setReplyMode(
+      draft ? (draft.replyAll ? "replyAll" : "reply") : null,
+    );
+    // Only re-run when the opened message changes — not on every draft upsert
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folder, messageId]);
 
   const inboxSource = folder === "trash" ? trashedActivity : activity;
   const sentSource = folder === "trash" ? trashedSent : sentMessages;
@@ -247,23 +267,39 @@ export const MailListView = observer(function MailListView({
     [accountFilter, sentSource],
   );
 
+  const draftItems = useMemo(
+    () =>
+      folder === "inbox"
+        ? drafts
+            .filter((d) =>
+              matchesAccount(
+                { kind: "draft", id: `draft:${d.id}`, message: d },
+                accountFilter,
+              ),
+            )
+            .map((d) => ({
+              kind: "draft" as const,
+              id: `draft:${d.id}`,
+              message: d,
+            }))
+        : [],
+    [accountFilter, drafts, folder],
+  );
+
   const items = useMemo((): MailListItem[] => {
     const q = search.trim().toLowerCase();
-    const source =
+    const source: MailListItem[] =
       folder === "inbox"
-        ? inboxItems
+        ? [...inboxItems, ...draftItems]
         : folder === "sent"
           ? sentItems
           : [...inboxItems, ...sentItems];
 
     return source
-      .sort((a, b) => {
-        const at =
-          a.kind === "inbox" ? a.message.receivedAt : a.message.sentAt;
-        const bt =
-          b.kind === "inbox" ? b.message.receivedAt : b.message.sentAt;
-        return new Date(bt).getTime() - new Date(at).getTime();
-      })
+      .sort(
+        (a, b) =>
+          new Date(itemSortAt(b)).getTime() - new Date(itemSortAt(a)).getTime(),
+      )
       .filter((item) => {
         if (!q) return true;
         if (item.kind === "inbox") {
@@ -274,6 +310,14 @@ export const MailListView = observer(function MailListView({
             (item.message.bodyPreview ?? "").toLowerCase().includes(q)
           );
         }
+        if (item.kind === "draft") {
+          return (
+            item.message.subject.toLowerCase().includes(q) ||
+            item.message.to.toLowerCase().includes(q) ||
+            item.message.from.toLowerCase().includes(q) ||
+            item.message.body.toLowerCase().includes(q)
+          );
+        }
         return (
           item.message.subject.toLowerCase().includes(q) ||
           item.message.to.toLowerCase().includes(q) ||
@@ -281,14 +325,13 @@ export const MailListView = observer(function MailListView({
           item.message.bodyPreview.toLowerCase().includes(q)
         );
       });
-  }, [folder, inboxItems, search, sentItems]);
+  }, [draftItems, folder, inboxItems, search, sentItems]);
 
   const selected =
     messageId != null
       ? (items.find((item) => {
-          const id =
-            item.kind === "inbox" ? item.message.key : item.message.id;
-          return id === messageId;
+          if (item.kind === "draft") return false;
+          return itemKey(item) === messageId;
         }) ??
         (() => {
           const inboxPool =
@@ -383,8 +426,13 @@ export const MailListView = observer(function MailListView({
       }
 
       const currentIndex = items.findIndex((item) => {
-        const id = item.kind === "inbox" ? item.message.key : item.message.id;
-        return id === messageId;
+        if (item.kind === "draft") {
+          return (
+            item.message.replyKey === messageId ||
+            (!item.message.replyKey && item.message.id === messageId)
+          );
+        }
+        return itemKey(item) === messageId;
       });
 
       if (e.key === "ArrowDown" || e.key === "j") {
@@ -392,17 +440,25 @@ export const MailListView = observer(function MailListView({
         const nextIndex = currentIndex + 1;
         if (nextIndex < items.length) {
           const nextItem = items[nextIndex];
-          router.push(messageHref(folderBase, nextItem, accountFilter));
+          router.push(
+            messageHref(folderBase, nextItem, accountFilter, compose),
+          );
         }
       } else if (e.key === "ArrowUp" || e.key === "k") {
         e.preventDefault();
         const prevIndex = currentIndex - 1;
         if (prevIndex >= 0) {
           const prevItem = items[prevIndex];
-          router.push(messageHref(folderBase, prevItem, accountFilter));
+          router.push(
+            messageHref(folderBase, prevItem, accountFilter, compose),
+          );
         }
       } else if (e.key === "Escape" || e.key === "u") {
         e.preventDefault();
+        if (replyMode) {
+          setReplyMode(null);
+          return;
+        }
         router.push(listHref);
       } else if (e.key === "c") {
         e.preventDefault();
@@ -410,31 +466,17 @@ export const MailListView = observer(function MailListView({
       } else if (e.key === "r" && selected && folder !== "trash") {
         e.preventDefault();
         if (selected.kind === "inbox" && activityDetail) {
-          router.push(
-            composeReplyHref(
-              compose,
-              activityDetail,
-              addresses,
-              accountFilter,
-            ),
-          );
+          setReplyMode("reply");
         }
       } else if (e.key === "a" && selected && folder !== "trash") {
         e.preventDefault();
         if (selected.kind === "inbox" && activityDetail) {
-          router.push(
-            composeReplyHref(
-              compose,
-              activityDetail,
-              addresses,
-              accountFilter,
-              { replyAll: true },
-            ),
-          );
+          setReplyMode("replyAll");
         }
       } else if (
         (e.key === "Backspace" || e.key === "Delete" || e.key === "e") &&
-        selected
+        selected &&
+        selected.kind !== "draft"
       ) {
         e.preventDefault();
         const kind = selected.kind;
@@ -448,14 +490,15 @@ export const MailListView = observer(function MailListView({
           moveToTrash(kind, id);
         }
 
-        // Select next item if possible
         const nextIndex =
           currentIndex + 1 < items.length
             ? currentIndex + 1
             : currentIndex - 1;
         if (nextIndex >= 0 && nextIndex < items.length) {
           const nextItem = items[nextIndex];
-          router.push(messageHref(folderBase, nextItem, accountFilter));
+          router.push(
+            messageHref(folderBase, nextItem, accountFilter, compose),
+          );
         } else {
           router.push(listHref);
         }
@@ -473,11 +516,11 @@ export const MailListView = observer(function MailListView({
     selected,
     activityDetail,
     compose,
-    addresses,
     folder,
     moveToTrash,
     restoreFromTrash,
     listHref,
+    replyMode,
   ]);
 
   const renderListPane = () => (
@@ -509,6 +552,37 @@ export const MailListView = observer(function MailListView({
           </EmailTableHeader>
           <div>
             {items.map((item) => {
+              if (item.kind === "draft") {
+                const primary = item.message.to || "(no recipient)";
+                const subject = item.message.subject || "(no subject)";
+                const date = formatDate(item.message.updatedAt);
+                const preview = previewText(item);
+                const isSelected = item.message.replyKey
+                  ? item.message.replyKey === messageId
+                  : false;
+                return (
+                  <EmailTableRow
+                    key={item.id}
+                    href={messageHref(
+                      folderBase,
+                      item,
+                      accountFilter,
+                      compose,
+                    )}
+                    selected={isSelected}
+                    primary={primary}
+                    subject={subject}
+                    preview={preview}
+                    date={date}
+                    status={
+                      <Badge variant="secondary" className="text-[10px]">
+                        Draft
+                      </Badge>
+                    }
+                  />
+                );
+              }
+
               const isInbox = item.kind === "inbox";
               const primary = isInbox
                 ? item.message.fromEmail
@@ -523,11 +597,16 @@ export const MailListView = observer(function MailListView({
                 isInbox ? item.message.receivedAt : item.message.sentAt,
               );
               const preview = previewText(item);
-              const isSelected = (isInbox ? item.message.key : item.message.id) === messageId;
+              const isSelected = itemKey(item) === messageId;
               return (
                 <EmailTableRow
                   key={item.id}
-                  href={messageHref(folderBase, item, accountFilter)}
+                  href={messageHref(
+                    folderBase,
+                    item,
+                    accountFilter,
+                    compose,
+                  )}
                   selected={isSelected}
                   primary={
                     folder === "trash"
@@ -632,6 +711,10 @@ export const MailListView = observer(function MailListView({
       );
     }
 
+    if (selected.kind === "draft") {
+      return null;
+    }
+
     if (detailLoading && !activityDetail) {
       return (
         <div className="flex flex-1 items-center justify-center">
@@ -652,33 +735,14 @@ export const MailListView = observer(function MailListView({
                   <Button
                     size="sm"
                     variant="outline"
-                    render={
-                      <Link
-                        href={composeReplyHref(
-                          compose,
-                          activityDetail,
-                          addresses,
-                          accountFilter,
-                        )}
-                      />
-                    }
+                    onClick={() => setReplyMode("reply")}
                   >
                     Reply
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    render={
-                      <Link
-                        href={composeReplyHref(
-                          compose,
-                          activityDetail,
-                          addresses,
-                          accountFilter,
-                          { replyAll: true },
-                        )}
-                      />
-                    }
+                    onClick={() => setReplyMode("replyAll")}
                   >
                     Reply all
                   </Button>
@@ -736,6 +800,16 @@ export const MailListView = observer(function MailListView({
                 "No message body available for this email."}
             </p>
           )}
+          {folder !== "trash" && replyMode ? (
+            <InlineReplyComposer
+              key={`${activityDetail.key}:${replyMode}`}
+              event={activityDetail}
+              replyAll={replyMode === "replyAll"}
+              addresses={addresses}
+              accountFilter={accountFilter}
+              onClose={() => setReplyMode(null)}
+            />
+          ) : null}
         </DetailView>
       );
     }

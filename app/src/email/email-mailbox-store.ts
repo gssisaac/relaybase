@@ -16,15 +16,18 @@ import {
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import type {
   Address,
+  DraftEmail,
   EmailConfig,
   RoutingActivityEvent,
   SentEmail,
 } from "@/email/components/types";
 import {
   loadPersistedDetail,
+  loadPersistedDrafts,
   loadPersistedInbox,
   loadPersistedSent,
   savePersistedDetail,
+  savePersistedDrafts,
   savePersistedInbox,
   savePersistedSent,
 } from "@/email/email-disk-store";
@@ -56,6 +59,7 @@ export class EmailMailboxStore {
   /** Raw inbox messages (all domains); visibility filtered via computeds. */
   activity: RoutingActivityEvent[] = [];
   sent: SentEmail[] = [];
+  drafts: DraftEmail[] = [];
   addresses: Address[] = [];
   trash: TrashEntry[] = [];
   accountFilter: EmailAccountFilter = "all";
@@ -129,6 +133,23 @@ export class EmailMailboxStore {
     );
   }
 
+  get enabledDrafts(): DraftEmail[] {
+    const set = this.enabledSet;
+    if (set.size === 0) return [];
+    return this.drafts.filter((d) => {
+      if (!d.from) return true;
+      return set.has(d.from.toLowerCase());
+    });
+  }
+
+  get visibleDrafts(): DraftEmail[] {
+    if (this.accountFilter === "all") return this.enabledDrafts;
+    const needle = this.accountFilter.toLowerCase();
+    return this.enabledDrafts.filter(
+      (d) => !d.from || d.from.toLowerCase() === needle,
+    );
+  }
+
   get trashedActivity(): RoutingActivityEvent[] {
     const trashKeys = this.trashKeys;
     return this.enabledActivity.filter((m) =>
@@ -191,6 +212,7 @@ export class EmailMailboxStore {
     if (productChanged) {
       this.activity = [];
       this.sent = [];
+      this.drafts = [];
       this.activityDetailByKey = {};
       this.detailLoadingKey = null;
       this.mailReady = false;
@@ -267,6 +289,52 @@ export class EmailMailboxStore {
     this.trash = [];
     writeTrash(this.productId, []);
     this.message = "Trash emptied";
+  }
+
+  getDraft(id: string): DraftEmail | null {
+    return this.drafts.find((d) => d.id === id) ?? null;
+  }
+
+  findDraftByReplyKey(replyKey: string): DraftEmail | null {
+    const key = replyKey.trim();
+    if (!key) return null;
+    return this.drafts.find((d) => d.replyKey === key) ?? null;
+  }
+
+  upsertDraft(
+    input: Omit<DraftEmail, "createdAt" | "updatedAt"> & {
+      createdAt?: string;
+      updatedAt?: string;
+    },
+  ): DraftEmail {
+    const now = new Date().toISOString();
+    const existing = this.drafts.find((d) => d.id === input.id);
+    const draft: DraftEmail = {
+      id: input.id,
+      from: input.from,
+      to: input.to,
+      cc: input.cc,
+      subject: input.subject,
+      body: input.body,
+      createdAt: existing?.createdAt ?? input.createdAt ?? now,
+      updatedAt: input.updatedAt ?? now,
+      replyKey: input.replyKey,
+      replyAll: input.replyAll,
+    };
+    if (existing) {
+      this.drafts = this.drafts.map((d) => (d.id === draft.id ? draft : d));
+    } else {
+      this.drafts = [draft, ...this.drafts];
+    }
+    this.persistDrafts();
+    return draft;
+  }
+
+  removeDraft(id: string) {
+    const next = this.drafts.filter((d) => d.id !== id);
+    if (next.length === this.drafts.length) return;
+    this.drafts = next;
+    this.persistDrafts();
   }
 
   getCachedDetail(messageId: string): RoutingActivityEvent | null {
@@ -473,9 +541,10 @@ export class EmailMailboxStore {
 
   private async loadPersistedMail() {
     if (!this.productId) return;
-    const [inbox, sent] = await Promise.all([
+    const [inbox, sent, drafts] = await Promise.all([
       loadPersistedInbox(this.productId),
       loadPersistedSent(this.productId),
+      loadPersistedDrafts(this.productId),
     ]);
     runInAction(() => {
       if (inbox && inbox.length > 0) {
@@ -494,6 +563,13 @@ export class EmailMailboxStore {
         this.mailReady = true;
         this.loading = false;
       }
+      if (drafts) {
+        this.drafts = drafts;
+        if (drafts.length > 0) {
+          this.mailReady = true;
+          this.loading = false;
+        }
+      }
     });
   }
 
@@ -501,6 +577,11 @@ export class EmailMailboxStore {
     if (!this.productId) return;
     void savePersistedInbox(this.productId, this.activity);
     void savePersistedSent(this.productId, this.sent);
+  }
+
+  private persistDrafts() {
+    if (!this.productId) return;
+    void savePersistedDrafts(this.productId, this.drafts);
   }
 
   private hydrateFromStale() {

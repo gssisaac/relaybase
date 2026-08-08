@@ -141,9 +141,24 @@ export type SentEmail = {
   messageId?: string;
 };
 
+export type DraftEmail = {
+  id: string;
+  from: string;
+  to: string;
+  cc?: string;
+  subject: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  /** When set, this is a reply draft tied to an inbox message. */
+  replyKey?: string;
+  replyAll?: boolean;
+};
+
 export type MailListItem =
   | { kind: "inbox"; id: string; message: RoutingActivityEvent }
-  | { kind: "sent"; id: string; message: SentEmail };
+  | { kind: "sent"; id: string; message: SentEmail }
+  | { kind: "draft"; id: string; message: DraftEmail };
 
 export type AudienceContact = {
   email: string;

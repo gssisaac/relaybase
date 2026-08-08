@@ -6,6 +6,7 @@ import {
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
 import type {
+  DraftEmail,
   RoutingActivityEvent,
   SentEmail,
 } from "@/email/components/types";
@@ -25,6 +26,10 @@ function inboxPath(productId: string) {
 
 function sentPath(productId: string) {
   return `${safeProductId(productId)}/sent.json`;
+}
+
+function draftsPath(productId: string) {
+  return `${safeProductId(productId)}/drafts.json`;
 }
 
 function detailPath(productId: string, messageKey: string) {
@@ -106,6 +111,20 @@ export async function savePersistedSent(
   sent: SentEmail[],
 ): Promise<void> {
   await writeJson(sentPath(productId), { sent });
+}
+
+export async function loadPersistedDrafts(
+  productId: string,
+): Promise<DraftEmail[] | null> {
+  const data = await readJson<{ drafts?: DraftEmail[] }>(draftsPath(productId));
+  return data?.drafts ?? null;
+}
+
+export async function savePersistedDrafts(
+  productId: string,
+  drafts: DraftEmail[],
+): Promise<void> {
+  await writeJson(draftsPath(productId), { drafts });
 }
 
 export async function loadPersistedDetail(

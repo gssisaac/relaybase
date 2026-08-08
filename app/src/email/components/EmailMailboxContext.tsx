@@ -58,30 +58,46 @@ const EmailMailboxStoreContext = createContext<EmailMailboxStore | null>(
   null,
 );
 
+function storeHasDraftApi(store: EmailMailboxStore) {
+  return (
+    typeof store.upsertDraft === "function" &&
+    typeof store.removeDraft === "function" &&
+    Array.isArray(store.drafts)
+  );
+}
+
 export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
   const { enabledAddresses, enabledAccounts } = useMailAccounts();
-  const [store] = useState(() => new EmailMailboxStore());
+  const [store, setStore] = useState(() => new EmailMailboxStore());
+
+  // Turbopack/HMR keeps the old MobX instance after EmailMailboxStore gains
+  // new methods — replace during render so callers never see a stale API.
+  let liveStore = store;
+  if (!storeHasDraftApi(store)) {
+    liveStore = new EmailMailboxStore();
+    setStore(liveStore);
+  }
 
   useEffect(() => {
-    store.start();
+    liveStore.start();
     return () => {
-      store.stop();
+      liveStore.stop();
     };
-  }, [store]);
+  }, [liveStore]);
 
   useEffect(() => {
-    store.configure({
+    liveStore.configure({
       productId,
       apiBase,
       enabledAccounts,
       enabledAddresses,
     });
-  }, [store, productId, apiBase, enabledAccounts, enabledAddresses]);
+  }, [liveStore, productId, apiBase, enabledAccounts, enabledAddresses]);
 
   return (
-    <EmailMailboxStoreContext.Provider value={store}>
+    <EmailMailboxStoreContext.Provider value={liveStore}>
       {children}
     </EmailMailboxStoreContext.Provider>
   );
@@ -109,6 +125,7 @@ export function useEmailMailbox(): EmailMailboxContextValue {
         config: store.config,
         activity: store.activity.map((m) => m.key),
         sent: store.sent.map((m) => m.id),
+        drafts: store.drafts.map((d) => `${d.id}:${d.updatedAt}`),
         addresses: store.addresses.map((a) => a.email),
         trash: store.trash.map((t) => `${t.kind}:${t.id}`),
         accountFilter: store.accountFilter,

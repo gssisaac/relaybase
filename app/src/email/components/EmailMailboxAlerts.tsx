@@ -12,16 +12,24 @@ import {
 
 export function EmailMailboxAlerts({
   section,
+  surface = "email",
 }: {
   section: EmailMailboxSection;
+  /** Dashboard shows setup/infra alerts; email only shows mail operation status. */
+  surface?: "email" | "dashboard";
 }) {
   const { domains, loading } = useDomain();
   const { config, error, message } = useEmailMailbox();
 
-  const showNoDomains = !loading && domains.length === 0;
-  const showRelaybase = Boolean(config) && !config?.relaybaseConfigured;
+  const showInfra = surface === "dashboard";
+  const showNoDomains = showInfra && !loading && domains.length === 0;
+  const showRelaybase =
+    showInfra && Boolean(config) && !config?.relaybaseConfigured;
   const showInbound =
-    section === "inbox" && !!config && !config.inboundR2Configured;
+    showInfra &&
+    section === "inbox" &&
+    !!config &&
+    !config.inboundR2Configured;
   const hasContent =
     showNoDomains ||
     Boolean(error) ||

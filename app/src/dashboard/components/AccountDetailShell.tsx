@@ -167,7 +167,7 @@ export function AccountDetailShell({
             {section === "compose" ||
             section === "inbox" ||
             section === "sent" ? (
-              <EmailMailboxAlerts section={section} />
+              <EmailMailboxAlerts section={section} surface="dashboard" />
             ) : null}
             {children}
           </div>

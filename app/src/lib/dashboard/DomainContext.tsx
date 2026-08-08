@@ -28,8 +28,10 @@ export type {
 };
 
 export {
+  DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
   DomainStore,
+  suggestedDisplayNameForLocalPart,
 } from "@/lib/dashboard/domain-store";
 
 const DomainStoreContext = React.createContext<DomainStore | null>(null);

@@ -2,7 +2,17 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
+import {
+  DEFAULT_ADDRESS_DISPLAY_NAMES,
+  DEFAULT_ADDRESS_LOCAL_PARTS,
+} from "@/lib/dashboard/default-addresses";
 import { desktopAwareFetch } from "@/lib/desktop/api-base";
+
+export {
+  DEFAULT_ADDRESS_DISPLAY_NAMES,
+  DEFAULT_ADDRESS_LOCAL_PARTS,
+  suggestedDisplayNameForLocalPart,
+} from "@/lib/dashboard/default-addresses";
 
 export type OnboardingStepStatus =
   | "pending"
@@ -52,15 +62,6 @@ export type DomainSummary = {
   r2WorkerReady: boolean;
   onboarding: DomainOnboardingSummary | null;
 };
-
-export const DEFAULT_ADDRESS_LOCAL_PARTS = [
-  "billing",
-  "support",
-  "privacy",
-  "noreply",
-  "hello",
-  "admin",
-] as const;
 
 export type DomainAddPhase =
   | "submitting"
@@ -616,6 +617,7 @@ export class DomainStore {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           localParts: [...DEFAULT_ADDRESS_LOCAL_PARTS],
+          displayNames: { ...DEFAULT_ADDRESS_DISPLAY_NAMES },
         }),
       },
     );

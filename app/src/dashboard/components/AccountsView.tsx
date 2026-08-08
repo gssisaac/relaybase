@@ -10,7 +10,12 @@ import { Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import {
+  DEFAULT_ADDRESS_DISPLAY_NAMES,
+  DEFAULT_ADDRESS_LOCAL_PARTS,
+  suggestedDisplayNameForLocalPart,
+  useDomain,
+} from "@/lib/dashboard/DomainContext";
 
 import {
   CloudflareConfigAlert,
@@ -35,8 +40,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { FieldCheck } from "@/components/ui/field-check";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+function initialDefaultSelection(): Record<string, boolean> {
+  return Object.fromEntries(
+    DEFAULT_ADDRESS_LOCAL_PARTS.map((part) => [part, true]),
+  );
+}
 
 export function AccountsView() {
   const productId = useProductId();
@@ -54,8 +66,13 @@ export function AccountsView() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [defaultsOpen, setDefaultsOpen] = useState(false);
+  const [selectedDefaults, setSelectedDefaults] = useState(
+    initialDefaultSelection,
+  );
   const [saving, setSaving] = useState(false);
   const [localPart, setLocalPart] = useState("");
+  const [displayName, setDisplayName] = useState("");
 
   const domain = activeDomain ?? config?.domain ?? "";
   const domainKey = activeDomain ?? "none";
@@ -124,20 +141,76 @@ export function AccountsView() {
       }));
   }, [addresses, search]);
 
-  async function addSender() {
+  const selectedDefaultParts = useMemo(
+    () => DEFAULT_ADDRESS_LOCAL_PARTS.filter((part) => selectedDefaults[part]),
+    [selectedDefaults],
+  );
+
+  function openDefaultsDialog() {
+    setSelectedDefaults(initialDefaultSelection());
+    setDefaultsOpen(true);
+  }
+
+  async function addAccount() {
     setSaving(true);
     setError(null);
     try {
       const res = await fetch(`${apiBase}/addresses${domainQuery()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ localPart }),
+        body: JSON.stringify({
+          localPart,
+          displayName:
+            displayName.trim() ||
+            suggestedDisplayNameForLocalPart(localPart),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to add");
       setLocalPart("");
+      setDisplayName("");
       setAddOpen(false);
       setMessage(`Registered ${data.address.email}`);
+      clearEmailCache(productId, `addresses:${domainKey}`);
+      await refresh(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addDefaultAccounts() {
+    if (!selectedDefaultParts.length) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const displayNames = Object.fromEntries(
+        selectedDefaultParts.map((part) => [
+          part,
+          DEFAULT_ADDRESS_DISPLAY_NAMES[part],
+        ]),
+      );
+      const res = await fetch(`${apiBase}/addresses${domainQuery()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          localParts: [...selectedDefaultParts],
+          displayNames,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to add");
+      const emails = (data.addresses as { email: string }[] | undefined)?.map(
+        (a) => a.email,
+      );
+      setDefaultsOpen(false);
+      setSelectedDefaults(initialDefaultSelection());
+      setMessage(
+        emails?.length
+          ? `Registered ${emails.length} account${emails.length === 1 ? "" : "s"}`
+          : "Standard accounts added",
+      );
       clearEmailCache(productId, `addresses:${domainKey}`);
       await refresh(true);
     } catch (e) {
@@ -155,18 +228,27 @@ export function AccountsView() {
             {domain || "Accounts"}
           </h1>
           <p className="text-xs text-muted-foreground">
-            Senders for the selected domain
+            Accounts for the selected domain
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <Dialog
+            open={addOpen}
+            onOpenChange={(open) => {
+              setAddOpen(open);
+              if (!open) {
+                setLocalPart("");
+                setDisplayName("");
+              }
+            }}
+          >
             <DialogTrigger render={<Button size="sm" />}>
               <Plus className="size-4" />
-              Add sender
+              Add account
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Add sender</DialogTitle>
+                <DialogTitle>Add account</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <Alert>
@@ -181,7 +263,11 @@ export function AccountsView() {
                     <Label className="text-xs">Local part</Label>
                     <Input
                       value={localPart}
-                      onChange={(e) => setLocalPart(e.target.value)}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setLocalPart(next);
+                        setDisplayName(suggestedDisplayNameForLocalPart(next));
+                      }}
                       placeholder="support"
                     />
                   </div>
@@ -189,13 +275,73 @@ export function AccountsView() {
                     @{domain}
                   </span>
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Display name</Label>
+                  <Input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Support Team"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Shown as the From name when sending from this address.
+                  </p>
+                </div>
                 <Button
                   className="w-full"
                   size="sm"
                   disabled={saving || !localPart.trim() || !domain}
-                  onClick={addSender}
+                  onClick={addAccount}
                 >
                   {saving ? "Adding…" : "Add"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={defaultsOpen}
+            onOpenChange={(open) => {
+              setDefaultsOpen(open);
+              if (open) setSelectedDefaults(initialDefaultSelection());
+            }}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add standard accounts</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Create the usual product addresses on{" "}
+                  <span className="font-mono">{domain || "your domain"}</span>.
+                  Uncheck any you do not need.
+                </p>
+                <div className="max-h-64 space-y-2 overflow-y-auto">
+                  {DEFAULT_ADDRESS_LOCAL_PARTS.map((part) => (
+                    <FieldCheck
+                      key={part}
+                      id={`default-account-${part}`}
+                      checked={Boolean(selectedDefaults[part])}
+                      onCheckedChange={(on) =>
+                        setSelectedDefaults((prev) => ({
+                          ...prev,
+                          [part]: on,
+                        }))
+                      }
+                      label={`${part}@${domain || "…"}`}
+                      description={DEFAULT_ADDRESS_DISPLAY_NAMES[part]}
+                    />
+                  ))}
+                </div>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  disabled={
+                    saving || !domain || selectedDefaultParts.length === 0
+                  }
+                  onClick={addDefaultAccounts}
+                >
+                  {saving
+                    ? "Adding…"
+                    : `Add selected (${selectedDefaultParts.length})`}
                 </Button>
               </div>
             </DialogContent>
@@ -240,12 +386,22 @@ export function AccountsView() {
           </>
         ) : !loading ? (
           <EmptyListState
-            title="No senders yet"
+            title="No accounts yet"
             description="Add an address to send from and receive mail on your domain."
             action={
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                Add sender
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button size="sm" onClick={() => setAddOpen(true)}>
+                  Add account
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={openDefaultsDialog}
+                  disabled={!domain}
+                >
+                  Add defaults 6 accounts
+                </Button>
+              </div>
             }
           />
         ) : (

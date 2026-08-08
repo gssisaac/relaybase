@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { suggestedDisplayNameForLocalPart } from "@/lib/dashboard/default-addresses";
 import {
   readUserEmailData,
   requireSessionUserId,
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       localPart?: string;
       localParts?: string[];
+      displayName?: string;
+      displayNames?: Record<string, string>;
     };
 
     const localParts = (
@@ -102,17 +105,51 @@ export async function POST(request: Request) {
       );
     }
 
-    const added: { email: string; domain: string }[] = [];
+    const singleDisplayName =
+      typeof body.displayName === "string" ? body.displayName.trim() : "";
+
+    const added: {
+      email: string;
+      domain: string;
+      displayName?: string;
+    }[] = [];
+    let mutated = false;
     for (const email of emails) {
-      if (!data.addresses.some((a) => a.email.toLowerCase() === email)) {
-        const address = { email, domain };
+      const local = email.slice(0, email.indexOf("@"));
+      const fromMap =
+        typeof body.displayNames?.[local] === "string"
+          ? body.displayNames[local]!.trim()
+          : "";
+      const displayName =
+        fromMap ||
+        (emails.length === 1 ? singleDisplayName : "") ||
+        suggestedDisplayNameForLocalPart(local);
+
+      const existingIndex = data.addresses.findIndex(
+        (a) => a.email.toLowerCase() === email,
+      );
+      if (existingIndex < 0) {
+        const address = {
+          email,
+          domain,
+          ...(displayName ? { displayName } : {}),
+        };
         data.addresses.push(address);
         added.push(address);
+        mutated = true;
       } else {
-        added.push({ email, domain });
+        const current = data.addresses[existingIndex]!;
+        if (displayName && !current.displayName?.trim()) {
+          const updated = { ...current, displayName };
+          data.addresses[existingIndex] = updated;
+          added.push(updated);
+          mutated = true;
+        } else {
+          added.push(current);
+        }
       }
     }
-    await writeUserEmailData(userId, data);
+    if (mutated) await writeUserEmailData(userId, data);
 
     if (emails.length === 1) {
       return NextResponse.json({ address: added[0], addresses: added });

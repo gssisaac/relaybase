@@ -171,7 +171,6 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
 
     setSending(true);
     store.setError(null);
-    store.setMessage(null);
 
     const payload = {
       from: sendFrom,

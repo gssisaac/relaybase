@@ -47,6 +47,8 @@ import { notifyNewMail } from "@/lib/desktop/notify";
 
 const NOTIFICATION_POLL_MS = 20_000;
 const SEND_TOAST_ID = "email-send";
+const TRASH_UNDO_TOAST_ID = "mail-trash-undo";
+const TRASH_UNDO_MS = 5_000;
 
 export type InboxNotificationEvent = {
   id: string;
@@ -92,7 +94,6 @@ export class EmailMailboxStore {
   loading = true;
   refreshing = false;
   error: string | null = null;
-  message: string | null = null;
 
   /** Cached inbox message details by key. */
   activityDetailByKey: Record<string, RoutingActivityEvent> = {};
@@ -336,10 +337,6 @@ export class EmailMailboxStore {
     this.error = value;
   }
 
-  setMessage(value: string | null) {
-    this.message = value;
-  }
-
   moveToTrash(kind: TrashKind, id: string) {
     if (this.trash.some((entry) => entry.kind === kind && entry.id === id)) {
       return;
@@ -349,21 +346,42 @@ export class EmailMailboxStore {
       { kind, id, trashedAt: new Date().toISOString() },
     ];
     writeTrash(this.productId, this.trash);
-    this.message = "Moved to Trash";
+
+    if (kind === "inbox") {
+      toast("Moved to Trash", {
+        id: TRASH_UNDO_TOAST_ID,
+        duration: TRASH_UNDO_MS,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            this.restoreFromTrash(kind, id, { silent: true });
+          },
+        },
+      });
+      return;
+    }
+
+    toast.success("Moved to Trash");
   }
 
-  restoreFromTrash(kind: TrashKind, id: string) {
+  restoreFromTrash(
+    kind: TrashKind,
+    id: string,
+    opts?: { silent?: boolean },
+  ) {
     this.trash = this.trash.filter(
       (entry) => !(entry.kind === kind && entry.id === id),
     );
     writeTrash(this.productId, this.trash);
-    this.message = "Restored from Trash";
+    if (!opts?.silent) {
+      toast.success("Restored from Trash");
+    }
   }
 
   emptyTrash() {
     this.trash = [];
     writeTrash(this.productId, []);
-    this.message = "Trash emptied";
+    toast.success("Trash emptied");
   }
 
   getDraft(id: string): DraftEmail | null {
@@ -737,14 +755,12 @@ export class EmailMailboxStore {
 
   private onSendStarted = () => {
     this.error = null;
-    this.message = null;
     toast.loading("Sending…", { id: SEND_TOAST_ID });
   };
 
   private onSendSucceeded = () => {
-    toast.dismiss(SEND_TOAST_ID);
     this.error = null;
-    this.message = "Email sent";
+    toast.success("Email sent", { id: SEND_TOAST_ID });
     for (const domain of this.domainsKey ? this.domainsKey.split("\0") : []) {
       clearEmailCache(this.productId, `sent:${domain}`);
     }
@@ -752,10 +768,10 @@ export class EmailMailboxStore {
   };
 
   private onSendFailed = (event: Event) => {
-    toast.dismiss(SEND_TOAST_ID);
     const detail = (event as CustomEvent<{ error?: string }>).detail;
-    this.message = null;
-    this.error = detail?.error || "Send failed";
+    const error = detail?.error || "Send failed";
+    toast.error(error, { id: SEND_TOAST_ID });
+    this.error = null;
   };
 
   private onVisibilityOrFocus = () => {

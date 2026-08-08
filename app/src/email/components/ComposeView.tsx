@@ -54,7 +54,6 @@ export function ComposeView() {
     addresses,
     accountFilter,
     setError,
-    setMessage,
     store,
   } = useEmailMailbox();
 
@@ -283,7 +282,6 @@ export function ComposeView() {
 
     setSending(true);
     setError(null);
-    setMessage(null);
 
     const payload = {
       from: sendFrom,

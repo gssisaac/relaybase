@@ -47,8 +47,6 @@ export type EmailMailboxContextValue = {
   refreshing: boolean;
   error: string | null;
   setError: (value: string | null) => void;
-  message: string | null;
-  setMessage: (value: string | null) => void;
   refresh: (force?: boolean) => Promise<void>;
   moveToTrash: (kind: TrashKind, id: string) => void;
   restoreFromTrash: (kind: TrashKind, id: string) => void;
@@ -147,7 +145,6 @@ export function useEmailMailbox(): EmailMailboxContextValue {
         loading: store.loading,
         refreshing: store.refreshing,
         error: store.error,
-        message: store.message,
         relaybaseOk: store.relaybaseOk,
         detailKeys: Object.keys(store.activityDetailByKey),
         detailLoadingKey: store.detailLoadingKey,
@@ -180,8 +177,6 @@ export function useEmailMailbox(): EmailMailboxContextValue {
     refreshing: store.refreshing,
     error: store.error,
     setError: store.setError,
-    message: store.message,
-    setMessage: store.setMessage,
     refresh: store.refresh,
     moveToTrash: store.moveToTrash,
     restoreFromTrash: store.restoreFromTrash,

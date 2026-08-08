@@ -19,7 +19,7 @@ export function EmailMailboxAlerts({
   surface?: "email" | "dashboard";
 }) {
   const { domains, loading } = useDomain();
-  const { config, error, message } = useEmailMailbox();
+  const { config, error } = useEmailMailbox();
 
   const showInfra = surface === "dashboard";
   const showNoDomains = showInfra && !loading && domains.length === 0;
@@ -33,7 +33,6 @@ export function EmailMailboxAlerts({
   const hasContent =
     showNoDomains ||
     Boolean(error) ||
-    Boolean(message) ||
     showRelaybase ||
     showInbound;
 
@@ -42,7 +41,7 @@ export function EmailMailboxAlerts({
   return (
     <div className="shrink-0 space-y-3 border-b border-border px-4 py-3">
       <NoDomainsAlert show={showNoDomains} />
-      <EmailAlerts error={error} message={message} />
+      <EmailAlerts error={error} message={null} />
       <RelaybaseConfigAlert show={showRelaybase} />
       {showInbound ? <InboundR2ConfigAlert config={config} /> : null}
     </div>

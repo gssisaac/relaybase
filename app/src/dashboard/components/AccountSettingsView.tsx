@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +19,7 @@ function domainOf(email: string): string {
 export function AccountSettingsView({ email }: { email: string }) {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { addresses, refresh, setError, setMessage, error, message } =
-    useEmailMailbox();
+  const { addresses, refresh, setError, error } = useEmailMailbox();
   const domainKey = domainOf(email);
 
   const address = addresses.find(
@@ -35,7 +35,6 @@ export function AccountSettingsView({ email }: { email: string }) {
   async function saveDisplayName() {
     setSaving(true);
     setError(null);
-    setMessage(null);
     try {
       const res = await fetch(`${apiBase}/addresses`, {
         method: "PATCH",
@@ -47,7 +46,7 @@ export function AccountSettingsView({ email }: { email: string }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
-      setMessage("Display name saved");
+      toast.success("Display name saved");
       clearEmailCache(productId, `addresses:${domainKey}`);
       await refresh(true);
     } catch (e) {
@@ -76,7 +75,7 @@ export function AccountSettingsView({ email }: { email: string }) {
         </p>
       </div>
 
-      <EmailAlerts error={error} message={message} />
+      <EmailAlerts error={error} message={null} />
 
       <div className="space-y-4 rounded-lg border border-border p-4">
         <div className="space-y-1.5">

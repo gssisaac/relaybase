@@ -26,6 +26,7 @@ import type {
   RoutingActivityEvent,
 } from "@/email/components/types";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : String(n);
@@ -207,6 +208,7 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
   }, [accountFilter, folder, router, searchParams, sent]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearch("");
   }, [folder, accountFilter]);
 
@@ -326,6 +328,7 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
 
   useEffect(() => {
     if (!messageId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActivityDetail(null);
       setDetailLoading(false);
       return;
@@ -409,166 +412,117 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
     );
   }
 
-  if (selected && messageId) {
-    if (selected.kind === "sent") {
-      const m = selected.message;
-      return (
-        <EmailListContainer plain>
-          <DetailView
-            title={m.subject || "(no subject)"}
-            backHref={listHref}
-            actions={trashActions("sent", m.id)}
-          >
-            <div className="mb-6 space-y-1 border-b border-border pb-4">
-              <p className="text-sm">
-                <span className="text-muted-foreground">To </span>
-                {m.to}
-              </p>
-              {m.cc ? (
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Cc </span>
-                  {m.cc}
-                </p>
-              ) : null}
-              <p className="text-sm">
-                <span className="text-muted-foreground">From </span>
-                {m.from}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {formatDetailDate(m.sentAt)}
-              </p>
-            </div>
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-              {m.bodyPreview}
-            </pre>
-          </DetailView>
-        </EmailListContainer>
-      );
-    }
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
 
-    if (detailLoading && !activityDetail) {
-      return (
-        <EmailListContainer plain>
-          <div className="min-h-0 flex-1" />
-        </EmailListContainer>
-      );
-    }
+      const currentIndex = items.findIndex((item) => {
+        const id = item.kind === "inbox" ? item.message.key : item.message.id;
+        return id === messageId;
+      });
 
-    if (activityDetail) {
-      return (
-        <EmailListContainer plain>
-          <DetailView
-            title={activityDetail.subject || "(no subject)"}
-            backHref={listHref}
-            actions={
-              <div className="flex items-center gap-2">
-                {folder !== "trash" ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      render={
-                        <Link
-                          href={composeReplyHref(
-                            compose,
-                            activityDetail,
-                            addresses,
-                            accountFilter,
-                          )}
-                        />
-                      }
-                    >
-                      Reply
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      render={
-                        <Link
-                          href={composeReplyHref(
-                            compose,
-                            activityDetail,
-                            addresses,
-                            accountFilter,
-                            { replyAll: true },
-                          )}
-                        />
-                      }
-                    >
-                      Reply all
-                    </Button>
-                  </>
-                ) : null}
-                {trashActions("inbox", activityDetail.key)}
-              </div>
-            }
-          >
-            <div className="mb-6 space-y-1 border-b border-border pb-4">
-              <p className="text-sm">
-                <span className="text-muted-foreground">From </span>
-                {activityDetail.fromEmail}
-              </p>
-              <p className="text-sm">
-                <span className="text-muted-foreground">To </span>
-                {(activityDetail.toEmails?.length
-                  ? activityDetail.toEmails
-                  : [activityDetail.toEmail]
-                ).join(", ")}
-              </p>
-              {(activityDetail.ccEmails?.length ?? 0) > 0 ? (
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Cc </span>
-                  {activityDetail.ccEmails!.join(", ")}
-                </p>
-              ) : null}
-              <p className="text-xs text-muted-foreground">
-                {formatDetailDate(activityDetail.receivedAt)}
-              </p>
-              {activityDetail.errorDetail ? (
-                <p className="pt-2 text-sm text-destructive">
-                  {activityDetail.errorDetail}
-                </p>
-              ) : null}
-            </div>
-            {activityDetail.bodyText ||
-            activityDetail.bodyHtml ||
-            (activityDetail.attachments?.length ?? 0) > 0 ? (
-              <InboundEmailDetail
-                productId={productId}
-                messageKey={activityDetail.key}
-                domain={domainOf(activityDetail.toEmail)}
-                bodyText={
-                  activityDetail.bodyText ??
-                  activityDetail.bodyPreview ??
-                  ""
-                }
-                bodyHtml={activityDetail.bodyHtml ?? undefined}
-                attachments={activityDetail.attachments ?? []}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {activityDetail.bodyPreview ||
-                  "No message body available for this email."}
-              </p>
-            )}
-          </DetailView>
-        </EmailListContainer>
-      );
-    }
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        const nextIndex = currentIndex + 1;
+        if (nextIndex < items.length) {
+          const nextItem = items[nextIndex];
+          router.push(messageHref(folderBase, nextItem, accountFilter));
+        }
+      } else if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        const prevIndex = currentIndex - 1;
+        if (prevIndex >= 0) {
+          const prevItem = items[prevIndex];
+          router.push(messageHref(folderBase, prevItem, accountFilter));
+        }
+      } else if (e.key === "Escape" || e.key === "u") {
+        e.preventDefault();
+        router.push(listHref);
+      } else if (e.key === "c") {
+        e.preventDefault();
+        router.push(composeHref(compose, accountFilter));
+      } else if (e.key === "r" && selected && folder !== "trash") {
+        e.preventDefault();
+        if (selected.kind === "inbox" && activityDetail) {
+          router.push(
+            composeReplyHref(
+              compose,
+              activityDetail,
+              addresses,
+              accountFilter,
+            ),
+          );
+        }
+      } else if (e.key === "a" && selected && folder !== "trash") {
+        e.preventDefault();
+        if (selected.kind === "inbox" && activityDetail) {
+          router.push(
+            composeReplyHref(
+              compose,
+              activityDetail,
+              addresses,
+              accountFilter,
+              { replyAll: true },
+            ),
+          );
+        }
+      } else if (
+        (e.key === "Backspace" || e.key === "Delete" || e.key === "e") &&
+        selected
+      ) {
+        e.preventDefault();
+        const kind = selected.kind;
+        const id =
+          selected.kind === "inbox"
+            ? selected.message.key
+            : selected.message.id;
+        if (folder === "trash") {
+          restoreFromTrash(kind, id);
+        } else {
+          moveToTrash(kind, id);
+        }
 
-    return (
-      <EmailListContainer plain>
-        <DetailView title="Message not found" backHref={listHref}>
-          <p className="text-sm text-muted-foreground">
-            This email could not be loaded.
-          </p>
-        </DetailView>
-      </EmailListContainer>
-    );
-  }
+        // Select next item if possible
+        const nextIndex =
+          currentIndex + 1 < items.length
+            ? currentIndex + 1
+            : currentIndex - 1;
+        if (nextIndex >= 0 && nextIndex < items.length) {
+          const nextItem = items[nextIndex];
+          router.push(messageHref(folderBase, nextItem, accountFilter));
+        } else {
+          router.push(listHref);
+        }
+      }
+    };
 
-  return (
-    <EmailListContainer plain>
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    items,
+    messageId,
+    router,
+    folderBase,
+    accountFilter,
+    selected,
+    activityDetail,
+    compose,
+    addresses,
+    folder,
+    moveToTrash,
+    restoreFromTrash,
+    listHref,
+  ]);
+
+  const renderListPane = () => (
+    <div className="flex flex-1 flex-col overflow-hidden">
       <ListToolbar
         search={search}
         onSearchChange={setSearch}
@@ -610,10 +564,12 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
                 isInbox ? item.message.receivedAt : item.message.sentAt,
               );
               const preview = previewText(item);
+              const isSelected = (isInbox ? item.message.key : item.message.id) === messageId;
               return (
                 <EmailTableRow
                   key={item.id}
                   href={messageHref(folderBase, item, accountFilter)}
+                  selected={isSelected}
                   primary={
                     folder === "trash"
                       ? `${isInbox ? "In" : "Sent"} · ${primary}`
@@ -671,6 +627,203 @@ export function MailListView({ folder, messageId }: MailListViewProps) {
       ) : (
         <div className="min-h-0 flex-1" />
       )}
+    </div>
+  );
+
+  const renderDetailPane = () => {
+    if (!messageId) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground p-8">
+          <Inbox className="size-8 stroke-[1.2] opacity-40" />
+          <p className="text-xs">No conversation selected</p>
+        </div>
+      );
+    }
+
+    if (!selected) {
+      return (
+        <DetailView title="Message not found" backHref={listHref}>
+          <p className="text-sm text-muted-foreground">
+            This email could not be loaded.
+          </p>
+        </DetailView>
+      );
+    }
+
+    if (selected.kind === "sent") {
+      const m = selected.message;
+      return (
+        <DetailView
+          title={m.subject || "(no subject)"}
+          backHref={listHref}
+          actions={trashActions("sent", m.id)}
+        >
+          <div className="mb-6 space-y-1 border-b border-border/30 pb-4">
+            <p className="text-sm">
+              <span className="text-muted-foreground">To </span>
+              {m.to}
+            </p>
+            {m.cc ? (
+              <p className="text-sm">
+                <span className="text-muted-foreground">Cc </span>
+                {m.cc}
+              </p>
+            ) : null}
+            <p className="text-sm">
+              <span className="text-muted-foreground">From </span>
+              {m.from}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatDetailDate(m.sentAt)}
+            </p>
+          </div>
+          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+            {m.bodyPreview}
+          </pre>
+        </DetailView>
+      );
+    }
+
+    if (detailLoading && !activityDetail) {
+      return (
+        <div className="flex flex-1 items-center justify-center">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      );
+    }
+
+    if (activityDetail) {
+      return (
+        <DetailView
+          title={activityDetail.subject || "(no subject)"}
+          backHref={listHref}
+          actions={
+            <div className="flex items-center gap-2">
+              {folder !== "trash" ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    render={
+                      <Link
+                        href={composeReplyHref(
+                          compose,
+                          activityDetail,
+                          addresses,
+                          accountFilter,
+                        )}
+                      />
+                    }
+                  >
+                    Reply
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    render={
+                      <Link
+                        href={composeReplyHref(
+                          compose,
+                          activityDetail,
+                          addresses,
+                          accountFilter,
+                          { replyAll: true },
+                        )}
+                      />
+                    }
+                  >
+                    Reply all
+                  </Button>
+                </>
+              ) : null}
+              {trashActions("inbox", activityDetail.key)}
+            </div>
+          }
+        >
+          <div className="mb-6 space-y-1 border-b border-border/30 pb-4">
+            <p className="text-sm">
+              <span className="text-muted-foreground">From </span>
+              {activityDetail.fromEmail}
+            </p>
+            <p className="text-sm">
+              <span className="text-muted-foreground">To </span>
+              {(activityDetail.toEmails?.length
+                ? activityDetail.toEmails
+                : [activityDetail.toEmail]
+              ).join(", ")}
+            </p>
+            {(activityDetail.ccEmails?.length ?? 0) > 0 ? (
+              <p className="text-sm">
+                <span className="text-muted-foreground">Cc </span>
+                {activityDetail.ccEmails!.join(", ")}
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              {formatDetailDate(activityDetail.receivedAt)}
+            </p>
+            {activityDetail.errorDetail ? (
+              <p className="pt-2 text-sm text-destructive">
+                {activityDetail.errorDetail}
+              </p>
+            ) : null}
+          </div>
+          {activityDetail.bodyText ||
+          activityDetail.bodyHtml ||
+          (activityDetail.attachments?.length ?? 0) > 0 ? (
+            <InboundEmailDetail
+              productId={productId}
+              messageKey={activityDetail.key}
+              domain={domainOf(activityDetail.toEmail)}
+              bodyText={
+                activityDetail.bodyText ??
+                activityDetail.bodyPreview ??
+                ""
+              }
+              bodyHtml={activityDetail.bodyHtml ?? undefined}
+              attachments={activityDetail.attachments ?? []}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {activityDetail.bodyPreview ||
+                "No message body available for this email."}
+            </p>
+          )}
+        </DetailView>
+      );
+    }
+
+    return (
+      <DetailView title="Message not found" backHref={listHref}>
+        <p className="text-sm text-muted-foreground">
+          This email could not be loaded.
+        </p>
+      </DetailView>
+    );
+  };
+
+  return (
+    <EmailListContainer plain>
+      <div className="flex h-full w-full min-w-0 flex-1 overflow-hidden">
+        {/* Left Pane: Email List */}
+        <div
+          className={cn(
+            "flex h-full flex-col overflow-hidden border-r border-border/30",
+            messageId ? "hidden md:flex md:w-[360px] lg:w-[400px] shrink-0" : "flex flex-1"
+          )}
+        >
+          {renderListPane()}
+        </div>
+
+        {/* Right Pane: Email Detail */}
+        <div
+          className={cn(
+            "flex h-full flex-1 flex-col overflow-hidden bg-card/40",
+            !messageId ? "hidden md:flex" : "flex flex-1"
+          )}
+        >
+          {renderDetailPane()}
+        </div>
+      </div>
     </EmailListContainer>
   );
 }

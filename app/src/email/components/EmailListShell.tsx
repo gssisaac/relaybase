@@ -73,14 +73,14 @@ export function ListToolbar({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="flex select-none flex-col gap-3 border-b border-border px-4 py-2 sm:flex-row sm:items-center">
+    <div className="flex select-none flex-col gap-3 border-b border-border/30 px-4 py-2 sm:flex-row sm:items-center">
       <div className="relative min-w-0 flex-1">
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={searchPlaceholder}
-          className="h-9 border-0 bg-muted/50 pl-8 shadow-none focus-visible:ring-1"
+          className="h-8 border-0 bg-secondary/60 pl-8 shadow-none focus-visible:bg-secondary/90 focus-visible:ring-0 focus-visible:border-0"
         />
       </div>
       {trailing ? (
@@ -92,7 +92,7 @@ export function ListToolbar({
 
 export function EmailTableHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="grid select-none grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] gap-3 border-b border-border bg-muted/20 px-4 py-1.5 text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
+    <div className="grid select-none grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] gap-3 border-b border-border/30 bg-muted/10 px-4 py-1.5 text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
       {children}
     </div>
   );
@@ -120,11 +120,13 @@ export function EmailTableRow({
   selected?: boolean;
 }) {
   const className = cn(
-    "grid w-full gap-3 border-b border-border px-4 py-2.5 text-left text-sm transition-colors last:border-b-0",
+    "grid w-full gap-3 border-b border-border/20 px-4 py-3 text-left text-sm transition-all last:border-b-0 relative outline-none",
     status
       ? "grid-cols-[1fr_auto_auto] sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]"
       : "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]",
-    selected ? "bg-accent/70" : "hover:bg-muted/50",
+    selected
+      ? "bg-primary/5 text-foreground before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-primary"
+      : "hover:bg-secondary/40 text-muted-foreground hover:text-foreground",
   );
 
   const body = (
@@ -196,7 +198,7 @@ export function DetailView({
 }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b border-border px-4 py-2">
+      <div className="flex items-center gap-3 border-b border-border/30 px-4 py-2">
         {backHref ? (
           <Button
             variant="ghost"

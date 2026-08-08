@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useDomain } from "@/lib/dashboard/DomainContext";
@@ -16,17 +16,27 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * Desktop-only: list zones from the user's own Cloudflare account and queue
- * them for onboarding (no Relaybase nameserver hand-off).
+ * Desktop-only: list zones from the user's Cloudflare account and queue
+ * selected ones for background onboarding.
  */
-export function ImportCloudflareZonesDialog() {
+export function ImportCloudflareZonesDialog({
+  open: openProp,
+  onOpenChange,
+  showTrigger = true,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
+} = {}) {
   const store = useDomain();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
+
   const [zones, setZones] = useState<ZoneSummary[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (!open || !isDesktopRuntime()) return;
@@ -35,11 +45,17 @@ export function ImportCloudflareZonesDialog() {
       setError(null);
       try {
         const list = await desktopListZones();
-        setZones(list);
-        const existing = new Set(store.domains.map((d) => d.domain));
+        const existing = new Set(
+          store.domains.map((d) => d.domain.trim().toLowerCase()),
+        );
+        // Only show zones not already in Relaybase.
+        const missing = list.filter(
+          (z) => !existing.has(z.name.trim().toLowerCase()),
+        );
+        setZones(missing);
         const next: Record<string, boolean> = {};
-        for (const z of list) {
-          if (!existing.has(z.name)) next[z.name] = false;
+        for (const z of missing) {
+          next[z.name] = true;
         }
         setSelected(next);
       } catch (err) {
@@ -52,38 +68,37 @@ export function ImportCloudflareZonesDialog() {
 
   if (!isDesktopRuntime()) return null;
 
-  async function handleImport() {
-    const names = Object.entries(selected)
-      .filter(([, on]) => on)
-      .map(([name]) => name);
-    if (names.length === 0) return;
-    setImporting(true);
-    setError(null);
-    try {
-      for (const name of names) {
-        await store.addDomain(name);
-      }
-      setOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Import failed");
-    } finally {
-      setImporting(false);
+  const selectedNames = Object.entries(selected)
+    .filter(([, on]) => on)
+    .map(([name]) => name);
+  const canSubmit = !loading && selectedNames.length > 0;
+
+  function handleImport() {
+    if (selectedNames.length === 0) {
+      setError("Select at least one zone to add.");
+      return;
     }
+    // Queue in MobX store and close immediately — progress continues in the banner.
+    store.queueAddDomains(selectedNames, true);
+    setOpen(false);
+    setError(null);
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
-        <Plus className="size-3.5" />
-        Import from Cloudflare
-      </DialogTrigger>
+      {showTrigger ? (
+        <DialogTrigger render={<Button size="sm" />}>
+          <RefreshCw className="size-3.5" />
+          Refresh from Cloudflare
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Import zones from your account</DialogTitle>
+          <DialogTitle>Refresh zones from Cloudflare</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          Domains already on your Cloudflare account — we never ask you to point
-          nameservers at Relaybase.
+          New domains on your Cloudflare account that are not in Relaybase yet.
+          Setup continues in the background after you confirm.
         </p>
         {loading ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -92,33 +107,31 @@ export function ImportCloudflareZonesDialog() {
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : zones.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No zones found.</p>
+          <p className="text-sm text-muted-foreground">
+            No new zones to add. All Cloudflare zones are already in Relaybase.
+          </p>
         ) : (
           <div className="max-h-64 space-y-2 overflow-y-auto">
-            {zones.map((z) => {
-              const already = store.domains.some((d) => d.domain === z.name);
-              return (
-                <FieldCheck
-                  key={z.id}
-                  id={`zone-${z.id}`}
-                  checked={already ? true : Boolean(selected[z.name])}
-                  disabled={already || importing}
-                  onCheckedChange={(on) =>
-                    setSelected((prev) => ({ ...prev, [z.name]: on }))
-                  }
-                  label={`${z.name}${already ? " (already added)" : ""} · ${z.status}`}
-                />
-              );
-            })}
+            {zones.map((z) => (
+              <FieldCheck
+                key={z.id}
+                id={`zone-${z.id}`}
+                checked={Boolean(selected[z.name])}
+                onCheckedChange={(on) =>
+                  setSelected((prev) => ({ ...prev, [z.name]: on }))
+                }
+                label={`${z.name} · ${z.status}`}
+              />
+            ))}
           </div>
         )}
         <Button
           className="w-full"
-          disabled={importing || loading}
-          onClick={() => void handleImport()}
+          disabled={!canSubmit}
+          onClick={handleImport}
         >
-          {importing ? <Loader2 className="size-3.5 animate-spin" /> : null}
           Add selected
+          {selectedNames.length > 0 ? ` (${selectedNames.length})` : ""}
         </Button>
       </DialogContent>
     </Dialog>

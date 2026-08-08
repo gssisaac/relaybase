@@ -36,21 +36,16 @@ export function useProductId(): string {
 }
 
 /**
- * Browser/dev: Next `/api/email` proxies.
- * Desktop: point at the Worker installed in the user's CF account when
- * `window.__RELAYBASE_WORKER_URL__` is set (filled by DesktopProvider effect).
+ * Dashboard data APIs live on the Next app (`/api/email/...`).
+ * Do not point this at the customer Worker — that host has no /config,
+ * /addresses, /keys UI routes, and cross-origin fetch fails in Tauri/WebKit.
+ * Worker calls use `workerFetch` / the Tauri bridge instead.
  */
 export function useProductApiBase(_segment: string): string {
-  if (typeof window !== "undefined") {
-    const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
-    if (w.__RELAYBASE_WORKER_URL__) {
-      return `${w.__RELAYBASE_WORKER_URL__.replace(/\/$/, "")}/v1`;
-    }
-  }
   return "/api/email";
 }
 
-export function usePanelHref(...segments: string[]): string {
+export function useProductHref(...segments: string[]): string {
   const suffix = segments.filter(Boolean).join("/");
   return suffix ? `/${suffix}` : "/";
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check, X } from "lucide-react";
 import { useMemo } from "react";
 
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
@@ -236,26 +236,54 @@ export function FormattedErrorText({ text }: { text: string }) {
 export function EmailAlerts({
   error,
   message,
+  onDismissError,
+  onDismissMessage,
 }: {
   error: string | null;
   message: string | null;
+  onDismissError?: () => void;
+  onDismissMessage?: () => void;
 }) {
   return (
     <>
       {error ? (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="relative pr-10">
           <AlertCircle className="size-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
             <FormattedErrorText text={error} />
           </AlertDescription>
+          {onDismissError ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute top-1.5 right-1.5 h-6 w-6 p-0"
+              onClick={onDismissError}
+              aria-label="Dismiss error"
+            >
+              <X className="size-3.5" />
+            </Button>
+          ) : null}
         </Alert>
       ) : null}
       {message ? (
-        <Alert>
+        <Alert className="relative pr-10">
           <Check className="size-4" />
           <AlertTitle>Success</AlertTitle>
           <AlertDescription>{message}</AlertDescription>
+          {onDismissMessage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute top-1.5 right-1.5 h-6 w-6 p-0"
+              onClick={onDismissMessage}
+              aria-label="Dismiss success"
+            >
+              <X className="size-3.5" />
+            </Button>
+          ) : null}
         </Alert>
       ) : null}
     </>

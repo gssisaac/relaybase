@@ -191,13 +191,13 @@ export function UserDashboardView() {
           <CardHeader>
             <CardTitle className="text-sm">Get started</CardTitle>
             <CardDescription>
-              Add your first sending domain to unlock accounts, email, broadcasts,
-              and audience tools.
+              Refresh domains from your Cloudflare account to unlock accounts,
+              email, broadcasts, and audience tools.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button size="sm" nativeButton={false} render={<Link href={`${base}/domains`} />}>
-              Add domain
+              Refresh from Cloudflare
             </Button>
           </CardContent>
         </Card>

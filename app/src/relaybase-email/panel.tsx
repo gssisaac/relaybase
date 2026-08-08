@@ -4,7 +4,7 @@ import { Suspense, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import type { PanelViewProps } from "@/lib/dashboard/shared/DashboardPageContent";
-import { usePanelHref } from "@/lib/dashboard/shared/ProductContext";
+import { useProductHref } from "@/lib/dashboard/shared/ProductContext";
 import { AccountDetailShell, type AccountDetailSection } from "@/relaybase-email/components/AccountDetailShell";
 import { AccountLogsView } from "@/relaybase-email/components/AccountLogsView";
 import { AccountOverviewView } from "@/relaybase-email/components/AccountOverviewView";
@@ -30,7 +30,7 @@ import { UserDashboardView } from "@/relaybase-email/components/UserDashboardVie
 
 function EmailIndexRedirect() {
   const router = useRouter();
-  const dashboard = usePanelHref("dashboard");
+  const dashboard = useProductHref("dashboard");
   useEffect(() => {
     router.replace(dashboard);
   }, [router, dashboard]);
@@ -39,7 +39,7 @@ function EmailIndexRedirect() {
 
 function SettingsIndexRedirect() {
   const router = useRouter();
-  const settingsDomain = usePanelHref("settings", "domain");
+  const settingsDomain = useProductHref("settings", "domain");
   useEffect(() => {
     router.replace(settingsDomain);
   }, [router, settingsDomain]);
@@ -48,7 +48,7 @@ function SettingsIndexRedirect() {
 
 function KeysRedirect() {
   const router = useRouter();
-  const keys = usePanelHref("keys");
+  const keys = useProductHref("keys");
   useEffect(() => {
     router.replace(keys);
   }, [keys, router]);
@@ -57,7 +57,7 @@ function KeysRedirect() {
 
 function EmailsInboxRedirect() {
   const router = useRouter();
-  const inbox = usePanelHref("emails", "inbox");
+  const inbox = useProductHref("emails", "inbox");
   useEffect(() => {
     router.replace(inbox);
   }, [inbox, router]);

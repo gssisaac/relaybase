@@ -37,8 +37,8 @@ export function EmailSettingsDomainView() {
       <Alert>
         <AlertTitle>Domains</AlertTitle>
         <AlertDescription>
-          Manage sending domains on your Cloudflare account from the Domains
-          page. Relaybase does not host nameservers for you.
+          Manage sending domains from your Cloudflare account on the Domains
+          page via Refresh from Cloudflare.
         </AlertDescription>
       </Alert>
 
@@ -46,8 +46,8 @@ export function EmailSettingsDomainView() {
         <CardHeader>
           <CardTitle className="text-sm">Domains</CardTitle>
           <CardDescription>
-            Add or import zones, switch the active domain, and scope accounts
-            and email by domain.
+            Refresh zones from Cloudflare, switch the active domain, and scope
+            accounts and email by domain.
           </CardDescription>
         </CardHeader>
         <CardContent>

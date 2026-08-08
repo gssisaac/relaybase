@@ -201,7 +201,7 @@ async function runStep(
           return markFailed(
             next,
             stepId,
-            `No Cloudflare zone found for ${domain}. Add the domain to the Relaybase Cloudflare account first, then retry.`,
+            `No Cloudflare zone found for ${domain}. Add the domain to your Cloudflare account, then refresh from Cloudflare and retry.`,
             "ZONE_NOT_FOUND",
           );
         }
@@ -569,47 +569,5 @@ export async function buildDomainStatusFromOnboarding(
           steps: record.steps,
         }
       : null,
-  };
-}
-
-export type ZoneConnectionStatus = {
-  found: boolean;
-  zoneId: string | null;
-  status: string | null;
-  nameServers: string[];
-};
-
-/**
- * Live-checks Cloudflare for a zone matching `domain`, independent of any
- * stored onboarding record. Used by the "Connect domain" guide so users can
- * poll for the zone Relaybase's ops team adds, then copy its nameservers.
- */
-export async function getZoneConnectionStatus(
-  domainInput: string,
-): Promise<ZoneConnectionStatus> {
-  const domain = normalizeDomain(domainInput);
-  const client = await createEmailClient();
-  const zone = await client.getZone(domain);
-  if (zone) {
-    const nameServers =
-      zone.nameServers.length >= 2
-        ? zone.nameServers
-        : await client.getAccountNameServers();
-    return {
-      found: true,
-      zoneId: zone.id,
-      status: zone.status,
-      nameServers: nameServers.length ? nameServers : zone.nameServers,
-    };
-  }
-
-  // Site not on the account yet — still return the account's Cloudflare
-  // nameservers so the Connect dialog can show copyable NS immediately.
-  const nameServers = await client.getAccountNameServers();
-  return {
-    found: false,
-    zoneId: null,
-    status: null,
-    nameServers,
   };
 }

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 
+import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
@@ -17,7 +18,9 @@ export function UserSidebar() {
   const pathname = usePathname();
   const userId = useProductId();
   const router = useRouter();
-  const { tabs, settingsNav } = useEmailPaths();
+  const { tabs, settingsNav, domains } = useEmailPaths();
+  const domainStore = useDomain();
+  const domainsWorking = domainStore.isWorking;
   const {
     isDesktop,
     dragRegionClassName,
@@ -98,7 +101,13 @@ export function UserSidebar() {
                 )}
               >
                 <Icon className="size-4 shrink-0" aria-hidden />
-                {item.label}
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                {item.href === domains && domainsWorking ? (
+                  <Loader2
+                    className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+                    aria-label="Domain setup in progress"
+                  />
+                ) : null}
               </Link>
               {item.href === "/settings" && inSettings ? (
                 <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-sidebar-border pl-3">

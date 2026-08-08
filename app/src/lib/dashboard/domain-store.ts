@@ -40,33 +40,6 @@ export type DomainOnboardingSummary = {
   steps: DomainOnboardingStep[];
 };
 
-export type ZoneConnectionStatus = {
-  found: boolean;
-  zoneId: string | null;
-  status: string | null;
-  nameServers: string[];
-};
-
-/** Zone missing is a normal "connect domain" state, not a hard failure. */
-export function needsDomainConnect(
-  onboarding: DomainOnboardingSummary | null | undefined,
-): boolean {
-  if (!onboarding) return false;
-  if (onboarding.lastErrorCode === "ZONE_NOT_FOUND") return true;
-  if (onboarding.status !== "failed") return false;
-  const err = onboarding.lastError ?? "";
-  if (err.includes("No Cloudflare zone found")) return true;
-  return Boolean(
-    onboarding.steps?.some(
-      (step) =>
-        step.id === "resolve_zone" &&
-        (step.errorCode === "ZONE_NOT_FOUND" ||
-          (step.status === "failed" &&
-            (step.error ?? "").includes("No Cloudflare zone found"))),
-    ),
-  );
-}
-
 export type DomainSummary = {
   domain: string;
   active: boolean;
@@ -173,8 +146,6 @@ export class DomainStore {
   loading = true;
   error: string | null = null;
   addJobs: DomainAddJob[] = [];
-  /** Domain the "Connect domain" guide should open for (e.g. from the progress banner). */
-  zoneGuideRequest: string | null = null;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private disposeTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -190,6 +161,13 @@ export class DomainStore {
 
   get hasProgress(): boolean {
     return this.progressCards.length > 0;
+  }
+
+  /** True while any add/onboarding job is still in flight (for sidebar spinner). */
+  get isWorking(): boolean {
+    return this.addJobs.some(
+      (j) => j.phase !== "done" && j.phase !== "failed",
+    );
   }
 
   get progressCards(): DomainProgressCard[] {
@@ -241,10 +219,6 @@ export class DomainStore {
       }
 
       if (job.phase === "failed") {
-        // Missing Cloudflare site is a normal connect step — don't banner it as Failed.
-        if (needsDomainConnect(onboarding)) {
-          continue;
-        }
         cards.push({
           key: job.id,
           domain: job.domain,
@@ -272,10 +246,21 @@ export class DomainStore {
         continue;
       }
 
-      // onboarding
-      if (needsDomainConnect(onboarding)) {
+      // onboarding — treat ready as done even if the job phase hasn't flipped yet
+      if (onboarding?.status === "ready") {
+        cards.push({
+          key: job.id,
+          domain: job.domain,
+          title: job.domain,
+          description: job.message ?? "Ready",
+          status: "done",
+          onboarding,
+          dismissible: true,
+          jobId: job.id,
+        });
         continue;
       }
+
       const status =
         onboarding?.status === "waiting"
           ? "waiting"
@@ -420,7 +405,7 @@ export class DomainStore {
    * Queue a background domain add. Returns immediately — dialog should close.
    * Onboarding (and optional default addresses) continue in the store.
    */
-  queueAddDomain(domain: string, seedDefaults: boolean): DomainAddJob {
+  queueAddDomain(domain: string, seedDefaults = true): DomainAddJob {
     return this.enqueueJob({
       domain,
       kind: "add",
@@ -428,6 +413,11 @@ export class DomainStore {
       phase: "submitting",
       message: `Adding ${domain.trim().toLowerCase()}…`,
     });
+  }
+
+  /** Queue several domains at once; returns immediately for background processing. */
+  queueAddDomains(domains: string[], seedDefaults = true): DomainAddJob[] {
+    return domains.map((domain) => this.queueAddDomain(domain, seedDefaults));
   }
 
   /** Start onboarding in the background; progress stays in the store across routes. */
@@ -459,6 +449,16 @@ export class DomainStore {
       this.disposeTimers.delete(jobId);
     }
     this.addJobs = this.addJobs.filter((j) => j.id !== jobId);
+  }
+
+  /** Dismiss every progress job (used by the banner X control). */
+  dismissAllProgress() {
+    const ids = this.addJobs.map((j) => j.id);
+    for (const id of ids) this.dismissJob(id);
+  }
+
+  clearError() {
+    this.error = null;
   }
 
   private enqueueJob(params: {
@@ -549,33 +549,6 @@ export class DomainStore {
     return { message: result.message };
   }
 
-  /** Live Cloudflare zone lookup for the "Connect domain" guide — does not touch onboarding state. */
-  async checkZoneStatus(domain: string): Promise<ZoneConnectionStatus> {
-    const res = await desktopAwareFetch(
-      `/api/email/domains/zone-status?domain=${encodeURIComponent(domain)}`,
-      { cache: "no-store" },
-    );
-    const data = (await res.json()) as ZoneConnectionStatus & {
-      error?: string;
-    };
-    if (!res.ok) throw new Error(data.error ?? "Failed to check domain status");
-    return {
-      found: Boolean(data.found),
-      zoneId: data.zoneId ?? null,
-      status: data.status ?? null,
-      nameServers: data.nameServers ?? [],
-    };
-  }
-
-  /** Ask the Domains page to open the "Connect domain" guide for this domain (e.g. from the progress banner). */
-  requestZoneGuide(domain: string) {
-    this.zoneGuideRequest = domain;
-  }
-
-  clearZoneGuideRequest() {
-    this.zoneGuideRequest = null;
-  }
-
   private async runJob(job: DomainAddJob) {
     try {
       let result: { message: string };
@@ -596,13 +569,6 @@ export class DomainStore {
       const settled = await this.waitForOnboarding(job.domain);
       if (settled === "failed") {
         const summary = this.domains.find((d) => d.domain === job.domain);
-        if (needsDomainConnect(summary?.onboarding)) {
-          // Normal connect-domain state — drop the job quietly (no Failed banner).
-          runInAction(() => {
-            this.addJobs = this.addJobs.filter((j) => j.id !== job.id);
-          });
-          return;
-        }
         throw new Error(
           summary?.onboarding?.lastError ?? "Domain onboarding failed",
         );

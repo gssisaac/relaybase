@@ -14,30 +14,30 @@ import {
 } from "lucide-react";
 
 import {
-  usePanelHref,
+  useProductHref,
   useProductApiBase,
 } from "@/lib/dashboard/shared/ProductContext";
 
 export function useEmailPaths() {
   const apiBase = useProductApiBase("email");
-  const base = usePanelHref();
-  const dashboard = usePanelHref("dashboard");
-  const domains = usePanelHref("domains");
-  const keys = usePanelHref("keys");
-  const accounts = usePanelHref("accounts");
-  const emails = usePanelHref("emails");
-  const inbox = usePanelHref("emails", "inbox");
-  const sent = usePanelHref("emails", "sent");
-  const compose = usePanelHref("emails", "compose");
-  const broadcasts = usePanelHref("broadcasts");
-  const audience = usePanelHref("audience");
-  const metrics = usePanelHref("metrics");
-  const settingsBase = usePanelHref("settings");
+  const base = useProductHref();
+  const dashboard = useProductHref("dashboard");
+  const domains = useProductHref("domains");
+  const keys = useProductHref("keys");
+  const accounts = useProductHref("accounts");
+  const emails = useProductHref("emails");
+  const inbox = useProductHref("emails", "inbox");
+  const sent = useProductHref("emails", "sent");
+  const compose = useProductHref("emails", "compose");
+  const broadcasts = useProductHref("broadcasts");
+  const audience = useProductHref("audience");
+  const metrics = useProductHref("metrics");
+  const settingsBase = useProductHref("settings");
   /** @deprecated Use `keys` — legacy settings route */
-  const settingsKeys = usePanelHref("settings", "keys");
-  const settingsDomain = usePanelHref("settings", "domain");
+  const settingsKeys = useProductHref("settings", "keys");
+  const settingsDomain = useProductHref("settings", "domain");
   /** @deprecated Use settingsKeys — legacy route alias */
-  const settingsCloudflare = usePanelHref("settings", "aws");
+  const settingsCloudflare = useProductHref("settings", "aws");
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },

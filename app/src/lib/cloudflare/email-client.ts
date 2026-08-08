@@ -200,25 +200,6 @@ export class CloudflareEmailClient {
     return info;
   }
 
-  /**
-   * Cloudflare usually assigns the same nameserver pair to every zone on an
-   * account. When a domain's site hasn't been added yet, we still surface
-   * those account nameservers so the user can copy them for their registrar.
-   */
-  async getAccountNameServers(): Promise<string[]> {
-    const accountFilter = this.accountId
-      ? `account.id=${encodeURIComponent(this.accountId)}&`
-      : "";
-    const data = await this.request<
-      Array<{ name_servers?: string[] }>
-    >(`/zones?${accountFilter}per_page=50`);
-    for (const zone of data.result ?? []) {
-      const ns = (zone.name_servers ?? []).filter(Boolean);
-      if (ns.length >= 2) return ns;
-    }
-    return [];
-  }
-
   async listSendingSubdomains(zoneId: string): Promise<CfEmailSendingSubdomain[]> {
     const data = await this.request<CfEmailSendingSubdomainRaw[]>(
       `/zones/${zoneId}/email/sending/subdomains`,

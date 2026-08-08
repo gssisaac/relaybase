@@ -14,7 +14,6 @@ import {
   type OnboardingFailureCode,
   type OnboardingOverallStatus,
   type OnboardingStepStatus,
-  type ZoneConnectionStatus,
 } from "@/lib/dashboard/domain-store";
 
 export type {
@@ -26,13 +25,11 @@ export type {
   OnboardingFailureCode,
   OnboardingOverallStatus,
   OnboardingStepStatus,
-  ZoneConnectionStatus,
 };
 
 export {
   DEFAULT_ADDRESS_LOCAL_PARTS,
   DomainStore,
-  needsDomainConnect,
 } from "@/lib/dashboard/domain-store";
 
 const DomainStoreContext = React.createContext<DomainStore | null>(null);
@@ -109,7 +106,8 @@ export function useDomain(): DomainStore {
           j.seedDefaults,
           j.addressesAdded.length,
         ]),
-        zoneGuideRequest: store.zoneGuideRequest,
+        isWorking: store.isWorking,
+        hasProgress: store.hasProgress,
       }),
       () => setTick((t) => t + 1),
     );

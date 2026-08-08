@@ -7,6 +7,7 @@ import {
   readDashboardCacheStale,
   writeDashboardCache,
 } from "@/lib/dashboard/shared/dashboard-client-cache";
+import { desktopAwareFetch } from "@/lib/desktop/api-base";
 
 export type CacheMeta = {
   fromCache: boolean;
@@ -106,7 +107,7 @@ export async function fetchCachedApi<T>(
     namespace,
     resource,
     async () => {
-      const res = await fetch(url);
+      const res = await desktopAwareFetch(url);
       const json = await res.json();
       if (!res.ok) {
         throw new Error(
@@ -135,7 +136,7 @@ export async function fetchCachedApiOptional<T>(
       if (!fresh) {
         void (async () => {
           try {
-            const res = await fetch(url);
+            const res = await desktopAwareFetch(url);
             const json = await res.json();
             if (!res.ok) return;
             const data = json as T;
@@ -156,7 +157,7 @@ export async function fetchCachedApiOptional<T>(
     clearDashboardCache(serviceId, namespace, resource);
   }
 
-  const res = await fetch(url);
+  const res = await desktopAwareFetch(url);
   const json = await res.json();
   if (!res.ok) {
     return {

@@ -8,4 +8,6 @@ export type Env = {
   ADMIN_TOKEN: string;
   WORKER_SCRIPT_NAME: string;
   INBOUND_BUCKET_NAME: string;
+  /** Optional — license Stripe webhook (hosted on Relaybase account only). */
+  STRIPE_WEBHOOK_SECRET?: string;
 };

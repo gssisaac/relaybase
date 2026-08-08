@@ -4,10 +4,13 @@ Monorepo for **Relaybase** — domain-scoped transactional email (send + receive
 
 | Package | Path | Port | Role |
 |---------|------|------|------|
-| **Worker** | repo root (`src/`) | 8787 (`wrangler dev`) | Send API, inbound storage, webhooks, admin routes |
-| **Admin** | `admin/` | 32829 | Platform operator dashboard (keys, logs, inbox, users) |
-| **User app** | `app/` | 32830 | Customer email dashboard (inbox, compose, broadcasts, settings) |
-| **Website** | `website/` | 32828 | Marketing site (static export → Cloudflare) |
+| **Worker** | `server/` | 8787 (`wrangler dev`) | Installable routing Worker (send, inbound, keys) + hosted license API |
+| **Admin** | `admin/` | 32829 | Operator dashboard (licenses, logs, settings; legacy users) |
+| **User app** | `app/` | 32830 | Email UI — `next dev` for HMR; static export for Tauri |
+| **Desktop** | `desktop/` | Tauri | Mac app shell (`devUrl` → `:32830`, prod → `app/out`) |
+| **Website** | `website/` | 32828 | Marketing site (BYO-CF / $39 one-time positioning) |
+
+**Product pivot:** Relaybase is a one-time Mac app that installs the Worker into the **user's** Cloudflare account. See `docs/pivot-byo-cloudflare.md` and `PRODUCT.md`.
 
 Production API: `https://api.relaybase.xyz`. Marketing: [relaybase.xyz](https://relaybase.xyz).
 
@@ -82,7 +85,28 @@ cd app && npm install && npm run dev   # http://localhost:32830
 
 Sign in with any user id (no password). Accounts live in `data/users.json` and `data/users/<id>.json`. The app uses local stub routes under `/api/email/*` — no Worker or Cloudflare calls unless you wire production env.
 
-### 4. Marketing site
+### 4. Desktop (Tauri)
+
+```bash
+cd desktop && pnpm install
+pnpm dev   # starts app/ on :32830 and opens the Tauri window
+```
+
+Daily UI work: prefer `cd app && pnpm dev` in the browser (fast HMR). Use `desktop` when testing Worker install or the native shell (credentials temporarily in `~/.relaybase/`).
+
+Release DMG (signing via `desktop/scripts/deploy/`, adapted from kloy):
+
+```bash
+cd desktop && pnpm run build:macos
+```
+
+Static export only (what Tauri bundles):
+
+```bash
+cd app && pnpm run build:desktop   # → app/out
+```
+
+### 5. Marketing site
 
 ```bash
 cd website && npm install && npm run dev   # http://localhost:32828

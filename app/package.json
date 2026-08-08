@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev -p 32830",
     "build": "next build",
+    "build:desktop": "node scripts/build-desktop.mjs",
     "build:cf": "corepack enable && pnpm install --frozen-lockfile && opennextjs-cloudflare build",
     "preview:cf": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy:cf": "pnpm run build:cf && opennextjs-cloudflare deploy",

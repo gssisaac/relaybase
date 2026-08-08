@@ -20,6 +20,7 @@ import {
   type DomainOnboardingSummary,
 } from "@/lib/dashboard/DomainContext";
 import { ConnectDomainDialog } from "@/relaybase-email/components/ConnectDomainDialog";
+import { ImportCloudflareZonesDialog } from "@/relaybase-email/components/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/relaybase-email/components/EmailShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -222,11 +223,13 @@ export function DomainsView() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Domains</h1>
           <p className="text-sm text-muted-foreground">
-            Manage sending domains. Adding a domain starts Cloudflare Email
-            Sending onboarding in the background.
+            Domains on your Cloudflare account. Import zones from CF or add a
+            hostname that already lives on your zones — we never take nameserver
+            control.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ImportCloudflareZonesDialog />
           <Dialog
             open={addOpen}
             onOpenChange={(open) => {
@@ -246,9 +249,9 @@ export function DomainsView() {
               </DialogHeader>
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  After you add a domain, connect it at your registrar with
-                  the Cloudflare nameservers we&apos;ll show you. Setup
-                  continues in the background — you can leave this page.
+                  Domain must already be a zone on <strong>your</strong>{" "}
+                  Cloudflare account. Prefer &quot;Import from Cloudflare&quot;
+                  when using the Mac app.
                 </p>
                 <div className="space-y-1.5">
                   <Label htmlFor="new-domain">Domain</Label>

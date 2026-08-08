@@ -152,7 +152,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                     Ready to ship your own billing@ and support@?
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Join the waitlist and lock in ${siteConfig.waitlist.monthly}
+                    Get notified when the Mac app launches — ${siteConfig.pricing.oneTime}
                     /mo per domain for your first {siteConfig.waitlist.durationYears}{" "}
                     year.
                   </p>

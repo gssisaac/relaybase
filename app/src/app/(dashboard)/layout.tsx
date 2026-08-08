@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { DesktopDashboardGate } from "@/app/(dashboard)/DesktopDashboardGate";
 import { UserSidebar } from "@/components/layout/UserSidebar";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { DomainProgressBanner } from "@/relaybase-email/components/DomainProgressBanner";
@@ -13,6 +14,11 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Static desktop export skips cookie auth; Tauri shell handles onboarding.
+  if (process.env.DESKTOP_BUILD === "1") {
+    return <DesktopDashboardGate>{children}</DesktopDashboardGate>;
+  }
+
   const jar = await cookies();
   const userId = jar.get("relaybase_user")?.value?.trim();
   if (!userId) redirect("/login");
@@ -23,16 +29,18 @@ export default async function DashboardLayout({
   await ensureUserAuthToken(userId);
 
   return (
-    <SessionProvider userId={userId}>
-      <DomainProvider>
-        <div className="flex h-svh overflow-hidden bg-background">
-          <UserSidebar />
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <DomainProgressBanner />
-            {children}
-          </main>
-        </div>
-      </DomainProvider>
-    </SessionProvider>
+    <DesktopDashboardGate>
+      <SessionProvider userId={userId}>
+        <DomainProvider>
+          <div className="flex h-svh overflow-hidden bg-background">
+            <UserSidebar />
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <DomainProgressBanner />
+              {children}
+            </main>
+          </div>
+        </DomainProvider>
+      </SessionProvider>
+    </DesktopDashboardGate>
   );
 }

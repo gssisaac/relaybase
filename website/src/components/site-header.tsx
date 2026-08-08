@@ -41,10 +41,10 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <Badge variant="teal" className="hidden sm:inline-flex">
-            ${siteConfig.pricing.monthly}/mo per domain
+            ${siteConfig.pricing.oneTime} one-time
           </Badge>
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
-            Get started
+            Buy
             <ArrowRight data-icon="inline-end" />
           </Button>
         </div>

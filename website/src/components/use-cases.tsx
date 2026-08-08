@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { siteConfig } from "@/lib/site-config";
 
 const personas = [
   {
@@ -14,8 +15,7 @@ const personas = [
     title: "Solo product builders",
     description:
       "Launch billing@ and support@ on day one without paying for six Google seats you'll never log into.",
-    example:
-      "Indie SaaS founder ships invoices from billing@ and routes support tickets via webhook — $10/mo total.",
+    example: `Indie SaaS founder with a dozen Cloudflare domains — one $${siteConfig.pricing.oneTime} license, Cloudflare Email Sending on their own bill.`,
   },
   {
     icon: Boxes,
@@ -23,7 +23,7 @@ const personas = [
     description:
       "Run separate domains per product with the same API pattern. Scale from one product to five without re-architecting email.",
     example:
-      "Agency ships 4 client products: 4 domains × $10 = $40/mo vs $168/mo on Workspace.",
+      "Agency ships four client products on four zones — same Mac app, Worker already in their Cloudflare account.",
   },
   {
     icon: Users,
@@ -31,7 +31,7 @@ const personas = [
     description:
       "Centralize transactional send and inbound routing. Domain-scoped API keys keep each product isolated.",
     example:
-      "Platform team issues one key per microservice domain. Admin@ alerts go to PagerDuty via webhook.",
+      "Platform team issues one key per microservice domain from their Worker. Admin@ alerts go to PagerDuty via webhook.",
   },
 ];
 
@@ -44,11 +44,12 @@ export function UseCases() {
             Who it&apos;s for
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Email infrastructure for people who ship products
+            Email UX for people who already run Cloudflare
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Whether you&apos;re on product one or product ten, Relaybase keeps
-            email cheap, predictable, and code-first.
+            If you manage many domains on Cloudflare and need product addresses
+            without Workspace seat math, Relaybase is the client and Worker
+            wrapper.
           </p>
         </div>
 

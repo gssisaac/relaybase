@@ -8,6 +8,7 @@ import { adminLogs } from "./routes/admin-logs";
 import { send } from "./routes/send";
 import { v1Inbox } from "./routes/v1-inbox";
 import { v1Webhooks } from "./routes/v1-webhooks";
+import { license } from "./routes/license";
 import { waitlistOptions, waitlistPost } from "./routes/waitlist";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -41,6 +42,7 @@ app.route("/admin/inbox", adminInbox);
 app.route("/v1/inbox", v1Inbox);
 app.route("/v1/webhooks", v1Webhooks);
 app.route("/v1/send", send);
+app.route("/v1/license", license);
 app.options("/v1/waitlist", waitlistOptions);
 app.post("/v1/waitlist", waitlistPost);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -47,7 +48,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
           <CardDescription>
-            Enter your existing account id. Registration is closed.
+            MVP — enter your account ID. No password.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -66,9 +67,19 @@ export default function LoginPage() {
             {error ? (
               <p className="text-sm text-destructive">{error}</p>
             ) : null}
-            <Button type="submit" className="w-full" disabled={loading || !id.trim()}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || !id.trim()}
+            >
               {loading ? "Signing in…" : "Sign in"}
             </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              New here?{" "}
+              <Link href="/register" className="text-foreground underline">
+                Create an account
+              </Link>
+            </p>
           </form>
         </CardContent>
       </Card>

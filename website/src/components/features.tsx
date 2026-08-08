@@ -3,9 +3,9 @@ import {
   Inbox,
   Key,
   Layers,
+  MonitorSmartphone,
   Send,
   Webhook,
-  Zap,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,12 @@ import {
 
 const features = [
   {
+    icon: MonitorSmartphone,
+    title: "Mac app inbox",
+    description:
+      "Spark-like UI for every address across every domain on your Cloudflare account.",
+  },
+  {
     icon: Send,
     title: "Transactional send",
     description:
@@ -27,7 +33,7 @@ const features = [
     icon: Inbox,
     title: "Inbound receive",
     description:
-      "support@ and privacy@ land in your API. Poll events or push via webhooks — your choice.",
+      "support@ and privacy@ land in your Worker. Poll events or push via webhooks — your choice.",
   },
   {
     icon: Webhook,
@@ -39,25 +45,19 @@ const features = [
     icon: Key,
     title: "Domain-scoped keys",
     description:
-      "One API key per domain. billing@ and support@ share a key — no credential sprawl across products.",
+      "One API key per domain, issued by the Worker in your account — no credential sprawl.",
   },
   {
     icon: Layers,
-    title: "Multi-product ready",
+    title: "Multi-domain ready",
     description:
-      "Ship Product A and Product B on separate domains. Same dashboard, same integration pattern.",
-  },
-  {
-    icon: Zap,
-    title: "Auto-routing",
-    description:
-      "Route inbound addresses to your Worker automatically. No manual DNS forwarding chains.",
+      "Pull every zone from your Cloudflare account. Same UI pattern across products.",
   },
   {
     icon: Globe,
-    title: "Custom domains",
+    title: "Your domains",
     description:
-      "Use your own domain from day one. Customers see billing@yourbrand.com — not a shared relay address.",
+      "Customers see billing@yourbrand.com. Nameservers stay on your Cloudflare zones — never ours.",
   },
 ];
 
@@ -73,14 +73,17 @@ export function Features() {
             Everything a product team needs — nothing you don&apos;t
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Built for builders who want email infrastructure, not another inbox
-            to check.
+            A desktop client and Worker wrapper around Cloudflare Email — not
+            another hosted inbox we operate for you.
           </p>
         </div>
 
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
-            <Card key={feature.title} className="bg-white transition-shadow hover:shadow-md">
+            <Card
+              key={feature.title}
+              className="bg-white transition-shadow hover:shadow-md"
+            >
               <CardHeader>
                 <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-brand/10">
                   <feature.icon className="size-4 text-brand" />

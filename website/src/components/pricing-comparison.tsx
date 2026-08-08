@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, Minus, TrendingDown } from "lucide-react";
+import { Check, Minus, Shield } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,20 +11,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  getAnnualSavings,
   getGoogleWorkspaceMonthlyCost,
-  getMonthlySavings,
   siteConfig,
 } from "@/lib/site-config";
 
 export function PricingComparison() {
   const workspaceMonthly = getGoogleWorkspaceMonthlyCost();
-  const relaybaseMonthly = siteConfig.pricing.monthly;
-  const monthlySavings = getMonthlySavings();
-  const annualSavings = getAnnualSavings();
-  const savingsPercent = Math.round(
-    (monthlySavings / workspaceMonthly) * 100,
-  );
+  const oneTime = siteConfig.pricing.oneTime;
+  const cfEmailMonthly = siteConfig.cloudflareEmailSendingMonthly;
 
   return (
     <section id="pricing" className="py-20">
@@ -34,10 +28,11 @@ export function PricingComparison() {
             Pricing
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            The cheapest way to run product email
+            Buy once. Run on your Cloudflare plan.
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            One flat price per domain. No per-seat math, no surprise overages.
+            Relaybase is software — not a hosted email intermediary. You pay
+            Cloudflare for Email Sending; we never bill monthly for domains.
           </p>
         </div>
 
@@ -51,23 +46,27 @@ export function PricingComparison() {
             <CardHeader className="pt-8">
               <CardTitle className="text-2xl">{siteConfig.name}</CardTitle>
               <CardDescription>
-                Unlimited standard addresses on one domain
+                Mac app + routing Worker for your Cloudflare account
               </CardDescription>
               <div className="mt-4 flex items-baseline gap-1">
                 <span className="text-5xl font-bold tracking-tight text-brand">
-                  ${relaybaseMonthly}
+                  ${oneTime}
                 </span>
-                <span className="text-muted-foreground">/month per domain</span>
+                <span className="text-muted-foreground">one-time</span>
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Plus Cloudflare Email Sending (~${cfEmailMonthly}/mo on your
+                account — billed by Cloudflare, not us).
+              </p>
             </CardHeader>
             <CardContent className="space-y-3">
               {[
+                "Unlimited domains on your Cloudflare account",
                 "billing@, support@, privacy@, noreply@, hello@, admin@",
-                "Transactional send API",
-                "Inbound receive + webhooks",
-                "Multi-product: one API key per domain",
-                "Send logs & delivery monitoring",
-                "No per-mailbox or per-seat fees",
+                "Spark-like inbox, compose, and accounts UI",
+                "Send API + inbound webhooks from your Worker",
+                "Worker installed in your account — we don't host mail",
+                "No per-domain or per-seat Relaybase fees",
               ].map((item) => (
                 <div key={item} className="flex items-start gap-2.5 text-sm">
                   <Check className="mt-0.5 size-4 shrink-0 text-accent-teal" />
@@ -79,21 +78,14 @@ export function PricingComparison() {
                 className="mt-6 w-full"
                 size="lg"
               >
-                Join waitlist — ${siteConfig.waitlist.monthly}/mo
+                Get Relaybase — ${oneTime}
               </Button>
-              <p className="pt-1 text-center text-xs text-muted-foreground">
-                Waitlist: ${relaybaseMonthly} → ${siteConfig.waitlist.monthly}{" "}
-                ({siteConfig.waitlist.discountPercent}% off) for{" "}
-                {siteConfig.waitlist.durationYears} year
-              </p>
             </CardContent>
           </Card>
 
           <Card className="bg-muted/30">
             <CardHeader>
-              <CardTitle className="text-2xl">
-                Google Workspace
-              </CardTitle>
+              <CardTitle className="text-2xl">Google Workspace</CardTitle>
               <CardDescription>
                 {siteConfig.googleWorkspace.plan} — one paid seat per address
               </CardDescription>
@@ -118,7 +110,10 @@ export function PricingComparison() {
                 "Cost scales linearly with every new address",
                 "Designed for humans, not product automation",
               ].map((item) => (
-                <div key={item} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                <div
+                  key={item}
+                  className="flex items-start gap-2.5 text-sm text-muted-foreground"
+                >
                   <Minus className="mt-0.5 size-4 shrink-0" />
                   <span>{item}</span>
                 </div>
@@ -130,25 +125,15 @@ export function PricingComparison() {
         <div className="mt-10 rounded-2xl border border-accent-teal/30 bg-accent p-8 text-center md:p-10">
           <div className="mx-auto flex max-w-lg flex-col items-center gap-3">
             <div className="flex size-12 items-center justify-center rounded-full bg-white shadow-sm">
-              <TrendingDown className="size-6 text-accent-teal" />
+              <Shield className="size-6 text-accent-teal" />
             </div>
             <h3 className="text-2xl font-bold text-accent-foreground">
-              Save ${monthlySavings}/month — {savingsPercent}% less
+              We never touch your mail
             </h3>
             <p className="text-accent-foreground/80">
-              When you need six standard product addresses, Google Workspace
-              costs{" "}
-              <span className="font-semibold">${workspaceMonthly}/mo</span>.
-              Relaybase covers all six for{" "}
-              <span className="font-semibold">${relaybaseMonthly}/mo</span>.
-              That&apos;s{" "}
-              <span className="font-semibold">${annualSavings}/year</span> back
-              in your budget — per domain.
-            </p>
-            <p className="text-sm text-accent-foreground/70">
-              Running three products? Multiply the savings. Three domains on
-              Relaybase: ${relaybaseMonthly * 3}/mo vs ${workspaceMonthly * 3}/mo
-              on Workspace.
+              Relaybase installs a Worker into <em>your</em> Cloudflare account.
+              Send, receive, and storage stay under your credentials. We sell
+              software and a license — not intermediary email hosting.
             </p>
           </div>
         </div>

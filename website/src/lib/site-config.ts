@@ -5,39 +5,42 @@ const defaultApiUrl = "https://api.relaybase.xyz";
 
 export const siteConfig = {
   name: "Relaybase",
-  tagline: "Every product email. One flat price.",
+  tagline: "Product email on your Cloudflare account.",
   description:
-    "Spin up billing, support, privacy, no-reply, hello, and admin addresses for every product you ship — send and receive with a few lines of code. $10/month per domain. Built on Cloudflare.",
+    "A Mac app that wraps Cloudflare Email Sending and Routing with a Spark-like inbox and send API. Runs entirely in your Cloudflare account — one-time purchase, $39.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? defaultSiteUrl,
   apiUrl: process.env.NEXT_PUBLIC_RELAYBASE_API_URL ?? defaultApiUrl,
   getStartedPath: "/get-started",
   pricing: {
-    monthly: 10,
+    /** One-time license price (USD). */
+    oneTime: 39,
     currency: "USD",
+    /** @deprecated Use oneTime — kept briefly for any leftover references. */
+    monthly: 39,
   },
   waitlist: {
-    monthly: 5,
-    discountPercent: 50,
-    durationYears: 1,
-    maxDomains: 50,
+    monthly: 39,
+    discountPercent: 0,
+    durationYears: 0,
+    maxDomains: 0,
   },
   keywords: [
     "Relaybase",
+    "Cloudflare email client",
+    "Cloudflare Email Sending",
+    "Cloudflare Email Routing",
+    "product email Mac app",
     "transactional email API",
     "inbound email API",
-    "product email infrastructure",
-    "multi-product email",
     "billing@ support@ email",
-    "cheap transactional email",
-    "Cloudflare email sending",
-    "developer email API",
-    "no-reply email service",
+    "BYO Cloudflare",
+    "multi-domain email manager",
   ],
   ogImage: {
     url: "/og.svg",
     width: 1200,
     height: 630,
-    alt: "Relaybase — product email for builders",
+    alt: "Relaybase — product email for your Cloudflare account",
     type: "image/svg+xml",
   },
   standardAddresses: [
@@ -53,6 +56,7 @@ export const siteConfig = {
     perUserMonthly: 7,
     usersForSixAddresses: 6,
   },
+  cloudflareEmailSendingMonthly: 5,
 } as const;
 
 export function getGoogleWorkspaceMonthlyCost() {
@@ -62,12 +66,9 @@ export function getGoogleWorkspaceMonthlyCost() {
   );
 }
 
-export function getMonthlySavings() {
-  return getGoogleWorkspaceMonthlyCost() - siteConfig.pricing.monthly;
-}
-
-export function getAnnualSavings() {
-  return getMonthlySavings() * 12;
+/** Illustrative annual Workspace cost for six addresses (comparison only). */
+export function getGoogleWorkspaceAnnualCost() {
+  return getGoogleWorkspaceMonthlyCost() * 12;
 }
 
 /**

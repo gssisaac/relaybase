@@ -35,7 +35,18 @@ export function useProductId(): string {
   return useSession().userId;
 }
 
+/**
+ * Browser/dev: Next `/api/email` proxies.
+ * Desktop: point at the Worker installed in the user's CF account when
+ * `window.__RELAYBASE_WORKER_URL__` is set (filled by DesktopProvider effect).
+ */
 export function useProductApiBase(_segment: string): string {
+  if (typeof window !== "undefined") {
+    const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+    if (w.__RELAYBASE_WORKER_URL__) {
+      return `${w.__RELAYBASE_WORKER_URL__.replace(/\/$/, "")}/v1`;
+    }
+  }
   return "/api/email";
 }
 
@@ -45,5 +56,5 @@ export function usePanelHref(...segments: string[]): string {
 }
 
 export function useReleaseApiUrl(..._segments: string[]): string {
-  return "/api/email";
+  return useProductApiBase("email");
 }

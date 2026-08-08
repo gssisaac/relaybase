@@ -1,10 +1,11 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Boxes,
   Code2,
+  KeyRound,
   Layers,
   Mail,
+  MonitorSmartphone,
   Sparkles,
 } from "lucide-react";
 
@@ -26,13 +27,13 @@ export function Hero() {
             className="mb-6 border border-border bg-white px-3 py-1 text-muted-foreground"
           >
             <Sparkles className="mr-1.5 size-3.5 text-brand" />
-            Built for product builders &amp; multi-product teams
+            Built for your own Cloudflare account
           </Badge>
 
           <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl lg:text-6xl">
-            Every standard product email.
+            Product email that lives in
             <span className="mt-2 block text-brand">
-              One flat ${siteConfig.pricing.monthly}/month.
+              your Cloudflare account.
             </span>
           </h1>
 
@@ -42,7 +43,7 @@ export function Hero() {
 
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-              Join the waitlist — ${siteConfig.waitlist.monthly}/mo
+              Buy once — ${siteConfig.pricing.oneTime}
               <ArrowRight data-icon="inline-end" />
             </Button>
             <Button
@@ -51,7 +52,7 @@ export function Hero() {
               size="lg"
             >
               <Code2 data-icon="inline-start" />
-              See the code
+              See the API
             </Button>
           </div>
         </div>
@@ -65,18 +66,18 @@ export function Hero() {
             },
             {
               icon: Layers,
-              title: "Multi-product",
-              desc: "one domain per product, same API",
+              title: "Multi-domain",
+              desc: "every zone on your CF account",
             },
             {
-              icon: Code2,
-              title: "Embed in minutes",
-              desc: "send & receive with fetch()",
+              icon: MonitorSmartphone,
+              title: "Mac app",
+              desc: "Spark-like inbox + compose",
             },
             {
-              icon: Boxes,
-              title: "Cloudflare-backed",
-              desc: "enterprise-grade delivery",
+              icon: KeyRound,
+              title: "You own the Worker",
+              desc: "installed in your CF account",
             },
           ].map((item) => (
             <div

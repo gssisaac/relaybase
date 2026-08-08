@@ -6,8 +6,11 @@ import {
   EmailAlerts,
   PageToolbar,
 } from "@/relaybase-email/components/EmailShared";
+import { LicenseActivatePanel } from "@/relaybase-email/components/LicenseActivatePanel";
+import { WorkerUpdatePanel } from "@/relaybase-email/components/WorkerUpdatePanel";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { useEmailSettings } from "@/relaybase-email/components/useEmailSettings";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +24,7 @@ import {
 export function EmailSettingsDomainView() {
   const s = useEmailSettings();
   const { domains } = useEmailPaths();
+  const desktop = typeof window !== "undefined" && isDesktopRuntime();
 
   return (
     <div className="min-h-[min(70vh,560px)] space-y-4">
@@ -32,10 +36,10 @@ export function EmailSettingsDomainView() {
       <EmailAlerts error={s.error} message={s.message} />
 
       <Alert>
-        <AlertTitle>Domains moved</AlertTitle>
+        <AlertTitle>Domains</AlertTitle>
         <AlertDescription>
-          Manage sending domains, set the active domain, and view per-domain
-          counts from the Domains page.
+          Manage sending domains on your Cloudflare account from the Domains
+          page. Relaybase does not host nameservers for you.
         </AlertDescription>
       </Alert>
 
@@ -43,8 +47,8 @@ export function EmailSettingsDomainView() {
         <CardHeader>
           <CardTitle className="text-sm">Domains</CardTitle>
           <CardDescription>
-            Add domains, switch the active domain, and scope accounts, email,
-            broadcasts, and audience by domain.
+            Add or import zones, switch the active domain, and scope accounts
+            and email by domain.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -53,6 +57,13 @@ export function EmailSettingsDomainView() {
           </Button>
         </CardContent>
       </Card>
+
+      {desktop ? (
+        <>
+          <WorkerUpdatePanel />
+          <LicenseActivatePanel />
+        </>
+      ) : null}
     </div>
   );
 }

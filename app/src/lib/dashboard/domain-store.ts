@@ -2,6 +2,8 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
+import { desktopAwareFetch } from "@/lib/desktop/api-base";
+
 export type OnboardingStepStatus =
   | "pending"
   | "running"
@@ -130,7 +132,7 @@ async function postOnboard(
   activeDomain: string | null;
   message: string;
 }> {
-  const res = await fetch("/api/email/domains/onboard", {
+  const res = await desktopAwareFetch("/api/email/domains/onboard", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ domain, action }),
@@ -351,7 +353,7 @@ export class DomainStore {
   async refresh() {
     this.error = null;
     try {
-      const res = await fetch("/api/email/domains", { cache: "no-store" });
+      const res = await desktopAwareFetch("/api/email/domains", { cache: "no-store" });
       const data = (await res.json()) as {
         domains?: DomainSummary[];
         activeDomain?: string | null;
@@ -375,7 +377,7 @@ export class DomainStore {
 
   async setActiveDomain(domain: string) {
     this.error = null;
-    const res = await fetch("/api/email/domains", {
+    const res = await desktopAwareFetch("/api/email/domains", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ activeDomain: domain }),
@@ -394,7 +396,7 @@ export class DomainStore {
 
   async addDomain(domain: string) {
     this.error = null;
-    const res = await fetch("/api/email/domains", {
+    const res = await desktopAwareFetch("/api/email/domains", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ domain }),
@@ -493,7 +495,7 @@ export class DomainStore {
 
   async removeDomain(domain: string) {
     this.error = null;
-    const res = await fetch(
+    const res = await desktopAwareFetch(
       `/api/email/domains?domain=${encodeURIComponent(domain)}`,
       { method: "DELETE" },
     );
@@ -549,7 +551,7 @@ export class DomainStore {
 
   /** Live Cloudflare zone lookup for the "Connect domain" guide — does not touch onboarding state. */
   async checkZoneStatus(domain: string): Promise<ZoneConnectionStatus> {
-    const res = await fetch(
+    const res = await desktopAwareFetch(
       `/api/email/domains/zone-status?domain=${encodeURIComponent(domain)}`,
       { cache: "no-store" },
     );
@@ -641,7 +643,7 @@ export class DomainStore {
   }
 
   private async seedDefaultAddresses(domain: string): Promise<string[]> {
-    const res = await fetch(
+    const res = await desktopAwareFetch(
       `/api/email/addresses?domain=${encodeURIComponent(domain)}`,
       {
         method: "POST",

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users } from "lucide-react";
+import { KeyRound, LayoutDashboard, Users } from "lucide-react";
 
 import { useRelaybasePaths } from "@/relaybase/components/useEmailSenderPaths";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,8 @@ export function AdminSidebar() {
 
   const nav = [
     { href: "/status", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/users", label: "Users", icon: Users },
+    { href: "/licenses", label: "Licenses", icon: KeyRound },
+    { href: "/users", label: "Users (legacy)", icon: Users },
     ...tabs
       .filter((tab) => ["/logs", "/settings"].includes(tab.href))
       .map((tab) => ({

@@ -1,0 +1,16 @@
+{
+  "name": "relaybase-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Relaybase desktop shell (Tauri + Next.js dual-mode)",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:macos": "bash scripts/deploy/build-macos.sh",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}

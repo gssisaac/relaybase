@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useDashboardPaths } from "@/dashboard/paths";
 import { AddEmailAccountDialog } from "@/email/components/AddEmailAccountDialog";
+import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { useMailAccounts } from "@/email/components/MailAccountsContext";
 import {
   DEFAULT_DASHBOARD_PATH,
@@ -46,6 +47,19 @@ import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
+function UnreadCountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  const label = count > 99 ? "99+" : String(count);
+  return (
+    <span
+      className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
+      aria-label={`${count} unread`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function isActive(href: string, pathname: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -60,6 +74,8 @@ function FolderTree({
   getColor,
   defaultOpen,
   collapsed,
+  unreadCount = 0,
+  unreadCountForAccount,
 }: {
   label: string;
   icon: LucideIcon;
@@ -70,6 +86,8 @@ function FolderTree({
   getColor: (email: string) => string;
   defaultOpen: boolean;
   collapsed: boolean;
+  unreadCount?: number;
+  unreadCountForAccount?: (email: string) => number;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const parentHref = emailFolderHref(folder);
@@ -77,6 +95,7 @@ function FolderTree({
   const parentActive =
     (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
     !accountParam;
+  const showUnread = folder === "inbox";
 
   return (
     <div className="space-y-0.5">
@@ -85,7 +104,7 @@ function FolderTree({
           href={parentHref}
           title={collapsed ? label : undefined}
           className={cn(
-            "flex min-w-0 flex-1 items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+            "relative flex min-w-0 flex-1 items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
             parentActive
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
               : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
@@ -93,7 +112,17 @@ function FolderTree({
           )}
         >
           <Icon className="size-3.5 shrink-0" aria-hidden />
-          {!collapsed ? <span className="min-w-0 flex-1 truncate">{label}</span> : null}
+          {!collapsed ? (
+            <>
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {showUnread ? <UnreadCountBadge count={unreadCount} /> : null}
+            </>
+          ) : showUnread && unreadCount > 0 ? (
+            <span
+              className="absolute right-1 top-1 size-1.5 rounded-full bg-primary"
+              aria-label={`${unreadCount} unread`}
+            />
+          ) : null}
         </Link>
         {!collapsed && accounts.length > 0 ? (
           <button
@@ -119,6 +148,9 @@ function FolderTree({
             const active =
               (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
               accountParam === account.email;
+            const accountUnread = showUnread
+              ? (unreadCountForAccount?.(account.email) ?? 0)
+              : 0;
             return (
               <Link
                 key={`${folder}:${account.email}`}
@@ -137,6 +169,12 @@ function FolderTree({
                   aria-hidden
                 />
                 <span className="min-w-0 flex-1 truncate">{account.email}</span>
+                {accountUnread > 0 ? (
+                  <span
+                    className="size-2 shrink-0 rounded-full bg-primary"
+                    aria-label={`${accountUnread} unread`}
+                  />
+                ) : null}
               </Link>
             );
           })}
@@ -156,6 +194,7 @@ function EmailModeNav({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { enabledAddresses, getColor } = useMailAccounts();
+  const { unreadCount, unreadCountForAccount } = useEmailMailbox();
   const accountParam =
     searchParams.get("account")?.trim() ||
     searchParams.get("from")?.trim() ||
@@ -211,6 +250,8 @@ function EmailModeNav({
             getColor={getColor}
             defaultOpen={inInbox}
             collapsed={collapsed}
+            unreadCount={unreadCount}
+            unreadCountForAccount={unreadCountForAccount}
           />
           <FolderTree
             label="Sent"

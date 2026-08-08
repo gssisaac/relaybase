@@ -39,6 +39,10 @@ export type EmailMailboxContextValue = {
   inboxCount: number;
   sentCount: number;
   trashCount: number;
+  unreadCount: number;
+  isUnread: (key: string) => boolean;
+  unreadCountForAccount: (email: string) => number;
+  markRead: (key: string) => void;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -58,11 +62,16 @@ const EmailMailboxStoreContext = createContext<EmailMailboxStore | null>(
   null,
 );
 
-function storeHasDraftApi(store: EmailMailboxStore) {
+function storeHasUnreadApi(store: EmailMailboxStore) {
   return (
     typeof store.upsertDraft === "function" &&
     typeof store.removeDraft === "function" &&
-    Array.isArray(store.drafts)
+    Array.isArray(store.drafts) &&
+    typeof store.isUnread === "function" &&
+    typeof store.markRead === "function" &&
+    typeof store.unreadCountForAccount === "function" &&
+    typeof store.pollInboxNotifications === "function" &&
+    Array.isArray(store.readKeys)
   );
 }
 
@@ -75,7 +84,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   // Turbopack/HMR keeps the old MobX instance after EmailMailboxStore gains
   // new methods — replace during render so callers never see a stale API.
   let liveStore = store;
-  if (!storeHasDraftApi(store)) {
+  if (!storeHasUnreadApi(store)) {
     liveStore = new EmailMailboxStore();
     setStore(liveStore);
   }
@@ -133,6 +142,8 @@ export function useEmailMailbox(): EmailMailboxContextValue {
         inboxCount: store.inboxCount,
         sentCount: store.sentCount,
         trashCount: store.trashCount,
+        unreadCount: store.unreadCount,
+        readKeys: store.readKeys.slice(),
         loading: store.loading,
         refreshing: store.refreshing,
         error: store.error,
@@ -161,6 +172,10 @@ export function useEmailMailbox(): EmailMailboxContextValue {
     inboxCount: store.inboxCount,
     sentCount: store.sentCount,
     trashCount: store.trashCount,
+    unreadCount: store.unreadCount,
+    isUnread: store.isUnread,
+    unreadCountForAccount: store.unreadCountForAccount,
+    markRead: store.markRead,
     loading: store.loading,
     refreshing: store.refreshing,
     error: store.error,

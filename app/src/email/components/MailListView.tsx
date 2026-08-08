@@ -540,12 +540,15 @@ export const MailListView = observer(function MailListView({
       {items.length > 0 ? (
         <div className="min-h-0 flex-1 overflow-auto">
           <EmailTableHeader>
-            <span>
-              {folder === "sent"
-                ? "To"
-                : folder === "trash"
-                  ? "From / To"
-                  : "From"}
+            <span className="flex items-center gap-2">
+              <span className="size-2 shrink-0" aria-hidden />
+              <span>
+                {folder === "sent"
+                  ? "To"
+                  : folder === "trash"
+                    ? "From / To"
+                    : "From"}
+              </span>
             </span>
             <span>Subject</span>
             <span className="text-right">Date</span>
@@ -598,6 +601,10 @@ export const MailListView = observer(function MailListView({
               );
               const preview = previewText(item);
               const isSelected = itemKey(item) === messageId;
+              const unread =
+                isInbox && folder === "inbox"
+                  ? store.isUnread(item.message.key)
+                  : false;
               return (
                 <EmailTableRow
                   key={item.id}
@@ -608,6 +615,7 @@ export const MailListView = observer(function MailListView({
                     compose,
                   )}
                   selected={isSelected}
+                  unread={unread}
                   primary={
                     folder === "trash"
                       ? `${isInbox ? "In" : "Sent"} · ${primary}`

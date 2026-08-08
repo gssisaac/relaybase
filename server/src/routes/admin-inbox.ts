@@ -22,6 +22,7 @@ import {
 
 const adminInbox = new Hono<{ Bindings: Env }>();
 
+// Consumed by the desktop mail client (poll + ack) for live inbox updates.
 adminInbox.get("/notifications", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;

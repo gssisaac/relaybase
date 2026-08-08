@@ -108,6 +108,7 @@ export const EmailTableRow = memo(function EmailTableRow({
   date,
   status,
   selected,
+  unread,
 }: {
   href?: string;
   onClick?: () => void;
@@ -118,6 +119,7 @@ export const EmailTableRow = memo(function EmailTableRow({
   date: string;
   status?: ReactNode;
   selected?: boolean;
+  unread?: boolean;
 }) {
   const className = cn(
     "grid w-full gap-3 border-b border-border/20 px-4 py-3 text-left text-sm transition-all last:border-b-0 relative outline-none",
@@ -126,19 +128,42 @@ export const EmailTableRow = memo(function EmailTableRow({
       : "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]",
     selected
       ? "bg-primary/5 text-foreground before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[3px] before:bg-primary"
-      : "hover:bg-secondary/40 text-muted-foreground hover:text-foreground",
+      : unread
+        ? "bg-background text-foreground hover:bg-secondary/40"
+        : "hover:bg-secondary/40 text-muted-foreground hover:text-foreground",
   );
 
   const body = (
     <>
-      <div className="min-w-0">
-        <p className="truncate font-medium text-foreground">{primary}</p>
-        {secondary ? (
-          <p className="truncate text-xs text-muted-foreground">{secondary}</p>
-        ) : null}
+      <div className="flex min-w-0 items-start gap-2">
+        <span
+          className={cn(
+            "mt-1.5 size-2 shrink-0 rounded-full",
+            unread ? "bg-primary" : "bg-transparent",
+          )}
+          aria-hidden
+        />
+        <div className="min-w-0">
+          <p
+            className={cn(
+              "truncate text-foreground",
+              unread ? "font-semibold" : "font-medium",
+            )}
+          >
+            {primary}
+          </p>
+          {secondary ? (
+            <p className="truncate text-xs text-muted-foreground">{secondary}</p>
+          ) : null}
+        </div>
       </div>
       <div className="min-w-0 truncate">
-        <span className="font-medium text-foreground">
+        <span
+          className={cn(
+            "text-foreground",
+            unread ? "font-semibold" : "font-medium",
+          )}
+        >
           {subject || "(no subject)"}
         </span>
         {preview ? (

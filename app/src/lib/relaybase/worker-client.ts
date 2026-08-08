@@ -101,6 +101,58 @@ export async function getInboundMessage(
   return data.message;
 }
 
+export type WorkerInboxNotificationEvent = {
+  id: string;
+  type: "inbound.email.received";
+  createdAt: string;
+  data: {
+    messageId: string;
+    domain: string;
+    from: string;
+    to: string;
+    subject: string;
+    preview: string;
+    receivedAt: string;
+    hasAttachments: boolean;
+  };
+};
+
+/** Pending inbound events for the desktop mail client (polled + acked). */
+export async function listInboxNotifications(
+  cfg: RelaybaseWorkerConfig,
+  domain: string,
+  limit = 25,
+): Promise<WorkerInboxNotificationEvent[]> {
+  const search = new URLSearchParams({
+    domain: domain.trim().toLowerCase(),
+    limit: String(limit),
+  });
+  const data = await workerFetch<{ events?: WorkerInboxNotificationEvent[] }>(
+    cfg,
+    `/admin/inbox/notifications?${search.toString()}`,
+  );
+  return data.events ?? [];
+}
+
+export async function ackInboxNotifications(
+  cfg: RelaybaseWorkerConfig,
+  domain: string,
+  ids: string[],
+): Promise<number> {
+  const data = await workerFetch<{ acked?: number }>(
+    cfg,
+    `/admin/inbox/notifications/ack`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        domain: domain.trim().toLowerCase(),
+        ids,
+      }),
+    },
+  );
+  return data.acked ?? 0;
+}
+
 export type WorkerApiKey = {
   id: string;
   keyPrefix: string;

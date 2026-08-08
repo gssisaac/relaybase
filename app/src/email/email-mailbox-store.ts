@@ -1,6 +1,7 @@
 "use client";
 
 import { makeAutoObservable, runInAction } from "mobx";
+import { toast } from "sonner";
 
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import {
@@ -32,12 +33,36 @@ import {
   savePersistedSent,
 } from "@/email/email-disk-store";
 import {
+  readReadKeys,
+  writeReadKeys,
+} from "@/email/read-store";
+import {
   readTrash,
   trashEntryKey,
   writeTrash,
   type TrashEntry,
   type TrashKind,
 } from "@/email/trash-store";
+import { notifyNewMail } from "@/lib/desktop/notify";
+
+const NOTIFICATION_POLL_MS = 20_000;
+const SEND_TOAST_ID = "email-send";
+
+export type InboxNotificationEvent = {
+  id: string;
+  type: "inbound.email.received";
+  createdAt: string;
+  data: {
+    messageId: string;
+    domain: string;
+    from: string;
+    to: string;
+    subject: string;
+    preview: string;
+    receivedAt: string;
+    hasAttachments: boolean;
+  };
+};
 
 function domainOf(email: string) {
   const at = email.indexOf("@");
@@ -73,6 +98,11 @@ export class EmailMailboxStore {
   activityDetailByKey: Record<string, RoutingActivityEvent> = {};
   detailLoadingKey: string | null = null;
 
+  /** Message keys the user has opened (or first-run baseline). */
+  readKeys: string[] = [];
+  /** False until first-run baseline or persisted read state is loaded. */
+  private readStateReady = false;
+
   productId = "";
   apiBase = "";
   enabledAccounts: string[] = [];
@@ -86,6 +116,8 @@ export class EmailMailboxStore {
   private bound = false;
   /** True after a successful disk hydrate or network mail fetch this session. */
   private mailReady = false;
+  private notificationPollTimer: ReturnType<typeof setInterval> | null = null;
+  private notificationPollInFlight = false;
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
@@ -176,8 +208,42 @@ export class EmailMailboxStore {
     return this.trashedActivity.length + this.trashedSent.length;
   }
 
+  get readKeySet(): Set<string> {
+    return new Set(this.readKeys);
+  }
+
+  get unreadCount(): number {
+    if (!this.readStateReady) return 0;
+    const read = this.readKeySet;
+    return this.visibleActivity.filter((m) => !read.has(m.key)).length;
+  }
+
   get relaybaseOk(): boolean {
     return this.config?.relaybaseConfigured ?? false;
+  }
+
+  isUnread(key: string): boolean {
+    if (!this.readStateReady || !key) return false;
+    return !this.readKeySet.has(key);
+  }
+
+  unreadCountForAccount(email: string): number {
+    if (!this.readStateReady) return 0;
+    const needle = email.trim().toLowerCase();
+    if (!needle) return 0;
+    const read = this.readKeySet;
+    return this.visibleActivity.filter(
+      (m) => m.toEmail.toLowerCase() === needle && !read.has(m.key),
+    ).length;
+  }
+
+  markRead(key: string) {
+    const trimmed = key.trim();
+    if (!trimmed || !this.productId) return;
+    if (this.readKeys.includes(trimmed)) return;
+    this.readKeys = [...this.readKeys, trimmed];
+    this.readStateReady = true;
+    writeReadKeys(this.productId, this.readKeys);
   }
 
   configure(input: {
@@ -216,7 +282,10 @@ export class EmailMailboxStore {
       this.activityDetailByKey = {};
       this.detailLoadingKey = null;
       this.mailReady = false;
+      this.readKeys = [];
+      this.readStateReady = false;
       this.hydrateFromStale();
+      this.loadReadState();
     } else if (domainsChanged && nextDomainsKey) {
       this.hydrateInboxSentFromStale();
     }
@@ -230,21 +299,27 @@ export class EmailMailboxStore {
   async bootstrap() {
     if (!this.productId) return;
     const generation = ++this.bootstrapGeneration;
+    this.loadReadState();
     await this.loadPersistedMail();
     if (this.bootstrapGeneration !== generation) return;
+    this.ensureReadBaseline();
     // Soft refresh: skips inbox/sent network when disk/memory already has mail.
     await this.refresh(false);
+    if (this.bootstrapGeneration !== generation) return;
+    this.ensureReadBaseline();
   }
 
   start() {
     if (this.started) return;
     this.started = true;
     this.bindEvents();
+    this.startNotificationPolling();
   }
 
   stop() {
     if (!this.started) return;
     this.started = false;
+    this.stopNotificationPolling();
     this.unbindEvents();
   }
 
@@ -342,6 +417,7 @@ export class EmailMailboxStore {
   }
 
   async loadMessageDetail(messageId: string, domain: string) {
+    this.markRead(messageId);
     const cached = this.activityDetailByKey[messageId];
     if (cached?.bodyText || cached?.bodyHtml || cached?.attachments?.length) {
       this.detailLoadingKey = null;
@@ -520,6 +596,7 @@ export class EmailMailboxStore {
           this.sent = [...sentById.values()];
         }
         this.mailReady = true;
+        this.ensureReadBaseline();
       });
 
       void this.persistMailLists();
@@ -584,6 +661,27 @@ export class EmailMailboxStore {
     void savePersistedDrafts(this.productId, this.drafts);
   }
 
+  private loadReadState() {
+    if (!this.productId) return;
+    const stored = readReadKeys(this.productId);
+    if (stored === null) {
+      this.readKeys = [];
+      this.readStateReady = false;
+      return;
+    }
+    this.readKeys = stored;
+    this.readStateReady = true;
+  }
+
+  /** First-run: treat currently loaded inbox as already seen. */
+  private ensureReadBaseline() {
+    if (this.readStateReady || !this.productId) return;
+    if (this.activity.length === 0 && !this.mailReady) return;
+    this.readKeys = this.activity.map((m) => m.key);
+    this.readStateReady = true;
+    writeReadKeys(this.productId, this.readKeys);
+  }
+
   private hydrateFromStale() {
     if (!this.productId) return;
     this.trash = readTrash(this.productId);
@@ -639,10 +737,12 @@ export class EmailMailboxStore {
 
   private onSendStarted = () => {
     this.error = null;
-    this.message = "Sending…";
+    this.message = null;
+    toast.loading("Sending…", { id: SEND_TOAST_ID });
   };
 
   private onSendSucceeded = () => {
+    toast.dismiss(SEND_TOAST_ID);
     this.error = null;
     this.message = "Email sent";
     for (const domain of this.domainsKey ? this.domainsKey.split("\0") : []) {
@@ -652,10 +752,128 @@ export class EmailMailboxStore {
   };
 
   private onSendFailed = (event: Event) => {
+    toast.dismiss(SEND_TOAST_ID);
     const detail = (event as CustomEvent<{ error?: string }>).detail;
     this.message = null;
     this.error = detail?.error || "Send failed";
   };
+
+  private onVisibilityOrFocus = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
+    void this.pollInboxNotifications();
+  };
+
+  private startNotificationPolling() {
+    if (typeof window === "undefined") return;
+    this.stopNotificationPolling();
+    void this.pollInboxNotifications();
+    this.notificationPollTimer = setInterval(() => {
+      void this.pollInboxNotifications();
+    }, NOTIFICATION_POLL_MS);
+    document.addEventListener("visibilitychange", this.onVisibilityOrFocus);
+    window.addEventListener("focus", this.onVisibilityOrFocus);
+  }
+
+  private stopNotificationPolling() {
+    if (this.notificationPollTimer) {
+      clearInterval(this.notificationPollTimer);
+      this.notificationPollTimer = null;
+    }
+    if (typeof window === "undefined") return;
+    document.removeEventListener("visibilitychange", this.onVisibilityOrFocus);
+    window.removeEventListener("focus", this.onVisibilityOrFocus);
+  }
+
+  async pollInboxNotifications() {
+    if (
+      !this.started ||
+      !this.productId ||
+      !this.apiBase ||
+      this.notificationPollInFlight
+    ) {
+      return;
+    }
+    const domains = this.domainsKey ? this.domainsKey.split("\0").filter(Boolean) : [];
+    if (domains.length === 0) return;
+
+    this.notificationPollInFlight = true;
+    try {
+      const allEvents: InboxNotificationEvent[] = [];
+      const eventsByDomain = new Map<string, string[]>();
+
+      await Promise.all(
+        domains.map(async (domain) => {
+          try {
+            const res = await fetch(
+              `${this.apiBase}/inbox/notifications${domainQuery(domain, { limit: "25" })}`,
+            );
+            if (!res.ok) return;
+            const data = (await res.json()) as {
+              events?: InboxNotificationEvent[];
+            };
+            const events = data.events ?? [];
+            if (events.length === 0) return;
+            allEvents.push(...events);
+            eventsByDomain.set(
+              domain,
+              events.map((event) => event.id),
+            );
+          } catch {
+            // ignore transient poll errors
+          }
+        }),
+      );
+
+      if (allEvents.length === 0) return;
+
+      const arrivalIds = allEvents
+        .map((event) => event.data.messageId?.trim())
+        .filter((id): id is string => Boolean(id));
+
+      for (const domain of eventsByDomain.keys()) {
+        clearEmailCache(this.productId, `inbox:${domain}`);
+      }
+
+      await this.refresh(true);
+      // After refresh: baseline existing mail once, then keep arrivals unread.
+      this.ensureReadBaseline();
+      this.markUnread(arrivalIds);
+
+      void notifyNewMail(
+        allEvents.map((event) => ({
+          from: event.data.from,
+          subject: event.data.subject,
+        })),
+      );
+
+      await Promise.all(
+        [...eventsByDomain.entries()].map(async ([domain, ids]) => {
+          try {
+            await fetch(`${this.apiBase}/inbox/notifications`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ domain, ids }),
+            });
+          } catch {
+            // retry on next poll if ack fails
+          }
+        }),
+      );
+    } finally {
+      this.notificationPollInFlight = false;
+    }
+  }
+
+  private markUnread(keys: string[]) {
+    if (keys.length === 0 || !this.productId || !this.readStateReady) return;
+    const remove = new Set(keys);
+    const next = this.readKeys.filter((key) => !remove.has(key));
+    if (next.length === this.readKeys.length) return;
+    this.readKeys = next;
+    writeReadKeys(this.productId, this.readKeys);
+  }
 
   private bindEvents() {
     if (this.bound || typeof window === "undefined") return;

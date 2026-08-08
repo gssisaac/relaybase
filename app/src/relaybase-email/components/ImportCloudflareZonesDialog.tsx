@@ -73,11 +73,9 @@ export function ImportCloudflareZonesDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        <Button size="sm" variant="outline">
-          <Plus className="size-3.5" />
-          Import from Cloudflare
-        </Button>
+      <DialogTrigger render={<Button size="sm" variant="outline" />}>
+        <Plus className="size-3.5" />
+        Import from Cloudflare
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>

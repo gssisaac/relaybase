@@ -227,11 +227,9 @@ export function AudienceView() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger>
-              <Button size="sm">
-                <Plus className="size-4" />
-                Add subscriber
-              </Button>
+            <DialogTrigger render={<Button size="sm" />}>
+              <Plus className="size-4" />
+              Add subscriber
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>

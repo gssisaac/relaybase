@@ -2,11 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { DesktopDashboardGate } from "@/app/(dashboard)/DesktopDashboardGate";
-import { UserSidebar } from "@/components/layout/UserSidebar";
-import { DomainProvider } from "@/lib/dashboard/DomainContext";
-import { DomainProgressBanner } from "@/relaybase-email/components/DomainProgressBanner";
 import { ensureUserAuthToken } from "@/lib/dev-email-store";
-import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { getUser } from "@/lib/users-store";
 
 export default async function DashboardLayout({
@@ -28,19 +24,9 @@ export default async function DashboardLayout({
 
   await ensureUserAuthToken(userId);
 
+  // Page content only — DesktopDashboardGate owns the single sidebar shell.
+  // (Tauri pointing at next dev must not nest a second sidebar.)
   return (
-    <DesktopDashboardGate>
-      <SessionProvider userId={userId}>
-        <DomainProvider>
-          <div className="flex h-svh overflow-hidden bg-background">
-            <UserSidebar />
-            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <DomainProgressBanner />
-              {children}
-            </main>
-          </div>
-        </DomainProvider>
-      </SessionProvider>
-    </DesktopDashboardGate>
+    <DesktopDashboardGate userId={userId}>{children}</DesktopDashboardGate>
   );
 }

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { ComposeForm } from "@/relaybase-email/components/ComposeForm";
@@ -262,11 +263,11 @@ export function ComposeView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border px-4 py-3">
+      <DesktopTitleBar className="px-4 py-3">
         <h1 className="text-sm font-semibold">
           {isReplyAll ? "Reply all" : isReply ? "Reply" : "Compose email"}
         </h1>
-      </div>
+      </DesktopTitleBar>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
         <ComposeForm

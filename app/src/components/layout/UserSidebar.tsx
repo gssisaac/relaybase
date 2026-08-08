@@ -6,6 +6,7 @@ import { LogOut } from "lucide-react";
 
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
 function isActive(href: string, pathname: string) {
@@ -17,6 +18,13 @@ export function UserSidebar() {
   const userId = useProductId();
   const router = useRouter();
   const { tabs, settingsNav } = useEmailPaths();
+  const {
+    isDesktop,
+    dragRegionClassName,
+    dragRegionProps,
+    noDragClassName,
+    macSidebarHeaderClassName,
+  } = useDesktopChrome();
 
   const inSettings = pathname.startsWith("/settings");
 
@@ -33,17 +41,44 @@ export function UserSidebar() {
   }
 
   return (
-    <aside className="flex h-full w-56 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="border-b border-sidebar-border px-4 py-4">
-        <Link
-          href="/dashboard"
-          className="font-semibold tracking-tight text-sidebar-foreground"
-        >
-          Relaybase
-        </Link>
+    <aside className="flex h-full w-56 shrink-0 select-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      {/* Desktop: drag region + macOS overlay traffic-light clearance */}
+      <div
+        {...dragRegionProps}
+        className={cn(
+          "border-b border-sidebar-border px-4 py-4",
+          dragRegionClassName,
+          macSidebarHeaderClassName,
+        )}
+      >
+        {isDesktop ? (
+          <div
+            {...dragRegionProps}
+            className={cn(
+              "font-semibold tracking-tight text-sidebar-foreground",
+              dragRegionClassName,
+            )}
+          >
+            Relaybase
+          </div>
+        ) : (
+          <Link
+            href="/dashboard"
+            className="font-semibold tracking-tight text-sidebar-foreground"
+          >
+            Relaybase
+          </Link>
+        )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Main">
+      <nav
+        className={cn(
+          "flex flex-1 flex-col gap-1 overflow-y-auto p-3",
+          noDragClassName,
+        )}
+        aria-label="Main"
+        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+      >
         {nav.map((item) => {
           const Icon = item.icon;
           const active =
@@ -91,7 +126,13 @@ export function UserSidebar() {
         })}
       </nav>
 
-      <div className="space-y-2 border-t border-sidebar-border px-4 py-3">
+      <div
+        className={cn(
+          "space-y-2 border-t border-sidebar-border px-4 py-3",
+          noDragClassName,
+        )}
+        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+      >
         <p className="truncate font-mono text-xs text-muted-foreground" title={userId}>
           {userId}
         </p>

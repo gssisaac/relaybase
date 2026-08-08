@@ -237,11 +237,9 @@ export function DomainsView() {
               if (!open) resetAddForm();
             }}
           >
-            <DialogTrigger>
-              <Button size="sm">
-                <Plus className="size-4" />
-                Add domain
-              </Button>
+            <DialogTrigger render={<Button size="sm" />}>
+              <Plus className="size-4" />
+              Add domain
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>

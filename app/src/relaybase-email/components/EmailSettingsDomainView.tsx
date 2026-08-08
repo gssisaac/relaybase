@@ -9,7 +9,7 @@ import {
 import { WorkerUpdatePanel } from "@/relaybase-email/components/WorkerUpdatePanel";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { useEmailSettings } from "@/relaybase-email/components/useEmailSettings";
-import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,7 @@ import {
 export function EmailSettingsDomainView() {
   const s = useEmailSettings();
   const { domains } = useEmailPaths();
-  const desktop = typeof window !== "undefined" && isDesktopRuntime();
+  const { isDesktop: desktop } = useDesktopChrome();
 
   return (
     <div className="min-h-[min(70vh,560px)] space-y-4">
@@ -51,7 +51,11 @@ export function EmailSettingsDomainView() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button size="sm" render={<Link href={domains} />}>
+          <Button
+            size="sm"
+            nativeButton={false}
+            render={<Link href={domains} />}
+          >
             Open Domains
           </Button>
         </CardContent>

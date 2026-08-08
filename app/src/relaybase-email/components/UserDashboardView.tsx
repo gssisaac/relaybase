@@ -196,7 +196,7 @@ export function UserDashboardView() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button size="sm" render={<Link href={`${base}/domains`} />}>
+            <Button size="sm" nativeButton={false} render={<Link href={`${base}/domains`} />}>
               Add domain
             </Button>
           </CardContent>

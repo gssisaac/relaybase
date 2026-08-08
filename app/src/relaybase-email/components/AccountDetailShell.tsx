@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { DomainNavSidebar } from "@/relaybase-email/components/DomainNavSidebar";
 import { useEmailMailbox } from "@/relaybase-email/components/EmailMailboxContext";
@@ -23,6 +24,7 @@ import {
   MailboxNavProvider,
 } from "@/relaybase-email/components/MailboxNavContext";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
 export type AccountDetailSection =
@@ -61,6 +63,7 @@ export function AccountDetailShell({
   const router = useRouter();
   const { accounts } = useEmailPaths();
   const { addresses, setAccountFilter } = useEmailMailbox();
+  const { noDragClassName, isDesktop } = useDesktopChrome();
   const nav = accountMailboxNav(email);
   const base = `/accounts/${encodeURIComponent(email)}`;
 
@@ -100,17 +103,23 @@ export function AccountDetailShell({
           }}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="shrink-0 border-b border-border">
+          <DesktopTitleBar className="flex-col items-stretch gap-0">
             <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-2"
-                render={<Link href={accounts} />}
+              <div
+                className={cn(noDragClassName)}
+                {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
               >
-                <ArrowLeft className="size-4" />
-                Accounts
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-2"
+                  nativeButton={false}
+                  render={<Link href={accounts} />}
+                >
+                  <ArrowLeft className="size-4" />
+                  Accounts
+                </Button>
+              </div>
               <div className="flex min-w-0 items-baseline gap-2">
                 <h1 className="truncate text-sm font-semibold">{title}</h1>
                 <span className="truncate text-xs text-muted-foreground">
@@ -119,8 +128,12 @@ export function AccountDetailShell({
               </div>
             </div>
             <nav
-              className="flex gap-1 overflow-x-auto px-4 pb-2"
+              className={cn(
+                "flex gap-1 overflow-x-auto px-4 pb-2",
+                noDragClassName,
+              )}
               aria-label="Account"
+              {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
             >
               {NAV.map((item) => {
                 const href = hrefFor(item.id);
@@ -146,7 +159,7 @@ export function AccountDetailShell({
                 );
               })}
             </nav>
-          </header>
+          </DesktopTitleBar>
 
           <div
             className={cn(

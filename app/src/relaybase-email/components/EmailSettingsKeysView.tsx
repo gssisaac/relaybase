@@ -362,11 +362,11 @@ export function EmailSettingsKeysView() {
               if (!open) setLabel("");
             }}
           >
-            <DialogTrigger>
-              <Button size="sm" disabled={!canIssue}>
-                <Plus className="size-4" />
-                Issue key
-              </Button>
+            <DialogTrigger
+              render={<Button size="sm" disabled={!canIssue} />}
+            >
+              <Plus className="size-4" />
+              Issue key
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>

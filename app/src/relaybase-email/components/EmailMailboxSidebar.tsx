@@ -19,6 +19,7 @@ import {
 import type { EmailMailboxSection } from "@/relaybase-email/components/EmailMailboxLayout";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import type { Address } from "@/relaybase-email/components/types";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
 const SECTIONS: {
@@ -76,6 +77,8 @@ function EmailMailboxSidebarInner({
     openAccounts,
     setOpenAccounts,
   } = useEmailMailbox();
+  const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
+    useDesktopChrome();
 
   // Keep last non-empty list so refresh/domain flickers don't unmount the accordion.
   const stableAddressesRef = useRef<Address[]>([]);
@@ -117,14 +120,26 @@ function EmailMailboxSidebarInner({
   }, [sidebarAddresses, activity, sentMessages]);
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-muted/30">
-      <div className="space-y-2 border-b border-border p-3">
-        <CurrentDomainSelect className="h-9 w-full" />
+    <aside className="flex w-56 shrink-0 select-none flex-col border-r border-border bg-muted/30">
+      <div
+        {...dragRegionProps}
+        className={cn("space-y-2 border-b border-border p-3", dragRegionClassName)}
+      >
+        <div
+          className={cn(noDragClassName)}
+          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          <CurrentDomainSelect className="h-9 w-full" />
+        </div>
       </div>
 
       <nav
-        className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2"
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2",
+          noDragClassName,
+        )}
         aria-label="Mail accounts"
+        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         {sidebarAddresses.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">
@@ -216,7 +231,10 @@ function EmailMailboxSidebarInner({
         )}
       </nav>
 
-      <div className="border-t border-border p-3">
+      <div
+        className={cn("border-t border-border p-3", noDragClassName)}
+        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+      >
         <Button
           variant="outline"
           size="sm"

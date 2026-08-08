@@ -1,8 +1,9 @@
 /**
  * Resolve the API base for email dashboard fetches.
- * Desktop (Tauri): Worker URL + /v1 or /admin depending on path.
- * Browser/dev: Next `/api/email` proxy.
+ * Desktop (Tauri): only known Worker routes go to the customer Worker.
+ * Everything else (domains, stats, audience, …) stays on the Next `/api/email` app.
  */
+
 export function resolveEmailApiBase(): string {
   if (typeof window !== "undefined") {
     const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
@@ -17,46 +18,63 @@ export function isWorkerBacked(): boolean {
   return Boolean(resolveEmailApiBase());
 }
 
-/** Map legacy `/api/email/...` paths to Worker routes when desktop-connected. */
+function splitPath(path: string): { pathname: string; search: string } {
+  const local = path.startsWith("/") ? path : `/${path}`;
+  const q = local.indexOf("?");
+  if (q < 0) return { pathname: local, search: "" };
+  return { pathname: local.slice(0, q), search: local.slice(q) };
+}
+
+function stripEmailPrefix(pathname: string): string {
+  let p = pathname;
+  if (p.startsWith("/api/email")) p = p.slice("/api/email".length) || "/";
+  if (!p.startsWith("/")) p = `/${p}`;
+  return p;
+}
+
+/**
+ * Map legacy `/api/email/...` paths to Worker routes when desktop-connected.
+ * Unknown paths stay on the Next app — the Worker does not implement domains/stats/etc.
+ */
 export function mapEmailPath(path: string): {
   url: string;
   useAdminToken: boolean;
 } {
+  const { pathname, search } = splitPath(path);
+  const local = `${pathname}${search}`;
   const worker = resolveEmailApiBase();
   if (!worker) {
-    return { url: path.startsWith("/") ? path : `/${path}`, useAdminToken: false };
+    return { url: local, useAdminToken: false };
   }
 
-  // Normalize: callers often pass `/api/email/foo` or `foo`
-  let p = path;
-  if (p.startsWith("/api/email")) p = p.slice("/api/email".length) || "/";
-  if (!p.startsWith("/")) p = `/${p}`;
+  const p = stripEmailPrefix(pathname);
 
-  const adminPaths = [
-    "/keys",
-    "/inbox",
-    "/logs",
-    "/inbound-routing",
-  ];
-  const useAdmin = adminPaths.some(
-    (prefix) => p === prefix || p.startsWith(`${prefix}/`),
-  );
+  // Whitelist only routes that exist on the customer Worker (server/src/app.ts).
+  if (p === "/keys" || p.startsWith("/keys/")) {
+    const rest = p === "/keys" ? "" : p.slice("/keys".length);
+    return {
+      url: `${worker}/admin/keys${rest}${search}`,
+      useAdminToken: true,
+    };
+  }
+  if (p === "/inbox" || p.startsWith("/inbox/")) {
+    return {
+      url: `${worker}/admin/inbox${p.slice("/inbox".length)}${search}`,
+      useAdminToken: true,
+    };
+  }
+  if (p === "/logs" || p.startsWith("/logs/")) {
+    return {
+      url: `${worker}/admin/logs${p.slice("/logs".length)}${search}`,
+      useAdminToken: true,
+    };
+  }
+  if (p === "/send") {
+    return { url: `${worker}/v1/send${search}`, useAdminToken: false };
+  }
 
-  if (p.startsWith("/keys") || p === "/keys") {
-    return { url: `${worker}/admin/keys${p === "/keys" ? "" : p.slice("/keys".length)}`, useAdminToken: true };
-  }
-  if (p.startsWith("/inbox")) {
-    return { url: `${worker}/admin/inbox${p.slice("/inbox".length)}`, useAdminToken: true };
-  }
-  if (p.startsWith("/send") || p === "/send") {
-    return { url: `${worker}/v1/send`, useAdminToken: false };
-  }
-
-  // Default: try v1 path (send/inbox events/webhooks)
-  if (useAdmin) {
-    return { url: `${worker}/admin${p}`, useAdminToken: true };
-  }
-  return { url: `${worker}/v1${p}`, useAdminToken: true };
+  // Domains, addresses, stats, audience, broadcasts, … → Next app
+  return { url: local, useAdminToken: false };
 }
 
 export async function desktopAwareFetch(

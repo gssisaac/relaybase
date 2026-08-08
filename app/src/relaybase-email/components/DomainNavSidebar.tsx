@@ -4,6 +4,7 @@ import { Globe } from "lucide-react";
 import Link from "next/link";
 
 import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { cn } from "@/lib/utils";
 
@@ -15,21 +16,33 @@ type DomainNavSidebarProps = {
 export function DomainNavSidebar({ onDomainSelect }: DomainNavSidebarProps = {}) {
   const { domains, activeDomain, loading, setActiveDomain } = useDomain();
   const { domains: domainsHref } = useEmailPaths();
+  const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
+    useDesktopChrome();
   const readyDomains = domains.filter(
     (entry) => entry.onboarding?.status === "ready",
   );
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-muted/30">
-      <div className="border-b border-border px-3 py-3">
+    <aside className="flex w-56 shrink-0 select-none flex-col border-r border-border bg-muted/30">
+      <div
+        {...dragRegionProps}
+        className={cn(
+          "border-b border-border px-3 py-3",
+          dragRegionClassName,
+        )}
+      >
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Domains
         </p>
       </div>
 
       <nav
-        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2"
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2",
+          noDragClassName,
+        )}
         aria-label="Domains"
+        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         {loading && domains.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">
@@ -84,7 +97,10 @@ export function DomainNavSidebar({ onDomainSelect }: DomainNavSidebarProps = {})
         )}
       </nav>
 
-      <div className="border-t border-border p-3">
+      <div
+        className={cn("border-t border-border p-3", noDragClassName)}
+        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+      >
         <Link
           href={domainsHref}
           className="block text-center text-xs text-muted-foreground transition-colors hover:text-foreground"

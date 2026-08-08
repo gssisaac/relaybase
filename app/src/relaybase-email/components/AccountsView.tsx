@@ -160,11 +160,9 @@ export function AccountsView() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger>
-              <Button size="sm">
-                <Plus className="size-4" />
-                Add sender
-              </Button>
+            <DialogTrigger render={<Button size="sm" />}>
+              <Plus className="size-4" />
+              Add sender
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>

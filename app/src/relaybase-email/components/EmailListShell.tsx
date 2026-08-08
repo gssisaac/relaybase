@@ -73,7 +73,7 @@ export function ListToolbar({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-border px-4 py-2 sm:flex-row sm:items-center">
+    <div className="flex select-none flex-col gap-3 border-b border-border px-4 py-2 sm:flex-row sm:items-center">
       <div className="relative min-w-0 flex-1">
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -92,7 +92,7 @@ export function ListToolbar({
 
 export function EmailTableHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] gap-3 border-b border-border bg-muted/20 px-4 py-1.5 text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
+    <div className="grid select-none grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] gap-3 border-b border-border bg-muted/20 px-4 py-1.5 text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
       {children}
     </div>
   );
@@ -202,6 +202,7 @@ export function DetailView({
             variant="ghost"
             size="sm"
             className="-ml-2"
+            nativeButton={false}
             render={<Link href={backHref} />}
           >
             <ArrowLeft className="size-4" />

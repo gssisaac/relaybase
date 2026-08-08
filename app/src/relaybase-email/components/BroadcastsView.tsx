@@ -255,14 +255,18 @@ export function BroadcastsView() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger>
-              <Button
-                size="sm"
-                disabled={!relaybaseOk || audienceCount === 0 || !activeDomain}
-              >
-                <Megaphone className="size-4" />
-                New broadcast
-              </Button>
+            <DialogTrigger
+              render={
+                <Button
+                  size="sm"
+                  disabled={
+                    !relaybaseOk || audienceCount === 0 || !activeDomain
+                  }
+                />
+              }
+            >
+              <Megaphone className="size-4" />
+              New broadcast
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>

@@ -60,7 +60,7 @@ export default function LoginPage() {
                 value={id}
                 onChange={(e) => setId(e.target.value)}
                 placeholder="you@example.com"
-                autoComplete="username"
+                autoComplete="off"
                 required
               />
             </div>

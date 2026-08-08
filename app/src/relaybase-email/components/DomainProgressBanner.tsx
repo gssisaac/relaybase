@@ -53,7 +53,7 @@ export function DomainProgressBanner() {
   if (!cards.length) return null;
 
   return (
-    <div className="shrink-0 space-y-2 border-b border-border bg-muted/30 px-4 py-3">
+    <div className="shrink-0 select-none space-y-2 border-b border-border bg-muted/30 px-4 py-3">
       <div className="mx-auto w-full max-w-[1200px] space-y-2">
         {cards.map((card) => (
           <Card

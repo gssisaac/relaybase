@@ -129,6 +129,63 @@
     @apply font-sans;
   }
 
+  /* Tauri: chrome feels native — no accidental text selection */
+  html.relaybase-desktop body {
+    @apply select-none;
+  }
+
+  html.relaybase-desktop
+    :is(
+      input,
+      textarea,
+      select,
+      [contenteditable="true"],
+      .select-text,
+      .email-html-body,
+      pre,
+      code
+    ) {
+    @apply select-text;
+  }
+
+  .relaybase-drag-region {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .relaybase-no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  html.relaybase-desktop .relaybase-drag-region :is(
+      a,
+      button,
+      input,
+      select,
+      textarea,
+      label,
+      summary,
+      [role="button"],
+      [role="combobox"],
+      [role="tab"],
+      [role="menuitem"],
+      [role="link"],
+      [data-slot="select-trigger"],
+      [data-slot="dropdown-menu-trigger"],
+      [data-slot="tabs-trigger"],
+      [data-tauri-drag-region="false"],
+      .relaybase-no-drag
+    ) {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  /* macOS overlay title bar: clear traffic lights in sidebar brand */
+  html.relaybase-desktop-mac .relaybase-desktop-mac-sidebar-header {
+    padding-top: calc(1rem + 26px);
+  }
+
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,

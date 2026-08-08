@@ -3,7 +3,7 @@
 import { Globe } from "lucide-react";
 import Link from "next/link";
 
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { useDashboardPaths } from "@/dashboard/paths";
 import { cn } from "@/lib/utils";
@@ -14,13 +14,10 @@ type DomainNavSidebarProps = {
 };
 
 export function DomainNavSidebar({ onDomainSelect }: DomainNavSidebarProps = {}) {
-  const { domains, activeDomain, loading, setActiveDomain } = useDomain();
+  const { readyDomains, domain, loading, setDomain } = useDashboardDomain();
   const { domains: domainsHref } = useDashboardPaths();
   const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
     useDesktopChrome();
-  const readyDomains = domains.filter(
-    (entry) => entry.onboarding?.status === "ready",
-  );
 
   return (
     <aside className="flex w-56 shrink-0 select-none flex-col border-r border-border bg-muted/30">
@@ -44,7 +41,7 @@ export function DomainNavSidebar({ onDomainSelect }: DomainNavSidebarProps = {})
         aria-label="Domains"
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
-        {loading && domains.length === 0 ? (
+        {loading && readyDomains.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">
             Loading domains…
           </p>
@@ -61,16 +58,18 @@ export function DomainNavSidebar({ onDomainSelect }: DomainNavSidebarProps = {})
           </p>
         ) : (
           readyDomains.map((entry) => {
-            const active = activeDomain === entry.domain;
+            const active = domain === entry.domain;
             return (
               <button
                 key={entry.domain}
                 type="button"
                 onClick={() => {
                   if (active) return;
-                  void setActiveDomain(entry.domain).then(() => {
-                    onDomainSelect?.(entry.domain);
-                  });
+                  if (onDomainSelect) {
+                    onDomainSelect(entry.domain);
+                  } else {
+                    setDomain(entry.domain);
+                  }
                 }}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",

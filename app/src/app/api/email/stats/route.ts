@@ -18,7 +18,13 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const range = parseStatsRange(url.searchParams.get("range"));
     const domain = resolveRequestDomain(request, data);
-    if (url.searchParams.get("domain") && !domain) {
+    if (!url.searchParams.get("domain")) {
+      return NextResponse.json(
+        { error: "domain query required" },
+        { status: 400 },
+      );
+    }
+    if (!domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 

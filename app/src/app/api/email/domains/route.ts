@@ -7,7 +7,6 @@ import {
   readUserEmailData,
   removeUserDomain,
   requireSessionUserId,
-  setActiveUserDomain,
 } from "@/lib/dev-email-store";
 import {
   classifyProvisionFailure,
@@ -43,7 +42,6 @@ export async function GET() {
     const data = await readUserEmailData(userId);
     return NextResponse.json({
       domains: listDomainSummaries(data),
-      activeDomain: data.config.activeDomain,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
@@ -74,7 +72,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       domains: onboard.domains,
-      activeDomain: onboard.activeDomain,
       onboarding: onboard.onboarding,
       message: onboard.message.startsWith(domain)
         ? onboard.message
@@ -111,30 +108,6 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
-  try {
-    const userId = await requireSessionUserId();
-    const body = (await request.json()) as { activeDomain?: string };
-    const activeDomain = body.activeDomain?.trim();
-    if (!activeDomain) {
-      return NextResponse.json(
-        { error: "activeDomain is required" },
-        { status: 400 },
-      );
-    }
-    const data = await setActiveUserDomain(userId, activeDomain);
-    return NextResponse.json({
-      domains: listDomainSummaries(data),
-      activeDomain: data.config.activeDomain,
-      message: "Active domain updated",
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed";
-    const status = message.includes("not found") ? 404 : 401;
-    return NextResponse.json({ error: message }, { status });
-  }
-}
-
 export async function DELETE(request: Request) {
   try {
     const userId = await requireSessionUserId();
@@ -146,7 +119,6 @@ export async function DELETE(request: Request) {
     const data = await removeUserDomain(userId, domain);
     return NextResponse.json({
       domains: listDomainSummaries(data),
-      activeDomain: data.config.activeDomain,
       message: "Domain removed",
     });
   } catch (error) {

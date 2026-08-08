@@ -5,7 +5,7 @@ import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { SparklineChart } from "@/components/dashboard/SparklineChart";
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useEmailPaths } from "@/email/paths";
 import { CurrentDomainSelect } from "@/dashboard/components/CurrentDomainSelect";
 import { EmailAlerts } from "@/email/components/EmailShared";
@@ -121,7 +121,7 @@ const API_CARDS = [
 ];
 
 export function UserDashboardView() {
-  const { domainQuery, activeDomain, domains } = useDomain();
+  const { domainQuery, domain, domains } = useDashboardDomain();
   const { base } = useEmailPaths();
   const [range, setRange] = useState<StatsRange>("7d");
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
@@ -131,6 +131,11 @@ export function UserDashboardView() {
 
   const load = useCallback(
     async (nextRange: StatsRange, force?: boolean) => {
+      if (!domain) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       if (force) setRefreshing(true);
       else setLoading(true);
       setError(null);
@@ -149,12 +154,12 @@ export function UserDashboardView() {
         setRefreshing(false);
       }
     },
-    [domainQuery],
+    [domain, domainQuery],
   );
 
   useEffect(() => {
     void load(range);
-  }, [load, range, activeDomain]);
+  }, [load, range, domain]);
 
   return (
     <div className="space-y-4">
@@ -163,10 +168,10 @@ export function UserDashboardView() {
           <h1 className="text-lg font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             Overview for your email workspace
-            {activeDomain ? (
+            {domain ? (
               <>
                 {" "}
-                on <span className="font-mono">{activeDomain}</span>
+                on <span className="font-mono">{domain}</span>
               </>
             ) : null}
           </p>

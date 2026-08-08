@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import {
-  getActiveDomain,
   normalizeDomain,
   readUserEmailData,
   requireSessionUserId,
@@ -14,29 +13,17 @@ export async function GET(request: Request) {
     const data = await readUserEmailData(userId);
     const url = new URL(request.url);
     const requested = normalizeDomain(url.searchParams.get("domain") ?? "");
-    const domain =
-      (requested && data.domains.includes(requested) ? requested : null) ??
-      getActiveDomain(data) ??
-      "";
-
-    if (!domain) {
-      return NextResponse.json({
-        domain: "",
-        zoneId: null,
-        cloudflareConfigured: false,
-        sendingOnboarded: false,
-        sendingEnabled: false,
-        sendingDnsConfigured: false,
-        routingEnabled: false,
-        sendingSubdomainId: null,
-        returnPathDomain: null,
-        cloudflareSendingUrl: null,
-        dnsRecords: [],
-        onboarding: null,
-      });
+    if (!requested) {
+      return NextResponse.json(
+        { error: "domain query required" },
+        { status: 400 },
+      );
+    }
+    if (!data.domains.includes(requested)) {
+      return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    const status = await buildDomainStatusFromOnboarding(userId, domain);
+    const status = await buildDomainStatusFromOnboarding(userId, requested);
     return NextResponse.json(status);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";

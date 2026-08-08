@@ -11,7 +11,7 @@ import { Megaphone, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -57,7 +57,7 @@ function statusVariant(
 export function BroadcastsView() {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { activeDomain, domainQuery } = useDomain();
+  const { domain: activeDomain, domainQuery } = useDashboardDomain();
   const domainKey = activeDomain ?? "none";
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -112,6 +112,11 @@ export function BroadcastsView() {
 
   const refresh = useCallback(
     async (force?: boolean) => {
+      if (!activeDomain) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       const hasData =
         dataRef.current.config !== null || dataRef.current.broadcasts.length > 0;
       if (!hasData) setLoading(true);
@@ -172,7 +177,7 @@ export function BroadcastsView() {
         setRefreshing(false);
       }
     },
-    [apiBase, domainKey, domainQuery, productId],
+    [activeDomain, apiBase, domainKey, domainQuery, productId],
   );
 
   useEffect(() => {

@@ -94,8 +94,9 @@ export function AccountDetailShell({
     <MailboxNavProvider value={nav}>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <DomainNavSidebar
-          onDomainSelect={() => {
-            router.push(accounts);
+          onDomainSelect={(domain) => {
+            const params = new URLSearchParams({ domain });
+            router.push(`${accounts}?${params.toString()}`);
           }}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

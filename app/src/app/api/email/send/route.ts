@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
-  getActiveDomain,
+  normalizeDomain,
   readUserEmailData,
   requireSessionUserId,
   resolveRequestDomain,
@@ -16,9 +16,16 @@ export async function GET(request: Request) {
     const userId = await requireSessionUserId();
     const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
-    const sent = domain
-      ? data.sent.filter((s) => s.domain === domain)
-      : data.sent;
+    if (!new URL(request.url).searchParams.get("domain")) {
+      return NextResponse.json(
+        { error: "domain query required" },
+        { status: 400 },
+      );
+    }
+    if (!domain) {
+      return NextResponse.json({ error: "Domain not found" }, { status: 404 });
+    }
+    const sent = data.sent.filter((s) => s.domain === domain);
     return NextResponse.json({
       sent: sent.map((entry) => ({
         ...entry,
@@ -64,13 +71,32 @@ export async function POST(request: Request) {
       );
     }
 
+    const from = body.from?.trim() ?? "";
+    if (!from) {
+      return NextResponse.json(
+        { error: "From address is required" },
+        { status: 400 },
+      );
+    }
+
     const data = await readUserEmailData(userId);
-    const domain =
-      resolveRequestDomain(request, data) ??
-      body.from?.split("@")[1]?.toLowerCase() ??
-      getActiveDomain(data) ??
-      "example.com";
-    const from = body.from ?? `dev@${domain}`;
+    const domain = normalizeDomain(from.split("@")[1] ?? "");
+    if (!domain || !data.domains.includes(domain)) {
+      return NextResponse.json(
+        { error: "From address must use one of your domains" },
+        { status: 400 },
+      );
+    }
+    const knownAddress = data.addresses.some(
+      (a) => a.email.toLowerCase() === from.toLowerCase(),
+    );
+    if (!knownAddress) {
+      return NextResponse.json(
+        { error: "From address is not a registered sender" },
+        { status: 400 },
+      );
+    }
+
     const subject = body.subject ?? "(no subject)";
     const text = body.text?.trim() ?? "";
     const fromName =

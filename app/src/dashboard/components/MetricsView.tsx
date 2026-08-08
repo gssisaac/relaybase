@@ -1,5 +1,6 @@
 "use client";
 
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useDashboardPaths } from "@/dashboard/paths";
 import {
   fetchEmailCached,
@@ -41,12 +42,14 @@ import {
 export function MetricsView() {
   const productId = useProductId();
   const { apiBase, settingsDomain } = useDashboardPaths();
+  const { domain, domainQuery } = useDashboardDomain();
+  const domainKey = domain ?? "none";
   const [metrics, setMetrics] = useState<EmailMetrics | null>(null);
   const [status, setStatus] = useState<DomainStatus | null>(null);
   const [loading, setLoading] = useState(
     () =>
-      readEmailStale<EmailMetrics>(productId, "metrics") === null &&
-      readEmailStale<DomainStatus>(productId, "status") === null,
+      readEmailStale<EmailMetrics>(productId, `metrics:${domainKey}`) === null &&
+      readEmailStale<DomainStatus>(productId, `status:${domainKey}`) === null,
   );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,30 +59,47 @@ export function MetricsView() {
   dataRef.current = { metrics, status };
 
   useEffect(() => {
-    const staleMetrics = readEmailStale<EmailMetrics>(productId, "metrics");
+    const staleMetrics = readEmailStale<EmailMetrics>(
+      productId,
+      `metrics:${domainKey}`,
+    );
     if (staleMetrics) setMetrics(staleMetrics);
-    const staleStatus = readEmailStale<DomainStatus>(productId, "status");
+    const staleStatus = readEmailStale<DomainStatus>(
+      productId,
+      `status:${domainKey}`,
+    );
     if (staleStatus) setStatus(staleStatus);
     if (staleMetrics || staleStatus) setLoading(false);
-  }, [productId]);
+  }, [domainKey, productId]);
 
   const refresh = useCallback(
     async (force?: boolean) => {
+      if (!domain) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       const hasData =
         dataRef.current.metrics !== null || dataRef.current.status !== null;
       if (!hasData) setLoading(true);
       setRefreshing(true);
       setError(null);
       try {
+        const qs = domainQuery();
         const [metricsResult, statusResult] = await Promise.all([
-          fetchEmailCached<EmailMetrics>(productId, "metrics", `${apiBase}/metrics`, {
-            refresh: force,
-            onUpdate: (data) => setMetrics(data),
-          }),
+          fetchEmailCached<EmailMetrics>(
+            productId,
+            `metrics:${domainKey}`,
+            `${apiBase}/metrics${qs}`,
+            {
+              refresh: force,
+              onUpdate: (data) => setMetrics(data),
+            },
+          ),
           fetchEmailCachedOptional<DomainStatus>(
             productId,
-            "status",
-            `${apiBase}/status`,
+            `status:${domainKey}`,
+            `${apiBase}/status${qs}`,
             {
               refresh: force,
               onUpdate: (data) => {
@@ -99,12 +119,12 @@ export function MetricsView() {
         setRefreshing(false);
       }
     },
-    [apiBase, productId],
+    [apiBase, domain, domainKey, domainQuery, productId],
   );
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, domain]);
 
   const statCards = metrics
     ? [

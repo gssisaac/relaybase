@@ -1,6 +1,6 @@
 "use client";
 
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import {
   Select,
   SelectContent,
@@ -10,10 +10,10 @@ import {
 } from "@/components/ui/select";
 
 export function CurrentDomainSelect({ className }: { className?: string }) {
-  const { domains, activeDomain, loading, setActiveDomain } = useDomain();
+  const { domains, domain, loading, setDomain } = useDashboardDomain();
 
   // Always controlled — never pass `undefined` (Base UI warns on uncontrolled→controlled).
-  const value = activeDomain ?? null;
+  const value = domain ?? null;
   const disabled = loading || domains.length === 0;
   const placeholder = loading
     ? "Loading domains…"
@@ -25,7 +25,7 @@ export function CurrentDomainSelect({ className }: { className?: string }) {
     <Select
       value={value}
       onValueChange={(next) => {
-        if (next) void setActiveDomain(next);
+        if (next) setDomain(next);
       }}
       disabled={disabled}
     >

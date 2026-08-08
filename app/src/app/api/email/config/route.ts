@@ -6,7 +6,6 @@ import {
   requireSessionUserId,
   writeUserEmailData,
   addUserDomain,
-  setActiveUserDomain,
 } from "@/lib/dev-email-store";
 
 export async function GET() {
@@ -34,7 +33,6 @@ export async function PATCH(request: Request) {
       const domain = body.emailDomain.trim();
       if (domain) {
         await addUserDomain(userId, domain);
-        await setActiveUserDomain(userId, domain);
       }
     }
     if (body.relaybaseAuthToken !== undefined) {

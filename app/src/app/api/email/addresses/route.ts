@@ -17,21 +17,25 @@ export async function GET(request: Request) {
     const userId = await requireSessionUserId();
     const data = await readUserEmailData(userId);
     const url = new URL(request.url);
-    // Personal mail picker needs every domain's addresses — not just activeDomain.
+    // Personal mail picker needs every domain's addresses.
     if (url.searchParams.get("all") === "1") {
       return NextResponse.json({ addresses: data.addresses });
     }
 
     const domain = resolveRequestDomain(request, data);
-    if (url.searchParams.get("domain") && !domain) {
+    if (!url.searchParams.get("domain")) {
+      return NextResponse.json(
+        { error: "domain query required" },
+        { status: 400 },
+      );
+    }
+    if (!domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    const addresses = domain
-      ? data.addresses.filter((a) => a.domain === domain)
-      : data.addresses;
-
-    return NextResponse.json({ addresses });
+    return NextResponse.json({
+      addresses: data.addresses.filter((a) => a.domain === domain),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
     return NextResponse.json({ error: message }, { status: 401 });

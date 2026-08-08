@@ -203,7 +203,6 @@ export function DomainsView() {
   const store = useDomain();
   const {
     domains,
-    activeDomain,
     loading,
     error,
     refresh,
@@ -288,13 +287,8 @@ export function DomainsView() {
         <CardHeader>
           <CardTitle className="text-sm">Your domains</CardTitle>
           <CardDescription>
-            {activeDomain ? (
-              <>
-                Active: <span className="font-mono">{activeDomain}</span>
-              </>
-            ) : (
-              "No active domain selected"
-            )}
+            Domains available for dashboard scoping via{" "}
+            <span className="font-mono">?domain=</span>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -321,11 +315,6 @@ export function DomainsView() {
                         <div className="flex items-center gap-2">
                           <Globe className="size-3.5 text-muted-foreground" />
                           {entry.domain}
-                          {entry.active ? (
-                            <Badge variant="default" className="text-[10px]">
-                              Active
-                            </Badge>
-                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell>

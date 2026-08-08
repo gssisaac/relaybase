@@ -10,15 +10,17 @@ import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { useEmailPaths } from "@/email/paths";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDomain } from "@/lib/dashboard/DomainContext";
+
+function domainOf(email: string): string {
+  return email.split("@")[1]?.toLowerCase() ?? "none";
+}
 
 export function AccountSettingsView({ email }: { email: string }) {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { activeDomain } = useDomain();
   const { addresses, refresh, setError, setMessage, error, message } =
     useEmailMailbox();
-  const domainKey = activeDomain ?? "none";
+  const domainKey = domainOf(email);
 
   const address = addresses.find(
     (entry) => entry.email.toLowerCase() === email.toLowerCase(),
@@ -59,7 +61,7 @@ export function AccountSettingsView({ email }: { email: string }) {
     return (
       <div className="p-4">
         <p className="text-sm text-muted-foreground">
-          Account {email} was not found on the active domain.
+          Account {email} was not found.
         </p>
       </div>
     );
@@ -78,31 +80,21 @@ export function AccountSettingsView({ email }: { email: string }) {
 
       <div className="space-y-4 rounded-lg border border-border p-4">
         <div className="space-y-1.5">
-          <Label className="text-xs">Address</Label>
-          <Input value={email} readOnly className="h-10 bg-muted/30" />
+          <Label htmlFor="account-email">Email</Label>
+          <Input id="account-email" value={email} disabled />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Display name</Label>
+          <Label htmlFor="account-display-name">Display name</Label>
           <Input
+            id="account-display-name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Support Team"
-            className="h-10"
+            placeholder="Optional"
           />
-          <p className="text-xs text-muted-foreground">
-            Shown as the From name in recipient inboxes when you send from this
-            address.
-          </p>
         </div>
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            disabled={saving}
-            onClick={() => void saveDisplayName()}
-          >
-            {saving ? "Saving…" : "Save display name"}
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => void saveDisplayName()} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
       </div>
     </div>
   );

@@ -12,15 +12,19 @@ export async function GET(request: Request) {
     const userId = await requireSessionUserId();
     const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
-    if (new URL(request.url).searchParams.get("domain") && !domain) {
+    if (!new URL(request.url).searchParams.get("domain")) {
+      return NextResponse.json(
+        { error: "domain query required" },
+        { status: 400 },
+      );
+    }
+    if (!domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    const contacts = domain
-      ? data.audience.filter((c) => c.domain === domain)
-      : data.audience;
-
-    return NextResponse.json({ contacts });
+    return NextResponse.json({
+      contacts: data.audience.filter((c) => c.domain === domain),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
     return NextResponse.json({ error: message }, { status: 401 });

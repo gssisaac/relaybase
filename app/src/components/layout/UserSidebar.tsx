@@ -40,6 +40,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
@@ -243,6 +244,7 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const { tabs, settingsNav, domains } = useDashboardPaths();
   const domainStore = useDomain();
+  const { hrefWithDomain } = useDashboardDomain();
   const domainsWorking = domainStore.isWorking;
   const inSettings = pathname.startsWith("/settings");
 
@@ -254,11 +256,12 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
           item.href === "/settings"
             ? inSettings
             : isActive(item.href, pathname);
+        const href = hrefWithDomain(item.href);
 
         return (
           <div key={item.href}>
             <Link
-              href={item.href}
+              href={href}
               title={collapsed ? item.label : undefined}
               className={cn(
                 "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
@@ -284,7 +287,7 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
                   return (
                     <Link
                       key={sub.href}
-                      href={sub.href}
+                      href={hrefWithDomain(sub.href)}
                       className={cn(
                         "rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
                         subActive

@@ -38,8 +38,8 @@ export async function GET(request: Request, { params }: Params) {
       );
     }
 
-    // Prefer the requested/active domain, then other owned domains (multi-domain
-    // mailboxes often list under one domain while activeDomain is another).
+    // Prefer the requested domain, then other owned domains (multi-domain
+    // mailboxes may omit ?domain= and need a scan across owned domains).
     const candidates = explicitDomain
       ? [explicitDomain]
       : [

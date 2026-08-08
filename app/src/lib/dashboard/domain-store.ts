@@ -103,7 +103,6 @@ async function postOnboard(
   action: "start" | "advance" | "retry",
 ): Promise<{
   domains: DomainSummary[];
-  activeDomain: string | null;
   message: string;
 }> {
   const res = await desktopAwareFetch("/api/email/domains/onboard", {
@@ -113,14 +112,12 @@ async function postOnboard(
   });
   const data = (await res.json()) as {
     domains?: DomainSummary[];
-    activeDomain?: string | null;
     message?: string;
     error?: string;
   };
   if (!res.ok) throw new Error(data.error ?? "Onboarding request failed");
   return {
     domains: data.domains ?? [],
-    activeDomain: data.activeDomain ?? null,
     message: data.message ?? "Onboarding updated",
   };
 }
@@ -143,7 +140,6 @@ function onboardingSettled(
 
 export class DomainStore {
   domains: DomainSummary[] = [];
-  activeDomain: string | null = null;
   loading = true;
   error: string | null = null;
   addJobs: DomainAddJob[] = [];
@@ -324,31 +320,17 @@ export class DomainStore {
     // unload drops the store instance entirely.
   }
 
-  domainQuery(extra?: Record<string, string>): string {
-    const params = new URLSearchParams();
-    if (this.activeDomain) params.set("domain", this.activeDomain);
-    if (extra) {
-      for (const [key, value] of Object.entries(extra)) {
-        if (value) params.set(key, value);
-      }
-    }
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
-  }
-
   async refresh() {
     this.error = null;
     try {
       const res = await desktopAwareFetch("/api/email/domains", { cache: "no-store" });
       const data = (await res.json()) as {
         domains?: DomainSummary[];
-        activeDomain?: string | null;
         error?: string;
       };
       if (!res.ok) throw new Error(data.error ?? "Failed to load domains");
       runInAction(() => {
         this.domains = data.domains ?? [];
-        this.activeDomain = data.activeDomain ?? null;
         this.loading = false;
       });
       this.resolveWaiters();
@@ -361,25 +343,6 @@ export class DomainStore {
     }
   }
 
-  async setActiveDomain(domain: string) {
-    this.error = null;
-    const res = await desktopAwareFetch("/api/email/domains", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activeDomain: domain }),
-    });
-    const data = (await res.json()) as {
-      domains?: DomainSummary[];
-      activeDomain?: string | null;
-      error?: string;
-    };
-    if (!res.ok) throw new Error(data.error ?? "Failed to update domain");
-    runInAction(() => {
-      this.domains = data.domains ?? [];
-      this.activeDomain = data.activeDomain ?? domain;
-    });
-  }
-
   async addDomain(domain: string) {
     this.error = null;
     const res = await desktopAwareFetch("/api/email/domains", {
@@ -389,14 +352,12 @@ export class DomainStore {
     });
     const data = (await res.json()) as {
       domains?: DomainSummary[];
-      activeDomain?: string | null;
       message?: string;
       error?: string;
     };
     if (!res.ok) throw new Error(data.error ?? "Failed to add domain");
     runInAction(() => {
       this.domains = data.domains ?? [];
-      this.activeDomain = data.activeDomain ?? null;
     });
     this.ensurePolling();
     return { message: data.message ?? "Domain added" };
@@ -502,13 +463,11 @@ export class DomainStore {
     );
     const data = (await res.json()) as {
       domains?: DomainSummary[];
-      activeDomain?: string | null;
       error?: string;
     };
     if (!res.ok) throw new Error(data.error ?? "Failed to remove domain");
     runInAction(() => {
       this.domains = data.domains ?? [];
-      this.activeDomain = data.activeDomain ?? null;
       this.addJobs = this.addJobs.filter((j) => j.domain !== domain);
     });
     this.ensurePolling();
@@ -519,7 +478,6 @@ export class DomainStore {
     const result = await postOnboard(domain, "start");
     runInAction(() => {
       this.domains = result.domains;
-      this.activeDomain = result.activeDomain;
     });
     this.resolveWaiters();
     this.ensurePolling();
@@ -531,7 +489,6 @@ export class DomainStore {
     const result = await postOnboard(domain, "advance");
     runInAction(() => {
       this.domains = result.domains;
-      this.activeDomain = result.activeDomain;
     });
     this.resolveWaiters();
     this.ensurePolling();
@@ -543,7 +500,6 @@ export class DomainStore {
     const result = await postOnboard(domain, "retry");
     runInAction(() => {
       this.domains = result.domains;
-      this.activeDomain = result.activeDomain;
     });
     this.resolveWaiters();
     this.ensurePolling();

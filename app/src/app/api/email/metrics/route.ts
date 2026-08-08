@@ -17,7 +17,13 @@ export async function GET(request: Request) {
     const userId = await requireSessionUserId();
     const data = await readUserEmailData(userId);
     const domain = resolveRequestDomain(request, data);
-    if (new URL(request.url).searchParams.get("domain") && !domain) {
+    if (!new URL(request.url).searchParams.get("domain")) {
+      return NextResponse.json(
+        { error: "domain query required" },
+        { status: 400 },
+      );
+    }
+    if (!domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 

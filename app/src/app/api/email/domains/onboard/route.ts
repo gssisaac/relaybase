@@ -42,7 +42,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       domains: result.domains,
-      activeDomain: result.activeDomain,
       onboarding: result.onboarding,
       message: result.message,
     });

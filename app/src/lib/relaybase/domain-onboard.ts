@@ -344,7 +344,6 @@ async function runStep(
 
 export type DomainOnboardResult = {
   domains: DomainSummary[];
-  activeDomain: string | null;
   onboarding: DomainOnboardingRecord | null;
   message: string;
 };
@@ -358,7 +357,6 @@ async function loadResult(
   const data = await readUserEmailData(userId);
   return {
     domains: listDomainSummaries(data),
-    activeDomain: data.config.activeDomain,
     onboarding: onboarding ?? data.domainOnboarding?.[domain] ?? null,
     message,
   };

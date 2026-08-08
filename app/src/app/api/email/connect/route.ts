@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import {
-  getActiveDomain,
   normalizeDomain,
   readUserEmailData,
   requireSessionUserId,
@@ -22,14 +21,11 @@ export async function POST(request: Request) {
     };
 
     const data = await readUserEmailData(userId);
-    const requested = normalizeDomain(body.domain ?? "");
-    const domain =
-      (requested && data.domains.includes(requested) ? requested : null) ??
-      getActiveDomain(data);
+    const domain = normalizeDomain(body.domain ?? "");
 
-    if (!domain) {
+    if (!domain || !data.domains.includes(domain)) {
       return NextResponse.json(
-        { error: "Add a domain before connecting Email Sending." },
+        { error: "domain is required" },
         { status: 400 },
       );
     }
@@ -53,7 +49,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: result.onboarding?.status === "ready",
       domains: result.domains,
-      activeDomain: result.activeDomain,
       onboarding: result.onboarding,
       message: result.message,
       mode: body.mode ?? "all",

@@ -10,11 +10,11 @@ import { Plus, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
   suggestedDisplayNameForLocalPart,
-  useDomain,
 } from "@/lib/dashboard/DomainContext";
 
 import {
@@ -53,7 +53,7 @@ function initialDefaultSelection(): Record<string, boolean> {
 export function AccountsView() {
   const productId = useProductId();
   const { apiBase, accounts } = useDashboardPaths();
-  const { activeDomain, domainQuery } = useDomain();
+  const { domain: urlDomain, domainQuery } = useDashboardDomain();
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [search, setSearch] = useState("");
@@ -74,8 +74,8 @@ export function AccountsView() {
   const [localPart, setLocalPart] = useState("");
   const [displayName, setDisplayName] = useState("");
 
-  const domain = activeDomain ?? config?.domain ?? "";
-  const domainKey = activeDomain ?? "none";
+  const domain = urlDomain ?? config?.domain ?? "";
+  const domainKey = urlDomain ?? "none";
 
   const dataRef = useRef({ config, addresses });
   dataRef.current = { config, addresses };
@@ -93,6 +93,11 @@ export function AccountsView() {
 
   const refresh = useCallback(
     async (force?: boolean) => {
+      if (!urlDomain) {
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       const hasData =
         dataRef.current.config !== null || dataRef.current.addresses.length > 0;
       if (!hasData) setLoading(true);
@@ -123,12 +128,12 @@ export function AccountsView() {
         setRefreshing(false);
       }
     },
-    [apiBase, domainKey, domainQuery, productId],
+    [apiBase, domainKey, domainQuery, productId, urlDomain],
   );
 
   useEffect(() => {
     refresh();
-  }, [refresh, activeDomain]);
+  }, [refresh, urlDomain]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();

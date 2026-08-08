@@ -19,8 +19,9 @@ import {
 import type { EmailConfig } from "@/email/components/types";
 
 export type DevEmailConfig = {
-  /** @deprecated Legacy single domain — use domains[] + activeDomain */
+  /** @deprecated Legacy single domain — use domains[] */
   domain?: string;
+  /** @deprecated Unused for UI scoping — dashboard uses URL ?domain= */
   activeDomain: string | null;
   cloudflareConfigured: boolean;
   relaybaseConfigured: boolean;
@@ -410,32 +411,29 @@ export async function writeUserEmailData(
   }
 }
 
+/** First owned domain — not a persisted UI preference. */
 export function getActiveDomain(data: DevUserEmailData): string | null {
-  const active = normalizeDomain(data.config.activeDomain ?? "");
-  if (active && data.domains.includes(active)) return active;
   return data.domains[0] ?? null;
 }
 
+/** Require explicit `?domain=` owned by the user. No persisted-active fallback. */
 export function resolveRequestDomain(
   request: Request,
   data: DevUserEmailData,
 ): string | null {
   const url = new URL(request.url);
   const requested = normalizeDomain(url.searchParams.get("domain") ?? "");
-  if (requested) {
-    if (!data.domains.includes(requested)) return null;
-    return requested;
-  }
-  return getActiveDomain(data);
+  if (!requested) return null;
+  if (!data.domains.includes(requested)) return null;
+  return requested;
 }
 
 export function listDomainSummaries(data: DevUserEmailData): DomainSummary[] {
-  const active = getActiveDomain(data);
   return data.domains.map((domain) => {
     const r2 = data.domainR2?.[domain];
     return {
       domain,
-      active: domain === active,
+      active: false,
       addressCount: data.addresses.filter((a) => a.domain === domain).length,
       audienceCount: data.audience.filter((a) => a.domain === domain).length,
       broadcastCount: data.broadcasts.filter((b) => b.domain === domain).length,
@@ -461,9 +459,6 @@ export async function addUserDomain(
   if (!data.domains.includes(domain)) {
     data.domains.push(domain);
     data.domains.sort();
-  }
-  if (!data.config.activeDomain) {
-    data.config.activeDomain = domain;
   }
   await writeUserEmailData(userId, data);
   return data;
@@ -491,8 +486,6 @@ export async function removeUserDomain(
     data.domainOnboarding = nextOnboarding;
   }
 
-  const active = getActiveDomain(data);
-  data.config.activeDomain = active;
   await writeUserEmailData(userId, data);
   return data;
 }
@@ -535,20 +528,6 @@ export async function initDomainOnboarding(
   const record = createInitialOnboardingRecord();
   await setDomainOnboarding(userId, domain, record);
   return record;
-}
-
-export async function setActiveUserDomain(
-  userId: string,
-  domainInput: string,
-): Promise<DevUserEmailData> {
-  const domain = normalizeDomain(domainInput);
-  const data = await readUserEmailData(userId);
-  if (!data.domains.includes(domain)) {
-    throw new Error("Domain not found");
-  }
-  data.config.activeDomain = domain;
-  await writeUserEmailData(userId, data);
-  return data;
 }
 
 export async function resolveUserDomain(userId: string): Promise<string | null> {
@@ -602,11 +581,10 @@ export async function markDomainR2Provisioned(
 
 export async function buildUserEmailConfig(userId: string): Promise<EmailConfig> {
   const data = await readUserEmailData(userId);
-  const activeDomain = getActiveDomain(data);
-  const domain = activeDomain ?? "";
+  const domain = getActiveDomain(data) ?? "";
   const authToken = data.config.relaybaseAuthToken?.trim() ?? "";
   const authConfigured = Boolean(authToken && (await isValidAuthToken(authToken)));
-  const r2 = activeDomain ? data.domainR2?.[activeDomain] : undefined;
+  const r2 = domain ? data.domainR2?.[domain] : undefined;
   const platform = await readRelaybasePlatformConfig();
   const inboundR2BucketName = resolveInboundR2BucketName(
     "relaybase",
@@ -637,23 +615,17 @@ export async function buildUserEmailConfig(userId: string): Promise<EmailConfig>
     cloudflareDnsApiToken: "",
     cloudflareApiEmail: "",
     cloudflareGlobalApiKey: "",
-    registeredAddresses: data.addresses
-      .filter((a) => !activeDomain || a.domain === activeDomain)
-      .map((a) => a.email),
-    audienceContacts: data.audience.filter(
-      (a) => !activeDomain || a.domain === activeDomain,
-    ),
-    broadcasts: data.broadcasts
-      .filter((b) => !activeDomain || b.domain === activeDomain)
-      .map((b) => ({
-        id: b.id,
-        subject: b.subject,
-        body: "",
-        from: "",
-        createdAt: b.createdAt,
-        recipientCount: 0,
-        status: b.status,
-      })),
+    registeredAddresses: data.addresses.map((a) => a.email),
+    audienceContacts: data.audience,
+    broadcasts: data.broadcasts.map((b) => ({
+      id: b.id,
+      subject: b.subject,
+      body: "",
+      from: "",
+      createdAt: b.createdAt,
+      recipientCount: 0,
+      status: b.status,
+    })),
     configured: authConfigured,
     relaybaseConfigured:
       data.config.relaybaseConfigured ||
@@ -667,10 +639,10 @@ export async function buildUserEmailConfig(userId: string): Promise<EmailConfig>
     usesIntegrationCredentials: true,
     domain,
     domains: data.domains,
-    activeDomain,
+    activeDomain: null,
     inboundR2BucketName,
-    inboundR2ObjectPrefix: activeDomain
-      ? r2?.objectPrefix ?? inboundR2ObjectPrefix(activeDomain)
+    inboundR2ObjectPrefix: domain
+      ? r2?.objectPrefix ?? inboundR2ObjectPrefix(domain)
       : undefined,
     inboundR2BucketExists,
     inboundR2WorkerConfigured,

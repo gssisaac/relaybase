@@ -5,7 +5,7 @@ import { Check, Copy, Plus, RefreshCw, RotateCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { SparklineChart } from "@/components/dashboard/SparklineChart";
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { DomainScopedLayout } from "@/dashboard/components/DomainScopedLayout";
 import { useDashboardPaths } from "@/dashboard/paths";
@@ -134,7 +134,7 @@ print(res.json()["messageId"])`,
 }
 
 export function EmailSettingsKeysView() {
-  const { domainQuery, activeDomain, domains } = useDomain();
+  const { domainQuery, domain: activeDomain, domains } = useDashboardDomain();
   const { apiBase, domains: domainsHref } = useDashboardPaths();
   const [keys, setKeys] = useState<ProductEmailKeyRow[]>([]);
   const [stats, setStats] = useState<KeysStats | null>(null);
@@ -159,6 +159,11 @@ export function EmailSettingsKeysView() {
 
   const refreshKeys = useCallback(
     async (force?: boolean) => {
+      if (!domain) {
+        setLoadingKeys(false);
+        setRefreshing(false);
+        return;
+      }
       if (force) setRefreshing(true);
       else setLoadingKeys(true);
       setKeysError(null);
@@ -185,7 +190,7 @@ export function EmailSettingsKeysView() {
         setRefreshing(false);
       }
     },
-    [apiBase, domainQuery, range],
+    [apiBase, domain, domainQuery, range],
   );
 
   useEffect(() => {

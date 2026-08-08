@@ -81,7 +81,6 @@ export function useDomain(): DomainStore {
       () => ({
         domains: store.domains.map((d) => [
           d.domain,
-          d.active,
           d.addressCount,
           d.audienceCount,
           d.broadcastCount,
@@ -95,7 +94,6 @@ export function useDomain(): DomainStore {
           d.onboarding?.lastError,
           d.onboarding?.steps?.map((s) => [s.id, s.status, s.error]),
         ]),
-        activeDomain: store.activeDomain,
         loading: store.loading,
         error: store.error,
         jobs: store.addJobs.map((j) => [

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDomain } from "@/lib/dashboard/DomainContext";
 import { ComposeForm } from "@/email/components/ComposeForm";
 import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
@@ -91,7 +90,6 @@ function domainOf(email: string) {
 
 export function ComposeView() {
   const productId = useProductId();
-  const { activeDomain } = useDomain();
   const { apiBase } = useEmailPaths();
   const { sent } = useMailboxNav();
   const router = useRouter();
@@ -150,7 +148,6 @@ export function ComposeView() {
         const domain =
           (fromParam ? domainOf(fromParam) : "") ||
           (accountFilter !== "all" ? domainOf(accountFilter) : "") ||
-          activeDomain ||
           "";
         const qs = domain ? `?domain=${encodeURIComponent(domain)}` : "";
         const res = await fetch(
@@ -198,7 +195,6 @@ export function ComposeView() {
     };
   }, [
     accountFilter,
-    activeDomain,
     addresses,
     apiBase,
     fromParam,
@@ -247,7 +243,7 @@ export function ComposeView() {
       inReplyTo: inReplyToParam?.trim() || undefined,
       references: referencesParam?.trim() || undefined,
     };
-    const domainKey = activeDomain ?? "none";
+    const domainKey = domainOf(sendFrom) || "none";
     const sentParams = new URLSearchParams({ sent: "1" });
     sentParams.set("account", sendFrom);
 

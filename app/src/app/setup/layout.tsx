@@ -15,11 +15,7 @@ function SetupShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
-    if (
-      credentials?.workerUrl &&
-      credentials.adminToken &&
-      credentials.licenseKey
-    ) {
+    if (credentials?.workerUrl && credentials.adminToken) {
       router.replace("/");
     }
   }, [ready, credentials, router]);

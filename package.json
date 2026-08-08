@@ -15,6 +15,7 @@
     "desktop:dev": "pnpm --dir desktop dev",
     "desktop:build": "pnpm --dir desktop build",
     "desktop:build:macos": "pnpm --dir desktop build:macos",
+    "pack:worker-install": "npm run pack:customer-install --prefix server",
     "website:dev": "npm run dev --prefix website",
     "website:build": "npm run build --prefix website",
     "website:start": "npm run start --prefix website"

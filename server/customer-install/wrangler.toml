@@ -1,0 +1,20 @@
+# Customer install template — fill KV ids after creating namespaces (see README).
+name = "relaybase-api"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+[vars]
+WORKER_SCRIPT_NAME = "relaybase-api"
+INBOUND_BUCKET_NAME = "relaybase-inbound"
+
+[[kv_namespaces]]
+binding = "KEYS"
+id = "REPLACE_WITH_relaybase-keys_ID"
+
+[[kv_namespaces]]
+binding = "RELAYBASE_API"
+id = "REPLACE_WITH_relaybase-api_ID"
+
+[[r2_buckets]]
+binding = "INBOUND"
+bucket_name = "relaybase-inbound"

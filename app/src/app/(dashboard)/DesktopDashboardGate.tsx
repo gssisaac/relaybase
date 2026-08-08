@@ -14,20 +14,11 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { DomainProgressBanner } from "@/relaybase-email/components/DomainProgressBanner";
 
 function setupPathFor(credentials: {
-  accountId?: string;
-  apiToken?: string;
   workerUrl?: string;
   adminToken?: string;
-  licenseKey?: string;
 } | null): string | null {
-  if (!credentials?.accountId || !credentials.apiToken) {
-    return "/setup/connect";
-  }
-  if (!credentials.workerUrl || !credentials.adminToken) {
+  if (!credentials?.workerUrl || !credentials.adminToken) {
     return "/setup/install";
-  }
-  if (!credentials.licenseKey) {
-    return "/setup/license";
   }
   return null;
 }
@@ -51,7 +42,7 @@ function DesktopInner({ children }: { children: ReactNode }) {
   }
 
   const readyToUse = Boolean(
-    credentials?.workerUrl && credentials.adminToken && credentials.licenseKey,
+    credentials?.workerUrl && credentials.adminToken,
   );
 
   if (!readyToUse) {

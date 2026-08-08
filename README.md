@@ -46,7 +46,7 @@ Inbound path:
 1. Node.js 22 (see `app/.node-version`, `admin/.node-version`)
 2. npm 10.9.2 (`packageManager` in frontend `package.json` files)
 3. Cloudflare account with **Email Sending** enabled and sending domain onboarded
-4. API token with **Account → Email Sending → Edit** (and **Zone → Email Routing Rules → Edit** for inbound routing)
+4. For the **hosted** Relaybase Worker / admin: API token with Email Sending (and Email Routing) as needed. For the **Mac app**, customers self-install via `pnpm pack:worker-install` ZIP + Wrangler — the app only needs Worker URL + admin token.
 
 ---
 

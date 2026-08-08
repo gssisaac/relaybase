@@ -6,7 +6,6 @@ import {
   EmailAlerts,
   PageToolbar,
 } from "@/relaybase-email/components/EmailShared";
-import { LicenseActivatePanel } from "@/relaybase-email/components/LicenseActivatePanel";
 import { WorkerUpdatePanel } from "@/relaybase-email/components/WorkerUpdatePanel";
 import { useEmailPaths } from "@/relaybase-email/components/useEmailPaths";
 import { useEmailSettings } from "@/relaybase-email/components/useEmailSettings";
@@ -58,12 +57,7 @@ export function EmailSettingsDomainView() {
         </CardContent>
       </Card>
 
-      {desktop ? (
-        <>
-          <WorkerUpdatePanel />
-          <LicenseActivatePanel />
-        </>
-      ) : null}
+      {desktop ? <WorkerUpdatePanel /> : null}
     </div>
   );
 }

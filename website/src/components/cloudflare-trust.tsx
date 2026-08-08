@@ -22,21 +22,21 @@ export function CloudflareTrust() {
               <span className="text-[#f6821f]">your Cloudflare account</span>
             </h2>
             <p className="mt-4 text-lg text-slate-400">
-              Relaybase does not host email for you. The Mac app connects with
-              your API token, installs our routing Worker into your account, and
-              gives you an inbox UX over Cloudflare Email Sending and Routing —
-              the same products you already pay Cloudflare for.
+              Relaybase does not host email for you. You deploy our routing Worker
+              into your Cloudflare account with Wrangler; the Mac app only needs
+              your Worker URL and admin token — then you get an inbox UX over
+              Cloudflare Email Sending and Routing.
             </p>
 
             <ul className="mt-8 space-y-4">
               {[
                 {
                   icon: KeyRound,
-                  text: "You keep the API token — stored in your Mac keychain, never on our servers",
+                  text: "No Workers/KV/R2 API token in the Mac app — you deploy; we never hold account edit rights",
                 },
                 {
                   icon: MonitorSmartphone,
-                  text: "Worker, KV, and R2 live in your account — we ship the build, you own the runtime",
+                  text: "Worker, KV, and R2 live in your account — we ship the install ZIP, you own the runtime",
                 },
                 {
                   icon: Shield,
@@ -72,10 +72,10 @@ export function CloudflareTrust() {
             </div>
 
             <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900 p-4 font-mono text-xs text-slate-400">
-              <p className="text-slate-500">{"// Your Mac app"}</p>
-              <p>Relaybase.app ──▶ your CF API token</p>
+              <p className="text-slate-500">{"// You deploy"}</p>
+              <p>wrangler deploy ──▶ relaybase-api in your account</p>
               <p className="text-[#f6821f]">
-                &nbsp;&nbsp;install Worker in your account
+                Relaybase.app ──▶ your Worker URL + admin token
               </p>
               <p className="text-slate-500">
                 &nbsp;&nbsp;&nbsp;&nbsp;──▶ Email Sending API (your bill)

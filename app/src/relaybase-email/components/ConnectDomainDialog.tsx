@@ -44,9 +44,9 @@ export function ConnectDomainDialog({
                 Cloudflare account.
               </li>
               <li>
-                The Relaybase Mac app connects with your Cloudflare API token,
-                installs the routing worker into <em>your</em> account, and
-                manages addresses from there.
+                You deploy the routing Worker into <em>your</em> Cloudflare
+                account; the Mac app connects to that Worker and manages
+                addresses from there.
               </li>
               <li>We never ask you to point nameservers at Relaybase.</li>
             </ul>

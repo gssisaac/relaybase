@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "./env";
 import { adminBootstrap } from "./routes/admin-bootstrap";
 import { adminCloudflare } from "./routes/admin-cloudflare";
+import { adminConnect } from "./routes/admin-connect";
 import { adminInbox } from "./routes/admin-inbox";
 import { adminKeys } from "./routes/admin-keys";
 import { adminLogs } from "./routes/admin-logs";
@@ -37,6 +38,7 @@ app.get("/health", async (c) => {
 app.route("/admin/keys", adminKeys);
 app.route("/admin/logs", adminLogs);
 app.route("/admin/cloudflare", adminCloudflare);
+app.route("/admin/connect", adminConnect);
 app.route("/admin/bootstrap", adminBootstrap);
 app.route("/admin/inbox", adminInbox);
 app.route("/v1/inbox", v1Inbox);

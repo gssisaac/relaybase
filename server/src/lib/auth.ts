@@ -10,13 +10,20 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
   return match?.[1]?.trim() ?? null;
 }
 
-async function resolveAdminToken(env: Env): Promise<string | null> {
+async function kvAdminToken(env: Env): Promise<string | null> {
   const raw = await env.KEYS.get(ADMIN_KV_KEY);
-  if (raw) {
+  if (!raw) return null;
+  try {
     const parsed = JSON.parse(raw) as { token?: string };
-    if (parsed.token?.trim()) return parsed.token.trim();
+    return parsed.token?.trim() || null;
+  } catch {
+    return null;
   }
-  return env.ADMIN_TOKEN?.trim() || null;
+}
+
+/** Prefer wrangler secret; fall back to KV (legacy bootstrap). */
+export async function resolveAdminToken(env: Env): Promise<string | null> {
+  return env.ADMIN_TOKEN?.trim() || (await kvAdminToken(env));
 }
 
 export async function setAdminToken(kv: KVNamespace, token: string): Promise<void> {
@@ -27,8 +34,16 @@ export async function requireAdmin(
   c: Context<{ Bindings: Env }>,
 ): Promise<Response | null> {
   const token = extractBearerToken(c.req.header("Authorization"));
-  const expected = await resolveAdminToken(c.env);
-  if (!token || !expected || token !== expected) {
+  if (!token) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  // Accept either the Wrangler secret OR KV config:admin.
+  // Previously KV won exclusively, so a fresh `wrangler secret put ADMIN_TOKEN`
+  // was ignored when an old bootstrap token remained in KEYS.
+  const secret = c.env.ADMIN_TOKEN?.trim() || null;
+  const fromKv = await kvAdminToken(c.env);
+  const allowed = [secret, fromKv].filter(Boolean) as string[];
+  if (allowed.length === 0 || !allowed.includes(token)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   return null;

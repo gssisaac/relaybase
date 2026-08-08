@@ -89,7 +89,12 @@ export function formatDesktopError(err: unknown): string {
 export const CF_API_TOKENS_URL =
   "https://dash.cloudflare.com/profile/api-tokens";
 
-/** Exact Cloudflare API token scopes Relaybase needs. */
+/** Hosted install ZIP (packed via `pnpm pack:worker-install`). */
+export const WORKER_INSTALL_ZIP_URL =
+  process.env.NEXT_PUBLIC_WORKER_INSTALL_ZIP_URL ??
+  "https://relaybase.xyz/downloads/relaybase-worker-install.zip";
+
+/** Exact Cloudflare API token scopes — only if a future optional Zone-assist feature needs them. */
 export const CF_REQUIRED_TOKEN_PERMISSIONS = [
   "Account — Workers Scripts — Edit",
   "Account — Workers KV Storage — Edit",
@@ -98,6 +103,14 @@ export const CF_REQUIRED_TOKEN_PERMISSIONS = [
   "Zone — Email Routing Rules — Edit",
   "Zone — Zone — Read",
 ] as const;
+
+export type WorkerConnectResult = {
+  ok: boolean;
+  product: string;
+  workerScriptName: string;
+  workerUrl: string;
+  r2Configured: boolean;
+};
 
 export type DesktopErrorLink = {
   label: string;
@@ -130,97 +143,76 @@ export function explainDesktopError(
 ): DesktopErrorHelp {
   const raw = formatDesktopError(err);
   const lower = raw.toLowerCase();
-  const tokenLinks: DesktopErrorLink[] = [
-    { label: "Open Cloudflare API tokens", href: CF_API_TOKENS_URL },
-    { label: "Back to Connect Cloudflare", href: "/setup/connect" },
+  const installLinks: DesktopErrorLink[] = [
+    { label: "Download Worker install ZIP", href: WORKER_INSTALL_ZIP_URL },
+    { label: "Open install setup", href: "/setup/install" },
   ];
 
   if (
     lower.includes("~/.relaybase") ||
     lower.includes(".relaybase") ||
     lower.includes("credentials.json") ||
-    lower.includes("could not resolve home")
+    lower.includes("could not resolve home") ||
+    lower.includes("failed to create") ||
+    lower.includes("failed to write credentials")
   ) {
     return {
       title: "Could not save credentials on this Mac",
-      detail:
-        "Relaybase could not read or write ~/.relaybase/credentials.json.",
-      fix: "Make sure your home folder is writable, then try again. To reset, delete that file and reconnect.",
+      detail: stripRawApiNoise(raw) || "Could not create or write ~/.relaybase/credentials.json.",
+      fix: "Relaybase creates ~/.relaybase automatically. Ensure your home folder is writable, then Verify again. To reset, delete ~/.relaybase/credentials.json.",
     };
   }
 
   if (
-    lower.includes("connect cloudflare first") ||
-    lower.includes("no credentials")
-  ) {
-    return {
-      title: "Cloudflare is not connected yet",
-      detail: "Account ID and API token are missing from this app.",
-      fix: "Connect Cloudflare first, verify the token, then return here.",
-      links: [
-        { label: "Go to Connect Cloudflare", href: "/setup/connect" },
-        { label: "Open Cloudflare API tokens", href: CF_API_TOKENS_URL },
-      ],
-    };
-  }
-
-  if (
-    lower.includes("authentication error") ||
-    lower.includes("invalid access token") ||
-    lower.includes("code\":10000") ||
-    lower.includes('code": 10000') ||
+    lower.includes("admin token was rejected") ||
     lower.includes("unauthorized") ||
     lower.includes("status: 401") ||
-    lower.includes("(401)") ||
-    (lower.includes("403") && lower.includes("forbidden"))
+    lower.includes("(401)")
   ) {
     return {
-      title: "Cloudflare API token was rejected",
+      title: "Admin token was rejected",
       detail:
-        "The saved token is invalid, expired, revoked, or does not match this Account ID. Create a Custom token with the permissions below (Account Resources = this account, Zone Resources = All zones or the zones you use).",
-      fix: "Open the API tokens page, create a new token with every permission listed, then paste it on Connect Cloudflare and verify again.",
-      links: tokenLinks,
-      permissions: CF_REQUIRED_TOKEN_PERMISSIONS,
+        "The Worker URL responded, but the admin token did not match ADMIN_TOKEN on that Worker.",
+      fix: "In the Admin token field above, paste the secret you set with wrangler (or Generate → Copy wrangler command → run it, then Verify with that same token).",
+      links: installLinks,
     };
   }
 
   if (
-    lower.includes("permission") ||
-    lower.includes("not authorized") ||
-    lower.includes("insufficient") ||
-    lower.includes("does not have permission")
-  ) {
-    return {
-      title: "Token is missing a required permission",
-      detail:
-        "The token authenticated, but it cannot manage Workers, KV, R2, or Email for this account. Edit the token (or create a new one) and grant every permission below.",
-      fix: "Update the token scopes in Cloudflare, reconnect on Connect Cloudflare, then tap Re-check.",
-      links: tokenLinks,
-      permissions: CF_REQUIRED_TOKEN_PERMISSIONS,
-    };
-  }
-
-  if (lower.includes("cloudflare api error") || lower.includes("workers/scripts")) {
-    return {
-      title: "Cloudflare request failed",
-      detail:
-        "Relaybase could not complete a Cloudflare API call. Often this is a wrong Account ID, inactive token, or missing permission from the list below.",
-      fix: "Confirm Account ID + token, ensure all permissions below are granted, reconnect, then Re-check.",
-      links: tokenLinks,
-      permissions: CF_REQUIRED_TOKEN_PERMISSIONS,
-    };
-  }
-
-  if (
-    lower.includes("network") ||
-    lower.includes("dns") ||
+    lower.includes("could not reach worker") ||
+    lower.includes("error sending request") ||
     lower.includes("timed out") ||
-    lower.includes("error sending request")
+    lower.includes("dns")
   ) {
     return {
-      title: "Network request failed",
-      detail: "This Mac could not reach Cloudflare.",
-      fix: "Check your internet connection, then tap Re-check.",
+      title: "Could not reach your Worker",
+      detail:
+        "This Mac could not call the Worker URL. Check the URL, that deploy finished, and your network.",
+      fix: "Open the URL + `/health` in a browser. If that fails, redeploy from the install ZIP.",
+      links: installLinks,
+    };
+  }
+
+  if (
+    lower.includes("does not look like a relaybase") ||
+    lower.includes("not with a relaybase connect") ||
+    lower.includes("connect check failed")
+  ) {
+    return {
+      title: "Not a Relaybase Worker",
+      detail:
+        "The URL is reachable but did not return a Relaybase connect response.",
+      fix: "Deploy the official install ZIP (`relaybase-api`), then paste the workers.dev URL from Wrangler.",
+      links: installLinks,
+    };
+  }
+
+  if (lower.includes("worker url")) {
+    return {
+      title: "Worker URL looks invalid",
+      detail: stripRawApiNoise(raw) || "Enter your workers.dev HTTPS URL.",
+      fix: "Example: https://relaybase-api.<your-subdomain>.workers.dev",
+      links: installLinks,
     };
   }
 
@@ -230,9 +222,9 @@ export function explainDesktopError(
     detail:
       cleaned && cleaned.length < 220
         ? cleaned
-        : "Something unexpected happened while talking to Cloudflare or this app.",
-    fix: "Fix the issue below, then try again. If the token looks wrong, reconnect Cloudflare with a fresh token.",
-    links: tokenLinks,
+        : "Something unexpected happened while connecting to your Worker.",
+    fix: "Check the Worker URL and admin token from your Wrangler deploy, then try again.",
+    links: installLinks,
   };
 }
 
@@ -284,6 +276,25 @@ export async function desktopUpdateWorker(
 
 export async function desktopSaveLicense(licenseKey: string): Promise<void> {
   return invoke("save_license_key", { licenseKey });
+}
+
+export async function desktopVerifyWorkerConnection(
+  workerUrl: string,
+  adminToken: string,
+): Promise<WorkerConnectResult> {
+  return invoke("verify_worker_connection", { workerUrl, adminToken });
+}
+
+export async function desktopSaveWorkerConnection(input: {
+  workerUrl: string;
+  adminToken: string;
+  workerScriptName?: string;
+}): Promise<DesktopCredentials> {
+  return invoke("save_worker_connection", {
+    workerUrl: input.workerUrl,
+    adminToken: input.adminToken,
+    workerScriptName: input.workerScriptName ?? null,
+  });
 }
 
 export async function desktopClearCredentials(): Promise<void> {

@@ -1,0 +1,4 @@
+# Local wrangler dev only — production uses `wrangler secret put`
+ADMIN_TOKEN=replace_me_with_a_long_random_string
+# CF_ACCOUNT_ID=
+# CF_API_TOKEN=

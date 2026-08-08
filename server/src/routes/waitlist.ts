@@ -54,6 +54,10 @@ export async function waitlistPost(c: Context<{ Bindings: Env }>) {
       : "get-started";
   const userAgent = c.req.header("user-agent")?.slice(0, 512) ?? null;
 
+  if (!c.env.RELAYBASE_WAITLIST) {
+    return c.json({ error: "Waitlist is not configured on this Worker" }, 503);
+  }
+
   try {
     const result = await c.env.RELAYBASE_WAITLIST.prepare(
       `INSERT INTO waitlist (email, source, user_agent)

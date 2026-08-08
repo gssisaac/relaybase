@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   },
   ...pageSocialMeta({
     title: `Get ${siteConfig.name}`,
-    description: `$${siteConfig.pricing.oneTime} one-time. Connect your Cloudflare account, install the Worker, manage every domain.`,
+    description: `$${siteConfig.pricing.oneTime} one-time. Deploy the Worker into your Cloudflare account, connect the Mac app, manage every domain.`,
     path: siteConfig.getStartedPath,
   }),
 };
@@ -37,12 +37,12 @@ const promises = [
   {
     icon: KeyRound,
     title: "Your Cloudflare account",
-    desc: "Connect with an API token you create. Domains stay on your zones — we never ask for nameserver hand-off.",
+    desc: "You deploy the Worker with Wrangler. Domains stay on your zones — we never ask for nameserver hand-off.",
   },
   {
     icon: MonitorSmartphone,
     title: "Mac app + Worker",
-    desc: "Spark-like inbox UX and a routing Worker installed into your account for send API and inbound.",
+    desc: "Spark-like inbox UX over a routing Worker you install — send API and inbound in your account.",
   },
   {
     icon: Cloud,

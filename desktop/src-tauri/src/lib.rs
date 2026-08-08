@@ -83,6 +83,126 @@ async fn save_license_key(license_key: String) -> Result<(), String> {
     save_credentials(&creds)
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkerConnectResult {
+    ok: bool,
+    product: String,
+    worker_script_name: String,
+    worker_url: String,
+    r2_configured: bool,
+}
+
+fn normalize_worker_url(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("Worker URL is required".into());
+    }
+    let with_scheme = if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+        trimmed.to_string()
+    } else {
+        format!("https://{trimmed}")
+    };
+    let url = reqwest::Url::parse(&with_scheme).map_err(|_| {
+        "Worker URL looks invalid. Use https://relaybase-api.<subdomain>.workers.dev".to_string()
+    })?;
+    if url.scheme() != "https" && url.scheme() != "http" {
+        return Err("Worker URL must be http(s)".into());
+    }
+    Ok(with_scheme.trim_end_matches('/').to_string())
+}
+
+/// Verify user-deployed Worker via GET /admin/connect (admin Bearer).
+#[tauri::command]
+async fn verify_worker_connection(
+    worker_url: String,
+    admin_token: String,
+) -> Result<WorkerConnectResult, String> {
+    let base = normalize_worker_url(&worker_url)?;
+    let token = admin_token.trim();
+    if token.is_empty() {
+        return Err("Admin token is required (same value as wrangler secret ADMIN_TOKEN)".into());
+    }
+
+    let url = format!("{base}/admin/connect");
+    let http = reqwest::Client::new();
+    let res = http
+        .get(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach Worker ({e}). Check the URL and your network."))?;
+
+    let status = res.status();
+    let body = res.text().await.unwrap_or_default();
+    if status.as_u16() == 401 || status.as_u16() == 403 {
+        return Err(
+            "Admin token was rejected by the Worker. Use the same value you set with `wrangler secret put ADMIN_TOKEN`."
+                .into(),
+        );
+    }
+    if !status.is_success() {
+        return Err(format!(
+            "Worker connect check failed (HTTP {}). Is this a Relaybase Worker URL?",
+            status.as_u16()
+        ));
+    }
+
+    let value: serde_json::Value =
+        serde_json::from_str(&body).map_err(|_| {
+            "Worker responded, but not with a Relaybase connect payload. Confirm you deployed the install package.".to_string()
+        })?;
+
+    if value.get("ok") != Some(&serde_json::Value::Bool(true))
+        || value.get("product").and_then(|v| v.as_str()) != Some("relaybase")
+    {
+        return Err(
+            "This URL is reachable but does not look like a Relaybase Worker. Redeploy the install package."
+                .into(),
+        );
+    }
+
+    Ok(WorkerConnectResult {
+        ok: true,
+        product: "relaybase".into(),
+        worker_script_name: value
+            .get("workerScriptName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("relaybase-api")
+            .into(),
+        worker_url: base,
+        r2_configured: value
+            .pointer("/inbound/r2Configured")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    })
+}
+
+#[tauri::command]
+async fn save_worker_connection(
+    worker_url: String,
+    admin_token: String,
+    worker_script_name: Option<String>,
+) -> Result<StoredCredentials, String> {
+    let base = normalize_worker_url(&worker_url)?;
+    let token = admin_token.trim();
+    if token.is_empty() {
+        return Err("Admin token is required".into());
+    }
+    let mut creds = load_credentials()?.unwrap_or_default();
+    creds.worker_url = base;
+    creds.admin_token = token.to_string();
+    creds.worker_script_name = worker_script_name
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if creds.worker_script_name.is_empty() {
+        creds.worker_script_name = "relaybase-api".into();
+    }
+    save_credentials(&creds)?;
+    Ok(creds)
+}
+
 #[tauri::command]
 async fn get_desktop_info() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
@@ -153,6 +273,8 @@ pub fn run() {
             install_routing_worker,
             update_routing_worker,
             save_license_key,
+            verify_worker_connection,
+            save_worker_connection,
             get_desktop_info,
             open_external_url,
         ])

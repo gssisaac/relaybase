@@ -80,7 +80,7 @@ export function InboundEmailBody({
   if (safeHtml) {
     return (
       <div
-        className="email-html-body w-full font-sans text-sm leading-relaxed text-foreground [&_*]:!bg-transparent [&_*]:!font-[inherit] [&_*]:text-inherit [&_a]:text-primary [&_a]:underline [&_img]:max-w-full [&_img]:rounded-md"
+        className="email-html-body w-full font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:max-w-full [&_img]:rounded-md"
         dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     );
@@ -155,7 +155,7 @@ export function InboundEmailDetail({
     <div className="space-y-4">
       {safeHtml ? (
         <div
-          className="email-html-body w-full rounded-md border border-border bg-muted/20 p-4 font-sans text-sm leading-relaxed text-foreground [&_*]:!bg-transparent [&_*]:!font-[inherit] [&_*]:text-inherit [&_a]:text-primary [&_a]:underline [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md"
+          className="email-html-body w-full rounded-md border border-border bg-muted/20 p-4 font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md"
           dangerouslySetInnerHTML={{ __html: safeHtml }}
         />
       ) : (

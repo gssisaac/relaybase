@@ -202,4 +202,27 @@
     box-shadow: 0 0 0 1000px color-mix(in oklab, var(--input) 30%, var(--card)) inset !important;
     transition: background-color 5000s ease-in-out 0s;
   }
+
+  /* HTML email bodies ship hardcoded light-theme colors (#000, #222, etc.). */
+  .email-html-body {
+    color: var(--foreground);
+  }
+
+  .email-html-body :where(*) {
+    color: inherit !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border-color: var(--border);
+  }
+
+  .email-html-body :where(a) {
+    color: var(--primary) !important;
+    text-decoration: underline;
+  }
+
+  .email-html-body :where(blockquote) {
+    border-left: 2px solid var(--border);
+    margin-left: 0;
+    padding-left: 0.75rem;
+  }
 }

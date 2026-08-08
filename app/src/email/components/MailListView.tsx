@@ -185,7 +185,6 @@ export const MailListView = observer(function MailListView({
   const trashedSent = store.trashedSent;
   const addresses = store.visibleAddresses;
   const accountFilter = store.accountFilter;
-  const loading = store.loading;
   const moveToTrash = store.moveToTrash;
   const restoreFromTrash = store.restoreFromTrash;
   const emptyTrash = store.emptyTrash;
@@ -547,7 +546,7 @@ export const MailListView = observer(function MailListView({
             })}
           </div>
         </div>
-      ) : !loading ? (
+      ) : (
         <EmptyListState
           icon={folder === "sent" ? Send : folder === "trash" ? Trash2 : Inbox}
           title={
@@ -584,8 +583,6 @@ export const MailListView = observer(function MailListView({
             ) : undefined
           }
         />
-      ) : (
-        <div className="min-h-0 flex-1" />
       )}
     </div>
   );

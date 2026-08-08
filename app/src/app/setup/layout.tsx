@@ -11,12 +11,11 @@ import {
 } from "@/lib/desktop/DesktopContext";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
-import { cn } from "@/lib/utils";
 
 function SetupShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { ready, credentials } = useDesktop();
-  const { macSidebarHeaderClassName } = useDesktopChrome();
+  const { isDesktop, isMacOS } = useDesktopChrome();
 
   useEffect(() => {
     if (!ready) return;
@@ -35,9 +34,10 @@ function SetupShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-svh flex-col bg-background">
-      <DesktopTitleBar
-        className={cn("px-6 py-4", macSidebarHeaderClassName)}
-      >
+      {isDesktop && isMacOS ? (
+        <div aria-hidden className="w-full shrink-0" style={{ height: 28 }} />
+      ) : null}
+      <DesktopTitleBar className="px-6 py-4">
         <div>
           <p className="text-sm font-semibold tracking-tight">Relaybase</p>
           <p className="text-xs text-muted-foreground">

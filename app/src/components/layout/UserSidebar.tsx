@@ -4,9 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
+  ChevronsUpDown,
   Inbox,
+  LayoutGrid,
   Loader2,
   LogOut,
+  Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   Plus,
   Send,
@@ -15,19 +20,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDomain } from "@/lib/dashboard/DomainContext";
-import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
-import { cn } from "@/lib/utils";
+import { useDashboardPaths } from "@/dashboard/paths";
 import { AddEmailAccountDialog } from "@/email/components/AddEmailAccountDialog";
 import { useMailAccounts } from "@/email/components/MailAccountsContext";
-import {
-  emailFolderHref,
-  type EmailFolder,
-} from "@/email/paths";
-import { useDashboardPaths } from "@/dashboard/paths";
 import {
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,
@@ -37,6 +32,18 @@ import {
   writeSidebarMode,
   type SidebarMode,
 } from "@/email/sidebar-mode";
+import { emailFolderHref, type EmailFolder } from "@/email/paths";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { cn } from "@/lib/utils";
 
 function isActive(href: string, pathname: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -51,6 +58,7 @@ function FolderTree({
   accounts,
   getColor,
   defaultOpen,
+  collapsed,
 }: {
   label: string;
   icon: LucideIcon;
@@ -60,6 +68,7 @@ function FolderTree({
   accounts: { email: string; displayName?: string }[];
   getColor: (email: string) => string;
   defaultOpen: boolean;
+  collapsed: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const parentHref = emailFolderHref(folder);
@@ -68,49 +77,46 @@ function FolderTree({
     (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
     !accountParam;
 
-  useEffect(() => {
-    if (defaultOpen) setOpen(true);
-  }, [defaultOpen]);
-
   return (
     <div className="space-y-0.5">
       <div className="flex items-center gap-0.5">
         <Link
           href={parentHref}
+          title={collapsed ? label : undefined}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            "flex min-w-0 flex-1 items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
             parentActive
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
               : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+            collapsed ? "justify-center gap-0" : "gap-2",
           )}
         >
-          <Icon className="size-4 shrink-0" aria-hidden />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
+          <Icon className="size-3.5 shrink-0" aria-hidden />
+          {!collapsed ? <span className="min-w-0 flex-1 truncate">{label}</span> : null}
         </Link>
-        {accounts.length > 0 ? (
+        {!collapsed && accounts.length > 0 ? (
           <button
             type="button"
             aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+            className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             <ChevronDown
               className={cn(
-                "size-3.5 transition-transform",
+                "size-3 transition-transform",
                 open ? "rotate-0" : "-rotate-90",
               )}
             />
           </button>
         ) : null}
       </div>
-      {open && accounts.length > 0 ? (
-        <div className="ml-3 flex flex-col gap-0.5 border-l border-sidebar-border pl-2">
+      {!collapsed && open && accounts.length > 0 ? (
+        <div className="ml-3 flex flex-col gap-0.5 border-l border-sidebar-border/70 pl-2">
           {accounts.map((account) => {
             const href = emailFolderHref(folder, account.email);
             const active =
-              (pathname === parentPath ||
-                pathname.startsWith(`${parentPath}/`)) &&
+              (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
               accountParam === account.email;
             return (
               <Link
@@ -118,7 +124,7 @@ function FolderTree({
                 href={href}
                 title={account.email}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                  "flex items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
                   active
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
@@ -141,8 +147,10 @@ function FolderTree({
 
 function EmailModeNav({
   onAddAccount,
+  collapsed,
 }: {
   onAddAccount: () => void;
+  collapsed: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -163,13 +171,20 @@ function EmailModeNav({
   return (
     <div className="flex flex-1 flex-col gap-1">
       {enabledAddresses.length === 0 ? (
-        <div className="space-y-2 px-2 py-3">
-          <p className="text-xs text-muted-foreground">
-            No mail accounts yet. Add an existing domain address to start.
-          </p>
-          <Button size="sm" className="w-full" onClick={onAddAccount}>
-            <Plus className="size-4" />
-            Add account
+        <div className="space-y-2 px-2 py-2">
+          {!collapsed ? (
+            <p className="text-[11px] text-muted-foreground">
+              No mail accounts yet. Add an existing domain address to start.
+            </p>
+          ) : null}
+          <Button
+            size={collapsed ? "icon-sm" : "sm"}
+            className={cn(collapsed ? "mx-auto" : "w-full")}
+            onClick={onAddAccount}
+            title="Add account"
+          >
+            <Plus className="size-3.5" />
+            {!collapsed ? "Add account" : null}
           </Button>
         </div>
       ) : (
@@ -183,6 +198,7 @@ function EmailModeNav({
             accounts={enabledAddresses}
             getColor={getColor}
             defaultOpen={inCompose}
+            collapsed={collapsed}
           />
           <FolderTree
             label="Inbox"
@@ -193,6 +209,7 @@ function EmailModeNav({
             accounts={enabledAddresses}
             getColor={getColor}
             defaultOpen={inInbox}
+            collapsed={collapsed}
           />
           <FolderTree
             label="Sent"
@@ -203,6 +220,7 @@ function EmailModeNav({
             accounts={enabledAddresses}
             getColor={getColor}
             defaultOpen={inSent}
+            collapsed={collapsed}
           />
           <FolderTree
             label="Trash"
@@ -213,26 +231,15 @@ function EmailModeNav({
             accounts={enabledAddresses}
             getColor={getColor}
             defaultOpen={inTrash}
+            collapsed={collapsed}
           />
         </>
       )}
-
-      <div className="mt-auto pt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={onAddAccount}
-        >
-          <Plus className="size-4" />
-          Add account
-        </Button>
-      </div>
     </div>
   );
 }
 
-function DashboardModeNav() {
+function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const { tabs, settingsNav, domains } = useDashboardPaths();
   const domainStore = useDomain();
@@ -252,24 +259,26 @@ function DashboardModeNav() {
           <div key={item.href}>
             <Link
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
                 active
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                collapsed ? "justify-center gap-0" : "gap-2",
               )}
             >
-              <Icon className="size-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.href === domains && domainsWorking ? (
+              <Icon className="size-3.5 shrink-0" aria-hidden />
+              {!collapsed ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}
+              {!collapsed && item.href === domains && domainsWorking ? (
                 <Loader2
-                  className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+                  className="size-3 shrink-0 animate-spin text-muted-foreground"
                   aria-label="Domain setup in progress"
                 />
               ) : null}
             </Link>
-            {item.href === "/settings" && inSettings ? (
-              <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-sidebar-border pl-3">
+            {!collapsed && item.href === "/settings" && inSettings ? (
+              <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-sidebar-border/70 pl-2">
                 {settingsNav.map((sub) => {
                   const subActive = isActive(sub.href, pathname);
                   return (
@@ -277,7 +286,7 @@ function DashboardModeNav() {
                       key={sub.href}
                       href={sub.href}
                       className={cn(
-                        "rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                        "rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
                         subActive
                           ? "text-sidebar-accent-foreground"
                           : "text-muted-foreground hover:text-sidebar-foreground",
@@ -302,13 +311,17 @@ export function UserSidebar() {
   const userId = useProductId();
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(`relaybase:sidebar-collapsed:${userId}`) === "1";
+  });
   const mode = useMemo(() => modeFromPathname(pathname), [pathname]);
   const {
     isDesktop,
+    isMacOS,
     dragRegionClassName,
     dragRegionProps,
     noDragClassName,
-    macSidebarHeaderClassName,
   } = useDesktopChrome();
 
   useEffect(() => {
@@ -328,96 +341,168 @@ export function UserSidebar() {
     );
   }
 
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          `relaybase:sidebar-collapsed:${userId}`,
+          next ? "1" : "0",
+        );
+      }
+      return next;
+    });
+  }
+
   async function signOut() {
     await fetch("/api/auth", { method: "DELETE" });
     router.replace("/login");
     router.refresh();
   }
 
+  const modeToggleLabel =
+    mode === "email" ? "Switch to dashboard" : "Switch to email";
+
   return (
-    <aside className="flex h-full w-56 shrink-0 select-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <aside
+      className={cn(
+        "flex h-full shrink-0 select-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-out",
+        collapsed ? "w-14" : "w-52",
+      )}
+    >
       <div
         {...dragRegionProps}
         className={cn(
-          "space-y-3 border-b border-sidebar-border px-4 py-4",
+          "flex shrink-0 flex-col border-b border-sidebar-border",
           dragRegionClassName,
-          macSidebarHeaderClassName,
         )}
       >
-        {isDesktop ? (
+        {isDesktop && isMacOS ? (
           <div
-            {...dragRegionProps}
-            className={cn(
-              "font-semibold tracking-tight text-sidebar-foreground",
-              dragRegionClassName,
-            )}
-          >
-            Relaybase
-          </div>
-        ) : (
-          <Link
-            href="/dashboard"
-            className="font-semibold tracking-tight text-sidebar-foreground"
-          >
-            Relaybase
-          </Link>
-        )}
+            aria-hidden
+            className="w-full shrink-0"
+            style={{ height: 28 }}
+          />
+        ) : null}
         <div
-          className={cn(noDragClassName)}
+          className={cn(
+            "space-y-2 px-3 py-3",
+            noDragClassName,
+          )}
           {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
         >
-          <Tabs
-            value={mode}
-            onValueChange={(value) => {
-              if (value === "email" || value === "dashboard") {
-                switchMode(value);
+          <div className="flex items-center justify-between gap-1">
+            <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size={collapsed ? "icon-sm" : "sm"}
+                  className={cn(
+                    "max-w-full",
+                    collapsed ? "px-0" : "justify-start gap-1.5 px-1.5",
+                  )}
+                  aria-label="Relaybase menu"
+                />
               }
-            }}
+            >
+              {collapsed ? (
+                <LayoutGrid className="size-3.5" />
+              ) : (
+                <>
+                  <span className="truncate text-sm font-semibold tracking-tight">
+                    Relaybase
+                  </span>
+                  <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+                </>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" sideOffset={8}>
+              <DropdownMenuItem disabled>{userId}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAddOpen(true)}>
+                <Plus className="size-3.5" />
+                Add account
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  switchMode(mode === "email" ? "dashboard" : "email")
+                }
+              >
+                {mode === "email" ? (
+                  <LayoutGrid className="size-3.5" />
+                ) : (
+                  <Mail className="size-3.5" />
+                )}
+                {mode === "email" ? "Open dashboard" : "Open email"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => void signOut()}
+              >
+                <LogOut className="size-3.5" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={modeToggleLabel}
+            title={modeToggleLabel}
+            onClick={() =>
+              switchMode(mode === "email" ? "dashboard" : "email")
+            }
           >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="email">Email</TabsTrigger>
-              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            </TabsList>
-          </Tabs>
+            {mode === "email" ? (
+              <LayoutGrid className="size-3.5" />
+            ) : (
+              <Mail className="size-3.5" />
+            )}
+          </Button>
+          </div>
         </div>
       </div>
 
       <nav
         className={cn(
-          "flex flex-1 flex-col gap-1 overflow-y-auto p-3",
+          "flex flex-1 flex-col gap-1 overflow-y-auto p-2",
           noDragClassName,
         )}
         aria-label={mode === "email" ? "Email" : "Dashboard"}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         {mode === "email" ? (
-          <EmailModeNav onAddAccount={() => setAddOpen(true)} />
+          <EmailModeNav
+            collapsed={collapsed}
+            onAddAccount={() => setAddOpen(true)}
+          />
         ) : (
-          <DashboardModeNav />
+          <DashboardModeNav collapsed={collapsed} />
         )}
       </nav>
 
       <div
-        className={cn(
-          "space-y-2 border-t border-sidebar-border px-4 py-3",
-          noDragClassName,
-        )}
+        className={cn("border-t border-sidebar-border p-2", noDragClassName)}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
-        <p
-          className="truncate font-mono text-xs text-muted-foreground"
-          title={userId}
-        >
-          {userId}
-        </p>
-        <button
+        <Button
           type="button"
-          onClick={() => void signOut()}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+          variant="ghost"
+          size="icon-sm"
+          className="mx-auto"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={toggleCollapsed}
         >
-          <LogOut className="size-4 shrink-0" aria-hidden />
-          Sign out
-        </button>
+          {collapsed ? (
+            <PanelLeftOpen className="size-3.5" />
+          ) : (
+            <PanelLeftClose className="size-3.5" />
+          )}
+        </Button>
       </div>
 
       <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} />

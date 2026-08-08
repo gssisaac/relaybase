@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { UserSidebar } from "@/components/layout/UserSidebar";
@@ -118,8 +118,11 @@ export function DesktopDashboardGate({
   // under Tauri once desktop runtime is detected.
   const [desktop, setDesktop] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    setDesktop(isDesktopRuntime());
+  useLayoutEffect(() => {
+    const sync = () => setDesktop(isDesktopRuntime());
+    sync();
+    const t = window.setTimeout(sync, 50);
+    return () => window.clearTimeout(t);
   }, []);
 
   if (desktop === true) {

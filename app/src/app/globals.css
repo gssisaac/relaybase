@@ -181,11 +181,6 @@
     app-region: no-drag;
   }
 
-  /* macOS overlay title bar: clear traffic lights in sidebar brand */
-  html.relaybase-desktop-mac .relaybase-desktop-mac-sidebar-header {
-    padding-top: calc(1rem + 26px);
-  }
-
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import {
@@ -46,8 +46,12 @@ export function useDesktopChrome() {
     isMacOS: false,
   });
 
-  useEffect(() => {
-    setFlags(readDesktopFlags());
+  useLayoutEffect(() => {
+    const sync = () => setFlags(readDesktopFlags());
+    sync();
+    // Tauri injects invoke slightly after first paint in some webviews.
+    const t = window.setTimeout(sync, 50);
+    return () => window.clearTimeout(t);
   }, []);
 
   const dragRegionProps = isDesktop

@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
-
-import { RelaybaseEmailPanelView } from "@/relaybase-email/panel";
+import { RelaybaseEmailPanelView } from "@/app/panel";
 
 export const dynamic = "force-dynamic";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { UserSidebar } from "@/components/layout/UserSidebar";
@@ -12,7 +12,8 @@ import {
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
-import { DomainProgressBanner } from "@/relaybase-email/components/DomainProgressBanner";
+import { DomainProgressBanner } from "@/dashboard/components/DomainProgressBanner";
+import { MailAccountsProvider } from "@/email/components/MailAccountsContext";
 
 function setupPathFor(credentials: {
   workerUrl?: string;
@@ -34,13 +35,21 @@ function DashboardShell({
   return (
     <SessionProvider userId={userId}>
       <DomainProvider>
-        <div className="flex h-svh overflow-hidden bg-background">
-          <UserSidebar />
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <DomainProgressBanner />
-            {children}
-          </main>
-        </div>
+        <MailAccountsProvider>
+          <div className="flex h-svh overflow-hidden bg-background">
+            <Suspense
+              fallback={
+                <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+              }
+            >
+              <UserSidebar />
+            </Suspense>
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <DomainProgressBanner />
+              {children}
+            </main>
+          </div>
+        </MailAccountsProvider>
       </DomainProvider>
     </SessionProvider>
   );

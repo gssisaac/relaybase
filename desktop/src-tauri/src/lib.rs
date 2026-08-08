@@ -3,7 +3,10 @@ mod secrets;
 mod worker;
 
 use cloudflare::{list_zones, verify_token, ZoneSummary};
-use secrets::{clear_credentials, load_credentials, save_credentials, StoredCredentials};
+use secrets::{
+    clear_credentials, load_credentials, load_email_prefs, save_credentials,
+    save_email_prefs as write_email_prefs, EmailPrefs, StoredCredentials,
+};
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
 #[tauri::command]
@@ -26,6 +29,16 @@ async fn get_credentials() -> Result<Option<StoredCredentials>, String> {
 #[tauri::command]
 async fn clear_stored_credentials() -> Result<(), String> {
     clear_credentials()
+}
+
+#[tauri::command]
+async fn get_email_prefs() -> Result<Option<EmailPrefs>, String> {
+    load_email_prefs()
+}
+
+#[tauri::command]
+async fn save_email_prefs(prefs: EmailPrefs) -> Result<(), String> {
+    write_email_prefs(&prefs)
 }
 
 #[tauri::command]
@@ -266,6 +279,8 @@ pub fn run() {
             save_cf_credentials,
             get_credentials,
             clear_stored_credentials,
+            get_email_prefs,
+            save_email_prefs,
             verify_cf_token,
             list_cf_zones,
             probe_routing_worker,

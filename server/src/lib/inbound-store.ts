@@ -238,7 +238,12 @@ export async function getInboundEmail(
   domainHint?: string,
 ): Promise<InboundEmailMeta | null> {
   if (domainHint) {
-    return getInboundEmailForDomain(bucket, domainHint.trim().toLowerCase(), id);
+    const hit = await getInboundEmailForDomain(
+      bucket,
+      domainHint.trim().toLowerCase(),
+      id,
+    );
+    if (hit) return hit;
   }
 
   const listed = await bucket.list({ prefix: `${PREFIX}/`, limit: 1000 });
@@ -246,6 +251,7 @@ export async function getInboundEmail(
     if (!object.key.endsWith(`/${id}/meta.json`)) continue;
     const domain = object.key.split("/")[1];
     if (!domain) continue;
+    if (domainHint && domain === domainHint.trim().toLowerCase()) continue;
     return getInboundEmailForDomain(bucket, domain, id);
   }
 

@@ -15,8 +15,14 @@ export async function GET(request: Request) {
   try {
     const userId = await requireSessionUserId();
     const data = await readUserEmailData(userId);
+    const url = new URL(request.url);
+    // Personal mail picker needs every domain's addresses — not just activeDomain.
+    if (url.searchParams.get("all") === "1") {
+      return NextResponse.json({ addresses: data.addresses });
+    }
+
     const domain = resolveRequestDomain(request, data);
-    if (new URL(request.url).searchParams.get("domain") && !domain) {
+    if (url.searchParams.get("domain") && !domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 

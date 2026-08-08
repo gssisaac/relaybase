@@ -16,7 +16,7 @@ import {
   resolveInboundR2BucketName,
   workerInboundR2BucketMismatch,
 } from "@/lib/relaybase/r2-inbound";
-import type { EmailConfig } from "@/relaybase-email/components/types";
+import type { EmailConfig } from "@/email/components/types";
 
 export type DevEmailConfig = {
   /** @deprecated Legacy single domain — use domains[] + activeDomain */

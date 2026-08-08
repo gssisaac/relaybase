@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  normalizeDomain,
   readUserEmailData,
   requireSessionUserId,
   resolveRequestDomain,
@@ -12,13 +13,20 @@ import {
 
 type Params = { params: Promise<{ key: string }> };
 
+function isNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.toLowerCase().includes("not found");
+}
+
 export async function GET(request: Request, { params }: Params) {
   try {
     const userId = await requireSessionUserId();
     const { key } = await params;
     const data = await readUserEmailData(userId);
-    const domain = resolveRequestDomain(request, data);
-    if (!domain) {
+    const url = new URL(request.url);
+    const explicitDomain = normalizeDomain(url.searchParams.get("domain") ?? "");
+    const resolved = resolveRequestDomain(request, data);
+
+    if (explicitDomain && !resolved) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
@@ -30,13 +38,47 @@ export async function GET(request: Request, { params }: Params) {
       );
     }
 
-    const message = await getInboundMessage(cfg, domain, key);
-    return NextResponse.json(message);
+    // Prefer the requested/active domain, then other owned domains (multi-domain
+    // mailboxes often list under one domain while activeDomain is another).
+    const candidates = explicitDomain
+      ? [explicitDomain]
+      : [
+          ...(resolved ? [resolved] : []),
+          ...data.domains.filter((d) => d !== resolved),
+        ];
+
+    let lastNotFound: Error | null = null;
+    for (const domain of candidates) {
+      try {
+        const message = await getInboundMessage(cfg, domain, key);
+        return NextResponse.json(message);
+      } catch (error) {
+        if (isNotFound(error)) {
+          lastNotFound = error instanceof Error ? error : new Error("Message not found");
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    // Last resort: worker id-only lookup (no domain hint).
+    if (!explicitDomain) {
+      try {
+        const message = await getInboundMessage(cfg, undefined, key);
+        return NextResponse.json(message);
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+        lastNotFound =
+          error instanceof Error ? error : new Error("Message not found");
+      }
+    }
+
+    return NextResponse.json(
+      { error: lastNotFound?.message ?? "Message not found" },
+      { status: 404 },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
-    if (message.includes("not found")) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
     if (message.includes("Unauthorized") || message.includes("401")) {
       return NextResponse.json({ error: message }, { status: 401 });
     }

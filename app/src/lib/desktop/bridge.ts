@@ -301,6 +301,21 @@ export async function desktopClearCredentials(): Promise<void> {
   return invoke("clear_stored_credentials");
 }
 
+export type DesktopEmailPrefs = {
+  version: number;
+  accountColors: Record<string, string>;
+};
+
+export async function desktopGetEmailPrefs(): Promise<DesktopEmailPrefs | null> {
+  return invoke("get_email_prefs");
+}
+
+export async function desktopSaveEmailPrefs(
+  prefs: DesktopEmailPrefs,
+): Promise<void> {
+  return invoke("save_email_prefs", { prefs });
+}
+
 /** Open an https URL in the system browser (required inside Tauri webview). */
 export async function desktopOpenExternal(url: string): Promise<void> {
   if (!isDesktopRuntime()) {

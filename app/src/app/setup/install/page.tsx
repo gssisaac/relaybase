@@ -1,6 +1,6 @@
 "use client";
 
-import { WorkerInstallPanel } from "@/relaybase-email/components/WorkerInstallPanel";
+import { WorkerInstallPanel } from "@/dashboard/components/WorkerInstallPanel";
 
 export default function SetupInstallPage() {
   return <WorkerInstallPanel />;

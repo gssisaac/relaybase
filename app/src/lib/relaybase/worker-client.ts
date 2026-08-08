@@ -3,7 +3,7 @@ import {
   readRelaybaseEnvSettings,
   resolveSettingValue,
 } from "@/lib/relaybase/env-settings";
-import type { RoutingActivityEvent } from "@/relaybase-email/components/types";
+import type { RoutingActivityEvent } from "@/email/components/types";
 
 const RELAYBASE_STORE_ID = "relaybase";
 const SETTINGS_FILE = "settings.json";
@@ -84,15 +84,16 @@ export async function listInboundMessages(
 
 export async function getInboundMessage(
   cfg: RelaybaseWorkerConfig,
-  domain: string,
+  domain: string | undefined,
   id: string,
 ): Promise<RoutingActivityEvent> {
-  const search = new URLSearchParams({
-    domain: domain.trim().toLowerCase(),
-  });
+  const search = new URLSearchParams();
+  const normalized = domain?.trim().toLowerCase();
+  if (normalized) search.set("domain", normalized);
+  const qs = search.toString();
   const data = await workerFetch<{ message?: RoutingActivityEvent }>(
     cfg,
-    `/admin/inbox/${encodeURIComponent(id)}?${search.toString()}`,
+    `/admin/inbox/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`,
   );
   if (!data.message) {
     throw new Error("Message not found");

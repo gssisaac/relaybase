@@ -9,6 +9,8 @@ use std::os::unix::fs::PermissionsExt;
 /// Temporary local credential store (replaces macOS Keychain while iterating).
 /// Path: ~/.relaybase/credentials.json
 const CREDENTIALS_FILE: &str = "credentials.json";
+/// Email UI prefs (account colors, etc.). Path: ~/.relaybase/email.json
+const EMAIL_PREFS_FILE: &str = "email.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +21,22 @@ pub struct StoredCredentials {
     pub admin_token: String,
     pub worker_script_name: String,
     pub license_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailPrefs {
+    pub version: u32,
+    pub account_colors: std::collections::HashMap<String, String>,
+}
+
+impl Default for EmailPrefs {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            account_colors: std::collections::HashMap::new(),
+        }
+    }
 }
 
 fn home_dir() -> Result<PathBuf, String> {
@@ -143,4 +161,51 @@ pub fn clear_credentials() -> Result<(), String> {
         )
     })?;
     Ok(())
+}
+
+pub fn save_email_prefs(prefs: &EmailPrefs) -> Result<(), String> {
+    let dir = ensure_dir()?;
+    let path = dir.join(EMAIL_PREFS_FILE);
+    let json = serde_json::to_string_pretty(prefs).map_err(|e| e.to_string())?;
+
+    match fs::write(&path, &json) {
+        Ok(()) => {
+            restrict_file_permissions(&path);
+            Ok(())
+        }
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            ensure_dir()?;
+            fs::write(&path, &json).map_err(|e2| {
+                format!(
+                    "Failed to write email prefs to {} after creating {}: {e2}",
+                    path.display(),
+                    dir.display()
+                )
+            })?;
+            restrict_file_permissions(&path);
+            Ok(())
+        }
+        Err(e) => Err(format!(
+            "Failed to write email prefs to {}: {e}",
+            path.display()
+        )),
+    }
+}
+
+pub fn load_email_prefs() -> Result<Option<EmailPrefs>, String> {
+    let dir = relaybase_dir()?;
+    let path = dir.join(EMAIL_PREFS_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let json = fs::read_to_string(&path).map_err(|e| {
+        format!("Failed to read email prefs from {}: {e}", path.display())
+    })?;
+    let prefs: EmailPrefs = serde_json::from_str(&json).map_err(|e| {
+        format!(
+            "Invalid email prefs file {}: {e}. Delete the file and relaunch.",
+            path.display()
+        )
+    })?;
+    Ok(Some(prefs))
 }

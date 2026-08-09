@@ -16,6 +16,19 @@ function isQuoteHeaderAt(lines: string[], i: number): number {
 }
 
 /**
+ * `joinQuotedBody` always inserts exactly one blank line (`\n\n`) before the
+ * quote. When splitting, drop that separator empty line only — keep spaces and
+ * user-typed trailing newlines so the compose textarea round-trip is lossless.
+ */
+function replyBeforeQuoteHeader(lines: string[], headerAt: number): string {
+  const before = lines.slice(0, headerAt);
+  if (before.length > 0 && before[before.length - 1] === "") {
+    before.pop();
+  }
+  return before.join("\n");
+}
+
+/**
  * Split a compose/message body into the new reply and trailing quoted history.
  * Primary boundary: first `On … wrote:` header (one or two lines).
  * Fallback: first blank-line-separated block that is entirely `>`-prefixed.
@@ -30,7 +43,7 @@ export function splitQuotedBody(body: string): {
   for (let i = 0; i < lines.length; i++) {
     const headerLines = isQuoteHeaderAt(lines, i);
     if (!headerLines) continue;
-    const reply = lines.slice(0, i).join("\n").replace(/\s+$/g, "");
+    const reply = replyBeforeQuoteHeader(lines, i);
     const quote = lines.slice(i).join("\n");
     return { reply, quote: quote.length ? quote : null };
   }
@@ -59,7 +72,7 @@ export function splitQuotedBody(body: string): {
       blankAt = -1;
       continue;
     }
-    const reply = lines.slice(0, blankAt).join("\n").replace(/\s+$/g, "");
+    const reply = lines.slice(0, blankAt).join("\n");
     const quote = lines.slice(blankAt + 1).join("\n");
     return { reply, quote: quote.length ? quote : null };
   }
@@ -70,8 +83,8 @@ export function splitQuotedBody(body: string): {
 /** Rejoin reply + wire-format quote for draft/send storage. */
 export function joinQuotedBody(reply: string, quote: string | null): string {
   if (!quote) return reply;
-  const head = reply.replace(/\s+$/g, "");
-  return head ? `${head}\n\n${quote}` : `\n\n${quote}`;
+  // Preserve reply as typed (spaces + trailing newlines); separator is always `\n\n`.
+  return reply.length > 0 ? `${reply}\n\n${quote}` : `\n\n${quote}`;
 }
 
 const HTML_QUOTE_START_RE =

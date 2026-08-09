@@ -89,18 +89,19 @@ export function ComposeForm({
     textareaRef.current?.focus({ preventScroll: true });
   }, [autoFocusBody]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      if (!sending && sendFrom && sendTo.trim() && sendSubject) {
-        e.preventDefault();
-        onSend();
-      }
-    }
+  const canSend =
+    !sending && Boolean(sendFrom && sendTo.trim() && sendSubject);
+
+  const handleSendHotkey = (e: React.KeyboardEvent) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key !== "Enter") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (canSend) onSend();
   };
 
   return (
     <div
-      onKeyDown={handleKeyDown}
+      onKeyDown={handleSendHotkey}
       className={
         compact
           ? "flex flex-col rounded-xl border border-border/40 bg-card shadow-sm"
@@ -221,6 +222,7 @@ export function ComposeForm({
           ref={textareaRef}
           value={reply}
           onChange={(e) => setSendText(joinQuotedBody(e.target.value, quote))}
+          onKeyDown={handleSendHotkey}
           placeholder="Write your message here..."
           autoComplete="off"
           autoCorrect="off"
@@ -257,7 +259,7 @@ export function ComposeForm({
           <Button
             size="sm"
             onClick={onSend}
-            disabled={sending || !sendFrom || !sendTo.trim() || !sendSubject}
+            disabled={!canSend}
             className="px-4"
           >
             {sending ? "Sending…" : "Send"}

@@ -30,6 +30,33 @@ describe("splitQuotedBody / joinQuotedBody", () => {
     assert.equal(joinQuotedBody("Updated", quote), `Updated\n\n${quote}`);
   });
 
+  it("preserves trailing spaces through compose round-trip", () => {
+    const quote =
+      "On Aug 9, 2026, 1:50 PM, a@b.com wrote:\n\n> Prior message";
+    const joined = joinQuotedBody("Thanks ", quote);
+    assert.equal(joined, `Thanks \n\n${quote}`);
+    const split = splitQuotedBody(joined);
+    assert.equal(split.reply, "Thanks ");
+    assert.equal(split.quote, quote);
+    assert.equal(joinQuotedBody(split.reply, split.quote), joined);
+  });
+
+  it("preserves trailing newlines through compose round-trip", () => {
+    const quote =
+      "On Aug 9, 2026, 1:50 PM, a@b.com wrote:\n\n> Prior message";
+    const joined = joinQuotedBody("Thanks\n", quote);
+    assert.equal(joined, `Thanks\n\n\n${quote}`);
+    const split = splitQuotedBody(joined);
+    assert.equal(split.reply, "Thanks\n");
+    assert.equal(split.quote, quote);
+    assert.equal(joinQuotedBody(split.reply, split.quote), joined);
+
+    const twoLines = joinQuotedBody("Line one\nLine two\n\n", quote);
+    const splitTwo = splitQuotedBody(twoLines);
+    assert.equal(splitTwo.reply, "Line one\nLine two\n\n");
+    assert.equal(joinQuotedBody(splitTwo.reply, splitTwo.quote), twoLines);
+  });
+
   it("returns null quote when body has no quote", () => {
     const body = "Just a normal message\nwith two lines";
     const split = splitQuotedBody(body);

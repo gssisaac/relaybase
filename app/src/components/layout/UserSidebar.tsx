@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
 import { useDashboardPaths } from "@/dashboard/paths";
 import { AddEmailAccountDialog } from "@/email/components/AddEmailAccountDialog";
 import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
@@ -419,7 +420,6 @@ export function UserSidebar() {
   const mode = useMemo(() => modeFromPathname(pathname), [pathname]);
   const {
     isDesktop,
-    isMacOS,
     dragRegionClassName,
     dragRegionProps,
     noDragClassName,
@@ -479,110 +479,188 @@ export function UserSidebar() {
       <div
         {...dragRegionProps}
         className={cn(
-          "flex shrink-0 flex-col border-b border-sidebar-border",
+          "relative flex shrink-0 flex-col border-b border-sidebar-border",
           dragRegionClassName,
         )}
       >
-        {isDesktop && isMacOS ? (
+        {/* Keep mounted for ⌘[ / ⌘] even when compact hides the buttons. */}
+        <div className={collapsed ? "hidden" : "contents"}>
+          <SidebarHistoryNav collapsed={collapsed} />
+        </div>
+        {collapsed ? (
           <div
-            aria-hidden
-            className="w-full shrink-0"
-            style={{ height: 28 }}
-          />
-        ) : null}
-        <div
-          className={cn(
-            "space-y-2 px-3 py-3",
-            noDragClassName,
-          )}
-          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
-        >
-          <div className="flex items-center justify-between gap-1">
-            <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size={collapsed ? "icon-sm" : "sm"}
-                  className={cn(
-                    "max-w-full",
-                    collapsed ? "px-0" : "justify-start gap-1.5 px-1.5",
-                  )}
-                  aria-label="Relaybase menu"
-                />
+            className={cn(
+              "flex flex-col items-center gap-0.5 px-1 pt-8 pb-2",
+              noDragClassName,
+            )}
+            data-tauri-drag-region="false"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              onClick={toggleCollapsed}
+            >
+              <PanelLeftOpen />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              aria-label={modeToggleLabel}
+              title={modeToggleLabel}
+              onClick={() =>
+                switchMode(mode === "email" ? "dashboard" : "email")
               }
             >
-              {collapsed ? (
+              {mode === "email" ? <LayoutGrid /> : <Mail />}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    aria-label="Relaybase menu"
+                  />
+                }
+              >
                 <img
                   src="/icon.png"
                   alt=""
-                  width={14}
-                  height={14}
-                  className="size-3.5"
+                  width={16}
+                  height={16}
+                  className="size-4"
                 />
-              ) : (
-                <>
-                  <img
-                    src="/icon.png"
-                    alt=""
-                    width={16}
-                    height={16}
-                    className="size-4 shrink-0"
-                  />
-                  <span className="truncate text-sm font-semibold tracking-tight">
-                    Relaybase
-                  </span>
-                  <ChevronsUpDown className="size-3.5 text-muted-foreground" />
-                </>
-              )}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={8}>
-              <DropdownMenuItem disabled>{userId}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setAddOpen(true)}>
-                <Plus className="size-3.5" />
-                Add account
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  switchMode(mode === "email" ? "dashboard" : "email")
-                }
-              >
-                {mode === "email" ? (
-                  <LayoutGrid className="size-3.5" />
-                ) : (
-                  <Mail className="size-3.5" />
-                )}
-                {mode === "email" ? "Open dashboard" : "Open email"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => void signOut()}
-              >
-                <LogOut className="size-3.5" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={modeToggleLabel}
-            title={modeToggleLabel}
-            onClick={() =>
-              switchMode(mode === "email" ? "dashboard" : "email")
-            }
-          >
-            {mode === "email" ? (
-              <LayoutGrid className="size-3.5" />
-            ) : (
-              <Mail className="size-3.5" />
-            )}
-          </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={8}>
+                <DropdownMenuItem disabled>{userId}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAddOpen(true)}>
+                  <Plus className="size-3.5" />
+                  Add account
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    switchMode(mode === "email" ? "dashboard" : "email")
+                  }
+                >
+                  {mode === "email" ? (
+                    <LayoutGrid className="size-3.5" />
+                  ) : (
+                    <Mail className="size-3.5" />
+                  )}
+                  {mode === "email" ? "Open dashboard" : "Open email"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => void signOut()}
+                >
+                  <LogOut className="size-3.5" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </div>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "fixed top-1 left-[84px] z-20 shrink-0",
+                noDragClassName,
+              )}
+              data-tauri-drag-region="false"
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              onClick={toggleCollapsed}
+            >
+              <PanelLeftClose />
+            </Button>
+            <div
+              className={cn("space-y-2 px-3 py-3", noDragClassName)}
+              {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="max-w-full justify-start gap-1.5 px-1.5"
+                        aria-label="Relaybase menu"
+                      />
+                    }
+                  >
+                    <img
+                      src="/icon.png"
+                      alt=""
+                      width={16}
+                      height={16}
+                      className="size-4 shrink-0"
+                    />
+                    <span className="truncate text-sm font-semibold tracking-tight">
+                      Relaybase
+                    </span>
+                    <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" sideOffset={8}>
+                    <DropdownMenuItem disabled>{userId}</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setAddOpen(true)}>
+                      <Plus className="size-3.5" />
+                      Add account
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        switchMode(mode === "email" ? "dashboard" : "email")
+                      }
+                    >
+                      {mode === "email" ? (
+                        <LayoutGrid className="size-3.5" />
+                      ) : (
+                        <Mail className="size-3.5" />
+                      )}
+                      {mode === "email" ? "Open dashboard" : "Open email"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => void signOut()}
+                    >
+                      <LogOut className="size-3.5" />
+                      Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={modeToggleLabel}
+                  title={modeToggleLabel}
+                  onClick={() =>
+                    switchMode(mode === "email" ? "dashboard" : "email")
+                  }
+                >
+                  {mode === "email" ? (
+                    <LayoutGrid className="size-3.5" />
+                  ) : (
+                    <Mail className="size-3.5" />
+                  )}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <nav
@@ -602,27 +680,6 @@ export function UserSidebar() {
           <DashboardModeNav collapsed={collapsed} />
         )}
       </nav>
-
-      <div
-        className={cn("border-t border-sidebar-border p-2", noDragClassName)}
-        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="mx-auto"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={toggleCollapsed}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="size-3.5" />
-          ) : (
-            <PanelLeftClose className="size-3.5" />
-          )}
-        </Button>
-      </div>
 
       <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} />
     </aside>

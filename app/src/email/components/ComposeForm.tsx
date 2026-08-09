@@ -126,7 +126,7 @@ export function ComposeForm({
             >
               <SelectTrigger
                 size="sm"
-                className="h-8 shrink-0 min-w-0 flex-1 border-0 bg-transparent px-0 py-0 shadow-none focus:ring-0 data-[size=sm]:h-8"
+                className="h-8 w-full min-w-0 flex-1 border-0 bg-transparent px-2 py-0 shadow-none focus:ring-0 data-[size=sm]:h-8"
               >
                 <SelectValue placeholder="Select account">
                   {(value: string | null) => {

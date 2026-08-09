@@ -105,6 +105,25 @@ export type DomainProgressCard = {
 
 const POLL_MS = 8000;
 const DONE_DISMISS_MS = 10_000;
+/** Long enough for R2 + Cloudflare steps; hung requests should not pin the banner forever. */
+const REQUEST_TIMEOUT_MS = 180_000;
+
+function timeoutSignal(): AbortSignal {
+  return AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+}
+
+function timeoutErrorMessage(fallback: string, error: unknown): string {
+  if (
+    error instanceof DOMException &&
+    (error.name === "TimeoutError" || error.name === "AbortError")
+  ) {
+    return "Request timed out. Refresh domains — setup may still have finished.";
+  }
+  if (error instanceof Error && error.name === "TimeoutError") {
+    return "Request timed out. Refresh domains — setup may still have finished.";
+  }
+  return error instanceof Error ? error.message : fallback;
+}
 
 async function postOnboard(
   domain: string,
@@ -117,6 +136,7 @@ async function postOnboard(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ domain, action }),
+    signal: timeoutSignal(),
   });
   const data = (await res.json()) as {
     domains?: DomainSummary[];
@@ -146,6 +166,10 @@ function onboardingSettled(
   return null;
 }
 
+function isJobTerminal(job: DomainAddJob): boolean {
+  return job.phase === "done" || job.phase === "failed";
+}
+
 export class DomainStore {
   domains: DomainSummary[] = [];
   loading = true;
@@ -153,12 +177,17 @@ export class DomainStore {
   addJobs: DomainAddJob[] = [];
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollInFlight = false;
   private disposeTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private waiters = new Map<
     string,
     Set<(result: "ready" | "failed") => void>
   >();
   private started = false;
+  /** Serializes add/start/retry POSTs so concurrent imports do not race user data. */
+  private submitTail: Promise<void> = Promise.resolve();
+  /** Jobs whose ready→seed/dismiss path was taken by reconcile (not runJob). */
+  private completingJobIds = new Set<string>();
   /** Bound by AccountsProvider — seeds via Dashboard AccountsStore + sync. */
   private seedAddressesFn:
     | ((domain: string) => Promise<string[]>)
@@ -178,9 +207,16 @@ export class DomainStore {
 
   /** True while any add/onboarding job is still in flight (for sidebar spinner). */
   get isWorking(): boolean {
-    return this.addJobs.some(
-      (j) => j.phase !== "done" && j.phase !== "failed",
-    );
+    return this.addJobs.some((j) => {
+      if (j.phase === "done" || j.phase === "failed") return false;
+      if (j.phase === "seeding_addresses") return true;
+      const settled = onboardingSettled(
+        this.domains.find((d) => d.domain === j.domain)?.onboarding,
+      );
+      // Server already settled — spinner should not wait on a hung submit.
+      if (settled) return false;
+      return true;
+    });
   }
 
   get progressCards(): DomainProgressCard[] {
@@ -191,6 +227,45 @@ export class DomainStore {
       jobDomains.add(job.domain);
       const summary = this.domains.find((d) => d.domain === job.domain);
       const onboarding = summary?.onboarding ?? null;
+      // Prefer live domain status over a stuck in-flight job phase.
+      const settled = onboardingSettled(onboarding);
+
+      if (job.phase === "failed" || settled === "failed") {
+        cards.push({
+          key: job.id,
+          domain: job.domain,
+          title: job.domain,
+          description:
+            job.error ??
+            onboarding?.lastError ??
+            job.message ??
+            "Domain setup failed",
+          status: "failed",
+          onboarding,
+          dismissible: true,
+          jobId: job.id,
+        });
+        continue;
+      }
+
+      if (job.phase === "done" || settled === "ready") {
+        const seeding = job.phase === "seeding_addresses";
+        cards.push({
+          key: job.id,
+          domain: job.domain,
+          title: job.domain,
+          description: seeding
+            ? (job.message ?? "Adding standard addresses…")
+            : job.phase === "done"
+              ? (job.message ?? "Ready")
+              : "Ready",
+          status: seeding ? "running" : "done",
+          onboarding,
+          dismissible: !seeding,
+          jobId: job.id,
+        });
+        continue;
+      }
 
       if (job.phase === "submitting") {
         const submittingTitle =
@@ -231,55 +306,9 @@ export class DomainStore {
         continue;
       }
 
-      if (job.phase === "failed") {
-        cards.push({
-          key: job.id,
-          domain: job.domain,
-          title: job.domain,
-          description: job.error ?? job.message ?? "Domain setup failed",
-          status: "failed",
-          onboarding,
-          dismissible: true,
-          jobId: job.id,
-        });
-        continue;
-      }
-
-      if (job.phase === "done") {
-        cards.push({
-          key: job.id,
-          domain: job.domain,
-          title: job.domain,
-          description: job.message ?? "Ready",
-          status: "done",
-          onboarding,
-          dismissible: true,
-          jobId: job.id,
-        });
-        continue;
-      }
-
-      // onboarding — treat ready as done even if the job phase hasn't flipped yet
-      if (onboarding?.status === "ready") {
-        cards.push({
-          key: job.id,
-          domain: job.domain,
-          title: job.domain,
-          description: job.message ?? "Ready",
-          status: "done",
-          onboarding,
-          dismissible: true,
-          jobId: job.id,
-        });
-        continue;
-      }
-
+      // onboarding
       const status =
-        onboarding?.status === "waiting"
-          ? "waiting"
-          : onboarding?.status === "failed"
-            ? "failed"
-            : "running";
+        onboarding?.status === "waiting" ? "waiting" : "running";
       const stepLabel =
         onboarding?.currentStepLabel ??
         (status === "waiting" ? "Waiting for DNS" : "Provisioning");
@@ -288,12 +317,12 @@ export class DomainStore {
         domain: job.domain,
         title: job.domain,
         description:
-          job.seedDefaults && status !== "failed"
+          job.seedDefaults
             ? `${stepLabel} · standard addresses queued`
             : (job.message ?? stepLabel),
-        status: status === "failed" ? "failed" : status,
+        status,
         onboarding,
-        dismissible: status === "failed",
+        dismissible: false,
         jobId: job.id,
       });
     }
@@ -339,21 +368,19 @@ export class DomainStore {
   async refresh() {
     this.error = null;
     try {
-      const res = await desktopAwareFetch("/api/email/domains", { cache: "no-store" });
+      const res = await desktopAwareFetch("/api/email/domains", {
+        cache: "no-store",
+        signal: timeoutSignal(),
+      });
       const data = (await res.json()) as {
         domains?: DomainSummary[];
         error?: string;
       };
       if (!res.ok) throw new Error(data.error ?? "Failed to load domains");
-      runInAction(() => {
-        this.domains = data.domains ?? [];
-        this.loading = false;
-      });
-      this.resolveWaiters();
-      this.ensurePolling();
+      this.applyDomains(data.domains ?? [], { clearLoading: true });
     } catch (e) {
       runInAction(() => {
-        this.error = e instanceof Error ? e.message : "Failed to load domains";
+        this.error = timeoutErrorMessage("Failed to load domains", e);
         this.loading = false;
       });
     }
@@ -361,22 +388,24 @@ export class DomainStore {
 
   async addDomain(domain: string) {
     this.error = null;
-    const res = await desktopAwareFetch("/api/email/domains", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain }),
-    });
-    const data = (await res.json()) as {
-      domains?: DomainSummary[];
-      message?: string;
-      error?: string;
-    };
-    if (!res.ok) throw new Error(data.error ?? "Failed to add domain");
-    runInAction(() => {
-      this.domains = data.domains ?? [];
-    });
-    this.ensurePolling();
-    return { message: data.message ?? "Domain added" };
+    try {
+      const res = await desktopAwareFetch("/api/email/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+        signal: timeoutSignal(),
+      });
+      const data = (await res.json()) as {
+        domains?: DomainSummary[];
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Failed to add domain");
+      this.applyDomains(data.domains ?? []);
+      return { message: data.message ?? "Domain added" };
+    } catch (e) {
+      throw new Error(timeoutErrorMessage("Failed to add domain", e));
+    }
   }
 
   /**
@@ -431,8 +460,10 @@ export class DomainStore {
 
   /** Dismiss every progress job (used by the banner X control). */
   dismissAllProgress() {
+    const domains = this.addJobs.map((j) => j.domain);
     const ids = this.addJobs.map((j) => j.id);
     for (const id of ids) this.dismissJob(id);
+    for (const domain of domains) this.waiters.delete(domain);
   }
 
   clearError() {
@@ -467,15 +498,104 @@ export class DomainStore {
       startedAt: Date.now(),
     };
     this.addJobs.push(job);
-    void this.runJob(job);
+    // Serialize heavy add/start/retry POSTs only; DNS waits may overlap after.
+    void this.enqueueSubmit(job);
+    this.ensurePolling();
     return job;
+  }
+
+  private enqueueSubmit(job: DomainAddJob) {
+    this.submitTail = this.submitTail
+      .then(() => this.runJob(job))
+      .catch(() => undefined);
+  }
+
+  private applyDomains(
+    domains: DomainSummary[],
+    opts?: { clearLoading?: boolean },
+  ) {
+    runInAction(() => {
+      this.domains = domains;
+      if (opts?.clearLoading) this.loading = false;
+    });
+    this.resolveWaiters();
+    this.reconcileJobsFromDomains();
+    this.ensurePolling();
+  }
+
+  /**
+   * When the domains list already shows ready/failed but a job is still
+   * stuck in submitting/onboarding (hung HTTP), flip the job so the banner
+   * can finish.
+   */
+  private reconcileJobsFromDomains() {
+    for (const job of this.addJobs) {
+      if (isJobTerminal(job) || job.phase === "seeding_addresses") continue;
+      if (this.completingJobIds.has(job.id)) continue;
+
+      const summary = this.domains.find((d) => d.domain === job.domain);
+      const settled = onboardingSettled(summary?.onboarding);
+      if (!settled) continue;
+
+      if (settled === "failed") {
+        runInAction(() => {
+          job.phase = "failed";
+          job.error =
+            summary?.onboarding?.lastError ?? "Domain onboarding failed";
+          job.message = job.error;
+        });
+        continue;
+      }
+
+      // ready — if submit HTTP is still in flight, finish without it
+      if (job.phase === "submitting") {
+        void this.completeJobFromReady(job);
+      }
+    }
+  }
+
+  private async completeJobFromReady(job: DomainAddJob) {
+    if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
+    this.completingJobIds.add(job.id);
+    try {
+      if (job.seedDefaults) {
+        runInAction(() => {
+          job.phase = "seeding_addresses";
+          job.message = "Adding standard addresses…";
+        });
+        const added = await this.seedDefaultAddresses(job.domain);
+        if (job.phase !== "seeding_addresses") return;
+        runInAction(() => {
+          job.addressesAdded = added;
+          job.phase = "done";
+          job.message = `${job.domain} ready · added ${added.length} addresses`;
+        });
+        await this.refresh();
+      } else {
+        runInAction(() => {
+          job.phase = "done";
+          job.message = `${job.domain} ready`;
+        });
+      }
+      this.scheduleDismiss(job.id);
+    } catch (e) {
+      if (isJobTerminal(job)) return;
+      runInAction(() => {
+        job.phase = "failed";
+        job.error =
+          e instanceof Error ? e.message : "Failed to add standard addresses";
+        job.message = job.error;
+      });
+    } finally {
+      this.completingJobIds.delete(job.id);
+    }
   }
 
   async removeDomain(domain: string) {
     this.error = null;
     const res = await desktopAwareFetch(
       `/api/email/domains?domain=${encodeURIComponent(domain)}`,
-      { method: "DELETE" },
+      { method: "DELETE", signal: timeoutSignal() },
     );
     const data = (await res.json()) as {
       domains?: DomainSummary[];
@@ -483,59 +603,60 @@ export class DomainStore {
     };
     if (!res.ok) throw new Error(data.error ?? "Failed to remove domain");
     runInAction(() => {
-      this.domains = data.domains ?? [];
       this.addJobs = this.addJobs.filter((j) => j.domain !== domain);
     });
-    this.ensurePolling();
+    this.applyDomains(data.domains ?? []);
   }
 
   async startOnboarding(domain: string) {
     this.error = null;
-    const result = await postOnboard(domain, "start");
-    runInAction(() => {
-      this.domains = result.domains;
-    });
-    this.resolveWaiters();
-    this.ensurePolling();
-    return { message: result.message };
+    try {
+      const result = await postOnboard(domain, "start");
+      this.applyDomains(result.domains);
+      return { message: result.message };
+    } catch (e) {
+      throw new Error(timeoutErrorMessage("Onboarding failed", e));
+    }
   }
 
   async advanceOnboarding(domain: string) {
     this.error = null;
-    const result = await postOnboard(domain, "advance");
-    runInAction(() => {
-      this.domains = result.domains;
-    });
-    this.resolveWaiters();
-    this.ensurePolling();
-    return { message: result.message };
+    try {
+      const result = await postOnboard(domain, "advance");
+      this.applyDomains(result.domains);
+      return { message: result.message };
+    } catch (e) {
+      throw new Error(timeoutErrorMessage("Onboarding failed", e));
+    }
   }
 
   async retryOnboarding(domain: string) {
     this.error = null;
-    const result = await postOnboard(domain, "retry");
-    runInAction(() => {
-      this.domains = result.domains;
-    });
-    this.resolveWaiters();
-    this.ensurePolling();
-    return { message: result.message };
+    try {
+      const result = await postOnboard(domain, "retry");
+      this.applyDomains(result.domains);
+      return { message: result.message };
+    } catch (e) {
+      throw new Error(timeoutErrorMessage("Onboarding failed", e));
+    }
   }
 
   /** Delete conflicting apex MX records, then continue Email Routing enable. */
   async resolveMxConflict(domain: string) {
     this.error = null;
-    const result = await postOnboard(domain, "resolve_mx_conflict");
-    runInAction(() => {
-      this.domains = result.domains;
-    });
-    this.resolveWaiters();
-    this.ensurePolling();
-    return { message: result.message };
+    try {
+      const result = await postOnboard(domain, "resolve_mx_conflict");
+      this.applyDomains(result.domains);
+      return { message: result.message };
+    } catch (e) {
+      throw new Error(timeoutErrorMessage("Failed to resolve MX conflict", e));
+    }
   }
 
   private async runJob(job: DomainAddJob) {
     try {
+      if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
+
       let result: { message: string };
       if (job.kind === "add") {
         result = await this.addDomain(job.domain);
@@ -545,13 +666,39 @@ export class DomainStore {
         result = await this.retryOnboarding(job.domain);
       }
 
+      // Reconcile may have already finished (or failed) this job while HTTP ran.
+      if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
+
       runInAction(() => {
         job.phase = "onboarding";
         job.message = result.message;
       });
       this.ensurePolling();
+    } catch (e) {
+      if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
+      runInAction(() => {
+        job.phase = "failed";
+        job.error = timeoutErrorMessage(
+          job.kind === "add" ? "Failed to add domain" : "Onboarding failed",
+          e,
+        );
+        job.message = job.error;
+      });
+      return;
+    }
+
+    // Continue outside the submit lock (caller awaits only up to here via
+    // careful structuring — finishJob follows without blocking the queue).
+    void this.finishJobAfterSubmit(job);
+  }
+
+  private async finishJobAfterSubmit(job: DomainAddJob) {
+    try {
+      if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
 
       const settled = await this.waitForOnboarding(job.domain);
+      if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
+
       if (settled === "failed") {
         const summary = this.domains.find((d) => d.domain === job.domain);
         throw new Error(
@@ -565,6 +712,7 @@ export class DomainStore {
           job.message = "Adding standard addresses…";
         });
         const added = await this.seedDefaultAddresses(job.domain);
+        if (isJobTerminal(job)) return;
         runInAction(() => {
           job.addressesAdded = added;
           job.phase = "done";
@@ -580,14 +728,10 @@ export class DomainStore {
 
       this.scheduleDismiss(job.id);
     } catch (e) {
+      if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
       runInAction(() => {
         job.phase = "failed";
-        job.error =
-          e instanceof Error
-            ? e.message
-            : job.kind === "add"
-              ? "Failed to add domain"
-              : "Onboarding failed";
+        job.error = timeoutErrorMessage("Onboarding failed", e);
         job.message = job.error;
       });
     }
@@ -660,11 +804,20 @@ export class DomainStore {
     this.disposeTimers.set(jobId, timer);
   }
 
-  private ensurePolling() {
-    const jobsWaiting = this.addJobs.some(
-      (j) => j.phase === "onboarding" || j.phase === "submitting",
+  private jobsNeedPolling(): boolean {
+    return (
+      this.waiters.size > 0 ||
+      this.addJobs.some(
+        (j) =>
+          j.phase === "onboarding" ||
+          j.phase === "submitting" ||
+          j.phase === "seeding_addresses",
+      )
     );
-    if (!needsPolling(this.domains) && !jobsWaiting && this.waiters.size === 0) {
+  }
+
+  private ensurePolling() {
+    if (!needsPolling(this.domains) && !this.jobsNeedPolling()) {
       this.clearPolling();
       return;
     }
@@ -672,6 +825,7 @@ export class DomainStore {
     this.pollTimer = setInterval(() => {
       void this.pollOnce();
     }, POLL_MS);
+    void this.pollOnce();
   }
 
   private clearPolling() {
@@ -682,24 +836,43 @@ export class DomainStore {
   }
 
   private async pollOnce() {
-    const pending = this.domains.filter(
-      (d) =>
-        d.onboarding?.status === "running" ||
-        d.onboarding?.status === "waiting",
-    );
-    if (pending.length === 0) {
-      // Still waiting for a job whose domain may not be listed yet
-      if (this.waiters.size === 0) {
-        this.clearPolling();
+    if (this.pollInFlight) return;
+    this.pollInFlight = true;
+    try {
+      const pending = this.domains.filter(
+        (d) =>
+          d.onboarding?.status === "running" ||
+          d.onboarding?.status === "waiting",
+      );
+
+      if (pending.length > 0) {
+        for (const entry of pending) {
+          try {
+            await this.advanceOnboarding(entry.domain);
+          } catch {
+            // Keep polling; next tick may recover.
+          }
+        }
+        return;
       }
-      return;
-    }
-    for (const entry of pending) {
-      try {
-        await this.advanceOnboarding(entry.domain);
-      } catch {
-        // Keep polling; next tick may recover.
+
+      // No runnable steps — refresh so hung submits can reconcile against
+      // server-side ready/failed, and idle waiters are not stuck forever.
+      if (this.jobsNeedPolling()) {
+        try {
+          await this.refresh();
+        } catch {
+          // Next tick may recover.
+        }
+        if (!needsPolling(this.domains) && !this.jobsNeedPolling()) {
+          this.clearPolling();
+        }
+        return;
       }
+
+      this.clearPolling();
+    } finally {
+      this.pollInFlight = false;
     }
   }
 }

@@ -62,6 +62,9 @@ export function useAccounts(): AccountsStore {
           list.length,
           list.map((a) => a.email).join(","),
         ]),
+        fetchedAt: Object.entries(store.fetchedAtByDomain)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([d, at]) => [d, at]),
         loadingDomain: store.loadingDomain,
         refreshingDomain: store.refreshingDomain,
         saving: store.saving,

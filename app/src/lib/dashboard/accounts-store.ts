@@ -7,6 +7,11 @@ import {
   DEFAULT_ADDRESS_LOCAL_PARTS,
 } from "@/lib/dashboard/default-addresses";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
+import {
+  dashboardCacheNeedsRefresh,
+  loadAddressesCache,
+  saveAddressesCache,
+} from "@/lib/dashboard/dashboard-cache-disk";
 import { desktopAwareFetch } from "@/lib/desktop/api-base";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import type { Address } from "@/email/components/types";
@@ -21,6 +26,8 @@ export type CreateAddressesInput = {
 export class AccountsStore {
   /** Addresses keyed by domain (lowercase). */
   addressesByDomain: Record<string, Address[]> = {};
+  /** ISO fetchedAt from disk/network, keyed by domain (lowercase). */
+  fetchedAtByDomain: Record<string, string> = {};
   loadingDomain: string | null = null;
   refreshingDomain: string | null = null;
   saving = false;
@@ -45,6 +52,11 @@ export class AccountsStore {
     return this.addressesByDomain[key] ?? [];
   }
 
+  hasHydrated(domain: string): boolean {
+    const key = domain.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(this.addressesByDomain, key);
+  }
+
   clearError() {
     this.error = null;
   }
@@ -53,6 +65,24 @@ export class AccountsStore {
     this.message = null;
   }
 
+  private applyAddresses(domain: string, addresses: Address[], fetchedAt: string) {
+    const key = domain.trim().toLowerCase();
+    this.addressesByDomain[key] = addresses;
+    this.fetchedAtByDomain[key] = fetchedAt;
+  }
+
+  private async persistCache(domain: string, addresses: Address[]) {
+    const key = domain.trim().toLowerCase();
+    await saveAddressesCache(key, addresses);
+    runInAction(() => {
+      this.fetchedAtByDomain[key] = new Date().toISOString();
+    });
+  }
+
+  /**
+   * Load disk cache first, then network-refresh when missing/stale (>60s) or forced.
+   * Cached rows stay visible; only `refreshingDomain` spins while revalidating.
+   */
   async refresh(domain: string, force = false): Promise<void> {
     const key = domain.trim().toLowerCase();
     if (!key || !this.productId) {
@@ -63,11 +93,49 @@ export class AccountsStore {
       return;
     }
 
-    const hasData = (this.addressesByDomain[key]?.length ?? 0) > 0;
     runInAction(() => {
       this.error = null;
-      if (!hasData) this.loadingDomain = key;
-      this.refreshingDomain = key;
+    });
+
+    let cached =
+      force ? null : await loadAddressesCache<Address[]>(key);
+
+    // Prefer in-memory hydrate if we already showed this domain this session.
+    if (
+      !cached &&
+      !force &&
+      this.hasHydrated(key) &&
+      this.fetchedAtByDomain[key]
+    ) {
+      cached = {
+        fetchedAt: this.fetchedAtByDomain[key]!,
+        data: this.addressesByDomain[key] ?? [],
+      };
+    }
+
+    if (cached && !force) {
+      runInAction(() => {
+        this.applyAddresses(key, cached!.data, cached!.fetchedAt);
+        if (this.loadingDomain === key) this.loadingDomain = null;
+      });
+    }
+
+    const needsNetwork =
+      force || !cached || dashboardCacheNeedsRefresh(cached.fetchedAt);
+
+    if (!needsNetwork) {
+      runInAction(() => {
+        if (this.refreshingDomain === key) this.refreshingDomain = null;
+        if (this.loadingDomain === key) this.loadingDomain = null;
+      });
+      return;
+    }
+
+    // Keep cards on screen when we already have rows (disk or memory).
+    const keepVisible = this.hasHydrated(key) || Boolean(cached);
+    runInAction(() => {
+      if (keepVisible) this.refreshingDomain = key;
+      else this.loadingDomain = key;
     });
 
     try {
@@ -85,9 +153,12 @@ export class AccountsStore {
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to load addresses");
       }
+      const addresses = data.addresses ?? [];
+      const fetchedAt = new Date().toISOString();
       runInAction(() => {
-        this.addressesByDomain[key] = data.addresses ?? [];
+        this.applyAddresses(key, addresses, fetchedAt);
       });
+      await saveAddressesCache(key, addresses);
     } catch (e) {
       runInAction(() => {
         this.error = e instanceof Error ? e.message : "Refresh failed";
@@ -136,6 +207,7 @@ export class AccountsStore {
       const created =
         data.addresses ?? (data.address ? [data.address] : []);
 
+      let nextList: Address[] = [];
       runInAction(() => {
         const prev = this.addressesByDomain[key] ?? [];
         const byEmail = new Map(
@@ -144,7 +216,8 @@ export class AccountsStore {
         for (const address of created) {
           byEmail.set(address.email.toLowerCase(), address);
         }
-        this.addressesByDomain[key] = [...byEmail.values()];
+        nextList = [...byEmail.values()];
+        this.addressesByDomain[key] = nextList;
         if (created.length === 1) {
           this.message = `Registered ${created[0]!.email}`;
         } else if (created.length > 1) {
@@ -152,6 +225,7 @@ export class AccountsStore {
         }
       });
 
+      await this.persistCache(key, nextList);
       clearEmailCache(this.productId, `addresses:${key}`);
       clearEmailCache(this.productId, "addresses:all");
       notifyAddressesChanged({
@@ -205,17 +279,20 @@ export class AccountsStore {
       };
       if (!res.ok) throw new Error(data.error ?? "Failed to delete");
 
+      let nextList: Address[] = [];
       runInAction(() => {
         if (data.addresses) {
-          this.addressesByDomain[key] = data.addresses;
+          nextList = data.addresses;
         } else {
-          this.addressesByDomain[key] = (
-            this.addressesByDomain[key] ?? []
-          ).filter((a) => a.email.toLowerCase() !== target);
+          nextList = (this.addressesByDomain[key] ?? []).filter(
+            (a) => a.email.toLowerCase() !== target,
+          );
         }
+        this.addressesByDomain[key] = nextList;
         this.message = `Deleted ${target}`;
       });
 
+      await this.persistCache(key, nextList);
       clearEmailCache(this.productId, `addresses:${key}`);
       clearEmailCache(this.productId, "addresses:all");
       notifyAddressesChanged({ domain: key, emails: [target] });

@@ -1,37 +1,37 @@
 "use client";
 
 import { useDashboardPaths } from "@/dashboard/paths";
-import {
-  fetchEmailCached,
-} from "@/email/components/email-cached-fetch";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchEmailCached } from "@/email/components/email-cached-fetch";
+import { Globe, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
   suggestedDisplayNameForLocalPart,
+  useDomain,
 } from "@/lib/dashboard/DomainContext";
 
 import {
   CloudflareConfigAlert,
   EmailAlerts,
 } from "@/email/components/EmailShared";
-import { DomainScopedLayout } from "@/dashboard/components/DomainScopedLayout";
+import { EmailTableRow } from "@/email/components/EmailListShell";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
-import {
-  EmailListContainer,
-  EmailTableHeader,
-  EmailTableRow,
-  EmptyListState,
-  ListToolbar,
-} from "@/email/components/EmailListShell";
-import type { EmailConfig } from "@/email/components/types";
+import type { Address, EmailConfig } from "@/email/components/types";
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -39,11 +39,17 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { FieldCheck } from "@/components/ui/field-check";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function initialDefaultSelection(): Record<string, boolean> {
   return Object.fromEntries(
@@ -51,64 +57,77 @@ function initialDefaultSelection(): Record<string, boolean> {
   );
 }
 
+type DomainFilter = "all" | string;
+
+type RemoveTarget = { domain: string; email: string };
+
 export function AccountsView() {
   const productId = useProductId();
-  const { apiBase, accounts } = useDashboardPaths();
-  const { domain: urlDomain } = useDashboardDomain();
+  const { apiBase, accounts, domains: domainsHref } = useDashboardPaths();
+  const { domains, loading: domainsLoading } = useDomain();
   const accountsStore = useAccounts();
-  const [config, setConfig] = useState<EmailConfig | null>(null);
-  const [search, setSearch] = useState("");
-  const [configLoading, setConfigLoading] = useState(
-    () => readEmailStale<EmailConfig>(productId, "config") === null,
+
+  const readyDomains = useMemo(
+    () =>
+      domains.filter(
+        (entry) => !entry.onboarding || entry.onboarding.status === "ready",
+      ),
+    [domains],
   );
-  const [configRefreshing, setConfigRefreshing] = useState(false);
+
+  const [domainFilter, setDomainFilter] = useState<DomainFilter>("all");
+  const [config, setConfig] = useState<EmailConfig | null>(() =>
+    readEmailStale<EmailConfig>(productId, "config"),
+  );
+  const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
+  const [dialogDomain, setDialogDomain] = useState("");
   const [selectedDefaults, setSelectedDefaults] = useState(
     initialDefaultSelection,
   );
   const [localPart, setLocalPart] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [configError, setConfigError] = useState<string | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
 
-  const domain = urlDomain ?? config?.domain ?? "";
-  const domainKey = urlDomain?.trim().toLowerCase() ?? "";
-  const addresses = domainKey
-    ? accountsStore.addressesFor(domainKey)
-    : [];
-  const loading =
-    configLoading ||
-    (Boolean(domainKey) &&
-      accountsStore.loadingDomain === domainKey &&
-      addresses.length === 0);
-  const refreshing =
-    configRefreshing ||
-    (Boolean(domainKey) && accountsStore.refreshingDomain === domainKey);
+  const visibleDomains = useMemo(() => {
+    if (domainFilter === "all") return readyDomains;
+    return readyDomains.filter((d) => d.domain === domainFilter);
+  }, [domainFilter, readyDomains]);
+
+  const visibleDomainKeys = useMemo(
+    () => visibleDomains.map((d) => d.domain),
+    [visibleDomains],
+  );
+
   const saving = accountsStore.saving;
   const error = configError ?? accountsStore.error;
   const message = accountsStore.message;
 
-  const configRef = useRef(config);
-  configRef.current = config;
+  const refreshing = visibleDomainKeys.some(
+    (key) => accountsStore.refreshingDomain === key.toLowerCase(),
+  );
 
+  const loading =
+    domainsLoading ||
+    (visibleDomainKeys.length > 0 &&
+      visibleDomainKeys.every(
+        (key) =>
+          !accountsStore.hasHydrated(key) &&
+          accountsStore.loadingDomain === key.toLowerCase(),
+      ));
+
+  // Drop filter selection if that domain disappears.
   useEffect(() => {
-    const staleConfig = readEmailStale<EmailConfig>(productId, "config");
-    if (staleConfig) {
-      setConfig(staleConfig);
-      setConfigLoading(false);
+    if (domainFilter === "all") return;
+    if (!readyDomains.some((d) => d.domain === domainFilter)) {
+      setDomainFilter("all");
     }
-  }, [productId]);
+  }, [domainFilter, readyDomains]);
 
   const refreshConfig = useCallback(
     async (force?: boolean) => {
-      if (!urlDomain) {
-        setConfigLoading(false);
-        setConfigRefreshing(false);
-        return;
-      }
-      if (!configRef.current) setConfigLoading(true);
-      setConfigRefreshing(true);
       setConfigError(null);
       try {
         const cfgResult = await fetchEmailCached<EmailConfig>(
@@ -123,60 +142,78 @@ export function AccountsView() {
         setConfig(cfgResult.data);
       } catch (e) {
         setConfigError(e instanceof Error ? e.message : "Refresh failed");
-      } finally {
-        setConfigLoading(false);
-        setConfigRefreshing(false);
       }
     },
-    [apiBase, productId, urlDomain],
+    [apiBase, productId],
+  );
+
+  const refreshAddresses = useCallback(
+    async (force?: boolean) => {
+      await Promise.all(
+        visibleDomainKeys.map((domain) =>
+          accountsStore.refresh(domain, force),
+        ),
+      );
+    },
+    [accountsStore, visibleDomainKeys],
   );
 
   const refresh = useCallback(
     async (force?: boolean) => {
-      await Promise.all([
-        refreshConfig(force),
-        domainKey
-          ? accountsStore.refresh(domainKey, force)
-          : Promise.resolve(),
-      ]);
+      await Promise.all([refreshConfig(force), refreshAddresses(force)]);
     },
-    [accountsStore, domainKey, refreshConfig],
+    [refreshAddresses, refreshConfig],
   );
+
+  const visibleDomainKeysKey = visibleDomainKeys.join(",");
 
   useEffect(() => {
     void refresh();
-  }, [refresh, urlDomain]);
+  }, [refresh, visibleDomainKeysKey]);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return addresses
-      .filter((a) => !q || a.email.toLowerCase().includes(q))
-      .map((a) => ({
-        key: a.email,
-        primary: a.email,
-        subject: a.displayName?.trim() || "Send and receive",
-      }));
-  }, [addresses, search]);
+  const searchQuery = search.trim().toLowerCase();
+
+  // Read addresses during render (useAccounts re-renders on store updates).
+  const accountsByDomain = new Map<string, Address[]>();
+  for (const entry of visibleDomains) {
+    const list = accountsStore.addressesFor(entry.domain);
+    const filtered = searchQuery
+      ? list.filter(
+          (a) =>
+            a.email.toLowerCase().includes(searchQuery) ||
+            (a.displayName?.toLowerCase().includes(searchQuery) ?? false),
+        )
+      : list;
+    accountsByDomain.set(entry.domain, filtered);
+  }
 
   const selectedDefaultParts = useMemo(
     () => DEFAULT_ADDRESS_LOCAL_PARTS.filter((part) => selectedDefaults[part]),
     [selectedDefaults],
   );
 
-  function openDefaultsDialog() {
+  function openAddDialog(domain: string) {
+    setDialogDomain(domain);
+    setLocalPart("");
+    setDisplayName("");
+    setAddOpen(true);
+  }
+
+  function openDefaultsDialog(domain: string) {
+    setDialogDomain(domain);
     setSelectedDefaults(initialDefaultSelection());
     setDefaultsOpen(true);
   }
 
   async function addAccount() {
+    const domainKey = dialogDomain.trim().toLowerCase();
     if (!domainKey) return;
     accountsStore.clearError();
     try {
       await accountsStore.create(domainKey, {
         localPart,
         displayName:
-          displayName.trim() ||
-          suggestedDisplayNameForLocalPart(localPart),
+          displayName.trim() || suggestedDisplayNameForLocalPart(localPart),
       });
       setLocalPart("");
       setDisplayName("");
@@ -187,6 +224,7 @@ export function AccountsView() {
   }
 
   async function addDefaultAccounts() {
+    const domainKey = dialogDomain.trim().toLowerCase();
     if (!domainKey || !selectedDefaultParts.length) return;
     accountsStore.clearError();
     try {
@@ -208,10 +246,10 @@ export function AccountsView() {
   }
 
   async function confirmRemove() {
-    if (!domainKey || !removeTarget) return;
+    if (!removeTarget) return;
     accountsStore.clearError();
     try {
-      await accountsStore.remove(domainKey, removeTarget);
+      await accountsStore.remove(removeTarget.domain, removeTarget.email);
       setRemoveTarget(null);
     } catch {
       // error already on store
@@ -219,249 +257,379 @@ export function AccountsView() {
   }
 
   return (
-    <DomainScopedLayout>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold tracking-tight">
-            {domain || "Accounts"}
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Accounts for the selected domain
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Dialog
-            open={addOpen}
-            onOpenChange={(open) => {
-              setAddOpen(open);
-              if (!open) {
-                setLocalPart("");
-                setDisplayName("");
-              }
-            }}
-          >
-            <DialogTrigger render={<Button size="sm" />}>
-              <Plus className="size-4" />
-              Add account
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Add account</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <Alert>
-                  <AlertDescription className="text-xs">
-                    Adds a send-from address and creates an Email Routing rule
-                    so replies to this address land in Inbox. No per-address
-                    verification once the domain is onboarded.
-                  </AlertDescription>
-                </Alert>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1 space-y-1">
-                    <Label className="text-xs">Local part</Label>
-                    <Input
-                      value={localPart}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setLocalPart(next);
-                        setDisplayName(suggestedDisplayNameForLocalPart(next));
-                      }}
-                      placeholder="support"
-                    />
-                  </div>
-                  <span className="pb-2 text-sm text-muted-foreground">
-                    @{domain}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Display name</Label>
-                  <Input
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Support Team"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Shown as the From name when sending from this address.
-                  </p>
-                </div>
-                <Button
-                  className="w-full"
-                  size="sm"
-                  disabled={saving || !localPart.trim() || !domain}
-                  onClick={addAccount}
-                >
-                  {saving ? "Adding…" : "Add"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog
-            open={defaultsOpen}
-            onOpenChange={(open) => {
-              setDefaultsOpen(open);
-              if (open) setSelectedDefaults(initialDefaultSelection());
-            }}
-          >
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Add standard accounts</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  Create the usual product addresses on{" "}
-                  <span className="font-mono">{domain || "your domain"}</span>.
-                  Uncheck any you do not need.
-                </p>
-                <div className="max-h-64 space-y-2 overflow-y-auto">
-                  {DEFAULT_ADDRESS_LOCAL_PARTS.map((part) => (
-                    <FieldCheck
-                      key={part}
-                      id={`default-account-${part}`}
-                      checked={Boolean(selectedDefaults[part])}
-                      onCheckedChange={(on) =>
-                        setSelectedDefaults((prev) => ({
-                          ...prev,
-                          [part]: on,
-                        }))
-                      }
-                      label={`${part}@${domain || "…"}`}
-                      description={DEFAULT_ADDRESS_DISPLAY_NAMES[part]}
-                    />
-                  ))}
-                </div>
-                <Button
-                  className="w-full"
-                  size="sm"
-                  disabled={
-                    saving || !domain || selectedDefaultParts.length === 0
-                  }
-                  onClick={addDefaultAccounts}
-                >
-                  {saving
-                    ? "Adding…"
-                    : `Add selected (${selectedDefaultParts.length})`}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void refresh(true)}
-            disabled={refreshing}
-          >
-            <RefreshCw
-              className={refreshing ? "size-4 animate-spin" : "size-4"}
-            />
-          </Button>
-        </div>
-      </div>
-
-      <EmailAlerts error={error} message={message} />
-      <CloudflareConfigAlert show={!config?.cloudflareConfigured} />
-
-      <EmailListContainer>
-        <ListToolbar search={search} onSearchChange={setSearch} />
-        {rows.length > 0 ? (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <DesktopTitleBar
+        className="px-4 py-3"
+        end={
           <>
-            <EmailTableHeader>
-              <span>Address</span>
-              <span className="hidden sm:block">Detail</span>
-              <span />
-              <span />
-            </EmailTableHeader>
-            <div>
-              {rows.map((row) => (
-                <EmailTableRow
-                  key={row.key}
-                  href={`${accounts}/${encodeURIComponent(row.key)}`}
-                  primary={row.primary}
-                  subject={row.subject}
-                  date=""
-                  status={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-muted-foreground hover:text-destructive"
-                      disabled={saving}
-                      aria-label={`Delete ${row.primary}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setRemoveTarget(row.key);
-                      }}
-                    >
-                      <Trash2 className="size-3" />
-                    </Button>
+            <Select
+              value={domainFilter}
+              onValueChange={(next) => {
+                if (next) setDomainFilter(next);
+              }}
+              disabled={domainsLoading || readyDomains.length === 0}
+            >
+              <SelectTrigger className="h-8 w-[220px]" size="sm">
+                <SelectValue
+                  placeholder={
+                    domainsLoading ? "Loading domains…" : "Filter domain"
                   }
-                />
-              ))}
-            </div>
-          </>
-        ) : !loading ? (
-          <EmptyListState
-            title="No accounts yet"
-            description="Add an address to send from and receive mail on your domain."
-            action={
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Button size="sm" onClick={() => setAddOpen(true)}>
-                  Add account
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={openDefaultsDialog}
-                  disabled={!domain}
                 >
-                  Add defaults 6 accounts
-                </Button>
-              </div>
-            }
-          />
-        ) : (
-          <div className="min-h-[200px]" />
-        )}
-      </EmailListContainer>
-
-      <Dialog
-        open={Boolean(removeTarget)}
-        onOpenChange={(open) => {
-          if (!open && !saving) setRemoveTarget(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md" showCloseButton={!saving}>
-          <DialogHeader>
-            <DialogTitle>Delete account</DialogTitle>
-            <DialogDescription>
-              Delete{" "}
-              <span className="font-mono text-foreground">{removeTarget}</span>?
-              It will be removed from this domain and from Email add-account
-              options. Mail already received is kept.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
+                  {(value: string | null) => {
+                    if (!value || value === "all") return "All";
+                    return value;
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {readyDomains.map((entry) => (
+                  <SelectItem key={entry.domain} value={entry.domain}>
+                    {entry.domain}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search accounts…"
+                className="h-8 w-[200px] pl-8 text-xs"
+              />
+            </div>
             <Button
-              type="button"
               variant="outline"
               size="sm"
-              disabled={saving}
-              onClick={() => setRemoveTarget(null)}
+              onClick={() => void refresh(true)}
+              disabled={refreshing}
             >
-              Cancel
+              <RefreshCw
+                className={refreshing ? "size-4 animate-spin" : "size-4"}
+              />
             </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              disabled={saving}
-              onClick={() => void confirmRemove()}
-            >
-              {saving ? "Deleting…" : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </DomainScopedLayout>
+          </>
+        }
+      >
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            Accounts
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Send-from addresses across your domains
+          </p>
+        </div>
+      </DesktopTitleBar>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+        <EmailAlerts error={error} message={message} />
+        <CloudflareConfigAlert show={!config?.cloudflareConfigured} />
+
+        {!domainsLoading && readyDomains.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">No ready domains</CardTitle>
+              <CardDescription>
+                Finish onboarding a domain before adding accounts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" nativeButton={false} render={<Link href={domainsHref} />}>
+                Manage domains
+              </Button>
+            </CardContent>
+          </Card>
+        ) : loading && visibleDomains.length === 0 ? (
+          <div className="min-h-[200px]" />
+        ) : (
+          <div className="space-y-4">
+            {visibleDomains
+              .filter((entry) => {
+                if (!searchQuery) return true;
+                if (!accountsStore.hasHydrated(entry.domain)) return true;
+                return (accountsByDomain.get(entry.domain)?.length ?? 0) > 0;
+              })
+              .map((entry) => {
+                const domainAddresses = accountsByDomain.get(entry.domain) ?? [];
+                const totalCount = accountsStore.addressesFor(entry.domain).length;
+                const domainLoading =
+                  !accountsStore.hasHydrated(entry.domain) &&
+                  accountsStore.loadingDomain === entry.domain.toLowerCase();
+
+                return (
+                  <Card key={entry.domain}>
+                    <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+                      <div className="min-w-0 space-y-1">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Globe
+                            className="size-4 shrink-0 text-muted-foreground"
+                            aria-hidden
+                          />
+                          <span className="truncate">{entry.domain}</span>
+                        </CardTitle>
+                        <CardDescription>
+                          {totalCount === 0
+                            ? "No accounts yet"
+                            : `${totalCount} account${totalCount === 1 ? "" : "s"}`}
+                          {searchQuery && totalCount > 0
+                            ? ` · ${domainAddresses.length} shown`
+                            : null}
+                        </CardDescription>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => openAddDialog(entry.domain)}
+                      >
+                        <Plus className="size-4" />
+                        Add account
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="px-0 pb-0">
+                      {domainLoading ? (
+                        <div className="min-h-[80px] px-6" />
+                      ) : domainAddresses.length > 0 ? (
+                        <div className="overflow-hidden rounded-b-xl border-t border-border/40">
+                          {domainAddresses.map((address) => {
+                            const label =
+                              address.displayName?.trim() ||
+                              address.email.split("@")[0] ||
+                              address.email;
+                            return (
+                              <EmailTableRow
+                                key={address.email}
+                                href={`${accounts}/${encodeURIComponent(address.email)}`}
+                                primary={address.email}
+                                subject={label}
+                                date=""
+                                status={
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="text-muted-foreground hover:text-destructive"
+                                    disabled={saving}
+                                    aria-label={`Delete ${address.email}`}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setRemoveTarget({
+                                        domain: entry.domain,
+                                        email: address.email,
+                                      });
+                                    }}
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </Button>
+                                }
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-start gap-3 px-6 pb-6">
+                          <div>
+                            <p className="text-sm font-medium">No accounts yet</p>
+                            <p className="text-xs text-muted-foreground">
+                              Add an address to send from and receive mail on
+                              this domain.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => openAddDialog(entry.domain)}
+                            >
+                              Add account
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openDefaultsDialog(entry.domain)}
+                            >
+                              Add defaults 6 accounts
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            {searchQuery &&
+            visibleDomains.every(
+              (entry) =>
+                accountsStore.hasHydrated(entry.domain) &&
+                (accountsByDomain.get(entry.domain)?.length ?? 0) === 0,
+            ) ? (
+              <p className="text-sm text-muted-foreground">
+                No accounts match “{search.trim()}”.
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        <Dialog
+          open={addOpen}
+          onOpenChange={(open) => {
+            setAddOpen(open);
+            if (!open) {
+              setLocalPart("");
+              setDisplayName("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add account</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Alert>
+                <AlertDescription className="text-xs">
+                  Adds a send-from address and creates an Email Routing rule so
+                  replies to this address land in Inbox. No per-address
+                  verification once the domain is onboarded.
+                </AlertDescription>
+              </Alert>
+              <div className="flex items-end gap-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs">Local part</Label>
+                  <Input
+                    value={localPart}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setLocalPart(next);
+                      setDisplayName(suggestedDisplayNameForLocalPart(next));
+                    }}
+                    placeholder="support"
+                  />
+                </div>
+                <span className="pb-2 text-sm text-muted-foreground">
+                  @{dialogDomain}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Display name</Label>
+                <Input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Support Team"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shown as the From name when sending from this address.
+                </p>
+              </div>
+              <Button
+                className="w-full"
+                size="sm"
+                disabled={saving || !localPart.trim() || !dialogDomain}
+                onClick={() => void addAccount()}
+              >
+                {saving ? "Adding…" : "Add"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={defaultsOpen}
+          onOpenChange={(open) => {
+            setDefaultsOpen(open);
+            if (open) setSelectedDefaults(initialDefaultSelection());
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add standard accounts</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Create the usual product addresses on{" "}
+                <span className="font-mono">
+                  {dialogDomain || "your domain"}
+                </span>
+                . Uncheck any you do not need.
+              </p>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {DEFAULT_ADDRESS_LOCAL_PARTS.map((part) => (
+                  <FieldCheck
+                    key={part}
+                    id={`default-account-${part}`}
+                    checked={Boolean(selectedDefaults[part])}
+                    onCheckedChange={(on) =>
+                      setSelectedDefaults((prev) => ({
+                        ...prev,
+                        [part]: on,
+                      }))
+                    }
+                    label={`${part}@${dialogDomain || "…"}`}
+                    description={DEFAULT_ADDRESS_DISPLAY_NAMES[part]}
+                  />
+                ))}
+              </div>
+              <Button
+                className="w-full"
+                size="sm"
+                disabled={
+                  saving ||
+                  !dialogDomain ||
+                  selectedDefaultParts.length === 0
+                }
+                onClick={() => void addDefaultAccounts()}
+              >
+                {saving
+                  ? "Adding…"
+                  : `Add selected (${selectedDefaultParts.length})`}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(removeTarget)}
+          onOpenChange={(open) => {
+            if (!open && !saving) setRemoveTarget(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md" showCloseButton={!saving}>
+            <DialogHeader>
+              <DialogTitle>Delete account</DialogTitle>
+              <DialogDescription>
+                Delete{" "}
+                <span className="font-mono text-foreground">
+                  {removeTarget?.email}
+                </span>
+                ? It will be removed from this domain and from Email add-account
+                options. Mail already received is kept.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={saving}
+                onClick={() => setRemoveTarget(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={saving}
+                onClick={() => void confirmRemove()}
+              >
+                {saving ? "Deleting…" : "Delete"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
   );
 }

@@ -217,8 +217,10 @@ export function MetricsView() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {status.dnsRecords.map((r) => (
-                      <TableRow key={`${r.type}-${r.name}`}>
+                    {status.dnsRecords.map((r, i) => (
+                      <TableRow
+                        key={`${r.type}-${r.name}-${r.expected}-${i}`}
+                      >
                         <TableCell className="font-mono text-xs">{r.type}</TableCell>
                         <TableCell className="max-w-[200px] truncate font-mono text-xs">
                           {r.name}

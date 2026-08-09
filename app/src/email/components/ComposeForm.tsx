@@ -115,7 +115,9 @@ export function ComposeForm({
           </span>
           {allowFromSelect ? (
             <Select
-              value={sendFrom || undefined}
+              // Always controlled — never pass `undefined` (Base UI warns on
+              // uncontrolled→controlled when sendFrom starts empty).
+              value={sendFrom || null}
               onValueChange={(next) => {
                 if (next) setSendFrom(next);
               }}

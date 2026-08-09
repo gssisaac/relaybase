@@ -1,6 +1,8 @@
 import type { Address, RoutingActivityEvent } from "@/email/components/types";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 
+export { joinQuotedBody, splitQuotedBody } from "@/email/reply-quote-body";
+
 function pad2(n: number) {
   return n < 10 ? `0${n}` : String(n);
 }

@@ -322,6 +322,8 @@ export class EmailMailboxStore {
     apiBase: string;
     enabledAccounts: string[];
     enabledAddresses: Address[];
+    /** From MailAccountsStore — mailbox does not fetch addresses:all itself. */
+    availableAddresses?: Address[];
   }) {
     const domains = new Set(
       input.enabledAddresses.map((a) => domainOf(a.email)).filter(Boolean),
@@ -335,6 +337,9 @@ export class EmailMailboxStore {
     this.apiBase = input.apiBase;
     this.enabledAccounts = input.enabledAccounts;
     this.enabledAddresses = input.enabledAddresses;
+    if (input.availableAddresses) {
+      this.addresses = input.availableAddresses;
+    }
     this.domainsKey = nextDomainsKey;
 
     if (
@@ -606,29 +611,11 @@ export class EmailMailboxStore {
         },
       );
 
-      const addrResult = await fetchEmailCachedOptional<{
-        addresses?: Address[];
-      }>(
-        this.productId,
-        "addresses:all",
-        `${this.apiBase}/addresses?all=1`,
-        {
-          refresh: force,
-          onUpdate: (data) => {
-            if (this.refreshGeneration === generation) {
-              runInAction(() => {
-                this.addresses = data?.addresses ?? [];
-              });
-            }
-          },
-        },
-      );
-
       if (this.refreshGeneration !== generation) return;
 
+      // Addresses come from MailAccountsStore via configure(); no addresses:all fetch.
       runInAction(() => {
         this.config = cfgResult.data;
-        if (addrResult.ok) this.addresses = addrResult.data?.addresses ?? [];
       });
 
       if (skipMailNetwork) {

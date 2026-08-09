@@ -95,3 +95,33 @@ export async function ensureInboundWorkerRouting(
     rules,
   };
 }
+
+export type RemoveInboundRoutingResult = {
+  domain: string;
+  zoneId: string;
+  removed: Array<{ address: string; ruleId: string }>;
+};
+
+/** Delete Cloudflare Email Routing rules for the given addresses (literal To matchers). */
+export async function removeInboundWorkerRouting(
+  cf: CloudflareClient,
+  domain: string,
+  addresses: string[],
+): Promise<RemoveInboundRoutingResult> {
+  const zoneId = await resolveZoneId(cf, domain);
+  const existing = await cf.listEmailRoutingRules(zoneId);
+  const targets = new Set(
+    addresses.map((address) => address.trim().toLowerCase()).filter(Boolean),
+  );
+  const removed: RemoveInboundRoutingResult["removed"] = [];
+
+  for (const address of targets) {
+    const matches = existing.filter((rule) => matchesAddress(rule, address));
+    for (const rule of matches) {
+      await cf.deleteEmailRoutingRule(zoneId, rule.id);
+      removed.push({ address, ruleId: rule.id });
+    }
+  }
+
+  return { domain, zoneId, removed };
+}

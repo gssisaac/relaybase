@@ -78,7 +78,8 @@ function storeHasUnreadApi(store: EmailMailboxStore) {
 export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { enabledAddresses, enabledAccounts } = useMailAccounts();
+  const { enabledAddresses, enabledAccounts, availableAddresses } =
+    useMailAccounts();
   const [store, setStore] = useState(() => new EmailMailboxStore());
 
   // Turbopack/HMR keeps the old MobX instance after EmailMailboxStore gains
@@ -102,8 +103,16 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
       apiBase,
       enabledAccounts,
       enabledAddresses,
+      availableAddresses,
     });
-  }, [liveStore, productId, apiBase, enabledAccounts, enabledAddresses]);
+  }, [
+    liveStore,
+    productId,
+    apiBase,
+    enabledAccounts,
+    enabledAddresses,
+    availableAddresses,
+  ]);
 
   return (
     <EmailMailboxStoreContext.Provider value={liveStore}>

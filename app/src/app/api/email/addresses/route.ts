@@ -10,6 +10,7 @@ import {
 import {
   ensureInboundWorkerRouting,
   readRelaybaseWorkerConfig,
+  removeInboundWorkerRouting,
 } from "@/lib/relaybase/worker-client";
 
 export async function GET(request: Request) {
@@ -203,6 +204,79 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ address: data.addresses[index] });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed";
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const userId = await requireSessionUserId();
+    const url = new URL(request.url);
+    const email = url.searchParams.get("email")?.trim().toLowerCase() ?? "";
+    if (!email) {
+      return NextResponse.json({ error: "email is required" }, { status: 400 });
+    }
+
+    const data = await readUserEmailData(userId);
+    const index = data.addresses.findIndex(
+      (a) => a.email.toLowerCase() === email,
+    );
+    if (index < 0) {
+      return NextResponse.json({ error: "Address not found" }, { status: 404 });
+    }
+
+    const removed = data.addresses[index]!;
+    const domain = resolveRequestDomain(request, data);
+    if (domain && removed.domain !== domain) {
+      return NextResponse.json(
+        { error: "Address does not belong to the selected domain" },
+        { status: 400 },
+      );
+    }
+
+    const routingDomain = domain ?? removed.domain;
+    const cfg = await readRelaybaseWorkerConfig();
+    if (!cfg) {
+      return NextResponse.json(
+        {
+          error:
+            "Relaybase worker is not configured. Ask your operator to finish setup before removing senders.",
+        },
+        { status: 503 },
+      );
+    }
+
+    try {
+      await removeInboundWorkerRouting(cfg, {
+        domain: routingDomain,
+        addresses: [removed.email],
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to remove inbound routing";
+      return NextResponse.json(
+        {
+          error: `Could not remove Cloudflare routing for ${removed.email}: ${message}`,
+        },
+        { status: 502 },
+      );
+    }
+
+    data.addresses = data.addresses.filter(
+      (a) => a.email.toLowerCase() !== email,
+    );
+    await writeUserEmailData(userId, data);
+
+    return NextResponse.json({
+      ok: true,
+      email: removed.email,
+      domain: removed.domain,
+      addresses: domain
+        ? data.addresses.filter((a) => a.domain === domain)
+        : data.addresses,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
     return NextResponse.json({ error: message }, { status: 401 });

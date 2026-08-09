@@ -2,15 +2,14 @@
 
 import { useDashboardPaths } from "@/dashboard/paths";
 import {
-  clearEmailCache,
   fetchEmailCached,
-  fetchEmailCachedOptional,
 } from "@/email/components/email-cached-fetch";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
+import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
@@ -30,12 +29,14 @@ import {
   EmptyListState,
   ListToolbar,
 } from "@/email/components/EmailListShell";
-import type { Address, EmailConfig } from "@/email/components/types";
+import type { EmailConfig } from "@/email/components/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -53,86 +54,97 @@ function initialDefaultSelection(): Record<string, boolean> {
 export function AccountsView() {
   const productId = useProductId();
   const { apiBase, accounts } = useDashboardPaths();
-  const { domain: urlDomain, domainQuery } = useDashboardDomain();
+  const { domain: urlDomain } = useDashboardDomain();
+  const accountsStore = useAccounts();
   const [config, setConfig] = useState<EmailConfig | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(
-    () =>
-      readEmailStale<EmailConfig>(productId, "config") === null &&
-      readEmailStale<{ addresses?: Address[] }>(productId, "addresses") === null,
+  const [configLoading, setConfigLoading] = useState(
+    () => readEmailStale<EmailConfig>(productId, "config") === null,
   );
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [configRefreshing, setConfigRefreshing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
   const [selectedDefaults, setSelectedDefaults] = useState(
     initialDefaultSelection,
   );
-  const [saving, setSaving] = useState(false);
   const [localPart, setLocalPart] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
 
   const domain = urlDomain ?? config?.domain ?? "";
-  const domainKey = urlDomain ?? "none";
+  const domainKey = urlDomain?.trim().toLowerCase() ?? "";
+  const addresses = domainKey
+    ? accountsStore.addressesFor(domainKey)
+    : [];
+  const loading =
+    configLoading ||
+    (Boolean(domainKey) &&
+      accountsStore.loadingDomain === domainKey &&
+      addresses.length === 0);
+  const refreshing =
+    configRefreshing ||
+    (Boolean(domainKey) && accountsStore.refreshingDomain === domainKey);
+  const saving = accountsStore.saving;
+  const error = configError ?? accountsStore.error;
+  const message = accountsStore.message;
 
-  const dataRef = useRef({ config, addresses });
-  dataRef.current = { config, addresses };
+  const configRef = useRef(config);
+  configRef.current = config;
 
   useEffect(() => {
     const staleConfig = readEmailStale<EmailConfig>(productId, "config");
-    if (staleConfig) setConfig(staleConfig);
-    const staleAddresses = readEmailStale<{ addresses?: Address[] }>(
-      productId,
-      "addresses",
-    );
-    if (staleAddresses) setAddresses(staleAddresses.addresses ?? []);
-    if (staleConfig || staleAddresses) setLoading(false);
+    if (staleConfig) {
+      setConfig(staleConfig);
+      setConfigLoading(false);
+    }
   }, [productId]);
+
+  const refreshConfig = useCallback(
+    async (force?: boolean) => {
+      if (!urlDomain) {
+        setConfigLoading(false);
+        setConfigRefreshing(false);
+        return;
+      }
+      if (!configRef.current) setConfigLoading(true);
+      setConfigRefreshing(true);
+      setConfigError(null);
+      try {
+        const cfgResult = await fetchEmailCached<EmailConfig>(
+          productId,
+          "config",
+          `${apiBase}/config`,
+          {
+            refresh: force,
+            onUpdate: (data) => setConfig(data),
+          },
+        );
+        setConfig(cfgResult.data);
+      } catch (e) {
+        setConfigError(e instanceof Error ? e.message : "Refresh failed");
+      } finally {
+        setConfigLoading(false);
+        setConfigRefreshing(false);
+      }
+    },
+    [apiBase, productId, urlDomain],
+  );
 
   const refresh = useCallback(
     async (force?: boolean) => {
-      if (!urlDomain) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-      const hasData =
-        dataRef.current.config !== null || dataRef.current.addresses.length > 0;
-      if (!hasData) setLoading(true);
-      setRefreshing(true);
-      setError(null);
-      try {
-        const [cfgResult, addrResult] = await Promise.all([
-          fetchEmailCached<EmailConfig>(productId, "config", `${apiBase}/config`, {
-            refresh: force,
-            onUpdate: (data) => setConfig(data),
-          }),
-          fetchEmailCachedOptional<{ addresses?: Address[] }>(
-            productId,
-            `addresses:${domainKey}`,
-            `${apiBase}/addresses${domainQuery()}`,
-            {
-              refresh: force,
-              onUpdate: (data) => setAddresses(data?.addresses ?? []),
-            },
-          ),
-        ]);
-        setConfig(cfgResult.data);
-        if (addrResult.ok) setAddresses(addrResult.data?.addresses ?? []);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Refresh failed");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      await Promise.all([
+        refreshConfig(force),
+        domainKey
+          ? accountsStore.refresh(domainKey, force)
+          : Promise.resolve(),
+      ]);
     },
-    [apiBase, domainKey, domainQuery, productId, urlDomain],
+    [accountsStore, domainKey, refreshConfig],
   );
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh, urlDomain]);
 
   const rows = useMemo(() => {
@@ -157,38 +169,26 @@ export function AccountsView() {
   }
 
   async function addAccount() {
-    setSaving(true);
-    setError(null);
+    if (!domainKey) return;
+    accountsStore.clearError();
     try {
-      const res = await fetch(`${apiBase}/addresses${domainQuery()}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          localPart,
-          displayName:
-            displayName.trim() ||
-            suggestedDisplayNameForLocalPart(localPart),
-        }),
+      await accountsStore.create(domainKey, {
+        localPart,
+        displayName:
+          displayName.trim() ||
+          suggestedDisplayNameForLocalPart(localPart),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to add");
       setLocalPart("");
       setDisplayName("");
       setAddOpen(false);
-      setMessage(`Registered ${data.address.email}`);
-      clearEmailCache(productId, `addresses:${domainKey}`);
-      await refresh(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add");
-    } finally {
-      setSaving(false);
+    } catch {
+      // error already on store
     }
   }
 
   async function addDefaultAccounts() {
-    if (!selectedDefaultParts.length) return;
-    setSaving(true);
-    setError(null);
+    if (!domainKey || !selectedDefaultParts.length) return;
+    accountsStore.clearError();
     try {
       const displayNames = Object.fromEntries(
         selectedDefaultParts.map((part) => [
@@ -196,32 +196,25 @@ export function AccountsView() {
           DEFAULT_ADDRESS_DISPLAY_NAMES[part],
         ]),
       );
-      const res = await fetch(`${apiBase}/addresses${domainQuery()}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          localParts: [...selectedDefaultParts],
-          displayNames,
-        }),
+      await accountsStore.create(domainKey, {
+        localParts: [...selectedDefaultParts],
+        displayNames,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to add");
-      const emails = (data.addresses as { email: string }[] | undefined)?.map(
-        (a) => a.email,
-      );
       setDefaultsOpen(false);
       setSelectedDefaults(initialDefaultSelection());
-      setMessage(
-        emails?.length
-          ? `Registered ${emails.length} account${emails.length === 1 ? "" : "s"}`
-          : "Standard accounts added",
-      );
-      clearEmailCache(productId, `addresses:${domainKey}`);
-      await refresh(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add");
-    } finally {
-      setSaving(false);
+    } catch {
+      // error already on store
+    }
+  }
+
+  async function confirmRemove() {
+    if (!domainKey || !removeTarget) return;
+    accountsStore.clearError();
+    try {
+      await accountsStore.remove(domainKey, removeTarget);
+      setRemoveTarget(null);
+    } catch {
+      // error already on store
     }
   }
 
@@ -354,7 +347,7 @@ export function AccountsView() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => refresh(true)}
+            onClick={() => void refresh(true)}
             disabled={refreshing}
           >
             <RefreshCw
@@ -385,6 +378,23 @@ export function AccountsView() {
                   primary={row.primary}
                   subject={row.subject}
                   date=""
+                  status={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground hover:text-destructive"
+                      disabled={saving}
+                      aria-label={`Delete ${row.primary}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setRemoveTarget(row.key);
+                      }}
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  }
                 />
               ))}
             </div>
@@ -413,6 +423,45 @@ export function AccountsView() {
           <div className="min-h-[200px]" />
         )}
       </EmailListContainer>
+
+      <Dialog
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => {
+          if (!open && !saving) setRemoveTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={!saving}>
+          <DialogHeader>
+            <DialogTitle>Delete account</DialogTitle>
+            <DialogDescription>
+              Delete{" "}
+              <span className="font-mono text-foreground">{removeTarget}</span>?
+              It will be removed from this domain and from Email add-account
+              options. Mail already received is kept.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving}
+              onClick={() => setRemoveTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={saving}
+              onClick={() => void confirmRemove()}
+            >
+              {saving ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DomainScopedLayout>
   );
 }

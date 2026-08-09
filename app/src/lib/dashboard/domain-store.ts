@@ -159,9 +159,17 @@ export class DomainStore {
     Set<(result: "ready" | "failed") => void>
   >();
   private started = false;
+  /** Bound by AccountsProvider — seeds via Dashboard AccountsStore + sync. */
+  private seedAddressesFn:
+    | ((domain: string) => Promise<string[]>)
+    | null = null;
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
+  }
+
+  bindSeedAddresses(fn: ((domain: string) => Promise<string[]>) | null) {
+    this.seedAddressesFn = fn;
   }
 
   get hasProgress(): boolean {
@@ -586,6 +594,10 @@ export class DomainStore {
   }
 
   private async seedDefaultAddresses(domain: string): Promise<string[]> {
+    if (this.seedAddressesFn) {
+      return this.seedAddressesFn(domain);
+    }
+    // Fallback when AccountsProvider is not mounted (should be rare).
     const res = await desktopAwareFetch(
       `/api/email/addresses?domain=${encodeURIComponent(domain)}`,
       {
@@ -604,7 +616,12 @@ export class DomainStore {
     if (!res.ok) {
       throw new Error(data.error ?? "Failed to add standard addresses");
     }
-    return (data.addresses ?? []).map((a) => a.email);
+    const { notifyAddressesChanged } = await import(
+      "@/lib/dashboard/accounts-sync"
+    );
+    const emails = (data.addresses ?? []).map((a) => a.email);
+    notifyAddressesChanged({ domain, emails });
+    return emails;
   }
 
   private waitForOnboarding(domain: string): Promise<"ready" | "failed"> {

@@ -4,7 +4,9 @@ import { requireAdmin } from "../lib/auth";
 import { createCloudflareClient } from "../lib/cloudflare-config";
 import {
   ensureInboundWorkerRouting,
+  removeInboundWorkerRouting,
   type InboundRoutingResult,
+  type RemoveInboundRoutingResult,
 } from "../lib/inbound-routing";
 import {
   getInboundAttachment,
@@ -114,23 +116,6 @@ adminInbox.get("/:id/attachments/:attachmentId", async (c) => {
   });
 });
 
-adminInbox.get("/:id", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-
-  const domain = c.req.query("domain")?.trim().toLowerCase();
-  const message = await getInboundEmail(
-    c.env.INBOUND,
-    c.req.param("id"),
-    domain,
-  );
-  if (!message) {
-    return c.json({ error: "Message not found" }, 404);
-  }
-
-  return c.json({ message: serializeMessage(message) });
-});
-
 adminInbox.post("/routing", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
@@ -167,6 +152,60 @@ adminInbox.post("/routing", async (c) => {
       error instanceof Error ? error.message : "Failed to configure routing";
     return c.json({ error: message }, 502);
   }
+});
+
+adminInbox.delete("/routing", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  let body: { domain?: string; addresses?: string[] };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const domain = body.domain?.trim().toLowerCase();
+  const addresses = body.addresses
+    ?.map((address) => address.trim().toLowerCase())
+    .filter(Boolean);
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  if (!addresses?.length) {
+    return c.json({ error: "addresses must be a non-empty array" }, 400);
+  }
+
+  try {
+    const cf = await createCloudflareClient(c.env);
+    const result: RemoveInboundRoutingResult = await removeInboundWorkerRouting(
+      cf,
+      domain,
+      addresses,
+    );
+    return c.json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to remove routing";
+    return c.json({ error: message }, 502);
+  }
+});
+
+adminInbox.get("/:id", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const domain = c.req.query("domain")?.trim().toLowerCase();
+  const message = await getInboundEmail(
+    c.env.INBOUND,
+    c.req.param("id"),
+    domain,
+  );
+  if (!message) {
+    return c.json({ error: "Message not found" }, 404);
+  }
+
+  return c.json({ message: serializeMessage(message) });
 });
 
 export { adminInbox };

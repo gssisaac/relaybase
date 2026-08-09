@@ -10,6 +10,7 @@ import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { useEmailPaths } from "@/email/paths";
+import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 
 function domainOf(email: string): string {
@@ -48,6 +49,8 @@ export function AccountSettingsView({ email }: { email: string }) {
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       toast.success("Display name saved");
       clearEmailCache(productId, `addresses:${domainKey}`);
+      clearEmailCache(productId, "addresses:all");
+      notifyAddressesChanged({ domain: domainKey, emails: [email] });
       await refresh(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");

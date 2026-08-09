@@ -385,4 +385,11 @@ export class CloudflareClient {
     );
     return data.result;
   }
+
+  async deleteEmailRoutingRule(zoneId: string, ruleId: string): Promise<void> {
+    await this.request<null>(
+      `/zones/${zoneId}/email/routing/rules/${ruleId}`,
+      { method: "DELETE" },
+    );
+  }
 }

@@ -255,6 +255,26 @@ export async function ensureInboundWorkerRouting(
   });
 }
 
+export type RemoveInboundRoutingResult = {
+  domain: string;
+  zoneId: string;
+  removed: Array<{ address: string; ruleId: string }>;
+};
+
+/** Delete Cloudflare Email Routing rules for the given addresses. */
+export async function removeInboundWorkerRouting(
+  cfg: RelaybaseWorkerConfig,
+  params: { domain: string; addresses: string[] },
+): Promise<RemoveInboundRoutingResult> {
+  return workerFetch<RemoveInboundRoutingResult>(cfg, "/admin/inbox/routing", {
+    method: "DELETE",
+    body: JSON.stringify({
+      domain: params.domain.trim().toLowerCase(),
+      addresses: params.addresses.map((a) => a.trim().toLowerCase()),
+    }),
+  });
+}
+
 export async function sendEmailWithApiKey(
   baseUrl: string,
   apiKey: string,

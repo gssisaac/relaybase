@@ -13,6 +13,7 @@ import {
   EMAIL_SEND_FAILED,
   EMAIL_SEND_STARTED,
   EMAIL_SEND_SUCCEEDED,
+  type EmailSendSucceededDetail,
 } from "@/email/components/email-send-events";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import type {
@@ -43,6 +44,7 @@ import {
   type TrashEntry,
   type TrashKind,
 } from "@/email/trash-store";
+import { inboundMatchesAccount } from "@/email/conversation-threading";
 import { notifyNewMail } from "@/lib/desktop/notify";
 
 const NOTIFICATION_POLL_MS = 20_000;
@@ -146,7 +148,9 @@ export class EmailMailboxStore {
   get enabledActivity(): RoutingActivityEvent[] {
     const set = this.enabledSet;
     if (set.size === 0) return [];
-    return this.activity.filter((m) => set.has(m.toEmail.toLowerCase()));
+    return this.activity.filter((m) =>
+      [...set].some((email) => inboundMatchesAccount(m, email)),
+    );
   }
 
   get enabledSent(): SentEmail[] {
@@ -237,7 +241,7 @@ export class EmailMailboxStore {
     if (!needle) return 0;
     const read = this.readKeySet;
     return this.visibleActivity.filter(
-      (m) => m.toEmail.toLowerCase() === needle && !read.has(m.key),
+      (m) => inboundMatchesAccount(m, needle) && !read.has(m.key),
     ).length;
   }
 
@@ -728,6 +732,11 @@ export class EmailMailboxStore {
             sentById.set(msg.id, previousSent.get(msg.id) ?? msg);
           }
         }
+        // Keep locally known sent mail when a force refresh races a just-written
+        // record (remote KV can lag behind the send response).
+        for (const [id, msg] of previousSent) {
+          if (!sentById.has(id)) sentById.set(id, msg);
+        }
         // Soft first-load: if every sent request failed, keep prior local mail.
         if (sentById.size > 0 || force || this.sent.length === 0) {
           this.sent = [...sentById.values()];
@@ -864,7 +873,14 @@ export class EmailMailboxStore {
     toast.loading("Sending…", { id: SEND_TOAST_ID });
   };
 
-  private onSendSucceeded = () => {
+  private onSendSucceeded = (event: Event) => {
+    const detail = (event as CustomEvent<EmailSendSucceededDetail>).detail;
+    const sent = detail?.sent;
+    if (sent?.id) {
+      const without = this.sent.filter((msg) => msg.id !== sent.id);
+      this.sent = [sent, ...without];
+      void this.persistMailLists();
+    }
     this.error = null;
     toast.success("Email sent", { id: SEND_TOAST_ID });
     for (const domain of this.domainsKey ? this.domainsKey.split("\0") : []) {

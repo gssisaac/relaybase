@@ -130,6 +130,94 @@ function formatParticipantLabel(messages: ThreadMessage[]): string {
   return `${ordered[0]}, ${ordered[1]} +${ordered.length - 2}`;
 }
 
+function inboundBodyScore(msg: RoutingActivityEvent): number {
+  let score = 0;
+  if (msg.bodyHtml?.trim()) score += 4;
+  if (msg.bodyText?.trim()) score += 2;
+  if (msg.bodyPreview?.trim()) score += 1;
+  if (msg.attachments?.length) score += msg.attachments.length;
+  return score;
+}
+
+/** Prefer the richer of two CF-routing copies of the same Message-ID. */
+function preferInboundCopy(
+  a: RoutingActivityEvent,
+  b: RoutingActivityEvent,
+): RoutingActivityEvent {
+  const scoreA = inboundBodyScore(a);
+  const scoreB = inboundBodyScore(b);
+  if (scoreB !== scoreA) return scoreB > scoreA ? b : a;
+  const toA = a.toEmails?.length ?? 0;
+  const toB = b.toEmails?.length ?? 0;
+  if (toB !== toA) return toB > toA ? b : a;
+  return a.key.localeCompare(b.key) <= 0 ? a : b;
+}
+
+/**
+ * Cloudflare Email Routing delivers once per matching local address, so the
+ * same MIME Message-ID can appear as multiple inbox rows (To + Cc). Collapse
+ * those copies before threading so the conversation stack shows one message.
+ */
+export function collapseDuplicateInbound(
+  inbound: RoutingActivityEvent[],
+): RoutingActivityEvent[] {
+  const byRfc = new Map<string, RoutingActivityEvent>();
+  const withoutRfc: RoutingActivityEvent[] = [];
+  for (const msg of inbound) {
+    const rfc = normalizeMessageId(msg.messageId);
+    if (!rfc) {
+      withoutRfc.push(msg);
+      continue;
+    }
+    const prev = byRfc.get(rfc);
+    byRfc.set(rfc, prev ? preferInboundCopy(prev, msg) : msg);
+  }
+  return [...byRfc.values(), ...withoutRfc];
+}
+
+/** True when the account is envelope To or any MIME To/Cc recipient. */
+export function inboundMatchesAccount(
+  msg: Pick<RoutingActivityEvent, "toEmail" | "toEmails" | "ccEmails">,
+  accountEmail: string,
+): boolean {
+  const needle = accountEmail.trim().toLowerCase();
+  if (!needle) return true;
+  if (msg.toEmail.toLowerCase() === needle) return true;
+  for (const addr of msg.toEmails ?? []) {
+    if (addr.trim().toLowerCase() === needle) return true;
+  }
+  for (const addr of msg.ccEmails ?? []) {
+    if (addr.trim().toLowerCase() === needle) return true;
+  }
+  return false;
+}
+
+/**
+ * Sent mail belongs to the From account. When an inbox account filter is set,
+ * only that account's outbound copies should join the conversation stack —
+ * otherwise a reply from isaac@ shows as "(me)" inside support@'s thread.
+ */
+export function filterSentForAccount(
+  sent: SentEmail[],
+  accountEmail: string | "all",
+): SentEmail[] {
+  if (accountEmail === "all") return sent;
+  const needle = accountEmail.trim().toLowerCase();
+  if (!needle) return sent;
+  return sent.filter((m) => m.from.toLowerCase() === needle);
+}
+
+/** Whether a sent row should show the "(me)" marker for the current filter. */
+export function sentIsMeForAccount(
+  from: string,
+  accountEmail: string | "all",
+): boolean {
+  if (accountEmail === "all") return true;
+  const needle = accountEmail.trim().toLowerCase();
+  if (!needle) return true;
+  return from.trim().toLowerCase() === needle;
+}
+
 /**
  * Group inbound + sent messages into conversations using RFC threading headers
  * and Sent.replyKey. Inbox rows should use threads that contain ≥1 inbound.
@@ -141,7 +229,7 @@ export function groupConversations(
   const uf = new UnionFind();
   const messages: ThreadMessage[] = [];
 
-  for (const m of inbound) {
+  for (const m of collapseDuplicateInbound(inbound)) {
     const node = inboundNodeId(m.key);
     uf.find(node);
     const rfc = normalizeMessageId(m.messageId);
@@ -255,8 +343,7 @@ export function threadMatchesAccount(
   const needle = accountEmail.trim().toLowerCase();
   if (!needle) return true;
   return thread.messages.some(
-    (m) =>
-      m.kind === "inbound" && m.message.toEmail.toLowerCase() === needle,
+    (m) => m.kind === "inbound" && inboundMatchesAccount(m.message, needle),
   );
 }
 

@@ -9,7 +9,7 @@ import {
   dispatchEmailSendSucceeded,
   dispatchEmailSendUndone,
 } from "@/email/components/email-send-events";
-import type { Address } from "@/email/components/types";
+import type { Address, SentEmail } from "@/email/components/types";
 import { domainOf } from "@/email/reply-helpers";
 import { parseEmailListStrict } from "@/lib/email/parse-recipients";
 
@@ -402,10 +402,23 @@ export function useComposeDraftController({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-          const data = await res.json();
+          const data = (await res.json()) as {
+            error?: string;
+            sent?: SentEmail & { bodyPreview?: string };
+          };
           if (!res.ok) throw new Error(data.error ?? "Send failed");
           clearEmailCache(productId, `sent:${domainKey}`);
-          dispatchEmailSendSucceeded();
+          const sent = data.sent;
+          dispatchEmailSendSucceeded(
+            sent?.id
+              ? {
+                  sent: {
+                    ...sent,
+                    bodyPreview: sent.bodyPreview ?? "",
+                  },
+                }
+              : undefined,
+          );
         } catch (e) {
           // Keep the message — restore draft so the user can retry.
           store.upsertDraft(restoreDraft);

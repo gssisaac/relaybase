@@ -65,6 +65,74 @@ function listPrefix(domain: string): string {
   return `${PREFIX}/${domain.trim().toLowerCase()}/`;
 }
 
+/** Normalize RFC Message-ID for comparison (`<id@host>` → `id@host`). */
+export function normalizeInboundMessageId(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) return null;
+  const unwrapped =
+    trimmed.startsWith("<") && trimmed.endsWith(">")
+      ? trimmed.slice(1, -1).trim()
+      : trimmed;
+  return unwrapped || null;
+}
+
+function messageIdIndexKey(domain: string, normalizedMessageId: string): string {
+  return `${PREFIX}/${domain}/by-message-id/${encodeURIComponent(normalizedMessageId)}`;
+}
+
+async function writeMessageIdIndex(
+  bucket: R2Bucket,
+  domain: string,
+  normalizedMessageId: string,
+  id: string,
+): Promise<void> {
+  await bucket.put(messageIdIndexKey(domain, normalizedMessageId), id, {
+    httpMetadata: { contentType: "text/plain" },
+  });
+}
+
+async function findExistingByMessageId(
+  bucket: R2Bucket,
+  domain: string,
+  normalizedMessageId: string,
+): Promise<InboundEmailMeta | null> {
+  const index = await bucket.get(messageIdIndexKey(domain, normalizedMessageId));
+  if (index) {
+    const id = (await index.text()).trim();
+    if (id) {
+      const existing = await getInboundEmailForDomain(bucket, domain, id);
+      if (existing) return existing;
+    }
+  }
+
+  // Pre-index messages (or a lost index object): scan once and backfill.
+  const listed = await bucket.list({
+    prefix: listPrefix(domain),
+    limit: MAX_MESSAGES + 50,
+  });
+  for (const object of listed.objects) {
+    if (!object.key.endsWith("/meta.json")) continue;
+    const metaObject = await bucket.get(object.key);
+    if (!metaObject) continue;
+    const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
+    if (normalizeInboundMessageId(meta.messageId) !== normalizedMessageId) {
+      continue;
+    }
+    await writeMessageIdIndex(bucket, domain, normalizedMessageId, meta.id);
+    return normalizeRecipientLists(meta);
+  }
+  return null;
+}
+
+export type StoreInboundEmailResult = {
+  record: InboundEmailMeta;
+  /** False when this envelope delivery matched an existing Message-ID. */
+  created: boolean;
+};
+
 export function previewText(text: string, max = 500): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= max) return normalized;
@@ -118,14 +186,28 @@ export async function storeInboundEmail(
     size: number;
     raw: ArrayBuffer;
   },
-): Promise<InboundEmailMeta> {
-  const id = crypto.randomUUID();
+): Promise<StoreInboundEmailResult> {
   const receivedAt = new Date().toISOString();
   const domain = domainFromAddress(params.toEmail);
   if (!domain) {
     throw new Error("Inbound email is missing a recipient domain");
   }
 
+  const normalizedMessageId = normalizeInboundMessageId(params.messageId);
+  if (normalizedMessageId) {
+    const existing = await findExistingByMessageId(
+      bucket,
+      domain,
+      normalizedMessageId,
+    );
+    if (existing) {
+      // Cloudflare Email Routing invokes the Worker once per matching local
+      // address (To + Cc). Keep a single R2 record per RFC Message-ID.
+      return { record: existing, created: false };
+    }
+  }
+
+  const id = crypto.randomUUID();
   const parsed = await parseInboundMime(params.raw);
   const attachmentMeta: InboundAttachmentMeta[] = [];
 
@@ -205,8 +287,12 @@ export async function storeInboundEmail(
     },
   });
 
+  if (normalizedMessageId) {
+    await writeMessageIdIndex(bucket, domain, normalizedMessageId, id);
+  }
+
   await pruneOldMessages(bucket, domain);
-  return record;
+  return { record, created: true };
 }
 
 export async function listInboundEmails(
@@ -229,7 +315,19 @@ export async function listInboundEmails(
   }
 
   messages.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-  return messages.slice(0, limit);
+
+  // Collapse historical To+Cc duplicates that predate Message-ID indexing.
+  const deduped: InboundEmailMeta[] = [];
+  const seenMessageIds = new Set<string>();
+  for (const message of messages) {
+    const rfc = normalizeInboundMessageId(message.messageId);
+    if (rfc) {
+      if (seenMessageIds.has(rfc)) continue;
+      seenMessageIds.add(rfc);
+    }
+    deduped.push(message);
+  }
+  return deduped.slice(0, limit);
 }
 
 export async function getInboundEmail(

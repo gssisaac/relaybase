@@ -109,28 +109,30 @@ export async function POST(request: Request) {
     const references = body.references?.trim() || undefined;
     const replyKey = body.replyKey?.trim() || undefined;
 
-    let messageId = crypto.randomUUID();
-    const workerConfigured = Boolean(await readRelaybaseWorkerConfig());
-
-    if (workerConfigured) {
-      const result = await sendViaRelaybaseWorker({
-        domain,
-        from,
-        fromName,
-        to: toParsed.emails.length === 1 ? toParsed.emails[0]! : toParsed.emails,
-        cc: ccParsed.emails.length
-          ? ccParsed.emails.length === 1
-            ? ccParsed.emails[0]
-            : ccParsed.emails
-          : undefined,
-        subject,
-        text,
-        html,
-        inReplyTo,
-        references,
-      });
-      messageId = result.messageId;
+    if (!(await readRelaybaseWorkerConfig())) {
+      return NextResponse.json(
+        { error: "Relaybase worker is not configured — email was not sent" },
+        { status: 503 },
+      );
     }
+
+    const result = await sendViaRelaybaseWorker({
+      domain,
+      from,
+      fromName,
+      to: toParsed.emails.length === 1 ? toParsed.emails[0]! : toParsed.emails,
+      cc: ccParsed.emails.length
+        ? ccParsed.emails.length === 1
+          ? ccParsed.emails[0]
+          : ccParsed.emails
+        : undefined,
+      subject,
+      text,
+      html,
+      inReplyTo,
+      references,
+    });
+    const messageId = result.messageId;
 
     const record = {
       id: crypto.randomUUID(),

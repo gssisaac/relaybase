@@ -37,8 +37,10 @@ import { InlineReplyComposer } from "@/email/components/InlineReplyComposer";
 import { useMailboxNav } from "@/email/components/MailboxNavContext";
 import type { MailListItem, RoutingActivityEvent } from "@/email/components/types";
 import {
+  filterSentForAccount,
   findThreadByInboundKey,
   groupConversations,
+  inboundMatchesAccount,
   threadMatchesAccount,
   threadMatchesSearch,
   threadUnreadKeys,
@@ -136,7 +138,7 @@ function matchesAccount(
   if (account === "all") return true;
   const needle = account.toLowerCase();
   if (item.kind === "inbox") {
-    return item.message.toEmail.toLowerCase() === needle;
+    return inboundMatchesAccount(item.message, needle);
   }
   if (item.kind === "draft") {
     return !item.message.from || item.message.from.toLowerCase() === needle;
@@ -250,7 +252,8 @@ export const MailListView = observer(function MailListView({
   /** Inbox conversations (inbound + matching sent). Trash stays flat. */
   const inboxThreads = useMemo((): ConversationThread[] => {
     if (folder !== "inbox") return [];
-    const threads = groupConversations(activity, sentMessages);
+    const sentForThreading = filterSentForAccount(sentMessages, accountFilter);
+    const threads = groupConversations(activity, sentForThreading);
     return threads.filter((thread) => {
       if (accountFilter !== "all" && !threadMatchesAccount(thread, accountFilter)) {
         return false;

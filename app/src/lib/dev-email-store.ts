@@ -505,6 +505,9 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
       entry.from.split("@")[1]?.toLowerCase() ||
       fallbackDomain,
     ...(entry.messageId ? { messageId: entry.messageId } : {}),
+    ...(entry.inReplyTo ? { inReplyTo: entry.inReplyTo } : {}),
+    ...(entry.references ? { references: entry.references } : {}),
+    ...(entry.replyKey ? { replyKey: entry.replyKey } : {}),
   }));
 
   return {
@@ -564,6 +567,31 @@ function mergeAuthToken(
   };
 }
 
+/** Union sent rows so a lagging remote KV read cannot hide a just-written FS row. */
+function mergeSentLists(primary: DevSent[], secondary: DevSent[]): DevSent[] {
+  const byId = new Map<string, DevSent>();
+  for (const entry of [...primary, ...secondary]) {
+    if (!entry?.id) continue;
+    const prev = byId.get(entry.id);
+    if (!prev || (entry.sentAt ?? "") > (prev.sentAt ?? "")) {
+      byId.set(entry.id, entry);
+    }
+  }
+  return [...byId.values()].sort((a, b) =>
+    (b.sentAt ?? "").localeCompare(a.sentAt ?? ""),
+  );
+}
+
+function mergeUserEmailDataPreferringKv(
+  fromKv: DevUserEmailData,
+  fromFs: DevUserEmailData,
+): DevUserEmailData {
+  return {
+    ...fromKv,
+    sent: mergeSentLists(fromKv.sent, fromFs.sent),
+  };
+}
+
 function writeUserEmailDataToFs(userId: string, payload: string): void {
   const file = dataFile(userId);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -585,6 +613,11 @@ export async function readUserEmailData(userId: string): Promise<DevUserEmailDat
       // KV — with remote bindings that would overwrite production userdata.
       if (userDataLooksEmpty(fromKv) && !userDataLooksEmpty(fromFs)) {
         return mergeAuthToken(fromFs, fromKv);
+      }
+      // Remote KV is eventually consistent: a send can land on disk before the
+      // matching KV get observes the new row. Union sent so /sent stays honest.
+      if (!userDataLooksEmpty(fromFs)) {
+        return mergeUserEmailDataPreferringKv(fromKv, fromFs);
       }
       return fromKv;
     }

@@ -164,6 +164,26 @@ send.post("/", async (c) => {
       inReplyTo: body.inReplyTo?.trim() || undefined,
       references: body.references?.trim() || undefined,
     });
+    // CF returns per-recipient disposition. Fail closed when nobody was
+    // delivered/queued — especially all-permanent-bounce "success" responses.
+    if (
+      result.delivered.length === 0 &&
+      result.queued.length === 0 &&
+      result.permanentBounces.length > 0
+    ) {
+      const error = `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`;
+      return logAndRespond(c, {
+        ok: false,
+        status: 502,
+        body: { error, messageId: result.messageId },
+        record,
+        from,
+        to: to.join(", "),
+        subject,
+        messageId: result.messageId,
+        error,
+      });
+    }
     return logAndRespond(c, {
       ok: true,
       status: 200,

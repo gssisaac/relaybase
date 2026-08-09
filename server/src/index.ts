@@ -6,7 +6,7 @@ import { deliverWebhooks } from "./lib/webhooks";
 
 async function dispatchInboundEvent(
   kv: KVNamespace,
-  record: Awaited<ReturnType<typeof handleInboundEmail>>,
+  record: Awaited<ReturnType<typeof handleInboundEmail>>["record"],
 ): Promise<void> {
   const event = await enqueueInboundEvent(kv, record);
   await deliverWebhooks(kv, record.domain, event);
@@ -20,8 +20,10 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     try {
-      const record = await handleInboundEmail(message, env);
-      ctx.waitUntil(dispatchInboundEvent(env.KEYS, record));
+      const { record, created } = await handleInboundEmail(message, env);
+      if (created) {
+        ctx.waitUntil(dispatchInboundEvent(env.KEYS, record));
+      }
     } catch (error) {
       console.error("Failed to store inbound email", error);
       throw error;

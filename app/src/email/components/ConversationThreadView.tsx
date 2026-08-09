@@ -27,9 +27,10 @@ import type {
   RoutingActivityEvent,
 } from "@/email/components/types";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
-import type {
-  ConversationThread,
-  ThreadMessage,
+import {
+  sentIsMeForAccount,
+  type ConversationThread,
+  type ThreadMessage,
 } from "@/email/conversation-threading";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
 import type { ForwardThreadPart } from "@/email/reply-helpers";
@@ -356,7 +357,8 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
                         {from}
-                        {msg.kind === "sent" ? (
+                        {msg.kind === "sent" &&
+                        sentIsMeForAccount(from, accountFilter) ? (
                           <span className="ml-2 text-xs font-normal text-muted-foreground">
                             (me)
                           </span>
@@ -450,7 +452,8 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
                       {from}
-                      {msg.kind === "sent" ? (
+                      {msg.kind === "sent" &&
+                      sentIsMeForAccount(from, accountFilter) ? (
                         <span className="ml-2 text-xs font-normal text-muted-foreground">
                           (me)
                         </span>

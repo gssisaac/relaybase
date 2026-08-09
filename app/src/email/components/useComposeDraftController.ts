@@ -295,13 +295,9 @@ export function useComposeDraftController({
       latestRef.current.draftId ??
       draftId ??
       (modeRef.current.kind === "reply" ? modeRef.current.draftId : null);
+    // Only remove this draft — sibling reply/forward drafts for the same
+    // thread key must remain (Gmail-style multiple drafts).
     if (id) store.removeDraft(id);
-    const replyKey =
-      modeRef.current.kind === "reply" ? modeRef.current.replyKey : null;
-    if (replyKey) {
-      const orphan = store.findDraftByReplyKey?.(replyKey);
-      if (orphan && orphan.id !== id) store.removeDraft(orphan.id);
-    }
     latestRef.current.draftId = null;
     setDraftId(null);
     setSendTo("");

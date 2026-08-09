@@ -23,6 +23,7 @@ export function EmailSendUndoneNavigator() {
         const params = new URLSearchParams();
         if (detail.replyAll) params.set("replyAll", "1");
         else params.set("reply", "1");
+        params.set("draftId", detail.draftId);
         if (detail.from) params.set("account", detail.from);
         router.push(
           `${inbox}/${encodeURIComponent(detail.replyKey)}?${params.toString()}`,

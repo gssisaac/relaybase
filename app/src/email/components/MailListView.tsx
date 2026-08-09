@@ -456,23 +456,16 @@ export const MailListView = observer(function MailListView({
       );
       return;
     }
+    // Draft reply/forward rows render in ConversationThreadView — do not
+    // auto-open the composer when a thread merely has saved drafts.
     if (composeDismissedThreadRef.current === threadKey) {
       setComposeSourceId(null);
       setComposeMode(null);
       return;
     }
-    const keys = selectedThread?.inboundKeys ?? [messageId];
-    const draft =
-      keys.map((key) => store.findDraftByReplyKey(key)).find(Boolean) ?? null;
-    if (draft?.replyKey) {
-      setComposeSourceId(`inbound:${draft.replyKey}`);
-      setComposeMode(draft.replyAll ? "replyAll" : "reply");
-    } else {
-      setComposeSourceId(null);
-      setComposeMode(null);
-    }
+    setComposeSourceId(null);
+    setComposeMode(null);
     // Re-run on message change or Unsend navigation (?reply= / ?replyAll=).
-    // Skip store/draft deps so ordinary draft upserts don't reopen compose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     folder,
@@ -896,6 +889,10 @@ export const MailListView = observer(function MailListView({
                           <Badge variant="secondary" className="text-[10px]">
                             Reply
                           </Badge>
+                        ) : item.message.forwardKey ? (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Forward
+                          </Badge>
                         ) : (
                           <Badge variant="secondary" className="text-[10px]">
                             Draft
@@ -1086,7 +1083,8 @@ export const MailListView = observer(function MailListView({
               addresses={addresses}
               fromFallbacks={[draft.from]}
               allowFromSelect={!fromSpecified}
-              skipAutosaveWhenEmpty={!draft.replyKey}
+              forwardKey={draft.forwardKey}
+              skipAutosaveWhenEmpty={!draft.replyKey && !draft.forwardKey}
               navigateOnSendStart
               alwaysShowDiscard
               onAfterDiscard={onDraftDiscard}
@@ -1095,6 +1093,10 @@ export const MailListView = observer(function MailListView({
                 draft.replyKey ? (
                   <p className="mb-3 text-xs font-medium text-muted-foreground">
                     {draft.replyAll ? "Reply all draft" : "Reply draft"}
+                  </p>
+                ) : draft.forwardKey ? (
+                  <p className="mb-3 text-xs font-medium text-muted-foreground">
+                    Forward draft
                   </p>
                 ) : undefined
               }

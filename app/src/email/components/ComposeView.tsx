@@ -228,6 +228,7 @@ export const ComposeView = observer(function ComposeView() {
                 : "compose"
           }
           initial={initial}
+          forwardKey={forwardKey || undefined}
           threading={isForward ? undefined : threading}
           addresses={addresses}
           fromFallbacks={fromFallbacks}

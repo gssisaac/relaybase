@@ -491,6 +491,28 @@ export class EmailMailboxStore {
     return this.drafts.find((d) => d.replyKey === key) ?? null;
   }
 
+  /** Reply / forward drafts tied to any inbound key in the thread. */
+  findDraftsForThread(inboundKeys: string[]): DraftEmail[] {
+    const keys = new Set(
+      inboundKeys.map((k) => k.trim()).filter(Boolean),
+    );
+    if (keys.size === 0) return [];
+    return this.drafts
+      .filter((d) => {
+        const reply = d.replyKey?.trim();
+        if (reply && keys.has(reply)) return true;
+        const forward = d.forwardKey?.trim();
+        if (forward && keys.has(forward)) return true;
+        return false;
+      })
+      .slice()
+      .sort((a, b) => {
+        const aAt = Date.parse(a.updatedAt) || 0;
+        const bAt = Date.parse(b.updatedAt) || 0;
+        return aAt - bAt;
+      });
+  }
+
   upsertDraft(
     input: Omit<DraftEmail, "createdAt" | "updatedAt"> & {
       createdAt?: string;
@@ -510,6 +532,7 @@ export class EmailMailboxStore {
       updatedAt: input.updatedAt ?? now,
       replyKey: input.replyKey,
       replyAll: input.replyAll,
+      forwardKey: input.forwardKey,
     };
     if (existing) {
       this.drafts = this.drafts.map((d) => (d.id === draft.id ? draft : d));

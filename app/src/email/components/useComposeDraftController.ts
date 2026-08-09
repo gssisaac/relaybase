@@ -33,6 +33,8 @@ export type ComposeDraftMode =
       kind: "standalone";
       draftId?: string | null;
       threading?: ComposeDraftThreading;
+      /** When set, persist this forward draft against an inbox message. */
+      forwardKey?: string;
     }
   | {
       kind: "reply";
@@ -52,6 +54,7 @@ type DraftStore = {
     body: string;
     replyKey?: string;
     replyAll?: boolean;
+    forwardKey?: string;
   }) => unknown;
   removeDraft: (id: string) => void;
   findDraftByReplyKey?: (replyKey: string) => { id: string } | null;
@@ -228,7 +231,9 @@ export function useComposeDraftController({
             replyKey: currentMode.replyKey,
             replyAll: currentMode.replyAll,
           }
-        : {}),
+        : currentMode.forwardKey
+          ? { forwardKey: currentMode.forwardKey }
+          : {}),
     });
     setDraftStatus("Draft saved");
   }
@@ -367,7 +372,9 @@ export function useComposeDraftController({
             replyKey: currentMode.replyKey,
             replyAll: currentMode.replyAll,
           }
-        : {}),
+        : currentMode.forwardKey
+          ? { forwardKey: currentMode.forwardKey }
+          : {}),
     };
 
     closedRef.current = true;

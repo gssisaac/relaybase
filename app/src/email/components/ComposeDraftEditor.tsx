@@ -23,6 +23,8 @@ export type ComposeDraftEditorProps = {
     replyAll: boolean;
     threading?: ComposeDraftThreading;
   };
+  /** When set on a standalone/forward compose, ties the draft to an inbox message. */
+  forwardKey?: string;
   /** Threading headers for standalone compose (legacy URL params). */
   threading?: ComposeDraftThreading;
   addresses: Address[];
@@ -44,6 +46,7 @@ export function ComposeDraftEditor({
   draftId,
   initial,
   reply,
+  forwardKey,
   threading,
   addresses,
   fromFallbacks,
@@ -81,8 +84,9 @@ export function ComposeDraftEditor({
       kind: "standalone",
       draftId: resolvedDraftId,
       threading,
+      forwardKey,
     };
-  }, [reply, resolvedDraftId, threading]);
+  }, [forwardKey, reply, resolvedDraftId, threading]);
 
   const controller = useComposeDraftController({
     store,

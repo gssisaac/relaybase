@@ -4,20 +4,21 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import type { PanelViewProps } from "@/lib/dashboard/shared/DashboardPageContent";
-import { useProductHref } from "@/lib/dashboard/shared/ProductContext";
+import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { DashboardPanelView } from "@/dashboard/panel";
 import { EmailShell } from "@/email/components/EmailShell";
 import {
   EmailMailboxRoutes,
   EmailsLegacyRedirect,
 } from "@/email/panel";
+import { resolveEntryPath } from "@/email/sidebar-mode";
 
 function IndexRedirect() {
   const router = useRouter();
-  const dashboard = useProductHref("dashboard");
+  const userId = useProductId();
   useEffect(() => {
-    router.replace(dashboard);
-  }, [router, dashboard]);
+    router.replace(resolveEntryPath(userId));
+  }, [router, userId]);
   return null;
 }
 

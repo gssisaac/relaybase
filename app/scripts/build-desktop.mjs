@@ -53,15 +53,15 @@ try {
     fs.writeFileSync(catchAll, patched);
   }
 
-  // Soften login/root pages that use cookies for export — leave files; desktop
-  // entry is /dashboard. Export may still try to prerender login; patch page.tsx root.
+  // Soften login/root pages that use cookies for export. Home restores the
+  // last email/dashboard route from localStorage (same as browser entry).
   const rootPage = path.join(appRoot, "src", "app", "page.tsx");
   let rootBackup = null;
   if (fs.existsSync(rootPage)) {
     rootBackup = fs.readFileSync(rootPage, "utf8");
     fs.writeFileSync(
       rootPage,
-      `import { redirect } from "next/navigation";\nexport default function Home() {\n  redirect("/dashboard");\n}\n`,
+      `"use client";\nimport { RestoreLastRoute } from "@/components/RestoreLastRoute";\nexport default function Home() {\n  return <RestoreLastRoute fallbackUserId="desktop" />;\n}\n`,
     );
   }
 

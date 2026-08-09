@@ -25,7 +25,7 @@ function SuspenseMailListView({
   folder,
   messageId,
 }: {
-  folder: Extract<EmailMailboxSection, "inbox" | "sent" | "trash">;
+  folder: Extract<EmailMailboxSection, "inbox" | "drafts" | "sent" | "trash">;
   messageId?: string;
 }) {
   return (
@@ -46,6 +46,7 @@ function SuspenseComposeView() {
 function mailboxSection(second?: string): EmailMailboxSection | null {
   if (
     second === "inbox" ||
+    second === "drafts" ||
     second === "sent" ||
     second === "compose" ||
     second === "trash"
@@ -73,7 +74,12 @@ export function EmailMailboxRoutes({
       : undefined;
 
   let page: ReactNode = null;
-  if (section === "inbox" || section === "sent" || section === "trash") {
+  if (
+    section === "inbox" ||
+    section === "drafts" ||
+    section === "sent" ||
+    section === "trash"
+  ) {
     page = <SuspenseMailListView folder={section} messageId={messageId} />;
   } else {
     page = <SuspenseComposeView />;

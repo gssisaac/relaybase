@@ -64,10 +64,10 @@ export function AccountDetailShell({
   const pathname = usePathname();
   const router = useRouter();
   const { accounts } = useDashboardPaths();
-  const { compose, inbox, sent, trash } = useEmailPaths();
+  const { compose, inbox, drafts, sent, trash } = useEmailPaths();
   const { addresses, setAccountFilter } = useEmailMailbox();
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const nav = { compose, inbox, sent, trash };
+  const nav = { compose, inbox, drafts, sent, trash };
   const base = `/accounts/${encodeURIComponent(email)}`;
 
   const address = addresses.find(

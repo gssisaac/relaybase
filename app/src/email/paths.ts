@@ -5,7 +5,7 @@ import {
   useProductHref,
 } from "@/lib/dashboard/shared/ProductContext";
 
-export type EmailFolder = "compose" | "inbox" | "sent" | "trash";
+export type EmailFolder = "compose" | "inbox" | "drafts" | "sent" | "trash";
 
 /** Mail client routes under `/email/*`. */
 export function useEmailPaths() {
@@ -13,6 +13,7 @@ export function useEmailPaths() {
   const base = useProductHref();
   const email = useProductHref("email");
   const inbox = useProductHref("email", "inbox");
+  const drafts = useProductHref("email", "drafts");
   const sent = useProductHref("email", "sent");
   const compose = useProductHref("email", "compose");
   const trash = useProductHref("email", "trash");
@@ -23,6 +24,7 @@ export function useEmailPaths() {
     email,
     emails: email,
     inbox,
+    drafts,
     sent,
     compose,
     trash,
@@ -36,9 +38,11 @@ export function emailAccountHref(
   const base =
     folder === "inbox"
       ? "/email/inbox"
-      : folder === "sent"
-        ? "/email/sent"
-        : "/email/trash";
+      : folder === "drafts"
+        ? "/email/drafts"
+        : folder === "sent"
+          ? "/email/sent"
+          : "/email/trash";
   if (!account || account === "all") return base;
   return `${base}?account=${encodeURIComponent(account)}`;
 }

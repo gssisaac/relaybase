@@ -24,7 +24,7 @@ export type EmailCommandId =
 
 export type EmailCommandGroup = "navigation" | "actions" | "copy";
 
-export type EmailCommandFolder = "inbox" | "sent" | "trash";
+export type EmailCommandFolder = "inbox" | "drafts" | "sent" | "trash";
 
 export type EmailCommandTargetKind = "any" | "inbox" | "sent" | "draft";
 

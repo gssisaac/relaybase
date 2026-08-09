@@ -16,7 +16,10 @@ import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout"
 import type { MailListItem } from "@/email/components/types";
 import type { TrashKind } from "@/email/trash-store";
 
-type MailFolder = Extract<EmailMailboxSection, "inbox" | "sent" | "trash">;
+type MailFolder = Extract<
+  EmailMailboxSection,
+  "inbox" | "drafts" | "sent" | "trash"
+>;
 
 function accountQuery(account: EmailAccountFilter) {
   if (account === "all") return "";
@@ -33,10 +36,11 @@ function messageHref(
   item: MailListItem,
   account: EmailAccountFilter,
   compose: string,
+  inbox: string,
 ) {
   if (item.kind === "draft") {
     if (item.message.replyKey) {
-      const path = `${folderBase}/${encodeURIComponent(item.message.replyKey)}`;
+      const path = `${inbox}/${encodeURIComponent(item.message.replyKey)}`;
       return `${path}${accountQuery(account)}`;
     }
     return `${compose}?draft=${encodeURIComponent(item.message.id)}`;
@@ -121,7 +125,7 @@ export function useEmailCommandRuntimeAdapter(
             ? target.message.id
             : null;
       const targetHref = target
-        ? messageHref(folderBase, target, accountFilter, compose)
+        ? messageHref(folderBase, target, accountFilter, compose, inbox)
         : undefined;
       const isInboxTarget = target?.kind === "inbox";
       const canReply = Boolean(
@@ -171,6 +175,7 @@ export function useEmailCommandRuntimeAdapter(
       copyText,
       folder,
       folderBase,
+      inbox,
       isUnread,
       listHref,
       makeReplyHref,
@@ -182,9 +187,20 @@ export function useEmailCommandRuntimeAdapter(
     ],
   );
 
+  // MailListView rebuilds `selected` every render; key on identity + unread so
+  // resolve() does not thrash (and cannot feed a setScope render loop).
+  const selectionKey =
+    selected == null
+      ? "none"
+      : selected.kind === "inbox"
+        ? `inbox:${selected.message.key}:${isUnread(selected.message.key) ? "u" : "r"}`
+        : `${selected.kind}:${selected.message.id}`;
+
   const selectedCommands = useMemo(
     () => resolveEmailCommands(commandRuntimeFor(selected)),
-    [commandRuntimeFor, selected],
+    // selectionKey is the stable identity for `selected`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
+    [commandRuntimeFor, selectionKey],
   );
 
   const runSelectedCommand = useCallback(
@@ -200,7 +216,19 @@ export function useEmailCommandRuntimeAdapter(
         : undefined;
   const scopeTargetKind = selected?.kind;
   const scopeTitle =
-    folder === "inbox" ? "Inbox" : folder === "sent" ? "Sent" : "Trash";
+    folder === "inbox"
+      ? "Inbox"
+      : folder === "drafts"
+        ? "Drafts"
+        : folder === "sent"
+          ? "Sent"
+          : "Trash";
+
+  // Primitive identity for the publish effect — never depend on the commands
+  // array reference (MailListView rebuilds `selected` every render).
+  const scopeKey = `${scopeTitle}\0${scopeTargetId ?? ""}\0${scopeTargetKind ?? ""}\0${selectionKey}\0${selectedCommands
+    .map((command) => `${command.id}:${command.label}`)
+    .join(",")}`;
 
   useEffect(() => {
     setScope({
@@ -209,17 +237,11 @@ export function useEmailCommandRuntimeAdapter(
       targetKind: scopeTargetKind,
       commands: selectedCommands,
     });
-  }, [
-    scopeTitle,
-    scopeTargetId,
-    scopeTargetKind,
-    selectedCommands,
-    setScope,
-  ]);
-
-  useEffect(() => {
     return () => setScope(null);
-  }, [setScope]);
+    // scopeKey captures selection + command ids; listing selectedCommands would
+    // retrigger on every parent render even when content is unchanged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
+  }, [scopeKey, setScope]);
 
   return {
     commandRuntimeFor,

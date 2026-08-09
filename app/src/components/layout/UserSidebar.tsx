@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
   ChevronsUpDown,
+  FilePen,
   Inbox,
   LayoutGrid,
   Loader2,
@@ -203,6 +204,8 @@ function EmailModeNav({
     pathname === "/email/compose" || pathname.startsWith("/email/compose/");
   const inInbox =
     pathname === "/email/inbox" || pathname.startsWith("/email/inbox/");
+  const inDrafts =
+    pathname === "/email/drafts" || pathname.startsWith("/email/drafts/");
   const inSent =
     pathname === "/email/sent" || pathname.startsWith("/email/sent/");
   const inTrash =
@@ -252,6 +255,17 @@ function EmailModeNav({
             collapsed={collapsed}
             unreadCount={unreadCount}
             unreadCountForAccount={unreadCountForAccount}
+          />
+          <FolderTree
+            label="Drafts"
+            icon={FilePen}
+            folder="drafts"
+            pathname={pathname}
+            accountParam={accountParam}
+            accounts={enabledAddresses}
+            getColor={getColor}
+            defaultOpen={inDrafts}
+            collapsed={collapsed}
           />
           <FolderTree
             label="Sent"

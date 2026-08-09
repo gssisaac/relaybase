@@ -7,7 +7,12 @@ import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { EmailMailboxAlerts } from "@/email/components/EmailMailboxAlerts";
 import { useMailAccounts } from "@/email/components/MailAccountsContext";
 
-export type EmailMailboxSection = "compose" | "inbox" | "sent" | "trash";
+export type EmailMailboxSection =
+  | "compose"
+  | "inbox"
+  | "drafts"
+  | "sent"
+  | "trash";
 
 type EmailMailboxLayoutProps = {
   section: EmailMailboxSection;

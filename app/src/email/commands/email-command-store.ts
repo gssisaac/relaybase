@@ -27,7 +27,7 @@ export type EmailCommandDescriptor = {
 };
 
 export type EmailCommandRuntime = {
-  folder: Extract<EmailMailboxSection, "inbox" | "sent" | "trash">;
+  folder: Extract<EmailMailboxSection, "inbox" | "drafts" | "sent" | "trash">;
   target: MailListItem | null;
   targetHref?: string;
   composeHref: string;

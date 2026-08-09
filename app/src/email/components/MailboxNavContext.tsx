@@ -7,6 +7,7 @@ import { useEmailPaths } from "@/email/paths";
 export type MailboxNav = {
   compose: string;
   inbox: string;
+  drafts: string;
   sent: string;
   trash: string;
 };
@@ -29,10 +30,10 @@ export function MailboxNavProvider({
 
 export function useMailboxNav(): MailboxNav {
   const override = useContext(MailboxNavContext);
-  const { compose, inbox, sent, trash } = useEmailPaths();
+  const { compose, inbox, drafts, sent, trash } = useEmailPaths();
   return useMemo(
-    () => override ?? { compose, inbox, sent, trash },
-    [compose, inbox, override, sent, trash],
+    () => override ?? { compose, inbox, drafts, sent, trash },
+    [compose, drafts, inbox, override, sent, trash],
   );
 }
 
@@ -42,6 +43,7 @@ export function accountMailboxNav(email: string): MailboxNav {
   return {
     compose: `/email/compose?from=${q}`,
     inbox: `/email/inbox?account=${q}`,
+    drafts: `/email/drafts?account=${q}`,
     sent: `/email/sent?account=${q}`,
     trash: `/email/trash?account=${q}`,
   };

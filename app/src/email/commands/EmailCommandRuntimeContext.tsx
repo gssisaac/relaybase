@@ -2,8 +2,10 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -21,6 +23,14 @@ export type EmailCommandRuntimeScope = {
   commands: ResolvedEmailCommand[];
 };
 
+function scopeSignature(scope: EmailCommandRuntimeScope | null): string {
+  if (!scope) return "";
+  const commands = scope.commands
+    .map((command) => `${command.id}:${command.label}`)
+    .join(",");
+  return `${scope.title}\0${scope.targetId ?? ""}\0${scope.targetKind ?? ""}\0${commands}`;
+}
+
 type EmailCommandRuntimeContextValue = {
   scope: EmailCommandRuntimeScope | null;
   setScope: (scope: EmailCommandRuntimeScope | null) => void;
@@ -37,8 +47,20 @@ export function EmailCommandRuntimeProvider({
 }: {
   children: ReactNode;
 }) {
-  const [scope, setScope] = useState<EmailCommandRuntimeScope | null>(null);
+  const [scope, setScopeState] = useState<EmailCommandRuntimeScope | null>(
+    null,
+  );
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const signatureRef = useRef<string>("");
+
+  // Skip setState entirely when selection/command ids are unchanged so adapters
+  // that rebuild command arrays every render cannot loop via context updates.
+  const setScope = useCallback((next: EmailCommandRuntimeScope | null) => {
+    const nextSignature = scopeSignature(next);
+    if (signatureRef.current === nextSignature) return;
+    signatureRef.current = nextSignature;
+    setScopeState(next);
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -47,7 +69,7 @@ export function EmailCommandRuntimeProvider({
       paletteOpen,
       setPaletteOpen,
     }),
-    [paletteOpen, scope],
+    [paletteOpen, scope, setScope],
   );
 
   return (

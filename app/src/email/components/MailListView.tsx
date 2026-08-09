@@ -221,6 +221,8 @@ export const MailListView = observer(function MailListView({
   const [search, setSearch] = useState("");
   const [composeMode, setComposeMode] = useState<ThreadComposeMode>(null);
   const [composeSourceId, setComposeSourceId] = useState<string | null>(null);
+  /** Concrete draft open in the inline composer (new UUID or existing id). */
+  const [composeDraftId, setComposeDraftId] = useState<string | null>(null);
   /** After Discard, do not auto-reopen a reply when revisiting this thread. */
   const composeDismissedThreadRef = useRef<string | null>(null);
 
@@ -401,13 +403,20 @@ export const MailListView = observer(function MailListView({
     const threadKey = selectedThread?.threadId ?? messageId;
     if (threadKey) composeDismissedThreadRef.current = threadKey;
     setComposeSourceId(null);
+    setComposeDraftId(null);
     setComposeMode(null);
   }, [messageId, selectedThread?.threadId]);
 
   const openCompose = useCallback(
-    (mode: Exclude<ThreadComposeMode, null>, sourceId?: string | null) => {
+    (
+      mode: Exclude<ThreadComposeMode, null>,
+      sourceId?: string | null,
+      /** Omit to start a new draft; pass an id to reopen a specific draft. */
+      draftId?: string | null,
+    ) => {
       composeDismissedThreadRef.current = null;
       setComposeSourceId(sourceId ?? null);
+      setComposeDraftId(draftId ?? crypto.randomUUID());
       setComposeMode(mode);
     },
     [],
@@ -423,6 +432,7 @@ export const MailListView = observer(function MailListView({
       openCompose(
         detail.replyAll ? "replyAll" : "reply",
         `inbound:${detail.replyKey}`,
+        detail.draftId,
       );
     };
     window.addEventListener(EMAIL_SEND_UNDONE, onUndone);
@@ -431,11 +441,13 @@ export const MailListView = observer(function MailListView({
 
   const wantsReplyParam = searchParams.get("reply");
   const wantsReplyAllParam = searchParams.get("replyAll");
+  const wantsDraftIdParam = searchParams.get("draftId");
 
-  // When opening a message: restore reply panel from draft or ?reply= query
+  // When opening a message: restore reply panel from ?reply= / ?draftId= query
   useEffect(() => {
     if (folder !== "inbox" || !messageId) {
       setComposeSourceId(null);
+      setComposeDraftId(null);
       setComposeMode(null);
       return;
     }
@@ -446,10 +458,12 @@ export const MailListView = observer(function MailListView({
       // URL messageId is the reply target (Unsend navigates to draft.replyKey).
       composeDismissedThreadRef.current = null;
       setComposeSourceId(`inbound:${messageId}`);
+      setComposeDraftId(wantsDraftIdParam?.trim() || crypto.randomUUID());
       setComposeMode(wantsReplyAll ? "replyAll" : "reply");
       const params = new URLSearchParams(searchParams.toString());
       params.delete("reply");
       params.delete("replyAll");
+      params.delete("draftId");
       const qs = params.toString();
       router.replace(
         `${inbox}/${encodeURIComponent(messageId)}${qs ? `?${qs}` : ""}`,
@@ -460,10 +474,12 @@ export const MailListView = observer(function MailListView({
     // auto-open the composer when a thread merely has saved drafts.
     if (composeDismissedThreadRef.current === threadKey) {
       setComposeSourceId(null);
+      setComposeDraftId(null);
       setComposeMode(null);
       return;
     }
     setComposeSourceId(null);
+    setComposeDraftId(null);
     setComposeMode(null);
     // Re-run on message change or Unsend navigation (?reply= / ?replyAll=).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -473,6 +489,7 @@ export const MailListView = observer(function MailListView({
     selectedThread?.threadId,
     wantsReplyParam,
     wantsReplyAllParam,
+    wantsDraftIdParam,
   ]);
 
   const selected =
@@ -1164,6 +1181,8 @@ export const MailListView = observer(function MailListView({
             }}
             composeSourceId={composeSourceId}
             onComposeSourceIdChange={setComposeSourceId}
+            composeDraftId={composeDraftId}
+            onComposeDraftIdChange={setComposeDraftId}
             onTrashMessage={({ kind, id }) => {
               if (kind === "inbox") {
                 const keys = threadInboundKeysFor(id);
@@ -1276,11 +1295,13 @@ export const MailListView = observer(function MailListView({
             </p>
           )}
           {folder !== "trash" &&
-          (composeMode === "reply" || composeMode === "replyAll") ? (
+          (composeMode === "reply" || composeMode === "replyAll") &&
+          composeDraftId ? (
             <InlineReplyComposer
-              key={`${activityDetail.key}:${composeMode}`}
+              key={`reply:${composeDraftId}:${composeMode}`}
               parts={[{ kind: "inbound", event: activityDetail }]}
               draftReplyKey={activityDetail.key}
+              draftId={composeDraftId}
               replyAll={composeMode === "replyAll"}
               addresses={addresses}
               accountFilter={accountFilter}

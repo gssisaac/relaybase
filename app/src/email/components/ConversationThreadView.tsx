@@ -184,6 +184,8 @@ export const ConversationThreadView = observer(function ConversationThreadView({
   onComposeModeChange,
   composeSourceId,
   onComposeSourceIdChange,
+  composeDraftId,
+  onComposeDraftIdChange,
   onTrashMessage,
 }: {
   productId: string;
@@ -196,6 +198,9 @@ export const ConversationThreadView = observer(function ConversationThreadView({
   /** messageIdentity of the stack row that opened compose; locked while open. */
   composeSourceId: string | null;
   onComposeSourceIdChange: (id: string | null) => void;
+  /** Draft id currently open in the composer (new UUID or an existing draft). */
+  composeDraftId: string | null;
+  onComposeDraftIdChange: (id: string | null) => void;
   onTrashMessage: (target: {
     kind: "inbox" | "sent";
     id: string;
@@ -204,18 +209,12 @@ export const ConversationThreadView = observer(function ConversationThreadView({
   const store = useEmailMailboxStore();
   const latestId = messageIdentity(thread.messages[thread.messages.length - 1]!);
   const [expandedId, setExpandedId] = useState<string | null>(latestId);
-  /** When set, the open forward composer is editing this saved draft. */
-  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const inboundKey = thread.inboundKeys.join("\0");
   const canAct = folder !== "trash";
 
   useEffect(() => {
     setExpandedId(latestId);
   }, [thread.threadId, latestId]);
-
-  useEffect(() => {
-    if (!composeMode) setEditingDraftId(null);
-  }, [composeMode]);
 
   useEffect(() => {
     store.markReadMany(thread.inboundKeys);
@@ -266,51 +265,28 @@ export const ConversationThreadView = observer(function ConversationThreadView({
 
   const threadDrafts = store.findDraftsForThread(thread.inboundKeys);
   const visibleDrafts = useMemo(() => {
-    return threadDrafts.filter((draft) => {
-      if (editingDraftId && draft.id === editingDraftId) return false;
-      if (
-        (composeMode === "reply" || composeMode === "replyAll") &&
-        draftReplyKey &&
-        draft.replyKey === draftReplyKey
-      ) {
-        return false;
-      }
-      if (
-        composeMode === "forward" &&
-        !editingDraftId &&
-        draftForwardKey &&
-        draft.forwardKey === draftForwardKey
-      ) {
-        // New forward for this stack — hide matching forward drafts so the
-        // autosaved row does not appear under the open composer.
-        return false;
-      }
-      return true;
-    });
-  }, [
-    composeMode,
-    draftForwardKey,
-    draftReplyKey,
-    editingDraftId,
-    threadDrafts,
-  ]);
+    // Only hide the draft currently open in the composer — sibling reply /
+    // forward drafts for the same key stay visible as separate rows.
+    if (!composeDraftId) return threadDrafts;
+    return threadDrafts.filter((draft) => draft.id !== composeDraftId);
+  }, [composeDraftId, threadDrafts]);
 
   function startReply(msgId: string, mode: "reply" | "replyAll") {
-    setEditingDraftId(null);
+    onComposeDraftIdChange(crypto.randomUUID());
     setExpandedId(msgId);
     onComposeSourceIdChange(msgId);
     onComposeModeChange(mode);
   }
 
   function startForward(msgId: string) {
-    setEditingDraftId(null);
+    onComposeDraftIdChange(crypto.randomUUID());
     setExpandedId(msgId);
     onComposeSourceIdChange(msgId);
     onComposeModeChange("forward");
   }
 
   function closeCompose() {
-    setEditingDraftId(null);
+    onComposeDraftIdChange(null);
     onComposeSourceIdChange(null);
     onComposeModeChange(null);
   }
@@ -328,7 +304,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
   function openDraft(draft: DraftEmail) {
     if (draft.replyKey) {
       const sourceId = `inbound:${draft.replyKey}`;
-      setEditingDraftId(draft.id);
+      onComposeDraftIdChange(draft.id);
       setExpandedId(sourceId);
       onComposeSourceIdChange(sourceId);
       onComposeModeChange(draft.replyAll ? "replyAll" : "reply");
@@ -336,7 +312,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
     }
     if (draft.forwardKey) {
       const sourceId = `inbound:${draft.forwardKey}`;
-      setEditingDraftId(draft.id);
+      onComposeDraftIdChange(draft.id);
       setExpandedId(sourceId);
       onComposeSourceIdChange(sourceId);
       onComposeModeChange("forward");
@@ -345,7 +321,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
 
   function deleteDraft(draft: DraftEmail) {
     store.removeDraft(draft.id);
-    if (editingDraftId === draft.id) closeCompose();
+    if (composeDraftId === draft.id) closeCompose();
   }
 
   return (
@@ -599,11 +575,13 @@ export const ConversationThreadView = observer(function ConversationThreadView({
       {canAct &&
       (composeMode === "reply" || composeMode === "replyAll") &&
       quoteParts.length > 0 &&
-      draftReplyKey ? (
+      draftReplyKey &&
+      composeDraftId ? (
         <InlineReplyComposer
-          key={`${draftReplyKey}:${composeMode}:${quoteParts.length}`}
+          key={`reply:${composeDraftId}:${composeMode}:${quoteParts.length}`}
           parts={quoteParts}
           draftReplyKey={draftReplyKey}
+          draftId={composeDraftId}
           replyAll={composeMode === "replyAll"}
           addresses={addresses}
           accountFilter={accountFilter}
@@ -613,12 +591,13 @@ export const ConversationThreadView = observer(function ConversationThreadView({
       {canAct &&
       composeMode === "forward" &&
       quoteParts.length > 0 &&
-      draftForwardKey ? (
+      draftForwardKey &&
+      composeDraftId ? (
         <InlineForwardComposer
-          key={`fwd:${editingDraftId ?? "new"}:${composeFocusId ?? "latest"}:${quoteParts.length}`}
+          key={`fwd:${composeDraftId}:${composeFocusId ?? "latest"}:${quoteParts.length}`}
           parts={quoteParts}
           forwardKey={draftForwardKey}
-          draftId={editingDraftId}
+          draftId={composeDraftId}
           addresses={addresses}
           accountFilter={accountFilter}
           onClose={closeCompose}

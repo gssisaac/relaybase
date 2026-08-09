@@ -16,6 +16,7 @@ import { joinQuotedBody, splitQuotedBody } from "@/email/reply-quote-body";
 export const InlineReplyComposer = observer(function InlineReplyComposer({
   parts,
   draftReplyKey,
+  draftId,
   replyAll,
   addresses,
   accountFilter,
@@ -25,6 +26,11 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
   parts: ForwardThreadPart[];
   /** Inbound key for draft persistence / send replyKey. */
   draftReplyKey: string;
+  /**
+   * Concrete draft to edit. When missing from the store this starts a fresh
+   * reply under this id (multiple reply drafts per replyKey are allowed).
+   */
+  draftId: string;
   replyAll: boolean;
   addresses: Address[];
   accountFilter: EmailAccountFilter;
@@ -32,7 +38,7 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
 }) {
   const store = useEmailMailboxStore();
   const rootRef = useRef<HTMLDivElement>(null);
-  const existing = store.findDraftByReplyKey(draftReplyKey);
+  const existing = store.getDraft(draftId);
   const prefill = useMemo(
     () =>
       buildReplyPrefillFromParts(parts, addresses, {
@@ -83,7 +89,7 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
   return (
     <div ref={rootRef}>
       <ComposeDraftEditor
-        draftId={existing?.id}
+        draftId={draftId}
         initial={initial}
         reply={reply}
         addresses={addresses}

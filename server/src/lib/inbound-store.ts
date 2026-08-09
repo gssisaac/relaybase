@@ -29,6 +29,8 @@ export type InboundEmailMeta = {
   bodyText: string;
   bodyHtml: string | null;
   attachments: InboundAttachmentMeta[];
+  /** ISO timestamp when marked read, or null when unread. Missing on legacy rows. */
+  readAt?: string | null;
 };
 
 const MAX_MESSAGES = 500;
@@ -122,7 +124,7 @@ async function findExistingByMessageId(
       continue;
     }
     await writeMessageIdIndex(bucket, domain, normalizedMessageId, meta.id);
-    return normalizeRecipientLists(meta);
+    return normalizeReadState(normalizeRecipientLists(meta));
   }
   return null;
 }
@@ -258,6 +260,9 @@ export async function storeInboundEmail(
     bodyText: parsed.bodyText,
     bodyHtml: parsed.bodyHtml,
     attachments: attachmentMeta,
+    // New mail always starts unread; legacy rows (no key at all) are
+    // normalized to "already read" by `normalizeReadState`.
+    readAt: null,
   };
 
   await bucket.put(metaObjectKey(domain, id), JSON.stringify(record), {
@@ -311,7 +316,9 @@ export async function listInboundEmails(
     const metaObject = await bucket.get(object.key);
     if (!metaObject) continue;
     const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
-    messages.push({ ...meta, attachments: meta.attachments ?? [] });
+    messages.push(
+      normalizeReadState({ ...meta, attachments: meta.attachments ?? [] }),
+    );
   }
 
   messages.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
@@ -372,6 +379,18 @@ function normalizeRecipientLists(meta: InboundEmailMeta): InboundEmailMeta {
   };
 }
 
+/**
+ * Legacy rows written before read/unread tracking existed have no `readAt`
+ * key at all — treat those as already-read backlog (matches the previous
+ * client-side "baseline on first load" behavior). Rows written by the
+ * current `storeInboundEmail` always have an explicit `readAt` (`null` for
+ * unread), so this fallback only ever fires for pre-migration data.
+ */
+function normalizeReadState(meta: InboundEmailMeta): InboundEmailMeta {
+  if ("readAt" in meta) return meta;
+  return { ...meta, readAt: meta.receivedAt };
+}
+
 async function getInboundEmailForDomain(
   bucket: R2Bucket,
   domain: string,
@@ -381,7 +400,7 @@ async function getInboundEmailForDomain(
   if (!metaObject) return null;
 
   const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
-  const normalized = normalizeRecipientLists(meta);
+  const normalized = normalizeReadState(normalizeRecipientLists(meta));
   if (meta.toEmails?.length || meta.ccEmails?.length) {
     return normalized;
   }
@@ -424,4 +443,36 @@ export async function getInboundAttachment(
     meta: attachment,
     body: await object.arrayBuffer(),
   };
+}
+
+/**
+ * Bulk mark-read/unread. `readAt: null` marks unread, an ISO timestamp marks
+ * read. Ids that don't resolve to a message in this domain are skipped.
+ */
+export async function setInboundReadState(
+  bucket: R2Bucket,
+  domain: string,
+  ids: string[],
+  readAt: string | null,
+): Promise<{ updated: string[] }> {
+  const normalizedDomain = domain.trim().toLowerCase();
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  const updated: string[] = [];
+
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      const key = metaObjectKey(normalizedDomain, id);
+      const metaObject = await bucket.get(key);
+      if (!metaObject) return;
+
+      const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
+      const next: InboundEmailMeta = { ...meta, readAt };
+      await bucket.put(key, JSON.stringify(next), {
+        httpMetadata: { contentType: "application/json" },
+      });
+      updated.push(id);
+    }),
+  );
+
+  return { updated };
 }

@@ -101,6 +101,51 @@ export async function getInboundMessage(
   return data.message;
 }
 
+export type InboundAddressCounts = {
+  total: number;
+  unread: number;
+};
+
+export type InboundCountsResult = {
+  counts: Record<string, InboundAddressCounts>;
+  totalAll: number;
+  unreadAll: number;
+};
+
+/** Per-address received/unread counts for every retained message on a domain. */
+export async function getInboundCounts(
+  cfg: RelaybaseWorkerConfig,
+  domain: string,
+): Promise<InboundCountsResult> {
+  const search = new URLSearchParams({ domain: domain.trim().toLowerCase() });
+  return workerFetch<InboundCountsResult>(
+    cfg,
+    `/admin/inbox/counts?${search.toString()}`,
+  );
+}
+
+/** Bulk mark-read/unread by message key (`RoutingActivityEvent.key`). */
+export async function setInboundReadState(
+  cfg: RelaybaseWorkerConfig,
+  domain: string,
+  ids: string[],
+  read: boolean,
+): Promise<{ updated: string[] }> {
+  const data = await workerFetch<{ updated?: string[] }>(
+    cfg,
+    "/admin/inbox/read",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        domain: domain.trim().toLowerCase(),
+        ids,
+        read,
+      }),
+    },
+  );
+  return { updated: data.updated ?? [] };
+}
+
 export type WorkerInboxNotificationEvent = {
   id: string;
   type: "inbound.email.received";

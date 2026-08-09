@@ -57,6 +57,55 @@ function initialDefaultSelection(): Record<string, boolean> {
   );
 }
 
+/** Total received + unread for one address row — always shown so status is auditable. */
+function AddressCountsSummary({
+  total,
+  unread,
+  ready,
+}: {
+  total: number;
+  unread: number;
+  /** False until counts have been hydrated for this domain. */
+  ready: boolean;
+}) {
+  if (!ready) {
+    return (
+      <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+        —
+      </span>
+    );
+  }
+  return (
+    <span
+      className="flex items-center gap-2 whitespace-nowrap text-xs tabular-nums"
+      aria-label={`${total} received, ${unread} unread`}
+    >
+      <span className="text-muted-foreground">
+        <span className="font-medium text-foreground">{total}</span> received
+      </span>
+      <span
+        className={
+          unread > 0
+            ? "inline-flex items-center gap-1 font-semibold text-foreground"
+            : "text-muted-foreground"
+        }
+      >
+        {unread > 0 ? (
+          <span
+            className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
+            aria-hidden
+          >
+            {unread > 99 ? "99+" : unread}
+          </span>
+        ) : (
+          <span className="font-medium text-foreground">0</span>
+        )}{" "}
+        unread
+      </span>
+    </span>
+  );
+}
+
 type DomainFilter = "all" | string;
 
 type RemoveTarget = { domain: string; email: string };
@@ -151,7 +200,10 @@ export function AccountsView() {
     async (force?: boolean) => {
       await Promise.all(
         visibleDomainKeys.map((domain) =>
-          accountsStore.refresh(domain, force),
+          Promise.all([
+            accountsStore.refresh(domain, force),
+            accountsStore.refreshCounts(domain, force),
+          ]),
         ),
       );
     },
@@ -399,6 +451,13 @@ export function AccountsView() {
                               address.displayName?.trim() ||
                               address.email.split("@")[0] ||
                               address.email;
+                            const counts = accountsStore.countsFor(
+                              entry.domain,
+                              address.email,
+                            );
+                            const countsReady = accountsStore.hasHydratedCounts(
+                              entry.domain,
+                            );
                             return (
                               <EmailTableRow
                                 key={address.email}
@@ -407,24 +466,31 @@ export function AccountsView() {
                                 subject={label}
                                 date=""
                                 status={
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    className="text-muted-foreground hover:text-destructive"
-                                    disabled={saving}
-                                    aria-label={`Delete ${address.email}`}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setRemoveTarget({
-                                        domain: entry.domain,
-                                        email: address.email,
-                                      });
-                                    }}
-                                  >
-                                    <Trash2 className="size-3" />
-                                  </Button>
+                                  <>
+                                    <AddressCountsSummary
+                                      total={counts?.total ?? 0}
+                                      unread={counts?.unread ?? 0}
+                                      ready={countsReady}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon-xs"
+                                      className="text-muted-foreground hover:text-destructive"
+                                      disabled={saving}
+                                      aria-label={`Delete ${address.email}`}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setRemoveTarget({
+                                          domain: entry.domain,
+                                          email: address.email,
+                                        });
+                                      }}
+                                    >
+                                      <Trash2 className="size-3" />
+                                    </Button>
+                                  </>
                                 }
                               />
                             );

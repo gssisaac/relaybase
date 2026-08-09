@@ -9,7 +9,9 @@ import {
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import {
   dashboardCacheNeedsRefresh,
+  loadAccountCountsCache,
   loadAddressesCache,
+  saveAccountCountsCache,
   saveAddressesCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
 import { desktopAwareFetch } from "@/lib/desktop/api-base";
@@ -23,13 +25,21 @@ export type CreateAddressesInput = {
   displayNames?: Record<string, string>;
 };
 
+export type AddressCounts = {
+  total: number;
+  unread: number;
+};
+
 export class AccountsStore {
   /** Addresses keyed by domain (lowercase). */
   addressesByDomain: Record<string, Address[]> = {};
   /** ISO fetchedAt from disk/network, keyed by domain (lowercase). */
   fetchedAtByDomain: Record<string, string> = {};
+  /** Received/unread counts per address, keyed by domain then email. */
+  countsByDomain: Record<string, Record<string, AddressCounts>> = {};
   loadingDomain: string | null = null;
   refreshingDomain: string | null = null;
+  countsLoadingDomain: string | null = null;
   saving = false;
   error: string | null = null;
   message: string | null = null;
@@ -55,6 +65,74 @@ export class AccountsStore {
   hasHydrated(domain: string): boolean {
     const key = domain.trim().toLowerCase();
     return Object.prototype.hasOwnProperty.call(this.addressesByDomain, key);
+  }
+
+  countsFor(domain: string, email: string): AddressCounts | null {
+    const domainKey = domain.trim().toLowerCase();
+    const emailKey = email.trim().toLowerCase();
+    return this.countsByDomain[domainKey]?.[emailKey] ?? null;
+  }
+
+  hasHydratedCounts(domain: string): boolean {
+    const key = domain.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(this.countsByDomain, key);
+  }
+
+  /**
+   * Load disk cache first, then network-refresh when missing/stale (>60s) or
+   * forced — same pattern as `refresh()` for addresses. Counts are additive
+   * (per-address); a domain with no received mail yet simply has no entry.
+   */
+  async refreshCounts(domain: string, force = false): Promise<void> {
+    const key = domain.trim().toLowerCase();
+    if (!key || !this.productId) {
+      runInAction(() => {
+        if (this.countsLoadingDomain === key) this.countsLoadingDomain = null;
+      });
+      return;
+    }
+
+    let cached = force
+      ? null
+      : await loadAccountCountsCache<Record<string, AddressCounts>>(key);
+
+    if (cached) {
+      runInAction(() => {
+        this.countsByDomain[key] = cached!.data;
+      });
+    }
+
+    const needsNetwork =
+      force || !cached || dashboardCacheNeedsRefresh(cached.fetchedAt);
+    if (!needsNetwork) return;
+
+    runInAction(() => {
+      this.countsLoadingDomain = key;
+    });
+
+    try {
+      const res = await desktopAwareFetch(
+        `${this.apiBase}/inbox/counts?domain=${encodeURIComponent(key)}`,
+        { cache: "no-store" },
+      );
+      const data = (await res.json()) as {
+        counts?: Record<string, AddressCounts>;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Failed to load counts");
+      const counts = data.counts ?? {};
+      runInAction(() => {
+        this.countsByDomain[key] = counts;
+      });
+      await saveAccountCountsCache(key, counts);
+    } catch {
+      // Counts are supplementary — keep any cached values, don't surface
+      // this as a page-level error alongside address load failures.
+    } finally {
+      runInAction(() => {
+        if (this.countsLoadingDomain === key) this.countsLoadingDomain = null;
+      });
+    }
   }
 
   clearError() {

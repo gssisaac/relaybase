@@ -65,8 +65,12 @@ export function useAccounts(): AccountsStore {
         fetchedAt: Object.entries(store.fetchedAtByDomain)
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([d, at]) => [d, at]),
+        addressCounts: Object.entries(store.countsByDomain)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([d, counts]) => [d, JSON.stringify(counts)]),
         loadingDomain: store.loadingDomain,
         refreshingDomain: store.refreshingDomain,
+        countsLoadingDomain: store.countsLoadingDomain,
         saving: store.saving,
         error: store.error,
         message: store.message,

@@ -112,6 +112,8 @@ export type RoutingActivityEvent = {
   messageId?: string | null;
   inReplyTo?: string | null;
   references?: string | null;
+  /** ISO timestamp when marked read on the server, or null when unread. */
+  readAt?: string | null;
 };
 
 export type InboundAttachment = {

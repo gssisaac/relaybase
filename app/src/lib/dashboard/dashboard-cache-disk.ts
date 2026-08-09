@@ -82,6 +82,10 @@ function addressesCachePath(domain: string) {
   return resourceCachePath(`addresses-${safeResource(domain)}`);
 }
 
+function accountCountsCachePath(domain: string) {
+  return resourceCachePath(`account-counts-${safeResource(domain)}`);
+}
+
 function accountStatsCachePath(email: string, range: string) {
   return resourceCachePath(
     `account-stats-${safeResource(email)}-${safeResource(range)}`,
@@ -190,6 +194,31 @@ export async function saveAddressesCache<T>(
     data,
   };
   await writeJson(addressesCachePath(key), envelope);
+}
+
+export async function loadAccountCountsCache<T>(
+  domain: string,
+): Promise<DashboardCacheEnvelope<T> | null> {
+  const key = domain.trim().toLowerCase();
+  if (!key) return null;
+  const envelope = await readJson<DashboardCacheEnvelope<T>>(
+    accountCountsCachePath(key),
+  );
+  if (!envelope?.fetchedAt || envelope.data == null) return null;
+  return envelope;
+}
+
+export async function saveAccountCountsCache<T>(
+  domain: string,
+  data: T,
+): Promise<void> {
+  const key = domain.trim().toLowerCase();
+  if (!key) return;
+  const envelope: DashboardCacheEnvelope<T> = {
+    fetchedAt: new Date().toISOString(),
+    data,
+  };
+  await writeJson(accountCountsCachePath(key), envelope);
 }
 
 export async function loadAccountStatsCache<T>(

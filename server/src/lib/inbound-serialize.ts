@@ -22,6 +22,7 @@ export function serializeInboundListItem(message: InboundEmailMeta) {
     inReplyTo: message.inReplyTo ?? null,
     references: message.references ?? null,
     size: message.size,
+    readAt: message.readAt ?? null,
   };
 }
 
@@ -43,6 +44,7 @@ export function serializeInboundMessage(message: InboundEmailMeta) {
     inReplyTo: message.inReplyTo ?? null,
     references: message.references ?? null,
     size: message.size,
+    readAt: message.readAt ?? null,
     attachments: message.attachments.map((attachment) => ({
       ...attachment,
       filename: decodeMimeHeader(attachment.filename) || attachment.filename,

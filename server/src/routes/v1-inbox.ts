@@ -9,11 +9,13 @@ import {
   getInboundAttachment,
   getInboundEmail,
   listInboundEmails,
+  setInboundReadState,
 } from "../lib/inbound-store";
 import {
   serializeInboundListItem,
   serializeInboundMessage,
 } from "../lib/inbound-serialize";
+import { aggregateInboundCounts } from "../lib/inbound-counts";
 
 const v1Inbox = new Hono<{ Bindings: Env }>();
 
@@ -59,6 +61,46 @@ v1Inbox.get("/messages", async (c) => {
   return c.json({
     messages: messages.map(serializeInboundListItem),
   });
+});
+
+v1Inbox.get("/messages/counts", async (c) => {
+  const auth = await requireApiKey(c);
+  if (auth instanceof Response) return auth;
+
+  const messages = await listInboundEmails(c.env.INBOUND, {
+    domain: auth.record.domain,
+    limit: 500,
+  });
+  return c.json(aggregateInboundCounts(messages));
+});
+
+v1Inbox.post("/messages/read", async (c) => {
+  const auth = await requireApiKey(c);
+  if (auth instanceof Response) return auth;
+
+  let body: { ids?: string[]; read?: boolean };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const ids = body.ids?.filter((id) => typeof id === "string" && id.trim());
+  if (!ids?.length) {
+    return c.json({ error: "ids must be a non-empty array" }, 400);
+  }
+  if (typeof body.read !== "boolean") {
+    return c.json({ error: "read must be a boolean" }, 400);
+  }
+
+  const readAt = body.read ? new Date().toISOString() : null;
+  const result = await setInboundReadState(
+    c.env.INBOUND,
+    auth.record.domain,
+    ids,
+    readAt,
+  );
+  return c.json(result);
 });
 
 v1Inbox.get("/messages/:id/attachments/:attachmentId", async (c) => {

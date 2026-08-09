@@ -94,7 +94,7 @@ Opaque JSON via `get_mail_json` / `save_mail_json`. Relative paths must not cont
 | `{userId}/details/{key}.json` | full message detail |
 | `{userId}/ui/enabled-accounts.json` | `{ emails: string[] }` |
 | `{userId}/ui/sidebar.json` | `{ mode, lastEmailPath, lastDashboardPath, collapsed }` |
-| `{userId}/ui/read.json` | `{ keys: string[] }` — missing file = first-run baseline |
+| `{userId}/ui/read.json` | `{ version: 2, overrides: Record<string, boolean> }` — optimistic/offline read-state cache only; truth is the Worker's `readAt` per message (see [inbox-threading-and-multi-account.md](./inbox-threading-and-multi-account.md)). Legacy pre-migration shape was `{ keys: string[] }`. |
 | `{userId}/ui/trash.json` | `{ entries: TrashEntry[] }` |
 
 TS facades:
@@ -111,6 +111,7 @@ Opaque JSON via `get_cache_json` / `save_cache_json`. Relative paths use the sam
 | `dashboard/stats-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: UserStatsResponse }` |
 | `dashboard/api-keys-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: { keys, stats, workerUrl, workerConnected } }` |
 | `dashboard/addresses-{domain}.json` | `{ fetchedAt: ISO, data: Address[] }` |
+| `dashboard/account-counts-{domain}.json` | `{ fetchedAt: ISO, data: Record<email, { total, unread }> }` |
 | `dashboard/account-stats-{email}-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: AccountStats }` |
 | `dashboard/account-logs-{email}-{all\|success\|failed}.json` | `{ fetchedAt: ISO, data: AccountLogsResponse }` |
 

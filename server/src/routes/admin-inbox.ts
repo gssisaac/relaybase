@@ -12,6 +12,7 @@ import {
   getInboundAttachment,
   getInboundEmail,
   listInboundEmails,
+  setInboundReadState,
 } from "../lib/inbound-store";
 import {
   ackPendingEvents,
@@ -21,6 +22,7 @@ import {
   serializeInboundListItem,
   serializeInboundMessage,
 } from "../lib/inbound-serialize";
+import { aggregateInboundCounts } from "../lib/inbound-counts";
 
 const adminInbox = new Hono<{ Bindings: Env }>();
 
@@ -67,6 +69,53 @@ function serializeMessage(message: Awaited<ReturnType<typeof getInboundEmail>>) 
   if (!message) return null;
   return serializeInboundMessage(message);
 }
+
+// Per-address total/unread counts across every retained message for a
+// domain — powers the dashboard Accounts list.
+adminInbox.get("/counts", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const domain = c.req.query("domain")?.trim().toLowerCase();
+  if (!domain) {
+    return c.json({ error: "domain query parameter is required" }, 400);
+  }
+
+  const messages = await listInboundEmails(c.env.INBOUND, {
+    domain,
+    limit: 500,
+  });
+  return c.json(aggregateInboundCounts(messages));
+});
+
+// Bulk mark-read/unread (desktop client + Cmd+K mail commands).
+adminInbox.post("/read", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  let body: { domain?: string; ids?: string[]; read?: boolean };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const domain = body.domain?.trim().toLowerCase();
+  const ids = body.ids?.filter((id) => typeof id === "string" && id.trim());
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  if (!ids?.length) {
+    return c.json({ error: "ids must be a non-empty array" }, 400);
+  }
+  if (typeof body.read !== "boolean") {
+    return c.json({ error: "read must be a boolean" }, 400);
+  }
+
+  const readAt = body.read ? new Date().toISOString() : null;
+  const result = await setInboundReadState(c.env.INBOUND, domain, ids, readAt);
+  return c.json(result);
+});
 
 adminInbox.get("/", async (c) => {
   const denied = await requireAdmin(c);

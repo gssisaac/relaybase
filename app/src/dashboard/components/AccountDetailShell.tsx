@@ -43,7 +43,8 @@ export function AccountDetailShell({
 }: AccountDetailShellProps) {
   const pathname = usePathname();
   const { accounts } = useDashboardPaths();
-  const { addresses, setAccountFilter } = useEmailMailbox();
+  const { addresses, setAccountFilter, unreadCountForAccount } =
+    useEmailMailbox();
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const base = `/accounts/${encodeURIComponent(email)}`;
 
@@ -51,6 +52,7 @@ export function AccountDetailShell({
     (entry) => entry.email.toLowerCase() === email.toLowerCase(),
   );
   const title = address?.displayName?.trim() || email.split("@")[0] || email;
+  const unread = unreadCountForAccount(email);
 
   useEffect(() => {
     setAccountFilter(email);
@@ -86,6 +88,18 @@ export function AccountDetailShell({
             <span className="truncate text-xs text-muted-foreground">
               {email}
             </span>
+            {unread > 0 ? (
+              <span
+                className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"
+                aria-label={`${unread} unread`}
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            ) : (
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                0 unread
+              </span>
+            )}
           </div>
         </div>
         <nav

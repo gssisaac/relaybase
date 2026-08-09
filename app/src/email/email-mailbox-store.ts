@@ -34,8 +34,9 @@ import {
   savePersistedSent,
 } from "@/email/email-disk-store";
 import {
-  hydrateReadKeys,
-  writeReadKeys,
+  hydrateReadState,
+  writeReadOverrides,
+  type ReadOverrides,
 } from "@/email/read-store";
 import {
   hydrateTrash,
@@ -104,10 +105,15 @@ export class EmailMailboxStore {
   /** Keys currently loading detail. */
   detailLoadingKeys: string[] = [];
 
-  /** Message keys the user has opened (or first-run baseline). */
-  readKeys: string[] = [];
-  /** False until first-run baseline or persisted read state is loaded. */
-  private readStateReady = false;
+  /**
+   * Local read/unread overrides, keyed by message key. Truth lives on the
+   * Worker (`RoutingActivityEvent.readAt`) — this is only an optimistic
+   * cache for in-flight/offline mark-read/unread requests. See
+   * docs/inbox-threading-and-multi-account.md.
+   */
+  readOverrides: ReadOverrides = {};
+  /** Legacy local `{ keys }` read state, reconciled once against the server. */
+  private pendingLegacyReadKeys: string[] | null = null;
 
   productId = "";
   apiBase = "";
@@ -216,78 +222,163 @@ export class EmailMailboxStore {
     return this.trashedActivity.length + this.trashedSent.length;
   }
 
-  get readKeySet(): Set<string> {
-    return new Set(this.readKeys);
+  /** Derived — messages currently considered read (compat with older callers). */
+  get readKeys(): string[] {
+    return this.visibleActivity
+      .filter((m) => this.isReadEffective(m))
+      .map((m) => m.key);
   }
 
   get unreadCount(): number {
-    if (!this.readStateReady) return 0;
-    const read = this.readKeySet;
-    return this.visibleActivity.filter((m) => !read.has(m.key)).length;
+    return this.visibleActivity.filter((m) => !this.isReadEffective(m)).length;
   }
 
   get relaybaseOk(): boolean {
     return this.config?.relaybaseConfigured ?? false;
   }
 
+  /**
+   * Override (if pending) else the message's server `readAt`.
+   * Match Worker `normalizeReadState`: explicit `null` = unread (new mail);
+   * missing/`undefined` = pre-migration backlog = already read.
+   */
+  private isReadEffective(
+    message: Pick<RoutingActivityEvent, "key" | "readAt">,
+  ): boolean {
+    const override = this.readOverrides[message.key];
+    if (override !== undefined) return override;
+    if (!("readAt" in message) || message.readAt === undefined) return true;
+    return Boolean(message.readAt);
+  }
+
+  private findMessage(key: string): RoutingActivityEvent | null {
+    return (
+      this.activity.find((m) => m.key === key) ??
+      this.activityDetailByKey[key] ??
+      null
+    );
+  }
+
   isUnread(key: string): boolean {
-    if (!this.readStateReady || !key) return false;
-    return !this.readKeySet.has(key);
+    const trimmed = key.trim();
+    if (!trimmed) return false;
+    const message = this.findMessage(trimmed);
+    if (message) return !this.isReadEffective(message);
+    const override = this.readOverrides[trimmed];
+    return override === undefined ? false : !override;
   }
 
   unreadCountForAccount(email: string): number {
-    if (!this.readStateReady) return 0;
     const needle = email.trim().toLowerCase();
     if (!needle) return 0;
-    const read = this.readKeySet;
     return this.visibleActivity.filter(
-      (m) => inboundMatchesAccount(m, needle) && !read.has(m.key),
+      (m) => inboundMatchesAccount(m, needle) && !this.isReadEffective(m),
     ).length;
+  }
+
+  private applyReadOverrides(keys: string[], read: boolean) {
+    if (!keys.length || !this.productId) return;
+    const next = { ...this.readOverrides };
+    for (const key of keys) next[key] = read;
+    this.readOverrides = next;
+    writeReadOverrides(this.productId, this.readOverrides);
+  }
+
+  private resolveDomainForKey(key: string): string | null {
+    const message = this.findMessage(key);
+    if (!message) return null;
+    return domainOf(message.toEmail) || null;
+  }
+
+  /** POST the new read state to the Worker, grouped by domain. */
+  private async syncReadState(keys: string[], read: boolean) {
+    if (!this.productId || !this.apiBase || !keys.length) return;
+    const byDomain = new Map<string, string[]>();
+    for (const key of keys) {
+      const domain = this.resolveDomainForKey(key);
+      if (!domain) continue;
+      const list = byDomain.get(domain) ?? [];
+      list.push(key);
+      byDomain.set(domain, list);
+    }
+
+    await Promise.all(
+      [...byDomain.entries()].map(async ([domain, ids]) => {
+        try {
+          const res = await fetch(`${this.apiBase}/inbox/read`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain, ids, read }),
+          });
+          if (!res.ok) {
+            const data = (await res.json().catch(() => ({}))) as {
+              error?: string;
+            };
+            throw new Error(data.error ?? "Failed to sync read state");
+          }
+        } catch (e) {
+          // Keep the optimistic override; it stays persisted locally and
+          // will be retried the next time this key is marked, and
+          // reconciled against the server on the next inbox refresh.
+          console.error("[relaybase] failed to sync read state", e);
+        }
+      }),
+    );
+  }
+
+  /** Drop overrides once a fresh network fetch confirms the same state. */
+  private pruneConfirmedOverrides() {
+    const keys = Object.keys(this.readOverrides);
+    if (!keys.length) return;
+    const byKey = new Map(this.activity.map((m) => [m.key, m] as const));
+    const next = { ...this.readOverrides };
+    let changed = false;
+    for (const key of keys) {
+      const message = byKey.get(key);
+      if (!message) continue;
+      if (Boolean(message.readAt) === this.readOverrides[key]) {
+        delete next[key];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.readOverrides = next;
+      writeReadOverrides(this.productId, this.readOverrides);
+    }
   }
 
   markRead(key: string) {
     const trimmed = key.trim();
-    if (!trimmed || !this.productId) return;
-    if (this.readKeys.includes(trimmed)) return;
-    this.readKeys = [...this.readKeys, trimmed];
-    this.readStateReady = true;
-    writeReadKeys(this.productId, this.readKeys);
+    if (!trimmed || !this.productId || !this.isUnread(trimmed)) return;
+    this.applyReadOverrides([trimmed], true);
+    void this.syncReadState([trimmed], true);
   }
 
   markReadMany(keys: string[]) {
     if (!this.productId || !keys.length) return;
-    const read = new Set(this.readKeys);
-    let changed = false;
-    for (const key of keys) {
-      const trimmed = key.trim();
-      if (!trimmed || read.has(trimmed)) continue;
-      read.add(trimmed);
-      changed = true;
-    }
-    if (!changed) return;
-    this.readKeys = [...read];
-    this.readStateReady = true;
-    writeReadKeys(this.productId, this.readKeys);
+    const targets = [
+      ...new Set(keys.map((k) => k.trim()).filter(Boolean)),
+    ].filter((key) => this.isUnread(key));
+    if (!targets.length) return;
+    this.applyReadOverrides(targets, true);
+    void this.syncReadState(targets, true);
   }
 
   markUnread(key: string) {
     const trimmed = key.trim();
-    if (!trimmed || !this.productId || !this.readStateReady) return;
-    if (!this.readKeys.includes(trimmed)) return;
-    this.readKeys = this.readKeys.filter((readKey) => readKey !== trimmed);
-    writeReadKeys(this.productId, this.readKeys);
+    if (!trimmed || !this.productId || this.isUnread(trimmed)) return;
+    this.applyReadOverrides([trimmed], false);
+    void this.syncReadState([trimmed], false);
   }
 
   markUnreadMany(keys: string[]) {
-    if (!this.productId || !this.readStateReady || !keys.length) return;
-    const drop = new Set(
-      keys.map((k) => k.trim()).filter(Boolean),
-    );
-    if (!drop.size) return;
-    const next = this.readKeys.filter((k) => !drop.has(k));
-    if (next.length === this.readKeys.length) return;
-    this.readKeys = next;
-    writeReadKeys(this.productId, this.readKeys);
+    if (!this.productId || !keys.length) return;
+    const targets = [
+      ...new Set(keys.map((k) => k.trim()).filter(Boolean)),
+    ].filter((key) => !this.isUnread(key));
+    if (!targets.length) return;
+    this.applyReadOverrides(targets, false);
+    void this.syncReadState(targets, false);
   }
 
   isDetailLoading(key: string): boolean {
@@ -364,8 +455,8 @@ export class EmailMailboxStore {
       this.detailLoadingKeys = [];
       this.detailGenerationByKey.clear();
       this.mailReady = false;
-      this.readKeys = [];
-      this.readStateReady = false;
+      this.readOverrides = {};
+      this.pendingLegacyReadKeys = null;
       this.hydrateFromStale();
     } else if (domainsChanged && nextDomainsKey) {
       this.hydrateInboxSentFromStale();
@@ -384,31 +475,62 @@ export class EmailMailboxStore {
     if (this.bootstrapGeneration !== generation) return;
     await this.loadPersistedMail();
     if (this.bootstrapGeneration !== generation) return;
-    this.ensureReadBaseline();
     // Soft refresh: skips inbox/sent network when disk/memory already has mail.
     await this.refresh(false);
     if (this.bootstrapGeneration !== generation) return;
-    this.ensureReadBaseline();
+    await this.reconcileLegacyReadState();
   }
 
   private async hydrateUiState() {
     if (!this.productId) return;
     const productId = this.productId;
     const [stored, trash] = await Promise.all([
-      hydrateReadKeys(productId),
+      hydrateReadState(productId),
       hydrateTrash(productId),
     ]);
     if (this.productId !== productId) return;
     runInAction(() => {
       this.trash = trash;
-      if (stored === null) {
-        this.readKeys = [];
-        this.readStateReady = false;
-      } else {
-        this.readKeys = stored;
-        this.readStateReady = true;
-      }
+      this.readOverrides = stored?.overrides ?? {};
     });
+    this.pendingLegacyReadKeys = stored?.legacyReadKeys ?? null;
+  }
+
+  /**
+   * One-time reconciliation for installs upgrading from local-only read
+   * state: the server's `normalizeReadState` fallback treats pre-migration
+   * backlog as already read, which could silently flip mail the user had
+   * genuinely never opened. Compare the legacy local `{ keys }` list against
+   * the freshly-fetched server `readAt` values and correct any mismatch
+   * exactly once.
+   */
+  private async reconcileLegacyReadState() {
+    const legacyKeys = this.pendingLegacyReadKeys;
+    this.pendingLegacyReadKeys = null;
+    if (!legacyKeys || !this.productId) return;
+
+    const legacySet = new Set(legacyKeys);
+    const toMarkUnread: string[] = [];
+    const toMarkRead: string[] = [];
+    for (const message of this.activity) {
+      const wasReadLocally = legacySet.has(message.key);
+      // Same semantics as isReadEffective (without overrides).
+      const serverRead =
+        !("readAt" in message) ||
+        message.readAt === undefined ||
+        Boolean(message.readAt);
+      if (!wasReadLocally && serverRead) {
+        toMarkUnread.push(message.key);
+      } else if (wasReadLocally && !serverRead) {
+        toMarkRead.push(message.key);
+      }
+    }
+    if (toMarkUnread.length) this.markUnreadMany(toMarkUnread);
+    if (toMarkRead.length) this.markReadMany(toMarkRead);
+
+    // Persist the v2 shape (drops the legacy `keys` file) so this only runs
+    // once, even if there was nothing to reconcile.
+    writeReadOverrides(this.productId, this.readOverrides);
   }
 
   start() {
@@ -633,7 +755,12 @@ export class EmailMailboxStore {
 
     const generation = ++this.refreshGeneration;
     const hasMail = this.activity.length > 0 || this.sent.length > 0 || this.mailReady;
-    const skipMailNetwork = !force && hasMail;
+    // Disk cache from before server-side readAt may omit the field — force a
+    // network pull so UI unread matches Worker / dashboard counts.
+    const needsReadAtHydrate = this.activity.some(
+      (m) => !("readAt" in m) || m.readAt === undefined,
+    );
+    const skipMailNetwork = !force && hasMail && !needsReadAtHydrate;
     const hasData = this.config !== null || hasMail;
     if (!hasData) this.loading = true;
     this.refreshing = true;
@@ -742,7 +869,7 @@ export class EmailMailboxStore {
           this.sent = [...sentById.values()];
         }
         this.mailReady = true;
-        this.ensureReadBaseline();
+        this.pruneConfirmedOverrides();
       });
 
       void this.persistMailLists();
@@ -805,15 +932,6 @@ export class EmailMailboxStore {
   private persistDrafts() {
     if (!this.productId) return;
     void savePersistedDrafts(this.productId, this.drafts);
-  }
-
-  /** First-run: treat currently loaded inbox as already seen. */
-  private ensureReadBaseline() {
-    if (this.readStateReady || !this.productId) return;
-    if (this.activity.length === 0 && !this.mailReady) return;
-    this.readKeys = this.activity.map((m) => m.key);
-    this.readStateReady = true;
-    writeReadKeys(this.productId, this.readKeys);
   }
 
   private hydrateFromStale() {
@@ -966,18 +1084,13 @@ export class EmailMailboxStore {
 
       if (allEvents.length === 0) return;
 
-      const arrivalIds = allEvents
-        .map((event) => event.data.messageId?.trim())
-        .filter((id): id is string => Boolean(id));
-
       for (const domain of eventsByDomain.keys()) {
         clearEmailCache(this.productId, `inbox:${domain}`);
       }
 
+      // New mail always starts unread on the server (`readAt: null`), so a
+      // plain refresh already reflects the correct unread state.
       await this.refresh(true);
-      // After refresh: baseline existing mail once, then keep arrivals unread.
-      this.ensureReadBaseline();
-      this.markUnreadMany(arrivalIds);
 
       void notifyNewMail(
         allEvents.map((event) => ({
@@ -1045,6 +1158,7 @@ function pickListFields(
   | "messageId"
   | "inReplyTo"
   | "references"
+  | "readAt"
 > {
   return {
     fromEmail: msg.fromEmail,
@@ -1061,5 +1175,6 @@ function pickListFields(
     messageId: msg.messageId,
     inReplyTo: msg.inReplyTo,
     references: msg.references,
+    readAt: msg.readAt ?? null,
   };
 }

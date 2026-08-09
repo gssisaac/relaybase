@@ -32,6 +32,11 @@ export function formatQuoteDate(iso: string) {
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}, ${hour12}:${minutes} ${ampm}`;
 }
 
+export {
+  draftThreadRowSubtitle,
+  formatDraftAttribution,
+} from "./draft-thread-rows";
+
 /** Quote only this message’s new content — strip nested reply history first. */
 export function quoteInboundMessage(event: RoutingActivityEvent): string {
   const trimmed = trimQuotedHistoryForThread({

@@ -66,6 +66,7 @@ function storeHasUnreadApi(store: EmailMailboxStore) {
   return (
     typeof store.upsertDraft === "function" &&
     typeof store.removeDraft === "function" &&
+    typeof store.findDraftsForThread === "function" &&
     Array.isArray(store.drafts) &&
     typeof store.isUnread === "function" &&
     typeof store.markRead === "function" &&

@@ -43,6 +43,10 @@ function messageHref(
       const path = `${inbox}/${encodeURIComponent(item.message.replyKey)}`;
       return `${path}${accountQuery(account)}`;
     }
+    if (item.message.forwardKey) {
+      const path = `${inbox}/${encodeURIComponent(item.message.forwardKey)}`;
+      return `${path}${accountQuery(account)}`;
+    }
     return `${compose}?draft=${encodeURIComponent(item.message.id)}`;
   }
   const id = item.kind === "inbox" ? item.message.key : item.message.id;

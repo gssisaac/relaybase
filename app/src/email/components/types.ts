@@ -157,6 +157,8 @@ export type DraftEmail = {
   /** When set, this is a reply draft tied to an inbox message. */
   replyKey?: string;
   replyAll?: boolean;
+  /** When set, this is a forward draft tied to an inbox message. */
+  forwardKey?: string;
 };
 
 export type MailListItem =

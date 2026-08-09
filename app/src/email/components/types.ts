@@ -243,6 +243,24 @@ export type AudienceGroupContact = {
   addedAt: string;
 };
 
+export type BroadcastSendPhase = "preparing" | "sending" | "done";
+
+export type BroadcastSendRunStatus = "running" | "success" | "error";
+
+export type BroadcastSendRun = {
+  id: string;
+  status: BroadcastSendRunStatus;
+  phase: BroadcastSendPhase;
+  startedAt: string;
+  finishedAt?: string;
+  totalCount?: number;
+  processedCount?: number;
+  successCount?: number;
+  failedCount?: number;
+  error?: string;
+  estimatedRemainingMs?: number;
+};
+
 export type EmailBroadcast = {
   id: string;
   subject: string;
@@ -251,15 +269,25 @@ export type EmailBroadcast = {
   createdAt: string;
   sentAt?: string;
   recipientCount?: number;
+  /** draft | sending | sent | failed */
   status: string;
   groupIds: string[];
   domain?: string;
+  sendProgress?: BroadcastSendRun;
+  sendHistory?: BroadcastSendRun[];
 };
 
 export type BroadcastDetail = {
   broadcast: EmailBroadcast;
   groups: AudienceGroupSummary[];
   recipientCount: number;
+};
+
+export type BroadcastProgress = {
+  broadcastId: string;
+  status: string;
+  progress: BroadcastSendRun | null;
+  history: BroadcastSendRun[];
 };
 
 export type EmailMetrics = {

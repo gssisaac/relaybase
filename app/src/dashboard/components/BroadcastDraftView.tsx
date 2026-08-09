@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { BroadcastComposeForm } from "@/dashboard/components/BroadcastComposeForm";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useBroadcast } from "@/lib/dashboard/BroadcastContext";
 import {
   clearBroadcastDetailCache,
   useBroadcastDetail,
@@ -34,12 +35,11 @@ function pickDefaultFrom(
 ): string {
   for (const group of groups) {
     const preferred = group.defaultFrom?.trim().toLowerCase();
-    if (
-      preferred &&
-      domainAddresses.some((a) => a.email.toLowerCase() === preferred)
-    ) {
-      return preferred;
-    }
+    if (!preferred) continue;
+    const match = domainAddresses.find(
+      (a) => a.email.toLowerCase() === preferred,
+    );
+    if (match) return match.email;
   }
   return domainAddresses[0]?.email ?? "";
 }
@@ -49,6 +49,7 @@ export function BroadcastDraftView() {
   const { apiBase } = useEmailPaths();
   const { broadcasts } = useDashboardPaths();
   const router = useRouter();
+  const broadcastStore = useBroadcast();
   const { broadcastId, detail, loading, refresh } = useBroadcastDetail();
 
   const [allGroups, setAllGroups] = useState<AudienceGroupSummary[]>([]);
@@ -58,10 +59,12 @@ export function BroadcastDraftView() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
-  const [broadcasting, setBroadcasting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftStatus, setDraftStatus] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+
+  const job = broadcastStore.jobFor(broadcastId);
+  const broadcasting = broadcastStore.isActive(broadcastId);
 
   useEffect(() => {
     const staleGroups = readEmailStale<{ groups?: AudienceGroupSummary[] }>(
@@ -119,24 +122,43 @@ export function BroadcastDraftView() {
     return addresses.filter((a) => {
       const domain =
         a.domain ?? a.email.split("@")[1]?.toLowerCase() ?? "";
-      return domain !== "" && domains.has(domain);
+      return domain !== "" && domains.has(domain.toLowerCase());
     });
   }, [addresses, selectedGroups]);
 
   // Keep From on the audience domain(s); prefer group default sender.
+  // Re-sync casing to the address book entry so Select value matches items.
   useEffect(() => {
     if (!hydrated || domainAddresses.length === 0) return;
-    const allowed = new Set(
-      domainAddresses.map((a) => a.email.toLowerCase()),
-    );
-    if (from && allowed.has(from.toLowerCase())) return;
+    if (from) {
+      const match = domainAddresses.find(
+        (a) => a.email.toLowerCase() === from.toLowerCase(),
+      );
+      if (match) {
+        if (match.email !== from) setFrom(match.email);
+        return;
+      }
+    }
     setFrom(pickDefaultFrom(selectedGroups, domainAddresses));
   }, [domainAddresses, from, hydrated, selectedGroups]);
+
+  useEffect(() => {
+    if (job?.phase === "failed" && job.error) {
+      setError(job.error);
+    }
+  }, [job?.error, job?.phase]);
 
   async function saveDraft(opts?: { quiet?: boolean }) {
     if (!opts?.quiet) setSaving(true);
     setError(null);
     try {
+      const resolvedFrom =
+        from.trim() || pickDefaultFrom(selectedGroups, domainAddresses);
+      if (!resolvedFrom) {
+        throw new Error("Choose a From address before saving");
+      }
+      if (resolvedFrom !== from) setFrom(resolvedFrom);
+
       const res = await fetch(
         `${apiBase}/broadcasts/${encodeURIComponent(broadcastId)}`,
         {
@@ -144,7 +166,7 @@ export function BroadcastDraftView() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             groupIds: selectedGroupIds,
-            from: from || null,
+            from: resolvedFrom,
             subject,
             text: body,
           }),
@@ -164,27 +186,36 @@ export function BroadcastDraftView() {
     }
   }
 
-  async function broadcastNow() {
-    setBroadcasting(true);
+  function broadcastNow() {
     setError(null);
     setDraftStatus(null);
-    try {
-      const saved = await saveDraft({ quiet: true });
-      if (!saved) return;
-      const res = await fetch(
-        `${apiBase}/broadcasts/${encodeURIComponent(broadcastId)}/send`,
-        { method: "POST" },
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Broadcast failed");
-      clearBroadcastDetailCache(productId, broadcastId);
-      router.replace(`/broadcasts/${encodeURIComponent(broadcastId)}`);
-      await refresh(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Broadcast failed");
-    } finally {
-      setBroadcasting(false);
+
+    const resolvedFrom =
+      from.trim() || pickDefaultFrom(selectedGroups, domainAddresses);
+    if (!resolvedFrom) {
+      setError("Choose a From address before broadcasting.");
+      return;
     }
+    if (!subject.trim()) {
+      setError("Add a subject before broadcasting.");
+      return;
+    }
+    if (selectedGroupIds.length === 0) {
+      setError("Select at least one audience group.");
+      return;
+    }
+    if (resolvedFrom !== from) setFrom(resolvedFrom);
+
+    broadcastStore.queueBroadcast({
+      broadcastId,
+      groupIds: selectedGroupIds,
+      from: resolvedFrom,
+      subject,
+      body,
+    });
+    router.replace(
+      `/broadcasts/${encodeURIComponent(broadcastId)}/progress`,
+    );
   }
 
   if (loading && !detail) {
@@ -243,7 +274,7 @@ export function BroadcastDraftView() {
           saving={saving}
           draftStatus={draftStatus}
           onSaveDraft={() => void saveDraft()}
-          onBroadcast={() => void broadcastNow()}
+          onBroadcast={() => broadcastNow()}
         />
       </div>
     </div>

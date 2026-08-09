@@ -113,9 +113,28 @@ export type DevAudienceContact = {
   addedAt: string;
 };
 
+export type BroadcastSendPhase = "preparing" | "sending" | "done";
+
+export type BroadcastSendRunStatus = "running" | "success" | "error";
+
+export type DevBroadcastSendRun = {
+  id: string;
+  status: BroadcastSendRunStatus;
+  phase: BroadcastSendPhase;
+  startedAt: string;
+  finishedAt?: string;
+  totalCount?: number;
+  processedCount?: number;
+  successCount?: number;
+  failedCount?: number;
+  error?: string;
+  estimatedRemainingMs?: number;
+};
+
 export type DevBroadcast = {
   id: string;
   subject: string;
+  /** draft | sending | sent | failed */
   status: string;
   createdAt: string;
   domain: string;
@@ -124,6 +143,10 @@ export type DevBroadcast = {
   body?: string;
   recipientCount?: number;
   sentAt?: string;
+  /** Live or most recent send run (polled by the Progress tab). */
+  sendProgress?: DevBroadcastSendRun;
+  /** Completed send runs, newest first (capped). */
+  sendHistory?: DevBroadcastSendRun[];
 };
 
 export type DevSent = {
@@ -462,6 +485,11 @@ function migrateUserData(raw: Partial<DevUserEmailData>): DevUserEmailData {
       ? { recipientCount: entry.recipientCount }
       : {}),
     ...(entry.sentAt ? { sentAt: entry.sentAt } : {}),
+    // Keep send progress/history — Progress tab reads these after migrate.
+    ...(entry.sendProgress ? { sendProgress: entry.sendProgress } : {}),
+    ...(entry.sendHistory?.length
+      ? { sendHistory: entry.sendHistory }
+      : {}),
   }));
 
   const sent = (base.sent ?? []).map((entry) => ({
@@ -1547,38 +1575,62 @@ export async function getBroadcastDetail(
   return { broadcast, groups, recipientCount };
 }
 
+/** Prefer stored `address.domain`, else derive from the email local host. */
+function addressDomainOf(a: DevAddress): string {
+  return normalizeDomain(a.domain || a.email.split("@")[1] || "");
+}
+
+/** Accept bare emails or `Name <email@domain>` from the compose UI. */
+function normalizeFromAddress(
+  raw: string | null | undefined,
+): string | undefined {
+  if (raw == null) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const angle = trimmed.match(/<([^>]+)>/);
+  const email = (angle?.[1] ?? trimmed).trim().toLowerCase();
+  return email.includes("@") ? email : undefined;
+}
+
 /**
  * Default From for a broadcast targeting these groups:
  * 1. First group's `defaultFrom` that is a real address on that group's domain
  * 2. Else first address on the first group's domain
+ *
+ * Domain match uses `address.domain` or the email's host (same as the draft UI).
  */
 function resolveDefaultFromForGroups(
   data: DevUserEmailData,
   groups: DevAudienceGroup[],
 ): string | undefined {
   for (const group of groups) {
-    const preferred = group.defaultFrom?.trim().toLowerCase();
+    const groupDomain = normalizeDomain(group.domain);
+    const preferred = normalizeFromAddress(group.defaultFrom);
     if (
       preferred &&
       data.addresses.some(
         (a) =>
-          a.email.toLowerCase() === preferred && a.domain === group.domain,
+          a.email.toLowerCase() === preferred &&
+          addressDomainOf(a) === groupDomain,
       )
     ) {
       return preferred;
     }
   }
-  const primaryDomain = groups[0]?.domain;
+  const primaryDomain = normalizeDomain(groups[0]?.domain ?? "");
   if (!primaryDomain) return undefined;
   return (
-    data.addresses.find((a) => a.domain === primaryDomain)?.email.toLowerCase() ||
-    undefined
+    data.addresses
+      .find((a) => addressDomainOf(a) === primaryDomain)
+      ?.email.toLowerCase() || undefined
   );
 }
 
 export async function createBroadcastDraft(
   userId: string,
   input: {
+    /** Client-stable id for local drafts uploaded at send time. */
+    id?: string;
     groupIds: string[];
     from?: string;
     subject?: string;
@@ -1597,19 +1649,48 @@ export async function createBroadcastDraft(
   }
 
   const from =
-    input.from?.trim().toLowerCase() ||
+    normalizeFromAddress(input.from) ||
     resolveDefaultFromForGroups(data, groups);
   const domain = from?.split("@")[1]?.toLowerCase() || groups[0].domain;
+  const subject = input.subject?.trim() || "";
+  const body = input.body != null ? input.body : "";
+  const recipientCount = listContactsForGroups(data, groupIds).length;
+  const clientId = input.id?.trim();
+
+  if (clientId) {
+    const index = data.broadcasts.findIndex((b) => b.id === clientId);
+    if (index >= 0) {
+      const current = data.broadcasts[index];
+      if (current.status === "sending" || current.status === "sent") {
+        throw new Error("Broadcast was already sent");
+      }
+      const updated: DevBroadcast = {
+        ...current,
+        subject,
+        status: "draft",
+        domain,
+        groupIds,
+        body,
+        recipientCount,
+        ...(from ? { from } : {}),
+      };
+      if (!from) delete updated.from;
+      data.broadcasts[index] = updated;
+      await writeUserEmailData(userId, data);
+      return updated;
+    }
+  }
+
   const broadcast: DevBroadcast = {
-    id: crypto.randomUUID(),
-    subject: input.subject?.trim() || "",
+    id: clientId || crypto.randomUUID(),
+    subject,
     status: "draft",
     createdAt: new Date().toISOString(),
     domain,
     groupIds,
     ...(from ? { from } : {}),
-    ...(input.body != null ? { body: input.body } : { body: "" }),
-    recipientCount: listContactsForGroups(data, groupIds).length,
+    body,
+    recipientCount,
   };
   data.broadcasts.unshift(broadcast);
   await writeUserEmailData(userId, data);
@@ -1630,7 +1711,13 @@ export async function updateBroadcastDraft(
   const index = data.broadcasts.findIndex((b) => b.id === broadcastId);
   if (index < 0) throw new Error("Broadcast not found");
   const current = data.broadcasts[index];
-  if (current.status !== "draft") {
+  if (current.status === "sending") {
+    throw new Error("Broadcast is sending and cannot be edited");
+  }
+  if (current.status === "sent") {
+    throw new Error("Only draft broadcasts can be edited");
+  }
+  if (current.status !== "draft" && current.status !== "failed") {
     throw new Error("Only draft broadcasts can be edited");
   }
 
@@ -1649,7 +1736,7 @@ export async function updateBroadcastDraft(
   const from =
     patch.from === undefined
       ? current.from
-      : patch.from?.trim() || undefined;
+      : normalizeFromAddress(patch.from);
   const subject =
     patch.subject === undefined ? current.subject : patch.subject;
   const body = patch.body === undefined ? current.body : patch.body;
@@ -1660,6 +1747,7 @@ export async function updateBroadcastDraft(
 
   const updated: DevBroadcast = {
     ...current,
+    status: "draft",
     groupIds,
     subject,
     domain,
@@ -1675,19 +1763,55 @@ export async function updateBroadcastDraft(
   return updated;
 }
 
+const BROADCAST_HISTORY_LIMIT = 20;
+
+function pushBroadcastSendHistory(
+  broadcast: DevBroadcast,
+  run: DevBroadcastSendRun,
+) {
+  const history = broadcast.sendHistory ?? [];
+  broadcast.sendHistory = [run, ...history].slice(0, BROADCAST_HISTORY_LIMIT);
+}
+
+export type SendBroadcastOptions = {
+  /** Optional From override (draft UI) — persisted before send. */
+  from?: string;
+};
+
+async function persistBroadcastProgress(
+  userId: string,
+  data: DevUserEmailData,
+) {
+  await writeUserEmailData(userId, data);
+}
+
 export async function sendBroadcast(
   userId: string,
   broadcastId: string,
+  options: SendBroadcastOptions = {},
 ): Promise<DevBroadcast> {
+  const { plainTextToEmailHtml } = await import(
+    "@/email/plain-text-to-email-html"
+  );
+  const { sendViaRelaybaseWorker } = await import(
+    "@/lib/relaybase/send-email"
+  );
+  const { readRelaybaseWorkerConfig } = await import(
+    "@/lib/relaybase/worker-client"
+  );
+
   const data = await readUserEmailData(userId);
   const index = data.broadcasts.findIndex((b) => b.id === broadcastId);
   if (index < 0) throw new Error("Broadcast not found");
   const current = data.broadcasts[index];
-  if (current.status !== "draft") {
+  if (current.status === "sending") {
+    throw new Error("Broadcast is already sending");
+  }
+  if (current.status === "sent") {
     throw new Error("Broadcast was already sent");
   }
-  if (!current.from?.trim()) {
-    throw new Error("Choose a From address before broadcasting");
+  if (current.status !== "draft" && current.status !== "failed") {
+    throw new Error("Only draft broadcasts can be sent");
   }
   if (!current.subject?.trim()) {
     throw new Error("Add a subject before broadcasting");
@@ -1696,18 +1820,168 @@ export async function sendBroadcast(
     throw new Error("Select at least one audience group");
   }
 
+  const groups = resolveBroadcastGroups(data, current.groupIds);
+  const from =
+    normalizeFromAddress(options.from) ||
+    normalizeFromAddress(current.from) ||
+    resolveDefaultFromForGroups(data, groups);
+  if (!from) {
+    throw new Error("Choose a From address before broadcasting");
+  }
+
+  const knownAddress = data.addresses.find(
+    (a) => a.email.toLowerCase() === from,
+  );
+  if (!knownAddress) {
+    throw new Error("From address is not a registered sender");
+  }
+
+  const domain =
+    normalizeDomain(from.split("@")[1] ?? "") ||
+    current.domain ||
+    groups[0]?.domain ||
+    "";
+  const fromName = knownAddress.displayName?.trim() || undefined;
+  const subject = current.subject.trim();
+  const text = current.body?.trim() ?? "";
+  const html = plainTextToEmailHtml(text);
   const recipients = listContactsForGroups(data, current.groupIds);
-  const sent: DevBroadcast = {
-    ...current,
-    subject: current.subject.trim(),
-    status: "sent",
-    sentAt: new Date().toISOString(),
-    recipientCount: recipients.length,
-    domain:
-      current.from.split("@")[1]?.toLowerCase() ||
-      current.domain,
+  const startedAt = new Date().toISOString();
+  const run: DevBroadcastSendRun = {
+    id: crypto.randomUUID(),
+    status: "running",
+    phase: "preparing",
+    startedAt,
+    totalCount: recipients.length,
+    processedCount: 0,
+    successCount: 0,
+    failedCount: 0,
   };
-  data.broadcasts[index] = sent;
-  await writeUserEmailData(userId, data);
-  return sent;
+
+  current.from = from;
+  current.domain = domain;
+  current.status = "sending";
+  current.recipientCount = recipients.length;
+  current.sendProgress = run;
+  data.broadcasts[index] = current;
+  // Persist immediately so Progress tab can leave the draft page.
+  await persistBroadcastProgress(userId, data);
+
+  try {
+    if (recipients.length === 0) {
+      throw new Error("No recipients in the selected audience groups");
+    }
+
+    run.phase = "sending";
+    await persistBroadcastProgress(userId, data);
+
+    const workerConfigured = Boolean(await readRelaybaseWorkerConfig());
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i]!;
+      try {
+        let messageId = crypto.randomUUID();
+        if (workerConfigured) {
+          const result = await sendViaRelaybaseWorker({
+            domain,
+            from,
+            fromName,
+            to: recipient.email,
+            subject,
+            text,
+            html,
+          });
+          messageId = result.messageId;
+        }
+        data.sent.unshift({
+          id: crypto.randomUUID(),
+          from,
+          to: recipient.email,
+          subject,
+          bodyPreview: text,
+          sentAt: new Date().toISOString(),
+          domain,
+          messageId,
+        });
+        successCount += 1;
+      } catch {
+        failedCount += 1;
+      }
+      run.processedCount = i + 1;
+      run.successCount = successCount;
+      run.failedCount = failedCount;
+      run.estimatedRemainingMs = estimateRemainingMs(
+        startedAt,
+        i + 1,
+        recipients.length,
+      );
+      current.sendProgress = run;
+      // Persist every few recipients so progress polls stay fresh without
+      // writing on every single mail for large lists.
+      if ((i + 1) % 5 === 0 || i + 1 === recipients.length) {
+        await persistBroadcastProgress(userId, data);
+      }
+    }
+
+    const finishedAt = new Date().toISOString();
+    run.phase = "done";
+    run.finishedAt = finishedAt;
+    run.estimatedRemainingMs = 0;
+    if (successCount === 0) {
+      run.status = "error";
+      run.error = "All recipient sends failed";
+      current.status = "failed";
+    } else {
+      run.status = "success";
+      current.status = "sent";
+      current.sentAt = finishedAt;
+      if (failedCount > 0) {
+        run.error = `${failedCount} of ${recipients.length} sends failed`;
+      }
+    }
+    current.recipientCount = successCount;
+    current.sendProgress = run;
+    pushBroadcastSendHistory(current, { ...run });
+    data.broadcasts[index] = current;
+    await persistBroadcastProgress(userId, data);
+    return current;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Broadcast failed";
+    const finishedAt = new Date().toISOString();
+    run.phase = "done";
+    run.status = "error";
+    run.finishedAt = finishedAt;
+    run.error = message;
+    run.estimatedRemainingMs = 0;
+    current.status = "failed";
+    current.sendProgress = run;
+    pushBroadcastSendHistory(current, { ...run });
+    data.broadcasts[index] = current;
+    await persistBroadcastProgress(userId, data);
+    throw new Error(message);
+  }
+}
+
+export type BroadcastProgressResponse = {
+  broadcastId: string;
+  status: string;
+  progress: DevBroadcastSendRun | null;
+  history: DevBroadcastSendRun[];
+};
+
+export async function getBroadcastProgress(
+  userId: string,
+  broadcastId: string,
+): Promise<BroadcastProgressResponse | null> {
+  const data = await readUserEmailData(userId);
+  const broadcast = data.broadcasts.find((b) => b.id === broadcastId);
+  if (!broadcast) return null;
+  return {
+    broadcastId,
+    status: broadcast.status,
+    progress: broadcast.sendProgress ?? null,
+    history: broadcast.sendHistory ?? [],
+  };
 }

@@ -40,7 +40,12 @@ Broadcasts target one or more audience groups (`groupIds`). Recipients are the d
 Lifecycle:
 
 1. **draft** — created from audience picker; editable compose UI  
-2. **sent** — after **Broadcast**; detail shell with tabs (read-only content)
+2. **sending** — **Broadcast** queues work in the client MobX `BroadcastStore`, navigates to Progress, and the server fans out mail with live `sendProgress`  
+3. **sent** / **failed** — detail shell with tabs (Overview, Audience, Content, Progress)
+
+**Content tab:** **Use this to broadcast** creates a new draft with the same `groupIds`, `from`, `subject`, and body, then opens compose.
+
+**Progress tab:** Shows a live **Current run** panel only while a send is in flight (`sendProgress.status === "running"`, broadcast `sending`, or client upload/send job). When idle, only the **Past runs** list is shown (no empty current-run or summary cards).
 
 ---
 
@@ -59,7 +64,8 @@ Lifecycle:
 | `/broadcasts/new` | Redirects to `/broadcasts?new=1` |
 | `/broadcasts/:id` | Draft compose **or** sent Overview |
 | `/broadcasts/:id/audience` | Sent — audience tab |
-| `/broadcasts/:id/content` | Sent — content tab |
+| `/broadcasts/:id/content` | Sent — content tab (+ reuse into new draft) |
+| `/broadcasts/:id/progress` | Live send progress while sending; past runs when idle |
 
 Deep-link from Audience Send: `/broadcasts?new=1&groupId=<id>` opens the create dialog with that group pre-checked.
 
@@ -96,13 +102,16 @@ Includes `defaultFrom`, `dataSource`, cron fields, `lastSync*`, `syncProgress`, 
 
 ```ts
 {
-  id, subject, status, // "draft" | "sent" | "failed"
+  id, subject, status, // "draft" | "sending" | "sent" | "failed"
   createdAt, domain, groupIds,
-  from?, body?, recipientCount?, sentAt?
+  from?, body?, recipientCount?, sentAt?,
+  sendProgress?, sendHistory?
 }
 ```
 
-Store helpers: `createBroadcastDraft`, `updateBroadcastDraft`, `sendBroadcast`, `getBroadcastDetail`, `listContactsForGroups`.
+Store helpers: `createBroadcastDraft`, `updateBroadcastDraft`, `sendBroadcast`, `getBroadcastDetail`, `getBroadcastProgress`, `listContactsForGroups`.
+
+Client MobX: `BroadcastStore` / `BroadcastProvider` (`app/src/lib/dashboard/broadcast-store.ts`) — `queueBroadcast` saves then POSTs `/send` in the background so the UI can open Progress immediately.
 
 ---
 
@@ -208,18 +217,26 @@ Do not reintroduce “replace whole `dataSource` object with empty credential”
 
 While `status === "draft"`, `/broadcasts/:id` shows compose-shaped UI (`BroadcastComposeForm`):
 
-- From / To (group names) / Subject / body / footer
+- From / To (group badges) / Subject / body / footer
 - Same chrome as mail `ComposeForm`
+- **To** uses `BroadcastAudienceToField`: one-line group **Badge** buttons + contact count on the right; click opens a **Sheet** listing recipients (20 + Load more)
 - **From select** is scoped to addresses on the selected audience group **domain(s)** only (not all accounts)
 - **Default From** = each group’s Settings → **Default sender** (`defaultFrom`), else first address on that domain; set at draft create and corrected in the UI if wrong
 - **Save draft** → `PATCH /api/email/broadcasts/:id`
-- **Broadcast** (⌘Enter) → save then `POST .../send` → detail tabs
+- **Broadcast** (⌘Enter) → MobX `queueBroadcast` (background save + send) → navigate to `/broadcasts/:id/progress`
 
-### 3. Sent detail
+### 3. Progress + sent detail
 
-After send, same URL uses `BroadcastDetailShell` tabs:
+Progress tab (audience-style):
 
-- Overview, Audience, Content
+- Phases: `preparing` → `sending` → `done`
+- Live state on `broadcast.sendProgress`; recent runs in `broadcast.sendHistory`
+- API: `GET /api/email/broadcasts/:id/progress`
+- UI polls ~2s while status is `sending` / run is `running`
+
+After send completes, same URL uses `BroadcastDetailShell` tabs:
+
+- Overview, Audience, Content, Progress
 
 List row click → draft or sent detail by status.
 
@@ -250,8 +267,9 @@ List row click → draft or sent detail by status.
 | GET | `/api/email/broadcasts` | List |
 | POST | `/api/email/broadcasts` | Default **draft**; `status: "sent"` for legacy immediate send |
 | GET | `/api/email/broadcasts/:id` | Detail (`broadcast`, `groups`, `recipientCount`) |
-| PATCH | `/api/email/broadcasts/:id` | Draft only |
-| POST | `/api/email/broadcasts/:id/send` | Draft → sent |
+| PATCH | `/api/email/broadcasts/:id` | Draft / failed only |
+| POST | `/api/email/broadcasts/:id/send` | Draft/failed → sending → sent/failed (optional `{ from }`) |
+| GET | `/api/email/broadcasts/:id/progress` | `sendProgress` + history |
 
 ---
 
@@ -272,7 +290,8 @@ When changing this area:
 - [ ] Preserve credential merge (empty token must not wipe stored auth)
 - [ ] Keep data-source parse: root array first; wrappers secondary
 - [ ] Auth: token in credential field; header name is only the header name
-- [ ] Broadcast create = draft → compose page → send → tabbed detail
-- [ ] Progress updates go through `syncProgress` + optional `onProgress` KV writes
+- [ ] Broadcast create = draft → compose → queue send → Progress tab → sent detail
+- [ ] Audience sync progress updates go through `syncProgress` + optional `onProgress` KV writes
+- [ ] Broadcast send progress updates go through `sendProgress` / `sendHistory`
 - [ ] Update this doc if routes, statuses, or the API contract change
 - [ ] In-product guide text lives in `AudienceDataSourceGuide.tsx` — keep it aligned with the contract section above

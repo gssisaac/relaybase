@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
 import {
+  getBroadcastProgress,
   requireSessionUserId,
-  sendBroadcast,
 } from "@/lib/dev-email-store";
 
 type Params = { params: Promise<{ broadcastId: string }> };
@@ -13,24 +13,18 @@ function errorStatus(message: string): number {
   return 400;
 }
 
-type SendBody = {
-  from?: string;
-};
-
-export async function POST(request: Request, { params }: Params) {
+export async function GET(_request: Request, { params }: Params) {
   try {
     const userId = await requireSessionUserId();
     const { broadcastId } = await params;
-    let body: SendBody = {};
-    try {
-      body = (await request.json()) as SendBody;
-    } catch {
-      body = {};
+    const progress = await getBroadcastProgress(userId, broadcastId);
+    if (!progress) {
+      return NextResponse.json(
+        { error: "Broadcast not found" },
+        { status: 404 },
+      );
     }
-    const broadcast = await sendBroadcast(userId, broadcastId, {
-      from: body.from,
-    });
-    return NextResponse.json({ broadcast });
+    return NextResponse.json(progress);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
     return NextResponse.json(

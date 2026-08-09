@@ -25,6 +25,8 @@ export async function GET(request: Request) {
 }
 
 type CreateBroadcastBody = {
+  /** Optional client id — used when uploading a local draft at send time. */
+  id?: string;
   groupIds?: string[];
   from?: string;
   subject?: string;
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
 
     if (status === "draft") {
       const broadcast = await createBroadcastDraft(userId, {
+        id: body.id,
         groupIds,
         from: body.from,
         subject: body.subject,

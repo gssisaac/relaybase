@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { BroadcastAudienceToField } from "@/dashboard/components/BroadcastAudienceToField";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -47,16 +48,6 @@ export function BroadcastComposeForm({
   onSaveDraft?: () => void;
   saving?: boolean;
 }) {
-  const selectedGroups = groups.filter((g) => selectedGroupIds.includes(g.id));
-  const recipientCount = selectedGroups.reduce(
-    (sum, g) => sum + g.contactCount,
-    0,
-  );
-  const toLabel =
-    selectedGroups.length > 0
-      ? selectedGroups.map((g) => g.name).join(", ")
-      : "No audience selected";
-
   const canBroadcast =
     !broadcasting &&
     !saving &&
@@ -88,7 +79,13 @@ export function BroadcastComposeForm({
                 label: name ? `${name} <${a.email}>` : a.email,
               };
             })}
-            value={sendFrom || null}
+            value={
+              sendFrom
+                ? (addresses.find(
+                    (a) => a.email.toLowerCase() === sendFrom.toLowerCase(),
+                  )?.email ?? sendFrom)
+                : null
+            }
             onValueChange={(next) => {
               if (next) setSendFrom(next);
             }}
@@ -101,9 +98,12 @@ export function BroadcastComposeForm({
               <SelectValue placeholder="Select account">
                 {(value: string | null) => {
                   if (!value) return null;
-                  const address = addresses.find((a) => a.email === value);
+                  const address = addresses.find(
+                    (a) => a.email.toLowerCase() === value.toLowerCase(),
+                  );
+                  const email = address?.email ?? value;
                   const name = address?.displayName?.trim();
-                  return name ? `${name} <${value}>` : value;
+                  return name ? `${name} <${email}>` : email;
                 }}
               </SelectValue>
             </SelectTrigger>
@@ -120,19 +120,15 @@ export function BroadcastComposeForm({
           </Select>
         </div>
 
-        <div className="flex shrink-0 items-center py-1">
+        <div className="flex shrink-0 items-center gap-2 py-1">
           <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
             To:
           </span>
-          <div className="min-w-0 flex-1 py-1.5">
-            <p className="truncate text-sm text-foreground">{toLabel}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {recipientCount} contact{recipientCount === 1 ? "" : "s"}
-              {selectedGroups.length > 0
-                ? ` · ${selectedGroups.length} group${selectedGroups.length === 1 ? "" : "s"}`
-                : ""}
-            </p>
-          </div>
+          <BroadcastAudienceToField
+            groups={groups}
+            selectedGroupIds={selectedGroupIds}
+            disabled={broadcasting || saving}
+          />
         </div>
 
         <div className="flex shrink-0 items-center py-1">

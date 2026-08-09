@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   ArrowLeft,
   FileText,
   LayoutDashboard,
@@ -19,19 +20,25 @@ import { useDashboardPaths } from "@/dashboard/paths";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
-export type BroadcastSection = "overview" | "audience" | "content";
+export type BroadcastSection =
+  | "overview"
+  | "audience"
+  | "content"
+  | "progress";
 
 const NAV: { id: BroadcastSection; label: string; icon: LucideIcon }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "audience", label: "Audience", icon: Users },
   { id: "content", label: "Content", icon: FileText },
+  { id: "progress", label: "Progress", icon: Activity },
 ];
 
 function statusVariant(
   status: string,
-): "default" | "secondary" | "destructive" {
+): "default" | "secondary" | "destructive" | "outline" {
   if (status === "sent") return "default";
   if (status === "failed") return "destructive";
+  if (status === "sending") return "outline";
   return "secondary";
 }
 

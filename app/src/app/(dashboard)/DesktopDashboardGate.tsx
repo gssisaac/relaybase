@@ -8,6 +8,7 @@ import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { UserSidebar } from "@/components/layout/UserSidebar";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
+import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import {
@@ -44,28 +45,30 @@ function DashboardShell({
     <SessionProvider userId={userId}>
       <DomainProvider>
         <AccountsProvider>
-          <MailAccountsProvider>
-            <AccountsSyncBridge />
-            <EmailMailboxProvider>
-              <EmailCommandRuntimeProvider>
-                <DisableAppTabFocus />
-                <div className="flex h-svh overflow-hidden bg-background">
-                  <Suspense
-                    fallback={
-                      <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                    }
-                  >
-                    <UserSidebar />
-                  </Suspense>
-                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                    <DomainProgressBanner />
-                    {children}
-                  </main>
-                </div>
-                <GlobalCommandPalette />
-              </EmailCommandRuntimeProvider>
-            </EmailMailboxProvider>
-          </MailAccountsProvider>
+          <BroadcastProvider>
+            <MailAccountsProvider>
+              <AccountsSyncBridge />
+              <EmailMailboxProvider>
+                <EmailCommandRuntimeProvider>
+                  <DisableAppTabFocus />
+                  <div className="flex h-svh overflow-hidden bg-background">
+                    <Suspense
+                      fallback={
+                        <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                      }
+                    >
+                      <UserSidebar />
+                    </Suspense>
+                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                      <DomainProgressBanner />
+                      {children}
+                    </main>
+                  </div>
+                  <GlobalCommandPalette />
+                </EmailCommandRuntimeProvider>
+              </EmailMailboxProvider>
+            </MailAccountsProvider>
+          </BroadcastProvider>
         </AccountsProvider>
       </DomainProvider>
     </SessionProvider>

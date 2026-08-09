@@ -39,7 +39,9 @@ import { BroadcastAudienceView } from "@/dashboard/components/BroadcastAudienceV
 import { BroadcastContentView } from "@/dashboard/components/BroadcastContentView";
 import { BroadcastDraftView } from "@/dashboard/components/BroadcastDraftView";
 import { BroadcastOverviewView } from "@/dashboard/components/BroadcastOverviewView";
+import { BroadcastProgressView } from "@/dashboard/components/BroadcastProgressView";
 import { BroadcastsView } from "@/dashboard/components/BroadcastsView";
+import { useBroadcast } from "@/lib/dashboard/BroadcastContext";
 import { DomainsView } from "@/dashboard/components/DomainsView";
 import { EmailSettingsKeysView } from "@/dashboard/components/EmailSettingsKeysView";
 import { MetricsView } from "@/dashboard/components/MetricsView";
@@ -180,14 +182,28 @@ function AudienceGroupDetailRoutes({
 }
 
 function parseBroadcastSection(segment?: string): BroadcastSection {
-  if (segment === "audience" || segment === "content" || segment === "overview") {
+  if (
+    segment === "audience" ||
+    segment === "content" ||
+    segment === "progress" ||
+    segment === "overview"
+  ) {
     return segment === "overview" ? "overview" : segment;
   }
   return "overview";
 }
 
 function BroadcastDetailBody({ rest }: { rest: string[] }) {
-  const { detail, loading, notFound } = useBroadcastDetail();
+  const { broadcastId, detail, loading, notFound } = useBroadcastDetail();
+  const broadcastStore = useBroadcast();
+  const [sectionSegment] = rest;
+  const section = parseBroadcastSection(sectionSegment);
+  const status = detail?.broadcast.status;
+  const jobActive = broadcastStore.isActive(broadcastId);
+  const showDraft =
+    (status === "draft" || status === "failed") &&
+    section !== "progress" &&
+    !jobActive;
 
   if (loading && !detail) {
     return (
@@ -202,24 +218,31 @@ function BroadcastDetailBody({ rest }: { rest: string[] }) {
     );
   }
 
-  if (detail.broadcast.status === "draft") {
+  if (showDraft) {
     return <BroadcastDraftView />;
   }
 
-  const [sectionSegment] = rest;
-  const section = parseBroadcastSection(sectionSegment);
+  // While a background job is starting, prefer Progress over Overview.
+  const effectiveSection =
+    (status === "sending" || jobActive) && section === "overview"
+      ? "progress"
+      : section;
 
   let page: ReactNode = null;
-  if (section === "audience") {
+  if (effectiveSection === "audience") {
     page = <BroadcastAudienceView />;
-  } else if (section === "content") {
+  } else if (effectiveSection === "content") {
     page = <BroadcastContentView />;
+  } else if (effectiveSection === "progress") {
+    page = <BroadcastProgressView />;
   } else {
     page = <BroadcastOverviewView />;
   }
 
   return (
-    <BroadcastDetailShell section={section}>{page}</BroadcastDetailShell>
+    <BroadcastDetailShell section={effectiveSection}>
+      {page}
+    </BroadcastDetailShell>
   );
 }
 

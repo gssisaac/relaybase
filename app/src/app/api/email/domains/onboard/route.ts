@@ -7,6 +7,7 @@ import {
 } from "@/lib/dev-email-store";
 import {
   advanceDomainOnboarding,
+  resolveMxConflictOnboarding,
   retryDomainOnboarding,
   startDomainOnboarding,
 } from "@/lib/relaybase/domain-onboard";
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     const userId = await requireSessionUserId();
     const body = (await request.json()) as {
       domain?: string;
-      action?: "start" | "advance" | "retry";
+      action?: "start" | "advance" | "retry" | "resolve_mx_conflict";
     };
     const domain = normalizeDomain(body.domain ?? "");
     const action = body.action ?? "advance";
@@ -38,7 +39,9 @@ export async function POST(request: Request) {
         ? await startDomainOnboarding(userId, domain)
         : action === "retry"
           ? await retryDomainOnboarding(userId, domain)
-          : await advanceDomainOnboarding(userId, domain);
+          : action === "resolve_mx_conflict"
+            ? await resolveMxConflictOnboarding(userId, domain)
+            : await advanceDomainOnboarding(userId, domain);
 
     return NextResponse.json({
       domains: result.domains,

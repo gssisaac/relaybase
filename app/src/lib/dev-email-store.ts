@@ -93,7 +93,14 @@ export type OnboardingOverallStatus =
   | "failed";
 
 /** Structured failure reason so the UI can branch without string-matching errors. */
-export type OnboardingFailureCode = "ZONE_NOT_FOUND";
+export type OnboardingFailureCode = "ZONE_NOT_FOUND" | "MX_CONFLICT";
+
+export type MxConflictRecord = {
+  id: string;
+  name: string;
+  content: string;
+  priority: number | null;
+};
 
 export type DomainOnboardingStep = {
   id: OnboardingStepId;
@@ -113,6 +120,8 @@ export type DomainOnboardingRecord = {
   returnPathDomain?: string | null;
   lastError?: string | null;
   lastErrorCode?: OnboardingFailureCode | null;
+  /** Apex MX records that block Cloudflare Email Routing (external providers). */
+  mxConflicts?: MxConflictRecord[];
   updatedAt: string;
 };
 
@@ -124,6 +133,7 @@ export type DomainOnboardingSummary = {
   lastErrorCode: OnboardingFailureCode | null;
   zoneId: string | null;
   sendingSubdomainId: string | null;
+  mxConflicts: MxConflictRecord[];
   steps: DomainOnboardingStep[];
 };
 
@@ -194,6 +204,7 @@ export function createInitialOnboardingRecord(): DomainOnboardingRecord {
     returnPathDomain: null,
     lastError: null,
     lastErrorCode: null,
+    mxConflicts: [],
     updatedAt: now,
   };
 }
@@ -213,6 +224,7 @@ export function summarizeOnboarding(
     lastErrorCode: record.lastErrorCode ?? null,
     zoneId: record.zoneId ?? null,
     sendingSubdomainId: record.sendingSubdomainId ?? null,
+    mxConflicts: record.mxConflicts ?? [],
     steps: record.steps,
   };
 }

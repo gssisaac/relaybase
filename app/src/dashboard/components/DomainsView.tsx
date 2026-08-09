@@ -111,8 +111,10 @@ function stepStatusClass(status: string): string {
 
 function OnboardingInfoPopover({
   onboarding,
+  onTroubleshootMx,
 }: {
   onboarding: DomainOnboardingSummary | null;
+  onTroubleshootMx?: () => void;
 }) {
   return (
     <Popover>
@@ -140,30 +142,50 @@ function OnboardingInfoPopover({
         </PopoverHeader>
         {onboarding?.steps?.length ? (
           <ol className="space-y-1.5">
-            {onboarding.steps.map((step, index) => (
-              <li
-                key={step.id}
-                className={cn(
-                  "flex items-start gap-2 text-xs",
-                  stepStatusClass(step.status),
-                )}
-              >
-                <span className="mt-0.5 w-4 shrink-0 text-muted-foreground">
-                  {index + 1}.
-                </span>
-                <div className="min-w-0 break-words">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span>{step.label}</span>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] capitalize"
-                    >
-                      {step.status}
-                    </Badge>
+            {onboarding.steps.map((step, index) => {
+              const showMxTroubleshoot =
+                step.id === "routing_enable" &&
+                step.status === "failed" &&
+                (step.errorCode === "MX_CONFLICT" ||
+                  onboarding.lastErrorCode === "MX_CONFLICT") &&
+                Boolean(onTroubleshootMx);
+
+              return (
+                <li
+                  key={step.id}
+                  className={cn(
+                    "flex items-start gap-2 text-xs",
+                    stepStatusClass(step.status),
+                  )}
+                >
+                  <span className="mt-0.5 w-4 shrink-0 text-muted-foreground">
+                    {index + 1}.
+                  </span>
+                  <div className="min-w-0 flex-1 break-words">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{step.label}</span>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] capitalize"
+                      >
+                        {step.status}
+                      </Badge>
+                    </div>
+                    {showMxTroubleshoot ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-1.5 h-7 text-[11px]"
+                        onClick={onTroubleshootMx}
+                      >
+                        Troubleshooting
+                      </Button>
+                    ) : null}
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ol>
         ) : null}
       </PopoverContent>
@@ -209,6 +231,7 @@ export function DomainsView() {
     removeDomain,
     queueStartOnboarding,
     queueRetryOnboarding,
+    resolveMxConflict,
   } = store;
 
   const [message, setMessage] = useState<string | null>(null);
@@ -216,7 +239,14 @@ export function DomainsView() {
   const [workingDomain, setWorkingDomain] = useState<string | null>(null);
   const [refreshOpen, setRefreshOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [mxConflictDomain, setMxConflictDomain] = useState<string | null>(null);
+  const [mxResolving, setMxResolving] = useState(false);
   const { isDesktop: desktop } = useDesktopChrome();
+
+  const mxConflictEntry = mxConflictDomain
+    ? domains.find((d) => d.domain === mxConflictDomain)
+    : null;
+  const mxConflicts = mxConflictEntry?.onboarding?.mxConflicts ?? [];
 
   async function confirmRemove() {
     const domain = removeTarget;
@@ -232,6 +262,27 @@ export function DomainsView() {
       setLocalError(err instanceof Error ? err.message : "Failed to remove domain");
     } finally {
       setWorkingDomain(null);
+    }
+  }
+
+  async function confirmResolveMxConflict() {
+    const domain = mxConflictDomain;
+    if (!domain) return;
+    setMxResolving(true);
+    setLocalError(null);
+    setMessage(null);
+    try {
+      const result = await resolveMxConflict(domain);
+      setMxConflictDomain(null);
+      setMessage(result.message);
+    } catch (err) {
+      setLocalError(
+        err instanceof Error
+          ? err.message
+          : "Failed to remove conflicting MX records",
+      );
+    } finally {
+      setMxResolving(false);
     }
   }
 
@@ -325,7 +376,19 @@ export function DomainsView() {
                           >
                             {onboardingLabel(onboarding)}
                           </Badge>
-                          <OnboardingInfoPopover onboarding={onboarding} />
+                          <OnboardingInfoPopover
+                            onboarding={onboarding}
+                            onTroubleshootMx={
+                              onboarding?.lastErrorCode === "MX_CONFLICT" ||
+                              onboarding?.steps.some(
+                                (s) =>
+                                  s.id === "routing_enable" &&
+                                  s.errorCode === "MX_CONFLICT",
+                              )
+                                ? () => setMxConflictDomain(entry.domain)
+                                : undefined
+                            }
+                          />
                           {isFailed && errorMessage ? (
                             <OnboardingErrorPopover message={errorMessage} />
                           ) : null}
@@ -477,6 +540,81 @@ export function DomainsView() {
               onClick={() => void confirmRemove()}
             >
               {workingDomain ? "Removing…" : "Remove"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(mxConflictDomain)}
+        onOpenChange={(open) => {
+          if (!open && !mxResolving) setMxConflictDomain(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" showCloseButton={!mxResolving}>
+          <DialogHeader>
+            <DialogTitle>Conflicting MX records</DialogTitle>
+            <DialogDescription className="text-left">
+              <span className="font-mono text-foreground">
+                {mxConflictDomain}
+              </span>{" "}
+              already has apex MX records for another mail provider (for example
+              Google Workspace). Cloudflare Email Routing cannot share those
+              records.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p className="font-medium text-destructive">
+              Deleting them will stop inbound mail delivery to the previous
+              provider. Existing Workspace (or other) inboxes for this domain
+              will no longer receive mail.
+            </p>
+            <p className="text-muted-foreground">
+              Sending DNS on{" "}
+              <span className="font-mono">cf-bounce.{mxConflictDomain}</span> is
+              not affected.
+            </p>
+          </div>
+          {mxConflicts.length ? (
+            <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                Records to delete
+              </p>
+              <ul className="space-y-1.5 font-mono text-xs">
+                {mxConflicts.map((mx) => (
+                  <li key={mx.id} className="break-all">
+                    MX {mx.name} → {mx.content}
+                    {mx.priority != null ? ` (priority ${mx.priority})` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No conflicting apex MX records are listed. Confirming will retry
+              enabling Email Routing.
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={mxResolving}
+              onClick={() => setMxConflictDomain(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={mxResolving}
+              onClick={() => void confirmResolveMxConflict()}
+            >
+              {mxResolving
+                ? "Deleting & continuing…"
+                : "Delete MX & enable Routing"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -92,6 +92,16 @@ export type CfEmailRoutingSettings = {
   status?: string;
 };
 
+export type CfDnsRecord = {
+  id: string;
+  type: string;
+  name: string;
+  content: string;
+  proxied?: boolean;
+  ttl?: number;
+  priority?: number;
+};
+
 export type CloudflareEmailClientCredentials = {
   accountId: string;
   apiToken: string;
@@ -244,5 +254,26 @@ export class CloudflareEmailClient {
       { method: "POST", body: "{}" },
     );
     return data.result;
+  }
+
+  async listDnsRecords(
+    zoneId: string,
+    filters?: { type?: string; name?: string; perPage?: number },
+  ): Promise<CfDnsRecord[]> {
+    const params = new URLSearchParams();
+    params.set("per_page", String(filters?.perPage ?? 100));
+    if (filters?.type) params.set("type", filters.type);
+    if (filters?.name) params.set("name", filters.name);
+    const data = await this.request<CfDnsRecord[]>(
+      `/zones/${zoneId}/dns_records?${params.toString()}`,
+    );
+    return data.result ?? [];
+  }
+
+  async deleteDnsRecord(zoneId: string, recordId: string): Promise<void> {
+    await this.request<{ id: string }>(
+      `/zones/${zoneId}/dns_records/${recordId}`,
+      { method: "DELETE" },
+    );
   }
 }

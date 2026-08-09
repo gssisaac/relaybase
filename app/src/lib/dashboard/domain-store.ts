@@ -28,7 +28,14 @@ export type OnboardingOverallStatus =
   | "ready"
   | "failed";
 
-export type OnboardingFailureCode = "ZONE_NOT_FOUND";
+export type OnboardingFailureCode = "ZONE_NOT_FOUND" | "MX_CONFLICT";
+
+export type MxConflictRecord = {
+  id: string;
+  name: string;
+  content: string;
+  priority: number | null;
+};
 
 export type DomainOnboardingStep = {
   id: string;
@@ -47,6 +54,7 @@ export type DomainOnboardingSummary = {
   lastErrorCode: OnboardingFailureCode | null;
   zoneId: string | null;
   sendingSubdomainId: string | null;
+  mxConflicts: MxConflictRecord[];
   steps: DomainOnboardingStep[];
 };
 
@@ -100,7 +108,7 @@ const DONE_DISMISS_MS = 10_000;
 
 async function postOnboard(
   domain: string,
-  action: "start" | "advance" | "retry",
+  action: "start" | "advance" | "retry" | "resolve_mx_conflict",
 ): Promise<{
   domains: DomainSummary[];
   message: string;
@@ -498,6 +506,18 @@ export class DomainStore {
   async retryOnboarding(domain: string) {
     this.error = null;
     const result = await postOnboard(domain, "retry");
+    runInAction(() => {
+      this.domains = result.domains;
+    });
+    this.resolveWaiters();
+    this.ensurePolling();
+    return { message: result.message };
+  }
+
+  /** Delete conflicting apex MX records, then continue Email Routing enable. */
+  async resolveMxConflict(domain: string) {
+    this.error = null;
+    const result = await postOnboard(domain, "resolve_mx_conflict");
     runInAction(() => {
       this.domains = result.domains;
     });

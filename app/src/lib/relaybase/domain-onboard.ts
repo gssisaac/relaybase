@@ -11,6 +11,7 @@ import {
   type DomainOnboardingRecord,
   type DomainOnboardingStep,
   type DomainSummary,
+  type MxConflictRecord,
   type OnboardingFailureCode,
   type OnboardingStepId,
 } from "@/lib/dev-email-store";
@@ -158,6 +159,45 @@ async function createEmailClient(): Promise<CloudflareEmailClient> {
     accountId: platform.cloudflareAccountId,
     apiToken: platform.cloudflareApiToken,
   });
+}
+
+const MX_CONFLICT_MESSAGE =
+  "Existing MX records point this domain to another mail provider (for example Google Workspace). Cloudflare Email Routing cannot share the apex MX with an external mail server. Delete the conflicting records to continue — inbound mail for this domain will stop using the previous provider.";
+
+function normalizeDnsName(name: string): string {
+  return name.replace(/\.$/, "").toLowerCase();
+}
+
+function isApexDnsName(name: string, domain: string): boolean {
+  const normalized = normalizeDnsName(name);
+  return normalized === normalizeDnsName(domain) || normalized === "@";
+}
+
+function isCloudflareRoutingMx(content: string): boolean {
+  return normalizeDnsName(content).endsWith(".mx.cloudflare.net");
+}
+
+async function listApexMxConflicts(
+  client: CloudflareEmailClient,
+  zoneId: string,
+  domain: string,
+): Promise<MxConflictRecord[]> {
+  const allMx = await client.listDnsRecords(zoneId, {
+    type: "MX",
+    perPage: 100,
+  });
+
+  return allMx
+    .filter(
+      (row) =>
+        isApexDnsName(row.name, domain) && !isCloudflareRoutingMx(row.content),
+    )
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      content: row.content,
+      priority: row.priority ?? null,
+    }));
 }
 
 function matchSendingSubdomain(
@@ -311,11 +351,21 @@ async function runStep(
           return markFailed(next, stepId, "Missing zone ID. Retry onboarding.");
         }
         const client = await createEmailClient();
+        const conflicts = await listApexMxConflicts(client, zoneId, domain);
+        if (conflicts.length > 0) {
+          return {
+            ...markFailed(next, stepId, MX_CONFLICT_MESSAGE, "MX_CONFLICT"),
+            mxConflicts: conflicts,
+          };
+        }
         const settings = await client.getEmailRoutingSettings(zoneId);
         if (!settings.enabled) {
           await client.enableEmailRouting(zoneId);
         }
-        return markSucceeded(next, stepId);
+        return {
+          ...markSucceeded(next, stepId),
+          mxConflicts: [],
+        };
       }
 
       case "ready": {
@@ -464,11 +514,57 @@ export async function retryDomainOnboarding(
     ...updateStep(record, stepId, {
       status: "pending",
       error: null,
+      errorCode: null,
       updatedAt: resetAt,
     }),
     status: "running",
     currentStep: stepId,
     lastError: null,
+    lastErrorCode: null,
+    updatedAt: resetAt,
+  };
+  await setDomainOnboarding(userId, domain, record);
+  return advanceDomainOnboarding(userId, domain);
+}
+
+/**
+ * Delete conflicting apex MX records (external mail providers), then retry
+ * Email Routing enable. Does not touch cf-bounce Sending MX.
+ */
+export async function resolveMxConflictOnboarding(
+  userId: string,
+  domainInput: string,
+): Promise<DomainOnboardResult> {
+  const domain = normalizeDomain(domainInput);
+  const data = await readUserEmailData(userId);
+  if (!data.domains.includes(domain)) {
+    throw new Error("Domain not found");
+  }
+
+  let record = await getDomainOnboarding(userId, domain);
+  if (!record?.zoneId) {
+    throw new Error("Missing zone ID. Retry onboarding.");
+  }
+
+  const client = await createEmailClient();
+  const conflicts = await listApexMxConflicts(client, record.zoneId, domain);
+  for (const mx of conflicts) {
+    await client.deleteDnsRecord(record.zoneId, mx.id);
+  }
+
+  const resetAt = nowIso();
+  record = {
+    ...updateStep(record, "routing_enable", {
+      status: "pending",
+      error: null,
+      errorCode: null,
+      updatedAt: resetAt,
+    }),
+    status: "running",
+    currentStep: "routing_enable",
+    lastError: null,
+    lastErrorCode: null,
+    mxConflicts: [],
     updatedAt: resetAt,
   };
   await setDomainOnboarding(userId, domain, record);
@@ -564,6 +660,7 @@ export async function buildDomainStatusFromOnboarding(
           currentStep: record.currentStep,
           lastError: record.lastError ?? null,
           lastErrorCode: record.lastErrorCode ?? null,
+          mxConflicts: record.mxConflicts ?? [],
           steps: record.steps,
         }
       : null,

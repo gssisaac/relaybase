@@ -29,11 +29,6 @@ export function useDashboardPaths() {
   const audience = useProductHref("audience");
   const metrics = useProductHref("metrics");
   const settingsBase = useProductHref("settings");
-  /** @deprecated Use `keys` — legacy settings route */
-  const settingsKeys = useProductHref("settings", "keys");
-  const settingsDomain = useProductHref("settings", "domain");
-  /** @deprecated Use settingsKeys — legacy route alias */
-  const settingsCloudflare = useProductHref("settings", "aws");
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
@@ -46,8 +41,6 @@ export function useDashboardPaths() {
     { href: settingsBase, label: "Settings", icon: Settings },
   ];
 
-  const settingsNav = [{ href: settingsDomain, label: "Domain" }] as const;
-
   return {
     apiBase,
     base,
@@ -59,10 +52,6 @@ export function useDashboardPaths() {
     audience,
     metrics,
     settingsBase,
-    settingsKeys,
-    settingsCloudflare,
-    settingsDomain,
     tabs,
-    settingsNav,
   };
 }

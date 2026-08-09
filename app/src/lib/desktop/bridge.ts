@@ -94,11 +94,11 @@ export const WORKER_INSTALL_ZIP_URL =
   process.env.NEXT_PUBLIC_WORKER_INSTALL_ZIP_URL ??
   "https://relaybase.xyz/downloads/relaybase-worker-install.zip";
 
-/** Exact Cloudflare API token scopes — only if a future optional Zone-assist feature needs them. */
+/**
+ * Optional Cloudflare API token scopes for Zone / Email assist
+ * (Domains import, routing automation). Not required for Worker self-install.
+ */
 export const CF_REQUIRED_TOKEN_PERMISSIONS = [
-  "Account — Workers Scripts — Edit",
-  "Account — Workers KV Storage — Edit",
-  "Account — Workers R2 Storage — Edit",
   "Account — Email Sending — Edit",
   "Zone — Email Routing Rules — Edit",
   "Zone — Zone — Read",
@@ -110,6 +110,7 @@ export type WorkerConnectResult = {
   workerScriptName: string;
   workerUrl: string;
   r2Configured: boolean;
+  inboundBucketName: string;
 };
 
 export type DesktopErrorLink = {

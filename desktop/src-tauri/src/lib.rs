@@ -119,6 +119,7 @@ struct WorkerConnectResult {
     worker_script_name: String,
     worker_url: String,
     r2_configured: bool,
+    inbound_bucket_name: String,
 }
 
 fn normalize_worker_url(raw: &str) -> Result<String, String> {
@@ -203,6 +204,11 @@ async fn verify_worker_connection(
             .pointer("/inbound/r2Configured")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        inbound_bucket_name: value
+            .pointer("/inbound/bucketName")
+            .and_then(|v| v.as_str())
+            .unwrap_or("relaybase-inbound")
+            .into(),
     })
 }
 

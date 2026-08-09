@@ -17,21 +17,20 @@ import { AudienceView } from "@/dashboard/components/AudienceView";
 import { BroadcastsView } from "@/dashboard/components/BroadcastsView";
 import { DomainsView } from "@/dashboard/components/DomainsView";
 import { EmailSettingsKeysView } from "@/dashboard/components/EmailSettingsKeysView";
-import { EmailSettingsDomainView } from "@/dashboard/components/EmailSettingsDomainView";
-import { EmailSettingsShell } from "@/dashboard/components/EmailSettingsShell";
 import { MetricsView } from "@/dashboard/components/MetricsView";
+import { SettingsView } from "@/dashboard/components/SettingsView";
 import { UserDashboardView } from "@/dashboard/components/UserDashboardView";
 import {
   SuspenseComposeView,
   SuspenseMailListView,
 } from "@/email/panel";
 
-function SettingsIndexRedirect() {
+function SettingsRedirect() {
   const router = useRouter();
-  const settingsDomain = useProductHref("settings", "domain");
+  const settings = useProductHref("settings");
   useEffect(() => {
-    router.replace(settingsDomain);
-  }, [router, settingsDomain]);
+    router.replace(settings);
+  }, [router, settings]);
   return null;
 }
 
@@ -114,31 +113,12 @@ export function DashboardPanelView({ subPath }: PanelViewProps) {
 
   if (root === "settings") {
     if (second === "keys" || second === "aws") {
-      return (
-        <EmailSettingsShell>
-          <KeysRedirect />
-        </EmailSettingsShell>
-      );
+      return <KeysRedirect />;
     }
-    if (!second) {
-      return (
-        <EmailSettingsShell>
-          <SettingsIndexRedirect />
-        </EmailSettingsShell>
-      );
+    if (second) {
+      return <SettingsRedirect />;
     }
-    if (second === "domain") {
-      return (
-        <EmailSettingsShell>
-          <EmailSettingsDomainView />
-        </EmailSettingsShell>
-      );
-    }
-    return (
-      <EmailSettingsShell>
-        <SettingsIndexRedirect />
-      </EmailSettingsShell>
-    );
+    return <SettingsView />;
   }
 
   if (root === "accounts") {

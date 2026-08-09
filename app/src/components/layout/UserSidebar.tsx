@@ -37,6 +37,12 @@ import {
 import { emailFolderHref, type EmailFolder } from "@/email/paths";
 import { Button } from "@/components/ui/button";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -77,6 +83,8 @@ function FolderTree({
   collapsed,
   unreadCount = 0,
   unreadCountForAccount,
+  onAddAccount,
+  onRemoveAccount,
 }: {
   label: string;
   icon: LucideIcon;
@@ -89,6 +97,8 @@ function FolderTree({
   collapsed: boolean;
   unreadCount?: number;
   unreadCountForAccount?: (email: string) => number;
+  onAddAccount?: () => void;
+  onRemoveAccount?: (email: string) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const parentHref = emailFolderHref(folder);
@@ -97,51 +107,70 @@ function FolderTree({
     (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
     !accountParam;
   const showUnread = folder === "inbox";
+  const inboxMenus = folder === "inbox";
+
+  const parentRow = (
+    <div className="flex items-center gap-0.5">
+      <Link
+        href={parentHref}
+        title={collapsed ? label : undefined}
+        className={cn(
+          "relative flex min-w-0 flex-1 items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+          parentActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+          collapsed ? "justify-center gap-0" : "gap-2",
+        )}
+      >
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        {!collapsed ? (
+          <>
+            <span className="min-w-0 flex-1 truncate">{label}</span>
+            {showUnread ? <UnreadCountBadge count={unreadCount} /> : null}
+          </>
+        ) : showUnread && unreadCount > 0 ? (
+          <span
+            className="absolute right-1 top-1 size-1.5 rounded-full bg-primary"
+            aria-label={`${unreadCount} unread`}
+          />
+        ) : null}
+      </Link>
+      {!collapsed && accounts.length > 0 ? (
+        <button
+          type="button"
+          aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+        >
+          <ChevronDown
+            className={cn(
+              "size-3 transition-transform",
+              open ? "rotate-0" : "-rotate-90",
+            )}
+          />
+        </button>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="space-y-0.5">
-      <div className="flex items-center gap-0.5">
-        <Link
-          href={parentHref}
-          title={collapsed ? label : undefined}
-          className={cn(
-            "relative flex min-w-0 flex-1 items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
-            parentActive
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-            collapsed ? "justify-center gap-0" : "gap-2",
-          )}
-        >
-          <Icon className="size-3.5 shrink-0" aria-hidden />
-          {!collapsed ? (
-            <>
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-              {showUnread ? <UnreadCountBadge count={unreadCount} /> : null}
-            </>
-          ) : showUnread && unreadCount > 0 ? (
-            <span
-              className="absolute right-1 top-1 size-1.5 rounded-full bg-primary"
-              aria-label={`${unreadCount} unread`}
-            />
-          ) : null}
-        </Link>
-        {!collapsed && accounts.length > 0 ? (
-          <button
-            type="button"
-            aria-label={open ? `Collapse ${label}` : `Expand ${label}`}
-            aria-expanded={open}
-            onClick={() => setOpen((value) => !value)}
-            className="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-          >
-            <ChevronDown
-              className={cn(
-                "size-3 transition-transform",
-                open ? "rotate-0" : "-rotate-90",
-              )}
-            />
-          </button>
-        ) : null}
-      </div>
+      {inboxMenus && onAddAccount ? (
+        <ContextMenu>
+          <ContextMenuTrigger render={<div className="contents" />}>
+            {parentRow}
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={onAddAccount}>
+              <Plus className="size-3.5" />
+              Add account
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        parentRow
+      )}
       {!collapsed && open && accounts.length > 0 ? (
         <div className="ml-3 flex flex-col gap-0.5 border-l border-sidebar-border/70 pl-2">
           {accounts.map((account) => {
@@ -152,9 +181,8 @@ function FolderTree({
             const accountUnread = showUnread
               ? (unreadCountForAccount?.(account.email) ?? 0)
               : 0;
-            return (
+            const accountLink = (
               <Link
-                key={`${folder}:${account.email}`}
                 href={href}
                 title={account.email}
                 className={cn(
@@ -178,6 +206,27 @@ function FolderTree({
                 ) : null}
               </Link>
             );
+            if (!inboxMenus || !onRemoveAccount) {
+              return (
+                <div key={`${folder}:${account.email}`}>{accountLink}</div>
+              );
+            }
+            return (
+              <ContextMenu key={`${folder}:${account.email}`}>
+                <ContextMenuTrigger render={<div className="contents" />}>
+                  {accountLink}
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem
+                    variant="destructive"
+                    onClick={() => onRemoveAccount(account.email)}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Remove account
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            );
           })}
         </div>
       ) : null}
@@ -193,8 +242,9 @@ function EmailModeNav({
   collapsed: boolean;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const { enabledAddresses, getColor } = useMailAccounts();
+  const { enabledAddresses, getColor, removeEnabledAccount } = useMailAccounts();
   const { unreadCount, unreadCountForAccount } = useEmailMailbox();
   const accountParam =
     searchParams.get("account")?.trim() ||
@@ -210,6 +260,15 @@ function EmailModeNav({
     pathname === "/email/sent" || pathname.startsWith("/email/sent/");
   const inTrash =
     pathname === "/email/trash" || pathname.startsWith("/email/trash/");
+
+  function handleRemoveAccount(email: string) {
+    // Only drops the address from the mail sidebar enable-list (localStorage).
+    // Mail under ~/.relaybase/ is left intact so re-adding restores the view.
+    removeEnabledAccount(email);
+    if (accountParam?.toLowerCase() === email.toLowerCase()) {
+      router.push(emailFolderHref("inbox"));
+    }
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-1">
@@ -255,6 +314,8 @@ function EmailModeNav({
             collapsed={collapsed}
             unreadCount={unreadCount}
             unreadCountForAccount={unreadCountForAccount}
+            onAddAccount={onAddAccount}
+            onRemoveAccount={handleRemoveAccount}
           />
           <FolderTree
             label="Drafts"
@@ -297,7 +358,7 @@ function EmailModeNav({
 
 function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
-  const { tabs, settingsNav, domains } = useDashboardPaths();
+  const { tabs, domains, settingsBase } = useDashboardPaths();
   const domainStore = useDomain();
   const { hrefWithDomain } = useDashboardDomain();
   const domainsWorking = domainStore.isWorking;
@@ -308,55 +369,35 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
       {tabs.map((item) => {
         const Icon = item.icon;
         const active =
-          item.href === "/settings"
+          item.href === settingsBase
             ? inSettings
             : isActive(item.href, pathname);
         const href = hrefWithDomain(item.href);
 
         return (
-          <div key={item.href}>
-            <Link
-              href={href}
-              title={collapsed ? item.label : undefined}
-              className={cn(
-                "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
-                active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-                collapsed ? "justify-center gap-0" : "gap-2",
-              )}
-            >
-              <Icon className="size-3.5 shrink-0" aria-hidden />
-              {!collapsed ? <span className="min-w-0 flex-1 truncate">{item.label}</span> : null}
-              {!collapsed && item.href === domains && domainsWorking ? (
-                <Loader2
-                  className="size-3 shrink-0 animate-spin text-muted-foreground"
-                  aria-label="Domain setup in progress"
-                />
-              ) : null}
-            </Link>
-            {!collapsed && item.href === "/settings" && inSettings ? (
-              <div className="ml-3 mt-1 flex flex-col gap-0.5 border-l border-sidebar-border/70 pl-2">
-                {settingsNav.map((sub) => {
-                  const subActive = isActive(sub.href, pathname);
-                  return (
-                    <Link
-                      key={sub.href}
-                      href={hrefWithDomain(sub.href)}
-                      className={cn(
-                        "rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
-                        subActive
-                          ? "text-sidebar-accent-foreground"
-                          : "text-muted-foreground hover:text-sidebar-foreground",
-                      )}
-                    >
-                      {sub.label}
-                    </Link>
-                  );
-                })}
-              </div>
+          <Link
+            key={item.href}
+            href={href}
+            title={collapsed ? item.label : undefined}
+            className={cn(
+              "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+              collapsed ? "justify-center gap-0" : "gap-2",
+            )}
+          >
+            <Icon className="size-3.5 shrink-0" aria-hidden />
+            {!collapsed ? (
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
             ) : null}
-          </div>
+            {!collapsed && item.href === domains && domainsWorking ? (
+              <Loader2
+                className="size-3 shrink-0 animate-spin text-muted-foreground"
+                aria-label="Domain setup in progress"
+              />
+            ) : null}
+          </Link>
         );
       })}
     </>

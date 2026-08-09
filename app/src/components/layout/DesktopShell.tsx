@@ -32,8 +32,19 @@ export function DesktopShell({ children }: { children: ReactNode }) {
     root.classList.toggle("relaybase-desktop", desktop);
     root.classList.toggle("relaybase-desktop-mac", desktop && mac);
 
+    // Suppress WKWebView / system “Open Link / Inspect Element” menus.
+    // Custom ContextMenu components still receive the event and can open.
+    const onContextMenu = (event: Event) => {
+      if (!desktop) return;
+      event.preventDefault();
+    };
+    if (desktop) {
+      document.addEventListener("contextmenu", onContextMenu);
+    }
+
     return () => {
       root.classList.remove("relaybase-desktop", "relaybase-desktop-mac");
+      document.removeEventListener("contextmenu", onContextMenu);
     };
   }, []);
 

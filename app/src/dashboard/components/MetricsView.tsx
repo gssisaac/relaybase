@@ -41,7 +41,7 @@ import {
 
 export function MetricsView() {
   const productId = useProductId();
-  const { apiBase, settingsDomain } = useDashboardPaths();
+  const { apiBase, domains } = useDashboardPaths();
   const { domain, domainQuery } = useDashboardDomain();
   const domainKey = domain ?? "none";
   const [metrics, setMetrics] = useState<EmailMetrics | null>(null);
@@ -178,8 +178,8 @@ export function MetricsView() {
               <CardDescription>
                 <span className="font-mono">{metrics.domain || "—"}</span> · manage
                 in{" "}
-                <Link href={settingsDomain} className="underline">
-                  Domain connection
+                <Link href={domains} className="underline">
+                  Domains
                 </Link>
               </CardDescription>
             </CardHeader>

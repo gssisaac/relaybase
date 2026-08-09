@@ -5,8 +5,8 @@ mod worker;
 
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
-    clear_credentials, load_credentials, load_email_prefs,
-    load_mail_json as read_mail_json, save_credentials,
+    clear_credentials, load_cache_json as read_cache_json, load_credentials, load_email_prefs,
+    load_mail_json as read_mail_json, save_cache_json as write_cache_json, save_credentials,
     save_email_prefs as write_email_prefs, save_mail_json as write_mail_json, EmailPrefs,
     StoredCredentials,
 };
@@ -55,6 +55,19 @@ async fn save_mail_json(
     value: serde_json::Value,
 ) -> Result<(), String> {
     write_mail_json(&relative_path, &value)
+}
+
+#[tauri::command]
+async fn get_cache_json(relative_path: String) -> Result<Option<serde_json::Value>, String> {
+    read_cache_json(&relative_path)
+}
+
+#[tauri::command]
+async fn save_cache_json(
+    relative_path: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    write_cache_json(&relative_path, &value)
 }
 
 #[tauri::command]
@@ -326,6 +339,8 @@ pub fn run() {
             save_email_prefs,
             get_mail_json,
             save_mail_json,
+            get_cache_json,
+            save_cache_json,
             verify_cf_token,
             list_cf_zones,
             probe_routing_worker,

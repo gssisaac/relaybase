@@ -337,6 +337,21 @@ export async function desktopSaveMailJson(
   return invoke("save_mail_json", { relativePath, value });
 }
 
+/** Read JSON from `~/.relaybase/cache/{relativePath}`. */
+export async function desktopGetCacheJson(
+  relativePath: string,
+): Promise<unknown | null> {
+  return invoke("get_cache_json", { relativePath });
+}
+
+/** Write JSON to `~/.relaybase/cache/{relativePath}`. */
+export async function desktopSaveCacheJson(
+  relativePath: string,
+  value: unknown,
+): Promise<void> {
+  return invoke("save_cache_json", { relativePath, value });
+}
+
 /** Open an https URL in the system browser (required inside Tauri webview). */
 export async function desktopOpenExternal(url: string): Promise<void> {
   if (!isDesktopRuntime()) {

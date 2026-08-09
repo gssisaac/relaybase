@@ -31,6 +31,11 @@ Server/worker data (Cloudflare KV, R2, D1) is separate — that is the remote pr
 ├── credentials.json               # Cloudflare + Worker + license (0600)
 ├── email.json                     # account colors / email prefs (0600)
 ├── app-icon.png                   # notification identity image (seeded from bundle)
+├── cache/                         # opaque dashboard/API response cache
+│   └── dashboard/
+│       ├── stats-{range}.json          # e.g. stats-7d.json
+│       ├── api-keys-{range}.json       # e.g. api-keys-7d.json
+│       └── addresses-{domain}.json     # e.g. addresses-example.com.json
 └── mail/
     └── {userId}/                  # e.g. isaac
         ├── inbox.json
@@ -95,6 +100,18 @@ TS facades:
 - Lists/details → `app/src/email/email-disk-store.ts`
 - UI JSON → `app/src/email/user-ui-disk.ts` (+ `enabled-accounts.ts`, `sidebar-mode.ts`, `read-store.ts`, `trash-store.ts`)
 
+### `cache/**`
+
+Opaque JSON via `get_cache_json` / `save_cache_json`. Relative paths use the same safety rules as mail JSON (no `..`, safe segments).
+
+| Relative path | Shape (approx.) |
+|---------------|-----------------|
+| `dashboard/stats-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: UserStatsResponse }` |
+| `dashboard/api-keys-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: { keys, stats, workerUrl, workerConnected } }` |
+| `dashboard/addresses-{domain}.json` | `{ fetchedAt: ISO, data: Address[] }` |
+
+TS facade: `app/src/lib/dashboard/dashboard-cache-disk.ts`. Dashboard / API Keys / Accounts load cache first, then network-refreshes when older than 60s (spinner only; cached UI stays visible).
+
 ### `app-icon.png`
 
 Seeded on app launch from the bundled Tauri icon. Used by `show_notification` so macOS banners are not stuck on Terminal / stale WebKit icons.
@@ -121,7 +138,7 @@ Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in
 
 When adding durable desktop state:
 
-1. Put it under `~/.relaybase` (usually `mail/{userId}/ui/…` or extend `email.json` with a Rust schema change).
+1. Put it under `~/.relaybase` (usually `mail/{userId}/ui/…`, `cache/…`, or extend `email.json` with a Rust schema change).
 2. Go through existing Tauri commands — do **not** open ad-hoc files from the Next.js layer.
 3. Do **not** invent a second store in Application Support, Keychain, or `localhost` `localStorage`.
 4. Hydrate from disk on boot; migrate legacy `localStorage` keys once if present.

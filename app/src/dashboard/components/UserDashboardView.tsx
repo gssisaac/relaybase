@@ -5,10 +5,14 @@ import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { SparklineChart } from "@/components/dashboard/SparklineChart";
-import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
+import { ApiActivityChart } from "@/dashboard/components/ApiActivityChart";
+import {
+  dashboardCacheNeedsRefresh,
+  loadDashboardStatsCache,
+  saveDashboardStatsCache,
+} from "@/lib/dashboard/dashboard-cache-disk";
+import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useEmailPaths } from "@/email/paths";
-import { CurrentDomainSelect } from "@/dashboard/components/CurrentDomainSelect";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +32,7 @@ type UserStatsResponse = {
   range: StatsRange;
   workerConnected?: boolean;
   totals: {
+    domains: number;
     addresses: number;
     audience: number;
     broadcasts: number;
@@ -54,75 +59,58 @@ const RANGE_OPTIONS: { value: StatsRange; label: string }[] = [
   { value: "30d", label: "30 days" },
 ];
 
-const WORKSPACE_CARDS = [
+const KPI_CARDS = [
+  {
+    key: "domains" as const,
+    label: "Domains",
+    description: "Connected domains",
+    href: "domains",
+  },
   {
     key: "addresses" as const,
-    label: "Senders",
+    label: "Accounts",
     description: "Registered addresses",
     href: "accounts",
-    color: "#38bdf8",
+  },
+  {
+    key: "broadcasts" as const,
+    label: "Broadcasts",
+    description: "Campaigns across domains",
+    href: "broadcasts",
   },
   {
     key: "audience" as const,
     label: "Audience",
     description: "Contacts for broadcasts",
     href: "audience",
-    color: "#a78bfa",
-  },
-  {
-    key: "broadcasts" as const,
-    label: "Broadcasts",
-    description: "Campaigns on this domain",
-    href: "broadcasts",
-    color: "#f59e0b",
-  },
-  {
-    key: "sent" as const,
-    label: "Sent",
-    description: "Outbound messages",
-    href: "email/inbox",
-    color: "#22c55e",
-    seriesKey: "sent" as const,
   },
 ];
 
-const API_CARDS = [
-  {
-    key: "apiKeys" as const,
-    label: "API keys",
-    description: "Keys issued for this domain",
-    href: "keys",
-    color: "#a78bfa",
-    seriesKey: "apiKeysUsed" as const,
-  },
+const API_METRIC_CARDS = [
   {
     key: "requests" as const,
-    label: "Requests",
-    description: "Send API calls in range",
+    label: "API requests",
     href: "keys",
-    color: "#22c55e",
-    seriesKey: "requests" as const,
-  },
-  {
-    key: "errors" as const,
-    label: "Errors",
-    description: "Failed sends in range",
-    href: "keys",
-    color: "#ef4444",
-    seriesKey: "errors" as const,
   },
   {
     key: "apiEmails" as const,
     label: "API emails",
-    description: "Successful sends via API",
     href: "keys",
-    color: "#34d399",
-    seriesKey: "apiEmails" as const,
+  },
+  {
+    key: "errors" as const,
+    label: "Errors",
+    href: "keys",
+  },
+  {
+    key: "apiKeys" as const,
+    label: "API keys",
+    href: "keys",
   },
 ];
 
 export function UserDashboardView() {
-  const { domainQuery, domain, domains } = useDashboardDomain();
+  const { domains } = useDomain();
   const { base } = useEmailPaths();
   const [range, setRange] = useState<StatsRange>("7d");
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
@@ -130,74 +118,76 @@ export function UserDashboardView() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(
-    async (nextRange: StatsRange, force?: boolean) => {
-      if (!domain) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-      if (force) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(
-          `/api/email/stats${domainQuery({ range: nextRange })}`,
-          { cache: "no-store" },
-        );
-        const data = (await res.json()) as UserStatsResponse & { error?: string };
-        if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
-        setStats(data);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load stats");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [domain, domainQuery],
-  );
+  const load = useCallback(async (nextRange: StatsRange, force?: boolean) => {
+    setError(null);
+
+    const cached = await loadDashboardStatsCache<UserStatsResponse>(nextRange);
+    if (cached) {
+      setStats(cached.data);
+      setLoading(false);
+    } else {
+      // Don't flash another range's totals while the first fetch runs.
+      setStats(null);
+    }
+
+    const needsNetwork =
+      force === true ||
+      !cached ||
+      dashboardCacheNeedsRefresh(cached.fetchedAt);
+
+    if (!needsNetwork) return;
+
+    // Keep cached numbers on screen; only spin the refresh control.
+    if (cached) setRefreshing(true);
+    else setLoading(true);
+
+    try {
+      const res = await fetch(`/api/email/stats?range=${nextRange}`, {
+        cache: "no-store",
+      });
+      const data = (await res.json()) as UserStatsResponse & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
+      setStats(data);
+      await saveDashboardStatsCache(nextRange, data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load stats");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     void load(range);
-  }, [load, range, domain]);
+  }, [load, range]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar
         className="px-4 py-3"
         end={
-          <>
-            <CurrentDomainSelect />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void load(range, true)}
-              disabled={refreshing}
-            >
-              <RefreshCw
-                className={refreshing ? "size-4 animate-spin" : "size-4"}
-              />
-            </Button>
-          </>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load(range, true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={refreshing ? "size-4 animate-spin" : "size-4"}
+            />
+          </Button>
         }
       >
         <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Overview for your email workspace
-            {domain ? (
-              <>
-                {" "}
-                on <span className="font-mono">{domain}</span>
-              </>
-            ) : null}
+            Overview across all domains
           </p>
         </div>
       </DesktopTitleBar>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+        <div className="mx-auto w-full max-w-[1200px] space-y-6 p-4">
           <EmailAlerts error={error} message={null} />
 
           {!domains.length && !loading ? (
@@ -221,86 +211,68 @@ export function UserDashboardView() {
             </Card>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2">
-            {RANGE_OPTIONS.map((option) => (
-              <Button
-                key={option.value}
-                size="sm"
-                variant={range === option.value ? "default" : "outline"}
-                onClick={() => setRange(option.value)}
-              >
-                {option.label}
-              </Button>
-            ))}
-            {stats ? (
-              <Badge variant={stats.workerConnected ? "default" : "secondary"}>
-                {stats.workerConnected ? "Worker connected" : "Worker offline"}
-              </Badge>
-            ) : null}
-          </div>
-
-          <div>
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-              Workspace
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {WORKSPACE_CARDS.map((card) => {
-                const value = stats?.totals[card.key] ?? 0;
-                const series =
-                  "seriesKey" in card && card.seriesKey
-                    ? (stats?.series[card.seriesKey]?.map((b) => b.value) ?? [])
-                    : [];
-                const body = (
-                  <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {KPI_CARDS.map((card) => {
+              const value = stats?.totals[card.key] ?? 0;
+              return (
+                <Card
+                  key={card.key}
+                  className="transition-colors hover:bg-accent/30"
+                >
+                  <Link href={`${base}/${card.href}`} className="block">
                     <CardHeader className="pb-2">
-                      <CardDescription>{card.description}</CardDescription>
-                      <CardTitle className="text-2xl tabular-nums">
-                        {value}
+                      <CardDescription>{card.label}</CardDescription>
+                      <CardTitle className="text-4xl font-semibold tracking-tight tabular-nums">
+                        {loading && !stats ? "—" : value.toLocaleString()}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <SparklineChart
-                        data={series}
-                        color={card.color}
-                        className="h-16"
-                      />
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{card.label}</span>
-                        {card.key === "broadcasts" && stats ? (
-                          <Badge variant="secondary">
-                            {stats.totals.drafts} drafts
-                          </Badge>
-                        ) : null}
-                      </div>
+                    <CardContent className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {card.description}
+                      </p>
+                      {card.key === "broadcasts" && stats ? (
+                        <Badge variant="secondary">
+                          {stats.totals.drafts} drafts
+                        </Badge>
+                      ) : null}
                     </CardContent>
-                  </>
-                );
-
-                return (
-                  <Card
-                    key={card.key}
-                    className={cn(
-                      card.href && "transition-colors hover:bg-accent/30",
-                    )}
-                  >
-                    <Link href={`${base}/${card.href}`} className="block">
-                      {body}
-                    </Link>
-                  </Card>
-                );
-              })}
-            </div>
+                  </Link>
+                </Card>
+              );
+            })}
           </div>
 
-          <div>
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-              API activity
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {API_CARDS.map((card) => {
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                API activity
+              </h2>
+              <div className="flex flex-wrap items-center gap-2">
+                {RANGE_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    size="sm"
+                    variant={range === option.value ? "default" : "outline"}
+                    onClick={() => setRange(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+                {stats ? (
+                  <Badge
+                    variant={stats.workerConnected ? "default" : "secondary"}
+                  >
+                    {stats.workerConnected
+                      ? "Worker connected"
+                      : "Worker offline"}
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+              {API_METRIC_CARDS.map((card) => {
                 const value = stats?.totals[card.key] ?? 0;
-                const series =
-                  stats?.series[card.seriesKey]?.map((b) => b.value) ?? [];
                 return (
                   <Card
                     key={card.key}
@@ -308,38 +280,46 @@ export function UserDashboardView() {
                   >
                     <Link href={`${base}/${card.href}`} className="block">
                       <CardHeader className="pb-2">
-                        <CardDescription>{card.description}</CardDescription>
-                        <CardTitle
+                        <CardTitle className="text-sm">{card.label}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p
                           className={cn(
-                            "text-2xl tabular-nums",
+                            "text-2xl font-semibold tabular-nums",
                             card.key === "errors" &&
                               value > 0 &&
                               "text-destructive",
                           )}
                         >
-                          {value.toLocaleString()}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
-                        <SparklineChart
-                          data={series}
-                          color={card.color}
-                          className="h-16"
-                        />
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{card.label}</span>
-                          {card.key === "apiKeys" && stats ? (
-                            <Badge variant="secondary">
-                              {stats.totals.apiKeysUsed} used
-                            </Badge>
-                          ) : null}
-                        </div>
+                          {loading && !stats ? "—" : value.toLocaleString()}
+                        </p>
+                        {card.key === "apiKeys" && stats ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {stats.totals.apiKeysUsed} used in range
+                          </p>
+                        ) : null}
                       </CardContent>
                     </Link>
                   </Card>
                 );
               })}
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Request volume</CardTitle>
+                <CardDescription>
+                  API requests across all domains
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ApiActivityChart
+                  requests={stats?.series.requests ?? []}
+                  errors={stats?.series.errors ?? []}
+                  range={range}
+                />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

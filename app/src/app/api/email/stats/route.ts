@@ -17,14 +17,11 @@ export async function GET(request: Request) {
     const data = await readUserEmailData(userId);
     const url = new URL(request.url);
     const range = parseStatsRange(url.searchParams.get("range"));
-    const domain = resolveRequestDomain(request, data);
-    if (!url.searchParams.get("domain")) {
-      return NextResponse.json(
-        { error: "domain query required" },
-        { status: 400 },
-      );
-    }
-    if (!domain) {
+    const requestedDomain = url.searchParams.get("domain");
+    const domain = requestedDomain
+      ? resolveRequestDomain(request, data)
+      : null;
+    if (requestedDomain && !domain) {
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
@@ -42,6 +39,7 @@ export async function GET(request: Request) {
       workerConnected: api.workerConnected,
       totals: {
         ...local.totals,
+        domains: domain ? 1 : data.domains.length,
         apiKeys: api.totals.apiKeys,
         apiKeysUsed: api.totals.apiKeysUsed,
         requests: api.totals.requests,

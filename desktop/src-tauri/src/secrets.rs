@@ -271,3 +271,66 @@ pub fn load_mail_json(relative_path: &str) -> Result<Option<serde_json::Value>, 
     })?;
     Ok(Some(value))
 }
+
+/// Persist opaque JSON under `~/.relaybase/cache/{relative_path}`.
+/// Same path rules as mail JSON.
+fn cache_file_path(relative_path: &str) -> Result<PathBuf, String> {
+    let trimmed = relative_path.trim().trim_start_matches('/');
+    if trimmed.is_empty() {
+        return Err("Cache path is empty".into());
+    }
+    if trimmed.contains("..") {
+        return Err("Cache path must not contain '..'".into());
+    }
+    for segment in trimmed.split('/') {
+        if segment.is_empty() {
+            return Err("Cache path has an empty segment".into());
+        }
+        if !segment
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' || c == '%')
+        {
+            return Err(format!(
+                "Cache path segment has invalid characters: {segment}"
+            ));
+        }
+    }
+    let base = ensure_dir()?.join("cache");
+    Ok(base.join(trimmed))
+}
+
+pub fn save_cache_json(relative_path: &str, value: &serde_json::Value) -> Result<(), String> {
+    let path = cache_file_path(relative_path)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "Failed to create cache directory {}: {e}",
+                parent.display()
+            )
+        })?;
+        #[cfg(unix)]
+        {
+            let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+        }
+    }
+    let json = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
+    fs::write(&path, &json).map_err(|e| {
+        format!("Failed to write cache file {}: {e}", path.display())
+    })?;
+    restrict_file_permissions(&path);
+    Ok(())
+}
+
+pub fn load_cache_json(relative_path: &str) -> Result<Option<serde_json::Value>, String> {
+    let path = cache_file_path(relative_path)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let json = fs::read_to_string(&path).map_err(|e| {
+        format!("Failed to read cache file {}: {e}", path.display())
+    })?;
+    let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
+        format!("Invalid cache file {}: {e}", path.display())
+    })?;
+    Ok(Some(value))
+}

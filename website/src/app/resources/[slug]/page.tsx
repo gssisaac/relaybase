@@ -152,9 +152,8 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                     Ready to ship your own billing@ and support@?
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Get notified when the Mac app launches — ${siteConfig.pricing.oneTime}
-                    /mo per domain for your first {siteConfig.waitlist.durationYears}{" "}
-                    year.
+                    Get notified when the Mac app launches — free for one
+                    domain, or ${siteConfig.pricing.pro.price} once for Pro.
                   </p>
                 </div>
                 <Button size="lg" render={<Link href={siteConfig.getStartedPath} />}>

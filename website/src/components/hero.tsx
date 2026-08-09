@@ -43,7 +43,7 @@ export function Hero() {
 
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-              Buy once — ${siteConfig.pricing.oneTime}
+              Start free
               <ArrowRight data-icon="inline-end" />
             </Button>
             <Button
@@ -55,6 +55,10 @@ export function Hero() {
               See the API
             </Button>
           </div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Free for one domain. ${siteConfig.pricing.pro.price} once unlocks
+            everything.
+          </p>
         </div>
 
         <div className="mx-auto mt-16 grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-4">

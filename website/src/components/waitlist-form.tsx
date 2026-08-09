@@ -56,9 +56,7 @@ export function WaitlistForm() {
           {status === "already" ? "You're already on the list" : "You're on the list"}
         </p>
         <p className="mt-1.5 text-sm text-accent-foreground/80">
-          We&apos;ll email you when early access opens — with your{" "}
-          {siteConfig.waitlist.discountPercent}% waitlist rate locked in for{" "}
-          {siteConfig.waitlist.durationYears} year.
+          We&apos;ll email you when checkout opens — {siteConfig.waitlist.note}.
         </p>
       </div>
     );

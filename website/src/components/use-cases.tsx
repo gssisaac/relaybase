@@ -15,7 +15,7 @@ const personas = [
     title: "Solo product builders",
     description:
       "Launch billing@ and support@ on day one without paying for six Google seats you'll never log into.",
-    example: `Indie SaaS founder with a dozen Cloudflare domains — one $${siteConfig.pricing.oneTime} license, Cloudflare Email Sending on their own bill.`,
+    example: `Indie SaaS founder with a dozen Cloudflare domains — one $${siteConfig.pricing.pro.price} Pro license, Cloudflare Email Sending on their own bill.`,
   },
   {
     icon: Boxes,

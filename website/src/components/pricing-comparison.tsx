@@ -17,7 +17,7 @@ import {
 
 export function PricingComparison() {
   const workspaceMonthly = getGoogleWorkspaceMonthlyCost();
-  const oneTime = siteConfig.pricing.oneTime;
+  const { free, pro } = siteConfig.pricing;
   const cfEmailMonthly = siteConfig.cloudflareEmailSendingMonthly;
 
   return (
@@ -28,7 +28,7 @@ export function PricingComparison() {
             Pricing
           </Badge>
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Buy once. Run on your Cloudflare plan.
+            Start free. Pay once for everything else.
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
             Relaybase is software — not a hosted email intermediary. You pay
@@ -36,7 +36,45 @@ export function PricingComparison() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-2">
+        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+          <Card className="bg-white">
+            <CardHeader>
+              <CardTitle className="text-2xl">{free.label}</CardTitle>
+              <CardDescription>Try it on one domain, for good</CardDescription>
+              <div className="mt-4 flex items-baseline gap-1">
+                <span className="text-5xl font-bold tracking-tight text-foreground">
+                  ${free.price}
+                </span>
+                <span className="text-muted-foreground">forever</span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                No credit card. Not a trial — it never expires.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {[
+                `${free.domains} Cloudflare domain`,
+                `${free.addresses} email address`,
+                "Send API + inbound webhooks from your Worker",
+                "Worker installed in your account — we don't host mail",
+                "Community docs support",
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-2.5 text-sm">
+                  <Check className="mt-0.5 size-4 shrink-0 text-accent-teal" />
+                  <span>{item}</span>
+                </div>
+              ))}
+              <Button
+                render={<Link href={siteConfig.getStartedPath} />}
+                variant="outline"
+                className="mt-6 w-full"
+                size="lg"
+              >
+                Start free
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card className="relative border-2 border-brand bg-white shadow-md">
             <div className="absolute -top-3 left-6">
               <Badge className="bg-brand text-white shadow-sm">
@@ -44,29 +82,30 @@ export function PricingComparison() {
               </Badge>
             </div>
             <CardHeader className="pt-8">
-              <CardTitle className="text-2xl">{siteConfig.name}</CardTitle>
+              <CardTitle className="text-2xl">{pro.label}</CardTitle>
               <CardDescription>
-                Mac app + routing Worker for your Cloudflare account
+                Mac app + routing Worker, unlimited domains
               </CardDescription>
               <div className="mt-4 flex items-baseline gap-1">
                 <span className="text-5xl font-bold tracking-tight text-brand">
-                  ${oneTime}
+                  ${pro.price}
                 </span>
-                <span className="text-muted-foreground">one-time</span>
+                <span className="text-muted-foreground">once</span>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Plus Cloudflare Email Sending (~${cfEmailMonthly}/mo on your
-                account — billed by Cloudflare, not us).
+                Includes 1 year of updates. Plus Cloudflare Email Sending (~$
+                {cfEmailMonthly}/mo on your account — billed by Cloudflare,
+                not us).
               </p>
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                "Unlimited domains on your Cloudflare account",
+                "Unlimited domains and addresses on your Cloudflare account",
                 "billing@, support@, privacy@, noreply@, hello@, admin@",
+                "Audience, Broadcasts, and Metrics",
                 "Spark-like inbox, compose, and accounts UI",
-                "Send API + inbound webhooks from your Worker",
-                "Worker installed in your account — we don't host mail",
-                "No per-domain or per-seat Relaybase fees",
+                "3 team seats for shared inboxes",
+                "Priority support",
               ].map((item) => (
                 <div key={item} className="flex items-start gap-2.5 text-sm">
                   <Check className="mt-0.5 size-4 shrink-0 text-accent-teal" />
@@ -78,8 +117,12 @@ export function PricingComparison() {
                 className="mt-6 w-full"
                 size="lg"
               >
-                Get Relaybase — ${oneTime}
+                Get Pro — ${pro.price}
               </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                After year 1: optional ${pro.renewalPrice}/{pro.renewalPeriodLabel}{" "}
+                to keep getting updates. Skip it and your mail keeps working.
+              </p>
             </CardContent>
           </Card>
 
@@ -93,7 +136,7 @@ export function PricingComparison() {
                 <span className="text-5xl font-bold tracking-tight text-muted-foreground">
                   ${workspaceMonthly}
                 </span>
-                <span className="text-muted-foreground">/month for 6 seats</span>
+                <span className="text-muted-foreground">/mo for 6 seats</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 ${siteConfig.googleWorkspace.perUserMonthly}/user ×{" "}
@@ -128,12 +171,14 @@ export function PricingComparison() {
               <Shield className="size-6 text-accent-teal" />
             </div>
             <h3 className="text-2xl font-bold text-accent-foreground">
-              We never touch your mail
+              Your mail never stops — even if you never pay us again
             </h3>
             <p className="text-accent-foreground/80">
-              Relaybase installs a Worker into <em>your</em> Cloudflare account.
-              Send, receive, and storage stay under your credentials. We sell
-              software and a license — not intermediary email hosting.
+              Relaybase installs a Worker into <em>your</em> Cloudflare
+              account. It sends and receives mail on its own — not through
+              us. Skip a year of Pro updates and your inbox keeps working;
+              we sell software and (optionally) updates, not a subscription
+              to your own mail.
             </p>
           </div>
         </div>

@@ -7,22 +7,34 @@ export const siteConfig = {
   name: "Relaybase",
   tagline: "Product email on your Cloudflare account.",
   description:
-    "A Mac app that wraps Cloudflare Email Sending and Routing with a Spark-like inbox and send API. Runs entirely in your Cloudflare account — one-time purchase, $39.",
+    "A Mac app that wraps Cloudflare Email Sending and Routing with a Spark-like inbox and send API. Free for one domain. $69 once unlocks everything — runs entirely in your Cloudflare account.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? defaultSiteUrl,
   apiUrl: process.env.NEXT_PUBLIC_RELAYBASE_API_URL ?? defaultApiUrl,
   getStartedPath: "/get-started",
+  /**
+   * Pricing numbers — source of truth is `PRICING.md` (repo root). Only
+   * `free` and `pro` are public; Team/Studio exist in the model
+   * (`STRATEGY.md` §3) but are not shown on the site until they ship.
+   */
   pricing: {
-    /** One-time license price (USD). */
-    oneTime: 39,
     currency: "USD",
-    /** @deprecated Use oneTime — kept briefly for any leftover references. */
-    monthly: 39,
+    free: {
+      label: "Free",
+      price: 0,
+      domains: 1,
+      addresses: 1,
+    },
+    pro: {
+      label: "Pro",
+      /** One-time license price (USD). */
+      price: 69,
+      /** Optional annual update renewal — perpetual fallback if skipped. */
+      renewalPrice: 25,
+      renewalPeriodLabel: "year",
+    },
   },
   waitlist: {
-    monthly: 39,
-    discountPercent: 0,
-    durationYears: 0,
-    maxDomains: 0,
+    note: "early access to Free and Pro when checkout opens",
   },
   keywords: [
     "Relaybase",

@@ -22,13 +22,13 @@ import { pageSocialMeta, siteConfig } from "@/lib/site-config";
 
 export const metadata: Metadata = {
   title: `Get ${siteConfig.name}`,
-  description: `Buy the ${siteConfig.name} Mac app for $${siteConfig.pricing.oneTime} — product email on your own Cloudflare account.`,
+  description: `Free for one domain. $${siteConfig.pricing.pro.price} once for Pro — product email on your own Cloudflare account.`,
   alternates: {
     canonical: siteConfig.getStartedPath,
   },
   ...pageSocialMeta({
     title: `Get ${siteConfig.name}`,
-    description: `$${siteConfig.pricing.oneTime} one-time. Deploy the Worker into your Cloudflare account, connect the Mac app, manage every domain.`,
+    description: `Start free, or go Pro for $${siteConfig.pricing.pro.price} once. Deploy the Worker into your Cloudflare account, connect the Mac app, manage every domain.`,
     path: siteConfig.getStartedPath,
   }),
 };
@@ -69,7 +69,7 @@ export default function GetStartedPage() {
                 variant="secondary"
                 className="mb-6 border border-border bg-white px-3 py-1 text-muted-foreground"
               >
-                One-time license — ${pricing.oneTime}
+                Free for one domain · ${pricing.pro.price} once for Pro
               </Badge>
 
               <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl">
@@ -121,7 +121,7 @@ export default function GetStartedPage() {
                     Launch notify
                   </Badge>
                   <CardTitle className="mt-3 text-2xl">
-                    ${pricing.oneTime} one-time
+                    Free, or ${pricing.pro.price} once for Pro
                   </CardTitle>
                   <CardDescription>
                     Join the list — we&apos;ll email you when checkout opens
@@ -129,17 +129,17 @@ export default function GetStartedPage() {
 
                   <div className="mt-5 flex items-baseline justify-center gap-3">
                     <span className="text-5xl font-bold tracking-tight text-brand">
-                      ${pricing.oneTime}
+                      ${pricing.pro.price}
                     </span>
-                    <span className="text-muted-foreground">once</span>
+                    <span className="text-muted-foreground">once for Pro</span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5 pt-2">
                   <ul className="space-y-2.5 text-left text-sm">
                     {[
-                      "Mac app license (Windows later)",
+                      "Free forever — 1 domain, 1 address",
+                      "Pro: unlimited domains, Mac app (Windows later)",
                       "Worker install into your Cloudflare account",
-                      "Unlimited domains on your CF plan",
                       "Send + inbound API from your Worker",
                     ].map((line) => (
                       <li key={line} className="flex items-start gap-2.5">

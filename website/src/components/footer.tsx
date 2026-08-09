@@ -19,12 +19,13 @@ export function Footer() {
           </div>
 
           <p className="max-w-md text-sm text-muted-foreground">
-            Product email for builders — on your Cloudflare account. Mac app +
-            routing Worker, ${siteConfig.pricing.oneTime} once.
+            Product email for builders — on your Cloudflare account. Free for
+            one domain, or ${siteConfig.pricing.pro.price} once for
+            everything.
           </p>
 
           <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-            Get Relaybase — ${siteConfig.pricing.oneTime}
+            Start free
           </Button>
 
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">

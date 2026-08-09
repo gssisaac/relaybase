@@ -31,11 +31,20 @@ export default function Home() {
       description: siteConfig.description,
       url: siteConfig.url,
       image: ogImageUrl,
-      offers: {
-        "@type": "Offer",
-        price: String(siteConfig.pricing.oneTime),
-        priceCurrency: siteConfig.pricing.currency,
-      },
+      offers: [
+        {
+          "@type": "Offer",
+          name: siteConfig.pricing.free.label,
+          price: String(siteConfig.pricing.free.price),
+          priceCurrency: siteConfig.pricing.currency,
+        },
+        {
+          "@type": "Offer",
+          name: siteConfig.pricing.pro.label,
+          price: String(siteConfig.pricing.pro.price),
+          priceCurrency: siteConfig.pricing.currency,
+        },
+      ],
       featureList: [
         "Mac app for Cloudflare Email Sending and Routing",
         "Worker installed in your Cloudflare account",

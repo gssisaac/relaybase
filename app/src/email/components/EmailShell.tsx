@@ -15,8 +15,11 @@ export function EmailShell({
 }) {
   const pathname = usePathname();
   const { email } = useEmailPaths();
-  const { accounts, keys, broadcasts, audience } = useDashboardPaths();
+  const { dashboard, accounts, keys, broadcasts, audience } =
+    useDashboardPaths();
   const domainScoped =
+    pathname === dashboard ||
+    pathname.startsWith(`${dashboard}/`) ||
     pathname === accounts ||
     pathname.startsWith(`${accounts}/`) ||
     pathname === keys ||

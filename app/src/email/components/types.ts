@@ -171,15 +171,95 @@ export type AudienceContact = {
   name?: string;
 };
 
+export type AudienceDataSourceType = "generic_json";
+
+export type AudienceDataSource = {
+  type: AudienceDataSourceType;
+  endpointUrl: string;
+  credential?: string;
+  credentialHeader?: string;
+};
+
+export type AudienceSyncPhase =
+  | "idle"
+  | "fetching"
+  | "parsing"
+  | "writing"
+  | "done";
+
+export type AudienceSyncRunStatus = "running" | "success" | "error";
+
+export type AudienceSyncRun = {
+  id: string;
+  trigger: "manual" | "cron";
+  status: AudienceSyncRunStatus;
+  phase: AudienceSyncPhase;
+  startedAt: string;
+  finishedAt?: string;
+  totalCount?: number;
+  processedCount?: number;
+  skippedCount?: number;
+  successCount?: number;
+  failedCount?: number;
+  error?: string;
+  estimatedRemainingMs?: number;
+};
+
+export type AudienceGroupProgress = {
+  groupId: string;
+  cronEnabled: boolean;
+  cronIntervalMinutes?: number;
+  nextDueAt: string | null;
+  lastSyncAt?: string;
+  progress: AudienceSyncRun | null;
+  history: AudienceSyncRun[];
+};
+
+export type AudienceGroupSummary = {
+  id: string;
+  name: string;
+  domain: string;
+  createdAt: string;
+  contactCount: number;
+  defaultFrom?: string;
+  dataSource?: AudienceDataSource;
+  cronEnabled?: boolean;
+  cronIntervalMinutes?: number;
+  lastSyncAt?: string;
+  lastSyncStatus?: "success" | "error";
+  lastSyncError?: string;
+  lastSyncCount?: number;
+  syncProgress?: AudienceSyncRun;
+  syncHistory?: AudienceSyncRun[];
+};
+
+export type AudienceGroupContact = {
+  id: string;
+  email: string;
+  name?: string;
+  domain: string;
+  groupId: string;
+  source: "manual" | "synced";
+  addedAt: string;
+};
+
 export type EmailBroadcast = {
   id: string;
   subject: string;
-  body: string;
-  from: string;
+  body?: string;
+  from?: string;
   createdAt: string;
   sentAt?: string;
-  recipientCount: number;
+  recipientCount?: number;
   status: string;
+  groupIds: string[];
+  domain?: string;
+};
+
+export type BroadcastDetail = {
+  broadcast: EmailBroadcast;
+  groups: AudienceGroupSummary[];
+  recipientCount: number;
 };
 
 export type EmailMetrics = {

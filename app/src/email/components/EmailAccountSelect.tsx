@@ -33,7 +33,7 @@ export function EmailAccountSelect({
       onValueChange={(next) => onChange((next ?? "all") as EmailAccountFilter)}
       disabled={disabled}
     >
-      <SelectTrigger className={className ?? "h-9 w-[240px]"}>
+      <SelectTrigger className={className ?? "h-9 w-[280px]"}>
         <SelectValue placeholder="All accounts" />
       </SelectTrigger>
       <SelectContent>

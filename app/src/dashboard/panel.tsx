@@ -13,7 +13,32 @@ import { AccountLogsView } from "@/dashboard/components/AccountLogsView";
 import { AccountOverviewView } from "@/dashboard/components/AccountOverviewView";
 import { AccountSettingsView } from "@/dashboard/components/AccountSettingsView";
 import { AccountsView } from "@/dashboard/components/AccountsView";
-import { AudienceView } from "@/dashboard/components/AudienceView";
+import {
+  AudienceGroupDetailProvider,
+} from "@/dashboard/components/AudienceGroupDetailContext";
+import {
+  AudienceGroupDetailShell,
+  type AudienceGroupSection,
+} from "@/dashboard/components/AudienceGroupDetailShell";
+import { AudienceGroupContactsView } from "@/dashboard/components/AudienceGroupContactsView";
+import { AudienceGroupHistoryView } from "@/dashboard/components/AudienceGroupHistoryView";
+import { AudienceGroupOverviewView } from "@/dashboard/components/AudienceGroupOverviewView";
+import { AudienceGroupProgressView } from "@/dashboard/components/AudienceGroupProgressView";
+import { AudienceGroupSendView } from "@/dashboard/components/AudienceGroupSendView";
+import { AudienceGroupSettingsView } from "@/dashboard/components/AudienceGroupSettingsView";
+import { AudienceGroupsView } from "@/dashboard/components/AudienceGroupsView";
+import {
+  BroadcastDetailProvider,
+  useBroadcastDetail,
+} from "@/dashboard/components/BroadcastDetailContext";
+import {
+  BroadcastDetailShell,
+  type BroadcastSection,
+} from "@/dashboard/components/BroadcastDetailShell";
+import { BroadcastAudienceView } from "@/dashboard/components/BroadcastAudienceView";
+import { BroadcastContentView } from "@/dashboard/components/BroadcastContentView";
+import { BroadcastDraftView } from "@/dashboard/components/BroadcastDraftView";
+import { BroadcastOverviewView } from "@/dashboard/components/BroadcastOverviewView";
 import { BroadcastsView } from "@/dashboard/components/BroadcastsView";
 import { DomainsView } from "@/dashboard/components/DomainsView";
 import { EmailSettingsKeysView } from "@/dashboard/components/EmailSettingsKeysView";
@@ -106,6 +131,121 @@ function AccountDetailRoutes({
   );
 }
 
+function parseAudienceGroupSection(segment?: string): AudienceGroupSection {
+  if (
+    segment === "contacts" ||
+    segment === "send" ||
+    segment === "progress" ||
+    segment === "history" ||
+    segment === "settings" ||
+    segment === "overview"
+  ) {
+    return segment === "overview" ? "overview" : segment;
+  }
+  return "overview";
+}
+
+function AudienceGroupDetailRoutes({
+  groupId,
+  rest,
+}: {
+  groupId: string;
+  rest: string[];
+}) {
+  const [sectionSegment] = rest;
+  const section = parseAudienceGroupSection(sectionSegment);
+
+  let page: ReactNode = null;
+  if (section === "contacts") {
+    page = <AudienceGroupContactsView />;
+  } else if (section === "send") {
+    page = <AudienceGroupSendView />;
+  } else if (section === "progress") {
+    page = <AudienceGroupProgressView />;
+  } else if (section === "history") {
+    page = <AudienceGroupHistoryView />;
+  } else if (section === "settings") {
+    page = <AudienceGroupSettingsView />;
+  } else {
+    page = <AudienceGroupOverviewView />;
+  }
+
+  return (
+    <AudienceGroupDetailProvider groupId={groupId}>
+      <AudienceGroupDetailShell section={section}>
+        {page}
+      </AudienceGroupDetailShell>
+    </AudienceGroupDetailProvider>
+  );
+}
+
+function parseBroadcastSection(segment?: string): BroadcastSection {
+  if (segment === "audience" || segment === "content" || segment === "overview") {
+    return segment === "overview" ? "overview" : segment;
+  }
+  return "overview";
+}
+
+function BroadcastDetailBody({ rest }: { rest: string[] }) {
+  const { detail, loading, notFound } = useBroadcastDetail();
+
+  if (loading && !detail) {
+    return (
+      <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+    );
+  }
+  if (notFound || !detail) {
+    return (
+      <div className="p-4 text-sm text-muted-foreground">
+        Broadcast not found.
+      </div>
+    );
+  }
+
+  if (detail.broadcast.status === "draft") {
+    return <BroadcastDraftView />;
+  }
+
+  const [sectionSegment] = rest;
+  const section = parseBroadcastSection(sectionSegment);
+
+  let page: ReactNode = null;
+  if (section === "audience") {
+    page = <BroadcastAudienceView />;
+  } else if (section === "content") {
+    page = <BroadcastContentView />;
+  } else {
+    page = <BroadcastOverviewView />;
+  }
+
+  return (
+    <BroadcastDetailShell section={section}>{page}</BroadcastDetailShell>
+  );
+}
+
+function BroadcastDetailRoutes({
+  broadcastId,
+  rest,
+}: {
+  broadcastId: string;
+  rest: string[];
+}) {
+  return (
+    <BroadcastDetailProvider broadcastId={broadcastId}>
+      <BroadcastDetailBody rest={rest} />
+    </BroadcastDetailProvider>
+  );
+}
+
+function BroadcastNewRedirect() {
+  const router = useRouter();
+  const broadcasts = useProductHref("broadcasts");
+  useEffect(() => {
+    router.replace(`${broadcasts}?new=1`);
+  }, [broadcasts, router]);
+  return null;
+}
+
 export function DashboardPanelView({ subPath }: PanelViewProps) {
   if (subPath.length === 0) return null;
 
@@ -128,6 +268,21 @@ export function DashboardPanelView({ subPath }: PanelViewProps) {
     return <AccountDetailRoutes email={email} rest={rest} />;
   }
 
+  if (root === "audience") {
+    if (!second) return <AudienceGroupsView />;
+    const groupId = decodeURIComponent(second);
+    return <AudienceGroupDetailRoutes groupId={groupId} rest={rest} />;
+  }
+
+  if (root === "broadcasts") {
+    if (!second) return <BroadcastsView />;
+    if (second === "new") return <BroadcastNewRedirect />;
+    const broadcastId = decodeURIComponent(second);
+    return (
+      <BroadcastDetailRoutes broadcastId={broadcastId} rest={rest} />
+    );
+  }
+
   switch (root) {
     case "dashboard":
       return <UserDashboardView />;
@@ -135,10 +290,6 @@ export function DashboardPanelView({ subPath }: PanelViewProps) {
       return <DomainsView />;
     case "keys":
       return <EmailSettingsKeysView />;
-    case "audience":
-      return <AudienceView />;
-    case "broadcasts":
-      return <BroadcastsView />;
     case "metrics":
       return <MetricsView />;
     default:

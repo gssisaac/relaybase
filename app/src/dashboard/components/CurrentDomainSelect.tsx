@@ -29,7 +29,7 @@ export function CurrentDomainSelect({ className }: { className?: string }) {
       }}
       disabled={disabled}
     >
-      <SelectTrigger className={className ?? "h-9 w-[220px]"}>
+      <SelectTrigger className={className ?? "h-9 w-[280px]"}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       {domains.length > 0 ? (

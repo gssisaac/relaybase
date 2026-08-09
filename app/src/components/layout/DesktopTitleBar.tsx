@@ -28,7 +28,7 @@ export function DesktopTitleBar({
     <header
       {...dragRegionProps}
       className={cn(
-        "flex shrink-0 select-none items-center gap-3 border-b border-border",
+        "flex shrink-0 select-none items-center gap-3",
         dragRegionClassName,
         className,
       )}

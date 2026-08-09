@@ -1,27 +1,28 @@
 "use client";
 
+import { Megaphone, Plus, RefreshCw, Users } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useDashboardPaths } from "@/dashboard/paths";
 import { useEmailPaths } from "@/email/paths";
 import {
-  clearEmailCache,
   fetchEmailCached,
   fetchEmailCachedOptional,
 } from "@/email/components/email-cached-fetch";
-import Link from "next/link";
-import { Megaphone, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
-
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  RelaybaseConfigAlert,
-  EmailAlerts,
-} from "@/email/components/EmailShared";
-import { DomainScopedLayout } from "@/dashboard/components/DomainScopedLayout";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
+import { EmailAlerts } from "@/email/components/EmailShared";
 import {
-  DetailView,
   EmailListContainer,
   EmailTableHeader,
   EmailTableRow,
@@ -29,22 +30,24 @@ import {
   ListToolbar,
 } from "@/email/components/EmailListShell";
 import type {
-  Address,
+  AudienceGroupSummary,
   EmailBroadcast,
-  EmailConfig,
 } from "@/email/components/types";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { FieldCheck } from "@/components/ui/field-check";
+
+const RESOURCE = "broadcasts:all";
 
 function statusVariant(
   status: string,
@@ -54,122 +57,77 @@ function statusVariant(
   return "secondary";
 }
 
-export function BroadcastsView() {
+function BroadcastsViewInner() {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { domain: activeDomain, domainQuery } = useDashboardDomain();
-  const domainKey = activeDomain ?? "none";
-  const [config, setConfig] = useState<EmailConfig | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const { broadcasts: broadcastsHref, audience } = useDashboardPaths();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [broadcasts, setBroadcasts] = useState<EmailBroadcast[]>([]);
-  const [audienceCount, setAudienceCount] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [groups, setGroups] = useState<AudienceGroupSummary[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(
     () =>
-      readEmailStale<EmailConfig>(productId, "config") === null &&
-      readEmailStale<{ broadcasts?: EmailBroadcast[] }>(productId, "broadcasts") ===
-        null,
+      readEmailStale<{ broadcasts?: EmailBroadcast[] }>(
+        productId,
+        RESOURCE,
+      ) === null,
   );
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sendFrom, setSendFrom] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
 
-  const dataRef = useRef({ config, broadcasts, sendFrom });
-  dataRef.current = { config, broadcasts, sendFrom };
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const broadcastsRef = useRef(broadcasts);
+  broadcastsRef.current = broadcasts;
 
   useEffect(() => {
-    const staleConfig = readEmailStale<EmailConfig>(productId, "config");
-    if (staleConfig) setConfig(staleConfig);
-    const staleAddresses = readEmailStale<{ addresses?: Address[] }>(
-      productId,
-      "addresses",
-    );
-    if (staleAddresses) {
-      const list = staleAddresses.addresses ?? [];
-      setAddresses(list);
-      if (list.length) setSendFrom((prev) => prev || list[0].email);
-    }
     const staleBroadcasts = readEmailStale<{ broadcasts?: EmailBroadcast[] }>(
       productId,
-      "broadcasts",
+      RESOURCE,
     );
     if (staleBroadcasts) setBroadcasts(staleBroadcasts.broadcasts ?? []);
-    const staleAudience = readEmailStale<{ contacts?: unknown[] }>(
+    const staleGroups = readEmailStale<{ groups?: AudienceGroupSummary[] }>(
       productId,
-      "audience",
+      "audience-groups",
     );
-    if (staleAudience) {
-      setAudienceCount(staleAudience.contacts?.length ?? 0);
-    }
-    if (staleConfig || staleBroadcasts) setLoading(false);
+    if (staleGroups) setGroups(staleGroups.groups ?? []);
+    if (staleBroadcasts) setLoading(false);
   }, [productId]);
 
   const refresh = useCallback(
     async (force?: boolean) => {
-      if (!activeDomain) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-      const hasData =
-        dataRef.current.config !== null || dataRef.current.broadcasts.length > 0;
+      const hasData = broadcastsRef.current.length > 0;
       if (!hasData) setLoading(true);
       setRefreshing(true);
       setError(null);
       try {
-        const [cfgResult, addrResult, bcResult, audResult] = await Promise.all([
-          fetchEmailCached<EmailConfig>(productId, "config", `${apiBase}/config`, {
-            refresh: force,
-            onUpdate: (data) => setConfig(data),
-          }),
-          fetchEmailCachedOptional<{ addresses?: Address[] }>(
+        const [bcResult, groupsResult] = await Promise.all([
+          fetchEmailCached<{ broadcasts?: EmailBroadcast[] }>(
             productId,
-            `addresses:${domainKey}`,
-            `${apiBase}/addresses${domainQuery()}`,
+            RESOURCE,
+            `${apiBase}/broadcasts`,
             {
               refresh: force,
-              onUpdate: (data) => {
-                const list = data?.addresses ?? [];
-                setAddresses(list);
-                if (list.length) setSendFrom((prev) => prev || list[0].email);
-              },
+              onUpdate: (data) => setBroadcasts(data.broadcasts ?? []),
             },
           ),
-          fetchEmailCachedOptional<{ broadcasts?: EmailBroadcast[] }>(
+          fetchEmailCachedOptional<{ groups?: AudienceGroupSummary[] }>(
             productId,
-            `broadcasts:${domainKey}`,
-            `${apiBase}/broadcasts${domainQuery()}`,
+            "audience-groups",
+            `${apiBase}/audience-groups`,
             {
               refresh: force,
-              onUpdate: (data) => setBroadcasts(data?.broadcasts ?? []),
-            },
-          ),
-          fetchEmailCachedOptional<{ contacts?: unknown[] }>(
-            productId,
-            `audience:${domainKey}`,
-            `${apiBase}/audience${domainQuery()}`,
-            {
-              refresh: force,
-              onUpdate: (data) => setAudienceCount(data?.contacts?.length ?? 0),
+              onUpdate: (data) => setGroups(data?.groups ?? []),
             },
           ),
         ]);
-        setConfig(cfgResult.data);
-        if (addrResult.ok) {
-          const list = addrResult.data?.addresses ?? [];
-          setAddresses(list);
-          if (list.length && !dataRef.current.sendFrom) setSendFrom(list[0].email);
-        }
-        if (bcResult.ok) setBroadcasts(bcResult.data?.broadcasts ?? []);
-        if (audResult.ok) {
-          setAudienceCount(audResult.data?.contacts?.length ?? 0);
-        }
+        setBroadcasts(bcResult.data.broadcasts ?? []);
+        if (groupsResult.ok) setGroups(groupsResult.data?.groups ?? []);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Refresh failed");
       } finally {
@@ -177,237 +135,314 @@ export function BroadcastsView() {
         setRefreshing(false);
       }
     },
-    [activeDomain, apiBase, domainKey, domainQuery, productId],
+    [apiBase, productId],
   );
 
   useEffect(() => {
-    refresh();
-  }, [refresh, activeDomain]);
+    void refresh();
+  }, [refresh]);
+
+  // Deep-link from Audience Send: /broadcasts?new=1&groupId=…
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    const groupId = searchParams.get("groupId")?.trim();
+    setSelectedGroupIds(groupId ? [groupId] : []);
+    setCreateError(null);
+    setCreateOpen(true);
+    router.replace(broadcastsHref);
+  }, [broadcastsHref, router, searchParams]);
+
+  const groupById = useMemo(
+    () => new Map(groups.map((g) => [g.id, g])),
+    [groups],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return broadcasts.filter(
       (b) =>
         !q ||
-        b.subject.toLowerCase().includes(q) ||
-        b.from.toLowerCase().includes(q),
+        (b.subject || "").toLowerCase().includes(q) ||
+        (b.from || "").toLowerCase().includes(q),
     );
   }, [broadcasts, search]);
 
-  const selected = filtered.find((b) => b.id === selectedId) ?? null;
+  const recipientCount = useMemo(() => {
+    const selected = new Set(selectedGroupIds);
+    return groups
+      .filter((g) => selected.has(g.id))
+      .reduce((sum, g) => sum + g.contactCount, 0);
+  }, [groups, selectedGroupIds]);
 
-  async function sendBroadcast() {
-    setSending(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await fetch(`${apiBase}/broadcasts${domainQuery()}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ from: sendFrom, subject, text: body }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Broadcast failed");
-      setCreateOpen(false);
-      setSubject("");
-      setBody("");
-      setSelectedId(data.broadcast.id);
-      setMessage(`Sent to ${data.broadcast.recipientCount} recipients`);
-      clearEmailCache(productId, `broadcasts:${domainKey}`);
-      await refresh(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Broadcast failed");
-    } finally {
-      setSending(false);
-    }
+  function openCreate() {
+    setSelectedGroupIds([]);
+    setCreateError(null);
+    setCreateOpen(true);
   }
 
-  const relaybaseOk = config?.relaybaseConfigured ?? false;
-
-  if (selected) {
-    return (
-      <DomainScopedLayout>
-        <EmailAlerts error={error} message={message} />
-        <EmailListContainer>
-          <DetailView
-            title={selected.subject}
-            onBack={() => setSelectedId(null)}
-          >
-            <p className="mb-4 text-xs text-muted-foreground">
-              {selected.recipientCount} recipients · From {selected.from} ·{" "}
-              {new Date(selected.sentAt ?? selected.createdAt).toLocaleString()}
-            </p>
-            <Badge variant={statusVariant(selected.status)} className="mb-4">
-              {selected.status}
-            </Badge>
-            <pre className="whitespace-pre-wrap text-sm">{selected.body}</pre>
-          </DetailView>
-        </EmailListContainer>
-      </DomainScopedLayout>
+  function toggleGroup(groupId: string, checked: boolean) {
+    setSelectedGroupIds((prev) =>
+      checked
+        ? Array.from(new Set([...prev, groupId]))
+        : prev.filter((id) => id !== groupId),
     );
   }
 
+  async function createBroadcast() {
+    if (selectedGroupIds.length === 0) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const res = await fetch(`${apiBase}/broadcasts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          groupIds: selectedGroupIds,
+          status: "draft",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to create broadcast");
+      setCreateOpen(false);
+      router.push(
+        `${broadcastsHref}/${encodeURIComponent(data.broadcast.id)}`,
+      );
+    } catch (e) {
+      setCreateError(
+        e instanceof Error ? e.message : "Failed to create broadcast",
+      );
+      setCreating(false);
+    }
+  }
+
+  function openBroadcast(id: string) {
+    router.push(`${broadcastsHref}/${encodeURIComponent(id)}`);
+  }
+
   return (
-    <DomainScopedLayout>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold tracking-tight">
-            {activeDomain || "Broadcasts"}
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Broadcasts for the selected domain
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger
-              render={
-                <Button
-                  size="sm"
-                  disabled={
-                    !relaybaseOk || audienceCount === 0 || !activeDomain
-                  }
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) {
+            setCreateError(null);
+            setCreating(false);
+          }
+        }}
+      >
+        <DesktopTitleBar
+          className="px-4 py-3"
+          end={
+            <>
+              <DialogTrigger
+                render={<Button size="sm" />}
+                onClick={() => {
+                  setSelectedGroupIds([]);
+                  setCreateError(null);
+                }}
+              >
+                <Megaphone className="size-4" />
+                New broadcast
+              </DialogTrigger>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void refresh(true)}
+                disabled={refreshing}
+              >
+                <RefreshCw
+                  className={refreshing ? "size-4 animate-spin" : "size-4"}
                 />
-              }
-            >
-              <Megaphone className="size-4" />
-              New broadcast
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>New broadcast</DialogTitle>
-              </DialogHeader>
-              <p className="text-xs text-muted-foreground">
-                Sends to {audienceCount} subscriber
-                {audienceCount === 1 ? "" : "s"}
-              </p>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">From</Label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                    value={sendFrom}
-                    onChange={(e) => setSendFrom(e.target.value)}
-                  >
-                    <option value="">Select sender</option>
-                    {addresses.map((a) => (
-                      <option key={a.email} value={a.email}>
-                        {a.email}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Subject</Label>
-                  <Input
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
+              </Button>
+            </>
+          }
+        >
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold tracking-tight">
+              Broadcasts
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Draft and send broadcasts across your audience groups
+            </p>
+          </div>
+        </DesktopTitleBar>
+
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New broadcast</DialogTitle>
+            <DialogDescription>
+              Choose the audience for this broadcast.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium">Audience</p>
+              <Button
+                type="button"
+                variant="link"
+                size="xs"
+                className="h-auto px-0"
+                nativeButton={false}
+                render={<Link href={audience} />}
+              >
+                <Plus className="size-3" />
+                New audience
+              </Button>
+            </div>
+
+            {groups.length > 0 ? (
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-border/60 p-2.5">
+                {groups.map((group) => (
+                  <FieldCheck
+                    key={group.id}
+                    id={`broadcast-create-group-${group.id}`}
+                    checked={selectedGroupIds.includes(group.id)}
+                    onCheckedChange={(checked) =>
+                      toggleGroup(group.id, checked)
+                    }
+                    label={
+                      <span>
+                        {group.name}{" "}
+                        <span className="text-muted-foreground">
+                          · {group.domain} · {group.contactCount} contacts
+                        </span>
+                      </span>
+                    }
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Body</Label>
-                  <Textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    rows={8}
-                  />
-                </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed border-border/60 px-4 py-6 text-center">
+                <Users className="mx-auto mb-2 size-7 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">
+                  No audience groups yet.
+                </p>
                 <Button
-                  className="w-full"
+                  className="mt-3"
                   size="sm"
-                  onClick={sendBroadcast}
-                  disabled={sending || !sendFrom || !subject || !body}
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link href={audience} />}
                 >
-                  {sending ? "Sending…" : "Send broadcast"}
+                  <Plus className="size-4" />
+                  New audience
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refresh(true)}
-            disabled={refreshing}
-          >
-            <RefreshCw
-              className={refreshing ? "size-4 animate-spin" : "size-4"}
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              {recipientCount} contact{recipientCount === 1 ? "" : "s"} across
+              selected groups
+            </p>
+
+            {createError ? (
+              <p className="text-xs text-destructive">{createError}</p>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={creating}
+              onClick={() => setCreateOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={selectedGroupIds.length === 0 || creating}
+              onClick={() => void createBroadcast()}
+            >
+              {creating ? "Creating…" : "Create broadcast"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+          <EmailAlerts
+            error={error}
+            message={null}
+            onDismissError={() => setError(null)}
+          />
+
+          <EmailListContainer>
+            <ListToolbar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search broadcasts…"
             />
-          </Button>
+            {filtered.length > 0 ? (
+              <>
+                <EmailTableHeader>
+                  <span>Subject</span>
+                  <span className="hidden sm:block">Groups</span>
+                  <span className="hidden sm:block">Date</span>
+                  <span className="text-right">Status</span>
+                </EmailTableHeader>
+                <div>
+                  {filtered.map((b) => (
+                    <EmailTableRow
+                      key={b.id}
+                      onClick={() => openBroadcast(b.id)}
+                      primary={b.subject?.trim() || "Untitled draft"}
+                      subject={b.groupIds
+                        .map((id) => groupById.get(id)?.name ?? id)
+                        .join(", ")}
+                      preview={b.from ? `From ${b.from}` : "Draft"}
+                      date={new Date(
+                        b.sentAt ?? b.createdAt,
+                      ).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                      status={
+                        <Badge
+                          variant={statusVariant(b.status)}
+                          className="text-[10px] capitalize"
+                        >
+                          {b.status}
+                        </Badge>
+                      }
+                    />
+                  ))}
+                </div>
+              </>
+            ) : !loading ? (
+              <EmptyListState
+                icon={Megaphone}
+                title="No broadcasts yet"
+                description="Pick an audience and draft a broadcast."
+                action={
+                  <Button size="sm" onClick={openCreate}>
+                    New broadcast
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="min-h-[200px]" />
+            )}
+          </EmailListContainer>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <EmailAlerts error={error} message={message} />
-      <RelaybaseConfigAlert show={!relaybaseOk} />
-
-      {audienceCount === 0 ? (
-        <Alert>
-          <AlertTitle>No audience</AlertTitle>
-          <AlertDescription>
-            Add subscribers in{" "}
-            <Link href="/audience" className="underline">
-              Audience
-            </Link>{" "}
-            first.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <EmailListContainer>
-        <ListToolbar
-          search={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search broadcasts…"
-        />
-        {filtered.length > 0 ? (
-          <>
-            <EmailTableHeader>
-              <span>Subject</span>
-              <span className="hidden sm:block">From</span>
-              <span className="hidden sm:block">Date</span>
-              <span className="text-right">Status</span>
-            </EmailTableHeader>
-            <div>
-              {filtered.map((b) => (
-                <EmailTableRow
-                  key={b.id}
-                  onClick={() => setSelectedId(b.id)}
-                  primary={b.subject}
-                  subject={b.from}
-                  date={new Date(b.sentAt ?? b.createdAt).toLocaleDateString(
-                    undefined,
-                    { month: "short", day: "numeric" },
-                  )}
-                  status={
-                    <Badge
-                      variant={statusVariant(b.status)}
-                      className="text-[10px]"
-                    >
-                      {b.status}
-                    </Badge>
-                  }
-                />
-              ))}
-            </div>
-          </>
-        ) : !loading ? (
-          <EmptyListState
-            icon={Megaphone}
-            title="No broadcasts yet"
-            description="Send a broadcast to your audience subscribers."
-            action={
-              <Button
-                size="sm"
-                disabled={!relaybaseOk || audienceCount === 0}
-                onClick={() => setCreateOpen(true)}
-              >
-                New broadcast
-              </Button>
-            }
-          />
-        ) : (
-          <div className="min-h-[200px]" />
-        )}
-      </EmailListContainer>
-    </DomainScopedLayout>
+export function BroadcastsView() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+      }
+    >
+      <BroadcastsViewInner />
+    </Suspense>
   );
 }

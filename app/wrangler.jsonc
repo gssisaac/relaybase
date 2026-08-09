@@ -1,13 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "relaybase-app",
-  "main": ".open-next/worker.js",
+  "main": "custom-worker.ts",
   "compatibility_date": "2026-07-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "account_id": "3adf03d991843094a7343eebc0a98007",
   "routes": [
     { "pattern": "app.relaybase.xyz", "custom_domain": true }
   ],
+  // Background pulling for Audience Group data sources with cron enabled.
+  // See src/lib/audience-cron.ts (fan-out) and custom-worker.ts (scheduled()).
+  "triggers": { "crons": ["*/15 * * * *"] },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

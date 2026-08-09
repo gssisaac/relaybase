@@ -630,6 +630,7 @@ export function AccountsView() {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
     </div>
   );
 }

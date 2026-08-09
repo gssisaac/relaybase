@@ -17,6 +17,7 @@ import {
 } from "@/lib/dashboard/DomainContext";
 import { ImportCloudflareZonesDialog } from "@/dashboard/components/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/email/components/EmailShared";
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -299,31 +300,36 @@ export function DomainsView() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <DesktopTitleBar
+        className="px-4 py-3"
+        end={
+          <>
+            <ImportCloudflareZonesDialog
+              open={refreshOpen}
+              onOpenChange={setRefreshOpen}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void refresh()}
+              disabled={loading}
+              aria-label="Refresh domain list"
+            >
+              <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+            </Button>
+          </>
+        }
+      >
+        <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight">Domains</h1>
           <p className="text-sm text-muted-foreground">
             Domains from your Cloudflare account. Refresh to pull in new zones.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ImportCloudflareZonesDialog
-            open={refreshOpen}
-            onOpenChange={setRefreshOpen}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void refresh()}
-            disabled={loading}
-            aria-label="Refresh domain list"
-          >
-            <RefreshCw className={cn("size-4", loading && "animate-spin")} />
-          </Button>
-        </div>
-      </div>
+      </DesktopTitleBar>
 
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
       <EmailAlerts
         error={error ?? localError}
         message={message}
@@ -505,6 +511,7 @@ export function DomainsView() {
           )}
         </CardContent>
       </Card>
+      </div>
 
       <Dialog
         open={Boolean(removeTarget)}

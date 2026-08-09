@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireAdmin } from "../lib/auth";
+import { measureInboundR2Usage } from "../lib/r2-usage";
 
 const adminConnect = new Hono<{ Bindings: Env }>();
 
@@ -23,6 +24,10 @@ adminConnect.get("/", async (c) => {
   if (denied) return denied;
 
   const r2Configured = await checkInboundR2(c.env.INBOUND);
+  const usage = r2Configured
+    ? await measureInboundR2Usage(c.env.INBOUND)
+    : null;
+
   return c.json({
     ok: true,
     product: "relaybase",
@@ -30,6 +35,7 @@ adminConnect.get("/", async (c) => {
     inbound: {
       r2Configured,
       bucketName: c.env.INBOUND_BUCKET_NAME || "relaybase-inbound",
+      usage,
     },
   });
 });

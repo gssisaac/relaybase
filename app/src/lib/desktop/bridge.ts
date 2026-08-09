@@ -111,6 +111,11 @@ export type WorkerConnectResult = {
   workerUrl: string;
   r2Configured: boolean;
   inboundBucketName: string;
+  /** Sum of inbound R2 object sizes in bytes, when the Worker reported usage. */
+  r2TotalBytes?: number | null;
+  r2ObjectCount?: number | null;
+  /** True when the Worker stopped scanning early (large bucket). */
+  r2UsageTruncated?: boolean | null;
 };
 
 export type DesktopErrorLink = {

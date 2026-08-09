@@ -120,6 +120,11 @@ struct WorkerConnectResult {
     worker_url: String,
     r2_configured: bool,
     inbound_bucket_name: String,
+    /// Sum of object sizes in the inbound R2 bucket (bytes). None if unknown.
+    r2_total_bytes: Option<u64>,
+    r2_object_count: Option<u64>,
+    /// True when the Worker stopped scanning early (large bucket).
+    r2_usage_truncated: Option<bool>,
 }
 
 fn normalize_worker_url(raw: &str) -> Result<String, String> {
@@ -191,6 +196,7 @@ async fn verify_worker_connection(
         );
     }
 
+    let usage = value.pointer("/inbound/usage");
     Ok(WorkerConnectResult {
         ok: true,
         product: "relaybase".into(),
@@ -209,6 +215,15 @@ async fn verify_worker_connection(
             .and_then(|v| v.as_str())
             .unwrap_or("relaybase-inbound")
             .into(),
+        r2_total_bytes: usage
+            .and_then(|u| u.get("totalBytes"))
+            .and_then(|v| v.as_u64()),
+        r2_object_count: usage
+            .and_then(|u| u.get("objectCount"))
+            .and_then(|v| v.as_u64()),
+        r2_usage_truncated: usage
+            .and_then(|u| u.get("truncated"))
+            .and_then(|v| v.as_bool()),
     })
 }
 

@@ -49,7 +49,33 @@ type WorkerStatus = {
   workerScriptName: string;
   r2Configured: boolean;
   inboundBucketName: string;
+  r2TotalBytes?: number | null;
+  r2ObjectCount?: number | null;
+  r2UsageTruncated?: boolean | null;
 };
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+function workerStatusFromConnect(
+  result: Awaited<ReturnType<typeof desktopVerifyWorkerConnection>>,
+): WorkerStatus {
+  return {
+    ok: result.ok,
+    workerUrl: result.workerUrl,
+    workerScriptName: result.workerScriptName,
+    r2Configured: result.r2Configured,
+    inboundBucketName: result.inboundBucketName || "relaybase-inbound",
+    r2TotalBytes: result.r2TotalBytes ?? null,
+    r2ObjectCount: result.r2ObjectCount ?? null,
+    r2UsageTruncated: result.r2UsageTruncated ?? null,
+  };
+}
 
 type HealthTone = "ok" | "bad" | "pending" | "neutral";
 
@@ -218,13 +244,7 @@ function DesktopSettingsBody() {
 
   async function probeWorkerStatus(url: string, token: string) {
     const result = await desktopVerifyWorkerConnection(url, token);
-    setWorkerStatus({
-      ok: result.ok,
-      workerUrl: result.workerUrl,
-      workerScriptName: result.workerScriptName,
-      r2Configured: result.r2Configured,
-      inboundBucketName: result.inboundBucketName || "relaybase-inbound",
-    });
+    setWorkerStatus(workerStatusFromConnect(result));
     return result;
   }
 
@@ -241,13 +261,7 @@ function DesktopSettingsBody() {
       try {
         const result = await desktopVerifyWorkerConnection(url, token);
         if (cancelled) return;
-        setWorkerStatus({
-          ok: result.ok,
-          workerUrl: result.workerUrl,
-          workerScriptName: result.workerScriptName,
-          r2Configured: result.r2Configured,
-          inboundBucketName: result.inboundBucketName || "relaybase-inbound",
-        });
+        setWorkerStatus(workerStatusFromConnect(result));
       } catch {
         if (!cancelled) {
           setWorkerStatus({
@@ -256,6 +270,9 @@ function DesktopSettingsBody() {
             workerScriptName: credentials?.workerScriptName || "relaybase-api",
             r2Configured: false,
             inboundBucketName: "relaybase-inbound",
+            r2TotalBytes: null,
+            r2ObjectCount: null,
+            r2UsageTruncated: null,
           });
         }
       } finally {
@@ -335,6 +352,9 @@ function DesktopSettingsBody() {
         workerScriptName: credentials?.workerScriptName || "relaybase-api",
         r2Configured: false,
         inboundBucketName: "relaybase-inbound",
+        r2TotalBytes: null,
+        r2ObjectCount: null,
+        r2UsageTruncated: null,
       });
     } finally {
       setStatusBusy(false);
@@ -688,6 +708,30 @@ function DesktopSettingsBody() {
               <div>
                 <p className="text-muted-foreground">Binding</p>
                 <p className="mt-0.5 font-mono">INBOUND</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Size</p>
+                <p className="mt-0.5 font-mono">
+                  {statusBusy && workerStatus?.r2TotalBytes == null
+                    ? "…"
+                    : workerStatus?.r2TotalBytes != null
+                      ? `${formatBytes(workerStatus.r2TotalBytes)}${
+                          workerStatus.r2UsageTruncated ? "+" : ""
+                        }`
+                      : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Objects</p>
+                <p className="mt-0.5 font-mono">
+                  {statusBusy && workerStatus?.r2ObjectCount == null
+                    ? "…"
+                    : workerStatus?.r2ObjectCount != null
+                      ? `${workerStatus.r2ObjectCount.toLocaleString()}${
+                          workerStatus.r2UsageTruncated ? "+" : ""
+                        }`
+                      : "—"}
+                </p>
               </div>
             </div>
           ) : null}

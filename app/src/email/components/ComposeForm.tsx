@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/select";
 import type { Address } from "./types";
 
+const COMPACT_BODY_MIN_PX = 140;
+
+function compactComposerMaxPx() {
+  if (typeof window === "undefined") return 700;
+  return Math.min(Math.floor(window.innerHeight * 0.8), 700);
+}
+
 export function ComposeForm({
   sendFrom,
   setSendFrom,
@@ -30,6 +37,7 @@ export function ComposeForm({
   onDiscard,
   compact,
   allowFromSelect = false,
+  autoFocusBody = false,
 }: {
   sendFrom: string;
   setSendFrom: (v: string) => void;
@@ -49,12 +57,60 @@ export function ComposeForm({
   compact?: boolean;
   /** Dropdown only when From was not pre-specified (account / draft / reply). */
   allowFromSelect?: boolean;
+  /** Focus the body textarea on mount (reply composer). */
+  autoFocusBody?: boolean;
 }) {
   const selected = addresses.find((a) => a.email === sendFrom);
   const displayName = selected?.displayName?.trim();
   const fromLabel = displayName
     ? `${displayName} <${sendFrom}>`
     : sendFrom || "Select account";
+
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const fieldsRef = React.useRef<HTMLDivElement>(null);
+  const footerRef = React.useRef<HTMLDivElement>(null);
+  const bodyWrapRef = React.useRef<HTMLDivElement>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  const syncCompactBodyHeight = React.useCallback(() => {
+    if (!compact) return;
+    const ta = textareaRef.current;
+    const fields = fieldsRef.current;
+    const footer = footerRef.current;
+    const bodyWrap = bodyWrapRef.current;
+    if (!ta || !fields || !footer || !bodyWrap) return;
+
+    const maxTotal = compactComposerMaxPx();
+    const chrome =
+      fields.offsetHeight +
+      footer.offsetHeight +
+      // body wrap vertical padding (p-4 = 32)
+      32;
+    const maxBody = Math.max(COMPACT_BODY_MIN_PX, maxTotal - chrome);
+
+    ta.style.height = "0px";
+    ta.style.overflowY = "hidden";
+    const next = Math.max(COMPACT_BODY_MIN_PX, ta.scrollHeight);
+    const capped = Math.min(next, maxBody);
+    ta.style.height = `${capped}px`;
+    ta.style.overflowY = next > maxBody ? "auto" : "hidden";
+  }, [compact]);
+
+  React.useLayoutEffect(() => {
+    syncCompactBodyHeight();
+  }, [sendText, syncCompactBodyHeight, compact]);
+
+  React.useEffect(() => {
+    if (!compact) return;
+    const onResize = () => syncCompactBodyHeight();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [compact, syncCompactBodyHeight]);
+
+  React.useLayoutEffect(() => {
+    if (!autoFocusBody) return;
+    textareaRef.current?.focus({ preventScroll: true });
+  }, [autoFocusBody]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -67,14 +123,18 @@ export function ComposeForm({
 
   return (
     <div
+      ref={rootRef}
       onKeyDown={handleKeyDown}
       className={
         compact
-          ? "flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm"
+          ? "flex max-h-[min(80dvh,700px)] flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm"
           : "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm"
       }
     >
-      <div className="flex flex-col divide-y divide-border/20 px-4">
+      <div
+        ref={fieldsRef}
+        className="flex shrink-0 flex-col divide-y divide-border/20 px-4"
+      >
         <div className="flex items-center gap-2 py-1">
           <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
             From:
@@ -167,7 +227,7 @@ export function ComposeForm({
             value={sendSubject}
             onChange={(e) => setSendSubject(e.target.value)}
             placeholder="Enter subject..."
-            autoFocus={!compact}
+            autoFocus={!compact && !autoFocusBody}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
@@ -178,6 +238,7 @@ export function ComposeForm({
       </div>
 
       <div
+        ref={bodyWrapRef}
         className={
           compact
             ? "flex min-h-[160px] flex-col p-4"
@@ -185,6 +246,7 @@ export function ComposeForm({
         }
       >
         <textarea
+          ref={textareaRef}
           value={sendText}
           onChange={(e) => setSendText(e.target.value)}
           placeholder="Write your message here..."
@@ -194,13 +256,16 @@ export function ComposeForm({
           spellCheck={false}
           className={
             compact
-              ? "min-h-[140px] resize-y border-0 bg-transparent text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40 focus:ring-0"
+              ? "min-h-[140px] w-full resize-none border-0 bg-transparent text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40 focus:ring-0"
               : "min-h-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40 focus:ring-0"
           }
         />
       </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/20 bg-muted/10 px-4 py-3">
+      <div
+        ref={footerRef}
+        className="flex shrink-0 items-center justify-between gap-2 border-t border-border/20 bg-muted/10 px-4 py-3"
+      >
         <span className="select-none text-xs text-muted-foreground/60">
           {draftStatus ? draftStatus : "⌘Enter to send"}
         </span>

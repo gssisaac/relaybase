@@ -103,7 +103,8 @@ function composeHref(compose: string, fromAccount: EmailAccountFilter) {
 function itemSortAt(item: MailListItem) {
   if (item.kind === "inbox") return item.message.receivedAt;
   if (item.kind === "sent") return item.message.sentAt;
-  return item.message.updatedAt;
+  // Drafts: sort by first creation so autosave doesn't reshuffle the list.
+  return item.message.createdAt;
 }
 
 function itemKey(item: MailListItem) {

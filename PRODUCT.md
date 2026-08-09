@@ -33,7 +33,7 @@ Solo builders and multi-product operators who already manage domains on Cloudfla
 
 ## Core capabilities
 
-- Mac app: inbox, compose, accounts, domains, metrics (same IA as prior `app/` dashboard)
+- Mac app: inbox, compose, accounts, domains (same IA as prior `app/` dashboard)
 - User self-install of `server/` Worker via install ZIP + Wrangler (app verifies URL + admin token)
 - Domain-scoped API keys, webhooks, inbound R2 storage — owned by the user
 - Operator `admin/`: licenses, Worker health for Relaybase's own domain, release ops

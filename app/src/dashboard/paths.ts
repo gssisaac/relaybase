@@ -3,7 +3,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
   AtSign,
-  BarChart3,
   Globe,
   KeyRound,
   LayoutDashboard,
@@ -27,7 +26,6 @@ export function useDashboardPaths() {
   const accounts = useProductHref("accounts");
   const broadcasts = useProductHref("broadcasts");
   const audience = useProductHref("audience");
-  const metrics = useProductHref("metrics");
   const settingsBase = useProductHref("settings");
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
@@ -37,7 +35,6 @@ export function useDashboardPaths() {
     { href: accounts, label: "Accounts", icon: AtSign },
     { href: broadcasts, label: "Broadcasts", icon: Megaphone },
     { href: audience, label: "Audience", icon: Users },
-    { href: metrics, label: "Metrics", icon: BarChart3 },
     { href: settingsBase, label: "Settings", icon: Settings },
   ];
 
@@ -50,7 +47,6 @@ export function useDashboardPaths() {
     accounts,
     broadcasts,
     audience,
-    metrics,
     settingsBase,
     tabs,
   };

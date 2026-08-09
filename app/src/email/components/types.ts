@@ -289,18 +289,3 @@ export type BroadcastProgress = {
   progress: BroadcastSendRun | null;
   history: BroadcastSendRun[];
 };
-
-export type EmailMetrics = {
-  domain: string;
-  relaybaseConfigured: boolean;
-  cloudflareConfigured: boolean;
-  sendingEnabled: boolean;
-  routingEnabled: boolean;
-  dnsOk: number;
-  dnsTotal: number;
-  routingActivityCount: number;
-  audienceCount: number;
-  senderCount: number;
-  broadcastCount: number;
-  broadcastsSent: number;
-};

@@ -244,7 +244,6 @@ Customer-facing mailbox UI in `app/src/relaybase-email/`:
 | Audience | Contacts for broadcasts |
 | Broadcasts | Bulk / campaign sends (dev stubs) |
 | Domains | Domain connection and DNS hints |
-| Metrics | Delivery stats |
 | Settings | API keys, domain config, inbound routing |
 
 Auth: cookie `relaybase_user` after id-only sign-in/register (`/api/auth`). Dev data in `data/users/<id>.json`.

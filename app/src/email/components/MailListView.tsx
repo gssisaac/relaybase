@@ -29,6 +29,10 @@ import {
   type ThreadComposeMode,
 } from "@/email/components/ConversationThreadView";
 import { InboundEmailDetail } from "@/email/components/EmailShared";
+import {
+  EMAIL_SEND_UNDONE,
+  type EmailSendUndoneDetail,
+} from "@/email/components/email-send-events";
 import { InlineReplyComposer } from "@/email/components/InlineReplyComposer";
 import { useMailboxNav } from "@/email/components/MailboxNavContext";
 import type { MailListItem, RoutingActivityEvent } from "@/email/components/types";
@@ -409,6 +413,25 @@ export const MailListView = observer(function MailListView({
     [],
   );
 
+  // Unsend restores the draft then navigates with ?reply=1 — also reopen here so
+  // same-route searchParam updates always restore the reply editor (not just body).
+  useEffect(() => {
+    const onUndone = (event: Event) => {
+      const detail = (event as CustomEvent<EmailSendUndoneDetail>).detail;
+      if (!detail?.replyKey) return;
+      if (folder !== "inbox") return;
+      openCompose(
+        detail.replyAll ? "replyAll" : "reply",
+        `inbound:${detail.replyKey}`,
+      );
+    };
+    window.addEventListener(EMAIL_SEND_UNDONE, onUndone);
+    return () => window.removeEventListener(EMAIL_SEND_UNDONE, onUndone);
+  }, [folder, openCompose]);
+
+  const wantsReplyParam = searchParams.get("reply");
+  const wantsReplyAllParam = searchParams.get("replyAll");
+
   // When opening a message: restore reply panel from draft or ?reply= query
   useEffect(() => {
     if (folder !== "inbox" || !messageId) {
@@ -417,15 +440,12 @@ export const MailListView = observer(function MailListView({
       return;
     }
     const threadKey = selectedThread?.threadId ?? messageId;
-    const wantsReply = searchParams.get("reply") === "1";
-    const wantsReplyAll = searchParams.get("replyAll") === "1";
+    const wantsReply = wantsReplyParam === "1";
+    const wantsReplyAll = wantsReplyAllParam === "1";
     if (wantsReply || wantsReplyAll) {
+      // URL messageId is the reply target (Unsend navigates to draft.replyKey).
       composeDismissedThreadRef.current = null;
-      setComposeSourceId(
-        selectedThread
-          ? `inbound:${selectedThread.latestInboundKey}`
-          : `inbound:${messageId}`,
-      );
+      setComposeSourceId(`inbound:${messageId}`);
       setComposeMode(wantsReplyAll ? "replyAll" : "reply");
       const params = new URLSearchParams(searchParams.toString());
       params.delete("reply");
@@ -451,9 +471,16 @@ export const MailListView = observer(function MailListView({
       setComposeSourceId(null);
       setComposeMode(null);
     }
-    // Only re-run when the opened message changes — not on every draft upsert
+    // Re-run on message change or Unsend navigation (?reply= / ?replyAll=).
+    // Skip store/draft deps so ordinary draft upserts don't reopen compose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folder, messageId, selectedThread?.threadId]);
+  }, [
+    folder,
+    messageId,
+    selectedThread?.threadId,
+    wantsReplyParam,
+    wantsReplyAllParam,
+  ]);
 
   const selected =
     messageId != null

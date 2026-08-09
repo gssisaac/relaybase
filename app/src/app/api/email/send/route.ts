@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { plainTextToEmailHtml } from "@/email/plain-text-to-email-html";
 import {
   normalizeDomain,
   readUserEmailData,
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
 
     const subject = body.subject ?? "(no subject)";
     const text = body.text?.trim() ?? "";
+    const html = plainTextToEmailHtml(text);
     const fromName =
       data.addresses.find((a) => a.email.toLowerCase() === from.toLowerCase())
         ?.displayName?.trim() || undefined;
@@ -123,6 +125,7 @@ export async function POST(request: Request) {
           : undefined,
         subject,
         text,
+        html,
         inReplyTo,
         references,
       });

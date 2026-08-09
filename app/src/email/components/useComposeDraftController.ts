@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
+import { scheduleEmailSend } from "@/email/components/email-pending-send";
 import {
   dispatchEmailSendFailed,
-  dispatchEmailSendStarted,
   dispatchEmailSendSucceeded,
+  dispatchEmailSendUndone,
 } from "@/email/components/email-send-events";
 import type { Address } from "@/email/components/types";
 import { domainOf } from "@/email/reply-helpers";
@@ -83,8 +84,7 @@ export type UseComposeDraftControllerInput = {
   /** Standalone compose skips saving empty drafts. */
   skipAutosaveWhenEmpty?: boolean;
   /**
-   * When true (compose page), call onAfterSend before the fetch completes.
-   * When false (inline reply), call onAfterSend only after success.
+   * @deprecated Ignored — send always closes immediately for the Unsend window.
    */
   navigateOnSendStart?: boolean;
   onAfterDiscard: () => void;
@@ -100,10 +100,11 @@ export function useComposeDraftController({
   initial,
   fromFallbacks = [],
   skipAutosaveWhenEmpty = false,
-  navigateOnSendStart = false,
+  navigateOnSendStart: _navigateOnSendStart = false,
   onAfterDiscard,
   onAfterSend,
 }: UseComposeDraftControllerInput) {
+  void _navigateOnSendStart;
   const initialDraftId =
     mode.kind === "reply"
       ? mode.draftId
@@ -334,42 +335,74 @@ export function useComposeDraftController({
     const domainKey = domainOf(sendFrom) || "none";
     const from = sendFrom;
 
+    const restoreDraftId =
+      draftId ??
+      (currentMode.kind === "reply" ? currentMode.draftId : crypto.randomUUID());
+    const restoreDraft = {
+      id: restoreDraftId,
+      from: sendFrom,
+      to: sendTo,
+      cc: sendCc || undefined,
+      subject: sendSubject,
+      body: sendText,
+      ...(currentMode.kind === "reply"
+        ? {
+            replyKey: currentMode.replyKey,
+            replyAll: currentMode.replyAll,
+          }
+        : {}),
+    };
+
     closedRef.current = true;
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
     if (draftId) store.removeDraft(draftId);
+    // Close composer immediately; actual network send waits for Unsend window.
+    onAfterSendRef.current({ from });
 
-    dispatchEmailSendStarted();
-    if (navigateOnSendStart) {
-      onAfterSendRef.current({ from });
-    }
-
-    void (async () => {
-      try {
-        const res = await fetch(`${apiBase}/send`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+    scheduleEmailSend({
+      onUnsend: () => {
+        store.upsertDraft(restoreDraft);
+        dispatchEmailSendUndone({
+          draftId: restoreDraftId,
+          from,
+          replyKey:
+            currentMode.kind === "reply" ? currentMode.replyKey : undefined,
+          replyAll:
+            currentMode.kind === "reply" ? currentMode.replyAll : undefined,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Send failed");
-        clearEmailCache(productId, `sent:${domainKey}`);
-        dispatchEmailSendSucceeded();
-        if (!navigateOnSendStart) {
-          onAfterSendRef.current({ from });
+      },
+      execute: async () => {
+        // Unsend toast already covered the waiting UI — skip "Sending…" loading.
+        try {
+          const res = await fetch(`${apiBase}/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Send failed");
+          clearEmailCache(productId, `sent:${domainKey}`);
+          dispatchEmailSendSucceeded();
+        } catch (e) {
+          // Keep the message — restore draft so the user can retry.
+          store.upsertDraft(restoreDraft);
+          dispatchEmailSendFailed(
+            e instanceof Error ? e.message : "Send failed",
+          );
+          dispatchEmailSendUndone({
+            draftId: restoreDraftId,
+            from,
+            replyKey:
+              currentMode.kind === "reply" ? currentMode.replyKey : undefined,
+            replyAll:
+              currentMode.kind === "reply" ? currentMode.replyAll : undefined,
+          });
         }
-      } catch (e) {
-        dispatchEmailSendFailed(
-          e instanceof Error ? e.message : "Send failed",
-        );
-        if (!navigateOnSendStart) {
-          closedRef.current = false;
-          setSending(false);
-        }
-      }
-    })();
+      },
+    });
   }
 
   return {

@@ -12,6 +12,7 @@ import { reaction } from "mobx";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useMailAccounts } from "@/email/components/MailAccountsContext";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
+import { EmailSendUndoneNavigator } from "@/email/components/EmailSendUndoneNavigator";
 import { useEmailPaths } from "@/email/paths";
 import { EmailMailboxStore } from "@/email/email-mailbox-store";
 import type { TrashEntry, TrashKind } from "@/email/trash-store";
@@ -116,6 +117,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
 
   return (
     <EmailMailboxStoreContext.Provider value={liveStore}>
+      <EmailSendUndoneNavigator />
       {children}
     </EmailMailboxStoreContext.Provider>
   );

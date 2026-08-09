@@ -181,7 +181,7 @@ In-product copyable guide: `AudienceDataSourceGuide` (`AUDIENCE_DATA_SOURCE_GUID
 - Live state on `group.syncProgress`; recent runs in `group.syncHistory`
 - API: `GET /api/email/audience-groups/:groupId/progress`
 - UI polls ~2s while status is `running`
-- Shows bar, current/total, success/failed, elapsed, ETA
+- Shows a live **Current run** panel only while `syncProgress.status === "running"`; when idle, only the **Past runs** table (no empty current-run or summary cards)
 
 Synced contacts are replaced atomically at end of a successful sync. **Manual** contacts in the same group are kept.
 

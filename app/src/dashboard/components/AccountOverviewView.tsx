@@ -16,6 +16,11 @@ import {
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { accountMailboxNav } from "@/email/components/MailboxNavContext";
 import { useEmailPaths } from "@/email/paths";
+import {
+  dashboardCacheNeedsRefresh,
+  loadAccountStatsCache,
+  saveAccountStatsCache,
+} from "@/lib/dashboard/dashboard-cache-disk";
 
 type StatsRange = "24h" | "7d" | "30d";
 
@@ -54,29 +59,51 @@ export function AccountOverviewView({ email }: { email: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ email, range });
-      const res = await fetch(`${apiBase}/account-stats?${params}`, {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
-      setStats(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load stats");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [apiBase, email, range]);
+  const load = useCallback(
+    async (nextRange: StatsRange, force?: boolean) => {
+      setError(null);
+
+      const cached = await loadAccountStatsCache<AccountStats>(email, nextRange);
+      if (cached) {
+        setStats(cached.data);
+        setLoading(false);
+      } else {
+        setStats(null);
+      }
+
+      const needsNetwork =
+        force === true ||
+        !cached ||
+        dashboardCacheNeedsRefresh(cached.fetchedAt);
+
+      if (!needsNetwork) return;
+
+      // Keep cached numbers on screen; only spin the refresh control.
+      if (cached) setRefreshing(true);
+      else setLoading(true);
+
+      try {
+        const params = new URLSearchParams({ email, range: nextRange });
+        const res = await fetch(`${apiBase}/account-stats?${params}`, {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as AccountStats & { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
+        setStats(data);
+        await saveAccountStatsCache(email, nextRange, data);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load stats");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [apiBase, email],
+  );
 
   useEffect(() => {
-    setLoading(true);
-    void refresh();
-  }, [refresh]);
+    void load(range);
+  }, [load, range]);
 
   const cards = [
     {
@@ -143,7 +170,7 @@ export function AccountOverviewView({ email }: { email: string }) {
             variant="outline"
             size="sm"
             disabled={refreshing}
-            onClick={() => void refresh()}
+            onClick={() => void load(range, true)}
           >
             <RefreshCw
               className={refreshing ? "size-4 animate-spin" : "size-4"}

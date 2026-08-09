@@ -15,6 +15,11 @@ import {
 } from "@/components/ui/table";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { useEmailPaths } from "@/email/paths";
+import {
+  dashboardCacheNeedsRefresh,
+  loadAccountLogsCache,
+  saveAccountLogsCache,
+} from "@/lib/dashboard/dashboard-cache-disk";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "failed" | "success";
@@ -78,33 +83,60 @@ export function AccountLogsView({ email }: { email: string }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
+  const load = useCallback(
+    async (nextStatus: StatusFilter, force?: boolean) => {
+      setError(null);
+
+      const cached = await loadAccountLogsCache<AccountLogsResponse>(
         email,
-        status: statusFilter,
-        limit: "150",
-      });
-      const res = await fetch(`${apiBase}/account-logs?${params}`, {
-        cache: "no-store",
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to load logs");
-      setData(json);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load logs");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [apiBase, email, statusFilter]);
+        nextStatus,
+      );
+      if (cached) {
+        setData(cached.data);
+        setLoading(false);
+      } else {
+        setData(null);
+      }
+
+      const needsNetwork =
+        force === true ||
+        !cached ||
+        dashboardCacheNeedsRefresh(cached.fetchedAt);
+
+      if (!needsNetwork) return;
+
+      // Keep cached rows on screen; only spin the refresh control.
+      if (cached) setRefreshing(true);
+      else setLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          email,
+          status: nextStatus,
+          limit: "150",
+        });
+        const res = await fetch(`${apiBase}/account-logs?${params}`, {
+          cache: "no-store",
+        });
+        const json = (await res.json()) as AccountLogsResponse & {
+          error?: string;
+        };
+        if (!res.ok) throw new Error(json.error ?? "Failed to load logs");
+        setData(json);
+        await saveAccountLogsCache(email, nextStatus, json);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load logs");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [apiBase, email],
+  );
 
   useEffect(() => {
-    setLoading(true);
-    void refresh();
-  }, [refresh]);
+    void load(statusFilter);
+  }, [load, statusFilter]);
 
   const logs = data?.logs ?? [];
   const selected = logs.find((log) => log.id === selectedId) ?? null;
@@ -141,7 +173,7 @@ export function AccountLogsView({ email }: { email: string }) {
             variant="outline"
             size="sm"
             disabled={refreshing}
-            onClick={() => void refresh()}
+            onClick={() => void load(statusFilter, true)}
           >
             <RefreshCw
               className={refreshing ? "size-4 animate-spin" : "size-4"}

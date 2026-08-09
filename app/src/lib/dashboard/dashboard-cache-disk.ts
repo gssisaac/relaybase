@@ -82,6 +82,18 @@ function addressesCachePath(domain: string) {
   return resourceCachePath(`addresses-${safeResource(domain)}`);
 }
 
+function accountStatsCachePath(email: string, range: string) {
+  return resourceCachePath(
+    `account-stats-${safeResource(email)}-${safeResource(range)}`,
+  );
+}
+
+function accountLogsCachePath(email: string, status: string) {
+  return resourceCachePath(
+    `account-logs-${safeResource(email)}-${safeResource(status)}`,
+  );
+}
+
 export function dashboardCacheAgeMs(fetchedAt: string): number {
   const ts = new Date(fetchedAt).getTime();
   if (!Number.isFinite(ts)) return Number.POSITIVE_INFINITY;
@@ -178,4 +190,58 @@ export async function saveAddressesCache<T>(
     data,
   };
   await writeJson(addressesCachePath(key), envelope);
+}
+
+export async function loadAccountStatsCache<T>(
+  email: string,
+  range: string,
+): Promise<DashboardCacheEnvelope<T> | null> {
+  const key = email.trim().toLowerCase();
+  if (!key) return null;
+  const envelope = await readJson<DashboardCacheEnvelope<T>>(
+    accountStatsCachePath(key, range),
+  );
+  if (!envelope?.fetchedAt || envelope.data == null) return null;
+  return envelope;
+}
+
+export async function saveAccountStatsCache<T>(
+  email: string,
+  range: string,
+  data: T,
+): Promise<void> {
+  const key = email.trim().toLowerCase();
+  if (!key) return;
+  const envelope: DashboardCacheEnvelope<T> = {
+    fetchedAt: new Date().toISOString(),
+    data,
+  };
+  await writeJson(accountStatsCachePath(key, range), envelope);
+}
+
+export async function loadAccountLogsCache<T>(
+  email: string,
+  status: string,
+): Promise<DashboardCacheEnvelope<T> | null> {
+  const key = email.trim().toLowerCase();
+  if (!key) return null;
+  const envelope = await readJson<DashboardCacheEnvelope<T>>(
+    accountLogsCachePath(key, status),
+  );
+  if (!envelope?.fetchedAt || envelope.data == null) return null;
+  return envelope;
+}
+
+export async function saveAccountLogsCache<T>(
+  email: string,
+  status: string,
+  data: T,
+): Promise<void> {
+  const key = email.trim().toLowerCase();
+  if (!key) return;
+  const envelope: DashboardCacheEnvelope<T> = {
+    fetchedAt: new Date().toISOString(),
+    data,
+  };
+  await writeJson(accountLogsCachePath(key, status), envelope);
 }

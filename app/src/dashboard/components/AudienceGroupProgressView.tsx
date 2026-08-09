@@ -1,7 +1,7 @@
 "use client";
 
 import { Activity, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAudienceGroupDetail } from "@/dashboard/components/AudienceGroupDetailContext";
 import { useEmailPaths } from "@/email/paths";
@@ -20,6 +20,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 2000;
@@ -144,7 +152,9 @@ function RunStats({ run }: { run: AudienceSyncRun }) {
         <div>
           <p className="text-xs text-muted-foreground">Success / failed</p>
           <p className="tabular-nums font-medium">
-            {(run.successCount ?? (run.status === "success" ? processed : 0)).toLocaleString()}
+            {(
+              run.successCount ?? (run.status === "success" ? processed : 0)
+            ).toLocaleString()}
             {" / "}
             {(run.failedCount ?? run.skippedCount ?? 0).toLocaleString()}
           </p>
@@ -167,6 +177,77 @@ function RunStats({ run }: { run: AudienceSyncRun }) {
         <p className="text-xs text-destructive">{run.error}</p>
       ) : null}
     </div>
+  );
+}
+
+function PastRunsTable({ history }: { history: AudienceSyncRun[] }) {
+  if (history.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">No past runs yet.</p>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Status</TableHead>
+          <TableHead>Trigger</TableHead>
+          <TableHead>Started</TableHead>
+          <TableHead className="text-right">Success</TableHead>
+          <TableHead className="text-right">Failed</TableHead>
+          <TableHead className="text-right">Duration</TableHead>
+          <TableHead>Error</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {history.map((run) => {
+          const elapsed =
+            run.finishedAt != null && run.finishedAt !== ""
+              ? new Date(run.finishedAt).getTime() -
+                new Date(run.startedAt).getTime()
+              : null;
+          const success =
+            run.successCount ?? run.processedCount ?? 0;
+          const failed = run.failedCount ?? run.skippedCount ?? 0;
+          return (
+            <TableRow key={run.id}>
+              <TableCell>
+                <Badge
+                  variant={statusVariant(run.status)}
+                  className="text-[10px] capitalize"
+                >
+                  {run.status}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] capitalize"
+                >
+                  {run.trigger}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-muted-foreground whitespace-nowrap">
+                {formatWhen(run.startedAt)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {success.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {failed.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right tabular-nums text-muted-foreground">
+                {formatDuration(elapsed)}
+              </TableCell>
+              <TableCell className="max-w-56 truncate text-destructive">
+                {run.error || "—"}
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -203,17 +284,23 @@ export function AudienceGroupProgressView() {
     void load();
   }, [load]);
 
-  const running = data?.progress?.status === "running";
+  // Only treat a run as "current" while it is actually in flight.
+  const current = useMemo((): AudienceSyncRun | null => {
+    const progress = data?.progress ?? null;
+    if (progress?.status === "running") return progress;
+    return null;
+  }, [data?.progress]);
+
+  const inProgress = current != null;
 
   useEffect(() => {
-    if (!running) return;
+    if (!inProgress) return;
     const id = window.setInterval(() => {
       void load({ quiet: true });
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [load, running]);
+  }, [load, inProgress]);
 
-  const current = data?.progress ?? null;
   const history = data?.history ?? [];
 
   if (loading && !data) {
@@ -240,7 +327,9 @@ export function AudienceGroupProgressView() {
         <div>
           <h2 className="text-sm font-semibold">Sync progress</h2>
           <p className="text-xs text-muted-foreground">
-            Live status for manual refresh and scheduled cron pulls.
+            {inProgress
+              ? "Live status for manual refresh and scheduled cron pulls."
+              : "Past sync attempts for this group."}
           </p>
         </div>
         <Button
@@ -262,123 +351,32 @@ export function AudienceGroupProgressView() {
         onDismissError={() => setError(null)}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      {inProgress && current ? (
         <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Schedule</CardDescription>
-            <CardTitle className="text-base font-semibold">
-              {data?.cronEnabled && data.cronIntervalMinutes
-                ? `Every ${data.cronIntervalMinutes}m`
-                : "Off"}
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Activity className="size-4" />
+              Current run
             </CardTitle>
+            <CardDescription>
+              Started {formatWhen(current.startedAt)}
+            </CardDescription>
           </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Next due</CardDescription>
-            <CardTitle className="text-base font-semibold">
-              {data?.cronEnabled ? formatWhen(data.nextDueAt ?? undefined) : "—"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Last sync</CardDescription>
-            <CardTitle className="text-base font-semibold">
-              {formatWhen(data?.lastSyncAt)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Activity className="size-4" />
-            Current run
-          </CardTitle>
-          <CardDescription>
-            {current
-              ? `Started ${formatWhen(current.startedAt)}`
-              : "No sync has run yet for this group."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {current ? (
+          <CardContent>
             <RunStats run={current} />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Trigger a refresh from Overview, or wait for the next scheduled
-              cron pull.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Recent runs</CardTitle>
-          <CardDescription>
+      <div className="space-y-2">
+        <div>
+          <h3 className="text-sm font-semibold">Past runs</h3>
+          <p className="text-xs text-muted-foreground">
             Latest sync attempts (manual and cron).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {history.length > 0 ? (
-            <ul className="divide-y divide-border">
-              {history.map((run) => {
-                const elapsed =
-                  run.finishedAt != null && run.finishedAt !== ""
-                    ? new Date(run.finishedAt).getTime() -
-                      new Date(run.startedAt).getTime()
-                    : null;
-                return (
-                  <li
-                    key={run.id}
-                    className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm first:pt-0 last:pb-0"
-                  >
-                    <div className="min-w-0 space-y-0.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge
-                          variant={statusVariant(run.status)}
-                          className="text-[10px] capitalize"
-                        >
-                          {run.status}
-                        </Badge>
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] capitalize"
-                        >
-                          {run.trigger}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {formatWhen(run.startedAt)}
-                        </span>
-                      </div>
-                      {run.error ? (
-                        <p className="truncate text-xs text-destructive">
-                          {run.error}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-                      <p>
-                        {(run.successCount ?? run.processedCount ?? 0).toLocaleString()}
-                        {" ok"}
-                        {(run.failedCount ?? run.skippedCount ?? 0) > 0
-                          ? ` · ${(run.failedCount ?? run.skippedCount ?? 0).toLocaleString()} failed`
-                          : ""}
-                      </p>
-                      <p>{formatDuration(elapsed)}</p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No runs yet.</p>
-          )}
-        </CardContent>
-      </Card>
+          </p>
+        </div>
+        <PastRunsTable history={history} />
+      </div>
     </div>
   );
 }

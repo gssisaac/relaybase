@@ -33,9 +33,11 @@ Server/worker data (Cloudflare KV, R2, D1) is separate — that is the remote pr
 ├── app-icon.png                   # notification identity image (seeded from bundle)
 ├── cache/                         # opaque dashboard/API response cache
 │   └── dashboard/
-│       ├── stats-{range}.json          # e.g. stats-7d.json
-│       ├── api-keys-{range}.json       # e.g. api-keys-7d.json
-│       └── addresses-{domain}.json     # e.g. addresses-example.com.json
+│       ├── stats-{range}.json                    # e.g. stats-7d.json
+│       ├── api-keys-{range}.json                 # e.g. api-keys-7d.json
+│       ├── addresses-{domain}.json               # e.g. addresses-example.com.json
+│       ├── account-stats-{email}-{range}.json    # e.g. account-stats-isaac_example.com-7d.json
+│       └── account-logs-{email}-{status}.json    # e.g. account-logs-isaac_example.com-all.json
 └── mail/
     └── {userId}/                  # e.g. isaac
         ├── inbox.json
@@ -109,8 +111,10 @@ Opaque JSON via `get_cache_json` / `save_cache_json`. Relative paths use the sam
 | `dashboard/stats-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: UserStatsResponse }` |
 | `dashboard/api-keys-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: { keys, stats, workerUrl, workerConnected } }` |
 | `dashboard/addresses-{domain}.json` | `{ fetchedAt: ISO, data: Address[] }` |
+| `dashboard/account-stats-{email}-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: AccountStats }` |
+| `dashboard/account-logs-{email}-{all\|success\|failed}.json` | `{ fetchedAt: ISO, data: AccountLogsResponse }` |
 
-TS facade: `app/src/lib/dashboard/dashboard-cache-disk.ts`. Dashboard / API Keys / Accounts load cache first, then network-refreshes when older than 60s (spinner only; cached UI stays visible).
+TS facade: `app/src/lib/dashboard/dashboard-cache-disk.ts`. Dashboard / API Keys / Accounts / account Overview & Logs load cache first, then network-refreshes when older than 60s (spinner only; cached UI stays visible). Email segments in paths are sanitized (`@` → `_`, etc.).
 
 ### `app-icon.png`
 

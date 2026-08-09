@@ -47,10 +47,6 @@ import { EmailSettingsKeysView } from "@/dashboard/components/EmailSettingsKeysV
 import { MetricsView } from "@/dashboard/components/MetricsView";
 import { SettingsView } from "@/dashboard/components/SettingsView";
 import { UserDashboardView } from "@/dashboard/components/UserDashboardView";
-import {
-  SuspenseComposeView,
-  SuspenseMailListView,
-} from "@/email/panel";
 
 function SettingsRedirect() {
   const router = useRouter();
@@ -79,14 +75,7 @@ function AccountOverviewRedirect({ email }: { email: string }) {
 }
 
 function parseAccountSection(segment?: string): AccountDetailSection {
-  if (
-    segment === "compose" ||
-    segment === "inbox" ||
-    segment === "sent" ||
-    segment === "logs" ||
-    segment === "settings" ||
-    segment === "overview"
-  ) {
+  if (segment === "logs" || segment === "settings" || segment === "overview") {
     return segment === "overview" ? "overview" : segment;
   }
   return "overview";
@@ -99,27 +88,22 @@ function AccountDetailRoutes({
   email: string;
   rest: string[];
 }) {
-  const [sectionSegment, ...tail] = rest;
+  const [sectionSegment] = rest;
   const section = parseAccountSection(sectionSegment);
 
-  if (sectionSegment === "overview") {
+  // Legacy compose/inbox/sent tabs (and /overview) → account root.
+  if (
+    sectionSegment === "overview" ||
+    sectionSegment === "compose" ||
+    sectionSegment === "inbox" ||
+    sectionSegment === "sent"
+  ) {
     return <AccountOverviewRedirect email={email} />;
   }
-
-  const messageId =
-    (section === "inbox" || section === "sent") && tail.length > 0
-      ? tail.map((segment) => decodeURIComponent(segment)).join("/")
-      : undefined;
 
   let page: ReactNode = null;
   if (section === "overview") {
     page = <AccountOverviewView email={email} />;
-  } else if (section === "compose") {
-    page = <SuspenseComposeView />;
-  } else if (section === "inbox") {
-    page = <SuspenseMailListView folder="inbox" messageId={messageId} />;
-  } else if (section === "sent") {
-    page = <SuspenseMailListView folder="sent" messageId={messageId} />;
   } else if (section === "logs") {
     page = <AccountLogsView email={email} />;
   } else {

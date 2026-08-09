@@ -43,6 +43,7 @@ export type EmailMailboxContextValue = {
   isUnread: (key: string) => boolean;
   unreadCountForAccount: (email: string) => number;
   markRead: (key: string) => void;
+  markUnread: (key: string) => void;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -67,6 +68,7 @@ function storeHasUnreadApi(store: EmailMailboxStore) {
     Array.isArray(store.drafts) &&
     typeof store.isUnread === "function" &&
     typeof store.markRead === "function" &&
+    typeof store.markUnread === "function" &&
     typeof store.unreadCountForAccount === "function" &&
     typeof store.pollInboxNotifications === "function" &&
     Array.isArray(store.readKeys)
@@ -173,6 +175,7 @@ export function useEmailMailbox(): EmailMailboxContextValue {
     isUnread: store.isUnread,
     unreadCountForAccount: store.unreadCountForAccount,
     markRead: store.markRead,
+    markUnread: store.markUnread,
     loading: store.loading,
     refreshing: store.refreshing,
     error: store.error,

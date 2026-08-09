@@ -8,6 +8,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  EmailCommandContextMenu,
+  useEmailCommandRuntimeAdapter,
+} from "@/email/commands";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
@@ -367,6 +371,26 @@ export const MailListView = observer(function MailListView({
 
   const listHref = `${folderBase}${accountQuery(accountFilter)}`;
 
+  const {
+    commandRuntimeFor,
+    runSelectedCommand,
+    paletteOpen,
+  } = useEmailCommandRuntimeAdapter({
+    folder,
+    selected,
+    accountFilter,
+    folderBase,
+    compose,
+    inbox,
+    listHref,
+    router,
+    isUnread: store.isUnread,
+    markRead: store.markRead,
+    markUnread: store.markUnread,
+    moveToTrash,
+    restoreFromTrash,
+  });
+
   const detailDomain = useMemo(() => {
     if (!messageId || folder === "sent") return "";
     const inboxPool = folder === "trash" ? trashedActivity : activity;
@@ -415,7 +439,11 @@ export const MailListView = observer(function MailListView({
   }
 
   useEffect(() => {
+    // Mail keyboard layer (bubble): never compete with app-layer ⌘K / palette.
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (paletteOpen) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
       const target = e.target as HTMLElement;
       if (
         target.tagName === "INPUT" ||
@@ -462,17 +490,13 @@ export const MailListView = observer(function MailListView({
         router.push(listHref);
       } else if (e.key === "c") {
         e.preventDefault();
-        router.push(composeHref(compose, accountFilter));
-      } else if (e.key === "r" && selected && folder !== "trash") {
+        runSelectedCommand("compose");
+      } else if (e.key === "r") {
         e.preventDefault();
-        if (selected.kind === "inbox" && activityDetail) {
-          setReplyMode("reply");
-        }
-      } else if (e.key === "a" && selected && folder !== "trash") {
+        runSelectedCommand("reply");
+      } else if (e.key === "a") {
         e.preventDefault();
-        if (selected.kind === "inbox" && activityDetail) {
-          setReplyMode("replyAll");
-        }
+        runSelectedCommand("replyAll");
       } else if (
         (e.key === "Backspace" || e.key === "Delete" || e.key === "e") &&
         selected &&
@@ -514,13 +538,14 @@ export const MailListView = observer(function MailListView({
     folderBase,
     accountFilter,
     selected,
-    activityDetail,
     compose,
     folder,
     moveToTrash,
     restoreFromTrash,
     listHref,
     replyMode,
+    runSelectedCommand,
+    paletteOpen,
   ]);
 
   const renderListPane = () => (
@@ -564,25 +589,29 @@ export const MailListView = observer(function MailListView({
                   ? item.message.replyKey === messageId
                   : false;
                 return (
-                  <EmailTableRow
+                  <EmailCommandContextMenu
                     key={item.id}
-                    href={messageHref(
-                      folderBase,
-                      item,
-                      accountFilter,
-                      compose,
-                    )}
-                    selected={isSelected}
-                    primary={primary}
-                    subject={subject}
-                    preview={preview}
-                    date={date}
-                    status={
-                      <Badge variant="secondary" className="text-[10px]">
-                        Draft
-                      </Badge>
-                    }
-                  />
+                    runtime={commandRuntimeFor(item)}
+                  >
+                    <EmailTableRow
+                      href={messageHref(
+                        folderBase,
+                        item,
+                        accountFilter,
+                        compose,
+                      )}
+                      selected={isSelected}
+                      primary={primary}
+                      subject={subject}
+                      preview={preview}
+                      date={date}
+                      status={
+                        <Badge variant="secondary" className="text-[10px]">
+                          Draft
+                        </Badge>
+                      }
+                    />
+                  </EmailCommandContextMenu>
                 );
               }
 
@@ -606,29 +635,33 @@ export const MailListView = observer(function MailListView({
                   ? store.isUnread(item.message.key)
                   : false;
               return (
-                <EmailTableRow
+                <EmailCommandContextMenu
                   key={item.id}
-                  href={messageHref(
-                    folderBase,
-                    item,
-                    accountFilter,
-                    compose,
-                  )}
-                  selected={isSelected}
-                  unread={unread}
-                  primary={
-                    folder === "trash"
-                      ? `${isInbox ? "In" : "Sent"} · ${primary}`
-                      : primary
-                  }
-                  subject={
-                    attachmentCount > 0
-                      ? `${subject || "(no subject)"} (${attachmentCount})`
-                      : subject
-                  }
-                  preview={preview}
-                  date={date}
-                />
+                  runtime={commandRuntimeFor(item)}
+                >
+                  <EmailTableRow
+                    href={messageHref(
+                      folderBase,
+                      item,
+                      accountFilter,
+                      compose,
+                    )}
+                    selected={isSelected}
+                    unread={unread}
+                    primary={
+                      folder === "trash"
+                        ? `${isInbox ? "In" : "Sent"} · ${primary}`
+                        : primary
+                    }
+                    subject={
+                      attachmentCount > 0
+                        ? `${subject || "(no subject)"} (${attachmentCount})`
+                        : subject
+                    }
+                    preview={preview}
+                    date={date}
+                  />
+                </EmailCommandContextMenu>
               );
             })}
           </div>

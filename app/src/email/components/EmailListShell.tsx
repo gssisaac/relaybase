@@ -101,6 +101,7 @@ export function EmailTableHeader({ children }: { children: ReactNode }) {
 export const EmailTableRow = memo(function EmailTableRow({
   href,
   onClick,
+  onContextMenu,
   primary,
   secondary,
   subject,
@@ -112,6 +113,7 @@ export const EmailTableRow = memo(function EmailTableRow({
 }: {
   href?: string;
   onClick?: () => void;
+  onContextMenu?: React.MouseEventHandler<HTMLElement>;
   primary: string;
   secondary?: string;
   subject: string;
@@ -195,14 +197,19 @@ export const EmailTableRow = memo(function EmailTableRow({
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link href={href} className={className} onContextMenu={onContextMenu}>
         {body}
       </Link>
     );
   }
 
   return (
-    <button type="button" onClick={onClick} className={className}>
+    <button
+      type="button"
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className={className}
+    >
       {body}
     </button>
   );

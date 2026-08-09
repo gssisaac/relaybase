@@ -247,6 +247,14 @@ export class EmailMailboxStore {
     writeReadKeys(this.productId, this.readKeys);
   }
 
+  markUnread(key: string) {
+    const trimmed = key.trim();
+    if (!trimmed || !this.productId || !this.readStateReady) return;
+    if (!this.readKeys.includes(trimmed)) return;
+    this.readKeys = this.readKeys.filter((readKey) => readKey !== trimmed);
+    writeReadKeys(this.productId, this.readKeys);
+  }
+
   configure(input: {
     productId: string;
     apiBase: string;
@@ -855,7 +863,7 @@ export class EmailMailboxStore {
       await this.refresh(true);
       // After refresh: baseline existing mail once, then keep arrivals unread.
       this.ensureReadBaseline();
-      this.markUnread(arrivalIds);
+      this.markUnreadMany(arrivalIds);
 
       void notifyNewMail(
         allEvents.map((event) => ({
@@ -882,7 +890,7 @@ export class EmailMailboxStore {
     }
   }
 
-  private markUnread(keys: string[]) {
+  private markUnreadMany(keys: string[]) {
     if (keys.length === 0 || !this.productId || !this.readStateReady) return;
     const remove = new Set(keys);
     const next = this.readKeys.filter((key) => !remove.has(key));

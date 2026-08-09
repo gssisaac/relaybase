@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
+import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { UserSidebar } from "@/components/layout/UserSidebar";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
@@ -47,6 +48,7 @@ function DashboardShell({
             <AccountsSyncBridge />
             <EmailMailboxProvider>
               <EmailCommandRuntimeProvider>
+                <DisableAppTabFocus />
                 <div className="flex h-svh overflow-hidden bg-background">
                   <Suspense
                     fallback={

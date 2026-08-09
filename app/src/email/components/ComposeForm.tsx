@@ -101,6 +101,7 @@ export function ComposeForm({
 
   return (
     <div
+      data-allow-tab-focus
       onKeyDown={handleSendHotkey}
       className={
         compact
@@ -127,7 +128,14 @@ export function ComposeForm({
                 size="sm"
                 className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 shadow-none focus:ring-0 data-[size=sm]:h-8"
               >
-                <SelectValue placeholder="Select account" />
+                <SelectValue placeholder="Select account">
+                  {(value: string | null) => {
+                    if (!value) return null;
+                    const address = addresses.find((a) => a.email === value);
+                    const name = address?.displayName?.trim();
+                    return name ? `${name} <${value}>` : value;
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {addresses.map((address) => {
@@ -141,16 +149,7 @@ export function ComposeForm({
               </SelectContent>
             </Select>
           ) : (
-            <>
-              <span className="truncate font-mono text-sm text-foreground">
-                {fromLabel}
-              </span>
-              {displayName ? (
-                <span className="ml-1 shrink-0 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {displayName}
-                </span>
-              ) : null}
-            </>
+            <span className="truncate text-sm text-foreground">{fromLabel}</span>
           )}
         </div>
 

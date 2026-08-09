@@ -134,6 +134,7 @@ export function useComposeDraftController({
   });
   const onAfterDiscardRef = useRef(onAfterDiscard);
   const onAfterSendRef = useRef(onAfterSend);
+  const prevPreferredFromRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -156,21 +157,37 @@ export function useComposeDraftController({
   }, [draftId, sendCc, sendFrom, sendSubject, sendText, sendTo]);
 
   // Resolve From from draft / fallbacks / first account.
+  // When the preferred account changes (e.g. sidebar Compose account),
+  // apply it even if the current From is still a valid address.
+  const preferredFrom =
+    fromFallbacks.find(
+      (email) =>
+        Boolean(email) && addresses.some((a) => a.email === email),
+    ) ?? null;
+
   useEffect(() => {
     if (addresses.length === 0) return;
     const isValid = (email: string) =>
       Boolean(email) && addresses.some((a) => a.email === email);
 
-    if (isValid(sendFrom)) return;
+    const prevPreferred = prevPreferredFromRef.current;
+    prevPreferredFromRef.current = preferredFrom;
+    if (
+      preferredFrom &&
+      prevPreferred !== undefined &&
+      preferredFrom !== prevPreferred
+    ) {
+      setSendFrom(preferredFrom);
+      return;
+    }
 
-    for (const candidate of fromFallbacks) {
-      if (isValid(candidate)) {
-        setSendFrom(candidate);
-        return;
-      }
+    if (isValid(sendFrom)) return;
+    if (preferredFrom) {
+      setSendFrom(preferredFrom);
+      return;
     }
     setSendFrom(addresses[0]?.email ?? "");
-  }, [addresses, fromFallbacks, sendFrom]);
+  }, [addresses, preferredFrom, sendFrom]);
 
   function flushDraft() {
     if (closedRef.current) return;

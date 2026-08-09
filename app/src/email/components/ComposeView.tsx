@@ -152,13 +152,16 @@ export const ComposeView = observer(function ComposeView() {
       };
     }
     return {
-      from: "",
+      from:
+        fromParam?.trim() ||
+        (accountFilter !== "all" ? accountFilter : "") ||
+        "",
       to: toParam?.trim() || "",
       cc: ccParam?.trim() || "",
       subject: subjectParam?.trim() || "",
       body: "",
     };
-  }, [ccParam, forwardInitial, subjectParam, toParam]);
+  }, [accountFilter, ccParam, forwardInitial, fromParam, subjectParam, toParam]);
 
   const threading = useMemo(
     () => ({

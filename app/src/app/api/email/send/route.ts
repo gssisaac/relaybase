@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       text?: string;
       inReplyTo?: string;
       references?: string;
+      replyKey?: string;
     };
 
     const toInput = Array.isArray(body.to) ? body.to.join(", ") : (body.to ?? "");
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
         ?.displayName?.trim() || undefined;
     const inReplyTo = body.inReplyTo?.trim() || undefined;
     const references = body.references?.trim() || undefined;
+    const replyKey = body.replyKey?.trim() || undefined;
 
     let messageId = crypto.randomUUID();
     const workerConfigured = Boolean(await readRelaybaseWorkerConfig());
@@ -137,6 +139,9 @@ export async function POST(request: Request) {
       sentAt: new Date().toISOString(),
       domain,
       messageId,
+      ...(inReplyTo ? { inReplyTo } : {}),
+      ...(references ? { references } : {}),
+      ...(replyKey ? { replyKey } : {}),
     };
     data.sent.unshift(record);
     await writeUserEmailData(userId, data);

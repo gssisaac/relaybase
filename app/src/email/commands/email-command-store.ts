@@ -32,9 +32,11 @@ export type EmailCommandRuntime = {
   targetHref?: string;
   composeHref: string;
   canReply: boolean;
+  canForward: boolean;
   isTargetUnread: boolean;
   onNavigate: (href: string) => void;
   onReply: (mode: "reply" | "replyAll") => void;
+  onForward: () => void;
   onTrashTarget: () => void;
   onRestoreTarget: () => void;
   onMarkReadTarget: () => void;
@@ -124,6 +126,8 @@ function isRuntimeAvailable(
     case "reply":
     case "replyAll":
       return runtime.canReply;
+    case "forward":
+      return runtime.canForward;
     case "trashOrRestore":
       return Boolean(runtime.target) && !isDraftTarget(runtime.target);
     case "markRead":
@@ -155,6 +159,8 @@ function buildRunner(
       return () => runtime.onReply("reply");
     case "replyAll":
       return () => runtime.onReply("replyAll");
+    case "forward":
+      return () => runtime.onForward();
     case "trashOrRestore":
       return () => {
         if (runtime.folder === "trash") {

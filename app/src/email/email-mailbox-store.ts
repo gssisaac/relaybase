@@ -97,7 +97,10 @@ export class EmailMailboxStore {
 
   /** Cached inbox message details by key. */
   activityDetailByKey: Record<string, RoutingActivityEvent> = {};
+  /** Last requested detail key (compat); prefer `isDetailLoading`. */
   detailLoadingKey: string | null = null;
+  /** Keys currently loading detail. */
+  detailLoadingKeys: string[] = [];
 
   /** Message keys the user has opened (or first-run baseline). */
   readKeys: string[] = [];
@@ -111,7 +114,7 @@ export class EmailMailboxStore {
   domainsKey = "";
 
   private refreshGeneration = 0;
-  private detailGeneration = 0;
+  private detailGenerationByKey = new Map<string, number>();
   private bootstrapGeneration = 0;
   private started = false;
   private bound = false;
@@ -247,12 +250,71 @@ export class EmailMailboxStore {
     writeReadKeys(this.productId, this.readKeys);
   }
 
+  markReadMany(keys: string[]) {
+    if (!this.productId || !keys.length) return;
+    const read = new Set(this.readKeys);
+    let changed = false;
+    for (const key of keys) {
+      const trimmed = key.trim();
+      if (!trimmed || read.has(trimmed)) continue;
+      read.add(trimmed);
+      changed = true;
+    }
+    if (!changed) return;
+    this.readKeys = [...read];
+    this.readStateReady = true;
+    writeReadKeys(this.productId, this.readKeys);
+  }
+
   markUnread(key: string) {
     const trimmed = key.trim();
     if (!trimmed || !this.productId || !this.readStateReady) return;
     if (!this.readKeys.includes(trimmed)) return;
     this.readKeys = this.readKeys.filter((readKey) => readKey !== trimmed);
     writeReadKeys(this.productId, this.readKeys);
+  }
+
+  markUnreadMany(keys: string[]) {
+    if (!this.productId || !this.readStateReady || !keys.length) return;
+    const drop = new Set(
+      keys.map((k) => k.trim()).filter(Boolean),
+    );
+    if (!drop.size) return;
+    const next = this.readKeys.filter((k) => !drop.has(k));
+    if (next.length === this.readKeys.length) return;
+    this.readKeys = next;
+    writeReadKeys(this.productId, this.readKeys);
+  }
+
+  isDetailLoading(key: string): boolean {
+    return this.detailLoadingKeys.includes(key.trim());
+  }
+
+  moveInboxToTrashMany(ids: string[]) {
+    const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    if (!unique.length) return;
+    for (const id of unique) {
+      if (this.trash.some((entry) => entry.kind === "inbox" && entry.id === id)) {
+        continue;
+      }
+      this.trash = [
+        ...this.trash,
+        { kind: "inbox", id, trashedAt: new Date().toISOString() },
+      ];
+    }
+    writeTrash(this.productId, this.trash);
+    toast("Moved to Trash", {
+      id: TRASH_UNDO_TOAST_ID,
+      duration: TRASH_UNDO_MS,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          for (const id of unique) {
+            this.restoreFromTrash("inbox", id, { silent: true });
+          }
+        },
+      },
+    });
   }
 
   configure(input: {
@@ -290,6 +352,8 @@ export class EmailMailboxStore {
       this.drafts = [];
       this.activityDetailByKey = {};
       this.detailLoadingKey = null;
+      this.detailLoadingKeys = [];
+      this.detailGenerationByKey.clear();
       this.mailReady = false;
       this.readKeys = [];
       this.readStateReady = false;
@@ -446,21 +510,42 @@ export class EmailMailboxStore {
     this.markRead(messageId);
     const cached = this.activityDetailByKey[messageId];
     if (cached?.bodyText || cached?.bodyHtml || cached?.attachments?.length) {
-      this.detailLoadingKey = null;
+      runInAction(() => {
+        this.detailLoadingKeys = this.detailLoadingKeys.filter(
+          (k) => k !== messageId,
+        );
+        if (this.detailLoadingKey === messageId) {
+          this.detailLoadingKey = null;
+        }
+      });
       return cached;
     }
 
-    const generation = ++this.detailGeneration;
+    const generation = (this.detailGenerationByKey.get(messageId) ?? 0) + 1;
+    this.detailGenerationByKey.set(messageId, generation);
     this.detailLoadingKey = messageId;
+    if (!this.detailLoadingKeys.includes(messageId)) {
+      this.detailLoadingKeys = [...this.detailLoadingKeys, messageId];
+    }
+
+    const clearLoading = () => {
+      this.detailLoadingKeys = this.detailLoadingKeys.filter(
+        (k) => k !== messageId,
+      );
+      if (this.detailLoadingKey === messageId) {
+        this.detailLoadingKey = null;
+      }
+    };
 
     try {
       const fromDisk = await loadPersistedDetail(this.productId, messageId);
-      if (fromDisk && this.detailGeneration === generation) {
+      if (
+        fromDisk &&
+        this.detailGenerationByKey.get(messageId) === generation
+      ) {
         runInAction(() => {
           this.activityDetailByKey[messageId] = fromDisk;
-          if (this.detailLoadingKey === messageId) {
-            this.detailLoadingKey = null;
-          }
+          clearLoading();
         });
         return fromDisk;
       }
@@ -472,21 +557,17 @@ export class EmailMailboxStore {
         error?: string;
       };
       if (!res.ok) throw new Error(data.error ?? "Failed to load");
-      if (this.detailGeneration !== generation) return null;
+      if (this.detailGenerationByKey.get(messageId) !== generation) return null;
       runInAction(() => {
         this.activityDetailByKey[messageId] = data;
-        if (this.detailLoadingKey === messageId) {
-          this.detailLoadingKey = null;
-        }
+        clearLoading();
       });
       void savePersistedDetail(this.productId, data);
       return data;
     } catch (e) {
-      if (this.detailGeneration === generation) {
+      if (this.detailGenerationByKey.get(messageId) === generation) {
         runInAction(() => {
-          if (this.detailLoadingKey === messageId) {
-            this.detailLoadingKey = null;
-          }
+          clearLoading();
           this.error =
             e instanceof Error ? e.message : "Failed to load event";
         });
@@ -888,15 +969,6 @@ export class EmailMailboxStore {
     } finally {
       this.notificationPollInFlight = false;
     }
-  }
-
-  private markUnreadMany(keys: string[]) {
-    if (keys.length === 0 || !this.productId || !this.readStateReady) return;
-    const remove = new Set(keys);
-    const next = this.readKeys.filter((key) => !remove.has(key));
-    if (next.length === this.readKeys.length) return;
-    this.readKeys = next;
-    writeReadKeys(this.productId, this.readKeys);
   }
 
   private bindEvents() {

@@ -120,6 +120,7 @@ export function InboundEmailDetail({
   domain,
   bodyText,
   bodyHtml,
+  plain = false,
   attachments = [],
 }: {
   productId: string;
@@ -127,6 +128,8 @@ export function InboundEmailDetail({
   domain?: string;
   bodyText: string;
   bodyHtml?: string | null;
+  /** No border/background card around the body (conversation stack). */
+  plain?: boolean;
   attachments?: InboundAttachment[];
 }) {
   const attachmentUrl = (attachmentId: string) => {
@@ -155,9 +158,17 @@ export function InboundEmailDetail({
     <div className="space-y-4">
       {safeHtml ? (
         <div
-          className="email-html-body w-full rounded-md border border-border bg-muted/20 p-4 font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md"
+          className={
+            plain
+              ? "email-html-body w-full font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md"
+              : "email-html-body w-full rounded-md border border-border bg-muted/20 p-4 font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md"
+          }
           dangerouslySetInnerHTML={{ __html: safeHtml }}
         />
+      ) : plain ? (
+        <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+          {bodyText || "(empty message)"}
+        </p>
       ) : (
         <div className="rounded-md border border-border bg-muted/20 p-4">
           <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">

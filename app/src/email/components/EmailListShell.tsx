@@ -105,6 +105,8 @@ export const EmailTableRow = memo(function EmailTableRow({
   primary,
   secondary,
   subject,
+  stackCount,
+  subjectAddon,
   preview,
   date,
   status,
@@ -117,6 +119,10 @@ export const EmailTableRow = memo(function EmailTableRow({
   primary: string;
   secondary?: string;
   subject: string;
+  /** Conversation size — rendered flush against the subject (no gap). */
+  stackCount?: number;
+  /** Extra bits after stack count (e.g. attachment count). */
+  subjectAddon?: string;
   preview?: string;
   date: string;
   status?: ReactNode;
@@ -167,6 +173,16 @@ export const EmailTableRow = memo(function EmailTableRow({
           )}
         >
           {subject || "(no subject)"}
+          {stackCount != null && stackCount > 1 ? (
+            <span className="font-normal text-muted-foreground tabular-nums">
+              {stackCount}
+            </span>
+          ) : null}
+          {subjectAddon ? (
+            <span className="font-normal text-muted-foreground">
+              {subjectAddon}
+            </span>
+          ) : null}
         </span>
         {preview ? (
           <span className="text-muted-foreground">

@@ -53,6 +53,7 @@ type DraftStore = {
     replyAll?: boolean;
   }) => unknown;
   removeDraft: (id: string) => void;
+  findDraftByReplyKey?: (replyKey: string) => { id: string } | null;
   setError: (value: string | null) => void;
 };
 
@@ -266,7 +267,19 @@ export function useComposeDraftController({
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    if (draftId) store.removeDraft(draftId);
+    // Prefer latestRef — autosave may have assigned an id before React re-rendered.
+    const id =
+      latestRef.current.draftId ??
+      draftId ??
+      (modeRef.current.kind === "reply" ? modeRef.current.draftId : null);
+    if (id) store.removeDraft(id);
+    const replyKey =
+      modeRef.current.kind === "reply" ? modeRef.current.replyKey : null;
+    if (replyKey) {
+      const orphan = store.findDraftByReplyKey?.(replyKey);
+      if (orphan && orphan.id !== id) store.removeDraft(orphan.id);
+    }
+    latestRef.current.draftId = null;
     setDraftId(null);
     setSendTo("");
     setSendCc("");
@@ -297,7 +310,8 @@ export function useComposeDraftController({
     setSending(true);
     store.setError(null);
 
-    const threading = modeRef.current.threading;
+    const currentMode = modeRef.current;
+    const threading = currentMode.threading;
     const payload = {
       from: sendFrom,
       to:
@@ -313,6 +327,9 @@ export function useComposeDraftController({
       text: sendText,
       inReplyTo: threading?.inReplyTo,
       references: threading?.references,
+      ...(currentMode.kind === "reply" && currentMode.replyKey
+        ? { replyKey: currentMode.replyKey }
+        : {}),
     };
     const domainKey = domainOf(sendFrom) || "none";
     const from = sendFrom;

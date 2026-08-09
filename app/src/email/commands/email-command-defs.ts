@@ -3,6 +3,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Forward,
   MailOpen,
   Pencil,
   Reply,
@@ -16,6 +17,7 @@ export type EmailCommandId =
   | "compose"
   | "reply"
   | "replyAll"
+  | "forward"
   | "trashOrRestore"
   | "markRead"
   | "markUnread"
@@ -95,6 +97,15 @@ export const EMAIL_COMMAND_DEFS: readonly EmailCommandDef[] = [
     icon: ReplyAll,
     shortcut: "A",
     requires: { target: "inbox", folders: ["inbox"] },
+  },
+  {
+    id: "forward",
+    label: "Forward",
+    group: "actions",
+    keywords: ["forward", "fwd", "share"],
+    icon: Forward,
+    shortcut: "F",
+    requires: { target: "any", folders: ["inbox", "sent"] },
   },
   {
     id: "trashOrRestore",

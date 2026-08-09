@@ -60,9 +60,14 @@ export type UseEmailCommandRuntimeAdapterInput = {
   listHref: string;
   router: { push: (href: string) => void };
   isUnread: (key: string) => boolean;
+  /** When set, inbox mark-read/unread/trash apply to the whole conversation. */
+  threadInboundKeysFor: (inboxKey: string) => string[];
   markRead: (key: string) => void;
   markUnread: (key: string) => void;
+  markReadMany: (keys: string[]) => void;
+  markUnreadMany: (keys: string[]) => void;
   moveToTrash: (kind: TrashKind, id: string) => void;
+  moveInboxToTrashMany: (ids: string[]) => void;
   restoreFromTrash: (kind: TrashKind, id: string) => void;
 };
 
@@ -86,9 +91,13 @@ export function useEmailCommandRuntimeAdapter(
     listHref,
     router,
     isUnread,
+    threadInboundKeysFor,
     markRead,
     markUnread,
+    markReadMany,
+    markUnreadMany,
     moveToTrash,
+    moveInboxToTrashMany,
     restoreFromTrash,
   } = input;
   const { setScope, paletteOpen } = useEmailCommandRuntime();
@@ -116,6 +125,24 @@ export function useEmailCommandRuntimeAdapter(
     [accountFilter, inbox],
   );
 
+  const makeForwardHref = useCallback(
+    (target: MailListItem) => {
+      const params = new URLSearchParams();
+      if (accountFilter !== "all") {
+        params.set("account", accountFilter);
+      }
+      if (target.kind === "inbox") {
+        params.set("forwardKey", target.message.key);
+      } else if (target.kind === "sent") {
+        params.set("forwardSent", target.message.id);
+      } else {
+        return composeHref(compose, accountFilter);
+      }
+      return `${compose}?${params.toString()}`;
+    },
+    [accountFilter, compose],
+  );
+
   const commandRuntimeFor = useCallback(
     (target: MailListItem | null): EmailCommandRuntime => {
       const targetId =
@@ -128,43 +155,85 @@ export function useEmailCommandRuntimeAdapter(
         ? messageHref(folderBase, target, accountFilter, compose, inbox)
         : undefined;
       const isInboxTarget = target?.kind === "inbox";
+      const threadKeys =
+        isInboxTarget && folder === "inbox"
+          ? threadInboundKeysFor(target.message.key)
+          : isInboxTarget
+            ? [target.message.key]
+            : [];
       const canReply = Boolean(
         target &&
           target.kind === "inbox" &&
           folder !== "trash" &&
           target.message.key.trim(),
       );
+      const canForward = Boolean(
+        target &&
+          (target.kind === "inbox" || target.kind === "sent") &&
+          (folder === "inbox" || folder === "sent"),
+      );
+      const isTargetUnread = isInboxTarget
+        ? threadKeys.some((key) => isUnread(key))
+        : false;
       return {
         folder,
         target,
         targetHref,
         composeHref: composeHref(compose, accountFilter),
         canReply,
-        isTargetUnread: isInboxTarget
-          ? isUnread(target.message.key)
-          : false,
+        canForward,
+        isTargetUnread,
         onNavigate: (href) => router.push(href),
         onReply: (mode) => {
           if (!target || target.kind !== "inbox") return;
-          router.push(makeReplyHref(target.message.key, mode));
+          const latest =
+            folder === "inbox"
+              ? (threadInboundKeysFor(target.message.key).at(-1) ??
+                target.message.key)
+              : target.message.key;
+          router.push(makeReplyHref(latest, mode));
+        },
+        onForward: () => {
+          if (!target || (target.kind !== "inbox" && target.kind !== "sent")) {
+            return;
+          }
+          router.push(makeForwardHref(target));
         },
         onTrashTarget: () => {
           if (!targetId || !target || target.kind === "draft") return;
-          moveToTrash(target.kind, targetId);
+          if (target.kind === "inbox" && folder === "inbox") {
+            moveInboxToTrashMany(threadInboundKeysFor(target.message.key));
+          } else {
+            moveToTrash(target.kind, targetId);
+          }
           router.push(listHref);
         },
         onRestoreTarget: () => {
           if (!targetId || !target || target.kind === "draft") return;
-          restoreFromTrash(target.kind, targetId);
+          if (target.kind === "inbox" && threadKeys.length > 1) {
+            for (const key of threadKeys) {
+              restoreFromTrash("inbox", key);
+            }
+          } else {
+            restoreFromTrash(target.kind, targetId);
+          }
           router.push(listHref);
         },
         onMarkReadTarget: () => {
           if (!target || target.kind !== "inbox") return;
-          markRead(target.message.key);
+          if (folder === "inbox") {
+            markReadMany(threadInboundKeysFor(target.message.key));
+          } else {
+            markRead(target.message.key);
+          }
         },
         onMarkUnreadTarget: () => {
           if (!target || target.kind !== "inbox") return;
-          markUnread(target.message.key);
+          if (folder === "inbox") {
+            markUnreadMany(threadInboundKeysFor(target.message.key));
+          } else {
+            markUnread(target.message.key);
+          }
         },
         onCopyText: copyText,
       };
@@ -178,22 +247,33 @@ export function useEmailCommandRuntimeAdapter(
       inbox,
       isUnread,
       listHref,
+      makeForwardHref,
       makeReplyHref,
       markRead,
+      markReadMany,
       markUnread,
+      markUnreadMany,
+      moveInboxToTrashMany,
       moveToTrash,
       restoreFromTrash,
       router,
+      threadInboundKeysFor,
     ],
   );
 
   // MailListView rebuilds `selected` every render; key on identity + unread so
   // resolve() does not thrash (and cannot feed a setScope render loop).
+  const selectedThreadUnread =
+    selected?.kind === "inbox" && folder === "inbox"
+      ? threadInboundKeysFor(selected.message.key).some((key) => isUnread(key))
+      : selected?.kind === "inbox"
+        ? isUnread(selected.message.key)
+        : false;
   const selectionKey =
     selected == null
       ? "none"
       : selected.kind === "inbox"
-        ? `inbox:${selected.message.key}:${isUnread(selected.message.key) ? "u" : "r"}`
+        ? `inbox:${selected.message.key}:${selectedThreadUnread ? "u" : "r"}`
         : `${selected.kind}:${selected.message.id}`;
 
   const selectedCommands = useMemo(

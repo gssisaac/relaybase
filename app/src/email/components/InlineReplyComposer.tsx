@@ -5,18 +5,26 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { ComposeDraftEditor } from "@/email/components/ComposeDraftEditor";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
-import type { Address, RoutingActivityEvent } from "@/email/components/types";
+import type { Address } from "@/email/components/types";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
-import { buildReplyPrefill } from "@/email/reply-helpers";
+import {
+  buildReplyPrefillFromParts,
+  type ForwardThreadPart,
+} from "@/email/reply-helpers";
+import { joinQuotedBody, splitQuotedBody } from "@/email/reply-quote-body";
 
 export const InlineReplyComposer = observer(function InlineReplyComposer({
-  event,
+  parts,
+  draftReplyKey,
   replyAll,
   addresses,
   accountFilter,
   onClose,
 }: {
-  event: RoutingActivityEvent;
+  /** Oldest → focused stack — nested quote body (same as forward). */
+  parts: ForwardThreadPart[];
+  /** Inbound key for draft persistence / send replyKey. */
+  draftReplyKey: string;
   replyAll: boolean;
   addresses: Address[];
   accountFilter: EmailAccountFilter;
@@ -24,14 +32,23 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
 }) {
   const store = useEmailMailboxStore();
   const rootRef = useRef<HTMLDivElement>(null);
-  const existing = store.findDraftByReplyKey(event.key);
-  const prefill = buildReplyPrefill(event, addresses, {
-    replyAll,
-    fromAccount: accountFilter,
-  });
+  const existing = store.findDraftByReplyKey(draftReplyKey);
+  const prefill = useMemo(
+    () =>
+      buildReplyPrefillFromParts(parts, addresses, {
+        replyAll,
+        fromAccount: accountFilter,
+      }),
+    [accountFilter, addresses, parts, replyAll],
+  );
 
-  const initial = useMemo(
-    () => ({
+  const initial = useMemo(() => {
+    // Keep typed reply text from a draft, but always refresh nested quote history.
+    const typed = existing
+      ? splitQuotedBody(existing.body).reply
+      : "";
+    const { quote } = splitQuotedBody(prefill.body);
+    return {
       from: existing?.from || prefill.from,
       to: existing?.to || prefill.to,
       cc: existing
@@ -40,21 +57,20 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
           : (existing.cc ?? "")
         : prefill.cc,
       subject: existing?.subject || prefill.subject,
-      body: existing?.body ?? prefill.body,
-    }),
-    [existing, prefill, replyAll],
-  );
+      body: joinQuotedBody(typed, quote),
+    };
+  }, [existing, prefill, replyAll]);
 
   const reply = useMemo(
     () => ({
-      replyKey: event.key,
+      replyKey: draftReplyKey,
       replyAll,
       threading: {
         inReplyTo: prefill.inReplyTo,
         references: prefill.references,
       },
     }),
-    [event.key, prefill.inReplyTo, prefill.references, replyAll],
+    [draftReplyKey, prefill.inReplyTo, prefill.references, replyAll],
   );
 
   // Jump instantly to the reply box — never smooth-scroll (long threads are slow).

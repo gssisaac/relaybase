@@ -58,6 +58,9 @@ export type DevSent = {
   sentAt: string;
   domain: string;
   messageId?: string;
+  inReplyTo?: string;
+  references?: string;
+  replyKey?: string;
 };
 
 export type DomainR2Record = {

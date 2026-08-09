@@ -4,7 +4,7 @@ import { ArrowLeft, FilePen, Inbox, Send, Trash2 } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,10 +24,23 @@ import {
   EmptyListState,
   ListToolbar,
 } from "@/email/components/EmailListShell";
+import {
+  ConversationThreadView,
+  type ThreadComposeMode,
+} from "@/email/components/ConversationThreadView";
 import { InboundEmailDetail } from "@/email/components/EmailShared";
 import { InlineReplyComposer } from "@/email/components/InlineReplyComposer";
 import { useMailboxNav } from "@/email/components/MailboxNavContext";
 import type { MailListItem, RoutingActivityEvent } from "@/email/components/types";
+import {
+  findThreadByInboundKey,
+  groupConversations,
+  threadMatchesAccount,
+  threadMatchesSearch,
+  threadUnreadKeys,
+  type ConversationThread,
+} from "@/email/conversation-threading";
+import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
 import { buildReplyPrefill } from "@/email/reply-helpers";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { cn } from "@/lib/utils";
@@ -202,16 +215,18 @@ export const MailListView = observer(function MailListView({
   const relaybaseOk = store.relaybaseOk;
 
   const [search, setSearch] = useState("");
-  const [replyMode, setReplyMode] = useState<"reply" | "replyAll" | null>(
-    null,
-  );
+  const [composeMode, setComposeMode] = useState<ThreadComposeMode>(null);
+  const [composeSourceId, setComposeSourceId] = useState<string | null>(null);
+  /** After Discard, do not auto-reopen a reply when revisiting this thread. */
+  const composeDismissedThreadRef = useRef<string | null>(null);
 
   const activityDetail = messageId
     ? store.getCachedDetail(messageId)
     : null;
   const detailLoading =
     Boolean(messageId) &&
-    store.detailLoadingKey === messageId &&
+    messageId != null &&
+    store.isDetailLoading(messageId) &&
     !activityDetail;
   useEffect(() => {
     if (folder === "sent" && searchParams.get("sent") === "1") {
@@ -223,52 +238,71 @@ export const MailListView = observer(function MailListView({
     setSearch("");
   }, [folder, accountFilter]);
 
-  // When opening a message: restore reply panel from draft or ?reply= query
-  useEffect(() => {
-    if (folder !== "inbox" || !messageId) {
-      setReplyMode(null);
-      return;
-    }
-    const wantsReply = searchParams.get("reply") === "1";
-    const wantsReplyAll = searchParams.get("replyAll") === "1";
-    if (wantsReply || wantsReplyAll) {
-      setReplyMode(wantsReplyAll ? "replyAll" : "reply");
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("reply");
-      params.delete("replyAll");
-      const qs = params.toString();
-      router.replace(
-        `${inbox}/${encodeURIComponent(messageId)}${qs ? `?${qs}` : ""}`,
-      );
-      return;
-    }
-    const draft = store.findDraftByReplyKey(messageId);
-    setReplyMode(
-      draft ? (draft.replyAll ? "replyAll" : "reply") : null,
-    );
-    // Only re-run when the opened message changes — not on every draft upsert
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folder, messageId]);
-
   const inboxSource = folder === "trash" ? trashedActivity : activity;
   const sentSource = folder === "trash" ? trashedSent : sentMessages;
 
-  const inboxItems = useMemo(
-    () =>
-      inboxSource
-        .filter((m) =>
-          matchesAccount(
-            { kind: "inbox", id: `inbox:${m.key}`, message: m },
-            accountFilter,
-          ),
-        )
-        .map((m) => ({
-          kind: "inbox" as const,
-          id: `inbox:${m.key}`,
-          message: m,
-        })),
-    [accountFilter, inboxSource],
+  /** Inbox conversations (inbound + matching sent). Trash stays flat. */
+  const inboxThreads = useMemo((): ConversationThread[] => {
+    if (folder !== "inbox") return [];
+    const threads = groupConversations(activity, sentMessages);
+    return threads.filter((thread) => {
+      if (accountFilter !== "all" && !threadMatchesAccount(thread, accountFilter)) {
+        return false;
+      }
+      return threadMatchesSearch(thread, search);
+    });
+  }, [accountFilter, activity, folder, search, sentMessages]);
+
+  const threadByInboundKey = useMemo(() => {
+    const map = new Map<string, ConversationThread>();
+    for (const thread of inboxThreads) {
+      for (const key of thread.inboundKeys) {
+        map.set(key, thread);
+      }
+    }
+    return map;
+  }, [inboxThreads]);
+
+  const threadInboundKeysFor = useCallback(
+    (inboxKey: string) => {
+      const thread = threadByInboundKey.get(inboxKey.trim());
+      return thread?.inboundKeys ?? [inboxKey.trim()].filter(Boolean);
+    },
+    [threadByInboundKey],
   );
+
+  const inboxItems = useMemo(() => {
+    if (folder === "inbox") {
+      return inboxThreads.flatMap((thread) => {
+        const latest =
+          thread.messages.find(
+            (m): m is Extract<typeof m, { kind: "inbound" }> =>
+              m.kind === "inbound" && m.id === thread.latestInboundKey,
+          )?.message ??
+          activity.find((m) => m.key === thread.latestInboundKey);
+        if (!latest) return [];
+        return [
+          {
+            kind: "inbox" as const,
+            id: `inbox:${thread.latestInboundKey}`,
+            message: latest,
+          },
+        ];
+      });
+    }
+    return inboxSource
+      .filter((m) =>
+        matchesAccount(
+          { kind: "inbox", id: `inbox:${m.key}`, message: m },
+          accountFilter,
+        ),
+      )
+      .map((m) => ({
+        kind: "inbox" as const,
+        id: `inbox:${m.key}`,
+        message: m,
+      }));
+  }, [accountFilter, activity, folder, inboxSource, inboxThreads]);
 
   const sentItems = useMemo(
     () =>
@@ -308,14 +342,16 @@ export const MailListView = observer(function MailListView({
 
   const items = useMemo((): MailListItem[] => {
     const q = search.trim().toLowerCase();
+    if (folder === "inbox") {
+      // Already filtered/sorted by groupConversations + thread filters.
+      return inboxItems;
+    }
     const source: MailListItem[] =
-      folder === "inbox"
-        ? inboxItems
-        : folder === "drafts"
-          ? draftItems
-          : folder === "sent"
-            ? sentItems
-            : [...inboxItems, ...sentItems];
+      folder === "drafts"
+        ? draftItems
+        : folder === "sent"
+          ? sentItems
+          : [...inboxItems, ...sentItems];
 
     return source
       .sort(
@@ -349,6 +385,76 @@ export const MailListView = observer(function MailListView({
       });
   }, [draftItems, folder, inboxItems, search, sentItems]);
 
+  const selectedThread = useMemo(() => {
+    if (folder !== "inbox" || !messageId) return null;
+    return (
+      threadByInboundKey.get(messageId) ??
+      findThreadByInboundKey(inboxThreads, messageId)
+    );
+  }, [folder, inboxThreads, messageId, threadByInboundKey]);
+
+  const closeCompose = useCallback(() => {
+    const threadKey = selectedThread?.threadId ?? messageId;
+    if (threadKey) composeDismissedThreadRef.current = threadKey;
+    setComposeSourceId(null);
+    setComposeMode(null);
+  }, [messageId, selectedThread?.threadId]);
+
+  const openCompose = useCallback(
+    (mode: Exclude<ThreadComposeMode, null>, sourceId?: string | null) => {
+      composeDismissedThreadRef.current = null;
+      setComposeSourceId(sourceId ?? null);
+      setComposeMode(mode);
+    },
+    [],
+  );
+
+  // When opening a message: restore reply panel from draft or ?reply= query
+  useEffect(() => {
+    if (folder !== "inbox" || !messageId) {
+      setComposeSourceId(null);
+      setComposeMode(null);
+      return;
+    }
+    const threadKey = selectedThread?.threadId ?? messageId;
+    const wantsReply = searchParams.get("reply") === "1";
+    const wantsReplyAll = searchParams.get("replyAll") === "1";
+    if (wantsReply || wantsReplyAll) {
+      composeDismissedThreadRef.current = null;
+      setComposeSourceId(
+        selectedThread
+          ? `inbound:${selectedThread.latestInboundKey}`
+          : `inbound:${messageId}`,
+      );
+      setComposeMode(wantsReplyAll ? "replyAll" : "reply");
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("reply");
+      params.delete("replyAll");
+      const qs = params.toString();
+      router.replace(
+        `${inbox}/${encodeURIComponent(messageId)}${qs ? `?${qs}` : ""}`,
+      );
+      return;
+    }
+    if (composeDismissedThreadRef.current === threadKey) {
+      setComposeSourceId(null);
+      setComposeMode(null);
+      return;
+    }
+    const keys = selectedThread?.inboundKeys ?? [messageId];
+    const draft =
+      keys.map((key) => store.findDraftByReplyKey(key)).find(Boolean) ?? null;
+    if (draft?.replyKey) {
+      setComposeSourceId(`inbound:${draft.replyKey}`);
+      setComposeMode(draft.replyAll ? "replyAll" : "reply");
+    } else {
+      setComposeSourceId(null);
+      setComposeMode(null);
+    }
+    // Only re-run when the opened message changes — not on every draft upsert
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folder, messageId, selectedThread?.threadId]);
+
   const selected =
     messageId != null
       ? (folder === "drafts"
@@ -367,37 +473,60 @@ export const MailListView = observer(function MailListView({
                   } satisfies MailListItem)
                 : null;
             })()
-          : (items.find((item) => itemKey(item) === messageId) ??
-            (() => {
-              const inboxPool =
-                folder === "trash" ? trashedActivity : activity;
-              const sentPool = folder === "trash" ? trashedSent : sentMessages;
-              const inboxHit = inboxPool.find((m) => m.key === messageId);
-              if (inboxHit || folder === "inbox") {
+          : folder === "inbox" && selectedThread
+            ? (() => {
+                const fromActivity = activity.find(
+                  (m) => m.key === selectedThread.latestInboundKey,
+                );
+                const fromThread = selectedThread.messages.find(
+                  (
+                    m,
+                  ): m is Extract<
+                    (typeof selectedThread.messages)[number],
+                    { kind: "inbound" }
+                  > =>
+                    m.kind === "inbound" &&
+                    m.id === selectedThread.latestInboundKey,
+                )?.message;
+                const latest = fromActivity ?? fromThread;
+                if (!latest) return null;
                 return {
                   kind: "inbox" as const,
-                  id: `inbox:${messageId}`,
-                  message:
-                    inboxHit ??
-                    ({
-                      key: messageId,
-                      fromEmail: "",
-                      toEmail: "",
-                      subject: "",
-                      status: "",
-                      receivedAt: new Date(0).toISOString(),
-                    } satisfies RoutingActivityEvent),
+                  id: `inbox:${selectedThread.latestInboundKey}`,
+                  message: latest,
                 } satisfies MailListItem;
-              }
-              const sentHit = sentPool.find((m) => m.id === messageId);
-              return sentHit
-                ? ({
-                    kind: "sent" as const,
-                    id: `sent:${messageId}`,
-                    message: sentHit,
-                  } satisfies MailListItem)
-                : null;
-            })()))
+              })()
+            : (items.find((item) => itemKey(item) === messageId) ??
+              (() => {
+                const inboxPool =
+                  folder === "trash" ? trashedActivity : activity;
+                const sentPool = folder === "trash" ? trashedSent : sentMessages;
+                const inboxHit = inboxPool.find((m) => m.key === messageId);
+                if (inboxHit || folder === "inbox") {
+                  return {
+                    kind: "inbox" as const,
+                    id: `inbox:${messageId}`,
+                    message:
+                      inboxHit ??
+                      ({
+                        key: messageId,
+                        fromEmail: "",
+                        toEmail: "",
+                        subject: "",
+                        status: "",
+                        receivedAt: new Date(0).toISOString(),
+                      } satisfies RoutingActivityEvent),
+                  } satisfies MailListItem;
+                }
+                const sentHit = sentPool.find((m) => m.id === messageId);
+                return sentHit
+                  ? ({
+                      kind: "sent" as const,
+                      id: `sent:${messageId}`,
+                      message: sentHit,
+                    } satisfies MailListItem)
+                  : null;
+              })()))
       : null;
 
   const listHref = `${folderBase}${accountQuery(accountFilter)}`;
@@ -416,14 +545,20 @@ export const MailListView = observer(function MailListView({
     listHref,
     router,
     isUnread: store.isUnread,
+    threadInboundKeysFor,
     markRead: store.markRead,
     markUnread: store.markUnread,
+    markReadMany: store.markReadMany,
+    markUnreadMany: store.markUnreadMany,
     moveToTrash,
+    moveInboxToTrashMany: store.moveInboxToTrashMany,
     restoreFromTrash,
   });
 
   const detailDomain = useMemo(() => {
     if (!messageId || folder === "sent" || folder === "drafts") return "";
+    // Thread view loads its own details; only need a domain for fallback single-message.
+    if (folder === "inbox" && selectedThread) return "";
     const inboxPool = folder === "trash" ? trashedActivity : activity;
     const listHit = inboxPool.find((m) => m.key === messageId);
     if (folder === "trash" && !listHit) return "";
@@ -431,13 +566,21 @@ export const MailListView = observer(function MailListView({
       (listHit ? domainOf(listHit.toEmail) : "") ||
       (accountFilter !== "all" ? domainOf(accountFilter) : "")
     );
-  }, [accountFilter, activity, folder, messageId, trashedActivity]);
+  }, [
+    accountFilter,
+    activity,
+    folder,
+    messageId,
+    selectedThread,
+    trashedActivity,
+  ]);
 
   useEffect(() => {
     if (!messageId || folder === "sent" || folder === "drafts") return;
+    if (folder === "inbox" && selectedThread) return;
     if (folder === "trash" && !detailDomain) return;
     void store.loadMessageDetail(messageId, detailDomain);
-  }, [detailDomain, folder, messageId, store]);
+  }, [detailDomain, folder, messageId, selectedThread, store]);
 
   function trashActions(kind: "inbox" | "sent", id: string) {
     if (folder === "trash") {
@@ -446,7 +589,13 @@ export const MailListView = observer(function MailListView({
           size="sm"
           variant="outline"
           onClick={() => {
-            restoreFromTrash(kind, id);
+            if (kind === "inbox") {
+              for (const key of threadInboundKeysFor(id)) {
+                restoreFromTrash("inbox", key);
+              }
+            } else {
+              restoreFromTrash(kind, id);
+            }
             router.push(listHref);
           }}
         >
@@ -459,7 +608,11 @@ export const MailListView = observer(function MailListView({
         size="sm"
         variant="outline"
         onClick={() => {
-          moveToTrash(kind, id);
+          if (kind === "inbox" && folder === "inbox") {
+            store.moveInboxToTrashMany(threadInboundKeysFor(id));
+          } else {
+            moveToTrash(kind, id);
+          }
           router.push(listHref);
         }}
       >
@@ -484,7 +637,17 @@ export const MailListView = observer(function MailListView({
         return;
       }
 
-      const currentIndex = items.findIndex((item) => itemKey(item) === messageId);
+      const currentIndex = items.findIndex((item) => {
+        if (
+          folder === "inbox" &&
+          item.kind === "inbox" &&
+          messageId
+        ) {
+          const thread = threadByInboundKey.get(item.message.key);
+          if (thread) return thread.inboundKeys.includes(messageId);
+        }
+        return itemKey(item) === messageId;
+      });
 
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
@@ -506,8 +669,8 @@ export const MailListView = observer(function MailListView({
         }
       } else if (e.key === "Escape" || e.key === "u") {
         e.preventDefault();
-        if (replyMode) {
-          setReplyMode(null);
+        if (composeMode) {
+          closeCompose();
           return;
         }
         router.push(listHref);
@@ -516,10 +679,34 @@ export const MailListView = observer(function MailListView({
         runSelectedCommand("compose");
       } else if (e.key === "r") {
         e.preventDefault();
+        if (folder === "inbox" && selectedThread) {
+          openCompose(
+            "reply",
+            `inbound:${selectedThread.latestInboundKey}`,
+          );
+          return;
+        }
         runSelectedCommand("reply");
       } else if (e.key === "a") {
         e.preventDefault();
+        if (folder === "inbox" && selectedThread) {
+          openCompose(
+            "replyAll",
+            `inbound:${selectedThread.latestInboundKey}`,
+          );
+          return;
+        }
         runSelectedCommand("replyAll");
+      } else if (e.key === "f") {
+        e.preventDefault();
+        if (folder === "inbox" && selectedThread) {
+          openCompose(
+            "forward",
+            `inbound:${selectedThread.latestInboundKey}`,
+          );
+          return;
+        }
+        runSelectedCommand("forward");
       } else if (
         (e.key === "Backspace" || e.key === "Delete" || e.key === "e") &&
         selected &&
@@ -533,6 +720,8 @@ export const MailListView = observer(function MailListView({
             : selected.message.id;
         if (folder === "trash") {
           restoreFromTrash(kind, id);
+        } else if (kind === "inbox" && folder === "inbox") {
+          store.moveInboxToTrashMany(threadInboundKeysFor(id));
         } else {
           moveToTrash(kind, id);
         }
@@ -567,9 +756,15 @@ export const MailListView = observer(function MailListView({
     moveToTrash,
     restoreFromTrash,
     listHref,
-    replyMode,
+    composeMode,
+    closeCompose,
+    openCompose,
+    selectedThread,
     runSelectedCommand,
     paletteOpen,
+    store,
+    threadByInboundKey,
+    threadInboundKeysFor,
   ]);
 
   const onDraftDiscard = useCallback(() => {
@@ -686,24 +881,41 @@ export const MailListView = observer(function MailListView({
               }
 
               const isInbox = item.kind === "inbox";
+              const thread =
+                isInbox && folder === "inbox"
+                  ? threadByInboundKey.get(item.message.key)
+                  : null;
               const primary = isInbox
-                ? item.message.fromEmail
+                ? (thread?.participantLabel ?? item.message.fromEmail)
                 : item.message.to;
-              const subject = item.message.subject;
+              const subject = thread?.subject ?? item.message.subject;
               const attachmentCount = isInbox
                 ? item.message.attachmentCount ??
                   item.message.attachments?.length ??
                   0
                 : 0;
               const date = formatDate(
-                isInbox ? item.message.receivedAt : item.message.sentAt,
+                thread?.latestAt ??
+                  (isInbox ? item.message.receivedAt : item.message.sentAt),
               );
-              const preview = previewText(item);
-              const isSelected = itemKey(item) === messageId;
+              const previewRaw = thread?.preview || previewText(item);
+              const preview = trimQuotedHistoryForThread({
+                bodyText: previewRaw,
+              }).bodyText.replace(/\s+/g, " ").trim();
+              const isSelected =
+                isInbox && folder === "inbox" && thread && messageId
+                  ? thread.inboundKeys.includes(messageId)
+                  : itemKey(item) === messageId;
               const unread =
                 isInbox && folder === "inbox"
-                  ? store.isUnread(item.message.key)
+                  ? thread
+                    ? threadUnreadKeys(thread, store.isUnread).length > 0
+                    : store.isUnread(item.message.key)
                   : false;
+              const stackCount =
+                thread && thread.messageCount > 1
+                  ? thread.messageCount
+                  : undefined;
               return (
                 <EmailCommandContextMenu
                   key={item.id}
@@ -718,10 +930,10 @@ export const MailListView = observer(function MailListView({
                         ? `${isInbox ? "In" : "Sent"} · ${primary}`
                         : primary
                     }
-                    subject={
-                      attachmentCount > 0
-                        ? `${subject || "(no subject)"} (${attachmentCount})`
-                        : subject
+                    subject={subject || "(no subject)"}
+                    stackCount={stackCount}
+                    subjectAddon={
+                      attachmentCount > 0 ? ` (${attachmentCount})` : undefined
                     }
                     preview={preview}
                     date={date}
@@ -899,6 +1111,54 @@ export const MailListView = observer(function MailListView({
       );
     }
 
+    if (folder === "inbox" && selectedThread) {
+      return (
+        <DetailView
+          title={selectedThread.subject || "(no subject)"}
+          backHref={listHref}
+          actions={trashActions("inbox", selectedThread.latestInboundKey)}
+        >
+          <ConversationThreadView
+            productId={productId}
+            thread={selectedThread}
+            folder="inbox"
+            addresses={addresses}
+            accountFilter={accountFilter}
+            composeMode={composeMode}
+            onComposeModeChange={(mode) => {
+              if (mode === null) {
+                closeCompose();
+                return;
+              }
+              composeDismissedThreadRef.current = null;
+              setComposeMode(mode);
+            }}
+            composeSourceId={composeSourceId}
+            onComposeSourceIdChange={setComposeSourceId}
+            onTrashMessage={({ kind, id }) => {
+              if (kind === "inbox") {
+                const keys = threadInboundKeysFor(id);
+                // Deleting the focused message only — not the whole thread.
+                moveToTrash("inbox", id);
+                const remaining = keys.filter((key) => key !== id);
+                if (remaining.length === 0) {
+                  router.push(listHref);
+                  return;
+                }
+                if (id === selectedThread.latestInboundKey) {
+                  router.push(
+                    `${inbox}/${encodeURIComponent(remaining[remaining.length - 1]!)}${accountQuery(accountFilter)}`,
+                  );
+                }
+                return;
+              }
+              moveToTrash("sent", id);
+            }}
+          />
+        </DetailView>
+      );
+    }
+
     if (detailLoading && !activityDetail) {
       return (
         <div className="flex flex-1 items-center justify-center">
@@ -919,14 +1179,16 @@ export const MailListView = observer(function MailListView({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setReplyMode("reply")}
+                    onClick={() => openCompose("reply", `inbound:${activityDetail.key}`)}
                   >
                     Reply
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setReplyMode("replyAll")}
+                    onClick={() =>
+                      openCompose("replyAll", `inbound:${activityDetail.key}`)
+                    }
                   >
                     Reply all
                   </Button>
@@ -984,14 +1246,16 @@ export const MailListView = observer(function MailListView({
                 "No message body available for this email."}
             </p>
           )}
-          {folder !== "trash" && replyMode ? (
+          {folder !== "trash" &&
+          (composeMode === "reply" || composeMode === "replyAll") ? (
             <InlineReplyComposer
-              key={`${activityDetail.key}:${replyMode}`}
-              event={activityDetail}
-              replyAll={replyMode === "replyAll"}
+              key={`${activityDetail.key}:${composeMode}`}
+              parts={[{ kind: "inbound", event: activityDetail }]}
+              draftReplyKey={activityDetail.key}
+              replyAll={composeMode === "replyAll"}
               addresses={addresses}
               accountFilter={accountFilter}
-              onClose={() => setReplyMode(null)}
+              onClose={closeCompose}
             />
           ) : null}
         </DetailView>

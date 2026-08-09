@@ -1,15 +1,24 @@
 "use client";
 
+import { observer } from "mobx-react-lite";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { ComposeDraftEditor } from "@/email/components/ComposeDraftEditor";
-import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
+import {
+  useEmailMailbox,
+  useEmailMailboxStore,
+} from "@/email/components/EmailMailboxContext";
 import { useMailboxNav } from "@/email/components/MailboxNavContext";
+import {
+  buildForwardPrefill,
+  buildForwardPrefillFromSent,
+  domainOf,
+} from "@/email/reply-helpers";
 import { useEmailPaths } from "@/email/paths";
 
-export function ComposeView() {
+export const ComposeView = observer(function ComposeView() {
   const { inbox, drafts } = useEmailPaths();
   const { sent } = useMailboxNav();
   const router = useRouter();
@@ -17,6 +26,8 @@ export function ComposeView() {
   const isReply = searchParams.get("reply") === "1";
   const replyKey = searchParams.get("replyKey")?.trim() || "";
   const draftParam = searchParams.get("draft")?.trim() || "";
+  const forwardKey = searchParams.get("forwardKey")?.trim() || "";
+  const forwardSentId = searchParams.get("forwardSent")?.trim() || "";
   const toParam = searchParams.get("to");
   const ccParam = searchParams.get("cc");
   const subjectParam = searchParams.get("subject");
@@ -25,6 +36,8 @@ export function ComposeView() {
   const referencesParam = searchParams.get("references");
 
   const { addresses, accountFilter } = useEmailMailbox();
+  const store = useEmailMailboxStore();
+  const [forwardReady, setForwardReady] = useState(!forwardKey);
 
   // Old reply links → inbox message sub-page
   useEffect(() => {
@@ -56,6 +69,27 @@ export function ComposeView() {
     );
   }, [accountFilter, draftParam, drafts, router]);
 
+  useEffect(() => {
+    if (!forwardKey) {
+      setForwardReady(true);
+      return;
+    }
+    let cancelled = false;
+    setForwardReady(false);
+    const listHit =
+      store.activity.find((m) => m.key === forwardKey) ??
+      store.getCachedDetail(forwardKey);
+    const domain =
+      (listHit ? domainOf(listHit.toEmail) : "") ||
+      (accountFilter !== "all" ? domainOf(accountFilter) : "");
+    void store.loadMessageDetail(forwardKey, domain).finally(() => {
+      if (!cancelled) setForwardReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountFilter, forwardKey, store]);
+
   const fromFallbacks = useMemo(() => {
     const list: string[] = [];
     const fromQuery = fromParam?.trim();
@@ -71,16 +105,60 @@ export function ComposeView() {
         addresses.some((a) => a.email === accountFilter)),
   );
 
-  const initial = useMemo(
-    () => ({
+  const forwardInitial = useMemo(() => {
+    if (forwardKey) {
+      const event =
+        store.getCachedDetail(forwardKey) ??
+        store.activity.find((m) => m.key === forwardKey);
+      if (!event) return null;
+      return buildForwardPrefill(event, addresses, {
+        fromAccount: accountFilter,
+        fromOverride: fromParam,
+      });
+    }
+    if (forwardSentId) {
+      const sentMsg =
+        store.sent.find((m) => m.id === forwardSentId) ??
+        store.visibleSent.find((m) => m.id === forwardSentId);
+      if (!sentMsg) return null;
+      return buildForwardPrefillFromSent(sentMsg, addresses, {
+        fromAccount: accountFilter,
+        fromOverride: fromParam,
+      });
+    }
+    return null;
+  }, [
+    accountFilter,
+    addresses,
+    forwardKey,
+    forwardSentId,
+    fromParam,
+    store,
+    store.activity,
+    store.sent,
+    store.visibleSent,
+    // recompute when detail cache fills
+    forwardKey ? store.getCachedDetail(forwardKey) : null,
+  ]);
+
+  const initial = useMemo(() => {
+    if (forwardInitial) {
+      return {
+        from: forwardInitial.from,
+        to: forwardInitial.to,
+        cc: forwardInitial.cc,
+        subject: forwardInitial.subject,
+        body: forwardInitial.body,
+      };
+    }
+    return {
       from: "",
       to: toParam?.trim() || "",
       cc: ccParam?.trim() || "",
       subject: subjectParam?.trim() || "",
       body: "",
-    }),
-    [ccParam, subjectParam, toParam],
-  );
+    };
+  }, [ccParam, forwardInitial, subjectParam, toParam]);
 
   const threading = useMemo(
     () => ({
@@ -91,8 +169,16 @@ export function ComposeView() {
   );
 
   const onAfterDiscard = useCallback(() => {
+    if (forwardKey) {
+      router.push(`${inbox}/${encodeURIComponent(forwardKey)}`);
+      return;
+    }
+    if (forwardSentId) {
+      router.push(`${sent}/${encodeURIComponent(forwardSentId)}`);
+      return;
+    }
     router.push(inbox);
-  }, [inbox, router]);
+  }, [forwardKey, forwardSentId, inbox, router, sent]);
 
   const onAfterSend = useCallback(
     ({ from }: { from: string }) => {
@@ -111,16 +197,35 @@ export function ComposeView() {
     );
   }
 
+  if ((forwardKey || forwardSentId) && (!forwardReady || !forwardInitial)) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  const isForward = Boolean(forwardKey || forwardSentId);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar className="px-4 py-3">
-        <h1 className="text-sm font-semibold">Compose email</h1>
+        <h1 className="text-sm font-semibold">
+          {isForward ? "Forward" : "Compose email"}
+        </h1>
       </DesktopTitleBar>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
         <ComposeDraftEditor
+          key={
+            forwardKey
+              ? `fwd:${forwardKey}`
+              : forwardSentId
+                ? `fwds:${forwardSentId}`
+                : "compose"
+          }
           initial={initial}
-          threading={threading}
+          threading={isForward ? undefined : threading}
           addresses={addresses}
           fromFallbacks={fromFallbacks}
           allowFromSelect={!fromSpecified}
@@ -132,4 +237,4 @@ export function ComposeView() {
       </div>
     </div>
   );
-}
+});

@@ -77,4 +77,18 @@ describe("splitQuotedHtml / trimQuotedHistoryForThread", () => {
     assert.equal(trimmed.bodyHtml, undefined);
     assert.ok(trimmed.quoteText?.includes("On Sun,"));
   });
+
+  it("reply quote pipeline keeps only the new message lines", () => {
+    const trimmed = trimQuotedHistoryForThread({
+      bodyText:
+        "Can I use it for free?\n\nOn Sun, Aug 9, 2026 at 1:56 AM x wrote:\n\n> Prior\n> > Older",
+    });
+    const quoted = trimmed.bodyText
+      .split(/\r?\n/)
+      .map((line) => `> ${line}`)
+      .join("\n");
+    assert.match(quoted, /> Can I use it for free\?/);
+    assert.doesNotMatch(quoted, /Prior/);
+    assert.doesNotMatch(quoted, /Older/);
+  });
 });

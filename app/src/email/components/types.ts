@@ -139,6 +139,10 @@ export type SentEmail = {
   bodyPreview: string;
   sentAt: string;
   messageId?: string;
+  inReplyTo?: string;
+  references?: string;
+  /** Parent inbox message key when this was sent as a reply. */
+  replyKey?: string;
 };
 
 export type DraftEmail = {

@@ -8,6 +8,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 |------------------------|------------|
 | Email Cmd+K, row context menus, mail action shortcuts, or anything under `app/src/email/commands/` | [docs/email-command-system.md](docs/email-command-system.md) |
 | App entry redirects, sidebar email↔dashboard persistence, last-route restore | [docs/last-route-restore.md](docs/last-route-restore.md) |
+| Desktop credentials, mail cache, UI prefs, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Tab / focus navigation, `data-allow-tab-focus`, or `DisableAppTabFocus` | [docs/tab-focus-policy.md](docs/tab-focus-policy.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
 
@@ -20,6 +21,10 @@ Mail actions must stay centralized in `app/src/email/commands/`:
 - Keep app-layer ⌘K (capture) separate from mail-layer `j`/`k` shortcuts
 
 Full rules, file map, and add-command checklist: **[docs/email-command-system.md](docs/email-command-system.md)**.
+
+## Desktop storage (summary)
+
+Mac app durable data lives **only** under `~/.relaybase` (via Tauri). Do not use `localhost` / WebKit `localStorage` or Application Support as the source of truth — see **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**.
 
 ## General
 

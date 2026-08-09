@@ -33,11 +33,11 @@ import {
   savePersistedSent,
 } from "@/email/email-disk-store";
 import {
-  readReadKeys,
+  hydrateReadKeys,
   writeReadKeys,
 } from "@/email/read-store";
 import {
-  readTrash,
+  hydrateTrash,
   trashEntryKey,
   writeTrash,
   type TrashEntry,
@@ -363,7 +363,6 @@ export class EmailMailboxStore {
       this.readKeys = [];
       this.readStateReady = false;
       this.hydrateFromStale();
-      this.loadReadState();
     } else if (domainsChanged && nextDomainsKey) {
       this.hydrateInboxSentFromStale();
     }
@@ -377,7 +376,8 @@ export class EmailMailboxStore {
   async bootstrap() {
     if (!this.productId) return;
     const generation = ++this.bootstrapGeneration;
-    this.loadReadState();
+    await this.hydrateUiState();
+    if (this.bootstrapGeneration !== generation) return;
     await this.loadPersistedMail();
     if (this.bootstrapGeneration !== generation) return;
     this.ensureReadBaseline();
@@ -385,6 +385,26 @@ export class EmailMailboxStore {
     await this.refresh(false);
     if (this.bootstrapGeneration !== generation) return;
     this.ensureReadBaseline();
+  }
+
+  private async hydrateUiState() {
+    if (!this.productId) return;
+    const productId = this.productId;
+    const [stored, trash] = await Promise.all([
+      hydrateReadKeys(productId),
+      hydrateTrash(productId),
+    ]);
+    if (this.productId !== productId) return;
+    runInAction(() => {
+      this.trash = trash;
+      if (stored === null) {
+        this.readKeys = [];
+        this.readStateReady = false;
+      } else {
+        this.readKeys = stored;
+        this.readStateReady = true;
+      }
+    });
   }
 
   start() {
@@ -755,18 +775,6 @@ export class EmailMailboxStore {
     void savePersistedDrafts(this.productId, this.drafts);
   }
 
-  private loadReadState() {
-    if (!this.productId) return;
-    const stored = readReadKeys(this.productId);
-    if (stored === null) {
-      this.readKeys = [];
-      this.readStateReady = false;
-      return;
-    }
-    this.readKeys = stored;
-    this.readStateReady = true;
-  }
-
   /** First-run: treat currently loaded inbox as already seen. */
   private ensureReadBaseline() {
     if (this.readStateReady || !this.productId) return;
@@ -778,7 +786,6 @@ export class EmailMailboxStore {
 
   private hydrateFromStale() {
     if (!this.productId) return;
-    this.trash = readTrash(this.productId);
     const staleConfig = readEmailStale<EmailConfig>(this.productId, "config");
     if (staleConfig) {
       this.config = staleConfig;

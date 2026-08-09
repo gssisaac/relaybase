@@ -1,5 +1,7 @@
 "use client";
 
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
+
 export type NewMailNotifyItem = {
   from: string;
   subject: string;
@@ -25,30 +27,43 @@ async function ensureNotificationPermission(): Promise<boolean> {
   }
 }
 
+async function showDesktopNotification(
+  title: string,
+  body: string,
+): Promise<void> {
+  // Prefer our Rust command so macOS uses ~/.relaybase/app-icon.png
+  // (plugin notifications attribute to Terminal / stale bundle icons in dev).
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("show_notification", { title, body });
+    return;
+  } catch {
+    // Fall through to plugin.
+  }
+  const { sendNotification } = await import(
+    "@tauri-apps/plugin-notification"
+  );
+  await sendNotification({ title, body });
+}
+
 /** Show a macOS notification for new inbound mail. No-op outside Tauri. */
 export async function notifyNewMail(items: NewMailNotifyItem[]): Promise<void> {
   if (items.length === 0) return;
+  if (!isDesktopRuntime()) return;
   try {
     const granted = await ensureNotificationPermission();
     if (!granted) return;
 
-    const { sendNotification } = await import(
-      "@tauri-apps/plugin-notification"
-    );
-
     if (items.length === 1) {
       const item = items[0]!;
-      await sendNotification({
-        title: item.from || "New email",
-        body: item.subject?.trim() || "(no subject)",
-      });
+      await showDesktopNotification(
+        item.from || "New email",
+        item.subject?.trim() || "(no subject)",
+      );
       return;
     }
 
-    await sendNotification({
-      title: "Relaybase",
-      body: `${items.length} new messages`,
-    });
+    await showDesktopNotification("Relaybase", `${items.length} new messages`);
   } catch {
     // Web build or plugin unavailable.
   }

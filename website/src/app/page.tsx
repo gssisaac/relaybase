@@ -4,11 +4,12 @@ import { EmailAddresses } from "@/components/email-addresses";
 import { Features } from "@/components/features";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
+import { IntroVideo } from "@/components/intro-video";
 import { JsonLd } from "@/components/json-ld";
 import { PricingComparison } from "@/components/pricing-comparison";
 import { SiteHeader } from "@/components/site-header";
 import { UseCases } from "@/components/use-cases";
-import { siteConfig } from "@/lib/site-config";
+import { isEarlyAccessActive, siteConfig } from "@/lib/site-config";
 
 export default function Home() {
   const ogImageUrl = new URL(siteConfig.ogImage.url, siteConfig.url).toString();
@@ -38,6 +39,16 @@ export default function Home() {
           price: String(siteConfig.pricing.free.price),
           priceCurrency: siteConfig.pricing.currency,
         },
+        ...(isEarlyAccessActive()
+          ? [
+              {
+                "@type": "Offer",
+                name: siteConfig.pricing.earlyAccess.label,
+                price: String(siteConfig.pricing.earlyAccess.price),
+                priceCurrency: siteConfig.pricing.currency,
+              },
+            ]
+          : []),
         {
           "@type": "Offer",
           name: siteConfig.pricing.pro.label,
@@ -62,6 +73,7 @@ export default function Home() {
       <SiteHeader />
       <main>
         <Hero />
+        <IntroVideo />
         <EmailAddresses />
         <UseCases />
         <PricingComparison />

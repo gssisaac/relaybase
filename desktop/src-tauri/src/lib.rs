@@ -1,4 +1,5 @@
 mod cloudflare;
+mod notify;
 mod secrets;
 mod worker;
 
@@ -310,6 +311,11 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            // Seed ~/.relaybase/app-icon.png for notification identity image.
+            if let Err(e) = notify::ensure_notification_icon() {
+                log::warn!("notification icon seed failed: {e}");
+            }
+            let _ = app;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -331,6 +337,7 @@ pub fn run() {
             save_worker_connection,
             get_desktop_info,
             open_external_url,
+            notify::show_notification,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Relaybase desktop");

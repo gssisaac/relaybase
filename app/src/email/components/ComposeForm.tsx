@@ -105,12 +105,12 @@ export function ComposeForm({
       onKeyDown={handleSendHotkey}
       className={
         compact
-          ? "flex flex-col rounded-xl border border-border/40 bg-card shadow-sm"
+          ? "flex shrink-0 flex-col rounded-xl border border-border/40 bg-card shadow-sm"
           : "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm"
       }
     >
       <div className="flex shrink-0 flex-col divide-y divide-border/20 px-4">
-        <div className="flex items-center gap-2 py-1">
+        <div className="flex shrink-0 items-center gap-2 py-1">
           <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
             From:
           </span>
@@ -126,7 +126,7 @@ export function ComposeForm({
             >
               <SelectTrigger
                 size="sm"
-                className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0 shadow-none focus:ring-0 data-[size=sm]:h-8"
+                className="h-8 shrink-0 min-w-0 flex-1 border-0 bg-transparent px-0 py-0 shadow-none focus:ring-0 data-[size=sm]:h-8"
               >
                 <SelectValue placeholder="Select account">
                   {(value: string | null) => {
@@ -149,11 +149,13 @@ export function ComposeForm({
               </SelectContent>
             </Select>
           ) : (
-            <span className="truncate text-sm text-foreground">{fromLabel}</span>
+            <span className="min-w-0 flex-1 shrink-0 truncate text-sm text-foreground">
+              {fromLabel}
+            </span>
           )}
         </div>
 
-        <div className="flex items-center py-1">
+        <div className="flex shrink-0 items-center py-1">
           <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
             To:
           </span>
@@ -173,7 +175,7 @@ export function ComposeForm({
           />
         </div>
 
-        <div className="flex items-center py-1">
+        <div className="flex shrink-0 items-center py-1">
           <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
             Cc:
           </span>
@@ -193,7 +195,7 @@ export function ComposeForm({
           />
         </div>
 
-        <div className="flex items-center py-1">
+        <div className="flex shrink-0 items-center py-1">
           <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
             Subject:
           </span>

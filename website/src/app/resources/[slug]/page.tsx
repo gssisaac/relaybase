@@ -9,7 +9,12 @@ import { ResourceArticle } from "@/components/resource-article";
 import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { getAllResources, getResource } from "@/lib/resources";
-import { pageSocialMeta, siteConfig } from "@/lib/site-config";
+import {
+  getCurrentProPrice,
+  isEarlyAccessActive,
+  pageSocialMeta,
+  siteConfig,
+} from "@/lib/site-config";
 
 export const dynamic = "force-static";
 
@@ -153,7 +158,11 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Get notified when the Mac app launches — free for one
-                    domain, or ${siteConfig.pricing.pro.price} once for Pro.
+                    domain, or ${getCurrentProPrice()} once for Pro
+                    {isEarlyAccessActive()
+                      ? ` during Early Access (normally $${siteConfig.pricing.pro.price})`
+                      : ""}
+                    .
                   </p>
                 </div>
                 <Button size="lg" render={<Link href={siteConfig.getStartedPath} />}>

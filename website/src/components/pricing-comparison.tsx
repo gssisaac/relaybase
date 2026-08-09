@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, Minus, Shield } from "lucide-react";
+import { Check, Shield, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,15 +10,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  getGoogleWorkspaceMonthlyCost,
-  siteConfig,
-} from "@/lib/site-config";
+import { isEarlyAccessActive, siteConfig } from "@/lib/site-config";
 
 export function PricingComparison() {
-  const workspaceMonthly = getGoogleWorkspaceMonthlyCost();
-  const { free, pro } = siteConfig.pricing;
+  const { free, pro, earlyAccess } = siteConfig.pricing;
   const cfEmailMonthly = siteConfig.cloudflareEmailSendingMonthly;
+  const showEarlyAccess = isEarlyAccessActive();
+  const proPrice = showEarlyAccess ? earlyAccess.price : pro.price;
 
   return (
     <section id="pricing" className="py-20">
@@ -36,7 +34,7 @@ export function PricingComparison() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mx-auto mt-12 grid max-w-3xl gap-6 sm:grid-cols-2">
           <Card className="bg-white">
             <CardHeader>
               <CardTitle className="text-2xl">{free.label}</CardTitle>
@@ -75,10 +73,17 @@ export function PricingComparison() {
             </CardContent>
           </Card>
 
-          <Card className="relative border-2 border-brand bg-white shadow-md">
+          <Card className="relative overflow-visible border-2 border-brand bg-white shadow-md">
             <div className="absolute -top-3 left-6">
               <Badge className="bg-brand text-white shadow-sm">
-                Recommended
+                {showEarlyAccess ? (
+                  <>
+                    <Sparkles className="mr-1 size-3" />
+                    Early Access — first {earlyAccess.seatsTotal} only
+                  </>
+                ) : (
+                  "Recommended"
+                )}
               </Badge>
             </div>
             <CardHeader className="pt-8">
@@ -86,16 +91,22 @@ export function PricingComparison() {
               <CardDescription>
                 Mac app + routing Worker, unlimited domains
               </CardDescription>
-              <div className="mt-4 flex items-baseline gap-1">
+              <div className="mt-4 flex items-baseline gap-2">
                 <span className="text-5xl font-bold tracking-tight text-brand">
-                  ${pro.price}
+                  ${proPrice}
                 </span>
                 <span className="text-muted-foreground">once</span>
+                {showEarlyAccess ? (
+                  <span className="text-lg text-muted-foreground line-through">
+                    ${pro.price}
+                  </span>
+                ) : null}
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Includes 1 year of updates. Plus Cloudflare Email Sending (~$
-                {cfEmailMonthly}/mo on your account — billed by Cloudflare,
-                not us).
+                {showEarlyAccess ? "Early Access price, locked for life. " : ""}
+                Includes 1 year of updates plus Cloudflare Email Sending (~$
+                {cfEmailMonthly}/mo on your account — billed by Cloudflare, not
+                us).
               </p>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -103,7 +114,7 @@ export function PricingComparison() {
                 "Unlimited domains and addresses on your Cloudflare account",
                 "billing@, support@, privacy@, noreply@, hello@, admin@",
                 "Audience, Broadcasts, and Metrics",
-                "Spark-like inbox, compose, and accounts UI",
+                "Fast, keyboard-first inbox, compose, and accounts UI",
                 "3 team seats for shared inboxes",
                 "Priority support",
               ].map((item) => (
@@ -117,7 +128,7 @@ export function PricingComparison() {
                 className="mt-6 w-full"
                 size="lg"
               >
-                Get Pro — ${pro.price}
+                {showEarlyAccess ? "Get Early Access" : "Get Pro"} — ${proPrice}
               </Button>
               <p className="text-center text-xs text-muted-foreground">
                 After year 1: optional ${pro.renewalPrice}/{pro.renewalPeriodLabel}{" "}
@@ -125,45 +136,16 @@ export function PricingComparison() {
               </p>
             </CardContent>
           </Card>
-
-          <Card className="bg-muted/30">
-            <CardHeader>
-              <CardTitle className="text-2xl">Google Workspace</CardTitle>
-              <CardDescription>
-                {siteConfig.googleWorkspace.plan} — one paid seat per address
-              </CardDescription>
-              <div className="mt-4 flex items-baseline gap-1">
-                <span className="text-5xl font-bold tracking-tight text-muted-foreground">
-                  ${workspaceMonthly}
-                </span>
-                <span className="text-muted-foreground">/mo for 6 seats</span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                ${siteConfig.googleWorkspace.perUserMonthly}/user ×{" "}
-                {siteConfig.googleWorkspace.usersForSixAddresses} addresses
-                (annual billing)
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                "Full inbox UI per user (often overkill)",
-                "No transactional send API out of the box",
-                "Requires SMTP relay or third-party tooling",
-                "Inbound routing needs extra setup",
-                "Cost scales linearly with every new address",
-                "Designed for humans, not product automation",
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="flex items-start gap-2.5 text-sm text-muted-foreground"
-                >
-                  <Minus className="mt-0.5 size-4 shrink-0" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
         </div>
+
+        {showEarlyAccess ? (
+          <p className="mx-auto mt-6 max-w-lg text-center text-sm text-muted-foreground">
+            Early Access closes when the first {earlyAccess.seatsTotal} seats
+            are claimed or Relaybase officially launches, whichever comes
+            first. Your price never goes up after that — regular Pro is $
+            {pro.price}.
+          </p>
+        ) : null}
 
         <div className="mt-10 rounded-2xl border border-accent-teal/30 bg-accent p-8 text-center md:p-10">
           <div className="mx-auto flex max-w-lg flex-col items-center gap-3">
@@ -179,6 +161,11 @@ export function PricingComparison() {
               us. Skip a year of Pro updates and your inbox keeps working;
               we sell software and (optionally) updates, not a subscription
               to your own mail.
+            </p>
+            <p className="text-sm text-accent-foreground/70">
+              Built on Cloudflare&apos;s Email Sending API, currently in
+              public beta — we track every change and ship Worker updates the
+              same day.
             </p>
           </div>
         </div>

@@ -11,13 +11,19 @@ import {
   EmailMailboxRoutes,
   EmailsLegacyRedirect,
 } from "@/email/panel";
-import { resolveEntryPath } from "@/email/sidebar-mode";
+import { resolveEntryPathAsync } from "@/email/sidebar-mode";
 
 function IndexRedirect() {
   const router = useRouter();
   const userId = useProductId();
   useEffect(() => {
-    router.replace(resolveEntryPath(userId));
+    let cancelled = false;
+    void resolveEntryPathAsync(userId).then((path) => {
+      if (!cancelled) router.replace(path);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [router, userId]);
   return null;
 }

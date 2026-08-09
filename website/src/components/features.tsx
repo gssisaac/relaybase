@@ -21,7 +21,7 @@ const features = [
     icon: MonitorSmartphone,
     title: "Mac app inbox",
     description:
-      "Spark-like UI for every address across every domain on your Cloudflare account.",
+      "A fast, keyboard-driven inbox for every address across every domain on your Cloudflare account.",
   },
   {
     icon: Send,

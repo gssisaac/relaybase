@@ -11,6 +11,8 @@ import type {
   SentEmail,
 } from "@/email/components/types";
 
+/** Desktop mail lists/details → ~/.relaybase/mail (see docs/relaybase-home-storage.md). */
+
 function safeProductId(productId: string): string {
   const cleaned = productId.trim().replace(/[^a-zA-Z0-9._%-]/g, "_");
   return cleaned || "default";
@@ -62,25 +64,25 @@ function writeLocalJson(relativePath: string, value: unknown) {
 
 async function readJson<T>(relativePath: string): Promise<T | null> {
   if (isDesktopRuntime()) {
-    try {
-      const remote = await desktopGetMailJson(relativePath);
-      if (remote != null) return remote as T;
-    } catch {
-      // fall through
+    const remote = await desktopGetMailJson(relativePath);
+    if (remote != null) {
+      writeLocalJson(relativePath, remote);
+      return remote as T;
     }
+    // Disk miss: allow one-time migrate from legacy localhost localStorage.
+    return readLocalJson<T>(relativePath);
   }
   return readLocalJson<T>(relativePath);
 }
 
 async function writeJson(relativePath: string, value: unknown): Promise<void> {
-  writeLocalJson(relativePath, value);
   if (isDesktopRuntime()) {
-    try {
-      await desktopSaveMailJson(relativePath, value);
-    } catch {
-      // local mirror already written
-    }
+    // Disk first — do not treat localhost localStorage as durable.
+    await desktopSaveMailJson(relativePath, value);
+    writeLocalJson(relativePath, value);
+    return;
   }
+  writeLocalJson(relativePath, value);
 }
 
 export async function loadPersistedInbox(

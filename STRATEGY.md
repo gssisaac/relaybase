@@ -338,3 +338,88 @@ Free 티어는 사용자 자신의 Cloudflare Worker에서 실행되므로 Relay
 ### 7.6 결론
 
 가격체계는 카피가 아니라 지표로 정한다: 5개 모델 중 **Free + Pro 일회성($69) + 기본프레임 연간 업데이트 갱신($25, perpetual fallback)** 이 ARR 실현성·신뢰 안전성·아키텍처 적합성·퍼널 도달력에서 가장 높은 점수를 받고, 세 시나리오 모두에서 매출과(특히) 마진을 개선한다. "구독을 절대 안 한다"는 문장은 폐기하되, "구독을 강제하지 않는다 + 안 내도 안 멈춘다"는 더 구체적이고 아키텍처로 증명 가능한 약속으로 교체해 카피를 새로 쓴다.
+
+---
+
+## 8. Cloudflare Email Sending이 아직 공개 베타인 상황에서 prelaunch 타이밍 (v1)
+
+### 8.1 현재 상태 (근거)
+
+- Relaybase의 발신 경로 전체가 Cloudflare의 **Email Sending REST API** 한 엔드포인트에 물려 있다 — 대체 발신 경로가 없다.
+
+```227:230:server/src/lib/cloudflare-client.ts
+    if (replyTo) body.reply_to = replyTo;
+
+    const path = `/accounts/${this.accountId}/email/sending/send`;
+    const data = await this.sendWithRetry<{
+```
+
+- 이 API는 **2026-04-16 "public beta" 발표** 기준으로도 여전히 베타다(그 이전엔 2025-11경부터 private beta). 공개 문서·블로그 어디에도 GA(정식 출시) 일정이 명시되어 있지 않다. Cloudflare 공식 확인: *"Email Sending is now in public beta... Start sending and receiving emails from Workers and agents today."* (2026-04-16 changelog), *"Email Sending graduates from private beta to public beta today."* (Cloudflare Blog, 같은 날).
+- 코드베이스는 이미 이 베타의 거친 모서리를 상당히 인지하고 대응해 두었다 — "도메인이 아직 onboarding 안 됨", "not_entitled", "sending_disabled" 같은 베타 특유의 에러코드를 사람이 읽을 수 있는 힌트로 변환하는 로직이 이미 존재한다:
+
+```9:15:server/src/lib/cloudflare-api-hints.ts
+  if (p.includes("/email/sending/send")) {
+    return [
+      `Endpoint: ${m} /accounts/{{account_id}}/email/sending/send`,
+      "Required: Account → Email Sending → Edit",
+      "The From domain must be onboarded in Cloudflare → Email Service → Email Sending.",
+      "Before onboarding, you can only send to verified destination addresses.",
+    ].join("\n");
+  }
+```
+
+- 이는 "도메인 연결 즉시 발신 가능"이라는 온보딩 UX 약속에 실제 제약이 걸려 있다는 뜻이다: 도메인이 Cloudflare 쪽에서 **onboarding 완료 전에는 검증된 수신 주소로만** 발신이 가능하다. 이 지연/승인 절차가 사용자에게 얼마나 걸리는지는 Relaybase가 통제할 수 없는 영역이다.
+- 가격 페이지(Cloudflare Email Service Pricing, 2026-06-09 갱신)에 따르면 **발신은 사용자의 Cloudflare 계정이 Workers Paid 플랜(월 $5)일 때만 가능**하고, 월 3,000건 무료 포함 후 1,000건당 $0.35다. 이는 아직 이 저장소 어디에도 명시적으로 반영되어 있지 않다 — 특히 7.3의 **Free SKU($0, "송수신" 포함)**는 사실상 "Relaybase에는 $0이지만 Cloudflare에는 최소 $5/월"이라는 전제를 깔고 있는데, 이 전제가 마케팅 카피나 온보딩 화면에 아직 드러나지 않는다.
+
+### 8.2 과거 사례로 본 베타 기간의 현실적 길이
+
+Cloudflare Email Routing(자매 제품, 지금 `server/`의 수신 경로가 그대로 쓰는 API)의 실제 타임라인:
+
+| 단계 | 시점 |
+|---|---|
+| 발표 + closed beta(waitlist) | 2021-09 |
+| open beta(누구나 가입 가능) | 2022-02-08 |
+| **GA(베타 종료)** | 2022-10-25 |
+
+즉 "waitlist 없는 오픈 베타"에서 GA까지 **약 8.5개월**이 걸렸고, 최초 발표부터는 **13개월**이었다. Email Sending은 이미 2025-11경 private beta → 2026-04-16 public beta로 넘어왔으므로 같은 패턴을 적용하면 **GA는 대략 2026년 4분기~2027년 상반기** 사이가 현실적인 기대치다 — 그리고 이건 "이메일 라우팅(수신)"보다 스팸/신뢰도/발신자 평판 관리가 훨씬 더 어려운 "발신" 제품이라는 점을 고려하면 오히려 더 길어질 수도 있다.
+
+**결론: GA를 기다렸다가 launch하는 전략은 사실상 "6개월~1년 이상 통째로 대기"를 의미한다.** SOM이 연 1.5만 명 수준인 니치 제품에서 이 정도 대기는 감당하기 어렵다.
+
+### 8.3 핵심 원칙 — "prelaunch"와 "유료 정식 launch"를 분리한다
+
+베타 종료를 기다릴 필요가 없는 이유는 이 둘이 지는 리스크가 완전히 다르기 때문이다:
+
+| | 리스크 성격 | CF 베타 상태에 대한 노출 |
+|---|---|---|
+| **Prelaunch**(랜딩페이지, 웨이트리스트, HN/PH 예고, 콘텐츠 마케팅) | 관심 수집일 뿐, 실제 이메일이 오가지 않음 | **노출 없음** — 지금 당장 해도 무방 |
+| **유료 정식 launch**(라이선스 판매, 실사용자가 실제 업무 이메일을 이 경로로 발신) | CF API 브레이킹 체인지·정지·가격 변경이 실사용자 이메일에 직접 영향 | **노출 큼** — 타이밍 판단이 필요한 지점 |
+
+즉 지금 고민해야 할 건 "prelaunch를 언제 하느냐"가 아니라 이미 답이 나와 있다 — **지금 해도 된다.** 실제로 판단이 필요한 지점은 "웨이트리스트를 실제 결제 고객으로 전환(=정식 launch)하는 시점"이다.
+
+### 8.4 오히려 지금 "베타"라는 사실 자체가 프리런치 카피의 자산이 될 수 있다
+
+1번 섹션에서 이미 세운 신뢰 서사("Worker는 오픈소스, 검증은 당신이 한다", "We do not host your mail")와 정확히 같은 논리로, **Cloudflare Email Sending이 베타라는 사실을 숨기지 않고 먼저 말하는 것**이 오히려 타깃 고객(Cloudflare를 이미 쓰는 개발자층)에게는 신뢰 신호다. 이 페르소나는 베타 API를 다루는 데 익숙하고, 오히려 "너네도 아는구나, 숨기지 않는구나"에 더 반응한다.
+
+- 프리런치 랜딩페이지/웨이트리스트 카피에 명시: *"Built on Cloudflare's new Email Sending API (currently in public beta). We track every change and ship Worker updates the same day — you'll always know exactly what's happening under the hood."*
+- 이렇게 프레이밍하면 정식 launch를 늦출 이유가 아니라, **초기 가입자를 "베타를 함께 타는 얼리어답터"로 셀프 셀렉션**시키는 장치가 된다 — Screen Studio 사례(6번 섹션)에서 배운 "약속을 지금 명문화한다"는 원리를 여기에도 적용하는 것.
+
+### 8.5 유료 정식 launch를 판단하는 기준 (GA를 기다리지 않는 대신 쓸 체크리스트)
+
+GA 공지를 기다리는 대신, 아래 4개 신호를 **내부 게이트**로 삼는다. 전부 충족될 필요는 없지만 최소 1·2번은 필수:
+
+1. **자기 도메인(관리자용 relaybase.xyz 등)에서 최소 4~6주 실사용(dogfooding)** — 실제 라이선스 키 발송/알림 메일을 이 발신 경로로 돌리면서 breaking change·지연·거부율을 직접 관찰. 이미 `admin/`이 자체 도메인 발신에 이 경로를 쓰고 있다면 이 기간은 이미 누적되고 있을 수 있음 — 실제 누적 기간을 먼저 확인.
+2. **얼리액세스 코호트(5~20명, 웨이트리스트에서 선발) 4주 무료/할인 트라이얼** — 결제를 받기 전에 실제 제3자 도메인 onboarding 지연시간, 발신 성공률을 계측.
+3. **Cloudflare Email Service changelog에 60일 연속 breaking change 없음** — RSS(`developers.cloudflare.com/changelog/product/email-service/`)를 구독해 추적. 가격 변경 공지가 있었는지도 함께 확인(이미 6/9 가격 페이지 갱신이 있었으므로 가격 자체는 어느 정도 안정화된 신호로 볼 수 있음).
+4. **(이상적, 필수 아님) Cloudflare의 공식 GA 발표.**
+
+**권장 결론: 1·2번이 확보되면(대략 6~8주 내 가능) 유료 정식 launch를 진행하되, 카피에 8.4의 "베타 투명 공개" 문구를 유지하고 결제 페이지에 "Early Access" 배지를 단다.** GA는 몇 달 뒤에 "이제 정식 GA — Early Access 배지 제거" 이벤트로 재활용한다(2차 마케팅 모멘트).
+
+### 8.6 지금 코드/문서에서 같이 손봐야 할 갭
+
+- `PRODUCT.md`/웹사이트 Free 티어 카피에 **"발신에는 사용자의 Cloudflare 계정이 Workers Paid 플랜(월 $5, Cloudflare에 직접 결제)이 필요"**를 명시해야 한다 — 지금처럼 안 밝히면 "Free인데 왜 돈이 나가냐"는 온보딩 중 신뢰 손상 지점이 된다. Solo/Pro도 마찬가지로 명시가 필요.
+- 온보딩 UX 카피("몇 분 안에 연결 완료")에 **도메인 onboarding 승인/검증 지연 가능성**을 완화된 문구로 반영("보통 몇 분, Cloudflare 쪽 승인에 따라 다소 걸릴 수 있음") — `cloudflare-api-hints.ts`가 이미 이 제약을 알고 있으므로 UI 카피만 맞추면 됨.
+- `admin/` 대시보드에 Cloudflare Email Service changelog 변경 감지(수동 체크 or RSS 폴링)를 얹어 8.5의 3번 체크를 습관화.
+
+### 8.7 결론
+
+베타 종료(GA)를 prelaunch의 전제조건으로 삼지 않는다 — 과거 사례(Email Routing) 기준 GA는 6개월~1년 뒤일 수 있고, 이만큼 기다리는 건 이 니치 시장에서 감당할 수 없는 지연이다. 대신: **(1) 랜딩페이지/웨이트리스트 prelaunch는 지금 즉시 시작**하고, 카피에서 베타 의존성을 투명하게 먼저 밝혀 신뢰 자산으로 전환한다. **(2) 유료 정식 launch는 GA가 아니라 자체 dogfooding + 소규모 얼리액세스 코호트 결과(6~8주)를 게이트로 삼아 "Early Access" 배지와 함께 진행**하고, 실제 GA 발표를 나중에 배지를 떼는 2차 마케팅 이벤트로 재사용한다. 그 사이에 Free/Solo/Pro 카피에 "발신에는 사용자 쪽 Cloudflare Workers Paid 플랜이 필요하다"는 사실을 지금 명시해 신뢰 손상 지점을 미리 없앤다.

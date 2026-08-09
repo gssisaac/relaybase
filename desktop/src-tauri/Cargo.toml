@@ -5,6 +5,12 @@ description = "Relaybase desktop application"
 authors = ["Relaybase"]
 edition = "2021"
 rust-version = "1.77.2"
+# Dock / process name under `tauri dev` comes from the binary filename.
+autobins = false
+
+[[bin]]
+name = "Relaybase"
+path = "src/main.rs"
 
 [lib]
 name = "relaybase_desktop_lib"
@@ -26,3 +32,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
+notify-rust = "4"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mac-notification-sys = "0.6"

@@ -1,27 +1,36 @@
+import Image from "next/image";
 import Link from "next/link";
-import { Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { siteConfig } from "@/lib/site-config";
+import { getCurrentProPrice, isEarlyAccessActive, siteConfig } from "@/lib/site-config";
 
 export function Footer() {
   const year = new Date().getFullYear();
+  const earlyAccess = isEarlyAccessActive();
+  const price = getCurrentProPrice();
 
   return (
     <footer className="border-t border-border bg-white">
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="flex flex-col items-center gap-8 text-center">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Mail className="size-4" />
-            </div>
+            <Image
+              src="/icon.png"
+              alt=""
+              width={32}
+              height={32}
+              className="size-8"
+            />
             <span className="text-lg font-semibold">{siteConfig.name}</span>
           </div>
 
           <p className="max-w-md text-sm text-muted-foreground">
-            Product email for builders — on your Cloudflare account. Free for
-            one domain, or ${siteConfig.pricing.pro.price} once for
-            everything.
+            The inbox for your Cloudflare domains. Free for one domain, or $
+            {price} once for everything
+            {earlyAccess
+              ? ` during Early Access (normally $${siteConfig.pricing.pro.price})`
+              : ""}
+            .
           </p>
 
           <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">

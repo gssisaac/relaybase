@@ -131,7 +131,7 @@ export function ComposeDraftEditor({
     <div
       className={
         compact
-          ? "mt-6 border-t border-border/30 pt-4"
+          ? "mt-6 shrink-0 border-t border-border/30 pt-4"
           : "flex min-h-0 flex-1 flex-col"
       }
     >

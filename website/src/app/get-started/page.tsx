@@ -18,17 +18,28 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { WaitlistForm } from "@/components/waitlist-form";
-import { pageSocialMeta, siteConfig } from "@/lib/site-config";
+import {
+  getCurrentProPrice,
+  isEarlyAccessActive,
+  pageSocialMeta,
+  siteConfig,
+} from "@/lib/site-config";
+
+const currentProPrice = getCurrentProPrice();
+const earlyAccessLive = isEarlyAccessActive();
+const priceLabel = earlyAccessLive
+  ? `Early Access: $${currentProPrice} once for Pro (normally $${siteConfig.pricing.pro.price})`
+  : `$${currentProPrice} once for Pro`;
 
 export const metadata: Metadata = {
   title: `Get ${siteConfig.name}`,
-  description: `Free for one domain. $${siteConfig.pricing.pro.price} once for Pro — product email on your own Cloudflare account.`,
+  description: `Free for one domain. ${priceLabel} — an inbox for your own Cloudflare account.`,
   alternates: {
     canonical: siteConfig.getStartedPath,
   },
   ...pageSocialMeta({
     title: `Get ${siteConfig.name}`,
-    description: `Start free, or go Pro for $${siteConfig.pricing.pro.price} once. Deploy the Worker into your Cloudflare account, connect the Mac app, manage every domain.`,
+    description: `Start free, or get ${earlyAccessLive ? "Early Access to Pro" : "Pro"} for $${currentProPrice} once${earlyAccessLive ? ` — normally $${siteConfig.pricing.pro.price}` : ""}. Deploy the Worker into your Cloudflare account, connect the Mac app, manage every domain.`,
     path: siteConfig.getStartedPath,
   }),
 };
@@ -42,7 +53,7 @@ const promises = [
   {
     icon: MonitorSmartphone,
     title: "Mac app + Worker",
-    desc: "Spark-like inbox UX over a routing Worker you install — send API and inbound in your account.",
+    desc: "A fast native inbox over a routing Worker you install — send API and inbound in your account.",
   },
   {
     icon: Cloud,
@@ -52,7 +63,9 @@ const promises = [
 ] as const;
 
 export default function GetStartedPage() {
-  const { pricing } = siteConfig;
+  const { free, pro, earlyAccess } = siteConfig.pricing;
+  const showEarlyAccess = earlyAccessLive;
+  const proPrice = currentProPrice;
 
   return (
     <>
@@ -69,7 +82,8 @@ export default function GetStartedPage() {
                 variant="secondary"
                 className="mb-6 border border-border bg-white px-3 py-1 text-muted-foreground"
               >
-                Free for one domain · ${pricing.pro.price} once for Pro
+                Free for one domain ·{" "}
+                {showEarlyAccess ? "Early Access" : ""} ${proPrice} for Pro
               </Badge>
 
               <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl">
@@ -110,7 +124,9 @@ export default function GetStartedPage() {
                   <p>
                     We sell software. Cloudflare Email Sending (~$
                     {siteConfig.cloudflareEmailSendingMonthly}/mo) is billed by
-                    Cloudflare on your account.
+                    Cloudflare on your account. Email Sending is currently in
+                    Cloudflare&apos;s public beta — we track every change and
+                    ship Worker updates the same day.
                   </p>
                 </div>
               </div>
@@ -118,10 +134,12 @@ export default function GetStartedPage() {
               <Card className="border-2 border-brand/20 bg-white shadow-md">
                 <CardHeader className="pb-2 text-center">
                   <Badge variant="teal" className="mx-auto w-fit">
-                    Launch notify
+                    {showEarlyAccess
+                      ? `Early Access — first ${earlyAccess.seatsTotal} only`
+                      : "Launch notify"}
                   </Badge>
                   <CardTitle className="mt-3 text-2xl">
-                    Free, or ${pricing.pro.price} once for Pro
+                    Free, or ${proPrice} once for Pro
                   </CardTitle>
                   <CardDescription>
                     Join the list — we&apos;ll email you when checkout opens
@@ -129,18 +147,24 @@ export default function GetStartedPage() {
 
                   <div className="mt-5 flex items-baseline justify-center gap-3">
                     <span className="text-5xl font-bold tracking-tight text-brand">
-                      ${pricing.pro.price}
+                      ${proPrice}
                     </span>
                     <span className="text-muted-foreground">once for Pro</span>
+                    {showEarlyAccess ? (
+                      <span className="text-lg text-muted-foreground line-through">
+                        ${pro.price}
+                      </span>
+                    ) : null}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5 pt-2">
                   <ul className="space-y-2.5 text-left text-sm">
                     {[
-                      "Free forever — 1 domain, 1 address",
+                      `Free forever — ${free.domains} domain, ${free.addresses} address`,
                       "Pro: unlimited domains, Mac app (Windows later)",
                       "Worker install into your Cloudflare account",
                       "Send + inbound API from your Worker",
+                      ...(showEarlyAccess ? ["Early Access price locked for life"] : []),
                     ].map((line) => (
                       <li key={line} className="flex items-start gap-2.5">
                         <Check className="mt-0.5 size-4 shrink-0 text-accent-teal" />

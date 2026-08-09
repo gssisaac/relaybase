@@ -1,27 +1,29 @@
 # Relaybase — Pricing
 
-**Status: pre-launch.** This is the source of truth for pricing numbers and tier scope. Full rationale and the model comparison behind these numbers live in `STRATEGY.md` §7 (superseding §§1–6, which were written under a "$39, no subscription ever" draft that predated this decision). This doc is the spec other docs and the website should match.
+**Status: pre-launch (Early Access open).** This is the source of truth for pricing numbers and tier scope. Full rationale and the model comparison behind these numbers live in `STRATEGY.md` §7 (superseding §§1–6, which were written under a "$39, no subscription ever" draft that predated this decision) and `STRATEGY.md` §8 (why prelaunch doesn't wait for Cloudflare Email Sending's GA). The Early Access policy itself — audience, copy, and SKU rationale — is spelled out in `PRE-LAUNCH.md` §4. This doc is the spec other docs and the website should match.
 
-**Public scope right now: Free and Pro only.** Team and Studio exist in the model and are worth building toward, but they depend on engineering that hasn't shipped yet (mailbox-scoped seats, multi-Worker license tracking — see `STRATEGY.md` §2–3). Do not publish them on the marketing site until they're real. This doc tracks all four so engineering and marketing stay in sync as they ship.
+**Public scope right now: Free and Pro (as "Pro — Early Access") only.** Team and Studio exist in the model and are worth building toward, but they depend on engineering that hasn't shipped yet (mailbox-scoped seats, multi-Worker license tracking — see `STRATEGY.md` §2–3). Do not publish them on the marketing site until they're real. This doc tracks all four so engineering and marketing stay in sync as they ship.
 
 ---
 
 ## 1. Public tiers (live on relaybase.xyz today)
 
-| | Free | Pro |
-|---|---|---|
-| Price | **$0** | **$69 one-time** |
-| Cloudflare Worker installs | 1 | 1 |
-| Domains | 1 | Unlimited (on that Worker's Cloudflare account) |
-| Email addresses | 1 | Unlimited |
-| Send + receive API | Yes | Yes |
-| Inbox UI (Mac app) | Yes | Yes, + Windows and mobile companion when shipped |
-| Audience / Broadcasts / Metrics | No | Yes |
-| Team seats (email-only scoped access) | No | 3 included |
-| Support | Community docs | Priority email |
-| Updates | Security patches only | 1 year included, then optional renewal (§2) |
+| | Free | Pro — Early Access | Pro (regular, post-launch) |
+|---|---|---|---|
+| Price | **$0** | **$35 one-time** (~50% off, first 300 seats) | **$69 one-time** |
+| Cloudflare Worker installs | 1 | 1 | 1 |
+| Domains | 1 | Unlimited (on that Worker's Cloudflare account) | Unlimited |
+| Email addresses | 1 | Unlimited | Unlimited |
+| Send + receive API | Yes | Yes | Yes |
+| Inbox UI (Mac app) | Yes | Yes, + Windows and mobile companion when shipped | Yes |
+| Audience / Broadcasts / Metrics | No | Yes | Yes |
+| Team seats (email-only scoped access) | No | 3 included | 3 included |
+| Support | Community docs | Priority email | Priority email |
+| Updates | Security patches only | 1 year included, then optional renewal (§2) | 1 year included, then optional renewal (§2) |
 
 Free is not a trial — it does not expire and does not require a credit card. It runs the same Worker in the same way as Pro; the only difference is the domain/address cap and feature gating in the desktop app. Because the Worker executes entirely inside the customer's own Cloudflare account, Free costs Relaybase effectively nothing to serve — there is no hosting bill that scales with free users. Treat Free as a zero-cost top-of-funnel channel, not a loss leader.
+
+**Pro — Early Access** is identical to regular Pro in every feature — only the price and seat cap differ. It closes when the first 300 seats are claimed or Relaybase exits pre-launch (whichever comes first — `STRATEGY.md` §8.5's launch gate). Early Access buyers keep the $35 price for life; it never reverts to $69 for them. `siteConfig.pricing.earlyAccess.active` (`website/src/lib/site-config.ts`) is the single flag that turns this tier on/off across the site — flip it to `false` and every page falls back to the regular `$69` Pro price automatically.
 
 ## 2. Pro update renewal (optional, not required to keep using Relaybase)
 

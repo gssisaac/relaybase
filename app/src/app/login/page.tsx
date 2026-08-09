@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { resolveEntryPath } from "@/email/sidebar-mode";
+import { resolveEntryPathAsync } from "@/email/sidebar-mode";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function LoginPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Sign in failed");
-      router.replace(resolveEntryPath(id.trim()));
+      router.replace(await resolveEntryPathAsync(id.trim()));
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign in failed");

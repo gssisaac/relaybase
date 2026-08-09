@@ -1,9 +1,10 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Mail } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { siteConfig } from "@/lib/site-config";
+import { getCurrentProPrice, isEarlyAccessActive, siteConfig } from "@/lib/site-config";
 
 const navItems = [
   { href: "/#addresses", label: "Addresses" },
@@ -19,9 +20,14 @@ export function SiteHeader() {
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-lg">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-            <Mail className="size-4" />
-          </div>
+          <Image
+            src="/icon.png"
+            alt=""
+            width={32}
+            height={32}
+            className="size-8"
+            priority
+          />
           <span className="text-lg font-semibold tracking-tight">
             {siteConfig.name}
           </span>
@@ -41,7 +47,8 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <Badge variant="teal" className="hidden sm:inline-flex">
-            Free, or ${siteConfig.pricing.pro.price} once for Pro
+            Free, or ${getCurrentProPrice()} once for Pro
+            {isEarlyAccessActive() ? " (Early Access)" : ""}
           </Badge>
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
             Get started

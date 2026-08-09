@@ -5,16 +5,16 @@ const defaultApiUrl = "https://api.relaybase.xyz";
 
 export const siteConfig = {
   name: "Relaybase",
-  tagline: "Product email on your Cloudflare account.",
+  tagline: "The inbox for your Cloudflare domains.",
   description:
-    "A Mac app that wraps Cloudflare Email Sending and Routing with a Spark-like inbox and send API. Free for one domain. $69 once unlocks everything — runs entirely in your Cloudflare account.",
+    "A keyboard-first Mac inbox for every domain on your Cloudflare account — as a Worker you own.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? defaultSiteUrl,
   apiUrl: process.env.NEXT_PUBLIC_RELAYBASE_API_URL ?? defaultApiUrl,
   getStartedPath: "/get-started",
   /**
    * Pricing numbers — source of truth is `PRICING.md` (repo root). Only
-   * `free` and `pro` are public; Team/Studio exist in the model
-   * (`STRATEGY.md` §3) but are not shown on the site until they ship.
+   * `free`, `pro`, and `earlyAccess` are public; Team/Studio exist in the
+   * model (`STRATEGY.md` §3) but are not shown on the site until they ship.
    */
   pricing: {
     currency: "USD",
@@ -26,15 +26,26 @@ export const siteConfig = {
     },
     pro: {
       label: "Pro",
-      /** One-time license price (USD). */
+      /** One-time license price (USD), post-launch regular price. */
       price: 69,
       /** Optional annual update renewal — perpetual fallback if skipped. */
       renewalPrice: 25,
       renewalPeriodLabel: "year",
     },
+    /**
+     * Pre-launch only (`PRE-LAUNCH.md` §4). Same Pro feature set, discounted
+     * price, capped seats. Set `active: false` once seats fill or the product
+     * exits Early Access — the site should then fall back to `pro.price`.
+     */
+    earlyAccess: {
+      label: "Pro — Early Access",
+      price: 35,
+      seatsTotal: 300,
+      active: true,
+    },
   },
   waitlist: {
-    note: "early access to Free and Pro when checkout opens",
+    note: "Early Access pricing for the first 300",
   },
   keywords: [
     "Relaybase",
@@ -52,7 +63,7 @@ export const siteConfig = {
     url: "/og.svg",
     width: 1200,
     height: 630,
-    alt: "Relaybase — product email for your Cloudflare account",
+    alt: "Relaybase — the inbox for your Cloudflare domains",
     type: "image/svg+xml",
   },
   standardAddresses: [
@@ -63,24 +74,19 @@ export const siteConfig = {
     { role: "hello", address: "hello@yourdomain.com", purpose: "Welcome emails and onboarding" },
     { role: "admin", address: "admin@yourdomain.com", purpose: "Internal alerts and ops notices" },
   ],
-  googleWorkspace: {
-    plan: "Business Starter",
-    perUserMonthly: 7,
-    usersForSixAddresses: 6,
-  },
   cloudflareEmailSendingMonthly: 5,
 } as const;
 
-export function getGoogleWorkspaceMonthlyCost() {
-  return (
-    siteConfig.googleWorkspace.perUserMonthly *
-    siteConfig.googleWorkspace.usersForSixAddresses
-  );
+/** Single flag every page should branch on to show/hide Early Access framing. */
+export function isEarlyAccessActive() {
+  return siteConfig.pricing.earlyAccess.active;
 }
 
-/** Illustrative annual Workspace cost for six addresses (comparison only). */
-export function getGoogleWorkspaceAnnualCost() {
-  return getGoogleWorkspaceMonthlyCost() * 12;
+/** The price to lead with in CTAs — Early Access price while it's running, regular price after. */
+export function getCurrentProPrice() {
+  return isEarlyAccessActive()
+    ? siteConfig.pricing.earlyAccess.price
+    : siteConfig.pricing.pro.price;
 }
 
 /**

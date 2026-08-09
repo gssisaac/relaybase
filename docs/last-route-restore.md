@@ -14,15 +14,20 @@ Without entry restore, every open/login hard-redirected to `/dashboard`, which a
 
 ---
 
-## Storage (localStorage)
+## Storage
 
-Keys are scoped by `userId` (cookie session id in the browser; `"desktop"` in the Tauri static shell when no cookie is present).
+**Desktop source of truth:** `~/.relaybase/mail/{userId}/ui/sidebar.json`  
+(WebKit / Application Support `localStorage` is only a mirror — do not rely on it across binary renames.)  
+Full home-dir contract: [relaybase-home-storage.md](./relaybase-home-storage.md).
+
+Browser / mirror keys (scoped by `userId`; cookie session id, or `"desktop"` in the Tauri shell when no cookie):
 
 | Key pattern | Value |
 |-------------|--------|
 | `relaybase:sidebar:mode:{userId}` | `"email"` \| `"dashboard"` |
 | `relaybase:sidebar:lastPath:email:{userId}` | Full path including query (e.g. `/email/inbox?account=…`) |
 | `relaybase:sidebar:lastPath:dashboard:{userId}` | Full path including query (e.g. `/domains?domain=…`) |
+| `relaybase:sidebar-collapsed:{userId}` | `"1"` / `"0"` |
 
 Defaults when nothing is stored:
 
@@ -39,7 +44,9 @@ Defaults when nothing is stored:
 | `readSidebarMode` / `writeSidebarMode` | Persist active mode |
 | `readLastPath` / `writeLastPath` | Persist per-mode path (validated) |
 | `isRestorablePath(path, mode)` | Reject `/`, auth/setup/api, and cross-mode paths |
-| `resolveEntryPath(userId)` | Mode + last path for app entry |
+| `resolveEntryPath(userId)` | Mode + last path for app entry (after hydrate) |
+| `resolveEntryPathAsync(userId)` | Hydrate from `~/.relaybase` then resolve |
+| `hydrateSidebarState(userId)` | Disk ↔ localStorage migrate/hydrate |
 
 Only restorable paths are written or returned. Blocked prefixes: `/login`, `/register`, `/setup`, `/api`.
 

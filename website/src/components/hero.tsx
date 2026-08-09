@@ -11,9 +11,12 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { siteConfig } from "@/lib/site-config";
+import { getCurrentProPrice, isEarlyAccessActive, siteConfig } from "@/lib/site-config";
 
 export function Hero() {
+  const earlyAccess = isEarlyAccessActive();
+  const price = getCurrentProPrice();
+
   return (
     <section className="relative overflow-hidden border-b border-border">
       <div className="pointer-events-none absolute inset-0 grid-dots opacity-40" />
@@ -31,9 +34,9 @@ export function Hero() {
           </Badge>
 
           <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl lg:text-6xl">
-            Product email that lives in
+            Your domains already live on Cloudflare.
             <span className="mt-2 block text-brand">
-              your Cloudflare account.
+              Now give them an inbox.
             </span>
           </h1>
 
@@ -56,8 +59,18 @@ export function Hero() {
             </Button>
           </div>
           <p className="mt-4 text-sm text-muted-foreground">
-            Free for one domain. ${siteConfig.pricing.pro.price} once unlocks
-            everything.
+            {earlyAccess ? (
+              <>
+                Free for one domain. Early Access: ${price} once for
+                everything —{" "}
+                <span className="line-through">
+                  ${siteConfig.pricing.pro.price}
+                </span>{" "}
+                after launch.
+              </>
+            ) : (
+              <>Free for one domain. ${price} once unlocks everything.</>
+            )}
           </p>
         </div>
 
@@ -76,7 +89,7 @@ export function Hero() {
             {
               icon: MonitorSmartphone,
               title: "Mac app",
-              desc: "Spark-like inbox + compose",
+              desc: "Fast, keyboard-first inbox",
             },
             {
               icon: KeyRound,

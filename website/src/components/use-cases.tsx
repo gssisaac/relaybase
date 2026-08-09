@@ -1,4 +1,4 @@
-import { Boxes, Rocket, Users } from "lucide-react";
+import { Boxes, Layers, MoveRight } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -7,31 +7,31 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { siteConfig } from "@/lib/site-config";
+import { getCurrentProPrice } from "@/lib/site-config";
 
 const personas = [
   {
-    icon: Rocket,
-    title: "Solo product builders",
+    icon: Layers,
+    title: "Multi-domain Cloudflare operators",
     description:
-      "Launch billing@ and support@ on day one without paying for six Google seats you'll never log into.",
-    example: `Indie SaaS founder with a dozen Cloudflare domains — one $${siteConfig.pricing.pro.price} Pro license, Cloudflare Email Sending on their own bill.`,
+      "You've got five, ten, or twenty domains on Cloudflare with Email Routing quietly forwarding somewhere. Relaybase gives every one of them a real inbox — one Worker, one Mac app.",
+    example: `A builder with a dozen Cloudflare zones — one $${getCurrentProPrice()} license, every mailbox side by side in one app.`,
+  },
+  {
+    icon: MoveRight,
+    title: "Already on Cloudflare, mail somewhere else",
+    description:
+      "Your domains, DNS, and Workers are already on Cloudflare — your inbox is still tied to a different provider. Move it over without a nameserver migration or a new vendor contract.",
+    example:
+      "A team already running Workers and R2 in production, finally bringing support@ onto the same account.",
   },
   {
     icon: Boxes,
-    title: "Multi-product managers",
+    title: "Solo builders running multiple products",
     description:
-      "Run separate domains per product with the same API pattern. Scale from one product to five without re-architecting email.",
+      "Every product gets its own domain, its own billing@ and support@, and the same fast inbox pattern — switch between them without logging into five different tools.",
     example:
-      "Agency ships four client products on four zones — same Mac app, Worker already in their Cloudflare account.",
-  },
-  {
-    icon: Users,
-    title: "Platform & ops teams",
-    description:
-      "Centralize transactional send and inbound routing. Domain-scoped API keys keep each product isolated.",
-    example:
-      "Platform team issues one key per microservice domain from their Worker. Admin@ alerts go to PagerDuty via webhook.",
+      "An indie founder shipping four products on four zones — same Mac app, same Worker pattern, for all of them.",
   },
 ];
 
@@ -47,9 +47,9 @@ export function UseCases() {
             Email UX for people who already run Cloudflare
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            If you manage many domains on Cloudflare and need product addresses
-            without Workspace seat math, Relaybase is the client and Worker
-            wrapper.
+            If you manage multiple domains on Cloudflare, Relaybase is the
+            inbox and Worker wrapper you&apos;ve been missing — not a hosted
+            mailbox, not a new vendor.
           </p>
         </div>
 

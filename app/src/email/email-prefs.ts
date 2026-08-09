@@ -54,24 +54,25 @@ function writeLocalPrefs(prefs: EmailPrefs) {
 
 export async function loadEmailPrefs(): Promise<EmailPrefs> {
   if (isDesktopRuntime()) {
-    try {
-      const remote = await desktopGetEmailPrefs();
-      if (remote) return normalizePrefs(remote);
-    } catch {
-      // fall through to local
+    const remote = await desktopGetEmailPrefs();
+    if (remote) {
+      const normalized = normalizePrefs(remote);
+      writeLocalPrefs(normalized);
+      return normalized;
     }
+    // Disk miss: allow one-time migrate from legacy localhost localStorage.
+    return readLocalPrefs();
   }
   return readLocalPrefs();
 }
 
 export async function saveEmailPrefs(prefs: EmailPrefs): Promise<void> {
   const normalized = normalizePrefs(prefs);
-  writeLocalPrefs(normalized);
   if (isDesktopRuntime()) {
-    try {
-      await desktopSaveEmailPrefs(normalized);
-    } catch {
-      // local mirror already written
-    }
+    // Disk first — do not treat localhost localStorage as durable.
+    await desktopSaveEmailPrefs(normalized);
+    writeLocalPrefs(normalized);
+    return;
   }
+  writeLocalPrefs(normalized);
 }

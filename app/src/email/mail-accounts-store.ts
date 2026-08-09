@@ -9,7 +9,7 @@ import {
 } from "@/email/account-colors";
 import { loadEmailPrefs, saveEmailPrefs } from "@/email/email-prefs";
 import {
-  readEnabledAccounts,
+  hydrateEnabledAccounts,
   sortAddressesByLocalPart,
   writeEnabledAccounts,
 } from "@/email/enabled-accounts";
@@ -62,9 +62,8 @@ export class MailAccountsStore {
     this.userId = input.userId;
     this.apiBase = input.apiBase.replace(/\/$/, "") || "/api/email";
     if (userChanged) {
-      this.enabledAccounts = readEnabledAccounts(input.userId);
-      this.hydrated = true;
-      this.pruneEnabledToAvailable();
+      this.hydrated = false;
+      void this.hydrateEnabled();
     }
     if (this.started && (userChanged || apiChanged)) {
       void this.refreshAddresses();
@@ -74,10 +73,28 @@ export class MailAccountsStore {
   start() {
     if (this.started) return;
     this.started = true;
-    this.enabledAccounts = readEnabledAccounts(this.userId);
-    this.hydrated = true;
+    void this.hydrateEnabled();
     void this.loadPrefs();
     void this.refreshAddresses();
+  }
+
+  private async hydrateEnabled() {
+    const userId = this.userId;
+    if (!userId) return;
+    try {
+      const emails = await hydrateEnabledAccounts(userId);
+      if (this.userId !== userId) return;
+      runInAction(() => {
+        this.enabledAccounts = emails;
+        this.hydrated = true;
+      });
+      this.pruneEnabledToAvailable();
+      this.ensureColors();
+    } catch {
+      runInAction(() => {
+        this.hydrated = true;
+      });
+    }
   }
 
   stop() {

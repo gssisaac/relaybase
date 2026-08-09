@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { resolveEntryPath } from "@/email/sidebar-mode";
+import { resolveEntryPathAsync } from "@/email/sidebar-mode";
 
 function readCookieUserId(): string | null {
   if (typeof document === "undefined") return null;
@@ -17,7 +17,8 @@ function readCookieUserId(): string | null {
 }
 
 /**
- * Client entry gate: restore the last email/dashboard route from localStorage.
+ * Client entry gate: restore the last email/dashboard route from ~/.relaybase
+ * (desktop) with localStorage as a mirror.
  * Used on `/` (and desktop static home) so server redirects never wipe memory.
  */
 export function RestoreLastRoute({
@@ -33,7 +34,13 @@ export function RestoreLastRoute({
 
   useEffect(() => {
     const id = userId?.trim() || readCookieUserId() || fallbackUserId;
-    router.replace(resolveEntryPath(id));
+    let cancelled = false;
+    void resolveEntryPathAsync(id).then((path) => {
+      if (!cancelled) router.replace(path);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [router, userId, fallbackUserId]);
 
   return (

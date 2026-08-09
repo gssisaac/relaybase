@@ -6,7 +6,8 @@ use std::path::PathBuf;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-/// Temporary local credential store (replaces macOS Keychain while iterating).
+/// Desktop durable store root: ~/.relaybase (see docs/relaybase-home-storage.md).
+/// Do not add alternate roots (Application Support, Keychain, cwd, etc.).
 /// Path: ~/.relaybase/credentials.json
 const CREDENTIALS_FILE: &str = "credentials.json";
 /// Email UI prefs (account colors, etc.). Path: ~/.relaybase/email.json

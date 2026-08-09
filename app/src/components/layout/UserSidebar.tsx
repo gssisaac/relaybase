@@ -29,8 +29,11 @@ import {
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,
   modeFromPathname,
+  hydrateSidebarState,
   readLastPath,
+  readSidebarCollapsed,
   writeLastPath,
+  writeSidebarCollapsed,
   writeSidebarMode,
   type SidebarMode,
 } from "@/email/sidebar-mode";
@@ -262,8 +265,8 @@ function EmailModeNav({
     pathname === "/email/trash" || pathname.startsWith("/email/trash/");
 
   function handleRemoveAccount(email: string) {
-    // Only drops the address from the mail sidebar enable-list (localStorage).
-    // Mail under ~/.relaybase/ is left intact so re-adding restores the view.
+    // Only drops the address from the mail sidebar enable-list (~/.relaybase ui).
+    // Mail under ~/.relaybase/mail is left intact so re-adding restores the view.
     removeEnabledAccount(email);
     if (accountParam?.toLowerCase() === email.toLowerCase()) {
       router.push(emailFolderHref("inbox"));
@@ -410,10 +413,9 @@ export function UserSidebar() {
   const userId = useProductId();
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(`relaybase:sidebar-collapsed:${userId}`) === "1";
-  });
+  const [collapsed, setCollapsed] = useState<boolean>(() =>
+    readSidebarCollapsed(userId),
+  );
   const mode = useMemo(() => modeFromPathname(pathname), [pathname]);
   const {
     isDesktop,
@@ -422,6 +424,16 @@ export function UserSidebar() {
     dragRegionProps,
     noDragClassName,
   } = useDesktopChrome();
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateSidebarState(userId).then((state) => {
+      if (!cancelled) setCollapsed(state.collapsed);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     const query = searchParams.toString();
@@ -443,12 +455,7 @@ export function UserSidebar() {
   function toggleCollapsed() {
     setCollapsed((prev) => {
       const next = !prev;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          `relaybase:sidebar-collapsed:${userId}`,
-          next ? "1" : "0",
-        );
-      }
+      writeSidebarCollapsed(userId, next);
       return next;
     });
   }
@@ -507,9 +514,22 @@ export function UserSidebar() {
               }
             >
               {collapsed ? (
-                <LayoutGrid className="size-3.5" />
+                <img
+                  src="/icon.png"
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="size-3.5"
+                />
               ) : (
                 <>
+                  <img
+                    src="/icon.png"
+                    alt=""
+                    width={16}
+                    height={16}
+                    className="size-4 shrink-0"
+                  />
                   <span className="truncate text-sm font-semibold tracking-tight">
                     Relaybase
                   </span>

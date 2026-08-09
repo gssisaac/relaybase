@@ -1,6 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Relaybase",
+  "mainBinaryName": "Relaybase",
   "version": "0.1.0",
   "identifier": "com.relaybase.desktop",
   "build": {
@@ -45,7 +46,8 @@
     "macOS": {
       "entitlements": "entitlements.plist",
       "hardenedRuntime": true,
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "bundleName": "Relaybase"
     }
   }
 }

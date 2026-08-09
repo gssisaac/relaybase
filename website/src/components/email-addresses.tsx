@@ -38,8 +38,8 @@ export function EmailAddresses() {
             The emails every product needs — ready on day one
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Stop provisioning a Google Workspace seat for every role. Relaybase
-            gives you all the standard addresses your users expect, routed and
+            Add every address your team needs — billing@, support@, and more —
+            without spinning up a new mailbox for each one. Routed and
             API-ready from a single domain.
           </p>
         </div>

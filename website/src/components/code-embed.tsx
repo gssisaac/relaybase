@@ -19,7 +19,8 @@ const codeExamples: Record<TabId, { lang: string; code: string }> = {
   send: {
     lang: "typescript",
     code: `// Send a billing email — one fetch call
-const res = await fetch("https://api.relaybase.xyz/v1/send", {
+// RELAYBASE_URL is YOUR Worker, e.g. https://relaybase-api.your-account.workers.dev
+const res = await fetch(\`\${process.env.RELAYBASE_URL}/v1/send\`, {
   method: "POST",
   headers: {
     Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\`,
@@ -39,8 +40,9 @@ const { messageId } = await res.json();`,
   receive: {
     lang: "typescript",
     code: `// Poll for new inbound mail (or use webhooks)
+// RELAYBASE_URL is YOUR Worker, e.g. https://relaybase-api.your-account.workers.dev
 const res = await fetch(
-  "https://api.relaybase.xyz/v1/inbox/events?limit=25",
+  \`\${process.env.RELAYBASE_URL}/v1/inbox/events?limit=25\`,
   { headers: { Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\` } },
 );
 
@@ -49,7 +51,7 @@ const { events } = await res.json();
 for (const event of events) {
   if (event.type === "inbound.email.received") {
     const msg = await fetch(
-      \`https://api.relaybase.xyz/v1/inbox/messages/\${event.data.messageId}\`,
+      \`\${process.env.RELAYBASE_URL}/v1/inbox/messages/\${event.data.messageId}\`,
       { headers: { Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\` } },
     );
     // Route to your ticket system, Slack, etc.
@@ -59,7 +61,8 @@ for (const event of events) {
   webhook: {
     lang: "typescript",
     code: `// Register a webhook — push on every inbound email
-await fetch("https://api.relaybase.xyz/v1/webhooks", {
+// RELAYBASE_URL is YOUR Worker, e.g. https://relaybase-api.your-account.workers.dev
+await fetch(\`\${process.env.RELAYBASE_URL}/v1/webhooks\`, {
   method: "POST",
   headers: {
     Authorization: \`Bearer \${process.env.RELAYBASE_API_KEY}\`,
@@ -179,8 +182,12 @@ export function CodeEmbed() {
             <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-slate-300">
               RELAYBASE_URL
             </code>
-            . Works with Node, Deno, Cloudflare Workers, Vercel, and anything
-            that can call fetch.
+            — your own Worker&apos;s address (e.g.{" "}
+            <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-slate-300">
+              relaybase-api.your-account.workers.dev
+            </code>
+            ), not ours. Works with Node, Deno, Cloudflare Workers, Vercel,
+            and anything that can call fetch.
           </p>
         </div>
       </div>

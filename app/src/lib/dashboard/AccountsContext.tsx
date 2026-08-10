@@ -79,6 +79,8 @@ export function useAccounts(): AccountsStore {
         saving: store.saving,
         error: store.error,
         message: store.message,
+        inboundPending: store.inboundPendingEmails.slice(),
+        creatingEmails: store.creatingEmails.slice(),
       }),
       () => setTick((t) => t + 1),
     );

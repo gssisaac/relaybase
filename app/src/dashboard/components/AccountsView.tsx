@@ -8,6 +8,7 @@ import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
 import {
   Globe,
+  Loader2,
   MailX,
   MoreHorizontal,
   PenLine,
@@ -41,7 +42,6 @@ import {
   EmailAlerts,
 } from "@/email/components/EmailShared";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
-import { EmailTableRow } from "@/email/components/EmailListShell";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import type { Address, EmailConfig } from "@/email/components/types";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -79,6 +79,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
 function initialDefaultSelection(): Record<string, boolean> {
@@ -194,9 +200,6 @@ export function AccountsView() {
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [renameDisplayName, setRenameDisplayName] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
-  const [inboundSavingEmail, setInboundSavingEmail] = useState<string | null>(
-    null,
-  );
   /** Domains with expanded cards. Default / missing = collapsed compact. */
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(
     () => new Set(),
@@ -223,6 +226,21 @@ export function AccountsView() {
         if (expanded) next.add(key);
         else next.delete(key);
         setDomainExpanded(productId, key, expanded);
+        return next;
+      });
+    },
+    [productId],
+  );
+
+  const ensureDomainExpanded = useCallback(
+    (domain: string) => {
+      const key = domain.trim().toLowerCase();
+      if (!key) return;
+      setExpandedDomains((prev) => {
+        if (prev.has(key)) return prev;
+        const next = new Set(prev);
+        next.add(key);
+        setDomainExpanded(productId, key, true);
         return next;
       });
     },
@@ -348,54 +366,53 @@ export function AccountsView() {
     setDefaultsOpen(true);
   }
 
-  async function addAccount() {
+  function addAccount() {
     const domainKey = dialogDomain.trim().toLowerCase();
-    if (!domainKey) return;
-    accountsStore.clearError();
-    try {
-      await accountsStore.create(domainKey, {
-        localPart,
-        displayName:
-          displayName.trim() || suggestedDisplayNameForLocalPart(localPart),
-        inboundEnabled: addInboundEnabled,
-      });
-      setLocalPart("");
-      setDisplayName("");
-      setAddInboundEnabled(true);
-      setAddOpen(false);
-    } catch {
-      // error already on store
-    }
+    const part = localPart.trim();
+    if (!domainKey || !part) return;
+    const input = {
+      localPart: part,
+      displayName:
+        displayName.trim() || suggestedDisplayNameForLocalPart(part),
+      inboundEnabled: addInboundEnabled,
+    };
+    setLocalPart("");
+    setDisplayName("");
+    setAddInboundEnabled(true);
+    setAddOpen(false);
+    ensureDomainExpanded(domainKey);
+    void accountsStore.create(domainKey, input).catch(() => {
+      // toast + optimistic rollback handled in store
+    });
   }
 
-  async function addDefaultAccounts() {
+  function addDefaultAccounts() {
     const domainKey = dialogDomain.trim().toLowerCase();
     if (!domainKey || !selectedDefaultParts.length) return;
-    accountsStore.clearError();
-    try {
-      const displayNames = Object.fromEntries(
-        selectedDefaultParts.map((part) => [
-          part,
-          DEFAULT_ADDRESS_DISPLAY_NAMES[part],
-        ]),
-      );
-      const inboundEnabledByLocalPart = Object.fromEntries(
-        selectedDefaultParts.map((part) => [
-          part,
-          part === "noreply" ? !blockNoreplyInbound : true,
-        ]),
-      );
-      await accountsStore.create(domainKey, {
-        localParts: [...selectedDefaultParts],
-        displayNames,
-        inboundEnabledByLocalPart,
-      });
-      setDefaultsOpen(false);
-      setSelectedDefaults(initialDefaultSelection());
-      setBlockNoreplyInbound(true);
-    } catch {
-      // error already on store
-    }
+    const displayNames = Object.fromEntries(
+      selectedDefaultParts.map((part) => [
+        part,
+        DEFAULT_ADDRESS_DISPLAY_NAMES[part],
+      ]),
+    );
+    const inboundEnabledByLocalPart = Object.fromEntries(
+      selectedDefaultParts.map((part) => [
+        part,
+        part === "noreply" ? !blockNoreplyInbound : true,
+      ]),
+    );
+    const input = {
+      localParts: [...selectedDefaultParts],
+      displayNames,
+      inboundEnabledByLocalPart,
+    };
+    setDefaultsOpen(false);
+    setSelectedDefaults(initialDefaultSelection());
+    setBlockNoreplyInbound(true);
+    ensureDomainExpanded(domainKey);
+    void accountsStore.create(domainKey, input).catch(() => {
+      // toast + optimistic rollback handled in store
+    });
   }
 
   async function confirmRemove() {
@@ -448,39 +465,6 @@ export function AccountsView() {
       );
     } finally {
       setRenameSaving(false);
-    }
-  }
-
-  async function setInboundEnabledForAddress(
-    address: Address,
-    domain: string,
-    inboundEnabled: boolean,
-  ) {
-    const email = address.email.toLowerCase();
-    setInboundSavingEmail(email);
-    try {
-      const res = await desktopAwareFetch(`${apiBase}/addresses`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, inboundEnabled }),
-      });
-      const data = await readResponseJson<{ error?: string }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Failed to update inbound");
-      toast.success(
-        inboundEnabled
-          ? "Inbound mail enabled"
-          : "Inbound mail blocked (dropped)",
-      );
-      clearEmailCache(productId, `addresses:${domain}`);
-      clearEmailCache(productId, "addresses:all");
-      notifyAddressesChanged({ domain, emails: [email] });
-      await accountsStore.refresh(domain, true);
-    } catch (e) {
-      toast.error(
-        e instanceof Error ? e.message : "Failed to update inbound",
-      );
-    } finally {
-      setInboundSavingEmail(null);
     }
   }
 
@@ -648,125 +632,169 @@ export function AccountsView() {
                         {domainLoading ? (
                           <div className="min-h-[80px] px-6" />
                         ) : domainAddresses.length > 0 ? (
-                          <div className="overflow-hidden rounded-b-xl border-t border-border/40">
-                            {domainAddresses.map((address) => {
-                              const label =
-                                address.displayName?.trim() ||
-                                address.email.split("@")[0] ||
-                                address.email;
-                              const counts = accountsStore.countsFor(
-                                entry.domain,
-                                address.email,
-                              );
-                              const countsReady =
-                                accountsStore.hasHydratedCounts(entry.domain);
-                              return (
-                                <EmailTableRow
-                                  key={address.email}
-                                  onClick={() =>
-                                    router.push(
-                                      accountDetailHref(address.email),
-                                    )
-                                  }
-                                  primary={address.email}
-                                  subject={label}
-                                  date=""
-                                  status={
-                                    <>
-                                      {address.inboundEnabled === false ? (
-                                        <span className="whitespace-nowrap text-xs text-muted-foreground">
-                                          Inbound off
-                                        </span>
-                                      ) : (
-                                        <AddressCountsSummary
-                                          total={counts?.total ?? 0}
-                                          unread={counts?.unread ?? 0}
-                                          ready={countsReady}
-                                        />
+                          <div className="overflow-hidden rounded-b-xl">
+                            <Table>
+                              <TableBody>
+                                {domainAddresses.map((address) => {
+                                  const label =
+                                    address.displayName?.trim() ||
+                                    address.email.split("@")[0] ||
+                                    address.email;
+                                  const counts = accountsStore.countsFor(
+                                    entry.domain,
+                                    address.email,
+                                  );
+                                  const countsReady =
+                                    accountsStore.hasHydratedCounts(
+                                      entry.domain,
+                                    );
+                                  const creating = accountsStore.isCreating(
+                                    address.email,
+                                  );
+                                  return (
+                                    <TableRow
+                                      key={address.email}
+                                      className={cn(
+                                        "border-0",
+                                        !creating && "cursor-pointer",
                                       )}
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger
-                                          render={
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="icon-xs"
-                                              className="text-muted-foreground"
-                                              disabled={saving}
-                                              aria-label={`More actions for ${address.email}`}
-                                              onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                              }}
-                                            />
-                                          }
-                                        >
-                                          <MoreHorizontal className="size-3.5" />
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent
-                                          align="end"
-                                          className="min-w-52"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <DropdownMenuItem
-                                            onClick={() =>
-                                              openRenameDialog(
-                                                address,
-                                                entry.domain,
+                                      onClick={
+                                        creating
+                                          ? undefined
+                                          : () =>
+                                              router.push(
+                                                accountDetailHref(
+                                                  address.email,
+                                                ),
                                               )
-                                            }
-                                          >
-                                            <PenLine className="size-3.5" />
-                                            Change display name
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            closeOnClick={false}
-                                            onClick={(e) => e.preventDefault()}
-                                          >
-                                            <div className="flex w-full items-center justify-between gap-4">
-                                              <span className="inline-flex items-center gap-2.5">
-                                                <MailX className="size-3.5 shrink-0" />
-                                                Inbound off
-                                              </span>
-                                              <Switch
-                                                size="sm"
-                                                checked={
-                                                  address.inboundEnabled ===
-                                                  false
-                                                }
-                                                disabled={
-                                                  inboundSavingEmail ===
-                                                  address.email.toLowerCase()
-                                                }
-                                                onCheckedChange={(off) =>
-                                                  void setInboundEnabledForAddress(
+                                      }
+                                    >
+                                      <TableCell className="w-[42%] max-w-0 px-4 py-3 font-medium">
+                                        <span className="block truncate">
+                                          {address.email}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell className="w-[22%] max-w-0 px-4 py-3 text-muted-foreground">
+                                        <span className="block truncate">
+                                          {label}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell className="w-[28%] px-4 py-3 text-right">
+                                        {creating ? (
+                                          <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                                            <Loader2
+                                              className="size-3.5 animate-spin"
+                                              aria-hidden
+                                            />
+                                            Adding…
+                                          </span>
+                                        ) : address.inboundEnabled ===
+                                          false ? (
+                                          <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                            Inbound off
+                                          </span>
+                                        ) : (
+                                          <div className="flex justify-end">
+                                            <AddressCountsSummary
+                                              total={counts?.total ?? 0}
+                                              unread={counts?.unread ?? 0}
+                                              ready={countsReady}
+                                            />
+                                          </div>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="w-10 px-2 py-3 text-right">
+                                        {creating ? (
+                                          <span className="inline-block size-7" />
+                                        ) : (
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger
+                                              render={
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="icon-xs"
+                                                  className="text-muted-foreground"
+                                                  disabled={saving}
+                                                  aria-label={`More actions for ${address.email}`}
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                  }}
+                                                />
+                                              }
+                                            >
+                                              <MoreHorizontal className="size-3.5" />
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                              align="end"
+                                              className="min-w-52"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            >
+                                              <DropdownMenuItem
+                                                onClick={() =>
+                                                  openRenameDialog(
                                                     address,
                                                     entry.domain,
-                                                    !off,
                                                   )
                                                 }
-                                              />
-                                            </div>
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            variant="destructive"
-                                            onClick={() =>
-                                              setRemoveTarget({
-                                                domain: entry.domain,
-                                                email: address.email,
-                                              })
-                                            }
-                                          >
-                                            <Trash2 className="size-3.5" />
-                                            Delete
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </>
-                                  }
-                                />
-                              );
-                            })}
+                                              >
+                                                <PenLine className="size-3.5" />
+                                                Change display name
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                closeOnClick={false}
+                                                onClick={(e) =>
+                                                  e.preventDefault()
+                                                }
+                                              >
+                                                <div className="flex w-full items-center justify-between gap-4">
+                                                  <span className="inline-flex items-center gap-2.5">
+                                                    <MailX className="size-3.5 shrink-0" />
+                                                    Inbound off
+                                                  </span>
+                                                  <Switch
+                                                    size="sm"
+                                                    checked={
+                                                      address.inboundEnabled ===
+                                                      false
+                                                    }
+                                                    disabled={accountsStore.isInboundPending(
+                                                      address.email,
+                                                    )}
+                                                    onCheckedChange={(off) =>
+                                                      void accountsStore.setInboundEnabled(
+                                                        entry.domain,
+                                                        address.email,
+                                                        !off,
+                                                      )
+                                                    }
+                                                  />
+                                                </div>
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem
+                                                variant="destructive"
+                                                onClick={() =>
+                                                  setRemoveTarget({
+                                                    domain: entry.domain,
+                                                    email: address.email,
+                                                  })
+                                                }
+                                              >
+                                                <Trash2 className="size-3.5" />
+                                                Delete
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
                           </div>
                         ) : (
                           <div className="flex flex-col items-start gap-3 px-6 pb-6">
@@ -893,10 +921,10 @@ export function AccountsView() {
               <Button
                 className="w-full"
                 size="sm"
-                disabled={saving || !localPart.trim() || !dialogDomain}
-                onClick={() => void addAccount()}
+                disabled={!localPart.trim() || !dialogDomain}
+                onClick={() => addAccount()}
               >
-                {saving ? "Adding…" : "Add"}
+                Add
               </Button>
             </div>
           </DialogContent>
@@ -955,16 +983,10 @@ export function AccountsView() {
               <Button
                 className="w-full"
                 size="sm"
-                disabled={
-                  saving ||
-                  !dialogDomain ||
-                  selectedDefaultParts.length === 0
-                }
-                onClick={() => void addDefaultAccounts()}
+                disabled={!dialogDomain || selectedDefaultParts.length === 0}
+                onClick={() => addDefaultAccounts()}
               >
-                {saving
-                  ? "Adding…"
-                  : `Add selected (${selectedDefaultParts.length})`}
+                {`Add selected (${selectedDefaultParts.length})`}
               </Button>
             </div>
           </DialogContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import { makeAutoObservable, runInAction } from "mobx";
+import { toast } from "sonner";
 
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
@@ -23,6 +24,75 @@ import {
 } from "@/lib/desktop/api-base";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import type { Address } from "@/email/components/types";
+
+function withInboundEnabled(address: Address, inboundEnabled: boolean): Address {
+  return {
+    email: address.email,
+    ...(address.domain ? { domain: address.domain } : {}),
+    ...(address.displayName ? { displayName: address.displayName } : {}),
+    ...(inboundEnabled ? {} : { inboundEnabled: false }),
+  };
+}
+
+function resolveCreateLocalParts(input: CreateAddressesInput): string[] {
+  const parts =
+    Array.isArray(input.localParts) && input.localParts.length
+      ? input.localParts
+      : input.localPart
+        ? [input.localPart]
+        : [];
+  return [
+    ...new Set(
+      parts
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function buildOptimisticAddresses(
+  domain: string,
+  input: CreateAddressesInput,
+): Address[] {
+  const displayNames =
+    input.displayNames && typeof input.displayNames === "object"
+      ? input.displayNames
+      : {};
+  const inboundByLocal =
+    input.inboundEnabledByLocalPart &&
+    typeof input.inboundEnabledByLocalPart === "object"
+      ? input.inboundEnabledByLocalPart
+      : {};
+  const singleDisplayName =
+    typeof input.displayName === "string" ? input.displayName.trim() : "";
+
+  return resolveCreateLocalParts(input).map((local) => {
+    const fromMap =
+      typeof displayNames[local] === "string"
+        ? displayNames[local]!.trim()
+        : "";
+    const inboundFromMap =
+      typeof inboundByLocal[local] === "boolean"
+        ? inboundByLocal[local]
+        : undefined;
+    const inboundEnabled =
+      typeof inboundFromMap === "boolean"
+        ? inboundFromMap
+        : typeof input.inboundEnabled === "boolean"
+          ? input.inboundEnabled
+          : true;
+    return withInboundEnabled(
+      {
+        email: `${local}@${domain}`,
+        domain,
+        ...(fromMap || singleDisplayName
+          ? { displayName: fromMap || singleDisplayName }
+          : {}),
+      },
+      inboundEnabled,
+    );
+  });
+}
 
 export type CreateAddressesInput = {
   localPart?: string;
@@ -51,12 +121,24 @@ export class AccountsStore {
   saving = false;
   error: string | null = null;
   message: string | null = null;
+  /** Emails with an in-flight inbound PATCH (optimistic UI already applied). */
+  inboundPendingEmails: string[] = [];
+  /** Emails optimistically inserted while create() is in flight. */
+  creatingEmails: string[] = [];
 
   productId = "";
   apiBase = "/api/email";
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
+  }
+
+  isInboundPending(email: string): boolean {
+    return this.inboundPendingEmails.includes(email.trim().toLowerCase());
+  }
+
+  isCreating(email: string): boolean {
+    return this.creatingEmails.includes(email.trim().toLowerCase());
   }
 
   configure(input: { productId: string; apiBase: string }) {
@@ -260,8 +342,8 @@ export class AccountsStore {
   }
 
   /**
-   * Create one or more addresses on a domain. Updates local list and notifies
-   * Email MailAccountsStore via accounts-sync.
+   * Optimistically insert addresses, POST in the background, toast on result.
+   * Callers may close dialogs immediately and `void` this (still awaitable for seeds).
    */
   async create(
     domain: string,
@@ -270,11 +352,33 @@ export class AccountsStore {
     const key = domain.trim().toLowerCase();
     if (!key) throw new Error("Select a domain before adding senders");
 
+    const optimistic = buildOptimisticAddresses(key, input);
+    if (!optimistic.length) {
+      throw new Error("localPart or localParts is required");
+    }
+    const optimisticEmails = new Set(
+      optimistic.map((address) => address.email.toLowerCase()),
+    );
+
+    const snapshotBefore = this.addressesByDomain[key] ?? [];
+    const pendingEmails = [...optimisticEmails];
+    let optimisticList: Address[] = [];
     runInAction(() => {
-      this.saving = true;
       this.error = null;
       this.message = null;
+      const byEmail = new Map(
+        snapshotBefore.map((a) => [a.email.toLowerCase(), a] as const),
+      );
+      for (const address of optimistic) {
+        byEmail.set(address.email.toLowerCase(), address);
+      }
+      optimisticList = [...byEmail.values()];
+      this.addressesByDomain[key] = optimisticList;
+      this.creatingEmails = [
+        ...new Set([...this.creatingEmails, ...pendingEmails]),
+      ];
     });
+    // Don't persist optimistic create rows — only confirmed addresses go to disk.
 
     try {
       const res = await desktopAwareFetch(
@@ -306,11 +410,6 @@ export class AccountsStore {
         }
         nextList = [...byEmail.values()];
         this.addressesByDomain[key] = nextList;
-        if (created.length === 1) {
-          this.message = `Registered ${created[0]!.email}`;
-        } else if (created.length > 1) {
-          this.message = `Registered ${created.length} accounts`;
-        }
       });
 
       await this.persistCache(key, nextList);
@@ -320,17 +419,46 @@ export class AccountsStore {
         domain: key,
         emails: created.map((a) => a.email),
       });
+      toast.success(
+        created.length === 1
+          ? `Registered ${created[0]!.email}`
+          : `Registered ${created.length} accounts`,
+      );
 
       return created;
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to add";
+      let reverted: Address[] = [];
       runInAction(() => {
-        this.error = message;
+        const current = this.addressesByDomain[key] ?? [];
+        // Drop optimistic rows that were not already present before create.
+        const preexisting = new Set(
+          snapshotBefore.map((a) => a.email.toLowerCase()),
+        );
+        reverted = current.filter((a) => {
+          const email = a.email.toLowerCase();
+          if (!optimisticEmails.has(email)) return true;
+          return preexisting.has(email);
+        });
+        // Restore prior versions for emails that already existed.
+        const byEmail = new Map(
+          reverted.map((a) => [a.email.toLowerCase(), a] as const),
+        );
+        for (const address of snapshotBefore) {
+          if (optimisticEmails.has(address.email.toLowerCase())) {
+            byEmail.set(address.email.toLowerCase(), address);
+          }
+        }
+        reverted = [...byEmail.values()];
+        this.addressesByDomain[key] = reverted;
       });
+      toast.error(message);
       throw e instanceof Error ? e : new Error(message);
     } finally {
       runInAction(() => {
-        this.saving = false;
+        this.creatingEmails = this.creatingEmails.filter(
+          (email) => !optimisticEmails.has(email),
+        );
       });
     }
   }
@@ -345,6 +473,107 @@ export class AccountsStore {
       ),
     });
     return created.map((a) => a.email);
+  }
+
+  /**
+   * Optimistically flip inboundEnabled in the list, PATCH in the background,
+   * toast when the Worker/CF update finishes (or revert + toast on failure).
+   */
+  async setInboundEnabled(
+    domain: string,
+    email: string,
+    inboundEnabled: boolean,
+  ): Promise<void> {
+    const key = domain.trim().toLowerCase();
+    const emailKey = email.trim().toLowerCase();
+    if (!key || !emailKey) throw new Error("Domain and email are required");
+
+    const prevList = this.addressesByDomain[key] ?? [];
+    const index = prevList.findIndex(
+      (a) => a.email.toLowerCase() === emailKey,
+    );
+    if (index < 0) throw new Error("Address not found");
+
+    const previous = prevList[index]!;
+    const previousEnabled = previous.inboundEnabled !== false;
+    if (previousEnabled === inboundEnabled) return;
+
+    const optimistic = withInboundEnabled(previous, inboundEnabled);
+    const optimisticList = [...prevList];
+    optimisticList[index] = optimistic;
+
+    runInAction(() => {
+      this.addressesByDomain[key] = optimisticList;
+      if (!this.inboundPendingEmails.includes(emailKey)) {
+        this.inboundPendingEmails = [...this.inboundPendingEmails, emailKey];
+      }
+    });
+    void this.persistCache(key, optimisticList);
+
+    try {
+      const res = await desktopAwareFetch(`${this.apiBase}/addresses`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailKey, inboundEnabled }),
+      });
+      const data = await readResponseJson<{
+        address?: Address;
+        error?: string;
+      }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Failed to update inbound");
+
+      const confirmed = data.address
+        ? withInboundEnabled(
+            data.address,
+            data.address.inboundEnabled !== false,
+          )
+        : optimistic;
+
+      let nextList: Address[] = [];
+      runInAction(() => {
+        const list = this.addressesByDomain[key] ?? [];
+        const i = list.findIndex((a) => a.email.toLowerCase() === emailKey);
+        if (i >= 0) {
+          nextList = [...list];
+          nextList[i] = confirmed;
+          this.addressesByDomain[key] = nextList;
+        } else {
+          nextList = list;
+        }
+      });
+      await this.persistCache(key, nextList);
+      clearEmailCache(this.productId, `addresses:${key}`);
+      clearEmailCache(this.productId, "addresses:all");
+      notifyAddressesChanged({ domain: key, emails: [emailKey] });
+      toast.success(
+        inboundEnabled
+          ? "Inbound mail enabled"
+          : "Inbound mail blocked (dropped)",
+      );
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to update inbound";
+      let reverted: Address[] = [];
+      runInAction(() => {
+        const list = this.addressesByDomain[key] ?? [];
+        const i = list.findIndex((a) => a.email.toLowerCase() === emailKey);
+        if (i >= 0) {
+          reverted = [...list];
+          reverted[i] = previous;
+          this.addressesByDomain[key] = reverted;
+        } else {
+          reverted = list;
+        }
+      });
+      void this.persistCache(key, reverted);
+      toast.error(message);
+    } finally {
+      runInAction(() => {
+        this.inboundPendingEmails = this.inboundPendingEmails.filter(
+          (item) => item !== emailKey,
+        );
+      });
+    }
   }
 
   async remove(domain: string, email: string): Promise<void> {

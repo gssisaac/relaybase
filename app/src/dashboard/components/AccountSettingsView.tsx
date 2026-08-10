@@ -33,10 +33,11 @@ export function AccountSettingsView({ email }: { email: string }) {
     .addressesFor(domainKey)
     .find((entry) => entry.email.toLowerCase() === emailKey);
 
+  const inboundEnabled = address?.inboundEnabled !== false;
+  const inboundPending = accountsStore.isInboundPending(emailKey);
+
   const [displayName, setDisplayName] = useState("");
-  const [inboundEnabled, setInboundEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [savingInbound, setSavingInbound] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,8 +46,7 @@ export function AccountSettingsView({ email }: { email: string }) {
 
   useEffect(() => {
     setDisplayName(address?.displayName ?? "");
-    setInboundEnabled(address?.inboundEnabled !== false);
-  }, [address?.displayName, address?.email, address?.inboundEnabled]);
+  }, [address?.displayName, address?.email]);
 
   async function saveDisplayName() {
     setSaving(true);
@@ -71,37 +71,6 @@ export function AccountSettingsView({ email }: { email: string }) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function saveInboundEnabled(next: boolean) {
-    const previous = inboundEnabled;
-    setInboundEnabled(next);
-    setSavingInbound(true);
-    setError(null);
-    try {
-      const res = await desktopAwareFetch(`${apiBase}/addresses`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: emailKey,
-          inboundEnabled: next,
-        }),
-      });
-      const data = await readResponseJson<{ error?: string }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Failed to update inbound");
-      toast.success(
-        next ? "Inbound mail enabled" : "Inbound mail blocked (dropped)",
-      );
-      clearEmailCache(productId, `addresses:${domainKey}`);
-      clearEmailCache(productId, "addresses:all");
-      notifyAddressesChanged({ domain: domainKey, emails: [emailKey] });
-      await accountsStore.refresh(domainKey, true);
-    } catch (e) {
-      setInboundEnabled(previous);
-      setError(e instanceof Error ? e.message : "Failed to update inbound");
-    } finally {
-      setSavingInbound(false);
     }
   }
 
@@ -169,8 +138,10 @@ export function AccountSettingsView({ email }: { email: string }) {
           <Switch
             id="account-accept-inbound"
             checked={inboundEnabled}
-            disabled={savingInbound || !address}
-            onCheckedChange={(on) => void saveInboundEnabled(on)}
+            disabled={inboundPending || !address}
+            onCheckedChange={(on) =>
+              void accountsStore.setInboundEnabled(domainKey, emailKey, on)
+            }
           />
         </div>
       </div>

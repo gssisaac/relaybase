@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { Fragment, useEffect, useMemo } from "react";
 
 import {
   CommandDialog,
   CommandEmpty,
+  CommandFooter,
+  CommandFooterItem,
+  CommandFooterKey,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -50,7 +53,7 @@ export function GlobalCommandPalette() {
 
   return (
     <CommandDialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-      <CommandInput placeholder="Type a command…" />
+      <CommandInput placeholder="Type a command or search..." />
       <CommandList>
         <CommandEmpty>
           {scope
@@ -58,7 +61,7 @@ export function GlobalCommandPalette() {
             : "Open a mailbox to run commands."}
         </CommandEmpty>
         {groups.map((entry, index) => (
-          <div key={entry.group}>
+          <Fragment key={entry.group}>
             {index > 0 ? <CommandSeparator /> : null}
             <CommandGroup heading={entry.heading}>
               {entry.commands.map((command) => {
@@ -72,8 +75,8 @@ export function GlobalCommandPalette() {
                       void command.run();
                     }}
                   >
-                    <Icon className="size-4 shrink-0" />
-                    {command.label}
+                    <Icon />
+                    <span>{command.label}</span>
                     {command.shortcut ? (
                       <CommandShortcut>{command.shortcut}</CommandShortcut>
                     ) : null}
@@ -81,9 +84,28 @@ export function GlobalCommandPalette() {
                 );
               })}
             </CommandGroup>
-          </div>
+          </Fragment>
         ))}
       </CommandList>
+      <CommandFooter>
+        <CommandFooterItem
+          keys={
+            <>
+              <CommandFooterKey>↑</CommandFooterKey>
+              <CommandFooterKey>↓</CommandFooterKey>
+            </>
+          }
+          label="Select"
+        />
+        <CommandFooterItem
+          keys={<CommandFooterKey>⏎</CommandFooterKey>}
+          label="Open"
+        />
+        <CommandFooterItem
+          keys={<CommandFooterKey>esc</CommandFooterKey>}
+          label="Close"
+        />
+      </CommandFooter>
     </CommandDialog>
   );
 }

@@ -32,6 +32,7 @@ export function ComposeForm({
   onSend,
   draftStatus,
   onDiscard,
+  onEscape,
   compact,
   allowFromSelect = false,
   autoFocusBody = false,
@@ -51,6 +52,8 @@ export function ComposeForm({
   onSend: () => void;
   draftStatus?: string | null;
   onDiscard?: () => void;
+  /** Escape closes compose / navigates back without discarding. */
+  onEscape?: () => void;
   compact?: boolean;
   /** Dropdown only when From was not pre-specified (account / draft / reply). */
   allowFromSelect?: boolean;
@@ -92,7 +95,14 @@ export function ComposeForm({
   const canSend =
     !sending && Boolean(sendFrom && sendTo.trim() && sendSubject);
 
-  const handleSendHotkey = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      if (!onEscape) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onEscape();
+      return;
+    }
     if (!(e.metaKey || e.ctrlKey) || e.key !== "Enter") return;
     e.preventDefault();
     e.stopPropagation();
@@ -102,7 +112,7 @@ export function ComposeForm({
   return (
     <div
       data-allow-tab-focus
-      onKeyDown={handleSendHotkey}
+      onKeyDown={handleKeyDown}
       className={
         compact
           ? "flex shrink-0 flex-col rounded-xl border border-border/40 bg-card shadow-sm"
@@ -225,7 +235,7 @@ export function ComposeForm({
           ref={textareaRef}
           value={reply}
           onChange={(e) => setSendText(joinQuotedBody(e.target.value, quote))}
-          onKeyDown={handleSendHotkey}
+          onKeyDown={handleKeyDown}
           placeholder="Write your message here..."
           autoComplete="off"
           autoCorrect="off"

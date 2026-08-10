@@ -4,7 +4,7 @@ import { ArrowLeft, FilePen, Inbox, Send, Trash2 } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,18 +24,12 @@ import {
   EmptyListState,
   ListToolbar,
 } from "@/email/components/EmailListShell";
-import {
-  ConversationThreadView,
-  type ThreadComposeMode,
-} from "@/email/components/ConversationThreadView";
+import { ConversationThreadView } from "@/email/components/ConversationThreadView";
 import { InboundEmailDetail } from "@/email/components/EmailShared";
-import {
-  EMAIL_SEND_UNDONE,
-  type EmailSendUndoneDetail,
-} from "@/email/components/email-send-events";
 import { InlineReplyComposer } from "@/email/components/InlineReplyComposer";
 import { useMailboxNav } from "@/email/components/MailboxNavContext";
 import type { MailListItem, RoutingActivityEvent } from "@/email/components/types";
+import { useThreadComposeState } from "@/email/components/useThreadComposeState";
 import {
   filterSentForAccount,
   findThreadByInboundKey,
@@ -46,6 +40,7 @@ import {
   threadUnreadKeys,
   type ConversationThread,
 } from "@/email/conversation-threading";
+import { useStandaloneComposeOpener } from "@/email/compose-open";
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
 import { buildReplyPrefill } from "@/email/reply-helpers";
 import { emailMessageHref } from "@/email/paths";
@@ -116,11 +111,6 @@ function domainOf(email: string) {
   return at > 0 ? email.slice(at + 1).toLowerCase() : "";
 }
 
-function composeHref(compose: string, fromAccount: EmailAccountFilter) {
-  if (fromAccount === "all") return compose;
-  return `${compose}?from=${encodeURIComponent(fromAccount)}`;
-}
-
 function itemSortAt(item: MailListItem) {
   if (item.kind === "inbox") return item.message.receivedAt;
   if (item.kind === "sent") return item.message.sentAt;
@@ -152,8 +142,6 @@ function messageHref(
   folderBase: string,
   item: MailListItem,
   account: EmailAccountFilter,
-  _compose?: string,
-  _inbox?: string,
 ) {
   if (item.kind === "draft") {
     return emailMessageHref(folderBase, item.message.id, { account });
@@ -221,12 +209,11 @@ export const MailListView = observer(function MailListView({
   const relaybaseOk = store.relaybaseOk;
 
   const [search, setSearch] = useState("");
-  const [composeMode, setComposeMode] = useState<ThreadComposeMode>(null);
-  const [composeSourceId, setComposeSourceId] = useState<string | null>(null);
-  /** Concrete draft open in the inline composer (new UUID or existing id). */
-  const [composeDraftId, setComposeDraftId] = useState<string | null>(null);
-  /** After Discard, do not auto-reopen a reply when revisiting this thread. */
-  const composeDismissedThreadRef = useRef<string | null>(null);
+  const {
+    openCompose: openStandaloneCompose,
+    openComposeNew,
+    composeNewHref,
+  } = useStandaloneComposeOpener();
 
   const activityDetail = messageId
     ? store.getCachedDetail(messageId)
@@ -402,96 +389,22 @@ export const MailListView = observer(function MailListView({
     );
   }, [folder, inboxThreads, messageId, threadByInboundKey]);
 
-  const closeCompose = useCallback(() => {
-    const threadKey = selectedThread?.threadId ?? messageId;
-    if (threadKey) composeDismissedThreadRef.current = threadKey;
-    setComposeSourceId(null);
-    setComposeDraftId(null);
-    setComposeMode(null);
-  }, [messageId, selectedThread?.threadId]);
-
-  const openCompose = useCallback(
-    (
-      mode: Exclude<ThreadComposeMode, null>,
-      sourceId?: string | null,
-      /** Omit to start a new draft; pass an id to reopen a specific draft. */
-      draftId?: string | null,
-    ) => {
-      composeDismissedThreadRef.current = null;
-      setComposeSourceId(sourceId ?? null);
-      setComposeDraftId(draftId ?? crypto.randomUUID());
-      setComposeMode(mode);
-    },
-    [],
-  );
-
-  // Unsend restores the draft then navigates with ?reply=1 — also reopen here so
-  // same-route searchParam updates always restore the reply editor (not just body).
-  useEffect(() => {
-    const onUndone = (event: Event) => {
-      const detail = (event as CustomEvent<EmailSendUndoneDetail>).detail;
-      if (!detail?.replyKey) return;
-      if (folder !== "inbox") return;
-      openCompose(
-        detail.replyAll ? "replyAll" : "reply",
-        `inbound:${detail.replyKey}`,
-        detail.draftId,
-      );
-    };
-    window.addEventListener(EMAIL_SEND_UNDONE, onUndone);
-    return () => window.removeEventListener(EMAIL_SEND_UNDONE, onUndone);
-  }, [folder, openCompose]);
-
-  const wantsReplyParam = searchParams.get("reply");
-  const wantsReplyAllParam = searchParams.get("replyAll");
-  const wantsDraftIdParam = searchParams.get("draftId");
-
-  // When opening a message: restore reply panel from ?reply= / ?draftId= query
-  useEffect(() => {
-    if (folder !== "inbox" || !messageId) {
-      setComposeSourceId(null);
-      setComposeDraftId(null);
-      setComposeMode(null);
-      return;
-    }
-    const threadKey = selectedThread?.threadId ?? messageId;
-    const wantsReply = wantsReplyParam === "1";
-    const wantsReplyAll = wantsReplyAllParam === "1";
-    if (wantsReply || wantsReplyAll) {
-      // URL messageId is the reply target (Unsend navigates to draft.replyKey).
-      composeDismissedThreadRef.current = null;
-      setComposeSourceId(`inbound:${messageId}`);
-      setComposeDraftId(wantsDraftIdParam?.trim() || crypto.randomUUID());
-      setComposeMode(wantsReplyAll ? "replyAll" : "reply");
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("reply");
-      params.delete("replyAll");
-      params.delete("draftId");
-      params.set("m", messageId);
-      router.replace(`${inbox}?${params.toString()}`);
-      return;
-    }
-    // Draft reply/forward rows render in ConversationThreadView — do not
-    // auto-open the composer when a thread merely has saved drafts.
-    if (composeDismissedThreadRef.current === threadKey) {
-      setComposeSourceId(null);
-      setComposeDraftId(null);
-      setComposeMode(null);
-      return;
-    }
-    setComposeSourceId(null);
-    setComposeDraftId(null);
-    setComposeMode(null);
-    // Re-run on message change or Unsend navigation (?reply= / ?replyAll=).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
+  const {
+    composeMode,
+    composeSourceId,
+    setComposeSourceId,
+    composeDraftId,
+    setComposeDraftId,
+    closeCompose,
+    openCompose,
+    openComposeFromKeyboard,
+    onComposeModeChange,
+  } = useThreadComposeState({
     folder,
     messageId,
-    selectedThread?.threadId,
-    wantsReplyParam,
-    wantsReplyAllParam,
-    wantsDraftIdParam,
-  ]);
+    threadId: selectedThread?.threadId,
+    inbox,
+  });
 
   const selected =
     messageId != null
@@ -693,7 +606,7 @@ export const MailListView = observer(function MailListView({
         if (nextIndex < items.length) {
           const nextItem = items[nextIndex];
           router.push(
-            messageHref(folderBase, nextItem, accountFilter, compose, inbox),
+            messageHref(folderBase, nextItem, accountFilter),
           );
         }
       } else if (e.key === "ArrowUp" || e.key === "k") {
@@ -702,7 +615,7 @@ export const MailListView = observer(function MailListView({
         if (prevIndex >= 0) {
           const prevItem = items[prevIndex];
           router.push(
-            messageHref(folderBase, prevItem, accountFilter, compose, inbox),
+            messageHref(folderBase, prevItem, accountFilter),
           );
         }
       } else if (e.key === "Escape" || e.key === "u") {
@@ -712,15 +625,19 @@ export const MailListView = observer(function MailListView({
           return;
         }
         router.push(listHref);
-      } else if (e.key === "c") {
+      } else if (e.key === "c" || e.key === "C") {
         e.preventDefault();
-        runSelectedCommand("compose");
+        if (e.shiftKey) {
+          openComposeNew();
+        } else {
+          openStandaloneCompose();
+        }
       } else if (e.key === "r") {
         e.preventDefault();
         if (folder === "inbox" && selectedThread) {
-          openCompose(
+          openComposeFromKeyboard(
             "reply",
-            `inbound:${selectedThread.latestInboundKey}`,
+            selectedThread.latestInboundKey,
           );
           return;
         }
@@ -728,9 +645,9 @@ export const MailListView = observer(function MailListView({
       } else if (e.key === "a") {
         e.preventDefault();
         if (folder === "inbox" && selectedThread) {
-          openCompose(
+          openComposeFromKeyboard(
             "replyAll",
-            `inbound:${selectedThread.latestInboundKey}`,
+            selectedThread.latestInboundKey,
           );
           return;
         }
@@ -738,9 +655,9 @@ export const MailListView = observer(function MailListView({
       } else if (e.key === "f") {
         e.preventDefault();
         if (folder === "inbox" && selectedThread) {
-          openCompose(
+          openComposeFromKeyboard(
             "forward",
-            `inbound:${selectedThread.latestInboundKey}`,
+            selectedThread.latestInboundKey,
           );
           return;
         }
@@ -771,7 +688,7 @@ export const MailListView = observer(function MailListView({
         if (nextIndex >= 0 && nextIndex < items.length) {
           const nextItem = items[nextIndex];
           router.push(
-            messageHref(folderBase, nextItem, accountFilter, compose, inbox),
+            messageHref(folderBase, nextItem, accountFilter),
           );
         } else {
           router.push(listHref);
@@ -796,7 +713,9 @@ export const MailListView = observer(function MailListView({
     listHref,
     composeMode,
     closeCompose,
-    openCompose,
+    openComposeFromKeyboard,
+    openComposeNew,
+    openStandaloneCompose,
     selectedThread,
     runSelectedCommand,
     paletteOpen,
@@ -1028,7 +947,7 @@ export const MailListView = observer(function MailListView({
                 size="sm"
                 disabled={!relaybaseOk}
                 render={
-                  <Link href={composeHref(compose, accountFilter)} />
+                  <Link href={composeNewHref} />
                 }
               >
                 Compose email
@@ -1109,6 +1028,7 @@ export const MailListView = observer(function MailListView({
               alwaysShowDiscard
               onAfterDiscard={onDraftDiscard}
               onAfterSend={onDraftSend}
+              onEscape={onDraftDiscard}
               header={
                 draft.replyKey ? (
                   <p className="mb-3 text-xs font-medium text-muted-foreground">
@@ -1174,14 +1094,7 @@ export const MailListView = observer(function MailListView({
             addresses={addresses}
             accountFilter={accountFilter}
             composeMode={composeMode}
-            onComposeModeChange={(mode) => {
-              if (mode === null) {
-                closeCompose();
-                return;
-              }
-              composeDismissedThreadRef.current = null;
-              setComposeMode(mode);
-            }}
+            onComposeModeChange={onComposeModeChange}
             composeSourceId={composeSourceId}
             onComposeSourceIdChange={setComposeSourceId}
             composeDraftId={composeDraftId}

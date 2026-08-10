@@ -18,6 +18,11 @@ import {
 } from "@/email/reply-helpers";
 import { emailMessageHref, useEmailPaths } from "@/email/paths";
 
+/**
+ * Renders compose from URL only — open/resume/force-new policy lives in
+ * `@/email/compose-open`. Callers must navigate with the right query
+ * (`?new=1`, `?draft=`, `?forwardKey=`, …).
+ */
 export const ComposeView = observer(function ComposeView() {
   const { inbox, drafts } = useEmailPaths();
   const { sent } = useMailboxNav();
@@ -26,6 +31,7 @@ export const ComposeView = observer(function ComposeView() {
   const isReply = searchParams.get("reply") === "1";
   const replyKey = searchParams.get("replyKey")?.trim() || "";
   const draftParam = searchParams.get("draft")?.trim() || "";
+  const forceNew = searchParams.get("new") === "1";
   const forwardKey = searchParams.get("forwardKey")?.trim() || "";
   const forwardSentId = searchParams.get("forwardSent")?.trim() || "";
   const toParam = searchParams.get("to");
@@ -38,6 +44,18 @@ export const ComposeView = observer(function ComposeView() {
   const { addresses, accountFilter } = useEmailMailbox();
   const store = useEmailMailboxStore();
   const [forwardReady, setForwardReady] = useState(!forwardKey);
+
+  const draftFromParam = draftParam ? store.getDraft(draftParam) : null;
+  const standaloneDraft =
+    draftFromParam &&
+    !draftFromParam.replyKey?.trim() &&
+    !draftFromParam.forwardKey?.trim()
+      ? draftFromParam
+      : null;
+  const redirectDraftAway =
+    Boolean(draftParam) &&
+    Boolean(draftFromParam) &&
+    !standaloneDraft;
 
   // Old reply links → inbox message detail (`?m=`)
   useEffect(() => {
@@ -53,13 +71,13 @@ export const ComposeView = observer(function ComposeView() {
     );
   }, [accountFilter, inbox, isReply, replyKey, router, searchParams]);
 
-  // Legacy ?draft= → /email/drafts?m=
+  // Reply/forward drafts opened via ?draft= → drafts folder editor
   useEffect(() => {
-    if (!draftParam) return;
+    if (!redirectDraftAway || !draftParam) return;
     router.replace(
       emailMessageHref(drafts, draftParam, { account: accountFilter }),
     );
-  }, [accountFilter, draftParam, drafts, router]);
+  }, [accountFilter, draftParam, drafts, redirectDraftAway, router]);
 
   useEffect(() => {
     if (!forwardKey) {
@@ -87,14 +105,17 @@ export const ComposeView = observer(function ComposeView() {
     const fromQuery = fromParam?.trim();
     if (fromQuery) list.push(fromQuery);
     if (accountFilter !== "all") list.push(accountFilter);
+    if (standaloneDraft?.from) list.push(standaloneDraft.from);
     return list;
-  }, [accountFilter, fromParam]);
+  }, [accountFilter, fromParam, standaloneDraft?.from]);
 
   const fromSpecified = Boolean(
     (fromParam?.trim() &&
       addresses.some((a) => a.email === fromParam.trim())) ||
       (accountFilter !== "all" &&
-        addresses.some((a) => a.email === accountFilter)),
+        addresses.some((a) => a.email === accountFilter)) ||
+      (standaloneDraft?.from &&
+        addresses.some((a) => a.email === standaloneDraft.from)),
   );
 
   const forwardInitial = useMemo(() => {
@@ -143,6 +164,15 @@ export const ComposeView = observer(function ComposeView() {
         body: forwardInitial.body,
       };
     }
+    if (standaloneDraft) {
+      return {
+        from: standaloneDraft.from,
+        to: standaloneDraft.to,
+        cc: standaloneDraft.cc ?? "",
+        subject: standaloneDraft.subject,
+        body: standaloneDraft.body,
+      };
+    }
     return {
       from:
         fromParam?.trim() ||
@@ -153,7 +183,15 @@ export const ComposeView = observer(function ComposeView() {
       subject: subjectParam?.trim() || "",
       body: "",
     };
-  }, [accountFilter, ccParam, forwardInitial, fromParam, subjectParam, toParam]);
+  }, [
+    accountFilter,
+    ccParam,
+    forwardInitial,
+    fromParam,
+    standaloneDraft,
+    subjectParam,
+    toParam,
+  ]);
 
   const threading = useMemo(
     () => ({
@@ -163,17 +201,23 @@ export const ComposeView = observer(function ComposeView() {
     [inReplyToParam, referencesParam],
   );
 
-  const onAfterDiscard = useCallback(() => {
+  const onBack = useCallback(() => {
     if (forwardKey) {
-      router.push(emailMessageHref(inbox, forwardKey));
+      router.push(emailMessageHref(inbox, forwardKey, { account: accountFilter }));
       return;
     }
     if (forwardSentId) {
-      router.push(emailMessageHref(sent, forwardSentId));
+      router.push(
+        emailMessageHref(sent, forwardSentId, { account: accountFilter }),
+      );
       return;
     }
     router.push(inbox);
-  }, [forwardKey, forwardSentId, inbox, router, sent]);
+  }, [accountFilter, forwardKey, forwardSentId, inbox, router, sent]);
+
+  const onAfterDiscard = useCallback(() => {
+    onBack();
+  }, [onBack]);
 
   const onAfterSend = useCallback(
     ({ from }: { from: string }) => {
@@ -184,7 +228,7 @@ export const ComposeView = observer(function ComposeView() {
     [router, sent],
   );
 
-  if ((isReply && replyKey) || draftParam) {
+  if ((isReply && replyKey) || redirectDraftAway) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -213,12 +257,17 @@ export const ComposeView = observer(function ComposeView() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
         <ComposeDraftEditor
           key={
-            forwardKey
-              ? `fwd:${forwardKey}`
-              : forwardSentId
-                ? `fwds:${forwardSentId}`
-                : "compose"
+            standaloneDraft
+              ? `draft:${standaloneDraft.id}`
+              : forwardKey
+                ? `fwd:${forwardKey}`
+                : forwardSentId
+                  ? `fwds:${forwardSentId}`
+                  : forceNew
+                    ? "compose-new"
+                    : "compose"
           }
+          draftId={standaloneDraft?.id}
           initial={initial}
           forwardKey={forwardKey || undefined}
           threading={isForward ? undefined : threading}
@@ -229,6 +278,7 @@ export const ComposeView = observer(function ComposeView() {
           navigateOnSendStart
           onAfterDiscard={onAfterDiscard}
           onAfterSend={onAfterSend}
+          onEscape={onBack}
         />
       </div>
     </div>

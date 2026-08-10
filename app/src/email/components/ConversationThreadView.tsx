@@ -164,10 +164,18 @@ export function forwardPartsForThread(
   const slice = thread.messages.slice(0, end);
   return slice.map((msg): ForwardThreadPart => {
     if (msg.kind === "inbound") {
-      return {
-        kind: "inbound",
-        event: getCachedDetail(msg.id) ?? msg.message,
-      };
+      const cached = getCachedDetail(msg.id);
+      // Disk/API detail can omit envelope fields — never drop list addressing.
+      const event = cached
+        ? {
+            ...msg.message,
+            ...cached,
+            toEmail: cached.toEmail || msg.message.toEmail,
+            fromEmail: cached.fromEmail || msg.message.fromEmail,
+            subject: cached.subject || msg.message.subject,
+          }
+        : msg.message;
+      return { kind: "inbound", event };
     }
     return { kind: "sent", message: msg.message };
   });
@@ -272,6 +280,8 @@ export const ConversationThreadView = observer(function ConversationThreadView({
     return threadDrafts.filter((draft) => draft.id !== composeDraftId);
   }, [composeDraftId, threadDrafts]);
 
+  // Per-message UI actions always start a new draft — quote stack depends on
+  // which message was clicked. Keyboard r/a/f resume is handled in MailListView.
   function startReply(msgId: string, mode: "reply" | "replyAll") {
     onComposeDraftIdChange(crypto.randomUUID());
     setExpandedId(msgId);

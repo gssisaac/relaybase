@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 
+import { composeNewHref } from "@/email/compose-open";
 import { useEmailPaths } from "@/email/paths";
 
 export type MailboxNav = {
@@ -41,7 +42,7 @@ export function useMailboxNav(): MailboxNav {
 export function accountMailboxNav(email: string): MailboxNav {
   const q = encodeURIComponent(email);
   return {
-    compose: `/email/compose?from=${q}`,
+    compose: composeNewHref(email),
     inbox: `/email/inbox?account=${q}`,
     drafts: `/email/drafts?account=${q}`,
     sent: `/email/sent?account=${q}`,

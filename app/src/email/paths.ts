@@ -47,16 +47,38 @@ export function emailAccountHref(
   return `${base}?account=${encodeURIComponent(account)}`;
 }
 
-export function emailComposeHref(from?: string | null) {
-  if (!from || from === "all") return "/email/compose";
-  return `/email/compose?from=${encodeURIComponent(from)}`;
+export function emailComposeHref(
+  from?: string | null,
+  options?: {
+    draftId?: string | null;
+    base?: string;
+    /** Skip standalone draft resume (`shift+c` / Compose new). */
+    forceNew?: boolean;
+  },
+) {
+  const rawBase = options?.base ?? "/email/compose";
+  const qIndex = rawBase.indexOf("?");
+  const path = qIndex >= 0 ? rawBase.slice(0, qIndex) : rawBase;
+  const params = new URLSearchParams(
+    qIndex >= 0 ? rawBase.slice(qIndex + 1) : "",
+  );
+  if (from && from !== "all") params.set("from", from);
+  if (options?.forceNew) {
+    params.set("new", "1");
+    params.delete("draft");
+  } else {
+    params.delete("new");
+    const draftId = options?.draftId?.trim();
+    if (draftId) params.set("draft", draftId);
+  }
+  const q = params.toString();
+  return q ? `${path}?${q}` : path;
 }
 
 export function emailFolderHref(
-  folder: EmailFolder,
+  folder: Exclude<EmailFolder, "compose">,
   account?: string | null,
 ) {
-  if (folder === "compose") return emailComposeHref(account);
   return emailAccountHref(folder, account);
 }
 

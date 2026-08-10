@@ -86,6 +86,7 @@ export const InlineForwardComposer = observer(function InlineForwardComposer({
         skipAutosaveWhenEmpty
         onAfterDiscard={onClose}
         onAfterSend={onClose}
+        onEscape={onClose}
         header={
           <p className="mb-3 text-xs font-medium text-muted-foreground">
             Forward

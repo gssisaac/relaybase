@@ -30,11 +30,14 @@ export type EmailCommandRuntime = {
   folder: Extract<EmailMailboxSection, "inbox" | "drafts" | "sent" | "trash">;
   target: MailListItem | null;
   targetHref?: string;
-  composeHref: string;
+  /** True when a standalone draft exists for `c` / Continue draft. */
+  hasResumableComposeDraft: boolean;
   canReply: boolean;
   canForward: boolean;
   isTargetUnread: boolean;
   onNavigate: (href: string) => void;
+  onCompose: () => void;
+  onComposeNew: () => void;
   onReply: (mode: "reply" | "replyAll") => void;
   onForward: () => void;
   onTrashTarget: () => void;
@@ -50,9 +53,9 @@ export type ResolvedEmailCommand = EmailCommandDescriptor & {
 
 function toDescriptor(
   def: EmailCommandDef,
-  folder: EmailCommandRuntime["folder"],
+  runtime: EmailCommandRuntime,
 ): EmailCommandDescriptor {
-  if (def.id === "trashOrRestore" && folder === "trash") {
+  if (def.id === "trashOrRestore" && runtime.folder === "trash") {
     return {
       id: def.id,
       label: def.trashLabel ?? def.label,
@@ -60,6 +63,30 @@ function toDescriptor(
       keywords: def.keywords,
       icon: def.trashIcon ?? def.icon,
       shortcut: def.shortcut,
+    };
+  }
+  if (def.id === "compose") {
+    return {
+      id: def.id,
+      label: runtime.hasResumableComposeDraft
+        ? "Continue draft"
+        : "Compose email",
+      group: def.group,
+      keywords: def.keywords,
+      icon: def.icon,
+      shortcut: "C",
+    };
+  }
+  if (def.id === "composeNew") {
+    return {
+      id: def.id,
+      label: def.label,
+      group: def.group,
+      keywords: def.keywords,
+      icon: def.icon,
+      // When no draft to continue, `c` already opens new — keep ⇧C as the
+      // explicit force-new shortcut whenever the command is listed.
+      shortcut: "⇧C",
     };
   }
   return {
@@ -123,6 +150,10 @@ function isRuntimeAvailable(
       return Boolean(runtime.targetHref);
     case "compose":
       return true;
+    case "composeNew":
+      // Only offer force-new when there is a draft to leave behind; otherwise
+      // `compose` (`c`) already opens a blank message.
+      return runtime.hasResumableComposeDraft;
     case "reply":
     case "replyAll":
       return runtime.canReply;
@@ -154,7 +185,9 @@ function buildRunner(
         runtime.onNavigate(runtime.targetHref);
       };
     case "compose":
-      return () => runtime.onNavigate(runtime.composeHref);
+      return () => runtime.onCompose();
+    case "composeNew":
+      return () => runtime.onComposeNew();
     case "reply":
       return () => runtime.onReply("reply");
     case "replyAll":
@@ -189,7 +222,7 @@ export function resolveEmailCommands(
   return EMAIL_COMMAND_DEFS.filter(
     (def) => matchesRequires(def, runtime) && isRuntimeAvailable(def.id, runtime),
   ).map((def) => {
-    const command = toDescriptor(def, runtime.folder);
+    const command = toDescriptor(def, runtime);
     return {
       ...command,
       run: buildRunner(command.id, runtime),

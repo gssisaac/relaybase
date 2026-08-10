@@ -14,6 +14,11 @@ import {
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
 import type { MailListItem } from "@/email/components/types";
+import {
+  exactDraftComposeHref,
+  useStandaloneComposeOpener,
+  useThreadComposeOpener,
+} from "@/email/compose-open";
 import { emailMessageHref } from "@/email/paths";
 import type { TrashKind } from "@/email/trash-store";
 
@@ -22,16 +27,10 @@ type MailFolder = Extract<
   "inbox" | "drafts" | "sent" | "trash"
 >;
 
-function composeHref(compose: string, fromAccount: EmailAccountFilter) {
-  if (fromAccount === "all") return compose;
-  return `${compose}?from=${encodeURIComponent(fromAccount)}`;
-}
-
 function messageHref(
   folderBase: string,
   item: MailListItem,
   account: EmailAccountFilter,
-  compose: string,
   inbox: string,
 ) {
   if (item.kind === "draft") {
@@ -41,7 +40,7 @@ function messageHref(
     if (item.message.forwardKey) {
       return emailMessageHref(inbox, item.message.forwardKey, { account });
     }
-    return `${compose}?draft=${encodeURIComponent(item.message.id)}`;
+    return exactDraftComposeHref(item.message.id, account);
   }
   const id = item.kind === "inbox" ? item.message.key : item.message.id;
   return emailMessageHref(folderBase, id, { account });
@@ -83,7 +82,6 @@ export function useEmailCommandRuntimeAdapter(
     selected,
     accountFilter,
     folderBase,
-    compose,
     inbox,
     listHref,
     router,
@@ -98,6 +96,12 @@ export function useEmailCommandRuntimeAdapter(
     restoreFromTrash,
   } = input;
   const { setScope, paletteOpen } = useEmailCommandRuntime();
+  const {
+    openCompose,
+    openComposeNew,
+    hasResumableDraft,
+  } = useStandaloneComposeOpener();
+  const { openReply, openForward, openForwardSent } = useThreadComposeOpener();
 
   const copyText = useCallback(async (text: string, label: string) => {
     const trimmed = text.trim();
@@ -110,36 +114,6 @@ export function useEmailCommandRuntimeAdapter(
     }
   }, []);
 
-  const makeReplyHref = useCallback(
-    (id: string, mode: "reply" | "replyAll") => {
-      return emailMessageHref(inbox, id, {
-        account: accountFilter,
-        params: {
-          [mode === "replyAll" ? "replyAll" : "reply"]: "1",
-        },
-      });
-    },
-    [accountFilter, inbox],
-  );
-
-  const makeForwardHref = useCallback(
-    (target: MailListItem) => {
-      const params = new URLSearchParams();
-      if (accountFilter !== "all") {
-        params.set("account", accountFilter);
-      }
-      if (target.kind === "inbox") {
-        params.set("forwardKey", target.message.key);
-      } else if (target.kind === "sent") {
-        params.set("forwardSent", target.message.id);
-      } else {
-        return composeHref(compose, accountFilter);
-      }
-      return `${compose}?${params.toString()}`;
-    },
-    [accountFilter, compose],
-  );
-
   const commandRuntimeFor = useCallback(
     (target: MailListItem | null): EmailCommandRuntime => {
       const targetId =
@@ -149,7 +123,7 @@ export function useEmailCommandRuntimeAdapter(
             ? target.message.id
             : null;
       const targetHref = target
-        ? messageHref(folderBase, target, accountFilter, compose, inbox)
+        ? messageHref(folderBase, target, accountFilter, inbox)
         : undefined;
       const isInboxTarget = target?.kind === "inbox";
       const threadKeys =
@@ -176,11 +150,13 @@ export function useEmailCommandRuntimeAdapter(
         folder,
         target,
         targetHref,
-        composeHref: composeHref(compose, accountFilter),
+        hasResumableComposeDraft: hasResumableDraft,
         canReply,
         canForward,
         isTargetUnread,
         onNavigate: (href) => router.push(href),
+        onCompose: openCompose,
+        onComposeNew: openComposeNew,
         onReply: (mode) => {
           if (!target || target.kind !== "inbox") return;
           const latest =
@@ -188,13 +164,17 @@ export function useEmailCommandRuntimeAdapter(
               ? (threadInboundKeysFor(target.message.key).at(-1) ??
                 target.message.key)
               : target.message.key;
-          router.push(makeReplyHref(latest, mode));
+          openReply(latest, mode);
         },
         onForward: () => {
           if (!target || (target.kind !== "inbox" && target.kind !== "sent")) {
             return;
           }
-          router.push(makeForwardHref(target));
+          if (target.kind === "inbox") {
+            openForward(target.message.key);
+            return;
+          }
+          openForwardSent(target.message.id);
         },
         onTrashTarget: () => {
           if (!targetId || !target || target.kind === "draft") return;
@@ -237,21 +217,24 @@ export function useEmailCommandRuntimeAdapter(
     },
     [
       accountFilter,
-      compose,
       copyText,
       folder,
       folderBase,
+      hasResumableDraft,
       inbox,
       isUnread,
       listHref,
-      makeForwardHref,
-      makeReplyHref,
       markRead,
       markReadMany,
       markUnread,
       markUnreadMany,
       moveInboxToTrashMany,
       moveToTrash,
+      openCompose,
+      openComposeNew,
+      openForward,
+      openForwardSent,
+      openReply,
       restoreFromTrash,
       router,
       threadInboundKeysFor,
@@ -277,7 +260,7 @@ export function useEmailCommandRuntimeAdapter(
     () => resolveEmailCommands(commandRuntimeFor(selected)),
     // selectionKey is the stable identity for `selected`.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
-    [commandRuntimeFor, selectionKey],
+    [commandRuntimeFor, selectionKey, hasResumableDraft],
   );
 
   const runSelectedCommand = useCallback(
@@ -303,7 +286,7 @@ export function useEmailCommandRuntimeAdapter(
 
   // Primitive identity for the publish effect — never depend on the commands
   // array reference (MailListView rebuilds `selected` every render).
-  const scopeKey = `${scopeTitle}\0${scopeTargetId ?? ""}\0${scopeTargetKind ?? ""}\0${selectionKey}\0${selectedCommands
+  const scopeKey = `${scopeTitle}\0${scopeTargetId ?? ""}\0${scopeTargetKind ?? ""}\0${selectionKey}\0${hasResumableDraft ? "1" : "0"}\0${selectedCommands
     .map((command) => `${command.id}:${command.label}`)
     .join(",")}`;
 

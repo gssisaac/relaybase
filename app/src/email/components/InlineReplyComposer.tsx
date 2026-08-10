@@ -101,6 +101,7 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
         autoFocusBody
         onAfterDiscard={onClose}
         onAfterSend={onClose}
+        onEscape={onClose}
         header={
           <p className="mb-3 text-xs font-medium text-muted-foreground">
             {replyAll ? "Reply all" : "Reply"}

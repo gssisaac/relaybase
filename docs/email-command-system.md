@@ -41,8 +41,11 @@ Related (outside the module, thin consumers):
 
 | File | Role |
 |------|------|
+| `app/src/email/compose-open.ts` | Compose open/resume/force-new policy + adapter hooks |
+| `app/src/email/components/useThreadComposeState.ts` | Inline thread compose panel state |
 | `app/src/app/(dashboard)/DesktopDashboardGate.tsx` | Mounts `EmailCommandRuntimeProvider` + `GlobalCommandPalette` |
-| `app/src/email/components/MailListView.tsx` | List/detail UI; calls adapter; keeps j/k/esc navigation hotkeys |
+| `app/src/email/components/MailListView.tsx` | List/detail UI; consumes compose-open + command adapter |
+| `app/src/email/components/ComposeView.tsx` | Renders compose from URL only (no open policy) |
 | `app/src/components/ui/command.tsx` | Generic cmdk primitives |
 | `app/src/components/ui/context-menu.tsx` | Generic context-menu primitives |
 | `app/src/email/email-mailbox-store.ts` | Data actions (`markRead`, `moveToTrash`, …) |
@@ -85,8 +88,55 @@ Rules:
 
 - Never handle bare `k` without checking modifiers.
 - Never let mail shortcuts run while the palette is open.
-- List navigation (`j`/`k`/arrows/`u`/`esc`) stays in the mail view. Command keys that map to defs (`c`/`r`/`a`) go through `runSelectedCommand`.
+- List navigation (`j`/`k`/arrows/`u`/`esc`) stays in the mail view.
+- Standalone `c` / `⇧C` go through `useStandaloneComposeOpener`. Inbox-thread `r`/`a`/`f` use `useThreadComposeState` + `resumeOrNewDraftId`. Other command keys go through `runSelectedCommand`.
 - Trash `e` / Delete may keep next-item navigation in `MailListView` (view concern, not command metadata).
+
+---
+
+## Compose open / Esc / draft resume
+
+**Source of truth:** [`app/src/email/compose-open.ts`](../app/src/email/compose-open.ts)
+
+Callers must **not** call `emailComposeHref`, `forceNew`, or `findResumableComposeDraft` directly. Consume adapter hooks / helpers only:
+
+| Export | Use for |
+|--------|---------|
+| `useStandaloneComposeOpener()` | `openCompose` / `openComposeNew` / `composeNewHref` / `hasResumableDraft` |
+| `useThreadComposeOpener()` | URL reply/forward + `resumeOrNewDraftId` for inline keyboard |
+| `composeNewHref(account?)` | Sidebar / account nav Link hrefs (always new) |
+| `exactDraftComposeHref(id)` | Open a specific standalone draft |
+| `resolveReplyOpenDraftId(...)` | `?reply=` / Unsend panel restore |
+
+Inline thread compose state (mode / draft id / Esc dismiss) lives in [`useThreadComposeState`](../app/src/email/components/useThreadComposeState.ts). `ComposeView` only renders from URL — no resume policy.
+
+Esc in compose (standalone, inline reply, inline forward) **closes the composer without discarding**. Drafts autosave; recovery is reopen, not Undo. Esc/back must `flushNow()` before navigate so the just-edited draft wins `updatedAt`.
+
+| Entry | Intent | Draft behavior |
+|-------|--------|----------------|
+| Per-message UI Reply / Reply all / Forward | “Compose **here**” (quote stack depends on which message) | **Always new** draft id |
+| Toolbar **Compose** / sidebar Compose nav (incl. per-account) | Explicit new message | **Always new** (`composeNewHref` → `?new=1`) |
+| Keyboard `r` / `a` / `f` (inbox thread) | Continue at **default target** (latest inbound) | **Resume** via `resumeOrNewDraftId` (inline) |
+| Keyboard `c` / Cmd+K **Continue draft** / **Compose email** | Continue standalone compose | **Resume** via `openCompose()` |
+| Keyboard `⇧C` / Cmd+K **Compose new** | Leave existing draft; start blank | **Always new** via `openComposeNew()`; Cmd+K lists only when a resumable draft exists |
+| Cmd+K reply / `?reply=` / `?replyAll=` | Same as keyboard for that target key | **Resume** matching draft if any, else new |
+| Thread draft row click / Unsend with `draftId` | Exact draft | Open that id |
+| Esc / `u` while compose open | Hide composer | Keep draft; do not discard |
+
+Resume match (inside `compose-open` → `EmailMailboxStore.findResumableComposeDraft`):
+
+- `reply` / `replyAll` / `forward`: same mode + same inbound key (`replyKey` / `forwardKey`)
+- `compose`: standalone drafts only (no `replyKey`, no `forwardKey`)
+- If several match → most recently `updatedAt`
+
+Cmd+K labels for compose:
+
+- No standalone draft → only **Compose email** (`compose`, shortcut `C`)
+- Standalone draft exists → **Continue draft** (`compose`, `C`) + **Compose new** (`composeNew`, `⇧C`)
+
+Mid-thread UI drafts are **not** resumed by `r`/`a`/`f` (those keys always target latest). Reopen them via the thread draft row.
+
+Do **not** make per-message UI buttons call resume — stack/source differs by message.
 
 ---
 
@@ -154,6 +204,7 @@ External packages/components import from `@/email/commands` (barrel). Do not dee
 - Don’t put `commandRuntimeFor` / scope publish / context-menu rendering back into a growing god-component; use the adapter + `EmailCommandContextMenu`.
 - Don’t handle ⌘K only in the bubble phase without capture + `stopImmediatePropagation`.
 - Don’t clear command scope on every selection tick (unmount-only clear).
+- Don’t call `emailComposeHref` / `forceNew` / `findResumableComposeDraft` from UI — use `compose-open` adapters.
 
 ---
 
@@ -168,6 +219,10 @@ After changing commands:
 5. Palette open → `j`/`k`/`r` do not move mail.
 6. Right-click a row → same available set as Cmd+K for that row.
 7. Shortcut letters in defs still match mail-layer handlers where intended.
+8. Inbox thread: type in reply → Esc → `r` reopens the same draft (not a blank new one).
+9. Inbox thread: UI Reply on an older message → always a new draft; `r` still targets latest only.
+10. Compose: type → Esc → `c` reopens the same standalone draft.
+11. With a standalone draft parked: Cmd+K shows Continue draft (`C`) and Compose new (`⇧C`); `⇧C` / toolbar Compose opens blank without touching the parked draft.
 
 ---
 
@@ -180,4 +235,6 @@ After changing commands:
 | Change palette chrome only | `GlobalCommandPalette.tsx` |
 | Change row menu chrome only | `EmailCommandContextMenu.tsx` |
 | Wire provider / mount palette | `DesktopDashboardGate.tsx` |
-| List navigation keys only | `MailListView.tsx` (keep command keys via `runSelectedCommand`) |
+| List navigation keys only | `MailListView.tsx` |
+| Compose open / resume / force-new | **`compose-open.ts`** (hooks + `composeNewHref`); Cmd+K via adapter; inline thread via `useThreadComposeState`; `ComposeView` renders URL only |
+| Per-message UI always-new Reply/Forward | `ConversationThreadView` (`startReply` / `startForward`) |

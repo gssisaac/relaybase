@@ -33,6 +33,7 @@ Mail actions must stay centralized in `app/src/email/commands/`:
 - Static defs → resolve/run store → adapter → Cmd+K + context menu + command hotkeys
 - Show **available-only** commands (selection-filtered); do not dump dashboard “Open …” nav into mail Cmd+K
 - Keep app-layer ⌘K (capture) separate from mail-layer `j`/`k` shortcuts
+- Compose open/resume/force-new: **`app/src/email/compose-open.ts`** adapters only (`useStandaloneComposeOpener` / `useThreadComposeOpener` / `composeNewHref`). Esc closes without discard; per-message UI Reply/Forward always starts a new draft
 
 Full rules, file map, and add-command checklist: **[docs/email-command-system.md](docs/email-command-system.md)**.
 

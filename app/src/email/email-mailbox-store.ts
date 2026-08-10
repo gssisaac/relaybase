@@ -624,6 +624,46 @@ export class EmailMailboxStore {
     return this.drafts.find((d) => d.replyKey === key) ?? null;
   }
 
+  /**
+   * Most recently updated draft for keyboard/command resume.
+   * - reply / replyAll / forward: match mode + inbound key (usually latest)
+   * - compose: standalone drafts (no replyKey / forwardKey)
+   * UI per-message Reply/Forward must not use this — always new draft.
+   */
+  findResumableComposeDraft(
+    mode: "reply" | "replyAll" | "forward" | "compose",
+    inboundKey = "",
+  ): DraftEmail | null {
+    const matches =
+      mode === "compose"
+        ? this.drafts.filter(
+            (d) => !d.replyKey?.trim() && !d.forwardKey?.trim(),
+          )
+        : (() => {
+            const key = inboundKey.trim();
+            if (!key) return [];
+            return this.drafts.filter((d) => {
+              if (mode === "forward") return d.forwardKey?.trim() === key;
+              if (d.replyKey?.trim() !== key) return false;
+              if (mode === "replyAll") return Boolean(d.replyAll);
+              return !d.replyAll;
+            });
+          })();
+    if (matches.length === 0) return null;
+    // drafts list keeps most-recently upserted first; on equal timestamps keep it.
+    let best = matches[0]!;
+    let bestAt = Date.parse(best.updatedAt) || 0;
+    for (let i = 1; i < matches.length; i++) {
+      const draft = matches[i]!;
+      const at = Date.parse(draft.updatedAt) || 0;
+      if (at > bestAt) {
+        best = draft;
+        bestAt = at;
+      }
+    }
+    return best;
+  }
+
   /** Reply / forward drafts tied to any inbound key in the thread. */
   findDraftsForThread(inboundKeys: string[]): DraftEmail[] {
     const keys = new Set(
@@ -667,11 +707,11 @@ export class EmailMailboxStore {
       replyAll: input.replyAll,
       forwardKey: input.forwardKey,
     };
-    if (existing) {
-      this.drafts = this.drafts.map((d) => (d.id === draft.id ? draft : d));
-    } else {
-      this.drafts = [draft, ...this.drafts];
-    }
+    // Most-recently upserted first so resume ties break toward "just edited".
+    this.drafts = [
+      draft,
+      ...this.drafts.filter((d) => d.id !== draft.id),
+    ];
     this.persistDrafts();
     return draft;
   }
@@ -927,8 +967,21 @@ export class EmailMailboxStore {
         this.loading = false;
       }
       if (drafts) {
-        this.drafts = drafts;
-        if (drafts.length > 0) {
+        // Merge by id — never clobber a newer in-memory draft with a stale disk read.
+        const byId = new Map<string, DraftEmail>();
+        for (const draft of drafts) byId.set(draft.id, draft);
+        for (const draft of this.drafts) {
+          const prev = byId.get(draft.id);
+          const prevAt = prev ? Date.parse(prev.updatedAt) || 0 : 0;
+          const nextAt = Date.parse(draft.updatedAt) || 0;
+          if (!prev || nextAt >= prevAt) byId.set(draft.id, draft);
+        }
+        this.drafts = [...byId.values()].sort((a, b) => {
+          const aAt = Date.parse(a.updatedAt) || 0;
+          const bAt = Date.parse(b.updatedAt) || 0;
+          return bAt - aAt;
+        });
+        if (this.drafts.length > 0) {
           this.mailReady = true;
           this.loading = false;
         }

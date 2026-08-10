@@ -38,6 +38,7 @@ import {
   writeSidebarMode,
   type SidebarMode,
 } from "@/email/sidebar-mode";
+import { composeNewHref } from "@/email/compose-open";
 import { emailFolderHref, type EmailFolder } from "@/email/paths";
 import { Button } from "@/components/ui/button";
 import {
@@ -106,7 +107,8 @@ function FolderTree({
   onRemoveAccount?: (email: string) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const parentHref = emailFolderHref(folder);
+  const parentHref =
+    folder === "compose" ? composeNewHref() : emailFolderHref(folder);
   const parentPath = parentHref.split("?")[0]!;
   const parentActive =
     (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
@@ -179,7 +181,10 @@ function FolderTree({
       {!collapsed && open && accounts.length > 0 ? (
         <div className="ml-3 flex flex-col gap-0.5 border-l border-sidebar-border/70 pl-2">
           {accounts.map((account) => {
-            const href = emailFolderHref(folder, account.email);
+            const href =
+              folder === "compose"
+                ? composeNewHref(account.email)
+                : emailFolderHref(folder, account.email);
             const active =
               (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
               accountParam === account.email;

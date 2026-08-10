@@ -143,25 +143,18 @@ export function useComposeDraftController({
   const onAfterSendRef = useRef(onAfterSend);
   const prevPreferredFromRef = useRef<string | null | undefined>(undefined);
 
-  useEffect(() => {
-    modeRef.current = mode;
-  }, [mode]);
-
-  useEffect(() => {
-    onAfterDiscardRef.current = onAfterDiscard;
-    onAfterSendRef.current = onAfterSend;
-  }, [onAfterDiscard, onAfterSend]);
-
-  useEffect(() => {
-    latestRef.current = {
-      draftId,
-      sendFrom,
-      sendTo,
-      sendCc,
-      sendSubject,
-      sendText,
-    };
-  }, [draftId, sendCc, sendFrom, sendSubject, sendText, sendTo]);
+  // Keep refs in sync during render so Esc/unmount flush never sees a stale snapshot.
+  modeRef.current = mode;
+  onAfterDiscardRef.current = onAfterDiscard;
+  onAfterSendRef.current = onAfterSend;
+  latestRef.current = {
+    draftId,
+    sendFrom,
+    sendTo,
+    sendCc,
+    sendSubject,
+    sendText,
+  };
 
   // Resolve From from draft / fallbacks / first account.
   // When the preferred account changes (e.g. sidebar Compose account),
@@ -240,6 +233,15 @@ export function useComposeDraftController({
           : {}),
     });
     setDraftStatus("Draft saved");
+  }
+
+  /** Sync save before Esc/back so resume (`c`) sees this draft as latest. */
+  function flushNow() {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    flushDraft();
   }
 
   useEffect(() => {
@@ -459,6 +461,7 @@ export function useComposeDraftController({
     draftStatus,
     discard,
     send,
+    flushNow,
     hasContent: hasDraftContent({
       to: sendTo,
       cc: sendCc,

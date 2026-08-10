@@ -64,13 +64,17 @@ export function replyAllCc(
       .filter(Boolean),
   );
   const recipients = [
-    ...(event.toEmails?.length ? event.toEmails : [event.toEmail]),
+    ...(event.toEmails?.length
+      ? event.toEmails
+      : event.toEmail
+        ? [event.toEmail]
+        : []),
     ...(event.ccEmails ?? []),
   ];
   const unique: string[] = [];
   const seen = new Set<string>();
   for (const email of recipients) {
-    const trimmed = email.trim();
+    const trimmed = email?.trim() ?? "";
     if (!trimmed) continue;
     const key = trimmed.toLowerCase();
     if (exclude.has(key) || seen.has(key)) continue;
@@ -104,9 +108,10 @@ export function resolveReplyFrom(
   if (fromAccount && fromAccount !== "all") {
     return fromAccount;
   }
+  const toEmail = event.toEmail?.trim() ?? "";
   return (
     addresses.find(
-      (a) => a.email.toLowerCase() === event.toEmail.toLowerCase(),
+      (a) => toEmail && a.email.toLowerCase() === toEmail.toLowerCase(),
     )?.email ||
     addresses[0]?.email ||
     ""

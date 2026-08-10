@@ -5,6 +5,7 @@ import {
   EyeOff,
   Forward,
   MailOpen,
+  MailPlus,
   Pencil,
   Reply,
   ReplyAll,
@@ -15,6 +16,7 @@ import {
 export type EmailCommandId =
   | "open"
   | "compose"
+  | "composeNew"
   | "reply"
   | "replyAll"
   | "forward"
@@ -76,9 +78,17 @@ export const EMAIL_COMMAND_DEFS: readonly EmailCommandDef[] = [
     id: "compose",
     label: "Compose email",
     group: "navigation",
-    keywords: ["compose", "new", "mail", "create"],
+    keywords: ["compose", "mail", "write", "continue", "draft"],
     icon: Pencil,
     shortcut: "C",
+  },
+  {
+    id: "composeNew",
+    label: "Compose new",
+    group: "navigation",
+    keywords: ["compose", "new", "mail", "create", "fresh", "blank"],
+    icon: MailPlus,
+    shortcut: "⇧C",
   },
   {
     id: "reply",

@@ -39,6 +39,8 @@ export type ComposeDraftEditorProps = {
   alwaysShowDiscard?: boolean;
   onAfterDiscard: () => void;
   onAfterSend: (ctx: { from: string }) => void;
+  /** Escape navigates back / closes inline compose without discarding. */
+  onEscape?: () => void;
   header?: ReactNode;
 };
 
@@ -58,6 +60,7 @@ export function ComposeDraftEditor({
   alwaysShowDiscard = false,
   onAfterDiscard,
   onAfterSend,
+  onEscape,
   header,
 }: ComposeDraftEditorProps) {
   const productId = useProductId();
@@ -122,6 +125,14 @@ export function ComposeDraftEditor({
       onDiscard={
         alwaysShowDiscard || controller.draftId || controller.hasContent
           ? controller.discard
+          : undefined
+      }
+      onEscape={
+        onEscape
+          ? () => {
+              controller.flushNow();
+              onEscape();
+            }
           : undefined
       }
       compact={compact}

@@ -26,22 +26,6 @@ export type InstallResult = {
   adminRelinked: boolean;
 };
 
-export type ResourceCheck = {
-  name: string;
-  kind: string;
-  present: boolean;
-  detail: string;
-};
-
-export type ProbeResult = {
-  status: "ready" | "partial" | "missing" | string;
-  workerScriptName: string;
-  workerUrl: string | null;
-  healthOk: boolean;
-  resources: ResourceCheck[];
-  summary: string;
-};
-
 type TauriInvoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
 function getInvoke(): TauriInvoke | null {
@@ -260,24 +244,8 @@ export async function desktopListZones(): Promise<ZoneSummary[]> {
   return invoke("list_cf_zones");
 }
 
-export async function desktopProbeWorker(): Promise<ProbeResult> {
-  return invoke("probe_routing_worker");
-}
-
 export async function desktopAdoptWorker(): Promise<InstallResult> {
   return invoke("adopt_routing_worker");
-}
-
-export async function desktopInstallWorker(
-  workerJs?: string,
-): Promise<InstallResult> {
-  return invoke("install_routing_worker", { workerJs: workerJs ?? null });
-}
-
-export async function desktopUpdateWorker(
-  workerJs?: string,
-): Promise<InstallResult> {
-  return invoke("update_routing_worker", { workerJs: workerJs ?? null });
 }
 
 // ---- In-app Wrangler deploy (v2) -------------------------------------------

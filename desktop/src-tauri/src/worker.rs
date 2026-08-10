@@ -1,7 +1,6 @@
 use crate::cloudflare::{
-    admin_auth_ok, bootstrap_worker, enable_workers_dev, ensure_kv_namespace, ensure_r2_bucket,
-    find_kv_namespace, find_r2_bucket, put_worker_secret, upload_worker_script, worker_health_ok,
-    worker_script_exists, CfClient,
+    admin_auth_ok, bootstrap_worker, enable_workers_dev, find_kv_namespace, find_r2_bucket,
+    put_worker_secret, worker_health_ok, worker_script_exists, CfClient,
 };
 use crate::secrets::StoredCredentials;
 use serde::{Deserialize, Serialize};
@@ -10,45 +9,6 @@ use uuid::Uuid;
 pub const DEFAULT_SCRIPT: &str = "relaybase-api";
 pub const APP_NS: &str = "relaybase-app";
 pub const R2_BUCKET: &str = "relaybase-inbound";
-
-/// Minimal Worker stub shipped with the app when a full server build is not embedded.
-/// Production releases should replace this via `worker_js_override` from the release channel
-/// or by bundling `server/` build output under resources.
-const EMBEDDED_WORKER_STUB: &str = r#"
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (url.pathname === "/health") {
-      return Response.json({ ok: true, stub: true, inbound: { r2Configured: !!env.INBOUND } });
-    }
-    if (url.pathname === "/admin/bootstrap" && request.method === "PUT") {
-      const body = await request.json();
-      await env.RELAYBASE_APP.put("srv:config:cloudflare", JSON.stringify({
-        accountId: body.accountId,
-        apiToken: body.apiToken,
-      }));
-      await env.RELAYBASE_APP.put("srv:config:admin", JSON.stringify({ token: body.adminToken }));
-      return Response.json({ configured: true, accountId: body.accountId, stub: true });
-    }
-    if (url.pathname === "/admin/cloudflare" && request.method === "GET") {
-      const auth = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-      const raw = await env.RELAYBASE_APP.get("srv:config:admin");
-      const expected = raw ? (JSON.parse(raw).token || "") : (env.ADMIN_TOKEN || "");
-      if (!auth || auth !== expected) {
-        return Response.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      return Response.json({ configured: true, stub: true });
-    }
-    return Response.json({ error: "Relaybase Worker stub — replace with full server build via Update Worker", stub: true }, { status: 501 });
-  },
-  async email(message, env) {
-    const id = crypto.randomUUID();
-    const domain = (message.to || "").split("@")[1] || "unknown";
-    await env.INBOUND.put(`inbound/${domain}/${id}/raw.eml`, message.raw);
-    return;
-  }
-};
-"#;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -269,105 +229,4 @@ pub async fn adopt_worker(
     };
 
     Ok((result, creds))
-}
-
-pub async fn install_worker(
-    account_id: &str,
-    api_token: &str,
-    worker_js: Option<String>,
-    existing: &StoredCredentials,
-) -> Result<(InstallResult, StoredCredentials), String> {
-    let probe = probe_install(account_id, api_token).await?;
-    if probe.status == "ready" {
-        return adopt_worker(account_id, api_token, existing).await;
-    }
-
-    let client = client_from(account_id, api_token);
-    let script_name = DEFAULT_SCRIPT.to_string();
-    let app_kv_id = ensure_kv_namespace(&client, APP_NS).await?;
-    ensure_r2_bucket(&client, R2_BUCKET).await?;
-
-    let source = worker_js.unwrap_or_else(|| EMBEDDED_WORKER_STUB.trim().to_string());
-    upload_worker_script(
-        &client,
-        &script_name,
-        &source,
-        &app_kv_id,
-        R2_BUCKET,
-    )
-    .await?;
-
-    let admin_token = format!("rb_admin_{}", Uuid::new_v4());
-    put_worker_secret(&client, &script_name, "ADMIN_TOKEN", &admin_token).await?;
-    put_worker_secret(&client, &script_name, "CF_ACCOUNT_ID", account_id).await?;
-    put_worker_secret(&client, &script_name, "CF_API_TOKEN", api_token).await?;
-
-    let worker_url = enable_workers_dev(&client, &script_name).await?;
-
-    bootstrap_worker(
-        &worker_url,
-        &admin_token,
-        account_id,
-        api_token,
-        &admin_token,
-    )
-    .await?;
-
-    let result = InstallResult {
-        worker_url: worker_url.clone(),
-        worker_script_name: script_name.clone(),
-        admin_token: admin_token.clone(),
-        keys_kv_id: app_kv_id.clone(),
-        api_kv_id: app_kv_id,
-        r2_bucket: R2_BUCKET.to_string(),
-        skipped: false,
-        admin_relinked: false,
-    };
-
-    let creds = StoredCredentials {
-        account_id: account_id.to_string(),
-        api_token: api_token.to_string(),
-        worker_url,
-        admin_token,
-        worker_script_name: script_name,
-        license_key: existing.license_key.clone(),
-    };
-
-    Ok((result, creds))
-}
-
-pub async fn update_worker(
-    creds: &StoredCredentials,
-    worker_js: Option<String>,
-) -> Result<InstallResult, String> {
-    let client = CfClient {
-        account_id: creds.account_id.clone(),
-        api_token: creds.api_token.clone(),
-    };
-    let script_name = if creds.worker_script_name.is_empty() {
-        DEFAULT_SCRIPT.to_string()
-    } else {
-        creds.worker_script_name.clone()
-    };
-    let app_kv_id = ensure_kv_namespace(&client, APP_NS).await?;
-    ensure_r2_bucket(&client, R2_BUCKET).await?;
-    let source = worker_js.unwrap_or_else(|| EMBEDDED_WORKER_STUB.trim().to_string());
-    upload_worker_script(
-        &client,
-        &script_name,
-        &source,
-        &app_kv_id,
-        R2_BUCKET,
-    )
-    .await?;
-    Ok(InstallResult {
-        worker_url: creds.worker_url.clone(),
-        worker_script_name: script_name,
-        admin_token: creds.admin_token.clone(),
-        keys_kv_id: app_kv_id.clone(),
-        api_kv_id: app_kv_id,
-        r2_bucket: R2_BUCKET.to_string(),
-        skipped: false,
-        admin_relinked: false,
-    })
 }

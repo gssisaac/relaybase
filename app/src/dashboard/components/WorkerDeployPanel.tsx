@@ -20,12 +20,15 @@ import {
   desktopGetBundledWorkerVersion,
   desktopGetDeployedWorkerVersion,
   desktopGetDesktopSettings,
+  desktopKvHealthCheck,
   desktopSaveDesktopSettings,
   explainDesktopError,
   isDesktopRuntime,
   type DesktopErrorHelp,
   type DesktopSettings,
+  type KvHealthResult,
 } from "@/lib/desktop/bridge";
+import { toast } from "sonner";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { getWorkerDeployStore } from "@/lib/desktop/deploy-store";
 import { cn } from "@/lib/utils";
@@ -65,6 +68,8 @@ export const WorkerDeployPanel = observer(function WorkerDeployPanel({
   const [versionError, setVersionError] = useState<DesktopErrorHelp | null>(
     null,
   );
+  const [kvBusy, setKvBusy] = useState(false);
+  const [kvHealth, setKvHealth] = useState<KvHealthResult | null>(null);
 
   const hasWorker = Boolean(workerUrl.trim() && adminToken.trim());
 
@@ -148,6 +153,31 @@ export const WorkerDeployPanel = observer(function WorkerDeployPanel({
     }
   }
 
+  async function handleKvHealth() {
+    setKvBusy(true);
+    setKvHealth(null);
+    try {
+      const result = await desktopKvHealthCheck();
+      setKvHealth(result);
+      if (result.ok) {
+        toast.success("KV health check passed", {
+          description: "srv:config and srv:key prefixes are present.",
+        });
+      } else {
+        toast.warning("KV health check found issues", {
+          description:
+            "Missing prefixes — the Worker may not be fully bootstrapped.",
+        });
+      }
+    } catch (err) {
+      toast.error("KV health check failed", {
+        description: explainDesktopError(err).detail,
+      });
+    } finally {
+      setKvBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-3 rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -169,6 +199,29 @@ export const WorkerDeployPanel = observer(function WorkerDeployPanel({
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
         <VersionRow label="Bundled" value={bundledVersion} />
         <VersionRow label="Deployed" value={deployedVersion} />
+        {hasWorker ? (
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={kvBusy || store.busy}
+              onClick={() => void handleKvHealth()}
+            >
+              {kvBusy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              Check KV health
+            </Button>
+            {kvHealth ? (
+              <Badge variant={kvHealth.ok ? "secondary" : "destructive"}>
+                {kvHealth.ok ? "KV OK" : "KV incomplete"}
+              </Badge>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <DesktopErrorBanner error={versionError} />

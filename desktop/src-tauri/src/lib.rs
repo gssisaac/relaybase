@@ -15,7 +15,7 @@ use secrets::{
     upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, DesktopSettings, EmailPrefs,
     StoredCredentials,
 };
-use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
+use worker::{adopt_worker, InstallResult};
 
 #[tauri::command]
 async fn save_cf_credentials(
@@ -121,35 +121,10 @@ async fn list_cf_zones() -> Result<Vec<ZoneSummary>, String> {
 }
 
 #[tauri::command]
-async fn probe_routing_worker() -> Result<ProbeResult, String> {
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    if creds.account_id.is_empty() || creds.api_token.is_empty() {
-        return Err("Connect Cloudflare first".into());
-    }
-    probe_install(&creds.account_id, &creds.api_token).await
-}
-
-#[tauri::command]
 async fn adopt_routing_worker() -> Result<InstallResult, String> {
     let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
     let (result, next) = adopt_worker(&creds.account_id, &creds.api_token, &creds).await?;
     save_credentials(&next)?;
-    Ok(result)
-}
-
-#[tauri::command]
-async fn install_routing_worker(worker_js: Option<String>) -> Result<InstallResult, String> {
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    let (result, next) =
-        install_worker(&creds.account_id, &creds.api_token, worker_js, &creds).await?;
-    save_credentials(&next)?;
-    Ok(result)
-}
-
-#[tauri::command]
-async fn update_routing_worker(worker_js: Option<String>) -> Result<InstallResult, String> {
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    let result = update_worker(&creds, worker_js).await?;
     Ok(result)
 }
 
@@ -385,10 +360,7 @@ pub fn run() {
             save_cache_json,
             verify_cf_token,
             list_cf_zones,
-            probe_routing_worker,
             adopt_routing_worker,
-            install_routing_worker,
-            update_routing_worker,
             save_license_key,
             verify_worker_connection,
             save_worker_connection,

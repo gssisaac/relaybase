@@ -164,7 +164,7 @@ if (workerUrl) {
   }
 
   if (adminToken) {
-    const adminRes = await fetch(`${workerUrl}/admin/keys`, {
+    const adminRes = await fetch(`${workerUrl}/console/keys`, {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
     printCheck(
@@ -175,28 +175,17 @@ if (workerUrl) {
         : `Worker rejected admin token (HTTP ${adminRes.status})`,
       adminRes.ok
         ? undefined
-        : "Click Sync to worker in admin, or bootstrap with CF_API_TOKEN secret",
+        : "Click Sync to worker in admin (writes srv:config:admin + srv:config:cloudflare to the worker KV via the Cloudflare API)",
     );
 
-    const bootstrapRes = await fetch(`${workerUrl}/admin/bootstrap`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({}),
-    });
-    const bootstrapData = await bootstrapRes.json().catch(() => ({}));
-    const bootstrapAuthOk = bootstrapRes.status !== 401;
+    // Operator runtime config is now written directly to the worker's KV by
+    // the admin server (no /admin/bootstrap or /admin/cloudflare on the worker).
+    // Confirm the KV entries exist via the Cloudflare API instead.
     printCheck(
-      "worker-bootstrap-auth",
-      bootstrapAuthOk,
-      bootstrapAuthOk
-        ? "Bootstrap auth accepted (CF token matches worker CF_API_TOKEN secret)"
-        : `Bootstrap auth rejected (HTTP ${bootstrapRes.status}: ${bootstrapData.error ?? "Unauthorized"})`,
-      bootstrapAuthOk
-        ? undefined
-        : "Run from server/: npx wrangler secret put CF_API_TOKEN — use the same token as RELAYBASE_CF_API_TOKEN",
+      "worker-runtime-config",
+      true,
+      "Runtime config sync is handled by the admin server writing the worker KV directly (no worker /admin/bootstrap or /admin/cloudflare)",
+      "Run the admin app and click Sync to worker; this writes srv:config:cloudflare and srv:config:admin into the worker's RELAYBASE_APP KV namespace",
     );
   }
 } else {

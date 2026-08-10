@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
-import { readAudienceCatalog } from "../lib/catalog-audience";
-import { readBroadcasts } from "../lib/catalog-broadcasts";
-import { readMailbox } from "../lib/catalog-store";
-import { listInboundEmails } from "../lib/inbound-store";
-import { listKeys } from "../lib/keys";
-import { listSendLogs, type SendLogEntry } from "../lib/send-logs";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
+import { readAudienceCatalog } from "../../lib/catalog-audience";
+import { readBroadcasts } from "../../lib/catalog-broadcasts";
+import { readMailbox } from "../../lib/catalog-store";
+import { listInboundEmails } from "../../lib/inbound-store";
+import { listKeys } from "../../lib/keys";
+import { listSendLogs, type SendLogEntry } from "../../lib/send-logs";
 import {
   bucketIndex,
   createBuckets,
@@ -14,9 +14,9 @@ import {
   parseStatsRange,
   RANGE_MS,
   type StatsBucket,
-} from "../lib/stats-buckets";
+} from "../../lib/stats-buckets";
 
-const adminStats = new Hono<{ Bindings: Env }>();
+const consoleStats = new Hono<{ Bindings: Env }>();
 
 function isApiSend(log: SendLogEntry): boolean {
   return Boolean(log.keyId);
@@ -52,7 +52,7 @@ function sumBuckets(buckets: StatsBucket[]): number {
   return buckets.reduce((sum, b) => sum + b.value, 0);
 }
 
-adminStats.get("/", async (c) => {
+consoleStats.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -143,7 +143,7 @@ adminStats.get("/", async (c) => {
   });
 });
 
-adminStats.get("/account-stats", async (c) => {
+consoleStats.get("/account-stats", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -216,7 +216,7 @@ adminStats.get("/account-stats", async (c) => {
   });
 });
 
-adminStats.get("/account-logs", async (c) => {
+consoleStats.get("/account-logs", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -314,4 +314,4 @@ adminStats.get("/account-logs", async (c) => {
   });
 });
 
-export { adminStats };
+export { consoleStats };

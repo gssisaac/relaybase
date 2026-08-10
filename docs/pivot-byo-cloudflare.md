@@ -9,7 +9,7 @@
 Relaybase is repositioned from a hosted multi-tenant email SaaS ($10/domain/mo on a shared Cloudflare account) to a **one-time ($39) Mac/Windows app** that:
 
 1. Ships a **Worker install ZIP** (`relaybase-worker-install`) — the customer deploys with Wrangler into **their** Cloudflare account
-2. The Mac app only collects **Worker URL + admin token**, verifies via `GET /admin/connect`, then activates a license
+2. The Mac app only collects **Worker URL + admin token**, verifies via `GET /console/connect`, then activates a license
 3. Provides Spark-like inbox UX + send/receive API over CF Email Sending/Routing
 
 The desktop app **does not** request Account Workers / KV / R2 API permissions for install. Optional CF API tokens may return later for Zone/Email assist only.

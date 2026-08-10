@@ -1,22 +1,22 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
-import { createCloudflareClient } from "../lib/cloudflare-config";
-import { recordOpsLog } from "../lib/ops-logs";
-import { previewText } from "../lib/inbound-store";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
+import { createCloudflareClient } from "../../lib/cloudflare-config";
+import { recordOpsLog } from "../../lib/ops-logs";
+import { previewText } from "../../lib/inbound-store";
 import {
   findInvalidRecipients,
   normalizeRecipients,
-} from "../lib/recipients";
-import type { SentEmail } from "../../../app/src/email/components/types";
+} from "../../lib/recipients";
+import type { SentEmail } from "../../../../app/src/email/components/types";
 
-const adminSend = new Hono<{ Bindings: Env }>();
+const mailSend = new Hono<{ Bindings: Env }>();
 
 /**
  * Desktop compose send (admin bearer). Same body as /v1/send, without API-key
  * domain scoping — from address must still be a real mailbox address.
  */
-adminSend.post("/", async (c) => {
+mailSend.post("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -199,4 +199,4 @@ adminSend.post("/", async (c) => {
   }
 });
 
-export { adminSend };
+export { mailSend };

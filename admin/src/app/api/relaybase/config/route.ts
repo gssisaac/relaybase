@@ -71,6 +71,7 @@ export async function PUT(request: Request) {
   try {
     const body = (await request.json()) as {
       workerUrl?: string;
+      workerScriptName?: string;
       cloudflareAccountId?: string;
       cloudflareApiToken?: string;
       cloudflareZoneId?: string;
@@ -91,6 +92,9 @@ export async function PUT(request: Request) {
 
     await mergeEmailSenderSettings({
       ...(env.sources.workerUrl ? {} : { workerUrl }),
+      ...(env.sources.workerScriptName
+        ? {}
+        : { workerScriptName: body.workerScriptName }),
       ...(env.sources.cloudflareAccountId
         ? {}
         : { cloudflareAccountId: body.cloudflareAccountId }),
@@ -124,6 +128,7 @@ export async function PUT(request: Request) {
       adminToken: serviceToken,
       cloudflareAccountId: resolved.cloudflareAccountId,
       cloudflareApiToken: resolved.cloudflareApiToken,
+      workerScriptName: resolved.workerScriptName,
       bootstrapToken: resolved.cloudflareApiToken,
     });
 

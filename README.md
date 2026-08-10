@@ -189,7 +189,7 @@ Bindings in `server/wrangler.toml`:
 |----------|------|-------------|
 | `CF_ACCOUNT_ID` | secret | Cloudflare account ID |
 | `CF_API_TOKEN` | secret | Token with Email Sending edit |
-| `ADMIN_TOKEN` | secret | Bearer token for `/admin/*` routes |
+| `ADMIN_TOKEN` | secret | Bearer token for `/console/*` and `/mail/*` routes |
 | `WORKER_SCRIPT_NAME` | var | Worker name for routing helpers |
 | `INBOUND_BUCKET_NAME` | var | R2 bucket name label |
 
@@ -208,7 +208,7 @@ Bindings in `server/wrangler.toml`:
 
 | Variable | Description |
 |----------|-------------|
-| `RELAYBASE_API_KEY` | Domain-scoped key from `/admin/keys` |
+| `RELAYBASE_API_KEY` | Domain-scoped key from `/console/keys` |
 | `RELAYBASE_URL` | Worker base URL (no trailing slash) |
 
 ---
@@ -258,25 +258,26 @@ Auth: cookie `relaybase_user` after id-only sign-in/register (`/api/auth`). Dev 
 curl "$RELAYBASE_URL/health"
 ```
 
-### Admin routes
+### Console & mail routes
 
-Require `Authorization: Bearer $ADMIN_TOKEN`.
+Require `Authorization: Bearer $ADMIN_TOKEN`. Management routes live under `/console/*` and mail operations under `/mail/*`. Operator-only endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/logs`) have been removed from the worker and moved into the admin Next.js server.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/admin/keys` | Issue API key (`domain`, `label`) |
-| `GET` | `/admin/keys` | List keys (prefix only, not full secret) |
-| `GET` | `/admin/logs` | Send logs (`?limit`, `?status`, `?domain`) |
-| `GET` | `/admin/inbox` | List inbound (`?domain`, `?limit`) |
-| `GET` | `/admin/inbox/:id` | Full inbound message |
-| `POST` | `/admin/inbox/routing` | Route addresses to Worker |
-| `GET` | `/admin/inbox/notifications` | Pending inbound events |
-| `POST` | `/admin/inbox/notifications/ack` | Ack events |
+| `POST` | `/console/keys` | Issue API key (`domain`, `label`) |
+| `GET` | `/console/keys` | List keys (prefix only, not full secret) |
+| `GET` | `/console/ops-logs` | Ops event log (`?limit`, `?status`, `?domain`) |
+| `GET` | `/console/connect` | Desktop self-install probe (admin-token proof) |
+| `GET` | `/mail/inbox` | List inbound (`?domain`, `?limit`) |
+| `GET` | `/mail/inbox/:id` | Full inbound message |
+| `POST` | `/mail/inbox/routing` | Route addresses to Worker |
+| `GET` | `/mail/inbox/notifications` | Pending inbound events |
+| `POST` | `/mail/inbox/notifications/ack` | Ack events |
 
 Issue a key:
 
 ```bash
-curl -X POST "$RELAYBASE_URL/admin/keys" \
+curl -X POST "$RELAYBASE_URL/console/keys" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"domain":"yourdomain.com","label":"billing-service"}'

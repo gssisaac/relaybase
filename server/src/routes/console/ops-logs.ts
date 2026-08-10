@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
-import { listSendLogs } from "../lib/send-logs";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
+import { listOpsLogs } from "../../lib/ops-logs";
 
-const adminLogs = new Hono<{ Bindings: Env }>();
+const consoleOpsLogs = new Hono<{ Bindings: Env }>();
 
-adminLogs.get("/", async (c) => {
+consoleOpsLogs.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -17,13 +17,13 @@ adminLogs.get("/", async (c) => {
     return c.json({ error: "status must be all, failed, or success" }, 400);
   }
 
-  const result = await listSendLogs(c.env.RELAYBASE_APP, {
+  const result = await listOpsLogs(c.env.RELAYBASE_LOGS, {
     limit: Number.isFinite(limit) ? limit : 100,
     status: status as "all" | "failed" | "success",
     domain,
   });
 
-  return c.json(result);
+  return c.json({ ...result, workerConnected: true });
 });
 
-export { adminLogs };
+export { consoleOpsLogs };

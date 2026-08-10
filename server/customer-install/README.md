@@ -49,7 +49,7 @@ Wrangler prints a URL like `https://relaybase-api.<your-subdomain>.workers.dev`.
 2. Paste the Worker URL and the same `ADMIN_TOKEN`
 3. Tap **Verify & continue**
 
-The app calls `GET /admin/connect` on your Worker with that token. No Cloudflare Account API token is sent to Relaybase.
+The app calls `GET /console/connect` on your Worker with that token. No Cloudflare Account API token is sent to Relaybase.
 
 ## Troubleshooting
 

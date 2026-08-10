@@ -21,23 +21,19 @@ export default {
     if (url.pathname === "/health") {
       return Response.json({ ok: true, stub: true, inbound: { r2Configured: !!env.INBOUND } });
     }
-    if (url.pathname === "/admin/bootstrap" && request.method === "PUT") {
-      const body = await request.json();
-      await env.RELAYBASE_APP.put("srv:config:cloudflare", JSON.stringify({
-        accountId: body.accountId,
-        apiToken: body.apiToken,
-      }));
-      await env.RELAYBASE_APP.put("srv:config:admin", JSON.stringify({ token: body.adminToken }));
-      return Response.json({ configured: true, accountId: body.accountId, stub: true });
-    }
-    if (url.pathname === "/admin/cloudflare" && request.method === "GET") {
+    if (url.pathname === "/console/connect" && request.method === "GET") {
       const auth = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       const raw = await env.RELAYBASE_APP.get("srv:config:admin");
       const expected = raw ? (JSON.parse(raw).token || "") : (env.ADMIN_TOKEN || "");
       if (!auth || auth !== expected) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
       }
-      return Response.json({ configured: true, stub: true });
+      return Response.json({
+        ok: true,
+        product: "relaybase",
+        workerScriptName: env.WORKER_SCRIPT_NAME || "relaybase-api",
+        inbound: { r2Configured: !!env.INBOUND, bucketName: env.INBOUND_BUCKET_NAME || "relaybase-inbound" },
+      });
     }
     return Response.json({ error: "Relaybase Worker stub — replace with full server build via Update Worker", stub: true }, { status: 501 });
   },
@@ -200,15 +196,10 @@ async fn relink_admin(
     put_worker_secret(client, script_name, "ADMIN_TOKEN", &admin_token).await?;
     put_worker_secret(client, script_name, "CF_ACCOUNT_ID", account_id).await?;
     put_worker_secret(client, script_name, "CF_API_TOKEN", api_token).await?;
-    // Bootstrap accepts CF_API_TOKEN as bearer (see requireBootstrapAuth).
-    bootstrap_worker(
-        worker_url,
-        api_token,
-        account_id,
-        api_token,
-        &admin_token,
-    )
-    .await?;
+    // Bootstrap now writes the worker's KV directly via the Cloudflare API
+    // (the worker no longer exposes /admin/bootstrap or /admin/cloudflare).
+    bootstrap_worker(client, script_name, account_id, api_token, &admin_token)
+        .await?;
     Ok((admin_token, true))
 }
 
@@ -304,14 +295,7 @@ pub async fn install_worker(
 
     let worker_url = enable_workers_dev(&client, &script_name).await?;
 
-    bootstrap_worker(
-        &worker_url,
-        &admin_token,
-        account_id,
-        api_token,
-        &admin_token,
-    )
-    .await?;
+    bootstrap_worker(&client, &script_name, account_id, api_token, &admin_token).await?;
 
     let result = InstallResult {
         worker_url: worker_url.clone(),

@@ -2,6 +2,7 @@ import { resolveInboundR2BucketName } from "@/relaybase-email/lib/r2-inbound";
 
 export type RelaybaseSettingField =
   | "workerUrl"
+  | "workerScriptName"
   | "cloudflareAccountId"
   | "cloudflareApiToken"
   | "cloudflareZoneId"
@@ -12,6 +13,7 @@ export type RelaybaseEnvSources = Record<RelaybaseSettingField, boolean>;
 
 export type RelaybaseEnvSettings = {
   workerUrl: string;
+  workerScriptName: string;
   cloudflareAccountId: string;
   cloudflareApiToken: string;
   cloudflareZoneId: string;
@@ -40,6 +42,11 @@ export function readRelaybaseEnvSettings(): RelaybaseEnvSettings {
   const workerUrl = firstNonEmpty(
     trimUrl(process.env.RELAYBASE_URL),
     trimUrl(process.env.FLARE_EMAIL_SENDER_URL),
+  );
+  const workerScriptName = firstNonEmpty(
+    process.env.RELAYBASE_WORKER_SCRIPT_NAME,
+    process.env.WORKER_SCRIPT_NAME,
+    process.env.CF_WORKER_SCRIPT_NAME,
   );
   const cloudflareAccountId = firstNonEmpty(
     process.env.RELAYBASE_CF_ACCOUNT_ID,
@@ -71,6 +78,7 @@ export function readRelaybaseEnvSettings(): RelaybaseEnvSettings {
 
   const sources: RelaybaseEnvSources = {
     workerUrl: Boolean(workerUrl),
+    workerScriptName: Boolean(workerScriptName),
     cloudflareAccountId: Boolean(cloudflareAccountId),
     cloudflareApiToken: Boolean(cloudflareApiToken),
     cloudflareZoneId: Boolean(cloudflareZoneId),
@@ -80,6 +88,7 @@ export function readRelaybaseEnvSettings(): RelaybaseEnvSettings {
 
   return {
     workerUrl,
+    workerScriptName,
     cloudflareAccountId,
     cloudflareApiToken,
     cloudflareZoneId,

@@ -83,6 +83,14 @@ const FIELD_DEFS = [
     placeholder: "https://api.relaybase.xyz",
   },
   {
+    key: "workerScriptName" as const,
+    id: "relaybase-worker-script-name",
+    label: "Worker script name",
+    placeholder: "relaybase-api",
+    description:
+      "Cloudflare Worker script name to target for KV sync. Defaults to relaybase-api.",
+  },
+  {
     key: "cloudflareAccountId" as const,
     id: "relaybase-cf-account",
     label: "Cloudflare account ID",
@@ -134,6 +142,7 @@ export function EmailSenderSettingsView() {
   const [message, setMessage] = useState<string | null>(null);
   const [inputs, setInputs] = useState({
     workerUrl: "",
+    workerScriptName: "",
     cloudflareAccountId: "",
     cloudflareApiToken: "",
     cloudflareZoneId: "",
@@ -161,6 +170,7 @@ export function EmailSenderSettingsView() {
     if (!config) return;
     setInputs({
       workerUrl: config.workerUrl ?? "",
+      workerScriptName: config.workerScriptName ?? "",
       cloudflareAccountId: config.cloudflareAccountId ?? "",
       cloudflareZoneId: config.cloudflareZoneId ?? "",
       inboundR2BucketName: config.inboundR2BucketName ?? "",

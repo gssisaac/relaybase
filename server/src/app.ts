@@ -1,22 +1,19 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
 import { desktopCors } from "./lib/cors";
-import { adminAudienceGroups } from "./routes/admin-audience-groups";
-import { adminBootstrap } from "./routes/admin-bootstrap";
-import { adminBroadcasts } from "./routes/admin-broadcasts";
-import { adminCloudflare } from "./routes/admin-cloudflare";
-import { adminConnect } from "./routes/admin-connect";
-import { adminInbox } from "./routes/admin-inbox";
-import { adminKeys } from "./routes/admin-keys";
-import { adminLogs } from "./routes/admin-logs";
+import { consoleAudienceGroups } from "./routes/console/audience-groups";
+import { consoleBroadcasts } from "./routes/console/broadcasts";
+import { consoleConnect } from "./routes/console/connect";
 import {
-  adminAddresses,
-  adminDomains,
-  adminMailbox,
-} from "./routes/admin-mailbox";
-import { adminOpsLogs } from "./routes/admin-ops-logs";
-import { adminSend } from "./routes/admin-send";
-import { adminStats } from "./routes/admin-stats";
+  consoleAddresses,
+  consoleDomains,
+  consoleMailbox,
+} from "./routes/console/mailbox";
+import { consoleKeys } from "./routes/console/keys";
+import { consoleOpsLogs } from "./routes/console/ops-logs";
+import { consoleStats } from "./routes/console/stats";
+import { mailInbox } from "./routes/mail/inbox";
+import { mailSend } from "./routes/mail/send";
 import { send } from "./routes/send";
 import { v1Inbox } from "./routes/v1-inbox";
 import { v1Webhooks } from "./routes/v1-webhooks";
@@ -35,7 +32,7 @@ async function checkInboundR2(bucket: R2Bucket): Promise<boolean> {
   }
 }
 
-// Packaged Tauri webview fetches Worker admin routes cross-origin.
+// Packaged Tauri webview fetches Worker console/mail routes cross-origin.
 app.use("*", desktopCors);
 
 app.get("/health", async (c) => {
@@ -49,20 +46,21 @@ app.get("/health", async (c) => {
   });
 });
 
-app.route("/admin/keys", adminKeys);
-app.route("/admin/logs", adminLogs);
-app.route("/admin/ops-logs", adminOpsLogs);
-app.route("/admin/cloudflare", adminCloudflare);
-app.route("/admin/connect", adminConnect);
-app.route("/admin/bootstrap", adminBootstrap);
-app.route("/admin/inbox", adminInbox);
-app.route("/admin/mailbox", adminMailbox);
-app.route("/admin/domains", adminDomains);
-app.route("/admin/addresses", adminAddresses);
-app.route("/admin/send", adminSend);
-app.route("/admin/audience-groups", adminAudienceGroups);
-app.route("/admin/broadcasts", adminBroadcasts);
-app.route("/admin/stats", adminStats);
+// End-user management (admin-token auth).
+app.route("/console/keys", consoleKeys);
+app.route("/console/ops-logs", consoleOpsLogs);
+app.route("/console/connect", consoleConnect);
+app.route("/console/mailbox", consoleMailbox);
+app.route("/console/domains", consoleDomains);
+app.route("/console/addresses", consoleAddresses);
+app.route("/console/audience-groups", consoleAudienceGroups);
+app.route("/console/broadcasts", consoleBroadcasts);
+app.route("/console/stats", consoleStats);
+
+// End-user mail operations (admin-token auth).
+app.route("/mail/inbox", mailInbox);
+app.route("/mail/send", mailSend);
+
 app.route("/v1/inbox", v1Inbox);
 app.route("/v1/webhooks", v1Webhooks);
 app.route("/v1/send", send);

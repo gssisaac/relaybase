@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
 import {
   createBroadcastDraft,
   getBroadcastDetail,
@@ -8,11 +8,11 @@ import {
   readBroadcasts,
   sendBroadcast,
   updateBroadcastDraft,
-} from "../lib/catalog-broadcasts";
+} from "../../lib/catalog-broadcasts";
 
-const adminBroadcasts = new Hono<{ Bindings: Env }>();
+const consoleBroadcasts = new Hono<{ Bindings: Env }>();
 
-adminBroadcasts.get("/", async (c) => {
+consoleBroadcasts.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const broadcasts = await readBroadcasts(c.env.RELAYBASE_APP);
@@ -23,7 +23,7 @@ adminBroadcasts.get("/", async (c) => {
   return c.json({ broadcasts: filtered });
 });
 
-adminBroadcasts.post("/", async (c) => {
+consoleBroadcasts.post("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: {
@@ -53,7 +53,7 @@ adminBroadcasts.post("/", async (c) => {
   }
 });
 
-adminBroadcasts.get("/:broadcastId", async (c) => {
+consoleBroadcasts.get("/:broadcastId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const detail = await getBroadcastDetail(
@@ -64,7 +64,7 @@ adminBroadcasts.get("/:broadcastId", async (c) => {
   return c.json(detail);
 });
 
-adminBroadcasts.patch("/:broadcastId", async (c) => {
+consoleBroadcasts.patch("/:broadcastId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: {
@@ -91,7 +91,7 @@ adminBroadcasts.patch("/:broadcastId", async (c) => {
   }
 });
 
-adminBroadcasts.post("/:broadcastId/send", async (c) => {
+consoleBroadcasts.post("/:broadcastId/send", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: { from?: string } = {};
@@ -113,7 +113,7 @@ adminBroadcasts.post("/:broadcastId/send", async (c) => {
   }
 });
 
-adminBroadcasts.get("/:broadcastId/progress", async (c) => {
+consoleBroadcasts.get("/:broadcastId/progress", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const broadcasts = await readBroadcasts(c.env.RELAYBASE_APP);
@@ -124,4 +124,4 @@ adminBroadcasts.get("/:broadcastId/progress", async (c) => {
   return c.json(getBroadcastProgress(broadcast));
 });
 
-export { adminBroadcasts };
+export { consoleBroadcasts };

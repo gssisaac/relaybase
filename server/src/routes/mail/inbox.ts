@@ -1,34 +1,34 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
-import { createCloudflareClient } from "../lib/cloudflare-config";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
+import { createCloudflareClient } from "../../lib/cloudflare-config";
 import {
   ensureInboundRouting,
   removeInboundWorkerRouting,
   type InboundRoutingResult,
   type RemoveInboundRoutingResult,
-} from "../lib/inbound-routing";
+} from "../../lib/inbound-routing";
 import {
   getInboundAttachment,
   getInboundEmail,
   listInboundEmails,
   setInboundReadState,
-} from "../lib/inbound-store";
+} from "../../lib/inbound-store";
 import {
   ackPendingEvents,
   listPendingEvents,
-} from "../lib/inbound-events";
+} from "../../lib/inbound-events";
 import {
   serializeInboundListItem,
   serializeInboundMessage,
-} from "../lib/inbound-serialize";
-import { aggregateInboundCounts } from "../lib/inbound-counts";
-import { readMailbox } from "../lib/catalog-store";
+} from "../../lib/inbound-serialize";
+import { aggregateInboundCounts } from "../../lib/inbound-counts";
+import { readMailbox } from "../../lib/catalog-store";
 
-const adminInbox = new Hono<{ Bindings: Env }>();
+const mailInbox = new Hono<{ Bindings: Env }>();
 
 // Consumed by the desktop mail client (poll + ack) for live inbox updates.
-adminInbox.get("/notifications", async (c) => {
+mailInbox.get("/notifications", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -42,7 +42,7 @@ adminInbox.get("/notifications", async (c) => {
   return c.json({ events });
 });
 
-adminInbox.post("/notifications/ack", async (c) => {
+mailInbox.post("/notifications/ack", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -73,7 +73,7 @@ function serializeMessage(message: Awaited<ReturnType<typeof getInboundEmail>>) 
 
 // Per-address total/unread counts across every retained message for a
 // domain — powers the dashboard Accounts list.
-adminInbox.get("/counts", async (c) => {
+mailInbox.get("/counts", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -90,7 +90,7 @@ adminInbox.get("/counts", async (c) => {
 });
 
 // Bulk mark-read/unread (desktop client + Cmd+K mail commands).
-adminInbox.post("/read", async (c) => {
+mailInbox.post("/read", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -118,7 +118,7 @@ adminInbox.post("/read", async (c) => {
   return c.json(result);
 });
 
-adminInbox.get("/", async (c) => {
+mailInbox.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -138,7 +138,7 @@ adminInbox.get("/", async (c) => {
   });
 });
 
-adminInbox.get("/:id/attachments/:attachmentId", async (c) => {
+mailInbox.get("/:id/attachments/:attachmentId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -166,7 +166,7 @@ adminInbox.get("/:id/attachments/:attachmentId", async (c) => {
   });
 });
 
-adminInbox.post("/routing", async (c) => {
+mailInbox.post("/routing", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -212,7 +212,7 @@ adminInbox.post("/routing", async (c) => {
   }
 });
 
-adminInbox.delete("/routing", async (c) => {
+mailInbox.delete("/routing", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -249,7 +249,7 @@ adminInbox.delete("/routing", async (c) => {
   }
 });
 
-adminInbox.get("/:id", async (c) => {
+mailInbox.get("/:id", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -266,4 +266,4 @@ adminInbox.get("/:id", async (c) => {
   return c.json({ message: serializeMessage(message) });
 });
 
-export { adminInbox };
+export { mailInbox };

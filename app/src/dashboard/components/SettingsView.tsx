@@ -293,7 +293,7 @@ function DesktopSettingsBody() {
         ? {
             tone: "pending",
             label: "Checking connection…",
-            detail: "Probing GET /admin/connect on your Worker.",
+            detail: "Probing GET /console/connect on your Worker.",
           }
         : workerStatus?.ok
           ? {
@@ -614,7 +614,7 @@ function DesktopSettingsBody() {
           </div>
           <CardDescription>
             Binding check from{" "}
-            <span className="font-mono">GET /admin/connect</span>. Create the
+            <span className="font-mono">GET /console/connect</span>. Create the
             bucket in your account before deploy (
             <span className="font-mono">relaybase-inbound</span>).
           </CardDescription>

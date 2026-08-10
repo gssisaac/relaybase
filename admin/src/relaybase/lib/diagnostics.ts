@@ -159,7 +159,7 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
           : "Worker rejected the stored admin service token",
         detail: workerAuth
           ? undefined
-          : 'Click "Sync to worker" to bootstrap. Bootstrap auth must match the worker secret CF_API_TOKEN (`npx wrangler secret put CF_API_TOKEN` in server/) or ADMIN_TOKEN.',
+          : 'Click "Sync to worker" to write the admin token + Cloudflare runtime config into the worker KV. The Cloudflare API token in admin/.env.local must have Workers Scripts (read) and Workers KV Storage (edit) permissions, and the worker must have a KV namespace bound as RELAYBASE_APP.',
         logDetail: workerAuth ? undefined : `admin token prefix: ${adminToken.slice(0, 12)}…`,
       });
     }

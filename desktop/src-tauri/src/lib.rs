@@ -181,7 +181,7 @@ fn normalize_worker_url(raw: &str) -> Result<String, String> {
     Ok(with_scheme.trim_end_matches('/').to_string())
 }
 
-/// Verify user-deployed Worker via GET /admin/connect (admin Bearer).
+/// Verify user-deployed Worker via GET /console/connect (admin Bearer).
 #[tauri::command]
 async fn verify_worker_connection(
     worker_url: String,
@@ -193,7 +193,7 @@ async fn verify_worker_connection(
         return Err("Admin token is required (same value as wrangler secret ADMIN_TOKEN)".into());
     }
 
-    let url = format!("{base}/admin/connect");
+    let url = format!("{base}/console/connect");
     let http = reqwest::Client::new();
     let res = http
         .get(&url)

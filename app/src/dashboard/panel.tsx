@@ -48,6 +48,7 @@ import { BroadcastsView } from "@/dashboard/components/BroadcastsView";
 import { useBroadcast } from "@/lib/dashboard/BroadcastContext";
 import { DomainsView } from "@/dashboard/components/DomainsView";
 import { EmailSettingsKeysView } from "@/dashboard/components/EmailSettingsKeysView";
+import { LogsView } from "@/dashboard/components/LogsView";
 import { SettingsView } from "@/dashboard/components/SettingsView";
 import { UserDashboardView } from "@/dashboard/components/UserDashboardView";
 
@@ -352,6 +353,8 @@ export function DashboardPanelView({ subPath }: PanelViewProps) {
       return <DomainsView />;
     case "keys":
       return <EmailSettingsKeysView />;
+    case "logs":
+      return <LogsView />;
     default:
       return null;
   }

@@ -30,3 +30,9 @@ binding = "RELAYBASE_WAITLIST"
 database_name = "relaybase-waitlist"
 database_id = "ce28acf3-9eaa-42f9-b89d-9daa6afb00d4"
 migrations_dir = "migrations"
+
+[[d1_databases]]
+binding = "RELAYBASE_LOGS"
+database_name = "relaybase-logs"
+database_id = "ceea55c5-04cd-4501-846e-0ea62971f8e9"
+migrations_dir = "migrations-logs"

@@ -2,7 +2,8 @@
  * Broadcast drafts + send progress (Worker KV).
  * Key: srv:catalog:broadcasts
  *
- * Send history for each message is recorded in srv:sendlog:* via recordSendLog.
+ *   Send history for each message is recorded in srv:sendlog:* via recordSendLog
+  and also in D1 RELAYBASE_LOGS via recordOpsLog.
  */
 
 import type { Env } from "../env";
@@ -19,6 +20,7 @@ import type {
 } from "./catalog-types";
 import { createCloudflareClient } from "./cloudflare-config";
 import { readMailbox } from "./catalog-store";
+import { recordOpsLog } from "./ops-logs";
 import { recordSendLog } from "./send-logs";
 
 const BROADCASTS_KV_KEY = "srv:catalog:broadcasts";
@@ -377,6 +379,17 @@ export async function sendBroadcast(
           subject,
           messageId: result.messageId,
         });
+        await recordOpsLog(env.RELAYBASE_LOGS, {
+          kind: "send",
+          ok: true,
+          status: 200,
+          source: "broadcast",
+          domain,
+          fromAddr: from,
+          toAddr: recipient.email,
+          subject,
+          messageId: result.messageId,
+        });
         successCount++;
       } catch (error) {
         const message =
@@ -390,6 +403,17 @@ export async function sendBroadcast(
           keyLabel: "broadcast",
           from,
           to: recipient.email,
+          subject,
+          error: message,
+        });
+        await recordOpsLog(env.RELAYBASE_LOGS, {
+          kind: "send",
+          ok: false,
+          status: 502,
+          source: "broadcast",
+          domain,
+          fromAddr: from,
+          toAddr: recipient.email,
           subject,
           error: message,
         });

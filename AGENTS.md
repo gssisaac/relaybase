@@ -13,6 +13,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Tab / focus navigation, `data-allow-tab-focus`, or `DisableAppTabFocus` | [docs/tab-focus-policy.md](docs/tab-focus-policy.md) |
 | Audience groups, data-source sync/cron, Progress tab, or Broadcasts (draft → send) | [docs/audience-and-broadcasts.md](docs/audience-and-broadcasts.md) |
 | Inbound Worker storage, conversation threading, account filters, Sent-in-Inbox, `(me)` labels, or compose send → Sent | [docs/inbox-threading-and-multi-account.md](docs/inbox-threading-and-multi-account.md) |
+| Send/bounce logging, Dashboard Log page, D1 `RELAYBASE_LOGS`, or `ops_log` schema | [docs/ops-log-d1.md](docs/ops-log-d1.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
 
 ## Storage (summary)
@@ -22,6 +23,7 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 | Layer | Store | Use for |
 |-------|--------|---------|
 | Remote | Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 inbound | Domains, addresses, audience, broadcasts, key hashes, send logs, inbox |
+| Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). KV `srv:sendlog:*` stays authoritative for send history. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
 | Local | `~/.relaybase` | Credentials, API key plaintext, mail/UI/dashboard cache |
 
 Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, or a second mail-Worker KV binding. All UI modes call the Worker through `desktopAwareFetch` + `email-api-map.ts`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**.

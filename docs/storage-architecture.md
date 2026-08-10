@@ -7,6 +7,7 @@
 | Layer | Where | Role |
 |-------|--------|------|
 | **Remote** | Cloudflare Worker `RELAYBASE_APP` KV (+ R2 inbound) | Domains, addresses, audience, broadcasts, API key hashes, send logs, licenses, webhooks |
+| **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. KV `srv:sendlog:*` remains authoritative for send history. |
 | **Local** | `~/.relaybase` | Credentials, API key plaintext vault, mail/UI cache, dashboard cache |
 
 Marketing waitlist stays on D1 `RELAYBASE_WAITLIST` (website only) — **out of scope** for this doc.
@@ -30,12 +31,14 @@ flowchart TB
   subgraph worker [api.relaybase.xyz]
     KV["KV RELAYBASE_APP\nsrv:* keys"]
     R2["R2 relaybase-inbound"]
+    D1["D1 RELAYBASE_LOGS\nops events"]
   end
   UI --> Fetch
   Fetch -->|"admin Bearer"| worker
   UI --> Home
   worker --> KV
   worker --> R2
+  worker --> D1
 ```
 
 All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** path: map `/api/email/*` → Worker `/admin/*` via [`app/src/lib/desktop/email-api-map.ts`](../app/src/lib/desktop/email-api-map.ts) and [`desktopAwareFetch`](../app/src/lib/desktop/api-base.ts). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
@@ -61,7 +64,8 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 | `srv:catalog:broadcasts` | `lib/catalog-broadcasts.ts` | Drafts + send progress/history |
 | `srv:key:{sha256}` / `srv:id:{uuid}` | `lib/keys.ts` | API key records (**hash only**, no plaintext) |
 | `srv:license:key:{hash}` / `srv:license:id:{uuid}` | `lib/licenses.ts` | License records |
-| `srv:sendlog:_index` / `srv:sendlog:{uuid}` | `lib/send-logs.ts` | Send history (authoritative “sent”) |
+| `srv:sendlog:_index` / `srv:sendlog:{uuid}` | `lib/send-logs.ts` | Send history (authoritative “sent”)
+| `RELAYBASE_LOGS`.`ops_log` | `lib/ops-logs.ts` | Ops-event log: compose/API/broadcast sends + inbound bounces (dashboard Log page) | |
 | `srv:event:pending:{domain}:{id}` | `lib/inbound-events.ts` | Inbox notification queue |
 | `srv:webhook:*` | `lib/webhooks.ts` | Webhook regs / secrets / fail markers |
 

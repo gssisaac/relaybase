@@ -1,3 +1,8 @@
+import {
+  buildBouncePreview,
+  isBounceMessage,
+  parseBounceDiagnostic,
+} from "./bounce-detect";
 import { decodeMimeHeader, parseInboundMime } from "./mime-parse";
 import { buildStrippedInboundMime } from "./mime";
 
@@ -240,6 +245,18 @@ export async function storeInboundEmail(
     decodeMimeHeader(params.subject) ||
     "(no subject)";
 
+  const isBounce = isBounceMessage(params.raw, params.fromEmail);
+  const bounceDiagnostic = isBounce ? parseBounceDiagnostic(params.raw) : null;
+  const bouncePreview = bounceDiagnostic
+    ? buildBouncePreview(bounceDiagnostic)
+    : null;
+
+  const bodyText =
+    parsed.bodyText || (isBounce ? bouncePreview ?? "(empty message)" : "");
+  const bodyPreview = previewText(
+    bodyText || params.subject || (isBounce ? "Bounce notification" : ""),
+  );
+
   const toEmails = parsed.toEmails.length
     ? parsed.toEmails
     : [params.toEmail];
@@ -256,8 +273,8 @@ export async function storeInboundEmail(
     inReplyTo: params.inReplyTo ?? null,
     references: params.references ?? null,
     size: params.size,
-    bodyPreview: previewText(parsed.bodyText || params.subject),
-    bodyText: parsed.bodyText,
+    bodyPreview,
+    bodyText,
     bodyHtml: parsed.bodyHtml,
     attachments: attachmentMeta,
     // New mail always starts unread; legacy rows (no key at all) are

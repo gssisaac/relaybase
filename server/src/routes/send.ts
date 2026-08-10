@@ -3,6 +3,7 @@ import type { Env } from "../env";
 import { requireApiKey } from "../lib/auth";
 import { emailMatchesDomain } from "../lib/crypto";
 import { createCloudflareClient } from "../lib/cloudflare-config";
+import { recordOpsLog } from "../lib/ops-logs";
 import { recordSendLog } from "../lib/send-logs";
 import {
   findInvalidRecipients,
@@ -46,13 +47,16 @@ async function logAndRespond(
     subject?: string | null;
     messageId?: string;
     error?: string;
+    metaJson?: string;
+    opsOk?: boolean;
   },
 ): Promise<Response> {
+  const fields = keyFields(params.record ?? null);
   try {
     await recordSendLog(c.env.RELAYBASE_APP, {
       ok: params.ok,
       status: params.status,
-      ...keyFields(params.record ?? null),
+      ...fields,
       from: params.from ?? null,
       to: params.to ?? null,
       subject: params.subject ?? null,
@@ -61,6 +65,25 @@ async function logAndRespond(
     });
   } catch (error) {
     console.error("Failed to record send log", error);
+  }
+  try {
+    await recordOpsLog(c.env.RELAYBASE_LOGS, {
+      kind: "send",
+      ok: params.opsOk ?? params.ok,
+      status: params.status,
+      source: "api",
+      domain: fields.domain,
+      fromAddr: params.from ?? null,
+      toAddr: params.to ?? null,
+      subject: params.subject ?? null,
+      messageId: params.messageId ?? null,
+      error: params.error ?? null,
+      keyId: fields.keyId,
+      keyPrefix: fields.keyPrefix,
+      metaJson: params.metaJson ?? null,
+    });
+  } catch (error) {
+    console.error("Failed to record ops log", error);
   }
   return c.json(params.body, params.status);
 }
@@ -83,6 +106,17 @@ send.post("/", async (c) => {
       });
     } catch (error) {
       console.error("Failed to record send log", error);
+    }
+    try {
+      await recordOpsLog(c.env.RELAYBASE_LOGS, {
+        kind: "api_error",
+        ok: false,
+        status: 401,
+        source: "api",
+        error: "Invalid or missing API key",
+      });
+    } catch (error) {
+      console.error("Failed to record ops log", error);
     }
     return auth;
   }
@@ -166,10 +200,17 @@ send.post("/", async (c) => {
     });
     // CF returns per-recipient disposition. Fail closed when nobody was
     // delivered/queued — especially all-permanent-bounce "success" responses.
+    const hadBounces = result.permanentBounces.length > 0;
+    const meta = JSON.stringify({
+      delivered: result.delivered,
+      queued: result.queued,
+      ...(hadBounces ? { permanentBounces: result.permanentBounces } : {}),
+    });
+
     if (
       result.delivered.length === 0 &&
       result.queued.length === 0 &&
-      result.permanentBounces.length > 0
+      hadBounces
     ) {
       const error = `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`;
       return logAndRespond(c, {
@@ -182,10 +223,12 @@ send.post("/", async (c) => {
         subject,
         messageId: result.messageId,
         error,
+        metaJson: meta,
       });
     }
     return logAndRespond(c, {
       ok: true,
+      opsOk: !hadBounces,
       status: 200,
       body: { messageId: result.messageId },
       record,
@@ -193,6 +236,10 @@ send.post("/", async (c) => {
       to: to.join(", "),
       subject,
       messageId: result.messageId,
+      error: hadBounces
+        ? `Some recipients permanently bounced: ${result.permanentBounces.join(", ")}`
+        : undefined,
+      metaJson: meta,
     });
   } catch (error) {
     const message =

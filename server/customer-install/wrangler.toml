@@ -17,3 +17,10 @@ id = "REPLACE_WITH_relaybase-app_ID"
 [[r2_buckets]]
 binding = "INBOUND"
 bucket_name = "relaybase-inbound"
+
+# Optional — hosted-only product ops logs. Omit if you don't need dashboard Logs.
+# [[d1_databases]]
+# binding = "RELAYBASE_LOGS"
+# database_name = "relaybase-logs"
+# database_id = "REPLACE_WITH_relaybase-logs_ID"
+# migrations_dir = "migrations-logs"

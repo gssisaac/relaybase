@@ -3,6 +3,8 @@ export type Env = {
   INBOUND: R2Bucket;
   /** Hosted Relaybase account only — omitted from customer install ZIP. */
   RELAYBASE_WAITLIST?: D1Database;
+  /** Hosted Relaybase account only — product ops/send logs. */
+  RELAYBASE_LOGS?: D1Database;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   ADMIN_TOKEN?: string;

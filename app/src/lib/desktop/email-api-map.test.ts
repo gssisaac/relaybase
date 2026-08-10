@@ -47,6 +47,11 @@ describe("mapEmailApiToWorker", () => {
       mapEmailApiToWorker("/api/email/account-stats?email=a@b.com"),
       "/admin/stats/account-stats?email=a@b.com",
     );
+    assert.equal(mapEmailApiToWorker("/api/email/logs"), "/admin/ops-logs");
+    assert.equal(
+      mapEmailApiToWorker("/api/email/logs?domain=a.com"),
+      "/admin/ops-logs?domain=a.com",
+    );
   });
 
   it("handles sent and onboard specials", () => {

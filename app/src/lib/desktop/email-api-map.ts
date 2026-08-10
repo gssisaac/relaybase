@@ -70,6 +70,9 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/account-logs" || rest.startsWith("/account-logs")) {
     return `/admin/stats/account-logs${search}`;
   }
+  if (rest === "/logs" || rest.startsWith("/logs")) {
+    return `/admin/ops-logs${search}`;
+  }
 
   return null;
 }

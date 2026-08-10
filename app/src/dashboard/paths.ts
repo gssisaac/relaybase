@@ -7,6 +7,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Megaphone,
+  ScrollText,
   Settings,
   Users,
 } from "lucide-react";
@@ -23,6 +24,7 @@ export function useDashboardPaths() {
   const dashboard = useProductHref("dashboard");
   const domains = useProductHref("domains");
   const keys = useProductHref("keys");
+  const logs = useProductHref("logs");
   const accounts = useProductHref("accounts");
   const broadcasts = useProductHref("broadcasts");
   const audience = useProductHref("audience");
@@ -35,6 +37,7 @@ export function useDashboardPaths() {
     { href: audience, label: "Audience", icon: Users },
     { href: broadcasts, label: "Broadcasts", icon: Megaphone },
     { href: keys, label: "API Keys", icon: KeyRound },
+    { href: logs, label: "Log", icon: ScrollText },
     { href: settingsBase, label: "Settings", icon: Settings },
   ];
 
@@ -44,6 +47,7 @@ export function useDashboardPaths() {
     dashboard,
     domains,
     keys,
+    logs,
     accounts,
     broadcasts,
     audience,

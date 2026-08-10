@@ -1,0 +1,26 @@
+# Flutter / Dart build artifacts
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+pubspec.lock
+
+# Generated native projects (created by scripts/setup.sh via `flutter create`).
+ios/
+android/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# macOS
+.DS_Store
+
+# Coverage
+coverage/

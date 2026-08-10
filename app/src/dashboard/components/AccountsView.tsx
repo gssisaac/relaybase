@@ -6,24 +6,32 @@ import {
 } from "@/dashboard/accounts-ui-state";
 import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
-import { Globe, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Globe, MoreHorizontal, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
+import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
+  defaultInboundEnabledForLocalPart,
   suggestedDisplayNameForLocalPart,
   useDomain,
 } from "@/lib/dashboard/DomainContext";
+import {
+  desktopAwareFetch,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import {
   CloudflareConfigAlert,
   EmailAlerts,
 } from "@/email/components/EmailShared";
+import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import { EmailTableRow } from "@/email/components/EmailListShell";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import type { Address, EmailConfig } from "@/email/components/types";
@@ -45,9 +53,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FieldCheck } from "@/components/ui/field-check";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -116,6 +131,12 @@ type DomainFilter = "all" | string;
 
 type RemoveTarget = { domain: string; email: string };
 
+type RenameTarget = {
+  domain: string;
+  email: string;
+  displayName: string;
+};
+
 const COMPACT_EMAIL_PREVIEW_COUNT = 2;
 
 /** e.g. `a@x.com, b@x.com + 3 more` */
@@ -157,8 +178,16 @@ export function AccountsView() {
   );
   const [localPart, setLocalPart] = useState("");
   const [displayName, setDisplayName] = useState("");
+  /** Add-account dialog: accept inbound (off for noreply by default). */
+  const [addInboundEnabled, setAddInboundEnabled] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [renameDisplayName, setRenameDisplayName] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [inboundSavingEmail, setInboundSavingEmail] = useState<string | null>(
+    null,
+  );
   /** Domains with expanded cards. Default / missing = collapsed compact. */
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(
     () => new Set(),
@@ -299,6 +328,7 @@ export function AccountsView() {
     setDialogDomain(domain);
     setLocalPart("");
     setDisplayName("");
+    setAddInboundEnabled(true);
     setAddOpen(true);
   }
 
@@ -318,9 +348,11 @@ export function AccountsView() {
         localPart,
         displayName:
           displayName.trim() || suggestedDisplayNameForLocalPart(localPart),
+        inboundEnabled: addInboundEnabled,
       });
       setLocalPart("");
       setDisplayName("");
+      setAddInboundEnabled(true);
       setAddOpen(false);
     } catch {
       // error already on store
@@ -365,6 +397,81 @@ export function AccountsView() {
       setRemoveTarget(null);
     } catch {
       // error already on store
+    }
+  }
+
+  function openRenameDialog(address: Address, domain: string) {
+    setRenameTarget({
+      domain,
+      email: address.email,
+      displayName: address.displayName ?? "",
+    });
+    setRenameDisplayName(address.displayName ?? "");
+  }
+
+  async function saveRename() {
+    if (!renameTarget) return;
+    setRenameSaving(true);
+    accountsStore.clearError();
+    try {
+      const res = await desktopAwareFetch(`${apiBase}/addresses`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: renameTarget.email,
+          displayName: renameDisplayName,
+        }),
+      });
+      const data = await readResponseJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Failed to save display name");
+      toast.success("Display name saved");
+      clearEmailCache(productId, `addresses:${renameTarget.domain}`);
+      clearEmailCache(productId, "addresses:all");
+      notifyAddressesChanged({
+        domain: renameTarget.domain,
+        emails: [renameTarget.email],
+      });
+      await accountsStore.refresh(renameTarget.domain, true);
+      setRenameTarget(null);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Failed to save display name",
+      );
+    } finally {
+      setRenameSaving(false);
+    }
+  }
+
+  async function setInboundEnabledForAddress(
+    address: Address,
+    domain: string,
+    inboundEnabled: boolean,
+  ) {
+    const email = address.email.toLowerCase();
+    setInboundSavingEmail(email);
+    try {
+      const res = await desktopAwareFetch(`${apiBase}/addresses`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, inboundEnabled }),
+      });
+      const data = await readResponseJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Failed to update inbound");
+      toast.success(
+        inboundEnabled
+          ? "Inbound mail enabled"
+          : "Inbound mail blocked (dropped)",
+      );
+      clearEmailCache(productId, `addresses:${domain}`);
+      clearEmailCache(productId, "addresses:all");
+      notifyAddressesChanged({ domain, emails: [email] });
+      await accountsStore.refresh(domain, true);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Failed to update inbound",
+      );
+    } finally {
+      setInboundSavingEmail(null);
     }
   }
 
@@ -486,12 +593,7 @@ export function AccountsView() {
 
                 return (
                   <Card key={entry.domain}>
-                    <CardHeader
-                      className={cn(
-                        "flex flex-row flex-wrap items-center justify-between gap-3 space-y-0",
-                        expanded ? "pb-4" : "py-3",
-                      )}
-                    >
+                    <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-4">
                       <button
                         type="button"
                         className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -566,30 +668,87 @@ export function AccountsView() {
                                         <span className="whitespace-nowrap text-xs text-muted-foreground">
                                           Inbound off
                                         </span>
-                                      ) : null}
-                                      <AddressCountsSummary
-                                        total={counts?.total ?? 0}
-                                        unread={counts?.unread ?? 0}
-                                        ready={countsReady}
-                                      />
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-xs"
-                                        className="text-muted-foreground hover:text-destructive"
-                                        disabled={saving}
-                                        aria-label={`Delete ${address.email}`}
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          setRemoveTarget({
-                                            domain: entry.domain,
-                                            email: address.email,
-                                          });
-                                        }}
-                                      >
-                                        <Trash2 className="size-3" />
-                                      </Button>
+                                      ) : (
+                                        <AddressCountsSummary
+                                          total={counts?.total ?? 0}
+                                          unread={counts?.unread ?? 0}
+                                          ready={countsReady}
+                                        />
+                                      )}
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger
+                                          render={
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon-xs"
+                                              className="text-muted-foreground"
+                                              disabled={saving}
+                                              aria-label={`More actions for ${address.email}`}
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                              }}
+                                            />
+                                          }
+                                        >
+                                          <MoreHorizontal className="size-3.5" />
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                          align="end"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <DropdownMenuItem
+                                            onClick={() =>
+                                              openRenameDialog(
+                                                address,
+                                                entry.domain,
+                                              )
+                                            }
+                                          >
+                                            Change display name
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            closeOnClick={false}
+                                            className="cursor-default focus:bg-transparent"
+                                            onClick={(e) => e.preventDefault()}
+                                          >
+                                            <div className="flex w-full items-center justify-between gap-3">
+                                              <span>Inbound off</span>
+                                              <Switch
+                                                size="sm"
+                                                checked={
+                                                  address.inboundEnabled ===
+                                                  false
+                                                }
+                                                disabled={
+                                                  inboundSavingEmail ===
+                                                  address.email.toLowerCase()
+                                                }
+                                                onCheckedChange={(off) =>
+                                                  void setInboundEnabledForAddress(
+                                                    address,
+                                                    entry.domain,
+                                                    !off,
+                                                  )
+                                                }
+                                              />
+                                            </div>
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            variant="destructive"
+                                            onClick={() =>
+                                              setRemoveTarget({
+                                                domain: entry.domain,
+                                                email: address.email,
+                                              })
+                                            }
+                                          >
+                                            <Trash2 className="size-3.5" />
+                                            Delete
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
                                     </>
                                   }
                                 />
@@ -651,6 +810,7 @@ export function AccountsView() {
             if (!open) {
               setLocalPart("");
               setDisplayName("");
+              setAddInboundEnabled(true);
             }
           }}
         >
@@ -675,6 +835,9 @@ export function AccountsView() {
                       const next = e.target.value;
                       setLocalPart(next);
                       setDisplayName(suggestedDisplayNameForLocalPart(next));
+                      setAddInboundEnabled(
+                        defaultInboundEnabledForLocalPart(next),
+                      );
                     }}
                     placeholder="support"
                   />
@@ -693,6 +856,26 @@ export function AccountsView() {
                 <p className="text-xs text-muted-foreground">
                   Shown as the From name when sending from this address.
                 </p>
+              </div>
+              <div className="flex items-start justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
+                <div className="min-w-0 space-y-1">
+                  <Label
+                    htmlFor="add-account-accept-inbound"
+                    className="text-sm font-medium"
+                  >
+                    Accept inbound mail
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {addInboundEnabled
+                      ? "Replies land in the Relaybase inbox."
+                      : "Replies are dropped at Cloudflare (Inbound off)."}
+                  </p>
+                </div>
+                <Switch
+                  id="add-account-accept-inbound"
+                  checked={addInboundEnabled}
+                  onCheckedChange={setAddInboundEnabled}
+                />
               </div>
               <Button
                 className="w-full"
@@ -770,6 +953,64 @@ export function AccountsView() {
                   ? "Adding…"
                   : `Add selected (${selectedDefaultParts.length})`}
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(renameTarget)}
+          onOpenChange={(open) => {
+            if (!open && !renameSaving) setRenameTarget(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md" showCloseButton={!renameSaving}>
+            <DialogHeader>
+              <DialogTitle>Change display name</DialogTitle>
+              <DialogDescription>
+                From name for{" "}
+                <span className="font-mono text-foreground">
+                  {renameTarget?.email}
+                </span>
+                .
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rename-display-name">Display name</Label>
+                <Input
+                  id="rename-display-name"
+                  value={renameDisplayName}
+                  onChange={(e) => setRenameDisplayName(e.target.value)}
+                  placeholder="Optional"
+                  disabled={renameSaving}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void saveRename();
+                    }
+                  }}
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={renameSaving}
+                  onClick={() => setRenameTarget(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={renameSaving}
+                  onClick={() => void saveRename()}
+                >
+                  {renameSaving ? "Saving…" : "Save"}
+                </Button>
+              </DialogFooter>
             </div>
           </DialogContent>
         </Dialog>

@@ -50,7 +50,7 @@ export function ApiActivityChart({
           </span>
         </div>
       </div>
-      <div className="overflow-x-auto pb-1">
+      <div className="overflow-x-auto pb-4">
         <div
           className="flex items-end"
           style={{
@@ -74,10 +74,10 @@ export function ApiActivityChart({
             return (
               <div
                 key={`${point.label}-${index}`}
-                className="group flex w-[10px] shrink-0 flex-col items-center gap-1"
+                className="group flex w-5 shrink-0 flex-col items-center gap-1"
                 title={`${point.label}: ${point.value} requests, ${errorValue} errors`}
               >
-                <div className="relative flex h-32 w-full flex-col items-center justify-end">
+                <div className="relative flex h-32 w-[10px] flex-col items-center justify-end">
                   <div
                     className="w-full rounded-t-sm bg-sky-500/90 transition-opacity group-hover:opacity-80"
                     style={{ height: requestH }}
@@ -89,13 +89,13 @@ export function ApiActivityChart({
                     />
                   ) : null}
                 </div>
-                {showLabel ? (
-                  <span className="max-w-[28px] truncate text-[9px] text-muted-foreground">
-                    {point.label}
-                  </span>
-                ) : (
-                  <span className="h-3" aria-hidden />
-                )}
+                <div className="flex h-8 w-full items-end justify-start overflow-visible pl-0.5">
+                  {showLabel ? (
+                    <span className="inline-block origin-bottom-left -rotate-45 whitespace-nowrap text-[9px] leading-none text-muted-foreground">
+                      {point.label}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             );
           })}

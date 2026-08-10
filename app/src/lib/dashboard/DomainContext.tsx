@@ -33,6 +33,7 @@ export {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
   DomainStore,
+  defaultInboundEnabledForLocalPart,
   suggestedDisplayNameForLocalPart,
 } from "@/lib/dashboard/domain-store";
 

@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { FieldCheck } from "@/components/ui/field-check";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { useEmailPaths } from "@/email/paths";
@@ -155,25 +155,24 @@ export function AccountSettingsView({ email }: { email: string }) {
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-4">
-        <div>
-          <h3 className="text-sm font-medium">Inbound mail</h3>
-          <p className="text-xs text-muted-foreground">
-            When off, Cloudflare Email Routing drops messages to this address
-            without storing them.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <Label htmlFor="account-accept-inbound" className="text-sm font-medium">
+              Accept inbound mail
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {inboundEnabled
+                ? "Messages are delivered to the Relaybase inbox."
+                : "Replies are dropped at Cloudflare (no bounce)."}
+            </p>
+          </div>
+          <Switch
+            id="account-accept-inbound"
+            checked={inboundEnabled}
+            disabled={savingInbound || !address}
+            onCheckedChange={(on) => void saveInboundEnabled(on)}
+          />
         </div>
-        <FieldCheck
-          id="account-accept-inbound"
-          checked={inboundEnabled}
-          disabled={savingInbound || !address}
-          onCheckedChange={(on) => void saveInboundEnabled(on)}
-          label="Accept inbound mail"
-          description={
-            inboundEnabled
-              ? "Messages are delivered to the Relaybase inbox."
-              : "Replies are dropped at Cloudflare (no bounce)."
-          }
-        />
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import {
 export {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
+  defaultInboundEnabledForLocalPart,
   suggestedDisplayNameForLocalPart,
 } from "@/lib/dashboard/default-addresses";
 

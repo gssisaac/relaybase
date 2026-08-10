@@ -15,6 +15,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 
 import { AdminTokenPanel } from "@/dashboard/components/AdminTokenPanel";
+import { WorkerDeployPanel } from "@/dashboard/components/WorkerDeployPanel";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -495,6 +496,14 @@ function DesktopSettingsBody() {
         }}
       >
         <HealthStatus {...workerHealth} />
+        <WorkerDeployPanel
+          workerUrl={credentials?.workerUrl ?? ""}
+          adminToken={credentials?.adminToken ?? ""}
+          onDeployed={async () => {
+            await refreshCredentials();
+            await refreshConnectionStatus();
+          }}
+        />
         {workerEditing ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3">

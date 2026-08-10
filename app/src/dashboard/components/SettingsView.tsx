@@ -15,6 +15,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 
 import { AdminTokenPanel } from "@/dashboard/components/AdminTokenPanel";
+import { MobileAccessCard } from "@/dashboard/components/MobileAccessCard";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -661,6 +662,8 @@ function DesktopSettingsBody() {
           ) : null}
         </CardContent>
       </Card>
+
+      {hasWorker ? <MobileAccessCard /> : null}
       </div>
     </div>
   );

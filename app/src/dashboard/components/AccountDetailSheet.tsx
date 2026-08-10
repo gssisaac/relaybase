@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ScrollText,
   Settings,
+  Smartphone,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 import type { AccountDetailTab } from "@/dashboard/paths";
 import { AccountLogsView } from "@/dashboard/components/AccountLogsView";
+import { AccountOtherDeviceView } from "@/dashboard/components/AccountOtherDeviceView";
 import { AccountOverviewView } from "@/dashboard/components/AccountOverviewView";
 import { AccountSettingsView } from "@/dashboard/components/AccountSettingsView";
 import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
@@ -35,6 +37,7 @@ const NAV: {
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "logs", label: "Logs", icon: ScrollText },
   { id: "settings", label: "Settings", icon: Settings },
+  { id: "other-device", label: "Other device", icon: Smartphone },
 ];
 
 type AccountDetailSheetProps = {
@@ -54,6 +57,7 @@ function AccountDetailBody({
 }): ReactNode {
   if (tab === "logs") return <AccountLogsView email={email} />;
   if (tab === "settings") return <AccountSettingsView email={email} />;
+  if (tab === "other-device") return <AccountOtherDeviceView email={email} />;
   return <AccountOverviewView email={email} />;
 }
 

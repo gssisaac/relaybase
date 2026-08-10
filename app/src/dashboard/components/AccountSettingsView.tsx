@@ -33,10 +33,11 @@ export function AccountSettingsView({ email }: { email: string }) {
     .addressesFor(domainKey)
     .find((entry) => entry.email.toLowerCase() === emailKey);
 
-  const inboundEnabled = address?.inboundEnabled !== false;
-  const inboundPending = accountsStore.isInboundPending(emailKey);
+  const savedDisplayName = address?.displayName ?? "";
+  const savedInboundEnabled = address?.inboundEnabled !== false;
 
   const [displayName, setDisplayName] = useState("");
+  const [inboundEnabled, setInboundEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,10 +46,17 @@ export function AccountSettingsView({ email }: { email: string }) {
   }, [accountsStore, domainKey]);
 
   useEffect(() => {
-    setDisplayName(address?.displayName ?? "");
-  }, [address?.displayName, address?.email]);
+    setDisplayName(savedDisplayName);
+    setInboundEnabled(savedInboundEnabled);
+  }, [savedDisplayName, savedInboundEnabled, address?.email]);
 
-  async function saveDisplayName() {
+  const dirty =
+    Boolean(address) &&
+    (displayName !== savedDisplayName ||
+      inboundEnabled !== savedInboundEnabled);
+
+  async function saveSettings() {
+    if (!address || !dirty) return;
     setSaving(true);
     setError(null);
     try {
@@ -58,11 +66,12 @@ export function AccountSettingsView({ email }: { email: string }) {
         body: JSON.stringify({
           email: emailKey,
           displayName,
+          inboundEnabled,
         }),
       });
       const data = await readResponseJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
-      toast.success("Display name saved");
+      toast.success("Settings saved");
       clearEmailCache(productId, `addresses:${domainKey}`);
       clearEmailCache(productId, "addresses:all");
       notifyAddressesChanged({ domain: domainKey, emails: [emailKey] });
@@ -111,39 +120,41 @@ export function AccountSettingsView({ email }: { email: string }) {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Optional"
-            disabled={!address}
+            disabled={!address || saving}
           />
         </div>
+
+        <div className="border-t border-border pt-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <Label
+                htmlFor="account-accept-inbound"
+                className="text-sm font-medium"
+              >
+                Accept inbound mail
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {inboundEnabled
+                  ? "Messages are delivered to the Relaybase inbox."
+                  : "Replies are dropped at Cloudflare (no bounce)."}
+              </p>
+            </div>
+            <Switch
+              id="account-accept-inbound"
+              checked={inboundEnabled}
+              disabled={saving || !address}
+              onCheckedChange={setInboundEnabled}
+            />
+          </div>
+        </div>
+
         <Button
           size="sm"
-          onClick={() => void saveDisplayName()}
-          disabled={saving || !address}
+          onClick={() => void saveSettings()}
+          disabled={saving || !address || !dirty}
         >
           {saving ? "Saving…" : "Save"}
         </Button>
-      </div>
-
-      <div className="border-t border-border pt-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 space-y-1">
-            <Label htmlFor="account-accept-inbound" className="text-sm font-medium">
-              Accept inbound mail
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              {inboundEnabled
-                ? "Messages are delivered to the Relaybase inbox."
-                : "Replies are dropped at Cloudflare (no bounce)."}
-            </p>
-          </div>
-          <Switch
-            id="account-accept-inbound"
-            checked={inboundEnabled}
-            disabled={inboundPending || !address}
-            onCheckedChange={(on) =>
-              void accountsStore.setInboundEnabled(domainKey, emailKey, on)
-            }
-          />
-        </div>
       </div>
     </div>
   );

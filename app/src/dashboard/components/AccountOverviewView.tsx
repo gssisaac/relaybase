@@ -69,7 +69,7 @@ export function AccountOverviewView({ email }: { email: string }) {
       setError(null);
 
       const cached = await loadAccountStatsCache<AccountStats>(email, nextRange);
-      if (cached) {
+      if (cached?.data?.totals && cached.data.series) {
         setStats(cached.data);
         setLoading(false);
       } else {
@@ -78,7 +78,8 @@ export function AccountOverviewView({ email }: { email: string }) {
 
       const needsNetwork =
         force === true ||
-        !cached ||
+        !cached?.data?.totals ||
+        !cached.data.series ||
         dashboardCacheNeedsRefresh(cached.fetchedAt);
 
       if (!needsNetwork) return;
@@ -97,6 +98,9 @@ export function AccountOverviewView({ email }: { email: string }) {
           res,
         );
         if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
+        if (!data.totals || !data.series) {
+          throw new Error("Stats response missing totals/series");
+        }
         setStats(data);
         await saveAccountStatsCache(email, nextRange, data);
       } catch (e) {
@@ -117,32 +121,32 @@ export function AccountOverviewView({ email }: { email: string }) {
     {
       label: "Received",
       description: "Inbound mail to this address",
-      value: stats?.totals.received ?? 0,
-      series: stats?.series.received,
+      value: stats?.totals?.received ?? 0,
+      series: stats?.series?.received,
       color: "#38bdf8",
       href: nav.inbox,
     },
     {
       label: "Sent",
       description: "Messages sent from the dashboard",
-      value: stats?.totals.sent ?? 0,
-      series: stats?.series.sent,
+      value: stats?.totals?.sent ?? 0,
+      series: stats?.series?.sent,
       color: "#22c55e",
       href: nav.sent,
     },
     {
       label: "API emails",
       description: "Successful API sends from this address",
-      value: stats?.totals.apiEmails ?? 0,
-      series: stats?.series.apiEmails,
+      value: stats?.totals?.apiEmails ?? 0,
+      series: stats?.series?.apiEmails,
       color: "#34d399",
       href: nav.sent,
     },
     {
       label: "API errors",
       description: "Failed API sends from this address",
-      value: stats?.totals.apiErrors ?? 0,
-      series: stats?.series.apiErrors,
+      value: stats?.totals?.apiErrors ?? 0,
+      series: stats?.series?.apiErrors,
       color: "#ef4444",
       href: nav.compose,
     },
@@ -218,7 +222,7 @@ export function AccountOverviewView({ email }: { email: string }) {
         ))}
       </div>
 
-      {stats ? (
+      {stats?.totals ? (
         <p className="text-xs text-muted-foreground">
           API requests in range:{" "}
           <span className="tabular-nums text-foreground">

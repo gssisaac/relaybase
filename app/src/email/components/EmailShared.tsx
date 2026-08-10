@@ -8,7 +8,6 @@ import { useEffect, useMemo, useState } from "react";
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
 
 import type { InboundAttachment } from "@/email/components/types";
-import { useEmailPaths } from "@/email/paths";
 import {
   desktopAwareFetch,
   isWorkerBacked,
@@ -399,14 +398,12 @@ export function RelaybaseConfigAlert({ show }: { show: boolean }) {
 }
 
 export function NoDomainsAlert({ show }: { show: boolean }) {
-  const { base } = useEmailPaths();
-
   if (!show) return null;
   return (
     <Alert>
       <AlertTitle>No domains yet</AlertTitle>
       <AlertDescription>
-        <Link href={`${base}/domains`} className="font-medium underline">
+        <Link href="/domains" className="font-medium underline">
           Add a domain
         </Link>{" "}
         to start using accounts, email, broadcasts, and audience.

@@ -18,7 +18,7 @@ import {
   isPackagedApiUnavailableError,
   readResponseJson,
 } from "@/lib/desktop/api-base";
-import { useEmailPaths } from "@/email/paths";
+import { useDashboardPaths } from "@/dashboard/paths";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,25 +70,25 @@ const KPI_CARDS = [
     key: "domains" as const,
     label: "Domains",
     description: "Connected domains",
-    href: "domains",
+    path: "domains" as const,
   },
   {
     key: "addresses" as const,
     label: "Accounts",
     description: "Registered addresses",
-    href: "accounts",
+    path: "accounts" as const,
   },
   {
     key: "broadcasts" as const,
     label: "Broadcasts",
     description: "Campaigns across domains",
-    href: "broadcasts",
+    path: "broadcasts" as const,
   },
   {
     key: "audience" as const,
     label: "Audience",
     description: "Contacts for broadcasts",
-    href: "audience",
+    path: "audience" as const,
   },
 ];
 
@@ -96,28 +96,28 @@ const API_METRIC_CARDS = [
   {
     key: "requests" as const,
     label: "API requests",
-    href: "keys",
+    path: "keys" as const,
   },
   {
     key: "apiEmails" as const,
     label: "API emails",
-    href: "keys",
+    path: "keys" as const,
   },
   {
     key: "errors" as const,
     label: "Errors",
-    href: "keys",
+    path: "keys" as const,
   },
   {
     key: "apiKeys" as const,
     label: "API keys",
-    href: "keys",
+    path: "keys" as const,
   },
 ];
 
 export function UserDashboardView() {
   const { domains } = useDomain();
-  const { base } = useEmailPaths();
+  const paths = useDashboardPaths();
   const [range, setRange] = useState<StatsRange>("7d");
   const [stats, setStats] = useState<UserStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,7 +128,7 @@ export function UserDashboardView() {
     setError(null);
 
     const cached = await loadDashboardStatsCache<UserStatsResponse>(nextRange);
-    if (cached) {
+    if (cached?.data?.totals && cached.data.series) {
       setStats(cached.data);
       setLoading(false);
     } else {
@@ -138,7 +138,8 @@ export function UserDashboardView() {
 
     const needsNetwork =
       force === true ||
-      !cached ||
+      !cached?.data?.totals ||
+      !cached.data.series ||
       dashboardCacheNeedsRefresh(cached.fetchedAt);
 
     if (!needsNetwork) return;
@@ -155,6 +156,9 @@ export function UserDashboardView() {
         res,
       );
       if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
+      if (!data.totals || !data.series) {
+        throw new Error("Stats response missing totals/series");
+      }
       setStats(data);
       await saveDashboardStatsCache(nextRange, data);
     } catch (e) {
@@ -216,7 +220,7 @@ export function UserDashboardView() {
                 <Button
                   size="sm"
                   nativeButton={false}
-                  render={<Link href={`${base}/domains`} />}
+                  render={<Link href={paths.domains} />}
                 >
                   Refresh from Cloudflare
                 </Button>
@@ -226,13 +230,14 @@ export function UserDashboardView() {
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {KPI_CARDS.map((card) => {
-              const value = stats?.totals[card.key] ?? 0;
+              const value = stats?.totals?.[card.key] ?? 0;
+              const href = paths[card.path];
               return (
                 <Card
                   key={card.key}
                   className="transition-colors hover:bg-accent/30"
                 >
-                  <Link href={`${base}/${card.href}`} className="block">
+                  <Link href={href} className="block">
                     <CardHeader className="pb-2">
                       <CardDescription>{card.label}</CardDescription>
                       <CardTitle className="text-4xl font-semibold tracking-tight tabular-nums">
@@ -243,7 +248,7 @@ export function UserDashboardView() {
                       <p className="text-xs text-muted-foreground">
                         {card.description}
                       </p>
-                      {card.key === "broadcasts" && stats ? (
+                      {card.key === "broadcasts" && stats?.totals ? (
                         <Badge variant="secondary">
                           {stats.totals.drafts} drafts
                         </Badge>
@@ -285,13 +290,14 @@ export function UserDashboardView() {
 
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
               {API_METRIC_CARDS.map((card) => {
-                const value = stats?.totals[card.key] ?? 0;
+                const value = stats?.totals?.[card.key] ?? 0;
+                const href = paths[card.path];
                 return (
                   <Card
                     key={card.key}
                     className="transition-colors hover:bg-accent/30"
                   >
-                    <Link href={`${base}/${card.href}`} className="block">
+                    <Link href={href} className="block">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm">{card.label}</CardTitle>
                       </CardHeader>
@@ -306,7 +312,7 @@ export function UserDashboardView() {
                         >
                           {loading && !stats ? "—" : value.toLocaleString()}
                         </p>
-                        {card.key === "apiKeys" && stats ? (
+                        {card.key === "apiKeys" && stats?.totals ? (
                           <p className="mt-1 text-xs text-muted-foreground">
                             {stats.totals.apiKeysUsed} used in range
                           </p>
@@ -327,8 +333,8 @@ export function UserDashboardView() {
               </CardHeader>
               <CardContent>
                 <ApiActivityChart
-                  requests={stats?.series.requests ?? []}
-                  errors={stats?.series.errors ?? []}
+                  requests={stats?.series?.requests ?? []}
+                  errors={stats?.series?.errors ?? []}
                   range={range}
                 />
               </CardContent>

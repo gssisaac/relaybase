@@ -91,6 +91,8 @@ export type Address = {
   displayName?: string;
   /** When false, inbound is dropped at Cloudflare. Omit/true = receive. */
   inboundEnabled?: boolean;
+  /** When false, the mobile app cannot see or send from this address. Omit/true = allowed. */
+  mobileEnabled?: boolean;
 };
 
 export type RoutingActivityEvent = {

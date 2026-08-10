@@ -18,6 +18,10 @@ function isAllowedOrigin(origin: string): boolean {
   if (origin.startsWith("tauri://") || origin.startsWith("asset://")) {
     return true;
   }
+  if (origin.startsWith("capacitor://") || origin.startsWith("http://")) {
+    // Capacitor (iOS) and local web debug for the Flutter app.
+    return true;
+  }
   try {
     const u = new URL(origin);
     if (u.hostname === "tauri.localhost" || u.hostname.endsWith(".tauri.localhost")) {

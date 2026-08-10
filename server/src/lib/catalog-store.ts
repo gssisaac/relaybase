@@ -11,14 +11,21 @@ export type MailboxAddress = {
    * Omit / true = receive via Worker. Missing on read ⇒ treat as true.
    */
   inboundEnabled?: boolean;
+  /**
+   * When false, the mobile app cannot see or send from this address.
+   * Omit / true = mobile access allowed. Missing on read ⇒ treat as true
+   * (so existing installs keep working until the desktop opts an account out).
+   */
+  mobileEnabled?: boolean;
 };
 
-/** Persist only `false`; omit means receive-on. */
+/** Persist only `false`; omit means receive-on / mobile-on. */
 export function normalizeMailboxAddress(input: {
   email: string;
   domain: string;
   displayName?: string;
   inboundEnabled?: boolean;
+  mobileEnabled?: boolean;
 }): MailboxAddress {
   const displayName =
     typeof input.displayName === "string" ? input.displayName.trim() : "";
@@ -27,6 +34,7 @@ export function normalizeMailboxAddress(input: {
     domain: normalizeDomain(input.domain),
     ...(displayName ? { displayName } : {}),
     ...(input.inboundEnabled === false ? { inboundEnabled: false } : {}),
+    ...(input.mobileEnabled === false ? { mobileEnabled: false } : {}),
   };
 }
 
@@ -100,6 +108,12 @@ export async function readMailbox(kv: KVNamespace): Promise<MailboxData> {
                 a.inboundEnabled === false
                   ? false
                   : a.inboundEnabled === true
+                    ? true
+                    : undefined,
+              mobileEnabled:
+                a.mobileEnabled === false
+                  ? false
+                  : a.mobileEnabled === true
                     ? true
                     : undefined,
             }),
@@ -181,6 +195,7 @@ export async function upsertAddresses(
     email: string;
     displayName?: string;
     inboundEnabled?: boolean;
+    mobileEnabled?: boolean;
   }>,
 ): Promise<{ data: MailboxData; added: MailboxAddress[] }> {
   const domain = normalizeDomain(domainInput);
@@ -203,11 +218,16 @@ export async function upsertAddresses(
       typeof entry.inboundEnabled === "boolean"
         ? entry.inboundEnabled
         : prev?.inboundEnabled !== false;
+    const mobileEnabled =
+      typeof entry.mobileEnabled === "boolean"
+        ? entry.mobileEnabled
+        : prev?.mobileEnabled !== false;
     const next = normalizeMailboxAddress({
       email,
       domain,
       displayName: displayName || undefined,
       inboundEnabled,
+      mobileEnabled,
     });
     if (idx >= 0) {
       data.addresses[idx] = next;
@@ -230,4 +250,18 @@ export async function removeAddress(
   data.addresses = data.addresses.filter((a) => a.email !== email);
   await writeMailbox(kv, data);
   return { data, removed };
+}
+
+/** Addresses the mobile app is allowed to see (mobileEnabled !== false). */
+export function mobileEnabledAddresses(data: MailboxData): MailboxAddress[] {
+  return data.addresses.filter((a) => a.mobileEnabled !== false);
+}
+
+/** Unique domains that have at least one mobile-enabled address. */
+export function mobileEnabledDomains(data: MailboxData): string[] {
+  const set = new Set<string>();
+  for (const address of mobileEnabledAddresses(data)) {
+    set.add(address.domain);
+  }
+  return [...set].sort();
 }

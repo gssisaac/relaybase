@@ -29,6 +29,9 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/config" || rest.startsWith("/config/")) {
     return `/console/mailbox/config${search}`;
   }
+  if (rest === "/mobile-password" || rest.startsWith("/mobile-password/")) {
+    return `/console/addresses/mobile-password${rest.slice("/mobile-password".length)}${search}`;
+  }
   if (rest === "/domains" || rest.startsWith("/domains")) {
     // Onboarding is just POST /console/domains — no separate onboard pipeline.
     if (rest.startsWith("/domains/onboard")) {

@@ -61,4 +61,15 @@ describe("mapEmailApiToWorker", () => {
       "/console/domains",
     );
   });
+
+  it("maps mobile-password", () => {
+    assert.equal(
+      mapEmailApiToWorker("/api/email/mobile-password"),
+      "/console/addresses/mobile-password",
+    );
+    assert.equal(
+      mapEmailApiToWorker("/api/email/mobile-password?email=a@b.com"),
+      "/console/addresses/mobile-password?email=a@b.com",
+    );
+  });
 });

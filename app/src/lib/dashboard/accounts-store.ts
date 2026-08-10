@@ -34,6 +34,16 @@ function withInboundEnabled(address: Address, inboundEnabled: boolean): Address 
   };
 }
 
+function withMobileEnabled(address: Address, mobileEnabled: boolean): Address {
+  return {
+    email: address.email,
+    ...(address.domain ? { domain: address.domain } : {}),
+    ...(address.displayName ? { displayName: address.displayName } : {}),
+    ...(address.inboundEnabled === false ? { inboundEnabled: false } : {}),
+    ...(mobileEnabled ? {} : { mobileEnabled: false }),
+  };
+}
+
 function resolveCreateLocalParts(input: CreateAddressesInput): string[] {
   const parts =
     Array.isArray(input.localParts) && input.localParts.length
@@ -123,6 +133,8 @@ export class AccountsStore {
   message: string | null = null;
   /** Emails with an in-flight inbound PATCH (optimistic UI already applied). */
   inboundPendingEmails: string[] = [];
+  /** Emails with an in-flight mobile-enabled PATCH (optimistic UI already applied). */
+  mobilePendingEmails: string[] = [];
   /** Emails optimistically inserted while create() is in flight. */
   creatingEmails: string[] = [];
 
@@ -135,6 +147,10 @@ export class AccountsStore {
 
   isInboundPending(email: string): boolean {
     return this.inboundPendingEmails.includes(email.trim().toLowerCase());
+  }
+
+  isMobilePending(email: string): boolean {
+    return this.mobilePendingEmails.includes(email.trim().toLowerCase());
   }
 
   isCreating(email: string): boolean {
@@ -570,6 +586,107 @@ export class AccountsStore {
     } finally {
       runInAction(() => {
         this.inboundPendingEmails = this.inboundPendingEmails.filter(
+          (item) => item !== emailKey,
+        );
+      });
+    }
+  }
+
+  /**
+   * Optimistically flip mobileEnabled in the list, PATCH in the background,
+   * toast when the Worker update finishes (or revert + toast on failure).
+   */
+  async setMobileEnabled(
+    domain: string,
+    email: string,
+    mobileEnabled: boolean,
+  ): Promise<void> {
+    const key = domain.trim().toLowerCase();
+    const emailKey = email.trim().toLowerCase();
+    if (!key || !emailKey) throw new Error("Domain and email are required");
+
+    const prevList = this.addressesByDomain[key] ?? [];
+    const index = prevList.findIndex(
+      (a) => a.email.toLowerCase() === emailKey,
+    );
+    if (index < 0) throw new Error("Address not found");
+
+    const previous = prevList[index]!;
+    const previousEnabled = previous.mobileEnabled !== false;
+    if (previousEnabled === mobileEnabled) return;
+
+    const optimistic = withMobileEnabled(previous, mobileEnabled);
+    const optimisticList = [...prevList];
+    optimisticList[index] = optimistic;
+
+    runInAction(() => {
+      this.addressesByDomain[key] = optimisticList;
+      if (!this.mobilePendingEmails.includes(emailKey)) {
+        this.mobilePendingEmails = [...this.mobilePendingEmails, emailKey];
+      }
+    });
+    void this.persistCache(key, optimisticList);
+
+    try {
+      const res = await desktopAwareFetch(`${this.apiBase}/addresses`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailKey, mobileEnabled }),
+      });
+      const data = await readResponseJson<{
+        address?: Address;
+        error?: string;
+      }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Failed to update mobile access");
+
+      const confirmed = data.address
+        ? withMobileEnabled(
+            data.address,
+            data.address.mobileEnabled !== false,
+          )
+        : optimistic;
+
+      let nextList: Address[] = [];
+      runInAction(() => {
+        const list = this.addressesByDomain[key] ?? [];
+        const i = list.findIndex((a) => a.email.toLowerCase() === emailKey);
+        if (i >= 0) {
+          nextList = [...list];
+          nextList[i] = confirmed;
+          this.addressesByDomain[key] = nextList;
+        } else {
+          nextList = list;
+        }
+      });
+      await this.persistCache(key, nextList);
+      clearEmailCache(this.productId, `addresses:${key}`);
+      clearEmailCache(this.productId, "addresses:all");
+      notifyAddressesChanged({ domain: key, emails: [emailKey] });
+      toast.success(
+        mobileEnabled
+          ? "Mobile access enabled for this account"
+          : "Mobile access disabled for this account",
+      );
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Failed to update mobile access";
+      let reverted: Address[] = [];
+      runInAction(() => {
+        const list = this.addressesByDomain[key] ?? [];
+        const i = list.findIndex((a) => a.email.toLowerCase() === emailKey);
+        if (i >= 0) {
+          reverted = [...list];
+          reverted[i] = previous;
+          this.addressesByDomain[key] = reverted;
+        } else {
+          reverted = list;
+        }
+      });
+      void this.persistCache(key, reverted);
+      toast.error(message);
+    } finally {
+      runInAction(() => {
+        this.mobilePendingEmails = this.mobilePendingEmails.filter(
           (item) => item !== emailKey,
         );
       });

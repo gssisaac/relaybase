@@ -56,7 +56,7 @@ export function useDashboardPaths() {
   };
 }
 
-export type AccountDetailTab = "overview" | "logs" | "settings";
+export type AccountDetailTab = "overview" | "logs" | "settings" | "other-device";
 
 export type AudienceDetailTab =
   | "overview"
@@ -93,7 +93,9 @@ export function accountDetailFromSearch(searchParams: {
   if (!email.includes("@")) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
   const tab: AccountDetailTab =
-    raw === "logs" || raw === "settings" ? raw : "overview";
+    raw === "logs" || raw === "settings" || raw === "other-device"
+      ? raw
+      : "overview";
   return { email, tab };
 }
 

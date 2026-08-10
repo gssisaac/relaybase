@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 export type OpsLogKind = "send" | "bounce" | "api_error";
-export type OpsLogSource = "compose" | "api" | "broadcast" | "inbound";
+export type OpsLogSource = "compose" | "api" | "broadcast" | "inbound" | "mobile";
 
 export type OpsLogEntry = {
   id: string;

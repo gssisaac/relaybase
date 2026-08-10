@@ -4,7 +4,13 @@ import {
   hydrateAccountsUiState,
   setDomainExpanded,
 } from "@/dashboard/accounts-ui-state";
-import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
+import { AccountDetailSheet } from "@/dashboard/components/AccountDetailSheet";
+import {
+  accountDetailFromSearch,
+  accountDetailHref,
+  type AccountDetailTab,
+  useDashboardPaths,
+} from "@/dashboard/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
 import {
   Globe,
@@ -18,7 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -166,7 +172,10 @@ function compactEmailPreview(emails: string[], take = COMPACT_EMAIL_PREVIEW_COUN
 export function AccountsView() {
   const productId = useProductId();
   const router = useRouter();
-  const { apiBase, domains: domainsHref } = useDashboardPaths();
+  const { apiBase, accounts: accountsHref, domains: domainsHref } =
+    useDashboardPaths();
+  const searchParams = useSearchParams();
+  const accountDetail = accountDetailFromSearch(searchParams);
   const { domains, loading: domainsLoading } = useDomain();
   const accountsStore = useAccounts();
 
@@ -435,6 +444,19 @@ export function AccountsView() {
     setRenameDisplayName(address.displayName ?? "");
   }
 
+  function openAccountDetail(email: string, tab: AccountDetailTab = "overview") {
+    router.replace(accountDetailHref(email, tab));
+  }
+
+  function closeAccountDetail() {
+    router.replace(accountsHref);
+  }
+
+  function setAccountDetailTab(tab: AccountDetailTab) {
+    if (!accountDetail) return;
+    router.replace(accountDetailHref(accountDetail.email, tab));
+  }
+
   async function saveRename() {
     if (!renameTarget) return;
     setRenameSaving(true);
@@ -662,11 +684,7 @@ export function AccountsView() {
                                         creating
                                           ? undefined
                                           : () =>
-                                              router.push(
-                                                accountDetailHref(
-                                                  address.email,
-                                                ),
-                                              )
+                                              openAccountDetail(address.email)
                                       }
                                     >
                                       <TableCell className="w-[42%] max-w-0 px-4 py-3 font-medium">
@@ -1090,6 +1108,16 @@ export function AccountsView() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <AccountDetailSheet
+          email={accountDetail?.email ?? ""}
+          tab={accountDetail?.tab ?? "overview"}
+          open={Boolean(accountDetail)}
+          onOpenChange={(next) => {
+            if (!next) closeAccountDetail();
+          }}
+          onTabChange={setAccountDetailTab}
+        />
       </div>
       </div>
     </div>

@@ -99,7 +99,7 @@ export function AccountSettingsView({ email }: { email: string }) {
 
       <EmailAlerts error={error} message={null} />
 
-      <div className="space-y-4 rounded-lg border border-border p-4">
+      <div className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="account-email">Email</Label>
           <Input id="account-email" value={emailKey} disabled />
@@ -123,7 +123,7 @@ export function AccountSettingsView({ email }: { email: string }) {
         </Button>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-border p-4">
+      <div className="border-t border-border pt-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
             <Label htmlFor="account-accept-inbound" className="text-sm font-medium">

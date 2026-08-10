@@ -224,18 +224,17 @@ export function AccountLogsView({ email }: { email: string }) {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[140px]">When</TableHead>
-              <TableHead className="w-[90px]">Source</TableHead>
-              <TableHead className="w-[80px]">Status</TableHead>
-              <TableHead>Subject</TableHead>
-              <TableHead className="hidden sm:table-cell">Peer</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <Table>
+        <TableHeader>
+          <TableRow className="border-b hover:bg-transparent">
+            <TableHead className="w-[140px]">When</TableHead>
+            <TableHead className="w-[90px]">Source</TableHead>
+            <TableHead className="w-[80px]">Status</TableHead>
+            <TableHead>Subject</TableHead>
+            <TableHead className="hidden sm:table-cell">Peer</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="[&_tr]:border-0">
             {logs.map((log) => {
               const peer = log.direction === "sent" ? log.to : log.from;
               return (
@@ -296,7 +295,6 @@ export function AccountLogsView({ email }: { email: string }) {
             ) : null}
           </TableBody>
         </Table>
-      </div>
 
       {selected ? (
         <div className="space-y-2 rounded-lg border border-border p-4 text-sm">

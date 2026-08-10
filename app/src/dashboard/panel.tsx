@@ -5,13 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import type { PanelViewProps } from "@/lib/dashboard/shared/DashboardPageContent";
 import { useProductHref } from "@/lib/dashboard/shared/ProductContext";
-import {
-  AccountDetailShell,
-  type AccountDetailSection,
-} from "@/dashboard/components/AccountDetailShell";
-import { AccountLogsView } from "@/dashboard/components/AccountLogsView";
-import { AccountOverviewView } from "@/dashboard/components/AccountOverviewView";
-import { AccountSettingsView } from "@/dashboard/components/AccountSettingsView";
 import { AccountsView } from "@/dashboard/components/AccountsView";
 import {
   accountDetailFromSearch,
@@ -76,42 +69,11 @@ function KeysRedirect() {
   return null;
 }
 
-function AccountOverviewRedirect({ email }: { email: string }) {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace(accountDetailHref(email));
-  }, [email, router]);
-  return null;
-}
-
-function parseAccountSection(segment?: string): AccountDetailSection {
+function parseAccountSection(segment?: string): AccountDetailTab {
   if (segment === "logs" || segment === "settings" || segment === "overview") {
     return segment === "overview" ? "overview" : segment;
   }
   return "overview";
-}
-
-function AccountDetailRoutes({
-  email,
-  section,
-}: {
-  email: string;
-  section: AccountDetailSection;
-}) {
-  let page: ReactNode = null;
-  if (section === "overview") {
-    page = <AccountOverviewView email={email} />;
-  } else if (section === "logs") {
-    page = <AccountLogsView email={email} />;
-  } else {
-    page = <AccountSettingsView email={email} />;
-  }
-
-  return (
-    <AccountDetailShell email={email} section={section}>
-      {page}
-    </AccountDetailShell>
-  );
 }
 
 function AccountsRoutes({
@@ -126,8 +88,6 @@ function AccountsRoutes({
   const fromQuery = accountDetailFromSearch(searchParams);
   const pathSectionSegment = pathRest[0];
   const pathSection = parseAccountSection(pathSectionSegment);
-  const email = fromQuery?.email ?? pathEmail;
-  const section: AccountDetailTab = fromQuery?.tab ?? pathSection;
 
   // Migrate legacy `/accounts/{email}/…` → `/accounts?email=&tab=` (static-safe).
   useEffect(() => {
@@ -141,12 +101,11 @@ function AccountsRoutes({
       router.replace(accountDetailHref(pathEmail));
       return;
     }
-    router.replace(accountDetailHref(pathEmail, section));
-  }, [fromQuery, pathEmail, pathSectionSegment, router, section]);
+    router.replace(accountDetailHref(pathEmail, pathSection));
+  }, [fromQuery, pathEmail, pathSection, pathSectionSegment, router]);
 
-  if (!email) return <AccountsView />;
   if (pathEmail && !fromQuery) return null;
-  return <AccountDetailRoutes email={email} section={section} />;
+  return <AccountsView />;
 }
 
 function parseAudienceGroupSection(segment?: string): AudienceGroupSection {

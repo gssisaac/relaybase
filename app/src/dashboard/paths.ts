@@ -31,10 +31,10 @@ export function useDashboardPaths() {
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
     { href: domains, label: "Domains", icon: Globe },
-    { href: keys, label: "API Keys", icon: KeyRound },
     { href: accounts, label: "Accounts", icon: AtSign },
-    { href: broadcasts, label: "Broadcasts", icon: Megaphone },
     { href: audience, label: "Audience", icon: Users },
+    { href: broadcasts, label: "Broadcasts", icon: Megaphone },
+    { href: keys, label: "API Keys", icon: KeyRound },
     { href: settingsBase, label: "Settings", icon: Settings },
   ];
 
@@ -69,8 +69,8 @@ export type BroadcastDetailTab =
   | "progress";
 
 /**
- * Account detail URL for static-export-safe navigation.
- * Packaged builds only have `/accounts/`; selection uses `?email=` (+ optional `tab`).
+ * Account detail deep link for static-export-safe navigation.
+ * Opens the account sheet on `/accounts` via `?email=` (+ optional `tab`).
  */
 export function accountDetailHref(
   email: string,

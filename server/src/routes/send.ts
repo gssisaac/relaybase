@@ -198,30 +198,29 @@ send.post("/", async (c) => {
       inReplyTo: body.inReplyTo?.trim() || undefined,
       references: body.references?.trim() || undefined,
     });
-    // CF returns per-recipient disposition. Fail closed when nobody was
-    // delivered/queued — especially all-permanent-bounce "success" responses.
-    // Note: asynchronous bounces do not appear here; they arrive later as DSN
-    // inbound mail and are logged separately with kind="bounce".
+    // CF returns per-recipient disposition. Fail closed only when every
+    // recipient is in permanent_bounces. Empty delivered/queued without
+    // bounces is not a failure signal — CF can accept the message and
+    // deliver it asynchronously while leaving the disposition arrays empty.
+    // Asynchronous bounces arrive later as DSN inbound mail and are logged
+    // separately with kind="bounce".
     const hadBounces = result.permanentBounces.length > 0;
-    const noDisposition =
-      result.delivered.length === 0 && result.queued.length === 0;
     const meta = JSON.stringify({
       delivered: result.delivered,
       queued: result.queued,
       ...(hadBounces ? { permanentBounces: result.permanentBounces } : {}),
     });
 
-    if (noDisposition) {
-      const error = hadBounces
-        ? `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`
-        : "Cloudflare returned no delivered/queued recipients. The message may bounce asynchronously.";
+    if (
+      result.delivered.length === 0 &&
+      result.queued.length === 0 &&
+      hadBounces
+    ) {
+      const error = `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`;
       return logAndRespond(c, {
         ok: false,
-        opsOk: false,
-        status: hadBounces ? 502 : 200,
-        body: hadBounces
-          ? { error, messageId: result.messageId }
-          : { messageId: result.messageId },
+        status: 502,
+        body: { error, messageId: result.messageId },
         record,
         from,
         to: to.join(", "),

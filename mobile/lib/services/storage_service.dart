@@ -135,6 +135,19 @@ class StorageService {
 
   String? getPref(String key) => _prefs.get(key);
 
+  static const prefLastEmail = 'lastAccountEmail';
+  static const prefLastWorkerUrl = 'lastWorkerUrl';
+
+  Future<void> rememberLastUsed({String? email, String? workerUrl}) async {
+    if (email != null && email.isNotEmpty) await setPref(prefLastEmail, email);
+    if (workerUrl != null && workerUrl.isNotEmpty) {
+      await setPref(prefLastWorkerUrl, workerUrl);
+    }
+  }
+
+  String? get lastEmail => getPref(prefLastEmail);
+  String? get lastWorkerUrl => getPref(prefLastWorkerUrl);
+
   Future<void> clearAll() async {
     for (final box in _boxes.values) {
       await box.clear();

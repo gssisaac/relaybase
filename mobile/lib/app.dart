@@ -20,7 +20,7 @@ class RelaybaseApp extends ConsumerWidget {
       title: 'Relaybase',
       theme: AppTheme.cupertino(brightness),
       debugShowCheckedModeBanner: false,
-      home: auth.loading
+      home: !auth.bootstrapped
           ? const _Loading()
           : auth.isConfigured
               ? const MainScreen()

@@ -10,19 +10,30 @@ class AuthState {
   const AuthState({
     this.config,
     this.loading = true,
+    this.bootstrapped = false,
     this.error,
   });
 
   final AppConfig? config;
   final bool loading;
+  /// True once the initial secure-store read has finished. Distinguishes the
+  /// first-boot splash from a connect attempt (so the Connect screen stays
+  /// mounted and its inputs aren't cleared during a sign-in attempt).
+  final bool bootstrapped;
   final String? error;
 
   bool get isConfigured => config?.isConfigured ?? false;
 
-  AuthState copyWith({AppConfig? config, bool? loading, String? error}) =>
+  AuthState copyWith({
+    AppConfig? config,
+    bool? loading,
+    bool? bootstrapped,
+    String? error,
+  }) =>
       AuthState(
         config: config ?? this.config,
         loading: loading ?? this.loading,
+        bootstrapped: bootstrapped ?? this.bootstrapped,
         error: error ?? this.error,
       );
 }
@@ -45,9 +56,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
           mobilePassword: stored.password,
         ));
       }
-      state = state.copyWith(loading: false);
+      state = state.copyWith(loading: false, bootstrapped: true);
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(
+        loading: false,
+        bootstrapped: true,
+        error: e.toString(),
+      );
     }
   }
 

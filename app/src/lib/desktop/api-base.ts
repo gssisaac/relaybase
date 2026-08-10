@@ -187,13 +187,13 @@ export async function desktopAwareFetch(
     const method = (init?.method ?? "GET").toUpperCase();
     if (
       method === "POST" &&
-      workerPath.startsWith("/admin/inbox/notifications") &&
-      !workerPath.startsWith("/admin/inbox/notifications/ack")
+      workerPath.startsWith("/mail/inbox/notifications") &&
+      !workerPath.startsWith("/mail/inbox/notifications/ack")
     ) {
       const q = workerPath.includes("?")
         ? workerPath.slice(workerPath.indexOf("?"))
         : "";
-      workerPath = `/admin/inbox/notifications/ack${q}`;
+      workerPath = `/mail/inbox/notifications/ack${q}`;
     }
     // Domains onboard was a Next-only pipeline; treat as GET domains refresh.
     if (
@@ -201,7 +201,7 @@ export async function desktopAwareFetch(
       splitPathname(path).includes("/domains/onboard")
     ) {
       try {
-        const res = await workerFetch(creds, "/admin/domains");
+        const res = await workerFetch(creds, "/console/domains");
         const data = (await res.json().catch(() => ({}))) as {
           domains?: unknown[];
           error?: string;

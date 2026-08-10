@@ -292,7 +292,7 @@ export async function desktopVerifyWorkerConnection(
     return invoke("verify_worker_connection", { workerUrl, adminToken });
   }
   const base = workerUrl.replace(/\/$/, "");
-  const connect = await fetch(`${base}/admin/connect`, {
+  const connect = await fetch(`${base}/console/connect`, {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
   if (!connect.ok) {

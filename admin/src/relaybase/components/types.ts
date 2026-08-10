@@ -1,5 +1,6 @@
 export type EmailSenderConfigStatus = {
   workerUrl: string;
+  workerScriptName?: string;
   cloudflareConfigured: boolean;
   configured: boolean;
   workerLinked?: boolean;
@@ -23,6 +24,7 @@ export type EmailSenderConfigStatus = {
   };
   envSources?: {
     workerUrl: boolean;
+    workerScriptName?: boolean;
     cloudflareAccountId: boolean;
     cloudflareApiToken: boolean;
     cloudflareZoneId: boolean;

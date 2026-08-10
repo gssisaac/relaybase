@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
 import {
   addManualContact,
   createAudienceGroup,
@@ -14,19 +14,19 @@ import {
   removeContact,
   syncAudienceGroup,
   updateAudienceGroup,
-} from "../lib/catalog-audience";
-import type { AudienceDataSourcePatch } from "../lib/catalog-types";
+} from "../../lib/catalog-audience";
+import type { AudienceDataSourcePatch } from "../../lib/catalog-types";
 
-const adminAudienceGroups = new Hono<{ Bindings: Env }>();
+const consoleAudienceGroups = new Hono<{ Bindings: Env }>();
 
-adminAudienceGroups.get("/", async (c) => {
+consoleAudienceGroups.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
   return c.json({ groups: listGroupSummaries(catalog) });
 });
 
-adminAudienceGroups.post("/", async (c) => {
+consoleAudienceGroups.post("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: {
@@ -56,7 +56,7 @@ adminAudienceGroups.post("/", async (c) => {
   }
 });
 
-adminAudienceGroups.post("/test", async (c) => {
+consoleAudienceGroups.post("/test", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: AudienceDataSourcePatch & { groupId?: string };
@@ -85,7 +85,7 @@ adminAudienceGroups.post("/test", async (c) => {
   }
 });
 
-adminAudienceGroups.get("/:groupId", async (c) => {
+consoleAudienceGroups.get("/:groupId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
@@ -94,7 +94,7 @@ adminAudienceGroups.get("/:groupId", async (c) => {
   return c.json(detail);
 });
 
-adminAudienceGroups.patch("/:groupId", async (c) => {
+consoleAudienceGroups.patch("/:groupId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: Parameters<typeof updateAudienceGroup>[2];
@@ -116,7 +116,7 @@ adminAudienceGroups.patch("/:groupId", async (c) => {
   }
 });
 
-adminAudienceGroups.delete("/:groupId", async (c) => {
+consoleAudienceGroups.delete("/:groupId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   try {
@@ -128,7 +128,7 @@ adminAudienceGroups.delete("/:groupId", async (c) => {
   }
 });
 
-adminAudienceGroups.get("/:groupId/contacts", async (c) => {
+consoleAudienceGroups.get("/:groupId/contacts", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
@@ -137,7 +137,7 @@ adminAudienceGroups.get("/:groupId/contacts", async (c) => {
   return c.json({ contacts: detail.contacts });
 });
 
-adminAudienceGroups.post("/:groupId/contacts", async (c) => {
+consoleAudienceGroups.post("/:groupId/contacts", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: { email?: string; name?: string };
@@ -159,7 +159,7 @@ adminAudienceGroups.post("/:groupId/contacts", async (c) => {
   }
 });
 
-adminAudienceGroups.delete("/:groupId/contacts", async (c) => {
+consoleAudienceGroups.delete("/:groupId/contacts", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const contactId = c.req.query("id")?.trim();
@@ -177,7 +177,7 @@ adminAudienceGroups.delete("/:groupId/contacts", async (c) => {
   }
 });
 
-adminAudienceGroups.post("/:groupId/sync", async (c) => {
+consoleAudienceGroups.post("/:groupId/sync", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   try {
@@ -193,7 +193,7 @@ adminAudienceGroups.post("/:groupId/sync", async (c) => {
   }
 });
 
-adminAudienceGroups.get("/:groupId/progress", async (c) => {
+consoleAudienceGroups.get("/:groupId/progress", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
@@ -202,4 +202,4 @@ adminAudienceGroups.get("/:groupId/progress", async (c) => {
   return c.json(progress);
 });
 
-export { adminAudienceGroups };
+export { consoleAudienceGroups };

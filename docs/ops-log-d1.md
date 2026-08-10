@@ -14,8 +14,8 @@
 | API send (dual-write KV + D1) | `server/src/routes/send.ts` |
 | Broadcast send (dual-write KV + D1) | `server/src/lib/catalog-broadcasts.ts` |
 | Inbound bounce logging | `server/src/inbound.ts`, `server/src/lib/inbound-store.ts` |
-| Logs API | `server/src/routes/admin-ops-logs.ts` → `/admin/ops-logs` |
-| Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/logs` → `/admin/ops-logs`) |
+| Logs API | `server/src/routes/console/ops-logs.ts` → `/console/ops-logs` |
+| Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/logs` → `/console/ops-logs`) |
 | Dashboard nav | `app/src/dashboard/paths.ts` (Log tab after API Keys) |
 | Dashboard route | `app/src/dashboard/panel.tsx` (`case "logs"`) |
 | Log page UI | `app/src/dashboard/components/LogsView.tsx` |
@@ -26,11 +26,11 @@ Read this before changing send/bounce logging, adding a Log page event kind, or 
 
 ## Why a second log store
 
-Relaybase already had KV `srv:sendlog:*` (`server/src/lib/send-logs.ts`) for send history. That store is **authoritative** for Account Logs (`/admin/stats/account-logs`) and the legacy `/admin/logs` route. Do **not** remove or rewrite KV send logs.
+Relaybase already had KV `srv:sendlog:*` (`server/src/lib/send-logs.ts`) for send history. That store is **authoritative** for Account Logs (`/console/stats/account-logs`) and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route, now a direct KV read from the admin server). Do **not** remove or rewrite KV send logs.
 
 Two gaps motivated D1 `RELAYBASE_LOGS`:
 
-1. **Compose (`/admin/send`) was invisible.** Desktop compose never wrote any log, so a failed forward showed up only as a toast — nothing in the dashboard.
+1. **Compose (`/mail/send`) was invisible.** Desktop compose never wrote any log, so a failed forward showed up only as a toast — nothing in the dashboard.
 2. **Async bounces were invisible.** CF Email Sending returns a bounce DSN later as inbound mail. Without parsing it, the inbox shows `(empty message)` and no failure is recorded anywhere.
 
 D1 `ops_log` is an **additional** event log that covers compose, API, broadcast, and inbound bounce events in one queryable table. KV send logs stay untouched.
@@ -73,7 +73,7 @@ Migrations live in `server/migrations-logs/` (separate from `server/migrations/`
 
 | Source | Route | Kinds | Notes |
 |--------|-------|-------|-------|
-| Compose | `POST /admin/send` | `send`, `api_error` | Validation errors, all-bounce, CF exception, success, partial bounce. Also returns a `sent` object so the client upserts Sent. |
+| Compose | `POST /mail/send` | `send`, `api_error` | Validation errors, all-bounce, CF exception, success, partial bounce. Also returns a `sent` object so the client upserts Sent. |
 | API | `POST /v1/send` | `send`, `api_error` | Dual-write: KV `srv:sendlog:*` (unchanged) + D1 `ops_log`. Partial bounce keeps KV `ok: true` but D1 `ok: false` so the dashboard catches it. |
 | Broadcast | `catalog-broadcasts.ts` | `send` | Dual-write per recipient (KV + D1). |
 | Inbound | `server/src/inbound.ts` | `bounce` | Detected via `bounce-detect.ts`; logged with `Final-Recipient`, `Diagnostic-Code`, `Status` when present. |
@@ -102,7 +102,7 @@ Do **not** overwrite `bodyText` on normal mail — only fill the fallback when t
 
 ## Compose → Sent
 
-`/admin/send` now returns `{ messageId, sent }` on success, where `sent` is a `SentEmail`-shaped object (`app/src/email/components/types.ts`). The client (`useComposeDraftController.ts`) already upserts `sent` into the mailbox store and unions it on refresh — no client change was needed.
+`/mail/send` now returns `{ messageId, sent }` on success, where `sent` is a `SentEmail`-shaped object (`app/src/email/components/types.ts`). The client (`useComposeDraftController.ts`) already upserts `sent` into the mailbox store and unions it on refresh — no client change was needed.
 
 Server-side Sent storage (replacing `empty-sent`) is **out of scope** for this pass. The local `~/.relaybase/.../sent.json` upsert is the only Sent source for compose; remote KV Sent remains untouched.
 
@@ -114,7 +114,7 @@ Nav order in `app/src/dashboard/paths.ts`: … API Keys → **Log** → Settings
 
 Route: `/logs` → `LogsView` (`app/src/dashboard/components/LogsView.tsx`).
 
-API: `GET /admin/ops-logs?limit&status&domain` (`server/src/routes/admin-ops-logs.ts`). Client maps `/api/email/logs` → `/admin/ops-logs` in `email-api-map.ts`.
+API: `GET /console/ops-logs?limit&status&domain` (`server/src/routes/console/ops-logs.ts`). Client maps `/api/email/logs` → `/console/ops-logs` in `email-api-map.ts`.
 
 UI columns: When · Source · Status · Kind · Subject · Peer · Domain. Filters: all/success/failed + domain search. Summary: total, failed, failed-24h. Selecting a row shows full detail including `error` and `metaJson`.
 
@@ -122,7 +122,7 @@ UI columns: When · Source · Status · Kind · Subject · Peer · Domain. Filte
 
 ## Rules
 
-- **KV `srv:sendlog:*` stays authoritative** for Account Logs and legacy `/admin/logs`. Do not point those routes at D1.
+- **KV `srv:sendlog:*` stays authoritative** for Account Logs and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route, now a direct KV read). Do not point those at D1.
 - **D1 `ops_log` is additive.** New event kinds go here; do not duplicate into KV.
 - **Customer install ZIP keeps D1 optional.** `server/customer-install/wrangler.toml` has the binding commented out; `recordOpsLog` no-ops when the binding is missing.
 - **Soft-fail only.** A D1 write error must never break a send or an inbound store. Helpers catch + `console.error`; routes continue.

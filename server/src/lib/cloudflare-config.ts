@@ -28,19 +28,6 @@ export async function readCloudflareRuntimeConfig(
   return { accountId, apiToken };
 }
 
-export async function writeCloudflareRuntimeConfig(
-  kv: KVNamespace,
-  config: CloudflareRuntimeConfig,
-): Promise<void> {
-  await kv.put(
-    KV_KEY,
-    JSON.stringify({
-      accountId: config.accountId.trim(),
-      apiToken: config.apiToken.trim(),
-    }),
-  );
-}
-
 export async function createCloudflareClient(env: Env): Promise<CloudflareClient> {
   const config = await readCloudflareRuntimeConfig(env);
   if (!config) {
@@ -57,3 +44,4 @@ export async function createCloudflareClient(env: Env): Promise<CloudflareClient
 export async function cloudflareRuntimeConfigured(env: Env): Promise<boolean> {
   return (await readCloudflareRuntimeConfig(env)) !== null;
 }
+

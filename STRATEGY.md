@@ -77,7 +77,7 @@ npx wrangler r2 bucket create relaybase-inbound
 2. **인바운드 메일이라는 데이터의 성격상 신뢰가 구매 결정 요인이다.** Worker는 사용자의 실제 수신 이메일(R2에 원본 저장)과 발신 권한을 다룬다. "이 코드가 외부로 뭔가를 보내지 않는다"를 사용자가 직접 확인할 수 있어야 판매 저항이 줄어든다.
 3. **Worker 자체는 기술적 모트(moat)가 아니다.** Cloudflare Email Sending/Routing API를 감싸는 라우팅 계층일 뿐이며, 실제 상품 가치는 데스크톱 앱의 UX(Spark 스타일 인박스, Compose, Domains, Audience/Broadcasts 대시보드)와 온보딩 경험(ZIP+가이드+라이선스+지원)에 있다. 이 부분은 계속 비공개다. Worker를 공개해도 "제품"을 그대로 복제하려면 데스크톱 앱을 처음부터 다시 만들어야 한다.
 4. **무료 유통 채널이 된다.** Cloudflare/Workers 커뮤니티(GitHub, HN, r/CloudFlare)는 정확히 타깃 페르소나가 모이는 곳이다. 오픈소스 저장소는 SEO/입소문 효과가 있고, `website/content/resources/*` 콘텐츠 마케팅과 같은 목적(검증 가능성 + 발견 가능성)을 코드로 한 번 더 수행한다.
-5. **지원 비용 절감.** 사용자가 `/health`, `/admin/connect` 실패를 스스로 코드로 디버깅할 수 있고, GitHub Issues가 검색 가능한 지식베이스가 된다.
+5. **지원 비용 절감.** 사용자가 `/health`, `/console/connect` 실패를 스스로 코드로 디버깅할 수 있고, GitHub Issues가 검색 가능한 지식베이스가 된다.
 
 ### 1.3 공개 시 실제로 문제가 되는 지점과 대응
 

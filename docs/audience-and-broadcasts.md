@@ -7,8 +7,8 @@
 | Area | Paths |
 |------|--------|
 | Store / model | `server/src/lib/catalog-audience.ts`, `catalog-broadcasts.ts`, `catalog-types.ts` (KV `srv:catalog:*`) |
-| Audience APIs | `server/src/routes/admin-audience-groups.ts` → `/admin/audience-groups` |
-| Broadcast APIs | `server/src/routes/admin-broadcasts.ts` → `/admin/broadcasts` |
+| Audience APIs | `server/src/routes/console/audience-groups.ts` → `/console/audience-groups` |
+| Broadcast APIs | `server/src/routes/console/broadcasts.ts` → `/console/broadcasts` |
 | Cron | `server/src/index.ts` `scheduled()` + `server/wrangler.toml` triggers |
 | Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/*` → Worker admin) |
 | Audience UI | `app/src/dashboard/components/AudienceGroup*.tsx`, `AudienceGroupsView.tsx`, `AudienceDataSourceGuide.tsx` |

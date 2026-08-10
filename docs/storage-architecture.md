@@ -41,7 +41,7 @@ flowchart TB
   worker --> D1
 ```
 
-All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** path: map `/api/email/*` → Worker `/admin/*` via [`app/src/lib/desktop/email-api-map.ts`](../app/src/lib/desktop/email-api-map.ts) and [`desktopAwareFetch`](../app/src/lib/desktop/api-base.ts). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
+All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** path: map `/api/email/*` → Worker `/console/*` (management) and `/mail/*` (mail operations) via [`app/src/lib/desktop/email-api-map.ts`](../app/src/lib/desktop/email-api-map.ts) and [`desktopAwareFetch`](../app/src/lib/desktop/api-base.ts). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
 
 Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 
@@ -69,16 +69,20 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 | `srv:event:pending:{domain}:{id}` | `lib/inbound-events.ts` | Inbox notification queue |
 | `srv:webhook:*` | `lib/webhooks.ts` | Webhook regs / secrets / fail markers |
 
-### Admin HTTP surface (Bearer admin token)
+### HTTP surface (Bearer admin token)
+
+Operator-only admin endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/logs`) have been removed from the worker and moved into the admin Next.js server, which writes the worker's KV directly via the Cloudflare API. The worker now exposes only end-user routes:
 
 | Route | Purpose |
 |-------|---------|
-| `/admin/mailbox`, `/admin/domains`, `/admin/addresses` | Catalog mailbox CRUD |
-| `/admin/audience-groups` (+ contacts/sync/progress) | Audience |
-| `/admin/broadcasts` (+ send/progress) | Broadcasts |
-| `/admin/keys` (+ rotate, PATCH active) | API keys |
-| `/admin/stats`, `/admin/stats/account-*` | Dashboard stats / per-account |
-| `/admin/inbox`, `/admin/send`, … | Mail I/O |
+| `/console/mailbox`, `/console/domains`, `/console/addresses` | Catalog mailbox CRUD |
+| `/console/audience-groups` (+ contacts/sync/progress) | Audience |
+| `/console/broadcasts` (+ send/progress) | Broadcasts |
+| `/console/keys` (+ rotate, PATCH active) | API keys |
+| `/console/ops-logs` | Ops event log (D1 `RELAYBASE_LOGS`) |
+| `/console/connect` | Desktop self-install probe (admin-token proof) |
+| `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
+| `/mail/inbox`, `/mail/send`, … | Mail I/O |
 
 Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` in `server/src/index.ts` (single catalog, no per-user fan-out).
 
@@ -127,7 +131,7 @@ Browser `pnpm next` (no Tauri): credentials via `/api/local-credentials` reading
 When adding a dashboard/email feature that needs durable remote data:
 
 1. Persist in Worker under `srv:catalog:*` or an existing `srv:` family — **not** under `app/` FS/KV.
-2. Expose `/admin/…` with `requireAdmin` + CORS (`server/src/lib/cors.ts`).
+2. Expose `/console/…` (management) or `/mail/…` (mail ops) with `requireAdmin` + CORS (`server/src/lib/cors.ts`). Operator-only endpoints belong in the admin Next.js server, not the worker.
 3. Map `/api/email/…` → that route in `email-api-map.ts`.
 4. Call through `desktopAwareFetch` / `readResponseJson` — never raw `fetch` to Next `/api/email` in the UI.
 5. Cache on disk under `~/.relaybase/cache/…` if the UI needs offline/stale-while-revalidate.

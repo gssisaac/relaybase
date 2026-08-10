@@ -1,17 +1,17 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
 import {
   createKey,
   listKeys,
   revokeKey,
   rotateKey,
   setKeyActive,
-} from "../lib/keys";
+} from "../../lib/keys";
 
-const adminKeys = new Hono<{ Bindings: Env }>();
+const consoleKeys = new Hono<{ Bindings: Env }>();
 
-adminKeys.post("/", async (c) => {
+consoleKeys.post("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -48,7 +48,7 @@ adminKeys.post("/", async (c) => {
   }
 });
 
-adminKeys.get("/", async (c) => {
+consoleKeys.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -56,7 +56,7 @@ adminKeys.get("/", async (c) => {
   return c.json({ keys });
 });
 
-adminKeys.patch("/:id", async (c) => {
+consoleKeys.patch("/:id", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -83,7 +83,7 @@ adminKeys.patch("/:id", async (c) => {
   return c.json({ key: record });
 });
 
-adminKeys.post("/:id/rotate", async (c) => {
+consoleKeys.post("/:id/rotate", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -105,7 +105,7 @@ adminKeys.post("/:id/rotate", async (c) => {
   });
 });
 
-adminKeys.delete("/:id", async (c) => {
+consoleKeys.delete("/:id", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -122,4 +122,4 @@ adminKeys.delete("/:id", async (c) => {
   return c.json({ ok: true, id });
 });
 
-export { adminKeys };
+export { consoleKeys };

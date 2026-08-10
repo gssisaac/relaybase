@@ -281,6 +281,27 @@ export type CloudflareClientCredentials = {
   globalApiKey?: string;
 };
 
+export type CfKvNamespaceSummary = {
+  id: string;
+  title: string;
+};
+
+export type CfKvKey = {
+  name: string;
+  metadata?: unknown;
+};
+
+export type CfWorkerBinding =
+  | { type: "kv_namespace"; name: string; namespace_id: string }
+  | { type: "r2_bucket"; name: string; bucket_name: string }
+  | { type: "plain_text"; name: string; text: string }
+  | { type: "secret_text"; name: string }
+  | { type: string; name?: string; namespace_id?: string; bucket_name?: string; text?: string };
+
+export type CfWorkerScriptSettings = {
+  bindings?: CfWorkerBinding[];
+};
+
 export class CloudflareClient {
   private accountId: string;
   private apiToken: string;
@@ -1435,4 +1456,139 @@ export class CloudflareClient {
     );
     return data.result;
   }
+
+  async listKvNamespaces(): Promise<CfKvNamespaceSummary[]> {
+    const data = await this.request<CfKvNamespaceSummary[]>(
+      `/accounts/${this.accountId}/storage/kv/namespaces?per_page=100`,
+    );
+    return data.result ?? [];
+  }
+
+  async findKvNamespaceByTitle(
+    title: string,
+  ): Promise<CfKvNamespaceSummary | null> {
+    const target = title.trim().toLowerCase();
+    const namespaces = await this.listKvNamespaces();
+    return (
+      namespaces.find((ns) => ns.title?.trim().toLowerCase() === target) ??
+      null
+    );
+  }
+
+  async getKvValue(namespaceId: string, key: string): Promise<string | null> {
+    const path = `/accounts/${this.accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+    const url = `${API_BASE}${path}`;
+    const res = await fetch(url, {
+      headers: this.tokenHeaders(this.apiToken),
+      cache: "no-store",
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      throw this.formatCfError(
+        res,
+        {
+          success: false,
+          errors: [{ message: `HTTP ${res.status}` }],
+          result: null as never,
+        },
+        "KV read",
+        path,
+        "GET",
+      );
+    }
+    return res.text();
+  }
+
+  async putKvValue(
+    namespaceId: string,
+    key: string,
+    value: string,
+  ): Promise<void> {
+    const path = `/accounts/${this.accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+    const url = `${API_BASE}${path}`;
+    const res = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${this.apiToken}`,
+        "Content-Type": "text/plain",
+      },
+      body: value,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const raw = (await res.json().catch(() => ({}))) as CfLooseErrorBody;
+      const data = normalizeCfErrorBody(raw);
+      throw this.formatCfError(res, data, "KV write", path, "PUT");
+    }
+  }
+
+  async listKvKeys(
+    namespaceId: string,
+    prefix?: string,
+    limit = 1000,
+    cursor?: string,
+  ): Promise<{ keys: CfKvKey[]; list_complete: boolean; cursor?: string }> {
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    if (prefix) params.set("prefix", prefix);
+    if (cursor) params.set("cursor", cursor);
+    const path = `/accounts/${this.accountId}/storage/kv/namespaces/${namespaceId}/keys?${params.toString()}`;
+    const data = await this.request<{
+      keys: CfKvKey[];
+      list_complete?: boolean;
+      cursor?: string;
+    }>(path);
+    const info = data.result_info as
+      | { list_complete?: boolean; cursor?: string }
+      | undefined;
+    return {
+      keys: data.result?.keys ?? [],
+      list_complete:
+        data.result?.list_complete ?? info?.list_complete ?? true,
+      cursor: data.result?.cursor ?? info?.cursor,
+    };
+  }
+
+  /**
+   * Resolve the KV namespace ID bound as `RELAYBASE_APP` on a Worker script.
+   * Falls back to looking up the namespace by title when the binding is not
+   * discoverable (e.g. older deploys without the binding metadata).
+   */
+  async resolveWorkerKvNamespaceId(
+    scriptName: string,
+    bindingName = "RELAYBASE_APP",
+    fallbackTitle?: string,
+  ): Promise<string | null> {
+    try {
+      const settings = await this.request<CfWorkerScriptSettings>(
+        `/accounts/${this.accountId}/workers/scripts/${encodeURIComponent(scriptName)}/settings`,
+      );
+      const binding = settings.result?.bindings?.find(
+        (b): b is Extract<
+          CfWorkerBinding,
+          { type: "kv_namespace"; namespace_id: string }
+        > =>
+          b.type === "kv_namespace" && b.name === bindingName,
+      );
+      if (binding?.namespace_id) return binding.namespace_id;
+    } catch {
+      // settings endpoint may be unavailable for some script types
+    }
+    if (fallbackTitle) {
+      const ns = await this.findKvNamespaceByTitle(fallbackTitle);
+      if (ns) return ns.id;
+    }
+    return null;
+  }
+}
+
+function normalizeCfErrorBody(raw: CfLooseErrorBody): CfResponse<unknown> {
+  if (Array.isArray(raw.errors) || typeof raw.success === "boolean") {
+    return raw as CfResponse<unknown>;
+  }
+  return {
+    success: false,
+    errors: [{ message: raw.error ?? raw.message ?? "Unknown error" }],
+    result: null as never,
+  };
 }

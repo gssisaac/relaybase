@@ -3,6 +3,7 @@ import type {
   EmailSenderLogEntry,
   EmailSenderLogSummary,
 } from "@/relaybase/components/types";
+import { listWorkerSendLogs } from "./worker-logs";
 
 export type EmailSenderKey = {
   id: string;
@@ -89,7 +90,7 @@ export async function listEmailSenderKeys(
 ): Promise<EmailSenderKey[]> {
   const data = await emailSenderFetch<{ keys: EmailSenderKey[] }>(
     cfg,
-    "/admin/keys",
+    "/console/keys",
   );
   return data.keys ?? [];
 }
@@ -98,7 +99,7 @@ export async function createEmailSenderKey(
   cfg: EmailSenderConfig,
   params: { domain: string; label?: string },
 ): Promise<CreateEmailSenderKeyResult> {
-  return emailSenderFetch<CreateEmailSenderKeyResult>(cfg, "/admin/keys", {
+  return emailSenderFetch<CreateEmailSenderKeyResult>(cfg, "/console/keys", {
     method: "POST",
     body: JSON.stringify({
       domain: params.domain.trim(),
@@ -111,7 +112,7 @@ export async function deleteEmailSenderKey(
   cfg: EmailSenderConfig,
   id: string,
 ): Promise<void> {
-  await emailSenderFetch<{ ok: boolean }>(cfg, `/admin/keys/${id}`, {
+  await emailSenderFetch<{ ok: boolean }>(cfg, `/console/keys/${id}`, {
     method: "DELETE",
   });
 }
@@ -122,22 +123,14 @@ export type EmailSenderLogsResult = {
 };
 
 export async function listEmailSenderLogs(
-  cfg: EmailSenderConfig,
+  _cfg: EmailSenderConfig,
   params?: {
     limit?: number;
     status?: "all" | "failed" | "success";
     domain?: string;
   },
 ): Promise<EmailSenderLogsResult> {
-  const search = new URLSearchParams();
-  if (params?.limit) search.set("limit", String(params.limit));
-  if (params?.status) search.set("status", params.status);
-  if (params?.domain?.trim()) search.set("domain", params.domain.trim());
-  const qs = search.toString();
-  return emailSenderFetch<EmailSenderLogsResult>(
-    cfg,
-    `/admin/logs${qs ? `?${qs}` : ""}`,
-  );
+  return listWorkerSendLogs(params);
 }
 
 export async function sendEmailWithApiKey(
@@ -210,7 +203,7 @@ export async function verifyRelaybaseWorkerAdminToken(
   if (!trimmed || !baseUrl.trim()) return false;
   const result = await workerFetch<{ keys?: unknown[] }>(
     baseUrl,
-    "/admin/keys",
+    "/console/keys",
     trimmed,
   );
   return result.ok;
@@ -221,86 +214,42 @@ export async function syncWorkerRuntimeConfig(params: {
   adminToken: string;
   cloudflareAccountId: string;
   cloudflareApiToken: string;
+  workerScriptName?: string;
   bootstrapToken?: string;
 }): Promise<void> {
-  const payload = {
-    accountId: params.cloudflareAccountId,
-    apiToken: params.cloudflareApiToken,
-    adminToken: params.adminToken,
-  };
-
-  const primary = await workerFetch<{ configured?: boolean }>(
-    params.baseUrl,
-    "/admin/cloudflare",
-    params.adminToken,
-    { method: "PUT", body: JSON.stringify(payload) },
-  );
-  if (primary.ok) return;
-
-  const bootstrapToken = params.bootstrapToken?.trim();
-  if (!bootstrapToken) {
+  // Operator-only runtime config sync now writes the worker's KV directly
+  // through the Cloudflare API from the admin server, instead of proxying
+  // through the worker's former /admin/bootstrap and /admin/cloudflare
+  // endpoints (those routes have been removed from the worker).
+  const { syncWorkerRuntimeConfig: syncKv } = await import("./worker-config");
+  try {
+    await syncKv({
+      cloudflareAccountId: params.cloudflareAccountId,
+      cloudflareApiToken: params.cloudflareApiToken,
+      adminToken: params.adminToken,
+      workerScriptName: params.workerScriptName,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     throw new Error(
       formatWorkerSyncFailure({
-        step: "admin/cloudflare",
-        status: primary.status,
-        workerError: primary.data.error,
-        adminTokenRejected: primary.status === 401,
-        bootstrapAttempted: false,
-      }),
-    );
-  }
-
-  const bootstrap = await workerFetch<{ configured?: boolean }>(
-    params.baseUrl,
-    "/admin/bootstrap",
-    bootstrapToken,
-    { method: "PUT", body: JSON.stringify(payload) },
-  );
-  if (!bootstrap.ok) {
-    throw new Error(
-      formatWorkerSyncFailure({
-        step: "admin/bootstrap",
-        status: bootstrap.status,
-        workerError: bootstrap.data.error,
-        adminTokenRejected: primary.status === 401,
-        bootstrapAttempted: true,
-        bootstrapStatus: bootstrap.status,
-        bootstrapError: bootstrap.data.error,
+        workerError: message,
       }),
     );
   }
 }
 
 function formatWorkerSyncFailure(params: {
-  step: string;
-  status: number;
   workerError?: string;
-  adminTokenRejected: boolean;
-  bootstrapAttempted: boolean;
-  bootstrapStatus?: number;
-  bootstrapError?: string;
 }): string {
-  const parts: string[] = [];
-
-  if (params.bootstrapAttempted) {
-    parts.push(
-      "Could not sync credentials to the Relaybase worker.",
-      `Worker rejected the admin service token (${params.adminTokenRejected ? "401 Unauthorized" : `HTTP ${params.status}`}).`,
-      `Bootstrap via /admin/bootstrap also failed (${params.bootstrapStatus ?? "unknown"}${params.bootstrapError ? `: ${params.bootstrapError}` : ""}).`,
-      "Fix: ensure the Cloudflare API token in admin/.env.local matches the worker secret CF_API_TOKEN (run `npx wrangler secret put CF_API_TOKEN` from server/), then click Sync to worker again.",
-    );
-  } else if (params.adminTokenRejected) {
-    parts.push(
-      "Worker rejected the admin service token (401 Unauthorized).",
-      "No bootstrap token was available.",
-      "Fix: set RELAYBASE_CF_API_TOKEN in admin/.env.local to match the worker CF_API_TOKEN secret, then click Sync to worker.",
-    );
-  } else {
-    parts.push(
-      `Worker sync failed on ${params.step} (HTTP ${params.status}${params.workerError ? `: ${params.workerError}` : ""}).`,
-      "Check RELAYBASE_URL and worker logs, then try Sync to worker again.",
-    );
+  const parts: string[] = [
+    "Could not sync credentials to the Relaybase worker.",
+  ];
+  if (params.workerError) {
+    parts.push(`Reason: ${params.workerError}`);
   }
-
+  parts.push(
+    "Fix: ensure the Cloudflare API token in admin/.env.local has Workers Scripts (read) and Workers KV Storage (edit) permissions, the worker is deployed with a KV namespace bound as RELAYBASE_APP, then click Sync to worker again.",
+  );
   return parts.join(" ");
 }

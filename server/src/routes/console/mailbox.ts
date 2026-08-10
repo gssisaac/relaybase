@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import type { Env } from "../env";
-import { requireAdmin } from "../lib/auth";
-import { createCloudflareClient } from "../lib/cloudflare-config";
+import type { Env } from "../../env";
+import { requireAdmin } from "../../lib/auth";
+import { createCloudflareClient } from "../../lib/cloudflare-config";
 import {
   ensureInboundRouting,
   removeInboundWorkerRouting,
-} from "../lib/inbound-routing";
+} from "../../lib/inbound-routing";
 import {
   addDomain,
   listDomainSummaries,
@@ -17,19 +17,19 @@ import {
   upsertAddresses,
   writeMailbox,
   type MailboxAddress,
-} from "../lib/catalog-store";
+} from "../../lib/catalog-store";
 
-const adminMailbox = new Hono<{ Bindings: Env }>();
+const consoleMailbox = new Hono<{ Bindings: Env }>();
 
 /** Full mailbox blob (domains + addresses). */
-adminMailbox.get("/", async (c) => {
+consoleMailbox.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const data = await readMailbox(c.env.RELAYBASE_APP);
   return c.json(data);
 });
 
-adminMailbox.put("/", async (c) => {
+consoleMailbox.put("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: { domains?: string[]; addresses?: MailboxAddress[] };
@@ -78,7 +78,7 @@ adminMailbox.put("/", async (c) => {
 });
 
 /** Config subset for EmailMailboxStore. */
-adminMailbox.get("/config", async (c) => {
+consoleMailbox.get("/config", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const data = await readMailbox(c.env.RELAYBASE_APP);
@@ -111,18 +111,18 @@ adminMailbox.get("/config", async (c) => {
   });
 });
 
-export { adminMailbox };
+export { consoleMailbox };
 
-const adminDomains = new Hono<{ Bindings: Env }>();
+const consoleDomains = new Hono<{ Bindings: Env }>();
 
-adminDomains.get("/", async (c) => {
+consoleDomains.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const data = await readMailbox(c.env.RELAYBASE_APP);
   return c.json({ domains: listDomainSummaries(data) });
 });
 
-adminDomains.post("/", async (c) => {
+consoleDomains.post("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   let body: { domain?: string };
@@ -146,7 +146,7 @@ adminDomains.post("/", async (c) => {
   }
 });
 
-adminDomains.delete("/", async (c) => {
+consoleDomains.delete("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim();
@@ -160,11 +160,11 @@ adminDomains.delete("/", async (c) => {
   });
 });
 
-export { adminDomains };
+export { consoleDomains };
 
-const adminAddresses = new Hono<{ Bindings: Env }>();
+const consoleAddresses = new Hono<{ Bindings: Env }>();
 
-adminAddresses.get("/", async (c) => {
+consoleAddresses.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const data = await readMailbox(c.env.RELAYBASE_APP);
@@ -183,7 +183,7 @@ adminAddresses.get("/", async (c) => {
   });
 });
 
-adminAddresses.post("/", async (c) => {
+consoleAddresses.post("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -305,7 +305,7 @@ adminAddresses.post("/", async (c) => {
   });
 });
 
-adminAddresses.patch("/", async (c) => {
+consoleAddresses.patch("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
@@ -379,7 +379,7 @@ adminAddresses.patch("/", async (c) => {
   return c.json({ address: data.addresses[index] });
 });
 
-adminAddresses.delete("/", async (c) => {
+consoleAddresses.delete("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const email = c.req.query("email")?.trim().toLowerCase();
@@ -405,4 +405,4 @@ adminAddresses.delete("/", async (c) => {
   });
 });
 
-export { adminAddresses };
+export { consoleAddresses };

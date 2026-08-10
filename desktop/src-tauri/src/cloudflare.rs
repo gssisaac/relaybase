@@ -225,7 +225,7 @@ pub async fn admin_auth_ok(worker_url: &str, admin_token: &str) -> bool {
     if admin_token.trim().is_empty() {
         return false;
     }
-    let url = format!("{}/admin/cloudflare", worker_url.trim_end_matches('/'));
+    let url = format!("{}/console/connect", worker_url.trim_end_matches('/'));
     let http = reqwest::Client::new();
     match http
         .get(&url)
@@ -338,28 +338,119 @@ pub async fn put_worker_secret(
 }
 
 pub async fn bootstrap_worker(
-    worker_url: &str,
-    bootstrap_token: &str,
+    client: &CfClient,
+    script_name: &str,
     account_id: &str,
     api_token: &str,
     admin_token: &str,
 ) -> Result<(), String> {
-    let url = format!("{}/admin/bootstrap", worker_url.trim_end_matches('/'));
+    // The worker no longer exposes /admin/bootstrap or /admin/cloudflare.
+    // Write the runtime config + admin token directly to the worker's
+    // RELAYBASE_APP KV namespace via the Cloudflare API.
+    let namespace_id = resolve_worker_kv_namespace_id(client, script_name).await?;
+    put_kv_value(
+        client,
+        &namespace_id,
+        "srv:config:cloudflare",
+        &json!({ "accountId": account_id, "apiToken": api_token }).to_string(),
+    )
+    .await?;
+    put_kv_value(
+        client,
+        &namespace_id,
+        "srv:config:admin",
+        &json!({ "token": admin_token }).to_string(),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Resolve the KV namespace ID bound as RELAYBASE_APP on a Worker script.
+pub async fn resolve_worker_kv_namespace_id(
+    client: &CfClient,
+    script_name: &str,
+) -> Result<String, String> {
+    // Try the script settings/bindings endpoint first.
+    let settings_path = format!(
+        "/accounts/{}/workers/scripts/{}/settings",
+        client.account_id, script_name
+    );
+    let settings_url = format!("{CF_API}{settings_path}");
+    let http = reqwest::Client::new();
+    if let Ok(res) = http
+        .get(&settings_url)
+        .header("Authorization", format!("Bearer {}", client.api_token))
+        .send()
+        .await
+    {
+        if res.status().is_success() {
+            if let Ok(value) = res.json::<Value>().await {
+                if let Some(bindings) = value.pointer("/result/bindings").and_then(|v| v.as_array())
+                {
+                    for b in bindings {
+                        if b.get("type").and_then(|v| v.as_str()) == Some("kv_namespace")
+                            && b.get("name").and_then(|v| v.as_str()) == Some("RELAYBASE_APP")
+                        {
+                            if let Some(id) = b.get("namespace_id").and_then(|v| v.as_str()) {
+                                if !id.is_empty() {
+                                    return Ok(id.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fall back to looking up the namespace by title (relaybase-app).
+    if let Some(id) = find_kv_namespace(client, "relaybase-app").await? {
+        return Ok(id);
+    }
+    Err(format!(
+        "Could not resolve RELAYBASE_APP KV namespace for worker `{script_name}`"
+    ))
+}
+
+/// Write a string value into a KV namespace key.
+pub async fn put_kv_value(
+    client: &CfClient,
+    namespace_id: &str,
+    key: &str,
+    value: &str,
+) -> Result<(), String> {
+    let path = format!(
+        "/accounts/{}/storage/kv/namespaces/{}/values/{}",
+        client.account_id,
+        namespace_id,
+        urlencode(key)
+    );
+    let url = format!("{CF_API}{path}");
     let http = reqwest::Client::new();
     let res = http
         .put(&url)
-        .header("Authorization", format!("Bearer {bootstrap_token}"))
-        .json(&json!({
-            "accountId": account_id,
-            "apiToken": api_token,
-            "adminToken": admin_token,
-        }))
+        .header("Authorization", format!("Bearer {}", client.api_token))
+        .header("Content-Type", "text/plain")
+        .body(value.to_string())
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if !res.status().is_success() {
-        let body = res.text().await.unwrap_or_default();
-        return Err(format!("Bootstrap failed: {body}"));
+    let status = res.status();
+    let value: Value = res.json().await.map_err(|e| e.to_string())?;
+    if !status.is_success() || value.get("success") == Some(&Value::Bool(false)) {
+        return Err(format!("KV write failed ({status}): {value}"));
     }
     Ok(())
+}
+
+fn urlencode(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' {
+                c.to_string()
+            } else {
+                format!("%{:02X}", c as u32)
+            }
+        })
+        .collect()
 }

@@ -61,6 +61,8 @@ type StoredEmailSenderSettings = EmailSenderSettings & {
 
 export type EmailSenderSettings = {
   workerUrl: string;
+  /** Cloudflare Worker script name (defaults to relaybase-api). */
+  workerScriptName: string;
   /** Internal worker bridge token — auto-provisioned on save, not user-facing. */
   adminToken: string;
   cloudflareAccountId: string;
@@ -99,6 +101,7 @@ export type EmailSenderSettingsView = {
 function emptySettings(): EmailSenderSettings {
   return {
     workerUrl: "",
+    workerScriptName: "",
     adminToken: "",
     cloudflareAccountId: "",
     cloudflareApiToken: "",
@@ -115,6 +118,7 @@ function emptySettings(): EmailSenderSettings {
 function normalizeStoredSettings(raw: StoredEmailSenderSettings): EmailSenderSettings {
   return {
     workerUrl: raw.workerUrl?.trim().replace(/\/$/, "") ?? "",
+    workerScriptName: raw.workerScriptName?.trim() ?? "",
     adminToken: raw.adminToken?.trim() ?? "",
     cloudflareAccountId: raw.cloudflareAccountId?.trim() ?? "",
     cloudflareApiToken: raw.cloudflareApiToken?.trim() ?? "",
@@ -196,6 +200,11 @@ function mergeSettingsWithEnv(stored: EmailSenderSettings): EmailSenderSettings 
   return {
     ...stored,
     workerUrl: resolveSettingValue("workerUrl", stored.workerUrl, env),
+    workerScriptName: resolveSettingValue(
+      "workerScriptName",
+      stored.workerScriptName,
+      env,
+    ),
     cloudflareAccountId: resolveSettingValue(
       "cloudflareAccountId",
       stored.cloudflareAccountId,
@@ -274,6 +283,7 @@ export async function writeEmailSenderSettings(
 ): Promise<string> {
   return writeProductJson(RELAYBASE_STORE_ID, SETTINGS_FILE, {
     workerUrl: settings.workerUrl.trim().replace(/\/$/, ""),
+    workerScriptName: settings.workerScriptName.trim(),
     adminToken: settings.adminToken.trim(),
     cloudflareAccountId: settings.cloudflareAccountId.trim(),
     cloudflareApiToken: settings.cloudflareApiToken.trim(),
@@ -360,6 +370,9 @@ export async function mergeEmailSenderSettings(
   if (patch.workerUrl !== undefined) {
     next.workerUrl = patch.workerUrl.trim().replace(/\/$/, "");
   }
+  if (patch.workerScriptName !== undefined) {
+    next.workerScriptName = patch.workerScriptName.trim();
+  }
   if (patch.adminToken !== undefined && patch.adminToken.trim()) {
     next.adminToken = patch.adminToken.trim();
   }
@@ -424,6 +437,7 @@ export type EmailSenderAdminConfigDetail = EmailSenderSettingsView & {
   inboundR2BucketName: string;
   cloudflareApiToken: string;
   cloudflareDnsApiToken: string;
+  workerScriptName: string;
   envSources: RelaybaseEnvSources;
 };
 
@@ -442,6 +456,7 @@ export async function getEmailSenderAdminSettingsDetail(): Promise<EmailSenderAd
     ),
     cloudflareApiToken: settings.cloudflareApiToken.trim(),
     cloudflareDnsApiToken: settings.cloudflareDnsApiToken.trim(),
+    workerScriptName: settings.workerScriptName.trim(),
     envSources: env.sources,
   };
 }

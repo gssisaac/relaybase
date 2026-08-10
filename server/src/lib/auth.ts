@@ -26,10 +26,6 @@ export async function resolveAdminToken(env: Env): Promise<string | null> {
   return env.ADMIN_TOKEN?.trim() || (await kvAdminToken(env));
 }
 
-export async function setAdminToken(kv: KVNamespace, token: string): Promise<void> {
-  await kv.put(ADMIN_KV_KEY, JSON.stringify({ token: token.trim() }));
-}
-
 export async function requireAdmin(
   c: Context<{ Bindings: Env }>,
 ): Promise<Response | null> {
@@ -44,19 +40,6 @@ export async function requireAdmin(
   const fromKv = await kvAdminToken(c.env);
   const allowed = [secret, fromKv].filter(Boolean) as string[];
   if (allowed.length === 0 || !allowed.includes(token)) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  return null;
-}
-
-export async function requireBootstrapAuth(
-  c: Context<{ Bindings: Env }>,
-): Promise<Response | null> {
-  const token = extractBearerToken(c.req.header("Authorization"));
-  const allowed = [c.env.ADMIN_TOKEN?.trim(), c.env.CF_API_TOKEN?.trim()].filter(
-    Boolean,
-  );
-  if (!token || !allowed.includes(token)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   return null;
@@ -77,3 +60,4 @@ export async function requireApiKey(
 
   return { record };
 }
+

@@ -11,15 +11,15 @@ custom_domain = true
 WORKER_SCRIPT_NAME = "relaybase-api"
 INBOUND_BUCKET_NAME = "relaybase-inbound"
 
-[[kv_namespaces]]
-binding = "KEYS"
-id = "341bf6e6f3c943a8a4f73128a98eb795"
-preview_id = "fe42e6d5f04741f7a09516f25504581a"
+# Audience group data-source sync (single catalog — no per-user fan-out).
+[triggers]
+crons = ["*/15 * * * *"]
 
 [[kv_namespaces]]
-binding = "RELAYBASE_API"
-id = "605b827fcf4c4f3c80641ec039500c99"
-preview_id = "619ac20c77cc4722bb2339b59fe297ea"
+binding = "RELAYBASE_APP"
+# Was previously bound as KEYS (same namespace id — rename only).
+id = "341bf6e6f3c943a8a4f73128a98eb795"
+preview_id = "fe42e6d5f04741f7a09516f25504581a"
 
 [[r2_buckets]]
 binding = "INBOUND"

@@ -21,7 +21,7 @@ license.post("/verify", async (c) => {
   const key = body.licenseKey?.trim();
   if (!key) return c.json({ ok: false, error: "licenseKey required" }, 400);
 
-  const record = await verifyLicense(c.env.KEYS, key);
+  const record = await verifyLicense(c.env.RELAYBASE_APP, key);
   if (!record) return c.json({ ok: false, error: "Invalid or revoked license" }, 404);
 
   return c.json({
@@ -77,7 +77,7 @@ license.post("/stripe-webhook", async (c) => {
     return c.json({ error: "No email on session" }, 400);
   }
 
-  const { record, licenseKey } = await createLicense(c.env.KEYS, {
+  const { record, licenseKey } = await createLicense(c.env.RELAYBASE_APP, {
     email,
     stripeSessionId: obj?.id ?? null,
     note: "stripe-checkout",
@@ -102,7 +102,7 @@ license.post("/stripe-webhook", async (c) => {
 license.get("/admin", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const licenses = await listLicenses(c.env.KEYS);
+  const licenses = await listLicenses(c.env.RELAYBASE_APP);
   return c.json({ licenses });
 });
 
@@ -116,7 +116,7 @@ license.post("/admin", async (c) => {
     return c.json({ error: "Invalid JSON" }, 400);
   }
   if (!body.email?.trim()) return c.json({ error: "email required" }, 400);
-  const { record, licenseKey } = await createLicense(c.env.KEYS, {
+  const { record, licenseKey } = await createLicense(c.env.RELAYBASE_APP, {
     email: body.email,
     note: body.note ?? "manual",
   });
@@ -126,7 +126,7 @@ license.post("/admin", async (c) => {
 license.delete("/admin/:id", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const ok = await revokeLicense(c.env.KEYS, c.req.param("id"));
+  const ok = await revokeLicense(c.env.RELAYBASE_APP, c.req.param("id"));
   if (!ok) return c.json({ error: "Not found" }, 404);
   return c.json({ revoked: true });
 });

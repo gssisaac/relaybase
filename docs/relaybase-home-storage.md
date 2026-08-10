@@ -3,7 +3,9 @@
 **Audience:** humans and coding agents changing desktop persistence, credentials, mail cache, sidebar UI state, or notifications.
 
 **Source of truth (desktop):** `$HOME/.relaybase` only.  
-Implemented in `desktop/src-tauri/src/secrets.rs`, `desktop/src-tauri/src/notify.rs`, and the TS facades under `app/src/email/*-disk*` / `email-prefs.ts`.
+Implemented in `desktop/src-tauri/src/secrets.rs`, `desktop/src-tauri/src/notify.rs`, and the TS facades under `app/src/email/*-disk*` / `email-prefs.ts` / `api-key-vault.ts`.
+
+For the full two-layer model (Worker KV `RELAYBASE_APP` + this directory), see **[storage-architecture.md](./storage-architecture.md)**.
 
 ---
 
@@ -13,14 +15,14 @@ On the **Mac / Tauri desktop app**, durable user data **must** live under `~/.re
 
 | Allowed | Forbidden as durable store |
 |---------|----------------------------|
-| `~/.relaybase/**` via Tauri commands (`get_/save_credentials`, `get_/save_email_prefs`, `get_/save_mail_json`) | WebKit / Application Support (`~/Library/WebKit/*`, `~/Library/Application Support/Relaybase*`) |
+| `~/.relaybase/**` via Tauri commands (`get_/save_credentials`, `get_/save_email_prefs`, `get_/save_mail_json`, `get_/save_api_key_vault*`) | WebKit / Application Support (`~/Library/WebKit/*`, `~/Library/Application Support/Relaybase*`) |
 | | `localStorage` / `sessionStorage` for the `http://127.0.0.1:*` or `http://localhost:*` origin |
 | | Ad-hoc paths under the repo (`data/`, `app/data/`, etc.) for desktop UX |
 | | Keychain / other home dirs as a second source of truth (unless explicitly migrated later) |
 
 `localStorage` may mirror disk for sync reads **after** hydrate. It is **not** the source of truth. Binary renames (`relaybase_desktop` → `Relaybase`) reset WebKit profiles and will look like “data wiped” if anything still depends on localhost storage alone.
 
-Server/worker data (Cloudflare KV, R2, D1) is separate — that is the remote product store, not local desktop UX state.
+Server/worker data (Cloudflare KV `RELAYBASE_APP`, R2, D1 waitlist) is separate — that is the remote product store, not local desktop UX state.
 
 ---
 
@@ -30,16 +32,17 @@ Server/worker data (Cloudflare KV, R2, D1) is separate — that is the remote pr
 ~/.relaybase/                      # mode 0700
 ├── credentials.json               # Cloudflare + Worker + license (0600)
 ├── email.json                     # account colors / email prefs (0600)
+├── api-keys.json                  # plaintext API key vault (0600)
 ├── app-icon.png                   # notification identity image (seeded from bundle)
 ├── cache/                         # opaque dashboard/API response cache
 │   └── dashboard/
-│       ├── stats-{range}.json                    # e.g. stats-7d.json
-│       ├── api-keys-{range}.json                 # e.g. api-keys-7d.json
-│       ├── addresses-{domain}.json               # e.g. addresses-example.com.json
-│       ├── account-stats-{email}-{range}.json    # e.g. account-stats-isaac_example.com-7d.json
-│       └── account-logs-{email}-{status}.json    # e.g. account-logs-isaac_example.com-all.json
+│       ├── stats-{range}.json
+│       ├── api-keys-{range}.json
+│       ├── addresses-{domain}.json
+│       ├── ttl-*.json             # products-v1 TTL cache write-through
+│       └── …
 └── mail/
-    └── {userId}/                  # e.g. isaac
+    └── desktop/                   # fixed local operator id
         ├── inbox.json
         ├── sent.json
         ├── drafts.json
@@ -52,9 +55,7 @@ Server/worker data (Cloudflare KV, R2, D1) is separate — that is the remote pr
             └── trash.json
 ```
 
-`{userId}` is the session id (`relaybase_user` cookie), sanitized to `[A-Za-z0-9._%-]`.
-
-Legacy / unrelated files that may still exist locally (`tenants.json`, `logs.json`, `aws-settings.json`, `email-ui/`) are **not** part of the current desktop contract — do not extend them; prefer the layout above.
+`{userId}` is always `desktop` (cookie login removed). On first boot, any legacy `mail/{oldCookieUser}/` folder is renamed to `mail/desktop/` when `desktop` is missing.
 
 ---
 
@@ -62,7 +63,7 @@ Legacy / unrelated files that may still exist locally (`tenants.json`, `logs.jso
 
 ### `credentials.json`
 
-Written only by Rust (`secrets.rs`). Shape (camelCase):
+Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
 | Field | Purpose |
 |-------|---------|
@@ -82,44 +83,22 @@ Written only by Rust (`secrets.rs`). Shape (camelCase):
 
 TS: `app/src/email/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`.
 
-### `mail/{userId}/*.json`
+### `api-keys.json`
 
-Opaque JSON via `get_mail_json` / `save_mail_json`. Relative paths must not contain `..` or unsafe segments (enforced in Rust).
+| Field | Purpose |
+|-------|---------|
+| `version` | `1` |
+| `entries[]` | `{ id, domain, label, apiKey, createdAt }` plaintext secrets |
 
-| Relative path | Shape (approx.) |
-|---------------|-----------------|
-| `{userId}/inbox.json` | `{ messages: RoutingActivityEvent[] }` |
-| `{userId}/sent.json` | `{ sent: SentEmail[] }` |
-| `{userId}/drafts.json` | `{ drafts: DraftEmail[] }` |
-| `{userId}/details/{key}.json` | full message detail |
-| `{userId}/ui/enabled-accounts.json` | `{ emails: string[] }` |
-| `{userId}/ui/sidebar.json` | `{ mode, lastEmailPath, lastDashboardPath, collapsed }` |
-| `{userId}/ui/read.json` | `{ version: 2, overrides: Record<string, boolean> }` — optimistic/offline read-state cache only; truth is the Worker's `readAt` per message (see [inbox-threading-and-multi-account.md](./inbox-threading-and-multi-account.md)). Legacy pre-migration shape was `{ keys: string[] }`. |
-| `{userId}/ui/trash.json` | `{ entries: TrashEntry[] }` |
+Worker KV stores only key hashes. Plaintext is captured once at create/rotate and kept locally. TS: `app/src/lib/desktop/api-key-vault.ts`.
 
-TS facades:
+### `mail/desktop/*.json`
 
-- Lists/details → `app/src/email/email-disk-store.ts`
-- UI JSON → `app/src/email/user-ui-disk.ts` (+ `enabled-accounts.ts`, `sidebar-mode.ts`, `read-store.ts`, `trash-store.ts`)
+Opaque JSON via `get_mail_json` / `save_mail_json`.
 
 ### `cache/**`
 
-Opaque JSON via `get_cache_json` / `save_cache_json`. Relative paths use the same safety rules as mail JSON (no `..`, safe segments).
-
-| Relative path | Shape (approx.) |
-|---------------|-----------------|
-| `dashboard/stats-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: UserStatsResponse }` |
-| `dashboard/api-keys-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: { keys, stats, workerUrl, workerConnected } }` |
-| `dashboard/addresses-{domain}.json` | `{ fetchedAt: ISO, data: Address[] }` |
-| `dashboard/account-counts-{domain}.json` | `{ fetchedAt: ISO, data: Record<email, { total, unread }> }` |
-| `dashboard/account-stats-{email}-{24h\|7d\|30d}.json` | `{ fetchedAt: ISO, data: AccountStats }` |
-| `dashboard/account-logs-{email}-{all\|success\|failed}.json` | `{ fetchedAt: ISO, data: AccountLogsResponse }` |
-
-TS facade: `app/src/lib/dashboard/dashboard-cache-disk.ts`. Dashboard / API Keys / Accounts / account Overview & Logs load cache first, then network-refreshes when older than 60s (spinner only; cached UI stays visible). Email segments in paths are sanitized (`@` → `_`, etc.).
-
-### `app-icon.png`
-
-Seeded on app launch from the bundled Tauri icon. Used by `show_notification` so macOS banners are not stuck on Terminal / stale WebKit icons.
+Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelopes (`dashboard-cache-disk.ts`) and TTL write-through (`dashboard-client-cache.ts` → `dashboard/ttl-*.json`).
 
 ---
 
@@ -133,7 +112,7 @@ UI / store
 
 1. **Write (desktop):** must succeed on `~/.relaybase`. Failure must surface — do not pretend success after only writing `localStorage`.
 2. **Read (desktop):** prefer disk. Use `localStorage` only as a warm cache or one-time migration source.
-3. **Browser-only / non-Tauri:** `localStorage` fallback is allowed (no home-dir bridge). That path is not the Mac product.
+3. **Browser `pnpm next`:** credentials via `/api/local-credentials` → same `~/.relaybase/credentials.json`; API calls go to the Worker through `desktopAwareFetch`.
 
 Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in `ui/sidebar.json`).
 
@@ -143,14 +122,8 @@ Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in
 
 When adding durable desktop state:
 
-1. Put it under `~/.relaybase` (usually `mail/{userId}/ui/…`, `cache/…`, or extend `email.json` with a Rust schema change).
-2. Go through existing Tauri commands — do **not** open ad-hoc files from the Next.js layer.
+1. Put it under `~/.relaybase` (usually `mail/desktop/ui/…`, `cache/…`, or extend `email.json` / `api-keys.json` with a Rust schema change).
+2. Go through existing Tauri commands — do **not** open ad-hoc files from the Next.js layer (except `/api/local-credentials` for browser next).
 3. Do **not** invent a second store in Application Support, Keychain, or `localhost` `localStorage`.
 4. Hydrate from disk on boot; migrate legacy `localStorage` keys once if present.
-5. Keep `products-v1:*` API TTL caches in `localStorage` if needed — they are refetchable, not UX source of truth.
-
----
-
-## Why this exists
-
-Tauri `dev` runs a bare binary. WebKit data directories follow the **process name** (`relaybase_desktop` vs `Relaybase`). Relying on that profile for accounts / sidebar / read state caused empty UIs after renames even though `~/.relaybase/mail` was intact. Home-dir storage survives renames, rebuilds, and origin changes (`127.0.0.1` vs `localhost`).
+5. TTL API caches may mirror in `localStorage` but must also write through to `~/.relaybase/cache/…` on desktop.

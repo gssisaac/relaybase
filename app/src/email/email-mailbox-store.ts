@@ -10,6 +10,11 @@ import {
   fetchEmailCachedOptional,
 } from "@/email/components/email-cached-fetch";
 import {
+  desktopAwareFetch,
+  isPackagedApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
+import {
   EMAIL_SEND_FAILED,
   EMAIL_SEND_STARTED,
   EMAIL_SEND_SUCCEEDED,
@@ -305,16 +310,18 @@ export class EmailMailboxStore {
     await Promise.all(
       [...byDomain.entries()].map(async ([domain, ids]) => {
         try {
-          const res = await fetch(`${this.apiBase}/inbox/read`, {
+          const res = await desktopAwareFetch(`${this.apiBase}/inbox/read`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ domain, ids, read }),
           });
           if (!res.ok) {
-            const data = (await res.json().catch(() => ({}))) as {
-              error?: string;
-            };
-            throw new Error(data.error ?? "Failed to sync read state");
+            const data = await readResponseJson<{ error?: string }>(res).catch(
+              () => ({}),
+            );
+            throw new Error(
+              (data as { error?: string }).error ?? "Failed to sync read state",
+            );
           }
         } catch (e) {
           // Keep the optimistic override; it stays persisted locally and
@@ -724,12 +731,12 @@ export class EmailMailboxStore {
         return fromDisk;
       }
 
-      const res = await fetch(
+      const res = await desktopAwareFetch(
         `${this.apiBase}/inbox/${encodeURIComponent(messageId)}${inboxDetailQuery(domain)}`,
       );
-      const data = (await res.json()) as RoutingActivityEvent & {
-        error?: string;
-      };
+      const data = await readResponseJson<
+        RoutingActivityEvent & { error?: string }
+      >(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to load");
       if (this.detailGenerationByKey.get(messageId) !== generation) return null;
       runInAction(() => {
@@ -876,7 +883,13 @@ export class EmailMailboxStore {
     } catch (e) {
       if (this.refreshGeneration === generation) {
         runInAction(() => {
-          this.error = e instanceof Error ? e.message : "Refresh failed";
+          // Packaged features not yet wired (audience/stats/etc.) should not
+          // paint the red Live API banner over cached mail.
+          this.error = isPackagedApiUnavailableError(e)
+            ? null
+            : e instanceof Error
+              ? e.message
+              : "Refresh failed";
         });
       }
     } finally {
@@ -1062,13 +1075,13 @@ export class EmailMailboxStore {
       await Promise.all(
         domains.map(async (domain) => {
           try {
-            const res = await fetch(
+            const res = await desktopAwareFetch(
               `${this.apiBase}/inbox/notifications${domainQuery(domain, { limit: "25" })}`,
             );
             if (!res.ok) return;
-            const data = (await res.json()) as {
+            const data = await readResponseJson<{
               events?: InboxNotificationEvent[];
-            };
+            }>(res);
             const events = data.events ?? [];
             if (events.length === 0) return;
             allEvents.push(...events);
@@ -1102,7 +1115,7 @@ export class EmailMailboxStore {
       await Promise.all(
         [...eventsByDomain.entries()].map(async ([domain, ids]) => {
           try {
-            await fetch(`${this.apiBase}/inbox/notifications`, {
+            await desktopAwareFetch(`${this.apiBase}/inbox/notifications`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ domain, ids }),

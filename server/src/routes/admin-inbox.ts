@@ -37,7 +37,7 @@ adminInbox.get("/notifications", async (c) => {
   }
 
   const limit = Number(c.req.query("limit") ?? "25");
-  const events = await listPendingEvents(c.env.KEYS, domain, limit);
+  const events = await listPendingEvents(c.env.RELAYBASE_APP, domain, limit);
   return c.json({ events });
 });
 
@@ -61,7 +61,7 @@ adminInbox.post("/notifications/ack", async (c) => {
     return c.json({ error: "ids must be a non-empty array" }, 400);
   }
 
-  const acked = await ackPendingEvents(c.env.KEYS, domain, ids);
+  const acked = await ackPendingEvents(c.env.RELAYBASE_APP, domain, ids);
   return c.json({ acked });
 });
 

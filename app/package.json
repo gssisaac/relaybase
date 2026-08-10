@@ -7,16 +7,12 @@
     "dev": "next dev -p 32830",
     "build": "next build",
     "build:desktop": "node scripts/build-desktop.mjs",
-    "build:cf": "corepack enable && pnpm install --frozen-lockfile && opennextjs-cloudflare build",
-    "preview:cf": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy:cf": "pnpm run build:cf && opennextjs-cloudflare deploy",
     "start": "next start -p 32830",
     "lint": "eslint",
-    "test:unit": "node --experimental-strip-types --test src/email/reply-quote-body.test.ts src/email/plain-text-to-email-html.test.ts src/email/sidebar-mode.test.ts src/email/draft-thread-rows.test.ts src/lib/dashboard/accounts-sync.test.ts"
+    "test:unit": "node --experimental-strip-types --test src/email/reply-quote-body.test.ts src/email/plain-text-to-email-html.test.ts src/email/draft-thread-rows.test.ts src/lib/dashboard/accounts-sync.test.ts src/lib/desktop/email-api-map.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
-    "@opennextjs/cloudflare": "^1.20.1",
     "@tabler/icons-webfont": "^3.44.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-notification": "^2",
@@ -43,7 +39,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "wrangler": "^4.110.0"
+    "typescript": "^5"
   }
 }

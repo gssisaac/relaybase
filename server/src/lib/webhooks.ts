@@ -1,7 +1,7 @@
 import type { InboundEmailEvent } from "./inbound-events";
 import { sha256Hex } from "./crypto";
 
-const WEBHOOK_PREFIX = "webhook:";
+const WEBHOOK_PREFIX = "srv:webhook:";
 const MAX_WEBHOOKS_PER_DOMAIN = 3;
 const WEBHOOK_SECRET_PREFIX = "whsec_";
 
@@ -175,7 +175,7 @@ export async function deliverWebhooks(
 
     // Secret is only known at creation; for delivery we store plaintext secret
     // alongside hash in a separate KV key set at create time.
-    const secretRaw = await kv.get(`webhook:secret:${domain}:${webhook.id}`);
+    const secretRaw = await kv.get(`srv:webhook:secret:${domain}:${webhook.id}`);
     if (!secretRaw) continue;
 
     let delivered = false;
@@ -193,7 +193,7 @@ export async function deliverWebhooks(
 
     if (!delivered) {
       await kv.put(
-        `webhook:fail:${domain}:${webhook.id}:${event.id}`,
+        `srv:webhook:fail:${domain}:${webhook.id}:${event.id}`,
         JSON.stringify({
           webhookId: webhook.id,
           url: webhook.url,
@@ -212,7 +212,10 @@ export async function storeWebhookSecret(
   webhookId: string,
   secret: string,
 ): Promise<void> {
-  await kv.put(`webhook:secret:${domain.trim().toLowerCase()}:${webhookId}`, secret);
+  await kv.put(
+    `srv:webhook:secret:${domain.trim().toLowerCase()}:${webhookId}`,
+    secret,
+  );
 }
 
 export async function removeWebhookSecret(
@@ -220,5 +223,7 @@ export async function removeWebhookSecret(
   domain: string,
   webhookId: string,
 ): Promise<void> {
-  await kv.delete(`webhook:secret:${domain.trim().toLowerCase()}:${webhookId}`);
+  await kv.delete(
+    `srv:webhook:secret:${domain.trim().toLowerCase()}:${webhookId}`,
+  );
 }

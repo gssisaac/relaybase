@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 
 const isDesktopBuild = process.env.DESKTOP_BUILD === "1";
 // Monorepo root (pnpm-workspace.yaml). Turbopack must see this when
-// `tauri dev` launches `pnpm --dir ../app dev`, or it mis-infers the root
+// `tauri dev` launches `pnpm --dir ../app next`, or it mis-infers the root
 // as `app/src/app` and fails to resolve `next/package.json`.
 const turbopackRoot = path.join(import.meta.dirname, "..");
 
@@ -23,12 +23,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-
-if (process.env.NODE_ENV !== "production" && !isDesktopBuild) {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require("@opennextjs/cloudflare").initOpenNextCloudflareForDev({
-    // Needed so wrangler.jsonc `remote: true` KV bindings hit Cloudflare,
-    // not the stale local miniflare copy under .wrangler/state.
-    experimental: { remoteBindings: true },
-  });
-}

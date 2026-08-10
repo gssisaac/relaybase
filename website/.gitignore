@@ -30,6 +30,11 @@ yarn-error.log*
 # env files
 .env*
 
+# Large desktop binaries live on R2 (download.relaybase.xyz), not in git
+/public/release/Relaybase.*.dmg
+/public/release/Relaybase.*.app.tar.gz
+!/public/release/Relaybase.*.app.tar.gz.sig
+
 # vercel
 .vercel
 

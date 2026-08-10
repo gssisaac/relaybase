@@ -3,17 +3,64 @@
 import Link from "next/link";
 
 import { AlertCircle, Check, X } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
 
 import type { InboundAttachment } from "@/email/components/types";
 import { useEmailPaths } from "@/email/paths";
+import {
+  desktopAwareFetch,
+  isWorkerBacked,
+} from "@/lib/desktop/api-base";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 export { PageLoadingOverlay } from "@/components/ui/page-loading-overlay";
+
+/** Relative Next path (mapped to Worker in the packaged shell). */
+export function emailInboxAttachmentPath(
+  messageKey: string,
+  attachmentId: string,
+  domain?: string,
+): string {
+  const base = `/api/email/inbox/${encodeURIComponent(messageKey)}/attachments/${encodeURIComponent(attachmentId)}`;
+  return domain ? `${base}?domain=${encodeURIComponent(domain)}` : base;
+}
+
+function useAuthedAttachmentUrl(path: string): string | null {
+  const [url, setUrl] = useState<string | null>(() =>
+    isWorkerBacked() ? null : path,
+  );
+
+  useEffect(() => {
+    if (!isWorkerBacked()) {
+      setUrl(path);
+      return;
+    }
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await desktopAwareFetch(path);
+        if (!res.ok || cancelled) return;
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      } catch {
+        if (!cancelled) setUrl(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [path]);
+
+  return url;
+}
 
 export function StatusBadge({
   ok,
@@ -132,18 +179,14 @@ export function InboundEmailDetail({
   plain?: boolean;
   attachments?: InboundAttachment[];
 }) {
-  const attachmentUrl = (attachmentId: string) => {
-    const base = `/api/email/inbox/${encodeURIComponent(messageKey)}/attachments/${encodeURIComponent(attachmentId)}`;
-    return domain ? `${base}?domain=${encodeURIComponent(domain)}` : base;
-  };
+  const attachmentPath = (attachmentId: string) =>
+    emailInboxAttachmentPath(messageKey, attachmentId, domain);
 
   const safeHtml = useMemo(() => {
     if (!bodyHtml) return "";
-    const withInline = rewriteInlineAttachmentUrls(
-      bodyHtml,
-      attachments,
-      attachmentUrl,
-    );
+    const withInline = isWorkerBacked()
+      ? bodyHtml
+      : rewriteInlineAttachmentUrls(bodyHtml, attachments, attachmentPath);
     return sanitizeEmailHtml(withInline);
   }, [attachments, bodyHtml, domain, messageKey]);
 
@@ -184,55 +227,87 @@ export function InboundEmailDetail({
           </h3>
           {imageAttachments.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {imageAttachments.map((attachment) => {
-                const url = attachmentUrl(attachment.id);
-                return (
-                  <a
-                    key={attachment.id}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block overflow-hidden rounded-md border border-border bg-muted/20"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={url}
-                      alt={attachment.filename}
-                      className="max-h-80 w-full object-contain bg-background"
-                    />
-                    <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-                      {attachment.filename} · {formatFileSize(attachment.size)}
-                    </div>
-                  </a>
-                );
-              })}
+              {imageAttachments.map((attachment) => (
+                <AuthedAttachmentCard
+                  key={attachment.id}
+                  path={attachmentPath(attachment.id)}
+                  filename={attachment.filename}
+                  size={attachment.size}
+                  image
+                />
+              ))}
             </div>
           ) : null}
           {fileAttachments.length > 0 ? (
             <ul className="divide-y divide-border rounded-md border border-border">
-              {fileAttachments.map((attachment) => {
-                const url = attachmentUrl(attachment.id);
-                return (
-                  <li key={attachment.id}>
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-muted/40"
-                    >
-                      <span className="truncate font-medium">{attachment.filename}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {formatFileSize(attachment.size)}
-                      </span>
-                    </a>
-                  </li>
-                );
-              })}
+              {fileAttachments.map((attachment) => (
+                <li key={attachment.id}>
+                  <AuthedAttachmentCard
+                    path={attachmentPath(attachment.id)}
+                    filename={attachment.filename}
+                    size={attachment.size}
+                  />
+                </li>
+              ))}
             </ul>
           ) : null}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AuthedAttachmentCard({
+  path,
+  filename,
+  size,
+  image = false,
+}: {
+  path: string;
+  filename: string;
+  size: number;
+  image?: boolean;
+}) {
+  const url = useAuthedAttachmentUrl(path);
+  if (!url) {
+    return (
+      <div className="px-3 py-2 text-sm text-muted-foreground">
+        {filename} · {formatFileSize(size)}
+      </div>
+    );
+  }
+  if (image) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block overflow-hidden rounded-md border border-border bg-muted/20"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt={filename}
+          className="max-h-80 w-full object-contain bg-background"
+        />
+        <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          {filename} · {formatFileSize(size)}
+        </div>
+      </a>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-muted/40"
+    >
+      <span className="truncate font-medium">{filename}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {formatFileSize(size)}
+      </span>
+    </a>
   );
 }
 

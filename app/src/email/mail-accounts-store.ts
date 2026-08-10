@@ -14,6 +14,12 @@ import {
   writeEnabledAccounts,
 } from "@/email/enabled-accounts";
 import type { Address } from "@/email/components/types";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  isPackagedApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 /**
  * Email-side account UX: available addresses (for Add account dialog) +
@@ -112,26 +118,28 @@ export class MailAccountsStore {
       this.error = null;
     });
     try {
-      const res = await fetch(`${this.apiBase}/addresses?all=1`, {
+      const res = await desktopAwareFetch(`${this.apiBase}/addresses?all=1`, {
         cache: "no-store",
       });
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         addresses?: Address[];
         error?: string;
-      };
+      }>(res);
       if (!res.ok) {
         throw new Error(data.error || "Failed to load addresses");
       }
       runInAction(() => {
         this.availableAddresses = data.addresses ?? [];
         this.loading = false;
+        this.error = null;
       });
       this.pruneEnabledToAvailable();
       this.ensureColors();
     } catch (e) {
       runInAction(() => {
-        this.error =
-          e instanceof Error ? e.message : "Failed to load addresses";
+        this.error = isPackagedApiUnavailableError(e)
+          ? null
+          : friendlyDesktopFetchError(e, "Failed to load addresses");
         this.loading = false;
       });
     }

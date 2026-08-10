@@ -13,7 +13,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.join(__dirname, "..");
 const apiDir = path.join(appRoot, "src", "app", "api");
 const stashDir = path.join(appRoot, ".desktop-stash", "api");
-const catchAll = path.join(appRoot, "src", "app", "(dashboard)", "[...path]", "page.tsx");
+const catchAll = path.join(
+  appRoot,
+  "src",
+  "app",
+  "(dashboard)",
+  "[...path]",
+  "page.tsx",
+);
 
 function run(cmd, args, env = {}) {
   const result = spawnSync(cmd, args, {
@@ -31,6 +38,7 @@ let stashed = false;
 let catchAllBackup = null;
 
 try {
+  // Only local-credentials remains under api/ — stash for static export.
   if (fs.existsSync(apiDir)) {
     fs.mkdirSync(path.dirname(stashDir), { recursive: true });
     if (fs.existsSync(stashDir)) {
@@ -41,57 +49,34 @@ try {
     console.log("→ Stashed app/src/app/api for static export");
   }
 
-  // Remove force-dynamic for export
   if (fs.existsSync(catchAll)) {
     catchAllBackup = fs.readFileSync(catchAll, "utf8");
+    const staticParams = `export function generateStaticParams() {
+  return [
+    { path: ["dashboard"] },
+    { path: ["domains"] },
+    { path: ["accounts"] },
+    { path: ["keys"] },
+    { path: ["audience"] },
+    { path: ["broadcasts"] },
+    { path: ["settings"] },
+    { path: ["email"] },
+    { path: ["email", "inbox"] },
+    { path: ["email", "drafts"] },
+    { path: ["email", "sent"] },
+    { path: ["email", "compose"] },
+    { path: ["email", "trash"] },
+  ];
+}
+
+`;
     const patched = catchAllBackup
       .replace(/export const dynamic = "force-dynamic";\n*/, "")
-      .replace(
-        /type Props/,
-        `export function generateStaticParams() {\n  return [{ path: ["dashboard"] }];\n}\n\ntype Props`,
-      );
+      .replace(/type Props/, `${staticParams}type Props`);
     fs.writeFileSync(catchAll, patched);
   }
 
-  // Soften login/root pages that use cookies for export. Home restores the
-  // last email/dashboard route from localStorage (same as browser entry).
-  const rootPage = path.join(appRoot, "src", "app", "page.tsx");
-  let rootBackup = null;
-  if (fs.existsSync(rootPage)) {
-    rootBackup = fs.readFileSync(rootPage, "utf8");
-    fs.writeFileSync(
-      rootPage,
-      `"use client";\nimport { RestoreLastRoute } from "@/components/RestoreLastRoute";\nexport default function Home() {\n  return <RestoreLastRoute fallbackUserId="desktop" />;\n}\n`,
-    );
-  }
-
-  const loginPage = path.join(appRoot, "src", "app", "login", "page.tsx");
-  let loginBackup = null;
-  if (fs.existsSync(loginPage)) {
-    loginBackup = fs.readFileSync(loginPage, "utf8");
-    fs.writeFileSync(
-      loginPage,
-      `"use client";\nexport default function LoginPage() {\n  return <p className="p-8 text-sm">Use the desktop onboarding flow.</p>;\n}\n`,
-    );
-  }
-
-  const registerPage = path.join(appRoot, "src", "app", "register", "page.tsx");
-  let registerBackup = null;
-  if (fs.existsSync(registerPage)) {
-    registerBackup = fs.readFileSync(registerPage, "utf8");
-    fs.writeFileSync(
-      registerPage,
-      `"use client";\nexport default function RegisterPage() {\n  return <p className="p-8 text-sm">Licenses are purchased on relaybase.xyz.</p>;\n}\n`,
-    );
-  }
-
-  try {
-    run("pnpm", ["exec", "next", "build"], { DESKTOP_BUILD: "1" });
-  } finally {
-    if (rootBackup !== null) fs.writeFileSync(rootPage, rootBackup);
-    if (loginBackup !== null) fs.writeFileSync(loginPage, loginBackup);
-    if (registerBackup !== null) fs.writeFileSync(registerPage, registerBackup);
-  }
+  run("pnpm", ["exec", "next", "build"], { DESKTOP_BUILD: "1" });
 
   console.log("✓ Desktop static export ready at app/out");
 } finally {

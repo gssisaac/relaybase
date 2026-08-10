@@ -1,3 +1,9 @@
+import {
+  desktopGetCacheJson,
+  desktopSaveCacheJson,
+  isDesktopRuntime,
+} from "@/lib/desktop/bridge";
+
 export const FRAMEWORK_CACHE_TTL_MS = 30 * 60 * 1000;
 /** Re-fetch on page load when cached data is older than this (still within TTL). */
 export const FRAMEWORK_CACHE_REFRESH_AFTER_MS = 10 * 60 * 1000;
@@ -21,6 +27,17 @@ function storageKey(
   return `${CLIENT_CACHE_VERSION}:${serviceId}-${namespace}:${resource}`;
 }
 
+function diskRelativePath(
+  serviceId: string,
+  namespace: string,
+  resource: string,
+): string {
+  const safe = `${serviceId}-${namespace}-${resource}`
+    .trim()
+    .replace(/[^a-zA-Z0-9._%-]+/g, "_");
+  return `dashboard/ttl-${safe || "default"}.json`;
+}
+
 function readStorage<T>(key: string): CacheEntry<T> | null {
   if (typeof window === "undefined") return null;
   try {
@@ -41,6 +58,50 @@ function writeStorage<T>(key: string, entry: CacheEntry<T>): void {
   }
 }
 
+let hydrateStarted = false;
+
+/** Hydrate TTL cache from ~/.relaybase/cache/dashboard/ttl-* once at boot. */
+export async function hydrateDashboardClientCacheFromDisk(): Promise<void> {
+  if (hydrateStarted || typeof window === "undefined" || !isDesktopRuntime()) {
+    return;
+  }
+  hydrateStarted = true;
+  // Disk files are written per resource on write; there is no directory listing
+  // from the webview. Callers still get disk via read-through on miss below.
+}
+
+async function readDiskEntry<T>(
+  serviceId: string,
+  namespace: string,
+  resource: string,
+): Promise<CacheEntry<T> | null> {
+  if (!isDesktopRuntime()) return null;
+  try {
+    const raw = await desktopGetCacheJson(
+      diskRelativePath(serviceId, namespace, resource),
+    );
+    if (!raw || typeof raw !== "object") return null;
+    return raw as CacheEntry<T>;
+  } catch {
+    return null;
+  }
+}
+
+function writeDiskEntry(
+  serviceId: string,
+  namespace: string,
+  resource: string,
+  entry: CacheEntry<unknown>,
+): void {
+  if (!isDesktopRuntime()) return;
+  void desktopSaveCacheJson(
+    diskRelativePath(serviceId, namespace, resource),
+    entry,
+  ).catch(() => {
+    /* ignore disk write failures — localStorage mirror still works */
+  });
+}
+
 export function readDashboardCacheStale<T>(
   serviceId: string,
   namespace: string,
@@ -56,6 +117,13 @@ export function readDashboardCacheStale<T>(
     memory.set(key, stored);
     return stored;
   }
+
+  // Sync API cannot await disk; kick off async hydrate for next read.
+  void readDiskEntry<T>(serviceId, namespace, resource).then((disk) => {
+    if (!disk) return;
+    memory.set(key, disk);
+    writeStorage(key, disk);
+  });
 
   return null;
 }
@@ -94,6 +162,7 @@ export function writeDashboardCache<T>(
   };
   memory.set(key, entry);
   writeStorage(key, entry);
+  writeDiskEntry(serviceId, namespace, resource, entry);
 }
 
 export function clearDashboardCache(

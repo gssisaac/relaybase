@@ -65,6 +65,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  desktopAwareFetch,
+  isApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
+import {
+  forgetApiKey,
+  loadApiKeyVaultEntries,
+  mergeKeysWithVault,
+  rememberApiKey,
+} from "@/lib/desktop/api-key-vault";
 import { cn } from "@/lib/utils";
 
 type StatsRange = "24h" | "7d" | "30d";
@@ -234,28 +245,38 @@ export function EmailSettingsKeysView() {
       else setLoadingKeys(true);
 
       try {
-        const res = await fetch(
+        const res = await desktopAwareFetch(
           `${apiBase}/keys?range=${encodeURIComponent(range)}`,
           { cache: "no-store" },
         );
-        const data = (await res.json()) as {
+        const data = await readResponseJson<{
           keys?: ProductEmailKeyRow[];
           stats?: KeysStats;
           workerUrl?: string | null;
           workerConnected?: boolean;
           error?: string;
-        };
+        }>(res);
         if (!res.ok) throw new Error(data.error ?? "Failed to load keys");
+        const vault = await loadApiKeyVaultEntries();
+        const merged = mergeKeysWithVault(
+          (data.keys ?? []).map((k) => ({
+            ...k,
+            apiKey: k.apiKey ?? null,
+          })),
+          vault,
+        );
         const next: ApiKeysCacheData = {
-          keys: data.keys ?? [],
+          keys: merged,
           stats: data.stats ?? null,
           workerUrl: data.workerUrl ?? null,
-          workerConnected: Boolean(data.workerConnected),
+          workerConnected: data.workerConnected ?? true,
         };
         applyCacheData(next);
         await saveApiKeysCache(range, next);
       } catch (e) {
-        setKeysError(e instanceof Error ? e.message : "Failed to load keys");
+        if (!isApiUnavailableError(e)) {
+          setKeysError(e instanceof Error ? e.message : "Failed to load keys");
+        }
       } finally {
         setLoadingKeys(false);
         setRefreshing(false);
@@ -294,18 +315,29 @@ export function EmailSettingsKeysView() {
     setKeysError(null);
     setKeysMessage(null);
     try {
-      const res = await fetch(`${apiBase}/keys`, {
+      const res = await desktopAwareFetch(`${apiBase}/keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain, label: label.trim() || undefined }),
       });
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         domain?: string;
         label?: string | null;
+        apiKey?: string;
+        id?: string;
         error?: string;
         message?: string;
-      };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Create failed");
+      if (data.apiKey && data.id) {
+        await rememberApiKey({
+          id: data.id,
+          domain: data.domain ?? domain,
+          label: data.label,
+          apiKey: data.apiKey,
+        });
+        await copyKey(data.id, data.apiKey);
+      }
       setKeysMessage(
         data.message ??
           `Issued API key for ${data.domain}${data.label ? ` (${data.label})` : ""}`,
@@ -326,10 +358,14 @@ export function EmailSettingsKeysView() {
     setKeysError(null);
     setKeysMessage(null);
     try {
-      const res = await fetch(`${apiBase}/keys/${key.id}`, {
+      const res = await desktopAwareFetch(`${apiBase}/keys/${key.id}`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: true }),
       });
-      const data = (await res.json()) as { error?: string; message?: string };
+      const data = await readResponseJson<{ error?: string; message?: string }>(
+        res,
+      );
       if (!res.ok) throw new Error(data.error ?? "Activate failed");
       setKeysMessage(data.message ?? `Using key for ${key.domain}`);
       await refreshKeys(true);
@@ -345,24 +381,30 @@ export function EmailSettingsKeysView() {
     setKeysError(null);
     setKeysMessage(null);
     try {
-      const res = await fetch(`${apiBase}/keys/${key.id}/rotate`, {
+      const res = await desktopAwareFetch(`${apiBase}/keys/${key.id}/rotate`, {
         method: "POST",
       });
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         apiKey?: string;
         id?: string;
         error?: string;
         message?: string;
-      };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Rotate failed");
       setKeysMessage(data.message ?? `Rotated key for ${key.domain}`);
-      await refreshKeys(true);
       if (data.apiKey && data.id) {
+        await rememberApiKey({
+          id: data.id,
+          domain: key.domain,
+          label: key.label,
+          apiKey: data.apiKey,
+        });
         await copyKey(data.id, data.apiKey);
         setKeysMessage(
           `${data.message ?? "Key rotated"} — new secret copied to clipboard`,
         );
       }
+      await refreshKeys(true);
     } catch (e) {
       setKeysError(e instanceof Error ? e.message : "Rotate failed");
     } finally {
@@ -377,11 +419,13 @@ export function EmailSettingsKeysView() {
     setKeysError(null);
     setKeysMessage(null);
     try {
-      const res = await fetch(`${apiBase}/keys/${encodeURIComponent(key.id)}`, {
-        method: "DELETE",
-      });
-      const data = (await res.json()) as { error?: string };
+      const res = await desktopAwareFetch(
+        `${apiBase}/keys/${encodeURIComponent(key.id)}`,
+        { method: "DELETE" },
+      );
+      const data = await readResponseJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Revoke failed");
+      await forgetApiKey(key.id);
 
       const nextKeys = keys.filter((entry) => entry.id !== key.id);
       setKeys(nextKeys);

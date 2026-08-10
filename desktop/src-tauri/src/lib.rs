@@ -5,10 +5,11 @@ mod worker;
 
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
-    clear_credentials, load_cache_json as read_cache_json, load_credentials, load_email_prefs,
-    load_mail_json as read_mail_json, save_cache_json as write_cache_json, save_credentials,
-    save_email_prefs as write_email_prefs, save_mail_json as write_mail_json, EmailPrefs,
-    StoredCredentials,
+    clear_credentials, load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
+    load_email_prefs, load_mail_json as read_mail_json, migrate_mail_to_desktop_user,
+    remove_api_key_vault_entry, save_cache_json as write_cache_json, save_credentials,
+    save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
+    upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, EmailPrefs, StoredCredentials,
 };
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
@@ -42,6 +43,26 @@ async fn get_email_prefs() -> Result<Option<EmailPrefs>, String> {
 #[tauri::command]
 async fn save_email_prefs(prefs: EmailPrefs) -> Result<(), String> {
     write_email_prefs(&prefs)
+}
+
+#[tauri::command]
+async fn get_api_key_vault() -> Result<ApiKeyVault, String> {
+    load_api_key_vault()
+}
+
+#[tauri::command]
+async fn save_api_key_vault_entry(entry: ApiKeyVaultEntry) -> Result<ApiKeyVault, String> {
+    upsert_api_key_vault_entry(entry)
+}
+
+#[tauri::command]
+async fn remove_api_key_vault_entry_cmd(id: String) -> Result<ApiKeyVault, String> {
+    remove_api_key_vault_entry(id.trim())
+}
+
+#[tauri::command]
+async fn migrate_mail_user_folder() -> Result<Option<String>, String> {
+    migrate_mail_to_desktop_user()
 }
 
 #[tauri::command]
@@ -316,6 +337,7 @@ async fn open_external_url(url: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -337,6 +359,10 @@ pub fn run() {
             clear_stored_credentials,
             get_email_prefs,
             save_email_prefs,
+            get_api_key_vault,
+            save_api_key_vault_entry,
+            remove_api_key_vault_entry_cmd,
+            migrate_mail_user_folder,
             get_mail_json,
             save_mail_json,
             get_cache_json,

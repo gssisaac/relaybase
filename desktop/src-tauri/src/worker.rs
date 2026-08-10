@@ -8,8 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub const DEFAULT_SCRIPT: &str = "relaybase-api";
-pub const KEYS_NS: &str = "relaybase-keys";
-pub const API_NS: &str = "relaybase-api";
+pub const APP_NS: &str = "relaybase-app";
 pub const R2_BUCKET: &str = "relaybase-inbound";
 
 /// Minimal Worker stub shipped with the app when a full server build is not embedded.
@@ -23,18 +22,17 @@ export default {
       return Response.json({ ok: true, stub: true, inbound: { r2Configured: !!env.INBOUND } });
     }
     if (url.pathname === "/admin/bootstrap" && request.method === "PUT") {
-      const auth = request.headers.get("Authorization") || "";
       const body = await request.json();
-      await env.KEYS.put("config:cloudflare", JSON.stringify({
+      await env.RELAYBASE_APP.put("srv:config:cloudflare", JSON.stringify({
         accountId: body.accountId,
         apiToken: body.apiToken,
       }));
-      await env.KEYS.put("config:admin", JSON.stringify({ token: body.adminToken }));
+      await env.RELAYBASE_APP.put("srv:config:admin", JSON.stringify({ token: body.adminToken }));
       return Response.json({ configured: true, accountId: body.accountId, stub: true });
     }
     if (url.pathname === "/admin/cloudflare" && request.method === "GET") {
       const auth = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-      const raw = await env.KEYS.get("config:admin");
+      const raw = await env.RELAYBASE_APP.get("srv:config:admin");
       const expected = raw ? (JSON.parse(raw).token || "") : (env.ADMIN_TOKEN || "");
       if (!auth || auth !== expected) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,9 +97,11 @@ pub async fn probe_install(account_id: &str, api_token: &str) -> Result<ProbeRes
     let script_name = DEFAULT_SCRIPT.to_string();
 
     let script_present = worker_script_exists(&client, &script_name).await?;
-    let keys = find_kv_namespace(&client, KEYS_NS).await?;
-    let api = find_kv_namespace(&client, API_NS).await?;
+    let app_kv = find_kv_namespace(&client, APP_NS).await?;
+    // Legacy dual-namespace installs (pre consolidation).
+    let legacy_keys = find_kv_namespace(&client, "relaybase-keys").await?;
     let r2_present = find_r2_bucket(&client, R2_BUCKET).await?;
+    let kv_present = app_kv.is_some() || legacy_keys.is_some();
 
     let worker_url = if script_present {
         match enable_workers_dev(&client, &script_name).await {
@@ -130,23 +130,13 @@ pub async fn probe_install(account_id: &str, api_token: &str) -> Result<ProbeRes
             },
         },
         ResourceCheck {
-            name: KEYS_NS.into(),
+            name: APP_NS.into(),
             kind: "kv".into(),
-            present: keys.is_some(),
-            detail: if keys.is_some() {
+            present: kv_present,
+            detail: if kv_present {
                 "KV namespace found by title".into()
             } else {
-                "Stores admin config and API keys".into()
-            },
-        },
-        ResourceCheck {
-            name: API_NS.into(),
-            kind: "kv".into(),
-            present: api.is_some(),
-            detail: if api.is_some() {
-                "KV namespace found by title".into()
-            } else {
-                "Stores Relaybase API runtime data".into()
+                "Stores catalog, API keys, and runtime config".into()
             },
         },
         ResourceCheck {
@@ -161,8 +151,8 @@ pub async fn probe_install(account_id: &str, api_token: &str) -> Result<ProbeRes
         },
     ];
 
-    let all_present = script_present && keys.is_some() && api.is_some() && r2_present;
-    let any_present = script_present || keys.is_some() || api.is_some() || r2_present;
+    let all_present = script_present && kv_present && r2_present;
+    let any_present = script_present || kv_present || r2_present;
 
     let status = if all_present && health_ok {
         "ready"
@@ -241,12 +231,12 @@ pub async fn adopt_worker(
         .clone()
         .ok_or_else(|| "Could not resolve workers.dev URL".to_string())?;
 
-    let keys_kv_id = find_kv_namespace(&client, KEYS_NS)
-        .await?
-        .ok_or_else(|| "Missing KV namespace".to_string())?;
-    let api_kv_id = find_kv_namespace(&client, API_NS)
-        .await?
-        .ok_or_else(|| "Missing KV namespace".to_string())?;
+    let app_kv_id = match find_kv_namespace(&client, APP_NS).await? {
+        Some(id) => id,
+        None => find_kv_namespace(&client, "relaybase-keys")
+            .await?
+            .ok_or_else(|| "Missing KV namespace".to_string())?,
+    };
 
     let (admin_token, admin_relinked) = relink_admin(
         &client,
@@ -262,8 +252,8 @@ pub async fn adopt_worker(
         worker_url: worker_url.clone(),
         worker_script_name: script_name.clone(),
         admin_token: admin_token.clone(),
-        keys_kv_id,
-        api_kv_id,
+        keys_kv_id: app_kv_id.clone(),
+        api_kv_id: app_kv_id,
         r2_bucket: R2_BUCKET.to_string(),
         skipped: true,
         admin_relinked,
@@ -294,8 +284,7 @@ pub async fn install_worker(
 
     let client = client_from(account_id, api_token);
     let script_name = DEFAULT_SCRIPT.to_string();
-    let keys_kv_id = ensure_kv_namespace(&client, KEYS_NS).await?;
-    let api_kv_id = ensure_kv_namespace(&client, API_NS).await?;
+    let app_kv_id = ensure_kv_namespace(&client, APP_NS).await?;
     ensure_r2_bucket(&client, R2_BUCKET).await?;
 
     let source = worker_js.unwrap_or_else(|| EMBEDDED_WORKER_STUB.trim().to_string());
@@ -303,8 +292,7 @@ pub async fn install_worker(
         &client,
         &script_name,
         &source,
-        &keys_kv_id,
-        &api_kv_id,
+        &app_kv_id,
         R2_BUCKET,
     )
     .await?;
@@ -329,8 +317,8 @@ pub async fn install_worker(
         worker_url: worker_url.clone(),
         worker_script_name: script_name.clone(),
         admin_token: admin_token.clone(),
-        keys_kv_id,
-        api_kv_id,
+        keys_kv_id: app_kv_id.clone(),
+        api_kv_id: app_kv_id,
         r2_bucket: R2_BUCKET.to_string(),
         skipped: false,
         admin_relinked: false,
@@ -361,16 +349,14 @@ pub async fn update_worker(
     } else {
         creds.worker_script_name.clone()
     };
-    let keys_kv_id = ensure_kv_namespace(&client, KEYS_NS).await?;
-    let api_kv_id = ensure_kv_namespace(&client, API_NS).await?;
+    let app_kv_id = ensure_kv_namespace(&client, APP_NS).await?;
     ensure_r2_bucket(&client, R2_BUCKET).await?;
     let source = worker_js.unwrap_or_else(|| EMBEDDED_WORKER_STUB.trim().to_string());
     upload_worker_script(
         &client,
         &script_name,
         &source,
-        &keys_kv_id,
-        &api_kv_id,
+        &app_kv_id,
         R2_BUCKET,
     )
     .await?;
@@ -378,8 +364,8 @@ pub async fn update_worker(
         worker_url: creds.worker_url.clone(),
         worker_script_name: script_name,
         admin_token: creds.admin_token.clone(),
-        keys_kv_id,
-        api_kv_id,
+        keys_kv_id: app_kv_id.clone(),
+        api_kv_id: app_kv_id,
         r2_bucket: R2_BUCKET.to_string(),
         skipped: false,
         admin_relinked: false,

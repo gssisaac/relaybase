@@ -31,8 +31,8 @@ adminBootstrap.put("/", async (c) => {
     );
   }
 
-  await writeCloudflareRuntimeConfig(c.env.KEYS, { accountId, apiToken });
-  await setAdminToken(c.env.KEYS, adminToken);
+  await writeCloudflareRuntimeConfig(c.env.RELAYBASE_APP, { accountId, apiToken });
+  await setAdminToken(c.env.RELAYBASE_APP, adminToken);
 
   return c.json({ configured: true, accountId });
 });

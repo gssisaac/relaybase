@@ -24,7 +24,7 @@ v1Inbox.get("/events", async (c) => {
   if (auth instanceof Response) return auth;
 
   const limit = Number(c.req.query("limit") ?? "25");
-  const events = await listPendingEvents(c.env.KEYS, auth.record.domain, limit);
+  const events = await listPendingEvents(c.env.RELAYBASE_APP, auth.record.domain, limit);
   return c.json({ events });
 });
 
@@ -44,7 +44,7 @@ v1Inbox.post("/events/ack", async (c) => {
     return c.json({ error: "ids must be a non-empty array" }, 400);
   }
 
-  const acked = await ackPendingEvents(c.env.KEYS, auth.record.domain, ids);
+  const acked = await ackPendingEvents(c.env.RELAYBASE_APP, auth.record.domain, ids);
   return c.json({ acked });
 });
 

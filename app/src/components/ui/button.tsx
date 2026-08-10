@@ -40,17 +40,30 @@ const buttonVariants = cva(
   }
 )
 
+const ICON_SIZES = new Set(["icon", "icon-xs", "icon-sm", "icon-lg"])
+
 function Button({
   className,
   variant = "default",
   size = "default",
+  tabIndex,
+  onMouseDown,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // Icon chrome is click/shortcut driven — don't steal focus (WebKit shows
+  // :focus-visible rings on mouse click otherwise).
+  const isIconButton = ICON_SIZES.has(size ?? "default")
+
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
+      tabIndex={tabIndex ?? (isIconButton ? -1 : undefined)}
+      onMouseDown={(event) => {
+        if (isIconButton) event.preventDefault()
+        onMouseDown?.(event)
+      }}
     />
   )
 }

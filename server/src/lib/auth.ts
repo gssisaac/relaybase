@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import type { Env } from "../env";
 import { resolveKey } from "./keys";
 
-const ADMIN_KV_KEY = "config:admin";
+const ADMIN_KV_KEY = "srv:config:admin";
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
   if (!authHeader) return null;
@@ -11,7 +11,7 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
 }
 
 async function kvAdminToken(env: Env): Promise<string | null> {
-  const raw = await env.KEYS.get(ADMIN_KV_KEY);
+  const raw = await env.RELAYBASE_APP.get(ADMIN_KV_KEY);
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as { token?: string };
@@ -37,9 +37,9 @@ export async function requireAdmin(
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  // Accept either the Wrangler secret OR KV config:admin.
+  // Accept either the Wrangler secret OR KV srv:config:admin.
   // Previously KV won exclusively, so a fresh `wrangler secret put ADMIN_TOKEN`
-  // was ignored when an old bootstrap token remained in KEYS.
+  // was ignored when an old bootstrap token remained in RELAYBASE_APP.
   const secret = c.env.ADMIN_TOKEN?.trim() || null;
   const fromKv = await kvAdminToken(c.env);
   const allowed = [secret, fromKv].filter(Boolean) as string[];
@@ -70,7 +70,7 @@ export async function requireApiKey(
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const record = await resolveKey(c.env.KEYS, token);
+  const record = await resolveKey(c.env.RELAYBASE_APP, token);
   if (!record) {
     return c.json({ error: "Invalid or inactive API key" }, 401);
   }

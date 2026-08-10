@@ -17,7 +17,7 @@ export type InboundEmailEvent = {
 };
 
 const EVENT_TTL_SECONDS = 7 * 24 * 60 * 60;
-const PREFIX = "event:pending";
+const PREFIX = "srv:event:pending";
 
 function eventKey(domain: string, eventId: string): string {
   return `${PREFIX}:${domain.trim().toLowerCase()}:${eventId}`;

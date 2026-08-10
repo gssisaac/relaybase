@@ -55,6 +55,7 @@ import {
 import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
@@ -424,6 +425,7 @@ export function UserSidebar() {
     dragRegionProps,
     noDragClassName,
   } = useDesktopChrome();
+  const desktop = useOptionalDesktop();
 
   useEffect(() => {
     let cancelled = false;
@@ -461,9 +463,25 @@ export function UserSidebar() {
   }
 
   async function signOut() {
-    await fetch("/api/auth", { method: "DELETE" });
-    router.replace("/login");
-    router.refresh();
+    // Clear local Worker connection and return to setup (no cookie login).
+    desktop?.setCredentials(null);
+    try {
+      await fetch("/api/local-credentials", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: "",
+          apiToken: "",
+          workerUrl: "",
+          adminToken: "",
+          workerScriptName: "",
+          licenseKey: "",
+        }),
+      });
+    } catch {
+      /* browser-only path; Tauri clears via setup flow */
+    }
+    router.replace("/setup/install");
   }
 
   const modeToggleLabel =
@@ -526,7 +544,7 @@ export function UserSidebar() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="shrink-0"
+                    className="shrink-0 focus-visible:border-transparent focus-visible:ring-0"
                     aria-label="Relaybase menu"
                   />
                 }
@@ -596,8 +614,10 @@ export function UserSidebar() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="max-w-full justify-start gap-1.5 px-1.5"
+                        className="max-w-full justify-start gap-1.5 px-1.5 focus-visible:border-transparent focus-visible:ring-0"
                         aria-label="Relaybase menu"
+                        tabIndex={-1}
+                        onMouseDown={(event) => event.preventDefault()}
                       />
                     }
                   >

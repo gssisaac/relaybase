@@ -30,6 +30,13 @@ In the Cloudflare project (root directory: `website`):
 
 `SKIP_DEPENDENCY_INSTALL` prevents Cloudflare from running an automatic install against the wrong lockfile; `npm ci` inside `build:cf` handles install instead.
 
+## Desktop downloads (R2)
+
+macOS DMG / updater `.tar.gz` are hosted on R2 bucket `relaybase-releases` at
+`https://download.relaybase.xyz`. Small metadata (`public/release/latest.json`,
+`.sig`) ships with this site. See `desktop/docs/release.md` for the full
+notarize + upload flow (`cd desktop && pnpm run build:macos`).
+
 ## Stack
 
 - Next.js 16 (static export)

@@ -243,8 +243,7 @@ pub async fn upload_worker_script(
     client: &CfClient,
     script_name: &str,
     js_source: &str,
-    keys_kv_id: &str,
-    api_kv_id: &str,
+    app_kv_id: &str,
     r2_bucket: &str,
 ) -> Result<(), String> {
     let url = format!(
@@ -254,8 +253,7 @@ pub async fn upload_worker_script(
     let metadata = json!({
         "main_module": "index.js",
         "bindings": [
-            { "type": "kv_namespace", "name": "KEYS", "namespace_id": keys_kv_id },
-            { "type": "kv_namespace", "name": "RELAYBASE_API", "namespace_id": api_kv_id },
+            { "type": "kv_namespace", "name": "RELAYBASE_APP", "namespace_id": app_kv_id },
             { "type": "r2_bucket", "name": "INBOUND", "bucket_name": r2_bucket },
             { "type": "plain_text", "name": "WORKER_SCRIPT_NAME", "text": script_name },
             { "type": "plain_text", "name": "INBOUND_BUCKET_NAME", "text": r2_bucket }

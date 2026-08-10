@@ -1,2 +1,4 @@
 /target
 gen/schemas
+.tauri-signing/updater.key
+.tauri-signing/updater.key.bak

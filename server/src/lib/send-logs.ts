@@ -21,10 +21,10 @@ export type SendLogSummary = {
 };
 
 const MAX_LOGS = 500;
-const INDEX_KEY = "sendlog:_index";
+const INDEX_KEY = "srv:sendlog:_index";
 
 function logKey(id: string): string {
-  return `sendlog:${id}`;
+  return `srv:sendlog:${id}`;
 }
 
 export async function recordSendLog(

@@ -11,12 +11,11 @@ This package deploys the Relaybase routing Worker into **your** account. The Mac
 ## 1. Create storage (exact names)
 
 ```bash
-npx wrangler kv namespace create relaybase-keys
-npx wrangler kv namespace create relaybase-api
+npx wrangler kv namespace create relaybase-app
 npx wrangler r2 bucket create relaybase-inbound
 ```
 
-Copy each KV **id** into `wrangler.toml` (replace the `REPLACE_WITH_…` placeholders).
+Copy the KV **id** into `wrangler.toml` (replace the `REPLACE_WITH_relaybase-app_ID` placeholder).
 
 Why these names: the Mac app and docs refer to them; keeping the names makes support and upgrades predictable. Other Workers in your account are untouched.
 

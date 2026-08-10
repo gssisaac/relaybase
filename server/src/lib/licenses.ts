@@ -13,11 +13,11 @@ export type LicenseRecord = {
 type StoredLicense = LicenseRecord & { keyHash: string };
 
 function keyKv(hash: string): string {
-  return `license:key:${hash}`;
+  return `srv:license:key:${hash}`;
 }
 
 function idKv(id: string): string {
-  return `license:id:${id}`;
+  return `srv:license:id:${id}`;
 }
 
 export function generateLicenseKey(): string {
@@ -75,7 +75,7 @@ export async function verifyLicense(
 }
 
 export async function listLicenses(kv: KVNamespace): Promise<LicenseRecord[]> {
-  const listed = await kv.list({ prefix: "license:id:" });
+  const listed = await kv.list({ prefix: "srv:license:id:" });
   const out: LicenseRecord[] = [];
   for (const item of listed.keys) {
     const raw = await kv.get(item.name);

@@ -7,7 +7,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "pack:customer-install": "node scripts/pack-customer-install.mjs"
+    "pack:customer-install": "node scripts/pack-customer-install.mjs",
+    "migrate:kv-prefix": "node scripts/migrate-kv-prefix.mjs",
+    "migrate:kv-prefix:apply": "node scripts/migrate-kv-prefix.mjs --apply"
   },
   "dependencies": {
     "hono": "^4.7.11",

@@ -83,9 +83,6 @@ importers:
       '@base-ui/react':
         specifier: ^1.5.0
         version: 1.7.0(@types/react@19.2.18)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@opennextjs/cloudflare':
-        specifier: ^1.20.1
-        version: 1.20.2(encoding@0.1.13)(next@16.2.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(wrangler@4.120.0)
       '@tabler/icons-webfont':
         specifier: ^3.44.0
         version: 3.46.0
@@ -162,9 +159,6 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
-      wrangler:
-        specifier: ^4.110.0
-        version: 4.120.0
 
   desktop:
     devDependencies:

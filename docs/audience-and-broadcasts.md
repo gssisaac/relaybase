@@ -6,10 +6,11 @@
 
 | Area | Paths |
 |------|--------|
-| Store / model | `app/src/lib/dev-email-store.ts` |
-| Audience APIs | `app/src/app/api/email/audience-groups/**` |
-| Broadcast APIs | `app/src/app/api/email/broadcasts/**` |
-| Cron | `app/custom-worker.ts`, `app/src/lib/audience-cron.ts`, `app/wrangler.jsonc` |
+| Store / model | `server/src/lib/catalog-audience.ts`, `catalog-broadcasts.ts`, `catalog-types.ts` (KV `srv:catalog:*`) |
+| Audience APIs | `server/src/routes/admin-audience-groups.ts` → `/admin/audience-groups` |
+| Broadcast APIs | `server/src/routes/admin-broadcasts.ts` → `/admin/broadcasts` |
+| Cron | `server/src/index.ts` `scheduled()` + `server/wrangler.toml` triggers |
+| Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/*` → Worker admin) |
 | Audience UI | `app/src/dashboard/components/AudienceGroup*.tsx`, `AudienceGroupsView.tsx`, `AudienceDataSourceGuide.tsx` |
 | Broadcast UI | `app/src/dashboard/components/Broadcast*.tsx`, `BroadcastsView.tsx` |
 | Routing | `app/src/dashboard/panel.tsx` |
@@ -73,7 +74,7 @@ Deep-link from Audience Send: `/broadcasts?new=1&groupId=<id>` opens the create 
 
 ## Data model (store)
 
-Defined in `dev-email-store.ts` (persisted in user email JSON / KV).
+Defined in `server/src/lib/catalog-types.ts` (persisted in Worker KV `srv:catalog:audience-groups` / `srv:catalog:audience`).
 
 ### `DevAudienceDataSource`
 

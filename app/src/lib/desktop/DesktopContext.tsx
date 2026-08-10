@@ -4,6 +4,7 @@ import * as React from "react";
 
 import {
   desktopGetCredentials,
+  desktopMigrateMailUserFolder,
   isDesktopRuntime,
   type DesktopCredentials,
 } from "@/lib/desktop/bridge";
@@ -18,6 +19,30 @@ type DesktopContextValue = {
 
 const DesktopContext = React.createContext<DesktopContextValue | null>(null);
 
+function applyCredentialGlobals(creds: DesktopCredentials | null) {
+  if (typeof window === "undefined") return;
+  const w = window as unknown as {
+    __RELAYBASE_WORKER_URL__?: string;
+    __RELAYBASE_ADMIN_TOKEN__?: string;
+  };
+  if (creds?.workerUrl) w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
+  else delete w.__RELAYBASE_WORKER_URL__;
+  if (creds?.adminToken) w.__RELAYBASE_ADMIN_TOKEN__ = creds.adminToken;
+  else delete w.__RELAYBASE_ADMIN_TOKEN__;
+}
+
+async function loadLocalCredentials(): Promise<DesktopCredentials | null> {
+  try {
+    const res = await fetch("/api/local-credentials", { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as DesktopCredentials | null;
+    if (!data?.workerUrl || !data?.adminToken) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const [isDesktop, setIsDesktop] = React.useState(false);
   const [ready, setReady] = React.useState(false);
@@ -25,32 +50,17 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     React.useState<DesktopCredentials | null>(null);
 
   const refresh = React.useCallback(async () => {
-    if (!isDesktopRuntime()) {
-      setIsDesktop(false);
-      setCredentials(null);
-      if (typeof window !== "undefined") {
-        delete (window as unknown as { __RELAYBASE_WORKER_URL__?: string })
-          .__RELAYBASE_WORKER_URL__;
-      }
-      setReady(true);
-      return;
-    }
-    setIsDesktop(true);
+    const desktop = isDesktopRuntime();
+    setIsDesktop(desktop);
     try {
-      const creds = await desktopGetCredentials();
+      const creds = desktop
+        ? await desktopGetCredentials()
+        : await loadLocalCredentials();
       setCredentials(creds);
-      if (typeof window !== "undefined") {
-        const w = window as unknown as {
-          __RELAYBASE_WORKER_URL__?: string;
-          __RELAYBASE_ADMIN_TOKEN__?: string;
-        };
-        if (creds?.workerUrl) w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
-        else delete w.__RELAYBASE_WORKER_URL__;
-        if (creds?.adminToken) w.__RELAYBASE_ADMIN_TOKEN__ = creds.adminToken;
-        else delete w.__RELAYBASE_ADMIN_TOKEN__;
-      }
+      applyCredentialGlobals(creds);
     } catch {
       setCredentials(null);
+      applyCredentialGlobals(null);
     } finally {
       setReady(true);
     }
@@ -58,20 +68,15 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     void refresh();
+    void desktopMigrateMailUserFolder().catch(() => {
+      /* best-effort one-shot */
+    });
   }, [refresh]);
 
   const setCredentialsAndGlobals = React.useCallback(
     (creds: DesktopCredentials | null) => {
       setCredentials(creds);
-      if (typeof window === "undefined") return;
-      const w = window as unknown as {
-        __RELAYBASE_WORKER_URL__?: string;
-        __RELAYBASE_ADMIN_TOKEN__?: string;
-      };
-      if (creds?.workerUrl) w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
-      else delete w.__RELAYBASE_WORKER_URL__;
-      if (creds?.adminToken) w.__RELAYBASE_ADMIN_TOKEN__ = creds.adminToken;
-      else delete w.__RELAYBASE_ADMIN_TOKEN__;
+      applyCredentialGlobals(creds);
     },
     [],
   );

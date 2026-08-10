@@ -12,6 +12,12 @@ import {
   saveDashboardStatsCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
 import { useDomain } from "@/lib/dashboard/DomainContext";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  isPackagedApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 import { useEmailPaths } from "@/email/paths";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { Badge } from "@/components/ui/badge";
@@ -142,15 +148,22 @@ export function UserDashboardView() {
     else setLoading(true);
 
     try {
-      const res = await fetch(`/api/email/stats?range=${nextRange}`, {
+      const res = await desktopAwareFetch(`/api/email/stats?range=${nextRange}`, {
         cache: "no-store",
       });
-      const data = (await res.json()) as UserStatsResponse & { error?: string };
+      const data = await readResponseJson<UserStatsResponse & { error?: string }>(
+        res,
+      );
       if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
       setStats(data);
       await saveDashboardStatsCache(nextRange, data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load stats");
+      // Keep cached KPIs; don't flash WebKit / packaged-unwired noise.
+      if (!cached && !isPackagedApiUnavailableError(e)) {
+        setError(friendlyDesktopFetchError(e, "Failed to load stats"));
+      } else {
+        setError(null);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

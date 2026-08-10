@@ -22,6 +22,7 @@ import {
 } from "@/email/components/email-cached-fetch";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/EmailShared";
+import { isPackagedApiUnavailableError } from "@/lib/desktop/api-base";
 import {
   EmailListContainer,
   EmailTableHeader,
@@ -129,7 +130,13 @@ function BroadcastsViewInner() {
         setBroadcasts(bcResult.data.broadcasts ?? []);
         if (groupsResult.ok) setGroups(groupsResult.data?.groups ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Refresh failed");
+        setError(
+          isPackagedApiUnavailableError(e)
+            ? null
+            : e instanceof Error
+              ? e.message
+              : "Refresh failed",
+        );
       } finally {
         setLoading(false);
         setRefreshing(false);

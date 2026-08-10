@@ -1,7 +1,13 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireAdmin } from "../lib/auth";
-import { createKey, listKeys, revokeKey } from "../lib/keys";
+import {
+  createKey,
+  listKeys,
+  revokeKey,
+  rotateKey,
+  setKeyActive,
+} from "../lib/keys";
 
 const adminKeys = new Hono<{ Bindings: Env }>();
 
@@ -22,7 +28,7 @@ adminKeys.post("/", async (c) => {
   }
 
   try {
-    const { record, apiKey } = await createKey(c.env.KEYS, {
+    const { record, apiKey } = await createKey(c.env.RELAYBASE_APP, {
       domain,
       label: body.label,
     });
@@ -46,8 +52,57 @@ adminKeys.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
-  const keys = await listKeys(c.env.KEYS);
+  const keys = await listKeys(c.env.RELAYBASE_APP);
   return c.json({ keys });
+});
+
+adminKeys.patch("/:id", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const id = c.req.param("id")?.trim();
+  if (!id) {
+    return c.json({ error: "id is required" }, 400);
+  }
+
+  let body: { active?: boolean };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (typeof body.active !== "boolean") {
+    return c.json({ error: "active boolean is required" }, 400);
+  }
+
+  const record = await setKeyActive(c.env.RELAYBASE_APP, id, body.active);
+  if (!record) {
+    return c.json({ error: "Key not found" }, 404);
+  }
+  return c.json({ key: record });
+});
+
+adminKeys.post("/:id/rotate", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const id = c.req.param("id")?.trim();
+  if (!id) {
+    return c.json({ error: "id is required" }, 400);
+  }
+
+  const rotated = await rotateKey(c.env.RELAYBASE_APP, id);
+  if (!rotated) {
+    return c.json({ error: "Key not found" }, 404);
+  }
+  return c.json({
+    id: rotated.record.id,
+    apiKey: rotated.apiKey,
+    domain: rotated.record.domain,
+    label: rotated.record.label,
+    createdAt: rotated.record.createdAt,
+  });
 });
 
 adminKeys.delete("/:id", async (c) => {
@@ -59,7 +114,7 @@ adminKeys.delete("/:id", async (c) => {
     return c.json({ error: "id is required" }, 400);
   }
 
-  const deleted = await revokeKey(c.env.KEYS, id);
+  const deleted = await revokeKey(c.env.RELAYBASE_APP, id);
   if (!deleted) {
     return c.json({ error: "Key not found" }, 404);
   }

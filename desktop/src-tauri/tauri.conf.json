@@ -4,11 +4,19 @@
   "mainBinaryName": "Relaybase",
   "version": "0.1.0",
   "identifier": "com.relaybase.desktop",
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY1NkY5MDI5N0I3OTc0OTgKUldTWWRIbDdLWkJ2WmJ2d0RSM3BHbDVmVDNLYkJpWGpaY0E2ZzFiSDBFamIzT01iZ2svbGFCOW0K",
+      "endpoints": [
+        "https://relaybase.xyz/release/latest.json"
+      ]
+    }
+  },
   "build": {
     "beforeDevCommand": "pnpm --dir ../app dev",
     "devUrl": "http://127.0.0.1:32830",
     "beforeBuildCommand": "pnpm --dir ../app run build:desktop",
-    "frontendDist": "../app/out"
+    "frontendDist": "../../app/out"
   },
   "app": {
     "windows": [
@@ -35,6 +43,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["dmg", "app"],
     "icon": [
       "icons/32x32.png",

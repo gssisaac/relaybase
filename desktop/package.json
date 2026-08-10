@@ -8,6 +8,8 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "build:macos": "bash scripts/deploy/build-macos.sh",
+    "sync:release": "node scripts/sync-release-artifacts.mjs",
+    "upload:r2": "bash scripts/deploy/upload-release-r2.sh",
     "tauri": "tauri"
   },
   "devDependencies": {

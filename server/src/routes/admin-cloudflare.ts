@@ -37,11 +37,11 @@ adminCloudflare.put("/", async (c) => {
     return c.json({ error: "accountId and apiToken are required" }, 400);
   }
 
-  await writeCloudflareRuntimeConfig(c.env.KEYS, { accountId, apiToken });
+  await writeCloudflareRuntimeConfig(c.env.RELAYBASE_APP, { accountId, apiToken });
 
   const adminToken = body.adminToken?.trim();
   if (adminToken) {
-    await setAdminToken(c.env.KEYS, adminToken);
+    await setAdminToken(c.env.RELAYBASE_APP, adminToken);
   }
 
   return c.json({ configured: true, accountId });

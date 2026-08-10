@@ -16,6 +16,7 @@ import {
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import type { AudienceGroupSummary } from "@/email/components/types";
+import { isPackagedApiUnavailableError } from "@/lib/desktop/api-base";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,7 +143,13 @@ export function AudienceGroupsView() {
         });
         setGroups(result.data.groups ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Refresh failed");
+        setError(
+          isPackagedApiUnavailableError(e)
+            ? null
+            : e instanceof Error
+              ? e.message
+              : "Refresh failed",
+        );
       } finally {
         setLoading(false);
         setRefreshing(false);

@@ -1,6 +1,5 @@
 export type Env = {
-  KEYS: KVNamespace;
-  RELAYBASE_API: KVNamespace;
+  RELAYBASE_APP: KVNamespace;
   INBOUND: R2Bucket;
   /** Hosted Relaybase account only — omitted from customer install ZIP. */
   RELAYBASE_WAITLIST?: D1Database;

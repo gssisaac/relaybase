@@ -24,6 +24,8 @@ import {
 import { MailAccountsProvider } from "@/email/components/MailAccountsContext";
 import { EmailMailboxProvider } from "@/email/components/EmailMailboxContext";
 
+const LOCAL_OPERATOR_USER_ID = "desktop";
+
 function setupPathFor(credentials: {
   workerUrl?: string;
   adminToken?: string;
@@ -75,14 +77,7 @@ function DashboardShell({
   );
 }
 
-function DesktopInner({
-  children,
-  userId,
-}: {
-  children: ReactNode;
-  /** Cookie session when present (e.g. signed in as isaac after logout). */
-  userId?: string;
-}) {
+function OperatorInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { ready, credentials } = useDesktop();
 
@@ -112,27 +107,22 @@ function DesktopInner({
     );
   }
 
-  // First-run / no cookie → "desktop". After Sign in, use the session id.
   return (
-    <DashboardShell userId={userId ?? "desktop"}>{children}</DashboardShell>
+    <DashboardShell userId={LOCAL_OPERATOR_USER_ID}>{children}</DashboardShell>
   );
 }
 
 /**
- * Owns the single dashboard chrome (sidebar + main).
- * Tauri: local credentials; session userId when cookie auth exists, else "desktop".
- * Browser: cookie-auth userId from the server layout.
+ * Single dashboard chrome for every run mode.
+ * Credentials come from ~/.relaybase (Tauri) or /api/local-credentials (browser next).
  */
 export function DesktopDashboardGate({
   children,
-  userId,
 }: {
   children: ReactNode;
-  /** Present for browser/cookie auth; omitted for static DESKTOP_BUILD. */
+  /** Ignored — kept for call-site compatibility during migration. */
   userId?: string;
 }) {
-  // null = not checked yet (SSR / first paint). Avoid nesting a browser shell
-  // under Tauri once desktop runtime is detected.
   const [desktop, setDesktop] = useState<boolean | null>(null);
 
   useLayoutEffect(() => {
@@ -142,25 +132,20 @@ export function DesktopDashboardGate({
     return () => window.clearTimeout(t);
   }, []);
 
-  if (desktop === true) {
+  // Wait one frame so Tauri inject can be detected before choosing shell chrome.
+  if (desktop === null) {
     return (
-      <DesktopShell>
-        <DesktopProvider>
-          <DesktopInner userId={userId}>{children}</DesktopInner>
-        </DesktopProvider>
-      </DesktopShell>
+      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
     );
   }
 
-  // Browser path (or SSR before Tauri is detected): single shell with cookie user.
-  if (userId) {
-    return <DashboardShell userId={userId}>{children}</DashboardShell>;
-  }
-
-  // DESKTOP_BUILD / waiting for runtime check with no cookie userId.
   return (
-    <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-      Loading…
-    </div>
+    <DesktopShell>
+      <DesktopProvider>
+        <OperatorInner>{children}</OperatorInner>
+      </DesktopProvider>
+    </DesktopShell>
   );
 }

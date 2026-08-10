@@ -6,12 +6,12 @@ export type CloudflareRuntimeConfig = {
   apiToken: string;
 };
 
-const KV_KEY = "config:cloudflare";
+const KV_KEY = "srv:config:cloudflare";
 
 export async function readCloudflareRuntimeConfig(
   env: Env,
 ): Promise<CloudflareRuntimeConfig | null> {
-  const raw = await env.KEYS.get(KV_KEY);
+  const raw = await env.RELAYBASE_APP.get(KV_KEY);
   if (raw) {
     const parsed = JSON.parse(raw) as CloudflareRuntimeConfig;
     if (parsed.accountId?.trim() && parsed.apiToken?.trim()) {

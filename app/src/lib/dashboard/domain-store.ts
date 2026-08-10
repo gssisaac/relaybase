@@ -6,7 +6,12 @@ import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
 } from "@/lib/dashboard/default-addresses";
-import { desktopAwareFetch } from "@/lib/desktop/api-base";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  isPackagedApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 export {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
@@ -122,7 +127,7 @@ function timeoutErrorMessage(fallback: string, error: unknown): string {
   if (error instanceof Error && error.name === "TimeoutError") {
     return "Request timed out. Refresh domains — setup may still have finished.";
   }
-  return error instanceof Error ? error.message : fallback;
+  return friendlyDesktopFetchError(error, fallback);
 }
 
 async function postOnboard(
@@ -138,11 +143,11 @@ async function postOnboard(
     body: JSON.stringify({ domain, action }),
     signal: timeoutSignal(),
   });
-  const data = (await res.json()) as {
+  const data = await readResponseJson<{
     domains?: DomainSummary[];
     message?: string;
     error?: string;
-  };
+  }>(res);
   if (!res.ok) throw new Error(data.error ?? "Onboarding request failed");
   return {
     domains: data.domains ?? [],
@@ -372,15 +377,18 @@ export class DomainStore {
         cache: "no-store",
         signal: timeoutSignal(),
       });
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         domains?: DomainSummary[];
         error?: string;
-      };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to load domains");
       this.applyDomains(data.domains ?? [], { clearLoading: true });
     } catch (e) {
       runInAction(() => {
-        this.error = timeoutErrorMessage("Failed to load domains", e);
+        // Packaged app has no Next /api — keep UI usable on disk/cache without a red banner.
+        this.error = isPackagedApiUnavailableError(e)
+          ? null
+          : timeoutErrorMessage("Failed to load domains", e);
         this.loading = false;
       });
     }
@@ -395,11 +403,11 @@ export class DomainStore {
         body: JSON.stringify({ domain }),
         signal: timeoutSignal(),
       });
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         domains?: DomainSummary[];
         message?: string;
         error?: string;
-      };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to add domain");
       this.applyDomains(data.domains ?? []);
       return { message: data.message ?? "Domain added" };
@@ -597,10 +605,10 @@ export class DomainStore {
       `/api/email/domains?domain=${encodeURIComponent(domain)}`,
       { method: "DELETE", signal: timeoutSignal() },
     );
-    const data = (await res.json()) as {
+    const data = await readResponseJson<{
       domains?: DomainSummary[];
       error?: string;
-    };
+    }>(res);
     if (!res.ok) throw new Error(data.error ?? "Failed to remove domain");
     runInAction(() => {
       this.addJobs = this.addJobs.filter((j) => j.domain !== domain);
@@ -753,10 +761,10 @@ export class DomainStore {
         }),
       },
     );
-    const data = (await res.json()) as {
+    const data = await readResponseJson<{
       addresses?: { email: string; domain: string }[];
       error?: string;
-    };
+    }>(res);
     if (!res.ok) {
       throw new Error(data.error ?? "Failed to add standard addresses");
     }

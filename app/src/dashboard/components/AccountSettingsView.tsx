@@ -12,6 +12,10 @@ import { EmailAlerts } from "@/email/components/EmailShared";
 import { useEmailPaths } from "@/email/paths";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import {
+  desktopAwareFetch,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 function domainOf(email: string): string {
   return email.split("@")[1]?.toLowerCase() ?? "none";
@@ -37,7 +41,7 @@ export function AccountSettingsView({ email }: { email: string }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/addresses`, {
+      const res = await desktopAwareFetch(`${apiBase}/addresses`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -45,7 +49,7 @@ export function AccountSettingsView({ email }: { email: string }) {
           displayName,
         }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       toast.success("Display name saved");
       clearEmailCache(productId, `addresses:${domainKey}`);

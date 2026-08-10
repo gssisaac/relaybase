@@ -20,11 +20,11 @@ type StoredKeyRecord = KeyRecord & {
 };
 
 function keyKvKey(keyHash: string): string {
-  return `key:${keyHash}`;
+  return `srv:key:${keyHash}`;
 }
 
 function idKvKey(id: string): string {
-  return `id:${id}`;
+  return `srv:id:${id}`;
 }
 
 export async function createKey(
@@ -60,7 +60,7 @@ export async function createKey(
 }
 
 export async function listKeys(kv: KVNamespace): Promise<KeyRecord[]> {
-  const listed = await kv.list({ prefix: "id:" });
+  const listed = await kv.list({ prefix: "srv:id:" });
   const keys: KeyRecord[] = [];
 
   for (const item of listed.keys) {
@@ -100,4 +100,46 @@ export async function revokeKey(kv: KVNamespace, id: string): Promise<boolean> {
   await kv.delete(keyKvKey(stored.keyHash));
   await kv.delete(idKvKey(id));
   return true;
+}
+
+export async function setKeyActive(
+  kv: KVNamespace,
+  id: string,
+  active: boolean,
+): Promise<KeyRecord | null> {
+  const raw = await kv.get(idKvKey(id));
+  if (!raw) return null;
+
+  const stored = JSON.parse(raw) as StoredKeyRecord;
+  stored.active = active;
+  await kv.put(keyKvKey(stored.keyHash), JSON.stringify(stored));
+  await kv.put(idKvKey(id), JSON.stringify(stored));
+  const { keyHash: _keyHash, ...record } = stored;
+  return record;
+}
+
+export async function rotateKey(
+  kv: KVNamespace,
+  id: string,
+): Promise<{ record: KeyRecord; apiKey: string } | null> {
+  const raw = await kv.get(idKvKey(id));
+  if (!raw) return null;
+
+  const previous = JSON.parse(raw) as StoredKeyRecord;
+  await kv.delete(keyKvKey(previous.keyHash));
+  await kv.delete(idKvKey(id));
+
+  const apiKey = generateApiKey();
+  const keyHash = await sha256Hex(apiKey);
+  const keyPrefix = keyPrefixFromApiKey(apiKey);
+  const stored: StoredKeyRecord = {
+    ...previous,
+    keyPrefix,
+    keyHash,
+    active: true,
+  };
+  await kv.put(keyKvKey(keyHash), JSON.stringify(stored));
+  await kv.put(idKvKey(id), JSON.stringify(stored));
+  const { keyHash: _keyHash, ...record } = stored;
+  return { record, apiKey };
 }

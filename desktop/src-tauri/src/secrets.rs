@@ -12,6 +12,8 @@ use std::os::unix::fs::PermissionsExt;
 const CREDENTIALS_FILE: &str = "credentials.json";
 /// Email UI prefs (account colors, etc.). Path: ~/.relaybase/email.json
 const EMAIL_PREFS_FILE: &str = "email.json";
+/// Local API key plaintext vault. Path: ~/.relaybase/api-keys.json
+const API_KEYS_FILE: &str = "api-keys.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +38,32 @@ impl Default for EmailPrefs {
         Self {
             version: 1,
             account_colors: std::collections::HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyVaultEntry {
+    pub id: String,
+    pub domain: String,
+    pub label: Option<String>,
+    pub api_key: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeyVault {
+    pub version: u32,
+    pub entries: Vec<ApiKeyVaultEntry>,
+}
+
+impl Default for ApiKeyVault {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            entries: Vec::new(),
         }
     }
 }
@@ -333,4 +361,102 @@ pub fn load_cache_json(relative_path: &str) -> Result<Option<serde_json::Value>,
         format!("Invalid cache file {}: {e}", path.display())
     })?;
     Ok(Some(value))
+}
+
+pub fn load_api_key_vault() -> Result<ApiKeyVault, String> {
+    let path = relaybase_dir()?.join(API_KEYS_FILE);
+    if !path.exists() {
+        return Ok(ApiKeyVault::default());
+    }
+    let json = fs::read_to_string(&path).map_err(|e| {
+        format!("Failed to read API key vault from {}: {e}", path.display())
+    })?;
+    let vault: ApiKeyVault = serde_json::from_str(&json).map_err(|e| {
+        format!(
+            "Invalid API key vault {}: {e}. Delete the file and re-issue keys.",
+            path.display()
+        )
+    })?;
+    Ok(vault)
+}
+
+pub fn save_api_key_vault(vault: &ApiKeyVault) -> Result<(), String> {
+    let dir = ensure_dir()?;
+    let path = dir.join(API_KEYS_FILE);
+    let mut next = vault.clone();
+    if next.version == 0 {
+        next.version = 1;
+    }
+    let json = serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?;
+    fs::write(&path, &json).map_err(|e| {
+        format!("Failed to write API key vault to {}: {e}", path.display())
+    })?;
+    restrict_file_permissions(&path);
+    Ok(())
+}
+
+pub fn upsert_api_key_vault_entry(entry: ApiKeyVaultEntry) -> Result<ApiKeyVault, String> {
+    let mut vault = load_api_key_vault()?;
+    if let Some(existing) = vault.entries.iter_mut().find(|e| e.id == entry.id) {
+        *existing = entry;
+    } else {
+        vault.entries.insert(0, entry);
+    }
+    save_api_key_vault(&vault)?;
+    Ok(vault)
+}
+
+pub fn remove_api_key_vault_entry(id: &str) -> Result<ApiKeyVault, String> {
+    let mut vault = load_api_key_vault()?;
+    vault.entries.retain(|e| e.id != id);
+    save_api_key_vault(&vault)?;
+    Ok(vault)
+}
+
+/// One-shot: if `mail/desktop` is missing and another user folder exists
+/// (legacy cookie userId), rename the newest folder to `desktop`.
+pub fn migrate_mail_to_desktop_user() -> Result<Option<String>, String> {
+    let mail_root = ensure_dir()?.join("mail");
+    if !mail_root.exists() {
+        return Ok(None);
+    }
+    let desktop = mail_root.join("desktop");
+    if desktop.exists() {
+        return Ok(None);
+    }
+    let mut candidates: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
+    let entries = fs::read_dir(&mail_root).map_err(|e| {
+        format!("Failed to read mail directory {}: {e}", mail_root.display())
+    })?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == "desktop" || name.starts_with('.') {
+            continue;
+        }
+        let modified = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        candidates.push((modified, path));
+    }
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    let (_mtime, from) = candidates.remove(0);
+    let from_name = from
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    fs::rename(&from, &desktop).map_err(|e| {
+        format!(
+            "Failed to migrate mail/{} → mail/desktop: {e}",
+            from_name
+        )
+    })?;
+    Ok(Some(from_name))
 }

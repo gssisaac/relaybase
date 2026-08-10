@@ -1,11 +1,21 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
+import { desktopCors } from "./lib/cors";
+import { adminAudienceGroups } from "./routes/admin-audience-groups";
 import { adminBootstrap } from "./routes/admin-bootstrap";
+import { adminBroadcasts } from "./routes/admin-broadcasts";
 import { adminCloudflare } from "./routes/admin-cloudflare";
 import { adminConnect } from "./routes/admin-connect";
 import { adminInbox } from "./routes/admin-inbox";
 import { adminKeys } from "./routes/admin-keys";
 import { adminLogs } from "./routes/admin-logs";
+import {
+  adminAddresses,
+  adminDomains,
+  adminMailbox,
+} from "./routes/admin-mailbox";
+import { adminSend } from "./routes/admin-send";
+import { adminStats } from "./routes/admin-stats";
 import { send } from "./routes/send";
 import { v1Inbox } from "./routes/v1-inbox";
 import { v1Webhooks } from "./routes/v1-webhooks";
@@ -24,6 +34,9 @@ async function checkInboundR2(bucket: R2Bucket): Promise<boolean> {
   }
 }
 
+// Packaged Tauri webview fetches Worker admin routes cross-origin.
+app.use("*", desktopCors);
+
 app.get("/health", async (c) => {
   const r2Configured = await checkInboundR2(c.env.INBOUND);
   return c.json({
@@ -41,6 +54,13 @@ app.route("/admin/cloudflare", adminCloudflare);
 app.route("/admin/connect", adminConnect);
 app.route("/admin/bootstrap", adminBootstrap);
 app.route("/admin/inbox", adminInbox);
+app.route("/admin/mailbox", adminMailbox);
+app.route("/admin/domains", adminDomains);
+app.route("/admin/addresses", adminAddresses);
+app.route("/admin/send", adminSend);
+app.route("/admin/audience-groups", adminAudienceGroups);
+app.route("/admin/broadcasts", adminBroadcasts);
+app.route("/admin/stats", adminStats);
 app.route("/v1/inbox", v1Inbox);
 app.route("/v1/webhooks", v1Webhooks);
 app.route("/v1/send", send);

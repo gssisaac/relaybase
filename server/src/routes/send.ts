@@ -49,7 +49,7 @@ async function logAndRespond(
   },
 ): Promise<Response> {
   try {
-    await recordSendLog(c.env.KEYS, {
+    await recordSendLog(c.env.RELAYBASE_APP, {
       ok: params.ok,
       status: params.status,
       ...keyFields(params.record ?? null),
@@ -69,7 +69,7 @@ send.post("/", async (c) => {
   const auth = await requireApiKey(c);
   if (auth instanceof Response) {
     try {
-      await recordSendLog(c.env.KEYS, {
+      await recordSendLog(c.env.RELAYBASE_APP, {
         ok: false,
         status: 401,
         domain: null,

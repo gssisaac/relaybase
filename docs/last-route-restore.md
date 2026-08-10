@@ -10,17 +10,17 @@
 
 Relaybase remembers the user’s last **sidebar mode** (`email` | `dashboard`) and the last URL within each mode, then restores that location when they re-enter the app.
 
-Without entry restore, every open/login hard-redirected to `/dashboard`, which also overwrote the stored mode once `UserSidebar` mounted.
+Without entry restore, every open hard-redirected to `/dashboard`, which also overwrote the stored mode once `UserSidebar` mounted.
 
 ---
 
 ## Storage
 
-**Desktop source of truth:** `~/.relaybase/mail/{userId}/ui/sidebar.json`  
+**Desktop source of truth:** `~/.relaybase/mail/desktop/ui/sidebar.json`  
 (WebKit / Application Support `localStorage` is only a mirror — do not rely on it across binary renames.)  
 Full home-dir contract: [relaybase-home-storage.md](./relaybase-home-storage.md).
 
-Browser / mirror keys (scoped by `userId`; cookie session id, or `"desktop"` in the Tauri shell when no cookie):
+Browser / mirror keys (scoped by fixed local operator id `"desktop"`):
 
 | Key pattern | Value |
 |-------------|--------|
@@ -60,18 +60,14 @@ Only restorable paths are written or returned. Blocked prefixes: `/login`, `/reg
 app/src/components/layout/UserSidebar.tsx
 ```
 
-Sidebar email ↔ dashboard toggles already called `readLastPath` before this entry work; that behavior is unchanged.
-
 ---
 
 ## Who restores on entry
 
 | Entry point | Behavior |
 |-------------|----------|
-| `/` (`app/src/app/page.tsx`) | Authenticated → `<RestoreLastRoute />`; else → `/login` |
-| Login / register success | `router.replace(resolveEntryPath(id))` |
+| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` |
 | Empty panel index (`app/src/app/panel.tsx`) | `resolveEntryPath(userId)` |
-| Desktop static home (`build-desktop.mjs` patch) | `<RestoreLastRoute fallbackUserId="desktop" />` |
 
 Client gate:
 
@@ -79,39 +75,16 @@ Client gate:
 app/src/components/RestoreLastRoute.tsx
 ```
 
-Server code cannot read `localStorage`, so entry must use this client component (or an equivalent client `replace`) rather than a server `redirect("/dashboard")`.
-
-`RestoreLastRoute` resolves `userId` as: prop → `relaybase_user` cookie → `fallbackUserId` (`"desktop"`).
+`RestoreLastRoute` resolves `userId` as: prop → `fallbackUserId` (`"desktop"`). Cookie login is removed.
 
 ---
 
 ## Flow
 
 ```mermaid
-flowchart LR
-  nav[User navigates] --> sidebar[UserSidebar writes mode + path]
-  open["Open / or sign in"] --> gate[RestoreLastRoute / resolveEntryPath]
-  gate --> ls[(localStorage)]
-  ls --> target[Last email or dashboard URL]
-  target --> replace[router.replace]
+flowchart TD
+  entry["/ entry"] --> restore["RestoreLastRoute"]
+  restore --> hydrate["hydrateSidebarState desktop"]
+  hydrate --> resolve["resolveEntryPath"]
+  resolve --> navigate["router.replace last path"]
 ```
-
----
-
-## Rules for agents
-
-1. **Do not** hardcode post-auth or home redirects to `/dashboard` (or `/email/inbox`) without going through `resolveEntryPath`.
-2. **Reuse** `sidebar-mode.ts` — do not invent a second localStorage scheme for the same purpose.
-3. When adding a new app entry (deep link bootstrap, setup completion → app, etc.), restore via `resolveEntryPath` / `RestoreLastRoute` after auth/setup gates.
-4. Keep `/setup/*` ahead of restore on desktop until Worker credentials exist (`DesktopDashboardGate`).
-5. Path validation belongs in `isRestorablePath`; extend the blocklist there if new non-app routes appear.
-
----
-
-## Tests
-
-```bash
-pnpm --dir app run test:unit
-```
-
-Includes `app/src/email/sidebar-mode.test.ts` (`isRestorablePath`, `modeFromPathname`).

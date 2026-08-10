@@ -26,7 +26,7 @@ v1Webhooks.post("/", async (c) => {
   }
 
   try {
-    const result = await createWebhook(c.env.KEYS, {
+    const result = await createWebhook(c.env.RELAYBASE_APP, {
       domain: auth.record.domain,
       url,
       secret: body.secret,
@@ -49,7 +49,7 @@ v1Webhooks.get("/", async (c) => {
   const auth = await requireApiKey(c);
   if (auth instanceof Response) return auth;
 
-  const webhooks = await listWebhooks(c.env.KEYS, auth.record.domain);
+  const webhooks = await listWebhooks(c.env.RELAYBASE_APP, auth.record.domain);
   return c.json({ webhooks });
 });
 
@@ -58,7 +58,7 @@ v1Webhooks.delete("/:id", async (c) => {
   if (auth instanceof Response) return auth;
 
   const deleted = await deleteWebhook(
-    c.env.KEYS,
+    c.env.RELAYBASE_APP,
     auth.record.domain,
     c.req.param("id"),
   );

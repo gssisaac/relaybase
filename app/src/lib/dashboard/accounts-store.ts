@@ -14,7 +14,12 @@ import {
   saveAccountCountsCache,
   saveAddressesCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
-import { desktopAwareFetch } from "@/lib/desktop/api-base";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  isPackagedApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import type { Address } from "@/email/components/types";
 
@@ -115,10 +120,10 @@ export class AccountsStore {
         `${this.apiBase}/inbox/counts?domain=${encodeURIComponent(key)}`,
         { cache: "no-store" },
       );
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         counts?: Record<string, AddressCounts>;
         error?: string;
-      };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to load counts");
       const counts = data.counts ?? {};
       runInAction(() => {
@@ -224,10 +229,10 @@ export class AccountsStore {
         `${this.apiBase}/addresses?domain=${encodeURIComponent(key)}`,
         { cache: "no-store" },
       );
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         addresses?: Address[];
         error?: string;
-      };
+      }>(res);
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to load addresses");
       }
@@ -239,7 +244,9 @@ export class AccountsStore {
       await saveAddressesCache(key, addresses);
     } catch (e) {
       runInAction(() => {
-        this.error = e instanceof Error ? e.message : "Refresh failed";
+        this.error = isPackagedApiUnavailableError(e)
+          ? null
+          : friendlyDesktopFetchError(e, "Refresh failed");
       });
     } finally {
       runInAction(() => {
@@ -275,11 +282,11 @@ export class AccountsStore {
           body: JSON.stringify(input),
         },
       );
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         address?: Address;
         addresses?: Address[];
         error?: string;
-      };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to add");
 
       const created =
@@ -351,10 +358,10 @@ export class AccountsStore {
         `${this.apiBase}/addresses?${params.toString()}`,
         { method: "DELETE" },
       );
-      const data = (await res.json()) as {
+      const data = await readResponseJson<{
         addresses?: Address[];
         error?: string;
-      };
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to delete");
 
       let nextList: Address[] = [];

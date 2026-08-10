@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -9,7 +9,6 @@ import {
   DesktopProvider,
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
-import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 
 function SetupShell({ children }: { children: ReactNode }) {
@@ -51,23 +50,8 @@ function SetupShell({ children }: { children: ReactNode }) {
 }
 
 export default function SetupLayout({ children }: { children: ReactNode }) {
-  const [desktop, setDesktop] = useState(false);
-
-  useEffect(() => {
-    setDesktop(isDesktopRuntime());
-  }, []);
-
-  if (!desktop) {
-    return (
-      <div className="flex min-h-svh flex-col items-center justify-center gap-2 p-6 text-center">
-        <p className="text-sm font-medium">Desktop setup</p>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Cloudflare Worker install runs inside the Relaybase Mac app.
-        </p>
-      </div>
-    );
-  }
-
+  // Tauri and browser next both load credentials from ~/.relaybase
+  // (Tauri invoke vs /api/local-credentials).
   return (
     <DesktopShell>
       <DesktopProvider>

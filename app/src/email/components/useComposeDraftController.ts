@@ -11,6 +11,10 @@ import {
 } from "@/email/components/email-send-events";
 import type { Address, SentEmail } from "@/email/components/types";
 import { domainOf } from "@/email/reply-helpers";
+import {
+  desktopAwareFetch,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 import { parseEmailListStrict } from "@/lib/email/parse-recipients";
 
 const AUTOSAVE_MS = 500;
@@ -397,15 +401,16 @@ export function useComposeDraftController({
       execute: async () => {
         // Unsend toast already covered the waiting UI — skip "Sending…" loading.
         try {
-          const res = await fetch(`${apiBase}/send`, {
+          const res = await desktopAwareFetch(`${apiBase}/send`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
-          const data = (await res.json()) as {
+          const data = await readResponseJson<{
             error?: string;
+            messageId?: string;
             sent?: SentEmail & { bodyPreview?: string };
-          };
+          }>(res);
           if (!res.ok) throw new Error(data.error ?? "Send failed");
           clearEmailCache(productId, `sent:${domainKey}`);
           const sent = data.sent;

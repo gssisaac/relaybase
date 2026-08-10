@@ -7,7 +7,10 @@ import {
   readDashboardCacheStale,
   writeDashboardCache,
 } from "@/lib/dashboard/shared/dashboard-client-cache";
-import { desktopAwareFetch } from "@/lib/desktop/api-base";
+import {
+  desktopAwareFetch,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 export type CacheMeta = {
   fromCache: boolean;
@@ -108,11 +111,9 @@ export async function fetchCachedApi<T>(
     resource,
     async () => {
       const res = await desktopAwareFetch(url);
-      const json = await res.json();
+      const json = await readResponseJson<{ error?: string } & T>(res);
       if (!res.ok) {
-        throw new Error(
-          (json as { error?: string }).error ?? `Failed to load ${resource}`,
-        );
+        throw new Error(json.error ?? `Failed to load ${resource}`);
       }
       return json as T;
     },
@@ -137,11 +138,10 @@ export async function fetchCachedApiOptional<T>(
         void (async () => {
           try {
             const res = await desktopAwareFetch(url);
-            const json = await res.json();
+            const json = await readResponseJson<T>(res);
             if (!res.ok) return;
-            const data = json as T;
-            writeDashboardCache(serviceId, namespace, resource, data);
-            options?.onUpdate?.(data);
+            writeDashboardCache(serviceId, namespace, resource, json);
+            options?.onUpdate?.(json);
           } catch {
             /* keep stale */
           }
@@ -158,16 +158,22 @@ export async function fetchCachedApiOptional<T>(
   }
 
   const res = await desktopAwareFetch(url);
-  const json = await res.json();
-  if (!res.ok) {
+  try {
+    const data = await readResponseJson<T>(res);
+    if (!res.ok) {
+      return {
+        data: null,
+        ok: false,
+        meta: { fromCache: false, ageMinutes: 0 },
+      };
+    }
+    writeDashboardCache(serviceId, namespace, resource, data);
+    return { data, ok: true, meta: { fromCache: false, ageMinutes: 0 } };
+  } catch {
     return {
       data: null,
       ok: false,
       meta: { fromCache: false, ageMinutes: 0 },
     };
   }
-
-  const data = json as T;
-  writeDashboardCache(serviceId, namespace, resource, data);
-  return { data, ok: true, meta: { fromCache: false, ageMinutes: 0 } };
 }

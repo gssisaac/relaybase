@@ -3,17 +3,33 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { resolveEntryPathAsync } from "@/email/sidebar-mode";
+import {
+  DEFAULT_DASHBOARD_PATH,
+  DEFAULT_EMAIL_PATH,
+  resolveEntryPathAsync,
+} from "@/email/sidebar-mode";
 
-function readCookieUserId(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)relaybase_user=([^;]+)/);
-  if (!match?.[1]) return null;
-  try {
-    return decodeURIComponent(match[1]).trim() || null;
-  } catch {
-    return match[1].trim() || null;
+/**
+ * Static desktop export only pre-renders mailbox section roots (not every
+ * message id). Collapse deep links so restore never targets a missing HTML.
+ */
+function normalizeEntryPath(path: string): string {
+  const [pathnamePart, query = ""] = path.split("?");
+  const pathname = pathnamePart || "/";
+  const qs = query ? `?${query}` : "";
+  const emailSection = pathname.match(
+    /^\/email\/(inbox|drafts|sent|compose|trash)(?:\/.*)?$/,
+  );
+  if (emailSection) {
+    return `/email/${emailSection[1]}${qs}`;
   }
+  if (pathname === "/email" || pathname.startsWith("/email/")) {
+    return `${DEFAULT_EMAIL_PATH}${qs}`;
+  }
+  if (pathname === "/" || !pathname.startsWith("/")) {
+    return DEFAULT_DASHBOARD_PATH;
+  }
+  return `${pathname}${qs}`;
 }
 
 /**
@@ -25,21 +41,29 @@ export function RestoreLastRoute({
   userId,
   fallbackUserId = "desktop",
 }: {
-  /** Cookie session id when known on the server. */
+  /** Local operator id (always "desktop"). */
   userId?: string;
-  /** Desktop static export / no cookie. */
   fallbackUserId?: string;
 }) {
   const router = useRouter();
 
   useEffect(() => {
-    const id = userId?.trim() || readCookieUserId() || fallbackUserId;
+    const id = userId?.trim() || fallbackUserId;
     let cancelled = false;
-    void resolveEntryPathAsync(id).then((path) => {
-      if (!cancelled) router.replace(path);
-    });
+    const failSafe = window.setTimeout(() => {
+      if (!cancelled) router.replace(DEFAULT_DASHBOARD_PATH);
+    }, 6000);
+    void resolveEntryPathAsync(id)
+      .then((path) => {
+        if (cancelled) return;
+        router.replace(normalizeEntryPath(path));
+      })
+      .catch(() => {
+        if (!cancelled) router.replace(DEFAULT_DASHBOARD_PATH);
+      });
     return () => {
       cancelled = true;
+      window.clearTimeout(failSafe);
     };
   }, [router, userId, fallbackUserId]);
 

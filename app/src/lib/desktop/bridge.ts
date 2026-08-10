@@ -288,7 +288,32 @@ export async function desktopVerifyWorkerConnection(
   workerUrl: string,
   adminToken: string,
 ): Promise<WorkerConnectResult> {
-  return invoke("verify_worker_connection", { workerUrl, adminToken });
+  if (isDesktopRuntime()) {
+    return invoke("verify_worker_connection", { workerUrl, adminToken });
+  }
+  const base = workerUrl.replace(/\/$/, "");
+  const connect = await fetch(`${base}/admin/connect`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  if (!connect.ok) {
+    throw new Error(
+      connect.status === 401 || connect.status === 403
+        ? "Admin token rejected by Worker"
+        : `Worker connect failed (${connect.status})`,
+    );
+  }
+  const value = (await connect.json().catch(() => ({}))) as {
+    workerScriptName?: string;
+    inbound?: { r2Configured?: boolean; bucketName?: string };
+  };
+  return {
+    ok: true,
+    product: "relaybase",
+    workerScriptName: value.workerScriptName ?? "relaybase-api",
+    workerUrl: base,
+    r2Configured: Boolean(value.inbound?.r2Configured),
+    inboundBucketName: value.inbound?.bucketName ?? "",
+  };
 }
 
 export async function desktopSaveWorkerConnection(input: {
@@ -296,15 +321,60 @@ export async function desktopSaveWorkerConnection(input: {
   adminToken: string;
   workerScriptName?: string;
 }): Promise<DesktopCredentials> {
-  return invoke("save_worker_connection", {
-    workerUrl: input.workerUrl,
-    adminToken: input.adminToken,
-    workerScriptName: input.workerScriptName ?? null,
+  if (isDesktopRuntime()) {
+    return invoke("save_worker_connection", {
+      workerUrl: input.workerUrl,
+      adminToken: input.adminToken,
+      workerScriptName: input.workerScriptName ?? null,
+    });
+  }
+  const existing = await loadLocalCredentialsFile();
+  const next: DesktopCredentials = {
+    accountId: existing?.accountId ?? "",
+    apiToken: existing?.apiToken ?? "",
+    workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
+    adminToken: input.adminToken.trim(),
+    workerScriptName:
+      input.workerScriptName?.trim() || existing?.workerScriptName || "",
+    licenseKey: existing?.licenseKey ?? "",
+  };
+  const res = await fetch("/api/local-credentials", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
   });
+  if (!res.ok) {
+    throw new Error("Failed to save credentials to ~/.relaybase");
+  }
+  return next;
 }
 
 export async function desktopClearCredentials(): Promise<void> {
-  return invoke("clear_stored_credentials");
+  if (isDesktopRuntime()) {
+    return invoke("clear_stored_credentials");
+  }
+  await fetch("/api/local-credentials", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      accountId: "",
+      apiToken: "",
+      workerUrl: "",
+      adminToken: "",
+      workerScriptName: "",
+      licenseKey: "",
+    }),
+  });
+}
+
+async function loadLocalCredentialsFile(): Promise<DesktopCredentials | null> {
+  try {
+    const res = await fetch("/api/local-credentials", { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as DesktopCredentials | null;
+  } catch {
+    return null;
+  }
 }
 
 export type DesktopEmailPrefs = {
@@ -359,4 +429,89 @@ export async function desktopOpenExternal(url: string): Promise<void> {
     return;
   }
   return invoke("open_external_url", { url });
+}
+
+export type DesktopApiKeyVaultEntry = {
+  id: string;
+  domain: string;
+  label: string | null;
+  apiKey: string;
+  createdAt: string;
+};
+
+export type DesktopApiKeyVault = {
+  version: number;
+  entries: DesktopApiKeyVaultEntry[];
+};
+
+export async function desktopGetApiKeyVault(): Promise<DesktopApiKeyVault> {
+  if (!isDesktopRuntime()) {
+    return loadBrowserApiKeyVault();
+  }
+  return invoke("get_api_key_vault");
+}
+
+export async function desktopSaveApiKeyVaultEntry(
+  entry: DesktopApiKeyVaultEntry,
+): Promise<DesktopApiKeyVault> {
+  if (!isDesktopRuntime()) {
+    const vault = loadBrowserApiKeyVault();
+    const next = {
+      version: 1,
+      entries: [
+        entry,
+        ...vault.entries.filter((e) => e.id !== entry.id),
+      ],
+    };
+    saveBrowserApiKeyVault(next);
+    return next;
+  }
+  return invoke("save_api_key_vault_entry", { entry });
+}
+
+export async function desktopRemoveApiKeyVaultEntry(
+  id: string,
+): Promise<DesktopApiKeyVault> {
+  if (!isDesktopRuntime()) {
+    const vault = loadBrowserApiKeyVault();
+    const next = {
+      version: 1,
+      entries: vault.entries.filter((e) => e.id !== id),
+    };
+    saveBrowserApiKeyVault(next);
+    return next;
+  }
+  return invoke("remove_api_key_vault_entry_cmd", { id });
+}
+
+/** One-shot mail/{oldCookieUser} → mail/desktop rename. */
+export async function desktopMigrateMailUserFolder(): Promise<string | null> {
+  if (!isDesktopRuntime()) return null;
+  return invoke("migrate_mail_user_folder");
+}
+
+const BROWSER_API_KEY_VAULT = "relaybase:api-keys-vault:v1";
+
+function loadBrowserApiKeyVault(): DesktopApiKeyVault {
+  if (typeof window === "undefined") return { version: 1, entries: [] };
+  try {
+    const raw = localStorage.getItem(BROWSER_API_KEY_VAULT);
+    if (!raw) return { version: 1, entries: [] };
+    const parsed = JSON.parse(raw) as DesktopApiKeyVault;
+    return {
+      version: 1,
+      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+    };
+  } catch {
+    return { version: 1, entries: [] };
+  }
+}
+
+function saveBrowserApiKeyVault(vault: DesktopApiKeyVault) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(BROWSER_API_KEY_VAULT, JSON.stringify(vault));
+  } catch {
+    /* ignore */
+  }
 }

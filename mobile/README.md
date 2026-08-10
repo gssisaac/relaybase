@@ -67,8 +67,12 @@ Convenience scripts are wired into the repo root `package.json`:
 - **flutter_secure_storage** for the Worker URL + mobile password
   (`lib/services/secure_storage_service.dart`).
 - **http** for `/mobile/*` calls (`lib/services/mobile_api_service.dart`).
-- **Cupertino-first** theming with a Material/Cupertino hybrid for Gmail-like
-  affordances (drawer, FAB, swipe actions).
+- **Cupertino-first** theming branded to match the desktop app (`#e85d2a`
+  primary, sharp `rounded-lg` controls). Drawer / FAB / swipe keep the mail
+  shell layout.
+
+Icons are synced from `desktop/src-tauri/icons` (+ `app/public/icon.png` for
+in-app use) via `./scripts/sync-icons.sh` (also run by `setup.sh`).
 
 See `/opt/cursor/artifacts/plans/flutter-mobile-email_1ec50219.plan.md` for
 the full design.

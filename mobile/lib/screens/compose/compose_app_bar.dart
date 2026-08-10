@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 
 /// Compose top bar: discard (back), attach, send.
 class ComposeAppBar extends StatelessWidget {
@@ -41,7 +42,7 @@ class ComposeAppBar extends StatelessWidget {
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             color: canSend ? colors.primary : colors.surfaceVariant,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppRadii.button,
             onPressed: sending || !canSend ? null : onSend,
             child: sending
                 ? const CupertinoActivityIndicator(color: CupertinoColors.white)

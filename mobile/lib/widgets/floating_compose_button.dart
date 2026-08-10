@@ -1,8 +1,9 @@
 import 'package:flutter/cupertino.dart';
 
 import '../theme/colors.dart';
+import '../theme/radii.dart';
 
-/// Circular floating compose button (pencil icon), bottom-right, 56dp.
+/// Floating compose button (pencil), bottom-right — brand radius, not a pill.
 class FloatingComposeButton extends StatelessWidget {
   const FloatingComposeButton({super.key, required this.onTap});
 
@@ -22,18 +23,18 @@ class FloatingComposeButton extends StatelessWidget {
           height: 56,
           decoration: BoxDecoration(
             color: colors.primary,
-            shape: BoxShape.circle,
+            borderRadius: AppRadii.fab,
             boxShadow: const [
               BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 6,
-                offset: Offset(0, 2),
+                color: Color(0x22000000),
+                blurRadius: 4,
+                offset: Offset(0, 1),
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             CupertinoIcons.pencil,
-            color: CupertinoColors.white,
+            color: colors.onPrimary,
             size: 26,
           ),
         ),

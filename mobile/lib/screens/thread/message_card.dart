@@ -3,6 +3,7 @@ import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 
 import '../../../models/thread.dart';
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 import '../../../widgets/avatar.dart';
 import 'attachment_list.dart';
 import 'message_header.dart';
@@ -28,7 +29,7 @@ class _MessageCardState extends State<MessageCard> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadii.field,
         border: Border.all(color: colors.divider),
       ),
       child: Column(

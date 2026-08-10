@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 
 /// A recipient chip row (To/Cc/Bcc). Recipients are simple comma-separated
 /// chips; editing is a plain text field that splits on commas.
@@ -50,7 +51,7 @@ class RecipientField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: colors.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadii.button,
         border: Border.all(color: colors.divider),
       ),
       child: Row(
@@ -77,7 +78,7 @@ class RecipientField extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
           color: colors.surfaceVariant,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppRadii.field,
         ),
         onSubmitted: (value) {
           final trimmed = value.trim();

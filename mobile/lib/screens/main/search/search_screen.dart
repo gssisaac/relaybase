@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/search_provider.dart';
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 import '../../../utils/date_format.dart';
 import '../../../widgets/avatar.dart';
 import '../../../widgets/empty_state.dart';
@@ -91,7 +92,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               },
               decoration: BoxDecoration(
                 color: colors.surfaceVariant,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: AppRadii.field,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             ),
@@ -122,7 +123,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: colors.surfaceVariant,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: AppRadii.button,
         border: Border.all(color: colors.divider),
       ),
       child: Text(label, style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant)),

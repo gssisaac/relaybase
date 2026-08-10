@@ -15,6 +15,7 @@
     "desktop:dev": "pnpm --dir desktop dev",
     "desktop:build": "pnpm --dir desktop build",
     "desktop:build:macos": "pnpm --dir desktop build:macos",
+    "icons:sync": "bash scripts/sync-brand-icons.sh",
     "mobile:setup": "cd mobile && ./scripts/setup.sh && flutter pub get",
     "mobile:ios": "cd mobile && flutter run -d ios",
     "mobile:android": "cd mobile && flutter run -d android",

@@ -2,9 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'colors.dart';
+import 'radii.dart';
 
-/// Cupertino-first theme with a Material/Cupertino hybrid for Gmail-like
-/// affordances (drawer, FAB, swipe actions).
+/// Cupertino-first theme with Material hybrid affordances, branded to match
+/// the desktop Relaybase app (primary `#e85d2a`, sharp `rounded-lg` controls).
 class AppTheme {
   const AppTheme._();
 
@@ -34,7 +35,7 @@ class AppTheme {
         secondary: colors.primary,
         onSecondary: colors.onPrimary,
         error: colors.delete,
-        onError: CupertinoColors.white,
+        onError: BrandColors.primaryForeground,
         surface: colors.surface,
         onSurface: colors.onSurface,
       ),
@@ -42,6 +43,18 @@ class AppTheme {
       dividerColor: colors.divider,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: colors.primary,
+          foregroundColor: colors.onPrimary,
+          shape: RoundedRectangleBorder(borderRadius: AppRadii.button),
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: colors.primary,
+        foregroundColor: colors.onPrimary,
+        shape: RoundedRectangleBorder(borderRadius: AppRadii.fab),
+      ),
     );
   }
 }

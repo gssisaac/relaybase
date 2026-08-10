@@ -6,6 +6,7 @@ import '../../config/deep_links.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../theme/colors.dart';
+import '../../theme/radii.dart';
 import '../../utils/validators.dart';
 
 /// Pairing screen: sign in with account email + password. The Worker URL is
@@ -26,7 +27,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   final _workerUrlController = TextEditingController();
   bool _obscurePassword = true;
   bool _scanning = false;
-  bool _showWorkerField = false;
 
   @override
   void initState() {
@@ -44,10 +44,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     }
     if (lastWorkerUrl != null && lastWorkerUrl.isNotEmpty) {
       _workerUrlController.text = lastWorkerUrl;
-    } else {
-      // No stored Worker URL yet — show the field so the user can enter it
-      // (or scan a QR which fills it automatically).
-      setState(() => _showWorkerField = true);
     }
   }
 
@@ -68,15 +64,19 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _toast('Enter a valid account email address');
       return;
     }
-    // Remember the email (and Worker URL if provided) immediately so they
-    // pre-fill next time, even if this attempt fails.
+    if (workerUrl.isEmpty || !Validators.isUrl(workerUrl)) {
+      _toast('Enter a valid Worker URL (https://…)');
+      return;
+    }
+    // Remember the email + Worker URL immediately so they pre-fill next time,
+    // even if this attempt fails.
     final storage = await ref.read(storageServiceProvider.future);
     await storage.rememberLastUsed(email: email, workerUrl: workerUrl);
 
     final ok = await ref.read(authProvider.notifier).connect(
           accountEmail: email,
           password: password,
-          workerUrl: workerUrl.isEmpty ? null : workerUrl,
+          workerUrl: workerUrl,
         );
     if (!ok && mounted) {
       final error = ref.read(authProvider).error ?? 'Could not connect';
@@ -135,7 +135,17 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(CupertinoIcons.envelope_open_fill, size: 64, color: colors.primary),
+          Center(
+            child: ClipRRect(
+              borderRadius: AppRadii.fab,
+              child: Image.asset(
+                'assets/images/icon.png',
+                width: 72,
+                height: 72,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
           Text(
             'Relaybase',
@@ -174,38 +184,18 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               ),
             ),
           ),
-          if (_showWorkerField) ...[
-            const SizedBox(height: 12),
-            _field(
-              controller: _workerUrlController,
-              placeholder: 'Worker URL (https://…)',
-              keyboardType: TextInputType.url,
-              autocorrect: false,
-              prefixIcon: CupertinoIcons.globe,
-            ),
-          ],
-          if (!_showWorkerField)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minSize: 0,
-                    onPressed: () => setState(() => _showWorkerField = true),
-                    child: Text(
-                      'Change Worker',
-                      style: TextStyle(fontSize: 12, color: colors.primary),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          const SizedBox(height: 12),
+          _field(
+            controller: _workerUrlController,
+            placeholder: 'Worker URL (https://…)',
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            prefixIcon: CupertinoIcons.globe,
+          ),
           const SizedBox(height: 24),
           CupertinoButton(
             color: colors.primary,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadii.button,
             padding: const EdgeInsets.symmetric(vertical: 14),
             onPressed: auth.loading ? null : _connect,
             child: auth.loading
@@ -230,6 +220,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 const SizedBox(width: 8),
                 Text('Scan pairing QR', style: TextStyle(color: colors.primary, fontSize: 15)),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Optional — scan a pairing QR to auto-fill the fields above.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
             ),
           ),
         ],
@@ -260,7 +258,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: ThemeColors.of(context).surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadii.field,
+        border: Border.all(color: ThemeColors.of(context).divider),
       ),
     );
   }

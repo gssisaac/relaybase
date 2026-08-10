@@ -70,4 +70,16 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 fi
 
+# Brand icons (same source as desktop Tauri / app public icon).
+if [[ -x "$(dirname "$0")/sync-icons.sh" ]]; then
+  "$(dirname "$0")/sync-icons.sh"
+fi
+
+# Android launcher label
+if [[ -f android/app/src/main/AndroidManifest.xml ]]; then
+  sed -i.bak 's/android:label="[^"]*"/android:label="Relaybase"/g' \
+    android/app/src/main/AndroidManifest.xml
+  rm -f android/app/src/main/AndroidManifest.xml.bak
+fi
+
 echo "Native projects ready. Run: flutter pub get && flutter run -d ios"

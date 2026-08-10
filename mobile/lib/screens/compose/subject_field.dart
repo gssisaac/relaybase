@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 
 /// Subject line field.
 class SubjectField extends StatefulWidget {
@@ -54,7 +55,7 @@ class _SubjectFieldState extends State<SubjectField> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: colors.surfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadii.field,
       ),
       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.onSurface),
     );

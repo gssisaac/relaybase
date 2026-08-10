@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../../../providers/threads_provider.dart';
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 
 /// Drawer folder list: Inbox, Starred, Sent, Drafts, Trash, All Mail.
 class FolderList extends StatelessWidget {
@@ -38,7 +39,7 @@ class FolderList extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       decoration: BoxDecoration(
         color: selected ? colors.primary.withValues(alpha: 0.12) : CupertinoColors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: AppRadii.button,
       ),
       child: CupertinoButton(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

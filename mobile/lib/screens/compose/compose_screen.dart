@@ -5,6 +5,7 @@ import '../../../models/thread.dart';
 import '../../../providers/accounts_provider.dart';
 import '../../../providers/compose_provider.dart';
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 import 'body_editor.dart';
 import 'compose_app_bar.dart';
 import 'recipient_field.dart';
@@ -216,7 +217,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
             child: CupertinoButton(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               color: colors.surfaceVariant,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: AppRadii.button,
               onPressed: () => _showFromPicker(accounts),
               child: Text(from.isEmpty ? 'Select account' : from,
                   style: TextStyle(fontSize: 14, color: colors.onSurface)),

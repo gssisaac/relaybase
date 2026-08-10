@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../theme/colors.dart';
+import '../../theme/radii.dart';
 
 /// Settings: account info, polling interval, clear cache, sign out.
 class SettingsScreen extends ConsumerWidget {
@@ -121,7 +122,7 @@ class SettingsScreen extends ConsumerWidget {
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: colors.surfaceVariant,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppRadii.field,
           ),
           child: Column(children: children),
         ),

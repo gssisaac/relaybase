@@ -75,8 +75,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   /// Validate account email + password against the Worker and persist on
-  /// success. The Worker URL must already be known (from a prior QR scan);
-  /// if not, the caller should scan a pairing QR first.
+  /// Validate account email + password + Worker URL against the Worker and
+  /// persist on success. The Worker URL is provided manually (or via an
+  /// optional QR scan); no pairing is required to sign in.
   Future<bool> connect({
     required String accountEmail,
     required String password,
@@ -87,7 +88,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (resolvedWorkerUrl == null || resolvedWorkerUrl.isEmpty) {
       state = state.copyWith(
         loading: false,
-        error: 'Scan a pairing QR first to connect to your Worker.',
+        error: 'Worker URL is required.',
       );
       return false;
     }

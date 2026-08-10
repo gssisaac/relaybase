@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../../../models/attachment.dart';
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 
 /// Attachment chips for a message card.
 class AttachmentList extends StatelessWidget {
@@ -26,7 +27,7 @@ class AttachmentList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: colors.surfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadii.button,
         border: Border.all(color: colors.divider),
       ),
       child: Row(

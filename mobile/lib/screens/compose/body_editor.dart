@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../../theme/colors.dart';
+import '../../../theme/radii.dart';
 
 /// Plain-text body editor. Rich text is out of scope for the first cut;
 /// the Worker accepts a `text` body and renders it on the receiving side.
@@ -49,7 +50,7 @@ class _BodyEditorState extends State<BodyEditor> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: colors.surfaceVariant,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadii.field,
       ),
       child: CupertinoTextField(
         controller: _controller,

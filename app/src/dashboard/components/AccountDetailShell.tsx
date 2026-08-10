@@ -14,8 +14,13 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
+import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
+
+function domainOf(email: string): string {
+  return email.split("@")[1]?.toLowerCase() ?? "";
+}
 
 export type AccountDetailSection = "overview" | "logs" | "settings";
 
@@ -41,19 +46,25 @@ export function AccountDetailShell({
   children,
 }: AccountDetailShellProps) {
   const { accounts } = useDashboardPaths();
-  const { addresses, setAccountFilter, unreadCountForAccount } =
-    useEmailMailbox();
+  const { setAccountFilter, unreadCountForAccount } = useEmailMailbox();
+  const accountsStore = useAccounts();
   const { noDragClassName, isDesktop } = useDesktopChrome();
 
-  const address = addresses.find(
-    (entry) => entry.email.toLowerCase() === email.toLowerCase(),
-  );
-  const title = address?.displayName?.trim() || email.split("@")[0] || email;
-  const unread = unreadCountForAccount(email);
+  const emailKey = email.trim().toLowerCase();
+  const domainKey = domainOf(emailKey);
+  const address = accountsStore
+    .addressesFor(domainKey)
+    .find((entry) => entry.email.toLowerCase() === emailKey);
+  const title = address?.displayName?.trim() || emailKey.split("@")[0] || emailKey;
+  const unread = unreadCountForAccount(emailKey);
 
   useEffect(() => {
-    setAccountFilter(email);
-  }, [email, setAccountFilter]);
+    if (domainKey) void accountsStore.refresh(domainKey);
+  }, [accountsStore, domainKey]);
+
+  useEffect(() => {
+    setAccountFilter(emailKey);
+  }, [emailKey, setAccountFilter]);
 
   const hrefFor = (id: AccountDetailSection) => accountDetailHref(email, id);
 

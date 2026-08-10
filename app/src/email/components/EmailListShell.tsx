@@ -7,6 +7,8 @@ import { memo, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { onDraggableFieldMouseDown } from "@/lib/desktop/window-drag";
 import { cn } from "@/lib/utils";
 
 export function EmailListContainer({
@@ -72,19 +74,43 @@ export function ListToolbar({
   searchPlaceholder?: string;
   trailing?: ReactNode;
 }) {
+  const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
+    useDesktopChrome();
+
   return (
-    <div className="flex select-none flex-col gap-3 border-b border-border/30 px-4 py-2 sm:flex-row sm:items-center">
-      <div className="relative min-w-0 flex-1">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    <div
+      {...dragRegionProps}
+      className={cn(
+        "flex shrink-0 select-none flex-col gap-3 border-b border-border/30 px-4 py-2 sm:flex-row sm:items-center",
+        dragRegionClassName,
+      )}
+    >
+      <div
+        {...dragRegionProps}
+        className={cn("relative min-w-0 flex-1", dragRegionClassName)}
+      >
+        <Search
+          className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
         <Input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
+          onMouseDown={onDraggableFieldMouseDown}
           placeholder={searchPlaceholder}
           className="h-8 border-0 bg-secondary/60 pl-8 shadow-none focus-visible:bg-secondary/90 focus-visible:ring-0 focus-visible:border-0"
         />
       </div>
       {trailing ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{trailing}</div>
+        <div
+          className={cn(
+            "flex shrink-0 flex-wrap items-center gap-2",
+            noDragClassName,
+          )}
+          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          {trailing}
+        </div>
       ) : null}
     </div>
   );
@@ -244,33 +270,62 @@ export function DetailView({
   actions?: ReactNode;
   children: ReactNode;
 }) {
+  const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
+    useDesktopChrome();
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b border-border/30 px-4 py-2">
-        {backHref ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2"
-            nativeButton={false}
-            render={<Link href={backHref} />}
-          >
-            <ArrowLeft className="size-4" />
-            Back
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            className="-ml-2"
-          >
-            <ArrowLeft className="size-4" />
-            Back
-          </Button>
+      <div
+        {...dragRegionProps}
+        className={cn(
+          "flex shrink-0 select-none items-center gap-3 border-b border-border/30 px-4 py-2",
+          dragRegionClassName,
         )}
-        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</h2>
-        {actions}
+      >
+        <div
+          className={cn("shrink-0", noDragClassName)}
+          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          {backHref ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="-ml-2"
+              nativeButton={false}
+              render={<Link href={backHref} />}
+            >
+              <ArrowLeft className="size-4" />
+              Back
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+              className="-ml-2"
+            >
+              <ArrowLeft className="size-4" />
+              Back
+            </Button>
+          )}
+        </div>
+        <h2
+          {...dragRegionProps}
+          className={cn(
+            "min-w-0 flex-1 truncate text-sm font-semibold",
+            dragRegionClassName,
+          )}
+        >
+          {title}
+        </h2>
+        {actions ? (
+          <div
+            className={cn("flex shrink-0 items-center gap-2", noDragClassName)}
+            {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+          >
+            {actions}
+          </div>
+        ) : null}
       </div>
       <div className="min-w-0 flex-1 overflow-auto p-4">{children}</div>
     </div>

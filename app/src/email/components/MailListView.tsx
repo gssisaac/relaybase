@@ -49,6 +49,7 @@ import {
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
 import { buildReplyPrefill } from "@/email/reply-helpers";
 import { emailMessageHref } from "@/email/paths";
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { cn } from "@/lib/utils";
 
@@ -1062,21 +1063,23 @@ export const MailListView = observer(function MailListView({
       );
       return (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-3 border-b border-border/30 px-4 py-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="-ml-2"
-              nativeButton={false}
-              render={<Link href={listHref} />}
-            >
-              <ArrowLeft className="size-4" />
-              Back
-            </Button>
-            <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
-              {draft.subject || "(no subject)"}
-            </h2>
-          </div>
+          <DesktopTitleBar className="border-b border-border/30 px-4 py-2">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2"
+                nativeButton={false}
+                render={<Link href={listHref} />}
+              >
+                <ArrowLeft className="size-4" />
+                Back
+              </Button>
+              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+                {draft.subject || "(no subject)"}
+              </h2>
+            </div>
+          </DesktopTitleBar>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
             <ComposeDraftEditor
               key={draft.id}

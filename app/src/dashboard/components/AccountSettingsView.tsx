@@ -8,9 +8,9 @@ import { FieldCheck } from "@/components/ui/field-check";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
-import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import { useEmailPaths } from "@/email/paths";
+import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import {
@@ -25,16 +25,23 @@ function domainOf(email: string): string {
 export function AccountSettingsView({ email }: { email: string }) {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { addresses, refresh, setError, error } = useEmailMailbox();
+  const accountsStore = useAccounts();
   const domainKey = domainOf(email);
+  const emailKey = email.trim().toLowerCase();
 
-  const address = addresses.find(
-    (entry) => entry.email.toLowerCase() === email.toLowerCase(),
-  );
+  const address = accountsStore
+    .addressesFor(domainKey)
+    .find((entry) => entry.email.toLowerCase() === emailKey);
+
   const [displayName, setDisplayName] = useState("");
   const [inboundEnabled, setInboundEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingInbound, setSavingInbound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void accountsStore.refresh(domainKey);
+  }, [accountsStore, domainKey]);
 
   useEffect(() => {
     setDisplayName(address?.displayName ?? "");
@@ -49,7 +56,7 @@ export function AccountSettingsView({ email }: { email: string }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          email: emailKey,
           displayName,
         }),
       });
@@ -58,8 +65,8 @@ export function AccountSettingsView({ email }: { email: string }) {
       toast.success("Display name saved");
       clearEmailCache(productId, `addresses:${domainKey}`);
       clearEmailCache(productId, "addresses:all");
-      notifyAddressesChanged({ domain: domainKey, emails: [email] });
-      await refresh(true);
+      notifyAddressesChanged({ domain: domainKey, emails: [emailKey] });
+      await accountsStore.refresh(domainKey, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
@@ -77,7 +84,7 @@ export function AccountSettingsView({ email }: { email: string }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          email: emailKey,
           inboundEnabled: next,
         }),
       });
@@ -88,8 +95,8 @@ export function AccountSettingsView({ email }: { email: string }) {
       );
       clearEmailCache(productId, `addresses:${domainKey}`);
       clearEmailCache(productId, "addresses:all");
-      notifyAddressesChanged({ domain: domainKey, emails: [email] });
-      await refresh(true);
+      notifyAddressesChanged({ domain: domainKey, emails: [emailKey] });
+      await accountsStore.refresh(domainKey, true);
     } catch (e) {
       setInboundEnabled(previous);
       setError(e instanceof Error ? e.message : "Failed to update inbound");
@@ -98,11 +105,15 @@ export function AccountSettingsView({ email }: { email: string }) {
     }
   }
 
-  if (!address && addresses.length > 0) {
+  const loading =
+    !accountsStore.hasHydrated(domainKey) &&
+    accountsStore.loadingDomain === domainKey;
+
+  if (!loading && accountsStore.hasHydrated(domainKey) && !address) {
     return (
       <div className="p-4">
         <p className="text-sm text-muted-foreground">
-          Account {email} was not found.
+          Account {emailKey} was not found.
         </p>
       </div>
     );
@@ -113,7 +124,7 @@ export function AccountSettingsView({ email }: { email: string }) {
       <div>
         <h2 className="text-sm font-semibold">Settings</h2>
         <p className="text-xs text-muted-foreground">
-          Identity settings for {email}
+          Identity settings for {emailKey}
         </p>
       </div>
 
@@ -122,7 +133,7 @@ export function AccountSettingsView({ email }: { email: string }) {
       <div className="space-y-4 rounded-lg border border-border p-4">
         <div className="space-y-1.5">
           <Label htmlFor="account-email">Email</Label>
-          <Input id="account-email" value={email} disabled />
+          <Input id="account-email" value={emailKey} disabled />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="account-display-name">Display name</Label>
@@ -131,9 +142,14 @@ export function AccountSettingsView({ email }: { email: string }) {
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Optional"
+            disabled={!address}
           />
         </div>
-        <Button size="sm" onClick={() => void saveDisplayName()} disabled={saving}>
+        <Button
+          size="sm"
+          onClick={() => void saveDisplayName()}
+          disabled={saving || !address}
+        >
           {saving ? "Saving…" : "Save"}
         </Button>
       </div>

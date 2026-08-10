@@ -60,7 +60,12 @@ export function useAccounts(): AccountsStore {
         counts: Object.entries(store.addressesByDomain).map(([d, list]) => [
           d,
           list.length,
-          list.map((a) => a.email).join(","),
+          list
+            .map(
+              (a) =>
+                `${a.email}:${a.displayName ?? ""}:${a.inboundEnabled !== false}`,
+            )
+            .join(","),
         ]),
         fetchedAt: Object.entries(store.fetchedAtByDomain)
           .sort(([a], [b]) => a.localeCompare(b))

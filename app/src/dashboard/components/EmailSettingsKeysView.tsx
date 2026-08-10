@@ -447,21 +447,17 @@ export function EmailSettingsKeysView() {
 
   const showWorkerUnavailable = workerConnected === false && !loadingKeys;
   const canIssue = readyDomains.length > 0 && workerConnected === true;
-  const requestSeries = stats?.series.requests.map((b) => b.value) ?? [];
-  const requestTotal = stats?.totals.requests ?? 0;
-  const errorTotal = stats?.totals.errors ?? 0;
+  const requestSeries = stats?.series?.requests?.map((b) => b.value) ?? [];
+  const requestTotal = stats?.totals?.requests ?? 0;
+  const errorTotal = stats?.totals?.errors ?? 0;
 
   const exampleKey =
     keys.find((key) => key.active && key.apiKey) ??
     keys.find((key) => key.apiKey) ??
     null;
   const exampleApiKey = exampleKey?.apiKey ?? "YOUR_API_KEY";
-  const exampleDomain =
-    exampleKey?.domain.trim().toLowerCase() ||
-    readyDomains[0]?.domain ||
-    "yourdomain.com";
   const exampleBaseUrl = workerUrl ?? "https://api.relaybase.xyz";
-  const exampleFrom = `hello@${exampleDomain}`;
+  const exampleFrom = "youraccount@yourdomain.com";
   const examples = buildSendExamples({
     baseUrl: exampleBaseUrl,
     apiKey: exampleApiKey,
@@ -795,8 +791,8 @@ export function EmailSettingsKeysView() {
                 <CardDescription>
                   Call <span className="font-mono">POST /v1/send</span> with
                   your API key. <span className="font-mono">from</span> must be
-                  an address on{" "}
-                  <span className="font-mono">{exampleDomain}</span>.
+                  an address on your domain (e.g.{" "}
+                  <span className="font-mono">{exampleFrom}</span>).
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -828,7 +824,7 @@ export function EmailSettingsKeysView() {
                     {exampleCopied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-                <pre className="overflow-x-auto rounded-lg border border-border/60 bg-black/40 p-3 font-mono text-xs leading-relaxed whitespace-pre">
+                <pre className="overflow-x-auto rounded-lg border border-border/60 bg-muted/30 p-3 font-mono text-xs leading-relaxed whitespace-pre text-foreground dark:bg-black/40">
                   {exampleCode}
                 </pre>
                 <p className="text-xs text-muted-foreground">

@@ -54,7 +54,7 @@ export function SparklineChart({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-lg border border-border/60 bg-black/40",
+        "relative overflow-hidden rounded-lg border border-border/60 bg-background dark:bg-black/40",
         className,
       )}
     >

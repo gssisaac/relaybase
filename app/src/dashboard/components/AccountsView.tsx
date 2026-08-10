@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  hydrateAccountsUiState,
+  setDomainExpanded,
+} from "@/dashboard/accounts-ui-state";
 import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
 import { Globe, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
@@ -51,6 +55,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 function initialDefaultSelection(): Record<string, boolean> {
   return Object.fromEntries(
@@ -111,6 +116,17 @@ type DomainFilter = "all" | string;
 
 type RemoveTarget = { domain: string; email: string };
 
+const COMPACT_EMAIL_PREVIEW_COUNT = 2;
+
+/** e.g. `a@x.com, b@x.com + 3 more` */
+function compactEmailPreview(emails: string[], take = COMPACT_EMAIL_PREVIEW_COUNT) {
+  if (emails.length === 0) return null;
+  const shown = emails.slice(0, take);
+  const rest = emails.length - shown.length;
+  const list = shown.join(", ");
+  return rest > 0 ? `${list} + ${rest} more` : list;
+}
+
 export function AccountsView() {
   const productId = useProductId();
   const router = useRouter();
@@ -143,6 +159,37 @@ export function AccountsView() {
   const [displayName, setDisplayName] = useState("");
   const [configError, setConfigError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
+  /** Domains with expanded cards. Default / missing = collapsed compact. */
+  const [expandedDomains, setExpandedDomains] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void hydrateAccountsUiState(productId).then((state) => {
+      if (cancelled) return;
+      setExpandedDomains(new Set(state.expandedDomains));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
+
+  const toggleDomainExpanded = useCallback(
+    (domain: string) => {
+      const key = domain.trim().toLowerCase();
+      if (!key) return;
+      setExpandedDomains((prev) => {
+        const next = new Set(prev);
+        const expanded = !next.has(key);
+        if (expanded) next.add(key);
+        else next.delete(key);
+        setDomainExpanded(productId, key, expanded);
+        return next;
+      });
+    },
+    [productId],
+  );
 
   const visibleDomains = useMemo(() => {
     if (domainFilter === "all") return readyDomains;
@@ -422,30 +469,61 @@ export function AccountsView() {
               .map((entry) => {
                 const domainAddresses = accountsByDomain.get(entry.domain) ?? [];
                 const totalCount = accountsStore.addressesFor(entry.domain).length;
+                const domainKey = entry.domain.toLowerCase();
+                const expanded = expandedDomains.has(domainKey);
                 const domainLoading =
                   !accountsStore.hasHydrated(entry.domain) &&
-                  accountsStore.loadingDomain === entry.domain.toLowerCase();
+                  accountsStore.loadingDomain === domainKey;
+                const accountSummary =
+                  totalCount === 0
+                    ? "No accounts yet"
+                    : `${totalCount} account${totalCount === 1 ? "" : "s"}`;
+                const emailPreview = !expanded
+                  ? compactEmailPreview(
+                      domainAddresses.map((a) => a.email),
+                    )
+                  : null;
 
                 return (
                   <Card key={entry.domain}>
-                    <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
-                      <div className="min-w-0 space-y-1">
-                        <CardTitle className="flex items-center gap-2 text-base">
-                          <Globe
-                            className="size-4 shrink-0 text-muted-foreground"
-                            aria-hidden
-                          />
-                          <span className="truncate">{entry.domain}</span>
-                        </CardTitle>
-                        <CardDescription>
-                          {totalCount === 0
-                            ? "No accounts yet"
-                            : `${totalCount} account${totalCount === 1 ? "" : "s"}`}
-                          {searchQuery && totalCount > 0
-                            ? ` · ${domainAddresses.length} shown`
-                            : null}
-                        </CardDescription>
-                      </div>
+                    <CardHeader
+                      className={cn(
+                        "flex flex-row flex-wrap items-center justify-between gap-3 space-y-0",
+                        expanded ? "pb-4" : "py-3",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-expanded={expanded}
+                        aria-label={
+                          expanded
+                            ? `Collapse ${entry.domain}`
+                            : `Expand ${entry.domain}`
+                        }
+                        onClick={() => toggleDomainExpanded(entry.domain)}
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <Globe
+                              className="size-4 shrink-0 text-muted-foreground"
+                              aria-hidden
+                            />
+                            <span className="truncate">{entry.domain}</span>
+                          </CardTitle>
+                          <CardDescription>
+                            {accountSummary}
+                            {searchQuery && totalCount > 0
+                              ? ` · ${domainAddresses.length} shown`
+                              : null}
+                          </CardDescription>
+                          {emailPreview ? (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {emailPreview}
+                            </p>
+                          ) : null}
+                        </div>
+                      </button>
                       <Button
                         size="sm"
                         onClick={() => openAddDialog(entry.domain)}
@@ -454,95 +532,102 @@ export function AccountsView() {
                         Add account
                       </Button>
                     </CardHeader>
-                    <CardContent className="px-0 pb-0">
-                      {domainLoading ? (
-                        <div className="min-h-[80px] px-6" />
-                      ) : domainAddresses.length > 0 ? (
-                        <div className="overflow-hidden rounded-b-xl border-t border-border/40">
-                          {domainAddresses.map((address) => {
-                            const label =
-                              address.displayName?.trim() ||
-                              address.email.split("@")[0] ||
-                              address.email;
-                            const counts = accountsStore.countsFor(
-                              entry.domain,
-                              address.email,
-                            );
-                            const countsReady = accountsStore.hasHydratedCounts(
-                              entry.domain,
-                            );
-                            return (
-                              <EmailTableRow
-                                key={address.email}
+                    {expanded ? (
+                      <CardContent className="px-0 pb-0">
+                        {domainLoading ? (
+                          <div className="min-h-[80px] px-6" />
+                        ) : domainAddresses.length > 0 ? (
+                          <div className="overflow-hidden rounded-b-xl border-t border-border/40">
+                            {domainAddresses.map((address) => {
+                              const label =
+                                address.displayName?.trim() ||
+                                address.email.split("@")[0] ||
+                                address.email;
+                              const counts = accountsStore.countsFor(
+                                entry.domain,
+                                address.email,
+                              );
+                              const countsReady =
+                                accountsStore.hasHydratedCounts(entry.domain);
+                              return (
+                                <EmailTableRow
+                                  key={address.email}
+                                  onClick={() =>
+                                    router.push(
+                                      accountDetailHref(address.email),
+                                    )
+                                  }
+                                  primary={address.email}
+                                  subject={label}
+                                  date=""
+                                  status={
+                                    <>
+                                      {address.inboundEnabled === false ? (
+                                        <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                          Inbound off
+                                        </span>
+                                      ) : null}
+                                      <AddressCountsSummary
+                                        total={counts?.total ?? 0}
+                                        unread={counts?.unread ?? 0}
+                                        ready={countsReady}
+                                      />
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        className="text-muted-foreground hover:text-destructive"
+                                        disabled={saving}
+                                        aria-label={`Delete ${address.email}`}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setRemoveTarget({
+                                            domain: entry.domain,
+                                            email: address.email,
+                                          });
+                                        }}
+                                      >
+                                        <Trash2 className="size-3" />
+                                      </Button>
+                                    </>
+                                  }
+                                />
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-start gap-3 px-6 pb-6">
+                            <div>
+                              <p className="text-sm font-medium">
+                                No accounts yet
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Add an address to send from and receive mail on
+                                this domain.
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => openAddDialog(entry.domain)}
+                              >
+                                Add account
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={() =>
-                                  router.push(accountDetailHref(address.email))
+                                  openDefaultsDialog(entry.domain)
                                 }
-                                primary={address.email}
-                                subject={label}
-                                date=""
-                                status={
-                                  <>
-                                    {address.inboundEnabled === false ? (
-                                      <span className="whitespace-nowrap text-xs text-muted-foreground">
-                                        Inbound off
-                                      </span>
-                                    ) : null}
-                                    <AddressCountsSummary
-                                      total={counts?.total ?? 0}
-                                      unread={counts?.unread ?? 0}
-                                      ready={countsReady}
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      className="text-muted-foreground hover:text-destructive"
-                                      disabled={saving}
-                                      aria-label={`Delete ${address.email}`}
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setRemoveTarget({
-                                          domain: entry.domain,
-                                          email: address.email,
-                                        });
-                                      }}
-                                    >
-                                      <Trash2 className="size-3" />
-                                    </Button>
-                                  </>
-                                }
-                              />
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-start gap-3 px-6 pb-6">
-                          <div>
-                            <p className="text-sm font-medium">No accounts yet</p>
-                            <p className="text-xs text-muted-foreground">
-                              Add an address to send from and receive mail on
-                              this domain.
-                            </p>
+                              >
+                                Add defaults 6 accounts
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => openAddDialog(entry.domain)}
-                            >
-                              Add account
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openDefaultsDialog(entry.domain)}
-                            >
-                              Add defaults 6 accounts
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
+                        )}
+                      </CardContent>
+                    ) : null}
                   </Card>
                 );
               })}

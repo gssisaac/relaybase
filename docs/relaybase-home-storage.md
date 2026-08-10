@@ -51,6 +51,7 @@ Server/worker data (Cloudflare KV `RELAYBASE_APP`, R2, D1 waitlist) is separate 
         └── ui/
             ├── enabled-accounts.json
             ├── sidebar.json
+            ├── accounts.json
             ├── read.json
             └── trash.json
 ```
@@ -82,6 +83,15 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `accountColors` | `{ [email]: "#RRGGBB" }` |
 
 TS: `app/src/email/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`.
+
+### `mail/desktop/ui/accounts.json`
+
+| Field | Purpose |
+|-------|---------|
+| `version` | `1` |
+| `expandedDomains` | Domain names whose Accounts cards are expanded (default all collapsed) |
+
+TS: `app/src/dashboard/accounts-ui-state.ts` → `readUiJson` / `writeUiJson`.
 
 ### `api-keys.json`
 

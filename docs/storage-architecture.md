@@ -139,6 +139,7 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Worker connection | `~/.relaybase/credentials.json` | window globals |
 | Domains / addresses | `srv:catalog:mailbox` | `cache/dashboard/addresses-*` |
 | Enabled mail accounts | `mail/desktop/ui/enabled-accounts.json` | localStorage mirror |
+| Accounts domain card expand | `mail/desktop/ui/accounts.json` | localStorage mirror |
 | Inbox / unread | R2 `meta.json` (`readAt`) | `mail/desktop/inbox.json`, `ui/read.json` |
 | Audience / broadcasts | `srv:catalog:audience*` / `broadcasts` | — |
 | Sent history | `srv:sendlog:*` | mail sent JSON optional |

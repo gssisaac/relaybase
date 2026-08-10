@@ -5,10 +5,12 @@ import 'package:relaybase/config/deep_links.dart';
 void main() {
   group('ConnectDeepLink', () {
     test('parses a valid connect deep link', () {
-      const uri = 'relaybase://connect?workerUrl=https://worker.example.com&password=secret123';
+      const uri =
+          'relaybase://connect?workerUrl=https://worker.example.com&email=isaac@kloyapp.com&password=secret123';
       final params = ConnectDeepLink.parse(uri);
       expect(params, isNotNull);
       expect(params!.workerUrl, 'https://worker.example.com');
+      expect(params.email, 'isaac@kloyapp.com');
       expect(params.password, 'secret123');
     });
 
@@ -16,9 +18,19 @@ void main() {
       expect(ConnectDeepLink.parse('https://example.com'), isNull);
     });
 
-    test('returns null when workerUrl or password is missing', () {
-      expect(ConnectDeepLink.parse('relaybase://connect?workerUrl=https://x'), isNull);
-      expect(ConnectDeepLink.parse('relaybase://connect?password=x'), isNull);
+    test('returns null when workerUrl, email, or password is missing', () {
+      expect(
+        ConnectDeepLink.parse('relaybase://connect?workerUrl=https://x&email=a@b.com'),
+        isNull,
+      );
+      expect(
+        ConnectDeepLink.parse('relaybase://connect?workerUrl=https://x&password=x'),
+        isNull,
+      );
+      expect(
+        ConnectDeepLink.parse('relaybase://connect?email=a@b.com&password=x'),
+        isNull,
+      );
     });
 
     test('returns null for an empty string', () {

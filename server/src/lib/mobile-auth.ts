@@ -2,7 +2,7 @@ import type { Env } from "../env";
 import { extractBearerToken } from "./auth";
 import {
   constantTimeEqual,
-  getMobileConfig,
+  getAccountMobileConfig,
   hashMobilePassword,
   type StoredMobileConfig,
 } from "./mobile-config";
@@ -20,27 +20,38 @@ type MobileAuthContext = {
   json(body: unknown, status: number): Response;
 };
 
+export type MobileAuthResult = {
+  email: string;
+  config: StoredMobileConfig;
+};
+
 /**
- * Authenticate `/mobile/*` requests with the mobile access password.
+ * Authenticate `/mobile/*` requests with a per-account mobile password.
  *
- * The desktop app writes a salted SHA-256 hash of the password to
- * `srv:config:mobile`. The Flutter app sends the plain password as
+ * The desktop Other device tab writes a salted SHA-256 hash of the password
+ * to `srv:config:mobile:{email}`. The Flutter app sends the account email
+ * via the `X-Account-Email` header and the plain password as
  * `Authorization: Bearer {password}`; we re-hash with the stored salt and
- * compare in constant time. Returns the resolved config on success so
- * routes can read metadata if needed.
+ * compare in constant time. Returns the resolved email + config on success
+ * so routes can scope operations to the authenticated account.
  */
 export async function requireMobilePassword(
   c: MobileAuthContext,
-): Promise<{ config: StoredMobileConfig } | Response> {
+): Promise<MobileAuthResult | Response> {
+  const email = c.req.header("X-Account-Email")?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "Account email is required" }, 401);
+  }
+
   const token = extractBearerToken(c.req.header("Authorization"));
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const config = await getMobileConfig(c.env.RELAYBASE_APP);
+  const config = await getAccountMobileConfig(c.env.RELAYBASE_APP, email);
   if (!config) {
-    // Mobile access has not been configured by the desktop app.
-    return c.json({ error: "Mobile access is not configured" }, 401);
+    // Mobile access has not been configured for this account.
+    return c.json({ error: "Mobile access is not configured for this account" }, 401);
   }
 
   const candidateHash = await hashMobilePassword(token, config.salt);
@@ -48,5 +59,5 @@ export async function requireMobilePassword(
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  return { config };
+  return { email, config };
 }

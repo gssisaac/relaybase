@@ -18,7 +18,8 @@ class MobileApiException implements Exception {
 }
 
 /// Thin HTTP wrapper around the Worker `/mobile/*` route family. Injects
-/// `Authorization: Bearer {mobilePassword}` on every call.
+/// `Authorization: Bearer {mobilePassword}` and `X-Account-Email` on every
+/// call (per-account mobile auth).
 class MobileApiService {
   MobileApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -35,6 +36,7 @@ class MobileApiService {
 
   Map<String, String> get _headers => {
         'Authorization': 'Bearer ${_config!.mobilePassword}',
+        'X-Account-Email': _config!.normalizedAccountEmail,
         'Accept': 'application/json',
       };
 
@@ -43,7 +45,7 @@ class MobileApiService {
     final res = await _get('/mobile/config');
     if (!_ok(res)) {
       throw MobileApiException(
-        _errorMessage(res.body) ?? 'Mobile access is not configured',
+        _errorMessage(res.body) ?? 'Mobile access is not configured for this account',
         status: res.statusCode,
       );
     }

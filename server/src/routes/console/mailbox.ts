@@ -18,6 +18,12 @@ import {
   writeMailbox,
   type MailboxAddress,
 } from "../../lib/catalog-store";
+import {
+  clearAccountMobileConfig,
+  getAccountMobileConfig,
+  rotateAccountMobileConfig,
+  toAccountMobileConfigPublicView,
+} from "../../lib/mobile-config";
 
 const consoleMailbox = new Hono<{ Bindings: Env }>();
 
@@ -413,6 +419,59 @@ consoleAddresses.delete("/", async (c) => {
       ? data.addresses.filter((a) => a.domain === domain)
       : data.addresses,
   });
+});
+
+/**
+ * Per-account mobile password. The desktop Other device tab generates a
+ * password per address (shown once) and stores a salted SHA-256 hash here.
+ * The Flutter app logs in with the account email + this password.
+ */
+consoleAddresses.get("/mobile-password", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const email = c.req.query("email")?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  const config = await getAccountMobileConfig(c.env.RELAYBASE_APP, email);
+  return c.json(toAccountMobileConfigPublicView(config));
+});
+
+/** Generate or regenerate the per-account mobile password. Returns the plain password once. */
+consoleAddresses.post("/mobile-password", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  let body: { email?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const email = body.email?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  const { password, config } = await rotateAccountMobileConfig(
+    c.env.RELAYBASE_APP,
+    email,
+  );
+  return c.json({
+    password,
+    hasPassword: true,
+    updatedAt: config.updatedAt,
+  });
+});
+
+/** Clear the per-account mobile password (disables mobile login for this account). */
+consoleAddresses.delete("/mobile-password", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+  const email = c.req.query("email")?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  await clearAccountMobileConfig(c.env.RELAYBASE_APP, email);
+  return c.json({ hasPassword: false, updatedAt: null });
 });
 
 export { consoleAddresses };

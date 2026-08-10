@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
-import { requireMobilePassword } from "../lib/mobile-auth";
+import { requireMobilePassword, type MobileAuthResult } from "../lib/mobile-auth";
 import {
   mobileEnabledAddresses,
   mobileEnabledDomains,
@@ -22,8 +22,10 @@ import { listSendLogs } from "../lib/send-logs";
 const mobile = new Hono<{
   Bindings: Env;
   Variables: {
+    mobileAuth: MobileAuthResult;
     mobileDomains: string[];
     mobileAddresses: MailboxAddress[];
+    authEmail: string;
   };
 }>();
 
@@ -31,6 +33,8 @@ const mobile = new Hono<{
 mobile.use("*", async (c, next) => {
   const auth = await requireMobilePassword(c);
   if (auth instanceof Response) return auth;
+  c.set("mobileAuth", auth);
+  c.set("authEmail", auth.email);
   const data = await readMailbox(c.env.RELAYBASE_APP);
   const addresses = mobileEnabledAddresses(data);
   const domains = mobileEnabledDomains(data);
@@ -42,7 +46,8 @@ mobile.use("*", async (c, next) => {
 /** Validate that the mobile session can connect. */
 mobile.get("/config", async (c) => {
   // Auth already ran in the middleware; return minimal public metadata.
-  return c.json({ ok: true, mobile: true });
+  const email = c.get("authEmail");
+  return c.json({ ok: true, mobile: true, email });
 });
 
 /** All domains + addresses the mobile app is allowed to see. */
@@ -63,7 +68,11 @@ mobile.get("/mailbox", async (c) => {
 /** Inbox list across all mobile-enabled domains (Gmail "all inboxes"). */
 mobile.get("/inbox", async (c) => {
   const domains = c.get("mobileDomains");
-  const account = c.req.query("account")?.trim().toLowerCase() || undefined;
+  const authEmail = c.get("authEmail");
+  const account =
+    c.req.query("account")?.trim().toLowerCase() ||
+    authEmail ||
+    undefined;
   const limit = Number(c.req.query("limit") ?? "50");
   const messages = await listInboxForDomains(c.env, domains, {
     account,

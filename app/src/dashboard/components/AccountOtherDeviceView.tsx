@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, QrCode as QrCodeIcon, Smartphone } from "lucide-react";
+import { Info, QrCode as QrCodeIcon, RefreshCw, Smartphone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,8 +14,10 @@ import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { resolveEmailApiBase } from "@/lib/desktop/api-base";
 import {
   buildConnectDeepLink,
-  fetchMobileConfigStatus,
-  type MobileConfigStatus,
+  clearAccountMobilePassword,
+  fetchAccountMobileStatus,
+  setAccountMobilePassword,
+  type AccountMobileStatus,
 } from "@/lib/desktop/mobile-config";
 
 function domainOf(email: string): string {
@@ -24,8 +26,9 @@ function domainOf(email: string): string {
 
 /**
  * Other device tab in the account detail sheet. Lets the desktop user enable
- * or disable mobile access for a single address and shows a pairing QR the
- * Flutter app scans to auto-fill the Worker URL + mobile password.
+ * or disable mobile access for a single address, generate a per-account
+ * mobile password, and show a pairing QR the Flutter app scans to auto-fill
+ * the Worker URL + account email + password.
  */
 export function AccountOtherDeviceView({ email }: { email: string }) {
   const accountsStore = useAccounts();
@@ -38,11 +41,10 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
   const mobileEnabled = address?.mobileEnabled !== false;
   const pending = accountsStore.isMobilePending(emailKey);
 
-  const [globalStatus, setGlobalStatus] = useState<MobileConfigStatus | null>(
-    null,
-  );
+  const [status, setStatus] = useState<AccountMobileStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
-  const [password, setPassword] = useState("");
+  const [plainPassword, setPlainPassword] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const workerUrl = resolveEmailApiBase();
 
@@ -54,12 +56,12 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
   useEffect(() => {
     let cancelled = false;
     setStatusLoading(true);
-    fetchMobileConfigStatus()
+    fetchAccountMobileStatus(emailKey)
       .then((s) => {
-        if (!cancelled) setGlobalStatus(s);
+        if (!cancelled) setStatus(s);
       })
       .catch(() => {
-        if (!cancelled) setGlobalStatus({ enabled: false, updatedAt: null });
+        if (!cancelled) setStatus({ hasPassword: false, updatedAt: null });
       })
       .finally(() => {
         if (!cancelled) setStatusLoading(false);
@@ -67,7 +69,7 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [emailKey]);
 
   async function toggleMobile(next: boolean) {
     try {
@@ -77,13 +79,46 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
     }
   }
 
-  const globalEnabled = globalStatus?.enabled ?? false;
+  async function handleGenerate() {
+    setBusy(true);
+    try {
+      const result = await setAccountMobilePassword(emailKey);
+      setStatus({ hasPassword: true, updatedAt: result.updatedAt });
+      setPlainPassword(result.password);
+      toast.success("Mobile password generated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to set password");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleClear() {
+    setBusy(true);
+    try {
+      const s = await clearAccountMobilePassword(emailKey);
+      setStatus(s);
+      setPlainPassword(null);
+      toast.success("Mobile password cleared");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to clear password");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const hasPassword = status?.hasPassword ?? false;
   const showQr =
-    globalEnabled && mobileEnabled && Boolean(workerUrl) && password.trim().length > 0;
+    mobileEnabled &&
+    hasPassword &&
+    Boolean(workerUrl) &&
+    plainPassword &&
+    plainPassword.trim().length > 0;
   const deepLink = showQr
     ? buildConnectDeepLink({
         workerUrl: workerUrl,
-        password: password.trim(),
+        email: emailKey,
+        password: plainPassword!.trim(),
       })
     : null;
 
@@ -114,41 +149,70 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
         />
       </div>
 
-      {!globalEnabled && !statusLoading ? (
-        <Alert>
-          <Info className="size-4" aria-hidden />
-          <AlertTitle>Mobile access is not enabled</AlertTitle>
-          <AlertDescription>
-            Enable mobile access in Settings first to generate a password and
-            pair this account.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {globalEnabled && mobileEnabled ? (
+      {mobileEnabled ? (
         <div className="space-y-3 rounded-lg border border-border p-4">
           <div className="flex items-center gap-2">
             <Smartphone className="size-4 text-muted-foreground" aria-hidden />
             <p className="text-sm font-medium">Pair a device</p>
           </div>
+
+          {!statusLoading && !hasPassword ? (
+            <Alert>
+              <Info className="size-4" aria-hidden />
+              <AlertTitle>No mobile password set</AlertTitle>
+              <AlertDescription>
+                Generate a password for this account to let the mobile app
+                sign in with this email address.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           <p className="text-xs text-muted-foreground">
-            Copy the mobile password from Settings, paste it here, then scan
-            the QR with the Relaybase mobile app. The QR encodes the Worker URL
-            and password — keep it private.
+            {hasPassword
+              ? "A mobile password is set for this account. Regenerate to issue a new one — old mobile sessions stop working immediately."
+              : "Generate a per-account password the mobile app uses to sign in with this email. It is shown once and stored only in Worker KV."}
           </p>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="mobile-pair-password">Mobile password</Label>
-            <Input
-              id="mobile-pair-password"
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Paste the mobile password from Settings"
-              className="font-mono text-xs"
-              autoComplete="off"
-              spellCheck={false}
-            />
+          {plainPassword ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="mobile-pair-password">Mobile password</Label>
+              <Input
+                id="mobile-pair-password"
+                type="text"
+                value={plainPassword}
+                readOnly
+                className="font-mono text-xs"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Copy this password and scan the QR with the Relaybase mobile
+                app. It won&apos;t be shown again.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={() => void handleGenerate()}
+            >
+              <RefreshCw className="size-3.5" />
+              {hasPassword ? "Regenerate password" : "Generate password"}
+            </Button>
+            {hasPassword ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void handleClear()}
+              >
+                Clear password
+              </Button>
+            ) : null}
           </div>
 
           {showQr && deepLink ? (
@@ -161,7 +225,9 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
           ) : (
             <div className="flex items-center gap-2 rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">
               <QrCodeIcon className="size-4" aria-hidden />
-              Enter the mobile password to show the pairing QR.
+              {hasPassword
+                ? "Generating password to show the pairing QR…"
+                : "Generate a password to show the pairing QR."}
             </div>
           )}
         </div>

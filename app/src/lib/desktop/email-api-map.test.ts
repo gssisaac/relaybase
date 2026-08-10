@@ -62,14 +62,14 @@ describe("mapEmailApiToWorker", () => {
     );
   });
 
-  it("maps mobile-config", () => {
+  it("maps mobile-password", () => {
     assert.equal(
-      mapEmailApiToWorker("/api/email/mobile-config"),
-      "/console/mobile-config",
+      mapEmailApiToWorker("/api/email/mobile-password"),
+      "/console/addresses/mobile-password",
     );
     assert.equal(
-      mapEmailApiToWorker("/api/email/mobile-config?foo=1"),
-      "/console/mobile-config?foo=1",
+      mapEmailApiToWorker("/api/email/mobile-password?email=a@b.com"),
+      "/console/addresses/mobile-password?email=a@b.com",
     );
   });
 });

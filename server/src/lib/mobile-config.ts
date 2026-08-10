@@ -11,6 +11,17 @@ import { sha256Hex } from "./crypto.ts";
 
 export const MOBILE_CONFIG_KV_KEY = "srv:config:mobile";
 
+/**
+ * Per-account mobile password stored in Worker KV under
+ * `srv:config:mobile:{email}`. The desktop Other device tab generates a
+ * password per address, shows it once, and writes a salted SHA-256 hash here.
+ * The Flutter app sends the plain password as a Bearer token plus the
+ * account email via `X-Account-Email`; the Worker re-hashes with the stored
+ * salt and compares in constant time. The plain password is never persisted.
+ */
+export const accountMobileConfigKey = (email: string): string =>
+  `${MOBILE_CONFIG_KV_KEY}:${email.trim().toLowerCase()}`;
+
 export type MobileConfig = {
   /** Salted SHA-256 hex of the plain password. */
   passwordHash: string;
@@ -25,6 +36,12 @@ export type StoredMobileConfig = MobileConfig;
 
 export type MobileConfigPublicView = {
   enabled: boolean;
+  updatedAt: string | null;
+};
+
+/** Per-account public status (no plain password). */
+export type AccountMobileConfigPublicView = {
+  hasPassword: boolean;
   updatedAt: string | null;
 };
 
@@ -121,4 +138,71 @@ export function toMobileConfigPublicView(
   return config
     ? { enabled: true, updatedAt: config.updatedAt }
     : { enabled: false, updatedAt: null };
+}
+
+// ---- Per-account mobile password ----
+
+export async function getAccountMobileConfig(
+  kv: KVNamespace,
+  email: string,
+): Promise<StoredMobileConfig | null> {
+  const raw = await kv.get(accountMobileConfigKey(email));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredMobileConfig>;
+    if (
+      typeof parsed.passwordHash !== "string" ||
+      typeof parsed.salt !== "string" ||
+      typeof parsed.updatedAt !== "string"
+    ) {
+      return null;
+    }
+    return {
+      passwordHash: parsed.passwordHash,
+      salt: parsed.salt,
+      updatedAt: parsed.updatedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function setAccountMobileConfig(
+  kv: KVNamespace,
+  email: string,
+  config: StoredMobileConfig,
+): Promise<void> {
+  await kv.put(accountMobileConfigKey(email), JSON.stringify(config));
+}
+
+export async function clearAccountMobileConfig(
+  kv: KVNamespace,
+  email: string,
+): Promise<void> {
+  await kv.delete(accountMobileConfigKey(email));
+}
+
+/** Create a fresh per-account password + salt + hash and persist. Returns the plain password. */
+export async function rotateAccountMobileConfig(
+  kv: KVNamespace,
+  email: string,
+): Promise<{ password: string; config: StoredMobileConfig }> {
+  const password = generateMobilePassword();
+  const salt = generateMobileSalt();
+  const passwordHash = await hashMobilePassword(password, salt);
+  const config: StoredMobileConfig = {
+    passwordHash,
+    salt,
+    updatedAt: new Date().toISOString(),
+  };
+  await setAccountMobileConfig(kv, email, config);
+  return { password, config };
+}
+
+export function toAccountMobileConfigPublicView(
+  config: StoredMobileConfig | null,
+): AccountMobileConfigPublicView {
+  return config
+    ? { hasPassword: true, updatedAt: config.updatedAt }
+    : { hasPassword: false, updatedAt: null };
 }

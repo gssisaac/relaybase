@@ -3,13 +3,14 @@ import type { Env } from "../env";
 import { requireAdmin } from "../lib/auth";
 import { createCloudflareClient } from "../lib/cloudflare-config";
 import {
-  ensureInboundWorkerRouting,
+  ensureInboundRouting,
   removeInboundWorkerRouting,
 } from "../lib/inbound-routing";
 import {
   addDomain,
   listDomainSummaries,
   normalizeDomain,
+  normalizeMailboxAddress,
   readMailbox,
   removeAddress,
   removeDomain,
@@ -56,13 +57,20 @@ adminMailbox.put("/", async (c) => {
             typeof a.email === "string" &&
             typeof a.domain === "string",
         )
-        .map((a) => ({
-          email: a.email.trim().toLowerCase(),
-          domain: normalizeDomain(a.domain),
-          ...(typeof a.displayName === "string" && a.displayName.trim()
-            ? { displayName: a.displayName.trim() }
-            : {}),
-        }))
+        .map((a) =>
+          normalizeMailboxAddress({
+            email: a.email,
+            domain: a.domain,
+            displayName:
+              typeof a.displayName === "string" ? a.displayName : undefined,
+            inboundEnabled:
+              a.inboundEnabled === false
+                ? false
+                : a.inboundEnabled === true
+                  ? true
+                  : undefined,
+          }),
+        )
     : [];
   const data = { domains, addresses };
   await writeMailbox(c.env.RELAYBASE_APP, data);
@@ -184,6 +192,8 @@ adminAddresses.post("/", async (c) => {
     localParts?: string[];
     displayName?: string;
     displayNames?: Record<string, string>;
+    inboundEnabled?: boolean;
+    inboundEnabledByLocalPart?: Record<string, boolean>;
     domain?: string;
   };
   try {
@@ -223,26 +233,11 @@ adminAddresses.post("/", async (c) => {
     ...new Set(localParts.map((part) => `${part}@${domain}`.toLowerCase())),
   ];
 
-  try {
-    const cf = await createCloudflareClient(c.env);
-    await ensureInboundWorkerRouting(
-      cf,
-      domain,
-      emails,
-      c.env.WORKER_SCRIPT_NAME,
-    );
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to configure inbound routing";
-    return c.json(
-      {
-        error: `Could not enable inbox for ${emails.join(", ")}: ${message}`,
-      },
-      502,
-    );
-  }
+  const inboundByLocal =
+    body.inboundEnabledByLocalPart &&
+    typeof body.inboundEnabledByLocalPart === "object"
+      ? body.inboundEnabledByLocalPart
+      : {};
 
   const singleDisplayName =
     typeof body.displayName === "string" ? body.displayName.trim() : "";
@@ -257,11 +252,48 @@ adminAddresses.post("/", async (c) => {
       typeof displayNames[local] === "string"
         ? displayNames[local]!.trim()
         : "";
+    const inboundFromMap =
+      typeof inboundByLocal[local] === "boolean"
+        ? inboundByLocal[local]
+        : typeof inboundByLocal[local.toLowerCase()] === "boolean"
+          ? inboundByLocal[local.toLowerCase()]
+          : undefined;
+    const inboundEnabled =
+      typeof inboundFromMap === "boolean"
+        ? inboundFromMap
+        : typeof body.inboundEnabled === "boolean"
+          ? body.inboundEnabled
+          : true;
     return {
       email,
       displayName: fromMap || singleDisplayName || undefined,
+      inboundEnabled,
     };
   });
+
+  try {
+    const cf = await createCloudflareClient(c.env);
+    await ensureInboundRouting(
+      cf,
+      domain,
+      entries.map((entry) => ({
+        address: entry.email,
+        inboundEnabled: entry.inboundEnabled,
+      })),
+      c.env.WORKER_SCRIPT_NAME,
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to configure inbound routing";
+    return c.json(
+      {
+        error: `Could not configure inbox for ${emails.join(", ")}: ${message}`,
+      },
+      502,
+    );
+  }
 
   const { data, added } = await upsertAddresses(c.env.RELAYBASE_APP, domain, entries);
   if (added.length === 1) {
@@ -277,7 +309,11 @@ adminAddresses.patch("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
-  let body: { email?: string; displayName?: string | null };
+  let body: {
+    email?: string;
+    displayName?: string | null;
+    inboundEnabled?: boolean;
+  };
   try {
     body = await c.req.json();
   } catch {
@@ -295,22 +331,50 @@ adminAddresses.patch("/", async (c) => {
     return c.json({ error: "Address not found" }, 404);
   }
 
+  const current = data.addresses[index]!;
   const displayName =
     typeof body.displayName === "string"
       ? body.displayName.trim()
       : body.displayName === null
         ? ""
         : undefined;
+  const inboundEnabled =
+    typeof body.inboundEnabled === "boolean"
+      ? body.inboundEnabled
+      : current.inboundEnabled !== false;
 
-  if (displayName !== undefined) {
-    const current = data.addresses[index]!;
-    data.addresses[index] = {
-      email: current.email,
-      domain: current.domain,
-      ...(displayName ? { displayName } : {}),
-    };
-    await writeMailbox(c.env.RELAYBASE_APP, data);
+  if (displayName === undefined && typeof body.inboundEnabled !== "boolean") {
+    return c.json({ address: current });
   }
+
+  const next = normalizeMailboxAddress({
+    email: current.email,
+    domain: current.domain,
+    displayName:
+      displayName !== undefined ? displayName || undefined : current.displayName,
+    inboundEnabled,
+  });
+
+  if (typeof body.inboundEnabled === "boolean") {
+    try {
+      const cf = await createCloudflareClient(c.env);
+      await ensureInboundRouting(
+        cf,
+        current.domain,
+        [{ address: email, inboundEnabled }],
+        c.env.WORKER_SCRIPT_NAME,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to update inbound routing";
+      return c.json({ error: message }, 502);
+    }
+  }
+
+  data.addresses[index] = next;
+  await writeMailbox(c.env.RELAYBASE_APP, data);
 
   return c.json({ address: data.addresses[index] });
 });

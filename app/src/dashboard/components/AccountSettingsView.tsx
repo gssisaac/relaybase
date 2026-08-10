@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { FieldCheck } from "@/components/ui/field-check";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
@@ -31,11 +32,14 @@ export function AccountSettingsView({ email }: { email: string }) {
     (entry) => entry.email.toLowerCase() === email.toLowerCase(),
   );
   const [displayName, setDisplayName] = useState("");
+  const [inboundEnabled, setInboundEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingInbound, setSavingInbound] = useState(false);
 
   useEffect(() => {
     setDisplayName(address?.displayName ?? "");
-  }, [address?.displayName, address?.email]);
+    setInboundEnabled(address?.inboundEnabled !== false);
+  }, [address?.displayName, address?.email, address?.inboundEnabled]);
 
   async function saveDisplayName() {
     setSaving(true);
@@ -60,6 +64,37 @@ export function AccountSettingsView({ email }: { email: string }) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveInboundEnabled(next: boolean) {
+    const previous = inboundEnabled;
+    setInboundEnabled(next);
+    setSavingInbound(true);
+    setError(null);
+    try {
+      const res = await desktopAwareFetch(`${apiBase}/addresses`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          inboundEnabled: next,
+        }),
+      });
+      const data = await readResponseJson<{ error?: string }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Failed to update inbound");
+      toast.success(
+        next ? "Inbound mail enabled" : "Inbound mail blocked (dropped)",
+      );
+      clearEmailCache(productId, `addresses:${domainKey}`);
+      clearEmailCache(productId, "addresses:all");
+      notifyAddressesChanged({ domain: domainKey, emails: [email] });
+      await refresh(true);
+    } catch (e) {
+      setInboundEnabled(previous);
+      setError(e instanceof Error ? e.message : "Failed to update inbound");
+    } finally {
+      setSavingInbound(false);
     }
   }
 
@@ -101,6 +136,28 @@ export function AccountSettingsView({ email }: { email: string }) {
         <Button size="sm" onClick={() => void saveDisplayName()} disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </Button>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border p-4">
+        <div>
+          <h3 className="text-sm font-medium">Inbound mail</h3>
+          <p className="text-xs text-muted-foreground">
+            When off, Cloudflare Email Routing drops messages to this address
+            without storing them.
+          </p>
+        </div>
+        <FieldCheck
+          id="account-accept-inbound"
+          checked={inboundEnabled}
+          disabled={savingInbound || !address}
+          onCheckedChange={(on) => void saveInboundEnabled(on)}
+          label="Accept inbound mail"
+          description={
+            inboundEnabled
+              ? "Messages are delivered to the Relaybase inbox."
+              : "Replies are dropped at Cloudflare (no bounce)."
+          }
+        />
       </div>
     </div>
   );

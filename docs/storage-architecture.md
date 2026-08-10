@@ -55,7 +55,7 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 |-------------|--------|----------|
 | `srv:config:admin` | `lib/auth.ts` | Legacy admin token JSON `{ token }` (secret preferred) |
 | `srv:config:cloudflare` | `lib/cloudflare-config.ts` | CF account id + API token for Email Sending |
-| `srv:catalog:mailbox` | `lib/catalog-store.ts` | `{ domains[], addresses[] }` |
+| `srv:catalog:mailbox` | `lib/catalog-store.ts` | `{ domains[], addresses[] }` — each address: `email`, `domain`, optional `displayName`, optional `inboundEnabled` (`false` = CF Email Routing `drop`; omit/true = Worker receive) |
 | `srv:catalog:audience` | `lib/catalog-audience.ts` | Flat contacts |
 | `srv:catalog:audience-groups` | `lib/catalog-audience.ts` | Groups, dataSource, sync progress/history |
 | `srv:catalog:broadcasts` | `lib/catalog-broadcasts.ts` | Drafts + send progress/history |

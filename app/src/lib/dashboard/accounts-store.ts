@@ -5,6 +5,7 @@ import { makeAutoObservable, runInAction } from "mobx";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
+  defaultInboundEnabledByLocalPart,
 } from "@/lib/dashboard/default-addresses";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import {
@@ -28,6 +29,8 @@ export type CreateAddressesInput = {
   localParts?: string[];
   displayName?: string;
   displayNames?: Record<string, string>;
+  inboundEnabled?: boolean;
+  inboundEnabledByLocalPart?: Record<string, boolean>;
 };
 
 export type AddressCounts = {
@@ -337,6 +340,9 @@ export class AccountsStore {
     const created = await this.create(domain, {
       localParts: [...DEFAULT_ADDRESS_LOCAL_PARTS],
       displayNames: { ...DEFAULT_ADDRESS_DISPLAY_NAMES },
+      inboundEnabledByLocalPart: defaultInboundEnabledByLocalPart(
+        DEFAULT_ADDRESS_LOCAL_PARTS,
+      ),
     });
     return created.map((a) => a.email);
   }

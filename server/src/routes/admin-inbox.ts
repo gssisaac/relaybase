@@ -3,7 +3,7 @@ import type { Env } from "../env";
 import { requireAdmin } from "../lib/auth";
 import { createCloudflareClient } from "../lib/cloudflare-config";
 import {
-  ensureInboundWorkerRouting,
+  ensureInboundRouting,
   removeInboundWorkerRouting,
   type InboundRoutingResult,
   type RemoveInboundRoutingResult,
@@ -23,6 +23,7 @@ import {
   serializeInboundMessage,
 } from "../lib/inbound-serialize";
 import { aggregateInboundCounts } from "../lib/inbound-counts";
+import { readMailbox } from "../lib/catalog-store";
 
 const adminInbox = new Hono<{ Bindings: Env }>();
 
@@ -188,11 +189,19 @@ adminInbox.post("/routing", async (c) => {
   }
 
   try {
+    const mailbox = await readMailbox(c.env.RELAYBASE_APP);
+    const byEmail = new Map(
+      mailbox.addresses.map((a) => [a.email.toLowerCase(), a] as const),
+    );
+    const entries = addresses.map((address) => ({
+      address,
+      inboundEnabled: byEmail.get(address)?.inboundEnabled !== false,
+    }));
     const cf = await createCloudflareClient(c.env);
-    const result: InboundRoutingResult = await ensureInboundWorkerRouting(
+    const result: InboundRoutingResult = await ensureInboundRouting(
       cf,
       domain,
-      addresses,
+      entries,
       c.env.WORKER_SCRIPT_NAME,
     );
     return c.json(result);

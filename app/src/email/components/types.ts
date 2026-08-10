@@ -89,6 +89,8 @@ export type Address = {
   email: string;
   domain?: string;
   displayName?: string;
+  /** When false, inbound is dropped at Cloudflare. Omit/true = receive. */
+  inboundEnabled?: boolean;
 };
 
 export type RoutingActivityEvent = {

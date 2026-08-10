@@ -6,7 +6,29 @@ export type MailboxAddress = {
   email: string;
   domain: string;
   displayName?: string;
+  /**
+   * When false, Cloudflare Email Routing uses action `drop`.
+   * Omit / true = receive via Worker. Missing on read ⇒ treat as true.
+   */
+  inboundEnabled?: boolean;
 };
+
+/** Persist only `false`; omit means receive-on. */
+export function normalizeMailboxAddress(input: {
+  email: string;
+  domain: string;
+  displayName?: string;
+  inboundEnabled?: boolean;
+}): MailboxAddress {
+  const displayName =
+    typeof input.displayName === "string" ? input.displayName.trim() : "";
+  return {
+    email: input.email.trim().toLowerCase(),
+    domain: normalizeDomain(input.domain),
+    ...(displayName ? { displayName } : {}),
+    ...(input.inboundEnabled === false ? { inboundEnabled: false } : {}),
+  };
+}
 
 export type MailboxData = {
   domains: string[];
@@ -68,13 +90,20 @@ export async function readMailbox(kv: KVNamespace): Promise<MailboxData> {
               typeof a.email === "string" &&
               typeof a.domain === "string",
           )
-          .map((a) => ({
-            email: a.email.trim().toLowerCase(),
-            domain: normalizeDomain(a.domain),
-            ...(typeof a.displayName === "string" && a.displayName.trim()
-              ? { displayName: a.displayName.trim() }
-              : {}),
-          }))
+          .map((a) =>
+            normalizeMailboxAddress({
+              email: a.email,
+              domain: a.domain,
+              displayName:
+                typeof a.displayName === "string" ? a.displayName : undefined,
+              inboundEnabled:
+                a.inboundEnabled === false
+                  ? false
+                  : a.inboundEnabled === true
+                    ? true
+                    : undefined,
+            }),
+          )
       : [];
     return { domains, addresses };
   } catch {
@@ -148,7 +177,11 @@ export async function removeDomain(
 export async function upsertAddresses(
   kv: KVNamespace,
   domainInput: string,
-  entries: Array<{ email: string; displayName?: string }>,
+  entries: Array<{
+    email: string;
+    displayName?: string;
+    inboundEnabled?: boolean;
+  }>,
 ): Promise<{ data: MailboxData; added: MailboxAddress[] }> {
   const domain = normalizeDomain(domainInput);
   const data = await readMailbox(kv);
@@ -160,18 +193,24 @@ export async function upsertAddresses(
   for (const entry of entries) {
     const email = entry.email.trim().toLowerCase();
     if (!email.endsWith(`@${domain}`)) continue;
-    const displayName = entry.displayName?.trim();
-    const next: MailboxAddress = {
+    const idx = data.addresses.findIndex((a) => a.email === email);
+    const prev = idx >= 0 ? data.addresses[idx]! : undefined;
+    const displayName =
+      entry.displayName !== undefined
+        ? entry.displayName.trim()
+        : (prev?.displayName ?? "");
+    const inboundEnabled =
+      typeof entry.inboundEnabled === "boolean"
+        ? entry.inboundEnabled
+        : prev?.inboundEnabled !== false;
+    const next = normalizeMailboxAddress({
       email,
       domain,
-      ...(displayName ? { displayName } : {}),
-    };
-    const idx = data.addresses.findIndex((a) => a.email === email);
+      displayName: displayName || undefined,
+      inboundEnabled,
+    });
     if (idx >= 0) {
-      data.addresses[idx] = {
-        ...data.addresses[idx]!,
-        ...next,
-      };
+      data.addresses[idx] = next;
     } else {
       data.addresses.push(next);
     }

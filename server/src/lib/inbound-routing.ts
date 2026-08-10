@@ -1,5 +1,11 @@
 import { CloudflareClient } from "./cloudflare-client";
 
+export type InboundRoutingEntry = {
+  address: string;
+  /** When false, Email Routing action is `drop`. Default true → Worker. */
+  inboundEnabled?: boolean;
+};
+
 export type InboundRoutingResult = {
   domain: string;
   zoneId: string;
@@ -7,7 +13,7 @@ export type InboundRoutingResult = {
   rules: Array<{
     address: string;
     ruleId: string;
-    action: "worker";
+    action: "worker" | "drop";
   }>;
 };
 
@@ -43,10 +49,14 @@ function matchesAddress(
   );
 }
 
-export async function ensureInboundWorkerRouting(
+/**
+ * Ensure Email Routing is enabled and each address has a literal-To rule:
+ * receive → Worker, inboundEnabled false → drop.
+ */
+export async function ensureInboundRouting(
   cf: CloudflareClient,
   domain: string,
-  addresses: string[],
+  entries: InboundRoutingEntry[],
   workerScriptName: string,
 ): Promise<InboundRoutingResult> {
   const zoneId = await resolveZoneId(cf, domain);
@@ -58,33 +68,44 @@ export async function ensureInboundWorkerRouting(
   const existing = await cf.listEmailRoutingRules(zoneId);
   const rules: InboundRoutingResult["rules"] = [];
 
-  for (const address of addresses) {
+  for (const entry of entries) {
+    const address = entry.address.trim().toLowerCase();
+    if (!address) continue;
+    const receive = entry.inboundEnabled !== false;
+    const action = receive
+      ? ({ type: "worker" as const, value: [workerScriptName] })
+      : ({ type: "drop" as const });
+    const ruleAction: "worker" | "drop" = receive ? "worker" : "drop";
+    const ruleName = receive
+      ? `Store ${address} in Worker`
+      : `Drop inbound for ${address}`;
+
     const current = existing.find((rule) => matchesAddress(rule, address));
     if (current) {
       const updated = await cf.updateEmailRoutingRule(zoneId, current.id, {
         enabled: true,
-        actions: [{ type: "worker", value: [workerScriptName] }],
+        actions: [action],
         matchers: [{ type: "literal", field: "to", value: address }],
       });
       rules.push({
         address,
         ruleId: updated.id,
-        action: "worker",
+        action: ruleAction,
       });
       continue;
     }
 
     const created = await cf.createEmailRoutingRule(zoneId, {
-      name: `Store ${address} in Worker`,
+      name: ruleName,
       enabled: true,
       priority: 0,
       matchers: [{ type: "literal", field: "to", value: address }],
-      actions: [{ type: "worker", value: [workerScriptName] }],
+      actions: [action],
     });
     rules.push({
       address,
       ruleId: created.id,
-      action: "worker",
+      action: ruleAction,
     });
   }
 
@@ -94,6 +115,21 @@ export async function ensureInboundWorkerRouting(
     routingEnabled: true,
     rules,
   };
+}
+
+/** @deprecated Prefer ensureInboundRouting — always wires Worker receive. */
+export async function ensureInboundWorkerRouting(
+  cf: CloudflareClient,
+  domain: string,
+  addresses: string[],
+  workerScriptName: string,
+): Promise<InboundRoutingResult> {
+  return ensureInboundRouting(
+    cf,
+    domain,
+    addresses.map((address) => ({ address, inboundEnabled: true })),
+    workerScriptName,
+  );
 }
 
 export type RemoveInboundRoutingResult = {

@@ -5,6 +5,7 @@ import { makeAutoObservable, runInAction } from "mobx";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
+  defaultInboundEnabledByLocalPart,
 } from "@/lib/dashboard/default-addresses";
 import {
   desktopAwareFetch,
@@ -758,6 +759,9 @@ export class DomainStore {
         body: JSON.stringify({
           localParts: [...DEFAULT_ADDRESS_LOCAL_PARTS],
           displayNames: { ...DEFAULT_ADDRESS_DISPLAY_NAMES },
+          inboundEnabledByLocalPart: defaultInboundEnabledByLocalPart(
+            DEFAULT_ADDRESS_LOCAL_PARTS,
+          ),
         }),
       },
     );

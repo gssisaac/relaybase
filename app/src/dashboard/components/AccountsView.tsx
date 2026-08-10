@@ -1,6 +1,6 @@
 "use client";
 
-import { useDashboardPaths } from "@/dashboard/paths";
+import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
 import { Globe, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -112,7 +112,7 @@ type RemoveTarget = { domain: string; email: string };
 
 export function AccountsView() {
   const productId = useProductId();
-  const { apiBase, accounts, domains: domainsHref } = useDashboardPaths();
+  const { apiBase, domains: domainsHref } = useDashboardPaths();
   const { domains, loading: domainsLoading } = useDomain();
   const accountsStore = useAccounts();
 
@@ -131,6 +131,8 @@ export function AccountsView() {
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [defaultsOpen, setDefaultsOpen] = useState(false);
+  /** When true (default), noreply is created with inbound drop. */
+  const [blockNoreplyInbound, setBlockNoreplyInbound] = useState(true);
   const [dialogDomain, setDialogDomain] = useState("");
   const [selectedDefaults, setSelectedDefaults] = useState(
     initialDefaultSelection,
@@ -254,6 +256,7 @@ export function AccountsView() {
   function openDefaultsDialog(domain: string) {
     setDialogDomain(domain);
     setSelectedDefaults(initialDefaultSelection());
+    setBlockNoreplyInbound(true);
     setDefaultsOpen(true);
   }
 
@@ -286,12 +289,20 @@ export function AccountsView() {
           DEFAULT_ADDRESS_DISPLAY_NAMES[part],
         ]),
       );
+      const inboundEnabledByLocalPart = Object.fromEntries(
+        selectedDefaultParts.map((part) => [
+          part,
+          part === "noreply" ? !blockNoreplyInbound : true,
+        ]),
+      );
       await accountsStore.create(domainKey, {
         localParts: [...selectedDefaultParts],
         displayNames,
+        inboundEnabledByLocalPart,
       });
       setDefaultsOpen(false);
       setSelectedDefaults(initialDefaultSelection());
+      setBlockNoreplyInbound(true);
     } catch {
       // error already on store
     }
@@ -461,12 +472,17 @@ export function AccountsView() {
                             return (
                               <EmailTableRow
                                 key={address.email}
-                                href={`${accounts}/${encodeURIComponent(address.email)}`}
+                                href={accountDetailHref(address.email)}
                                 primary={address.email}
                                 subject={label}
                                 date=""
                                 status={
                                   <>
+                                    {address.inboundEnabled === false ? (
+                                      <span className="whitespace-nowrap text-xs text-muted-foreground">
+                                        Inbound off
+                                      </span>
+                                    ) : null}
                                     <AddressCountsSummary
                                       total={counts?.total ?? 0}
                                       unread={counts?.unread ?? 0}
@@ -605,7 +621,10 @@ export function AccountsView() {
           open={defaultsOpen}
           onOpenChange={(open) => {
             setDefaultsOpen(open);
-            if (open) setSelectedDefaults(initialDefaultSelection());
+            if (open) {
+              setSelectedDefaults(initialDefaultSelection());
+              setBlockNoreplyInbound(true);
+            }
           }}
         >
           <DialogContent className="sm:max-w-md">
@@ -622,19 +641,30 @@ export function AccountsView() {
               </p>
               <div className="max-h-64 space-y-2 overflow-y-auto">
                 {DEFAULT_ADDRESS_LOCAL_PARTS.map((part) => (
-                  <FieldCheck
-                    key={part}
-                    id={`default-account-${part}`}
-                    checked={Boolean(selectedDefaults[part])}
-                    onCheckedChange={(on) =>
-                      setSelectedDefaults((prev) => ({
-                        ...prev,
-                        [part]: on,
-                      }))
-                    }
-                    label={`${part}@${dialogDomain || "…"}`}
-                    description={DEFAULT_ADDRESS_DISPLAY_NAMES[part]}
-                  />
+                  <div key={part} className="space-y-2">
+                    <FieldCheck
+                      id={`default-account-${part}`}
+                      checked={Boolean(selectedDefaults[part])}
+                      onCheckedChange={(on) =>
+                        setSelectedDefaults((prev) => ({
+                          ...prev,
+                          [part]: on,
+                        }))
+                      }
+                      label={`${part}@${dialogDomain || "…"}`}
+                      description={DEFAULT_ADDRESS_DISPLAY_NAMES[part]}
+                    />
+                    {part === "noreply" && selectedDefaults.noreply ? (
+                      <FieldCheck
+                        id="default-account-noreply-block-inbound"
+                        className="ml-6"
+                        checked={blockNoreplyInbound}
+                        onCheckedChange={setBlockNoreplyInbound}
+                        label="Block inbound mail"
+                        description="Replies to noreply@ are dropped at Cloudflare (recommended)."
+                      />
+                    ) : null}
+                  </div>
                 ))}
               </div>
               <Button

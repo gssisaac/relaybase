@@ -42,18 +42,12 @@ import {
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import {
+  cfConnectedFromCredentials,
+  type HealthTone,
+} from "@/lib/dashboard/connection-status";
+import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import { cn } from "@/lib/utils";
-
-type WorkerStatus = {
-  ok: boolean;
-  workerUrl: string;
-  workerScriptName: string;
-  r2Configured: boolean;
-  inboundBucketName: string;
-  r2TotalBytes?: number | null;
-  r2ObjectCount?: number | null;
-  r2UsageTruncated?: boolean | null;
-};
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
@@ -62,23 +56,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 }
-
-function workerStatusFromConnect(
-  result: Awaited<ReturnType<typeof desktopVerifyWorkerConnection>>,
-): WorkerStatus {
-  return {
-    ok: result.ok,
-    workerUrl: result.workerUrl,
-    workerScriptName: result.workerScriptName,
-    r2Configured: result.r2Configured,
-    inboundBucketName: result.inboundBucketName || "relaybase-inbound",
-    r2TotalBytes: result.r2TotalBytes ?? null,
-    r2ObjectCount: result.r2ObjectCount ?? null,
-    r2UsageTruncated: result.r2UsageTruncated ?? null,
-  };
-}
-
-type HealthTone = "ok" | "bad" | "pending" | "neutral";
 
 function maskSecret(value: string): string {
   const trimmed = value.trim();
@@ -185,7 +162,18 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 function DesktopSettingsBody() {
   const desktop = useOptionalDesktop();
   const credentials = desktop?.credentials ?? null;
-  const refresh = desktop?.refresh ?? (async () => undefined);
+  const refreshCredentials = desktop?.refresh ?? (async () => undefined);
+  const {
+    snapshot,
+    loading: statusLoading,
+    refreshing: statusRefreshing,
+    refresh: refreshConnectionStatus,
+  } = useConnectionStatus();
+
+  const workerStatus = snapshot?.worker ?? null;
+  const cfConnected =
+    snapshot?.cfConnected ?? cfConnectedFromCredentials(credentials);
+  const statusBusy = statusLoading || statusRefreshing;
 
   const [accountId, setAccountId] = useState("");
   const [apiToken, setApiToken] = useState("");
@@ -197,15 +185,11 @@ function DesktopSettingsBody() {
 
   const [cfBusy, setCfBusy] = useState(false);
   const [workerBusy, setWorkerBusy] = useState(false);
-  const [statusBusy, setStatusBusy] = useState(false);
 
   const [cfError, setCfError] = useState<DesktopErrorHelp | null>(null);
   const [workerError, setWorkerError] = useState<DesktopErrorHelp | null>(null);
   const [cfMessage, setCfMessage] = useState<string | null>(null);
   const [workerMessage, setWorkerMessage] = useState<string | null>(null);
-
-  const [workerStatus, setWorkerStatus] = useState<WorkerStatus | null>(null);
-  const [cfConnected, setCfConnected] = useState(false);
 
   function resetCfDraft() {
     setAccountId(credentials?.accountId ?? "");
@@ -230,9 +214,6 @@ function DesktopSettingsBody() {
       setWorkerUrl(credentials?.workerUrl ?? "");
       setAdminToken(credentials?.adminToken ?? "");
     }
-    setCfConnected(
-      Boolean(credentials?.accountId?.trim() && credentials?.apiToken?.trim()),
-    );
   }, [credentials, cfEditing, workerEditing]);
 
   // First visit with no CF creds → open edit so setup is obvious.
@@ -243,52 +224,6 @@ function DesktopSettingsBody() {
     }
   }, [credentials]);
 
-  async function probeWorkerStatus(url: string, token: string) {
-    const result = await desktopVerifyWorkerConnection(url, token);
-    setWorkerStatus(workerStatusFromConnect(result));
-    return result;
-  }
-
-  useEffect(() => {
-    const url = credentials?.workerUrl?.trim();
-    const token = credentials?.adminToken?.trim();
-    if (!url || !token) {
-      setWorkerStatus(null);
-      return;
-    }
-    let cancelled = false;
-    setStatusBusy(true);
-    void (async () => {
-      try {
-        const result = await desktopVerifyWorkerConnection(url, token);
-        if (cancelled) return;
-        setWorkerStatus(workerStatusFromConnect(result));
-      } catch {
-        if (!cancelled) {
-          setWorkerStatus({
-            ok: false,
-            workerUrl: url,
-            workerScriptName: credentials?.workerScriptName || "relaybase-api",
-            r2Configured: false,
-            inboundBucketName: "relaybase-inbound",
-            r2TotalBytes: null,
-            r2ObjectCount: null,
-            r2UsageTruncated: null,
-          });
-        }
-      } finally {
-        if (!cancelled) setStatusBusy(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    credentials?.workerUrl,
-    credentials?.adminToken,
-    credentials?.workerScriptName,
-  ]);
-
   async function handleSaveCf() {
     setCfBusy(true);
     setCfError(null);
@@ -297,12 +232,11 @@ function DesktopSettingsBody() {
       const result = await desktopVerifyCfToken(accountId, apiToken);
       if (!result.ok) throw new Error(result.message);
       await desktopSaveCfCredentials(accountId, apiToken);
-      setCfConnected(true);
       setCfMessage("Cloudflare token verified and saved locally.");
-      await refresh();
+      await refreshCredentials();
+      await refreshConnectionStatus();
       setCfEditing(false);
     } catch (err) {
-      setCfConnected(false);
       setCfError(explainDesktopError(err, "Cloudflare verification failed"));
     } finally {
       setCfBusy(false);
@@ -314,14 +248,15 @@ function DesktopSettingsBody() {
     setWorkerError(null);
     setWorkerMessage(null);
     try {
-      const result = await probeWorkerStatus(workerUrl, adminToken);
+      const result = await desktopVerifyWorkerConnection(workerUrl, adminToken);
       await desktopSaveWorkerConnection({
         workerUrl: result.workerUrl,
         adminToken,
         workerScriptName: result.workerScriptName,
       });
       setWorkerMessage(`Connected to ${result.workerUrl}`);
-      await refresh();
+      await refreshCredentials();
+      await refreshConnectionStatus();
       setWorkerEditing(false);
     } catch (err) {
       setWorkerError(explainDesktopError(err, "Could not verify Worker"));
@@ -341,25 +276,8 @@ function DesktopSettingsBody() {
       });
       return;
     }
-    setStatusBusy(true);
     setWorkerError(null);
-    try {
-      await probeWorkerStatus(url, token);
-    } catch (err) {
-      setWorkerError(explainDesktopError(err, "Status check failed"));
-      setWorkerStatus({
-        ok: false,
-        workerUrl: url,
-        workerScriptName: credentials?.workerScriptName || "relaybase-api",
-        r2Configured: false,
-        inboundBucketName: "relaybase-inbound",
-        r2TotalBytes: null,
-        r2ObjectCount: null,
-        r2UsageTruncated: null,
-      });
-    } finally {
-      setStatusBusy(false);
-    }
+    await refreshConnectionStatus();
   }
 
   const hasWorker = Boolean(credentials?.workerUrl?.trim());

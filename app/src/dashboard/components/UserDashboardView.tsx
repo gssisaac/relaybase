@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { ApiActivityChart } from "@/dashboard/components/ApiActivityChart";
+import { ConnectionStatusCards } from "@/dashboard/components/ConnectionStatusCards";
 import {
   dashboardCacheNeedsRefresh,
   loadDashboardStatsCache,
@@ -36,7 +37,6 @@ type StatsRange = "24h" | "7d" | "30d";
 type UserStatsResponse = {
   domain: string | null;
   range: StatsRange;
-  workerConnected?: boolean;
   totals: {
     domains: number;
     addresses: number;
@@ -260,6 +260,8 @@ export function UserDashboardView() {
             })}
           </div>
 
+          <ConnectionStatusCards settingsHref={paths.settingsBase} />
+
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-sm font-medium text-muted-foreground">
@@ -276,15 +278,6 @@ export function UserDashboardView() {
                     {option.label}
                   </Button>
                 ))}
-                {stats ? (
-                  <Badge
-                    variant={stats.workerConnected ? "default" : "secondary"}
-                  >
-                    {stats.workerConnected
-                      ? "Worker connected"
-                      : "Worker offline"}
-                  </Badge>
-                ) : null}
               </div>
             </div>
 

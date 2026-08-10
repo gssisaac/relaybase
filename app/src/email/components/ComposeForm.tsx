@@ -120,7 +120,7 @@ export function ComposeForm({
       }
     >
       <div className="flex shrink-0 flex-col divide-y divide-border/20 px-4">
-        <div className="flex shrink-0 items-center gap-2 py-1">
+        <div className="flex min-h-10 shrink-0 items-center py-1">
           <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
             From:
           </span>
@@ -159,7 +159,7 @@ export function ComposeForm({
               </SelectContent>
             </Select>
           ) : (
-            <span className="min-w-0 flex-1 shrink-0 truncate text-sm text-foreground">
+            <span className="min-w-0 flex-1 truncate py-1.5 text-sm text-foreground">
               {fromLabel}
             </span>
           )}

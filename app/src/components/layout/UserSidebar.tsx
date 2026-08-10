@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowLeftRight,
   ChevronDown,
-  ChevronsUpDown,
   FilePen,
   Inbox,
   LayoutGrid,
   Loader2,
-  LogOut,
   Mail,
   PanelLeftClose,
   PanelLeftOpen,
@@ -56,9 +55,61 @@ import {
 import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
+
+/** Matches the product email mark (envelope on orange), as a Lucide stroke. */
+const EMAIL_TITLE_ICON_COLOR = "#D8663B";
+
+function TitleIcon({ mode }: { mode: SidebarMode }) {
+  if (mode === "email") {
+    return (
+      <Mail
+        className="size-4 shrink-0"
+        style={{ color: EMAIL_TITLE_ICON_COLOR }}
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <img
+      src="/icon.png"
+      alt=""
+      width={16}
+      height={16}
+      className="size-4 shrink-0"
+    />
+  );
+}
+
+function TitleMenuItems({
+  mode,
+  onAddAccount,
+  onSwitchMode,
+}: {
+  mode: SidebarMode;
+  onAddAccount: () => void;
+  onSwitchMode: () => void;
+}) {
+  return (
+    <>
+      {mode === "email" ? (
+        <DropdownMenuItem onClick={onAddAccount}>
+          <Plus className="size-3.5" />
+          Add account
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuItem onClick={onSwitchMode}>
+        {mode === "email" ? (
+          <LayoutGrid className="size-3.5" />
+        ) : (
+          <Mail className="size-3.5" />
+        )}
+        {mode === "email" ? "Open dashboard" : "Open email"}
+      </DropdownMenuItem>
+    </>
+  );
+}
 
 function UnreadCountBadge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -430,7 +481,6 @@ export function UserSidebar() {
     dragRegionProps,
     noDragClassName,
   } = useDesktopChrome();
-  const desktop = useOptionalDesktop();
 
   useEffect(() => {
     let cancelled = false;
@@ -467,30 +517,11 @@ export function UserSidebar() {
     });
   }
 
-  async function signOut() {
-    // Clear local Worker connection and return to setup (no cookie login).
-    desktop?.setCredentials(null);
-    try {
-      await fetch("/api/local-credentials", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId: "",
-          apiToken: "",
-          workerUrl: "",
-          adminToken: "",
-          workerScriptName: "",
-          licenseKey: "",
-        }),
-      });
-    } catch {
-      /* browser-only path; Tauri clears via setup flow */
-    }
-    router.replace("/setup/install");
-  }
-
+  const titleLabel = mode === "email" ? "Email" : "Relaybase console";
   const modeToggleLabel =
     mode === "email" ? "Switch to dashboard" : "Switch to email";
+  const switchModeTarget = () =>
+    switchMode(mode === "email" ? "dashboard" : "email");
 
   return (
     <aside
@@ -536,11 +567,9 @@ export function UserSidebar() {
               className="shrink-0"
               aria-label={modeToggleLabel}
               title={modeToggleLabel}
-              onClick={() =>
-                switchMode(mode === "email" ? "dashboard" : "email")
-              }
+              onClick={switchModeTarget}
             >
-              {mode === "email" ? <LayoutGrid /> : <Mail />}
+              <ArrowLeftRight />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -550,43 +579,18 @@ export function UserSidebar() {
                     variant="ghost"
                     size="icon"
                     className="shrink-0 focus-visible:border-transparent focus-visible:ring-0"
-                    aria-label="Relaybase menu"
+                    aria-label={`${titleLabel} menu`}
                   />
                 }
               >
-                <img
-                  src="/icon.png"
-                  alt=""
-                  width={16}
-                  height={16}
-                  className="size-4"
-                />
+                <TitleIcon mode={mode} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" sideOffset={8}>
-                <DropdownMenuItem disabled>{userId}</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAddOpen(true)}>
-                  <Plus className="size-3.5" />
-                  Add account
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    switchMode(mode === "email" ? "dashboard" : "email")
-                  }
-                >
-                  {mode === "email" ? (
-                    <LayoutGrid className="size-3.5" />
-                  ) : (
-                    <Mail className="size-3.5" />
-                  )}
-                  {mode === "email" ? "Open dashboard" : "Open email"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => void signOut()}
-                >
-                  <LogOut className="size-3.5" />
-                  Sign out
-                </DropdownMenuItem>
+                <TitleMenuItems
+                  mode={mode}
+                  onAddAccount={() => setAddOpen(true)}
+                  onSwitchMode={switchModeTarget}
+                />
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -620,49 +624,23 @@ export function UserSidebar() {
                         variant="ghost"
                         size="sm"
                         className="max-w-full justify-start gap-1.5 px-1.5 focus-visible:border-transparent focus-visible:ring-0"
-                        aria-label="Relaybase menu"
+                        aria-label={`${titleLabel} menu`}
                         tabIndex={-1}
                         onMouseDown={(event) => event.preventDefault()}
                       />
                     }
                   >
-                    <img
-                      src="/icon.png"
-                      alt=""
-                      width={16}
-                      height={16}
-                      className="size-4 shrink-0"
-                    />
+                    <TitleIcon mode={mode} />
                     <span className="truncate text-sm font-semibold tracking-tight">
-                      Relaybase
+                      {titleLabel}
                     </span>
-                    <ChevronsUpDown className="size-3.5 text-muted-foreground" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" sideOffset={8}>
-                    <DropdownMenuItem disabled>{userId}</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setAddOpen(true)}>
-                      <Plus className="size-3.5" />
-                      Add account
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        switchMode(mode === "email" ? "dashboard" : "email")
-                      }
-                    >
-                      {mode === "email" ? (
-                        <LayoutGrid className="size-3.5" />
-                      ) : (
-                        <Mail className="size-3.5" />
-                      )}
-                      {mode === "email" ? "Open dashboard" : "Open email"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() => void signOut()}
-                    >
-                      <LogOut className="size-3.5" />
-                      Sign out
-                    </DropdownMenuItem>
+                    <TitleMenuItems
+                      mode={mode}
+                      onAddAccount={() => setAddOpen(true)}
+                      onSwitchMode={switchModeTarget}
+                    />
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -672,15 +650,9 @@ export function UserSidebar() {
                   size="icon-sm"
                   aria-label={modeToggleLabel}
                   title={modeToggleLabel}
-                  onClick={() =>
-                    switchMode(mode === "email" ? "dashboard" : "email")
-                  }
+                  onClick={switchModeTarget}
                 >
-                  {mode === "email" ? (
-                    <LayoutGrid className="size-3.5" />
-                  ) : (
-                    <Mail className="size-3.5" />
-                  )}
+                  <ArrowLeftRight className="size-3.5" />
                 </Button>
               </div>
             </div>

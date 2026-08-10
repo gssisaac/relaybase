@@ -66,32 +66,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// The stored Worker URL (from a previous QR pairing). Null until the user
-  /// has scanned a pairing QR at least once. Manual login uses this.
-  Future<String?> storedWorkerUrl() async {
-    final secure = _ref.read(secureStorageProvider);
-    final stored = await secure.read();
-    return stored?.workerUrl;
-  }
-
   /// Validate account email + password against the Worker and persist on
-  /// Validate account email + password + Worker URL against the Worker and
-  /// persist on success. The Worker URL is provided manually (or via an
-  /// optional QR scan); no pairing is required to sign in.
+  /// success. The Worker URL is NOT entered by the user — it is baked into
+  /// the build via [AppConfig.defaultWorkerUrl]. An optional QR scan can
+  /// override it, but no pairing is required to sign in.
   Future<bool> connect({
     required String accountEmail,
     required String password,
     String? workerUrl,
   }) async {
     state = state.copyWith(loading: true, error: null);
-    final resolvedWorkerUrl = workerUrl ?? await storedWorkerUrl();
-    if (resolvedWorkerUrl == null || resolvedWorkerUrl.isEmpty) {
-      state = state.copyWith(
-        loading: false,
-        error: 'Worker URL is required.',
-      );
-      return false;
-    }
+    final resolvedWorkerUrl =
+        (workerUrl != null && workerUrl.isNotEmpty)
+            ? workerUrl
+            : AppConfig.defaultWorkerUrl;
     final candidate = AppConfig(
       workerUrl: resolvedWorkerUrl,
       accountEmail: accountEmail,

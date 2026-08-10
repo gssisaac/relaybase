@@ -24,7 +24,6 @@ class ConnectScreen extends ConsumerStatefulWidget {
 class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _workerUrlController = TextEditingController();
   bool _obscurePassword = true;
   bool _scanning = false;
 
@@ -37,13 +36,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Future<void> _prefill() async {
     final storage = await ref.read(storageServiceProvider.future);
     final lastEmail = storage.lastEmail;
-    final lastWorkerUrl = storage.lastWorkerUrl;
     if (!mounted) return;
     if (lastEmail != null && lastEmail.isNotEmpty) {
       _emailController.text = lastEmail;
-    }
-    if (lastWorkerUrl != null && lastWorkerUrl.isNotEmpty) {
-      _workerUrlController.text = lastWorkerUrl;
     }
   }
 
@@ -51,32 +46,25 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _workerUrlController.dispose();
     super.dispose();
   }
 
   Future<void> _connect() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    final workerUrl = _workerUrlController.text.trim();
     if (email.isEmpty || password.isEmpty) return;
     if (!Validators.isEmail(email)) {
       _toast('Enter a valid account email address');
       return;
     }
-    if (workerUrl.isEmpty || !Validators.isUrl(workerUrl)) {
-      _toast('Enter a valid Worker URL (https://…)');
-      return;
-    }
-    // Remember the email + Worker URL immediately so they pre-fill next time,
-    // even if this attempt fails.
+    // Remember the email immediately so it pre-fills next time, even if this
+    // attempt fails.
     final storage = await ref.read(storageServiceProvider.future);
-    await storage.rememberLastUsed(email: email, workerUrl: workerUrl);
+    await storage.rememberLastUsed(email: email);
 
     final ok = await ref.read(authProvider.notifier).connect(
           accountEmail: email,
           password: password,
-          workerUrl: workerUrl,
         );
     if (!ok && mounted) {
       final error = ref.read(authProvider).error ?? 'Could not connect';
@@ -116,7 +104,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                     if (parsed != null) {
                       _emailController.text = parsed.email;
                       _passwordController.text = parsed.password;
-                      _workerUrlController.text = parsed.workerUrl;
                     } else {
                       _toast('Not a Relaybase pairing code');
                     }
@@ -183,14 +170,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                 color: colors.onSurfaceVariant,
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _field(
-            controller: _workerUrlController,
-            placeholder: 'Worker URL (https://…)',
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            prefixIcon: CupertinoIcons.globe,
           ),
           const SizedBox(height: 24),
           CupertinoButton(

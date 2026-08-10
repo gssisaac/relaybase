@@ -14,6 +14,8 @@ import { consoleOpsLogs } from "./routes/console/ops-logs";
 import { consoleStats } from "./routes/console/stats";
 import { mailInbox } from "./routes/mail/inbox";
 import { mailSend } from "./routes/mail/send";
+import { consoleMobileConfig } from "./routes/console/mobile-config";
+import { mobile } from "./routes/mobile";
 import { send } from "./routes/send";
 import { v1Inbox } from "./routes/v1-inbox";
 import { v1Webhooks } from "./routes/v1-webhooks";
@@ -56,10 +58,14 @@ app.route("/console/addresses", consoleAddresses);
 app.route("/console/audience-groups", consoleAudienceGroups);
 app.route("/console/broadcasts", consoleBroadcasts);
 app.route("/console/stats", consoleStats);
+app.route("/console/mobile-config", consoleMobileConfig);
 
 // End-user mail operations (admin-token auth).
 app.route("/mail/inbox", mailInbox);
 app.route("/mail/send", mailSend);
+
+// Flutter mobile app (mobile-password auth). Peer to /v1/*.
+app.route("/mobile", mobile);
 
 app.route("/v1/inbox", v1Inbox);
 app.route("/v1/webhooks", v1Webhooks);

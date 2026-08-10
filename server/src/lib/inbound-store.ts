@@ -493,3 +493,16 @@ export async function setInboundReadState(
 
   return { updated };
 }
+
+/**
+ * Look up a single message within a specific domain only (no global scan).
+ * Used by mobile routes so a request scoped to mobile-enabled domains can
+ * never return a message from a disabled domain.
+ */
+export async function getInboundEmailInDomain(
+  bucket: R2Bucket,
+  domain: string,
+  id: string,
+): Promise<InboundEmailMeta | null> {
+  return getInboundEmailForDomain(bucket, domain.trim().toLowerCase(), id);
+}

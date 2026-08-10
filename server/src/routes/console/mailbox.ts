@@ -313,6 +313,7 @@ consoleAddresses.patch("/", async (c) => {
     email?: string;
     displayName?: string | null;
     inboundEnabled?: boolean;
+    mobileEnabled?: boolean;
   };
   try {
     body = await c.req.json();
@@ -342,8 +343,16 @@ consoleAddresses.patch("/", async (c) => {
     typeof body.inboundEnabled === "boolean"
       ? body.inboundEnabled
       : current.inboundEnabled !== false;
+  const mobileEnabled =
+    typeof body.mobileEnabled === "boolean"
+      ? body.mobileEnabled
+      : current.mobileEnabled !== false;
 
-  if (displayName === undefined && typeof body.inboundEnabled !== "boolean") {
+  if (
+    displayName === undefined &&
+    typeof body.inboundEnabled !== "boolean" &&
+    typeof body.mobileEnabled !== "boolean"
+  ) {
     return c.json({ address: current });
   }
 
@@ -353,6 +362,7 @@ consoleAddresses.patch("/", async (c) => {
     displayName:
       displayName !== undefined ? displayName || undefined : current.displayName,
     inboundEnabled,
+    mobileEnabled,
   });
 
   if (typeof body.inboundEnabled === "boolean") {

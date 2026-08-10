@@ -34,6 +34,9 @@ class _AccountSwitcherState extends State<AccountSwitcher> {
   Widget build(BuildContext context) {
     final colors = ThemeColors.of(context);
     final current = _current;
+    // A team member only has access to their own account, so the switcher
+    // is a static header (no dropdown) when there's a single account.
+    final canSwitch = widget.accounts.length > 1;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
       color: colors.surface,
@@ -41,7 +44,8 @@ class _AccountSwitcherState extends State<AccountSwitcher> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
+            behavior: canSwitch ? HitTestBehavior.opaque : HitTestBehavior.deferToChild,
+            onTap: canSwitch ? () => setState(() => _expanded = !_expanded) : null,
             child: Row(
               children: [
                 if (current.email.isEmpty)
@@ -74,29 +78,18 @@ class _AccountSwitcherState extends State<AccountSwitcher> {
                     ],
                   ),
                 ),
-                Icon(
-                  _expanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
-                  size: 18,
-                  color: colors.onSurfaceVariant,
-                ),
+                if (canSwitch)
+                  Icon(
+                    _expanded ? CupertinoIcons.chevron_up : CupertinoIcons.chevron_down,
+                    size: 18,
+                    color: colors.onSurfaceVariant,
+                  ),
               ],
             ),
           ),
-          if (_expanded) ...[
+          if (canSwitch && _expanded) ...[
             const SizedBox(height: 8),
             ...widget.accounts.map((a) => _option(a, colors)),
-            if (widget.accounts.length > 1) ...[
-              const SizedBox(height: 4),
-              _item(
-                icon: CupertinoIcons.tray_full,
-                label: 'All inboxes',
-                colors: colors,
-                onTap: () {
-                  widget.onPick('');
-                  setState(() => _expanded = false);
-                },
-              ),
-            ],
           ],
         ],
       ),

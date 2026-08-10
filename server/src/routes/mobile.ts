@@ -3,7 +3,6 @@ import type { Env } from "../env";
 import { requireMobilePassword, type MobileAuthResult } from "../lib/mobile-auth";
 import {
   mobileEnabledAddresses,
-  mobileEnabledDomains,
   readMailbox,
   type MailboxAddress,
 } from "../lib/catalog-store";
@@ -29,15 +28,24 @@ const mobile = new Hono<{
   };
 }>();
 
-/** Load the mobile-enabled mailbox scope once per request. */
+/**
+ * Load the mobile scope once per request. A team member signs in with ONE
+ * account email + that account's password, so every `/mobile/*` route is
+ * scoped to that single authenticated account — they must never see or send
+ * from any other address, even on the same domain.
+ */
 mobile.use("*", async (c, next) => {
   const auth = await requireMobilePassword(c);
   if (auth instanceof Response) return auth;
   c.set("mobileAuth", auth);
   c.set("authEmail", auth.email);
   const data = await readMailbox(c.env.RELAYBASE_APP);
-  const addresses = mobileEnabledAddresses(data);
-  const domains = mobileEnabledDomains(data);
+  const allEnabled = mobileEnabledAddresses(data);
+  // Restrict to the single authenticated account only.
+  const addresses = allEnabled.filter(
+    (a) => a.email.toLowerCase() === auth.email,
+  );
+  const domains = addresses.map((a) => a.domain);
   c.set("mobileAddresses", addresses);
   c.set("mobileDomains", domains);
   await next();

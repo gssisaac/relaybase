@@ -6,7 +6,16 @@ import {
 } from "@/dashboard/accounts-ui-state";
 import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
-import { Globe, MoreHorizontal, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import {
+  Globe,
+  MailX,
+  MoreHorizontal,
+  PenLine,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -696,6 +705,7 @@ export function AccountsView() {
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent
                                           align="end"
+                                          className="min-w-52"
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           <DropdownMenuItem
@@ -706,15 +716,18 @@ export function AccountsView() {
                                               )
                                             }
                                           >
+                                            <PenLine className="size-3.5" />
                                             Change display name
                                           </DropdownMenuItem>
                                           <DropdownMenuItem
                                             closeOnClick={false}
-                                            className="cursor-default focus:bg-transparent"
                                             onClick={(e) => e.preventDefault()}
                                           >
-                                            <div className="flex w-full items-center justify-between gap-3">
-                                              <span>Inbound off</span>
+                                            <div className="flex w-full items-center justify-between gap-4">
+                                              <span className="inline-flex items-center gap-2.5">
+                                                <MailX className="size-3.5 shrink-0" />
+                                                Inbound off
+                                              </span>
                                               <Switch
                                                 size="sm"
                                                 checked={

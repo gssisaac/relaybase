@@ -11,14 +11,17 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAudienceGroupDetail } from "@/dashboard/components/AudienceGroupDetailContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import {
+  audienceDetailHref,
+  useDashboardPaths,
+  type AudienceDetailTab,
+} from "@/dashboard/paths";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
@@ -46,16 +49,14 @@ export function AudienceGroupDetailShell({
   section: AudienceGroupSection;
   children: ReactNode;
 }) {
-  const pathname = usePathname();
   const { audience } = useDashboardPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const { groupId, detail, notFound } = useAudienceGroupDetail();
 
-  const base = `/audience/${encodeURIComponent(groupId)}`;
   const title = detail?.group.name ?? (notFound ? "Group not found" : "…");
 
   const hrefFor = (id: AudienceGroupSection) =>
-    id === "overview" ? base : `${base}/${id}`;
+    audienceDetailHref(groupId, id as AudienceDetailTab);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -105,10 +106,7 @@ export function AudienceGroupDetailShell({
           {NAV.map((item) => {
             const href = hrefFor(item.id);
             const Icon = item.icon;
-            const active =
-              item.id === section ||
-              pathname === href ||
-              (item.id !== "overview" && pathname.startsWith(`${href}/`));
+            const active = item.id === section;
             return (
               <Link
                 key={item.id}

@@ -8,6 +8,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { AudienceDataSourceGuide } from "@/dashboard/components/AudienceDataSourceGuide";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDomain } from "@/lib/dashboard/DomainContext";
+import { audienceDetailHref } from "@/dashboard/paths";
 import { useEmailPaths } from "@/email/paths";
 import {
   clearEmailCache,
@@ -16,7 +17,12 @@ import {
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import type { AudienceGroupSummary } from "@/email/components/types";
-import { isPackagedApiUnavailableError } from "@/lib/desktop/api-base";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  isPackagedApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,12 +191,18 @@ export function AudienceGroupsView() {
   async function testConnection() {
     setTestState({ status: "testing" });
     try {
-      const res = await fetch(`${apiBase}/audience-groups/test`, {
+      const res = await desktopAwareFetch(`${apiBase}/audience-groups/test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ endpointUrl, credential, credentialHeader }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<{
+        ok?: boolean;
+        error?: string;
+        totalCount?: number;
+        skippedCount?: number;
+        sampleContacts?: Array<{ email: string; name?: string }>;
+      }>(res);
       if (!res.ok || !data.ok) {
         setTestState({
           status: "error",
@@ -207,7 +219,7 @@ export function AudienceGroupsView() {
     } catch (e) {
       setTestState({
         status: "error",
-        message: e instanceof Error ? e.message : "Test failed",
+        message: friendlyDesktopFetchError(e, "Test failed"),
       });
     }
   }
@@ -217,7 +229,7 @@ export function AudienceGroupsView() {
     setRegistering(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/audience-groups`, {
+      const res = await desktopAwareFetch(`${apiBase}/audience-groups`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -233,14 +245,17 @@ export function AudienceGroupsView() {
             : undefined,
         }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<{
+        group: { name: string };
+        error?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to create group");
       setAddOpen(false);
       setMessage(`Created "${data.group.name}"`);
       clearEmailCache(productId, RESOURCE);
       await refresh(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create group");
+      setError(friendlyDesktopFetchError(e, "Failed to create group"));
     } finally {
       setRegistering(false);
     }
@@ -511,9 +526,7 @@ export function AudienceGroupsView() {
                         key={group.id}
                         className="cursor-pointer"
                         onClick={() =>
-                          router.push(
-                            `/audience/${encodeURIComponent(group.id)}`,
-                          )
+                          router.push(audienceDetailHref(group.id))
                         }
                       >
                         <TableCell className="font-medium">

@@ -14,17 +14,13 @@ import {
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
 import type { MailListItem } from "@/email/components/types";
+import { emailMessageHref } from "@/email/paths";
 import type { TrashKind } from "@/email/trash-store";
 
 type MailFolder = Extract<
   EmailMailboxSection,
   "inbox" | "drafts" | "sent" | "trash"
 >;
-
-function accountQuery(account: EmailAccountFilter) {
-  if (account === "all") return "";
-  return `?account=${encodeURIComponent(account)}`;
-}
 
 function composeHref(compose: string, fromAccount: EmailAccountFilter) {
   if (fromAccount === "all") return compose;
@@ -40,18 +36,15 @@ function messageHref(
 ) {
   if (item.kind === "draft") {
     if (item.message.replyKey) {
-      const path = `${inbox}/${encodeURIComponent(item.message.replyKey)}`;
-      return `${path}${accountQuery(account)}`;
+      return emailMessageHref(inbox, item.message.replyKey, { account });
     }
     if (item.message.forwardKey) {
-      const path = `${inbox}/${encodeURIComponent(item.message.forwardKey)}`;
-      return `${path}${accountQuery(account)}`;
+      return emailMessageHref(inbox, item.message.forwardKey, { account });
     }
     return `${compose}?draft=${encodeURIComponent(item.message.id)}`;
   }
   const id = item.kind === "inbox" ? item.message.key : item.message.id;
-  const path = `${folderBase}/${encodeURIComponent(id)}`;
-  return `${path}${accountQuery(account)}`;
+  return emailMessageHref(folderBase, id, { account });
 }
 
 export type UseEmailCommandRuntimeAdapterInput = {
@@ -119,12 +112,12 @@ export function useEmailCommandRuntimeAdapter(
 
   const makeReplyHref = useCallback(
     (id: string, mode: "reply" | "replyAll") => {
-      const params = new URLSearchParams();
-      if (accountFilter !== "all") {
-        params.set("account", accountFilter);
-      }
-      params.set(mode === "replyAll" ? "replyAll" : "reply", "1");
-      return `${inbox}/${encodeURIComponent(id)}?${params.toString()}`;
+      return emailMessageHref(inbox, id, {
+        account: accountFilter,
+        params: {
+          [mode === "replyAll" ? "replyAll" : "reply"]: "1",
+        },
+      });
     },
     [accountFilter, inbox],
   );

@@ -5,32 +5,9 @@ import { useRouter } from "next/navigation";
 
 import {
   DEFAULT_DASHBOARD_PATH,
-  DEFAULT_EMAIL_PATH,
+  normalizeEntryPath,
   resolveEntryPathAsync,
 } from "@/email/sidebar-mode";
-
-/**
- * Static desktop export only pre-renders mailbox section roots (not every
- * message id). Collapse deep links so restore never targets a missing HTML.
- */
-function normalizeEntryPath(path: string): string {
-  const [pathnamePart, query = ""] = path.split("?");
-  const pathname = pathnamePart || "/";
-  const qs = query ? `?${query}` : "";
-  const emailSection = pathname.match(
-    /^\/email\/(inbox|drafts|sent|compose|trash)(?:\/.*)?$/,
-  );
-  if (emailSection) {
-    return `/email/${emailSection[1]}${qs}`;
-  }
-  if (pathname === "/email" || pathname.startsWith("/email/")) {
-    return `${DEFAULT_EMAIL_PATH}${qs}`;
-  }
-  if (pathname === "/" || !pathname.startsWith("/")) {
-    return DEFAULT_DASHBOARD_PATH;
-  }
-  return `${pathname}${qs}`;
-}
 
 /**
  * Client entry gate: restore the last email/dashboard route from ~/.relaybase

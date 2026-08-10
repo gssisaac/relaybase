@@ -59,3 +59,44 @@ export function emailFolderHref(
   if (folder === "compose") return emailComposeHref(account);
   return emailAccountHref(folder, account);
 }
+
+/**
+ * Message detail URL for static-export-safe navigation.
+ * Packaged Tauri only pre-renders section roots (`/email/inbox`, …), so
+ * selection lives in `?m=` rather than a path segment.
+ */
+export function emailMessageHref(
+  folderBase: string,
+  messageId: string,
+  options?: {
+    account?: string | null;
+    /** Extra query keys (reply, replyAll, draftId, …). */
+    params?: Record<string, string | undefined | null>;
+  },
+): string {
+  const params = new URLSearchParams();
+  const account = options?.account?.trim();
+  if (account && account !== "all") {
+    params.set("account", account);
+  }
+  if (options?.params) {
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value != null && value !== "") params.set(key, value);
+    }
+  }
+  params.set("m", messageId);
+  return `${folderBase}?${params.toString()}`;
+}
+
+/** Read selected message id from query (`m`) or legacy path segment. */
+export function emailMessageIdFromSearch(
+  searchParams: { get: (name: string) => string | null },
+  pathRest: string[] = [],
+): string | undefined {
+  const fromQuery = searchParams.get("m")?.trim();
+  if (fromQuery) return fromQuery;
+  if (pathRest.length > 0) {
+    return pathRest.map((segment) => decodeURIComponent(segment)).join("/");
+  }
+  return undefined;
+}

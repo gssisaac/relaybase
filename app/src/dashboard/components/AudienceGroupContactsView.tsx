@@ -11,6 +11,11 @@ import {
 } from "@/dashboard/components/AudienceGroupDetailContext";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
+import {
   DetailView,
   EmailListContainer,
   EmailTableHeader,
@@ -71,7 +76,7 @@ export function AudienceGroupContactsView() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await desktopAwareFetch(
         `${apiBase}/audience-groups/${encodeURIComponent(groupId)}/contacts`,
         {
           method: "POST",
@@ -82,7 +87,10 @@ export function AudienceGroupContactsView() {
           }),
         },
       );
-      const data = await res.json();
+      const data = await readResponseJson<{
+        contact: { email: string };
+        error?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to add contact");
       setContactEmail("");
       setContactName("");
@@ -91,7 +99,7 @@ export function AudienceGroupContactsView() {
       clearAudienceGroupDetailCache(productId, groupId);
       await refresh(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add contact");
+      setError(friendlyDesktopFetchError(e, "Failed to add contact"));
     } finally {
       setSaving(false);
     }
@@ -100,17 +108,17 @@ export function AudienceGroupContactsView() {
   async function removeContact(contactId: string) {
     setError(null);
     try {
-      const res = await fetch(
+      const res = await desktopAwareFetch(
         `${apiBase}/audience-groups/${encodeURIComponent(groupId)}/contacts?contactId=${encodeURIComponent(contactId)}`,
         { method: "DELETE" },
       );
-      const data = await res.json();
+      const data = await readResponseJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to remove contact");
       setSelectedId(null);
       clearAudienceGroupDetailCache(productId, groupId);
       await refresh(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to remove contact");
+      setError(friendlyDesktopFetchError(e, "Failed to remove contact"));
     }
   }
 

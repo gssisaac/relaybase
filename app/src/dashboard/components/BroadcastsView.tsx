@@ -14,7 +14,7 @@ import {
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { broadcastDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { useEmailPaths } from "@/email/paths";
 import {
   fetchEmailCached,
@@ -22,7 +22,12 @@ import {
 } from "@/email/components/email-cached-fetch";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/EmailShared";
-import { isPackagedApiUnavailableError } from "@/lib/desktop/api-base";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  isPackagedApiUnavailableError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 import {
   EmailListContainer,
   EmailTableHeader,
@@ -200,7 +205,7 @@ function BroadcastsViewInner() {
     setCreating(true);
     setCreateError(null);
     try {
-      const res = await fetch(`${apiBase}/broadcasts`, {
+      const res = await desktopAwareFetch(`${apiBase}/broadcasts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -208,22 +213,23 @@ function BroadcastsViewInner() {
           status: "draft",
         }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<{
+        broadcast: { id: string };
+        error?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to create broadcast");
       setCreateOpen(false);
-      router.push(
-        `${broadcastsHref}/${encodeURIComponent(data.broadcast.id)}`,
-      );
+      router.push(broadcastDetailHref(data.broadcast.id));
     } catch (e) {
       setCreateError(
-        e instanceof Error ? e.message : "Failed to create broadcast",
+        friendlyDesktopFetchError(e, "Failed to create broadcast"),
       );
       setCreating(false);
     }
   }
 
   function openBroadcast(id: string) {
-    router.push(`${broadcastsHref}/${encodeURIComponent(id)}`);
+    router.push(broadcastDetailHref(id));
   }
 
   return (

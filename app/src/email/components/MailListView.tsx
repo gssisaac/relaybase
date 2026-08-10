@@ -48,6 +48,7 @@ import {
 } from "@/email/conversation-threading";
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
 import { buildReplyPrefill } from "@/email/reply-helpers";
+import { emailMessageHref } from "@/email/paths";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { cn } from "@/lib/utils";
 
@@ -154,12 +155,10 @@ function messageHref(
   _inbox?: string,
 ) {
   if (item.kind === "draft") {
-    const path = `${folderBase}/${encodeURIComponent(item.message.id)}`;
-    return `${path}${accountQuery(account)}`;
+    return emailMessageHref(folderBase, item.message.id, { account });
   }
   const id = item.kind === "inbox" ? item.message.key : item.message.id;
-  const path = `${folderBase}/${encodeURIComponent(id)}`;
-  return `${path}${accountQuery(account)}`;
+  return emailMessageHref(folderBase, id, { account });
 }
 
 function threadingFromParent(event: RoutingActivityEvent | null | undefined) {
@@ -467,10 +466,8 @@ export const MailListView = observer(function MailListView({
       params.delete("reply");
       params.delete("replyAll");
       params.delete("draftId");
-      const qs = params.toString();
-      router.replace(
-        `${inbox}/${encodeURIComponent(messageId)}${qs ? `?${qs}` : ""}`,
-      );
+      params.set("m", messageId);
+      router.replace(`${inbox}?${params.toString()}`);
       return;
     }
     // Draft reply/forward rows render in ConversationThreadView — do not
@@ -1198,7 +1195,11 @@ export const MailListView = observer(function MailListView({
                 }
                 if (id === selectedThread.latestInboundKey) {
                   router.push(
-                    `${inbox}/${encodeURIComponent(remaining[remaining.length - 1]!)}${accountQuery(accountFilter)}`,
+                    emailMessageHref(
+                      inbox,
+                      remaining[remaining.length - 1]!,
+                      { account: accountFilter },
+                    ),
                   );
                 }
                 return;

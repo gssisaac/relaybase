@@ -13,12 +13,17 @@ import {
   clearBroadcastDetailCache,
   useBroadcastDetail,
 } from "@/dashboard/components/BroadcastDetailContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { broadcastDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { useEmailPaths } from "@/email/paths";
 import { fetchEmailCachedOptional } from "@/email/components/email-cached-fetch";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import type { Address, AudienceGroupSummary } from "@/email/components/types";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Button } from "@/components/ui/button";
 
@@ -159,7 +164,7 @@ export function BroadcastDraftView() {
       }
       if (resolvedFrom !== from) setFrom(resolvedFrom);
 
-      const res = await fetch(
+      const res = await desktopAwareFetch(
         `${apiBase}/broadcasts/${encodeURIComponent(broadcastId)}`,
         {
           method: "PATCH",
@@ -172,14 +177,14 @@ export function BroadcastDraftView() {
           }),
         },
       );
-      const data = await res.json();
+      const data = await readResponseJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to save draft");
       clearBroadcastDetailCache(productId, broadcastId);
       await refresh(true);
       if (!opts?.quiet) setDraftStatus("Draft saved");
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save draft");
+      setError(friendlyDesktopFetchError(e, "Failed to save draft"));
       return false;
     } finally {
       if (!opts?.quiet) setSaving(false);
@@ -213,9 +218,7 @@ export function BroadcastDraftView() {
       subject,
       body,
     });
-    router.replace(
-      `/broadcasts/${encodeURIComponent(broadcastId)}/progress`,
-    );
+    router.replace(broadcastDetailHref(broadcastId, "progress"));
   }
 
   if (loading && !detail) {

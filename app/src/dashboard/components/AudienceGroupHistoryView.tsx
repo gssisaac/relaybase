@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { broadcastDetailHref } from "@/dashboard/paths";
 import { useEmailPaths } from "@/email/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
@@ -25,7 +25,6 @@ const RESOURCE = "broadcasts:all";
 export function AudienceGroupHistoryView() {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { broadcasts: broadcastsHref } = useDashboardPaths();
   const router = useRouter();
   const { groupId } = useAudienceGroupDetail();
 
@@ -86,9 +85,7 @@ export function AudienceGroupHistoryView() {
                 <EmailTableRow
                   key={b.id}
                   onClick={() =>
-                    router.push(
-                      `${broadcastsHref}/${encodeURIComponent(b.id)}`,
-                    )
+                    router.push(broadcastDetailHref(b.id))
                   }
                   primary={b.subject?.trim() || "Untitled draft"}
                   subject={b.from || ""}

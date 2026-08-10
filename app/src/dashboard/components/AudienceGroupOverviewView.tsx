@@ -5,12 +5,18 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { audienceDetailHref } from "@/dashboard/paths";
 import { useEmailPaths } from "@/email/paths";
 import {
   clearAudienceGroupDetailCache,
   useAudienceGroupDetail,
 } from "@/dashboard/components/AudienceGroupDetailContext";
 import { EmailAlerts } from "@/email/components/EmailShared";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,11 +60,16 @@ export function AudienceGroupOverviewView() {
     setError(null);
     setMessage(null);
     try {
-      const res = await fetch(
+      const res = await desktopAwareFetch(
         `${apiBase}/audience-groups/${encodeURIComponent(groupId)}/sync`,
         { method: "POST" },
       );
-      const data = await res.json();
+      const data = await readResponseJson<{
+        ok?: boolean;
+        error?: string;
+        count?: number;
+        skippedCount?: number;
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Sync failed");
       if (!data.ok) {
         setError(data.error ?? "Sync failed");
@@ -71,7 +82,7 @@ export function AudienceGroupOverviewView() {
       clearAudienceGroupDetailCache(productId, groupId);
       await refresh(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Sync failed");
+      setError(friendlyDesktopFetchError(e, "Sync failed"));
     } finally {
       setSyncing(false);
     }
@@ -176,7 +187,7 @@ export function AudienceGroupOverviewView() {
             <p className="text-xs text-muted-foreground">
               Edit the endpoint, credential, or schedule in{" "}
               <Link
-                href={`/audience/${encodeURIComponent(groupId)}/settings`}
+                href={audienceDetailHref(groupId, "settings")}
                 className="underline"
               >
                 Settings
@@ -189,7 +200,7 @@ export function AudienceGroupOverviewView() {
             <p className="text-xs text-muted-foreground">
               Add a data source in{" "}
               <Link
-                href={`/audience/${encodeURIComponent(groupId)}/settings`}
+                href={audienceDetailHref(groupId, "settings")}
                 className="underline"
               >
                 Settings

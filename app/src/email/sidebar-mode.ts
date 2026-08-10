@@ -1,6 +1,21 @@
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/user-ui-disk";
+import {
+  DEFAULT_DASHBOARD_PATH,
+  DEFAULT_EMAIL_PATH,
+  isRestorablePath,
+  modeFromPathname,
+  normalizeEntryPath,
+  type SidebarMode,
+} from "@/email/sidebar-paths";
 
-export type SidebarMode = "email" | "dashboard";
+export type { SidebarMode };
+export {
+  DEFAULT_DASHBOARD_PATH,
+  DEFAULT_EMAIL_PATH,
+  isRestorablePath,
+  modeFromPathname,
+  normalizeEntryPath,
+};
 
 export type SidebarUiState = {
   mode: SidebarMode | null;
@@ -13,36 +28,6 @@ const MODE_PREFIX = "relaybase:sidebar:mode:";
 const LAST_EMAIL_PREFIX = "relaybase:sidebar:lastPath:email:";
 const LAST_DASHBOARD_PREFIX = "relaybase:sidebar:lastPath:dashboard:";
 const COLLAPSED_PREFIX = "relaybase:sidebar-collapsed:";
-
-export const DEFAULT_EMAIL_PATH = "/email/inbox";
-export const DEFAULT_DASHBOARD_PATH = "/dashboard";
-
-const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
-
-export function modeFromPathname(pathname: string): SidebarMode {
-  return pathname === "/email" || pathname.startsWith("/email/")
-    ? "email"
-    : "dashboard";
-}
-
-function pathnameOnly(path: string): string {
-  const noHash = path.split("#")[0] ?? path;
-  return noHash.split("?")[0] || "/";
-}
-
-/** True when a stored path is safe to restore for the given mode. */
-export function isRestorablePath(path: string, mode: SidebarMode): boolean {
-  if (!path.startsWith("/")) return false;
-  const pathname = pathnameOnly(path);
-  if (pathname === "/") return false;
-  for (const prefix of BLOCKED_PATH_PREFIXES) {
-    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false;
-  }
-  if (mode === "email") {
-    return pathname === "/email" || pathname.startsWith("/email/");
-  }
-  return pathname !== "/email" && !pathname.startsWith("/email/");
-}
 
 function readLocalSidebar(userId: string): SidebarUiState {
   const empty: SidebarUiState = {
@@ -121,7 +106,7 @@ export function readLastPath(userId: string, mode: SidebarMode): string {
   const fallback = mode === "email" ? DEFAULT_EMAIL_PATH : DEFAULT_DASHBOARD_PATH;
   const state = readLocalSidebar(userId);
   const raw = mode === "email" ? state.lastEmailPath : state.lastDashboardPath;
-  if (raw && isRestorablePath(raw, mode)) return raw;
+  if (raw && isRestorablePath(raw, mode)) return normalizeEntryPath(raw);
   return fallback;
 }
 
@@ -131,12 +116,13 @@ export function writeLastPath(
   path: string,
 ) {
   if (typeof window === "undefined" || !userId) return;
-  if (!isRestorablePath(path, mode)) return;
+  const normalized = normalizeEntryPath(path);
+  if (!isRestorablePath(normalized, mode)) return;
   const prev = readLocalSidebar(userId);
   const next: SidebarUiState =
     mode === "email"
-      ? { ...prev, lastEmailPath: path }
-      : { ...prev, lastDashboardPath: path };
+      ? { ...prev, lastEmailPath: normalized }
+      : { ...prev, lastDashboardPath: normalized };
   writeLocalSidebar(userId, next);
   persistSidebarDisk(userId, next);
 }
@@ -169,18 +155,20 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
   if (disk && typeof disk === "object") {
     const mode =
       disk.mode === "email" || disk.mode === "dashboard" ? disk.mode : null;
+    const emailPath =
+      typeof disk.lastEmailPath === "string"
+        ? normalizeEntryPath(disk.lastEmailPath)
+        : null;
+    const dashPath =
+      typeof disk.lastDashboardPath === "string"
+        ? normalizeEntryPath(disk.lastDashboardPath)
+        : null;
     const state: SidebarUiState = {
       mode,
       lastEmailPath:
-        typeof disk.lastEmailPath === "string" &&
-        isRestorablePath(disk.lastEmailPath, "email")
-          ? disk.lastEmailPath
-          : null,
+        emailPath && isRestorablePath(emailPath, "email") ? emailPath : null,
       lastDashboardPath:
-        typeof disk.lastDashboardPath === "string" &&
-        isRestorablePath(disk.lastDashboardPath, "dashboard")
-          ? disk.lastDashboardPath
-          : null,
+        dashPath && isRestorablePath(dashPath, "dashboard") ? dashPath : null,
       collapsed: Boolean(disk.collapsed),
     };
     writeLocalSidebar(userId, state);
@@ -188,15 +176,25 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
   }
 
   const local = readLocalSidebar(userId);
+  const migrated: SidebarUiState = {
+    ...local,
+    lastEmailPath: local.lastEmailPath
+      ? normalizeEntryPath(local.lastEmailPath)
+      : null,
+    lastDashboardPath: local.lastDashboardPath
+      ? normalizeEntryPath(local.lastDashboardPath)
+      : null,
+  };
   if (
-    local.mode ||
-    local.lastEmailPath ||
-    local.lastDashboardPath ||
-    local.collapsed
+    migrated.mode ||
+    migrated.lastEmailPath ||
+    migrated.lastDashboardPath ||
+    migrated.collapsed
   ) {
-    await writeUiJson(userId, UI_FILES.sidebar, local);
+    writeLocalSidebar(userId, migrated);
+    await writeUiJson(userId, UI_FILES.sidebar, migrated);
   }
-  return local;
+  return migrated;
 }
 
 /** Last sidebar mode + path for app entry (home / post-login). */

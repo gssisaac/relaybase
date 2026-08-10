@@ -7,7 +7,7 @@ import {
   EMAIL_SEND_UNDONE,
   type EmailSendUndoneDetail,
 } from "@/email/components/email-send-events";
-import { useEmailPaths } from "@/email/paths";
+import { emailMessageHref, useEmailPaths } from "@/email/paths";
 
 /** Reopens the draft or reply composer after Unsend / failed delayed send. */
 export function EmailSendUndoneNavigator() {
@@ -20,18 +20,20 @@ export function EmailSendUndoneNavigator() {
       if (!detail?.draftId) return;
 
       if (detail.replyKey) {
-        const params = new URLSearchParams();
-        if (detail.replyAll) params.set("replyAll", "1");
-        else params.set("reply", "1");
-        params.set("draftId", detail.draftId);
-        if (detail.from) params.set("account", detail.from);
         router.push(
-          `${inbox}/${encodeURIComponent(detail.replyKey)}?${params.toString()}`,
+          emailMessageHref(inbox, detail.replyKey, {
+            account: detail.from,
+            params: {
+              replyAll: detail.replyAll ? "1" : undefined,
+              reply: detail.replyAll ? undefined : "1",
+              draftId: detail.draftId,
+            },
+          }),
         );
         return;
       }
 
-      router.push(`${drafts}/${encodeURIComponent(detail.draftId)}`);
+      router.push(emailMessageHref(drafts, detail.draftId));
     };
 
     window.addEventListener(EMAIL_SEND_UNDONE, onUndone);

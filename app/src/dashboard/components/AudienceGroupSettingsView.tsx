@@ -15,6 +15,11 @@ import { fetchEmailCachedOptional } from "@/email/components/email-cached-fetch"
 import { readEmailStale } from "@/email/components/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import type { Address } from "@/email/components/types";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -135,7 +140,7 @@ export function AudienceGroupSettingsView() {
   async function testConnection() {
     setTestState({ status: "testing" });
     try {
-      const res = await fetch(`${apiBase}/audience-groups/test`, {
+      const res = await desktopAwareFetch(`${apiBase}/audience-groups/test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,7 +150,12 @@ export function AudienceGroupSettingsView() {
           credentialHeader,
         }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<{
+        ok?: boolean;
+        error?: string;
+        totalCount?: number;
+        skippedCount?: number;
+      }>(res);
       if (!res.ok || !data.ok) {
         setTestState({ status: "error", message: data.error ?? "Test failed" });
         return;
@@ -158,7 +168,7 @@ export function AudienceGroupSettingsView() {
     } catch (e) {
       setTestState({
         status: "error",
-        message: e instanceof Error ? e.message : "Test failed",
+        message: friendlyDesktopFetchError(e, "Test failed"),
       });
     }
   }
@@ -178,7 +188,7 @@ export function AudienceGroupSettingsView() {
           }
         : null;
 
-      const res = await fetch(
+      const res = await desktopAwareFetch(
         `${apiBase}/audience-groups/${encodeURIComponent(groupId)}`,
         {
           method: "PATCH",
@@ -192,7 +202,7 @@ export function AudienceGroupSettingsView() {
           }),
         },
       );
-      const data = await res.json();
+      const data = await readResponseJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
       setMessage("Settings saved");
       setDataSourceEdited(false);
@@ -200,7 +210,7 @@ export function AudienceGroupSettingsView() {
       clearAudienceGroupDetailCache(productId, groupId);
       await refresh(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save settings");
+      setError(friendlyDesktopFetchError(e, "Failed to save settings"));
     } finally {
       setSaving(false);
     }
@@ -210,16 +220,16 @@ export function AudienceGroupSettingsView() {
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await desktopAwareFetch(
         `${apiBase}/audience-groups/${encodeURIComponent(groupId)}`,
         { method: "DELETE" },
       );
-      const data = await res.json();
+      const data = await readResponseJson<{ error?: string }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to delete group");
       clearAudienceGroupDetailCache(productId, groupId);
       router.push(audience);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete group");
+      setError(friendlyDesktopFetchError(e, "Failed to delete group"));
       setDeleting(false);
     }
   }

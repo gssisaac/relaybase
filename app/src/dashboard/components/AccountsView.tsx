@@ -4,6 +4,7 @@ import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { fetchEmailCached } from "@/email/components/email-cached-fetch";
 import { Globe, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
@@ -112,6 +113,7 @@ type RemoveTarget = { domain: string; email: string };
 
 export function AccountsView() {
   const productId = useProductId();
+  const router = useRouter();
   const { apiBase, domains: domainsHref } = useDashboardPaths();
   const { domains, loading: domainsLoading } = useDomain();
   const accountsStore = useAccounts();
@@ -472,7 +474,9 @@ export function AccountsView() {
                             return (
                               <EmailTableRow
                                 key={address.email}
-                                href={accountDetailHref(address.email)}
+                                onClick={() =>
+                                  router.push(accountDetailHref(address.email))
+                                }
                                 primary={address.email}
                                 subject={label}
                                 date=""

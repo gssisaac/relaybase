@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   EmailMailboxLayout,
@@ -10,7 +10,7 @@ import {
 import { EmailPageSuspenseFallback } from "@/email/components/EmailPageSuspenseFallback";
 import { ComposeView } from "@/email/components/ComposeView";
 import { MailListView } from "@/email/components/MailListView";
-import { useEmailPaths } from "@/email/paths";
+import { emailMessageIdFromSearch, useEmailPaths } from "@/email/paths";
 
 function EmailsInboxRedirect() {
   const router = useRouter();
@@ -56,22 +56,22 @@ function mailboxSection(second?: string): EmailMailboxSection | null {
   return null;
 }
 
-export function EmailMailboxRoutes({
+function EmailMailboxRoutesInner({
   second,
   rest,
 }: {
   second?: string;
   rest: string[];
 }) {
+  const searchParams = useSearchParams();
   const section = mailboxSection(second);
   if (!section) {
     return <EmailsInboxRedirect />;
   }
 
-  const messageId =
-    rest.length > 0
-      ? rest.map((segment) => decodeURIComponent(segment)).join("/")
-      : undefined;
+  // Packaged static export only has section roots; selection is `?m=`.
+  // Path segments remain as a tauri/dev fallback.
+  const messageId = emailMessageIdFromSearch(searchParams, rest);
 
   let page: ReactNode = null;
   if (
@@ -85,9 +85,19 @@ export function EmailMailboxRoutes({
     page = <SuspenseComposeView />;
   }
 
+  return <EmailMailboxLayout section={section}>{page}</EmailMailboxLayout>;
+}
+
+export function EmailMailboxRoutes({
+  second,
+  rest,
+}: {
+  second?: string;
+  rest: string[];
+}) {
   return (
     <Suspense fallback={<EmailPageSuspenseFallback />}>
-      <EmailMailboxLayout section={section}>{page}</EmailMailboxLayout>
+      <EmailMailboxRoutesInner second={second} rest={rest} />
     </Suspense>
   );
 }

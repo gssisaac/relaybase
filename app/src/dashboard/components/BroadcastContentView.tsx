@@ -5,9 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { useBroadcastDetail } from "@/dashboard/components/BroadcastDetailContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { broadcastDetailHref } from "@/dashboard/paths";
 import { useEmailPaths } from "@/email/paths";
 import { EmailAlerts } from "@/email/components/EmailShared";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +26,6 @@ import {
 export function BroadcastContentView() {
   const { detail, loading } = useBroadcastDetail();
   const { apiBase } = useEmailPaths();
-  const { broadcasts: broadcastsHref } = useDashboardPaths();
   const router = useRouter();
 
   const [creating, setCreating] = useState(false);
@@ -42,7 +46,7 @@ export function BroadcastContentView() {
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch(`${apiBase}/broadcasts`, {
+      const res = await desktopAwareFetch(`${apiBase}/broadcasts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -53,15 +57,14 @@ export function BroadcastContentView() {
           status: "draft",
         }),
       });
-      const data = await res.json();
+      const data = await readResponseJson<{
+        broadcast: { id: string };
+        error?: string;
+      }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to create broadcast");
-      router.push(
-        `${broadcastsHref}/${encodeURIComponent(data.broadcast.id)}`,
-      );
+      router.push(broadcastDetailHref(data.broadcast.id));
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Failed to create broadcast",
-      );
+      setError(friendlyDesktopFetchError(e, "Failed to create broadcast"));
       setCreating(false);
     }
   }

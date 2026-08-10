@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import type { PanelViewProps } from "@/lib/dashboard/shared/DashboardPageContent";
 import { useProductHref } from "@/lib/dashboard/shared/ProductContext";
@@ -13,6 +13,17 @@ import { AccountLogsView } from "@/dashboard/components/AccountLogsView";
 import { AccountOverviewView } from "@/dashboard/components/AccountOverviewView";
 import { AccountSettingsView } from "@/dashboard/components/AccountSettingsView";
 import { AccountsView } from "@/dashboard/components/AccountsView";
+import {
+  accountDetailFromSearch,
+  accountDetailHref,
+  audienceDetailFromSearch,
+  audienceDetailHref,
+  broadcastDetailFromSearch,
+  broadcastDetailHref,
+  type AccountDetailTab,
+  type AudienceDetailTab,
+  type BroadcastDetailTab,
+} from "@/dashboard/paths";
 import {
   AudienceGroupDetailProvider,
 } from "@/dashboard/components/AudienceGroupDetailContext";
@@ -68,7 +79,7 @@ function KeysRedirect() {
 function AccountOverviewRedirect({ email }: { email: string }) {
   const router = useRouter();
   useEffect(() => {
-    router.replace(`/accounts/${encodeURIComponent(email)}`);
+    router.replace(accountDetailHref(email));
   }, [email, router]);
   return null;
 }
@@ -82,24 +93,11 @@ function parseAccountSection(segment?: string): AccountDetailSection {
 
 function AccountDetailRoutes({
   email,
-  rest,
+  section,
 }: {
   email: string;
-  rest: string[];
+  section: AccountDetailSection;
 }) {
-  const [sectionSegment] = rest;
-  const section = parseAccountSection(sectionSegment);
-
-  // Legacy compose/inbox/sent tabs (and /overview) → account root.
-  if (
-    sectionSegment === "overview" ||
-    sectionSegment === "compose" ||
-    sectionSegment === "inbox" ||
-    sectionSegment === "sent"
-  ) {
-    return <AccountOverviewRedirect email={email} />;
-  }
-
   let page: ReactNode = null;
   if (section === "overview") {
     page = <AccountOverviewView email={email} />;
@@ -114,6 +112,41 @@ function AccountDetailRoutes({
       {page}
     </AccountDetailShell>
   );
+}
+
+function AccountsRoutes({
+  pathEmail,
+  pathRest,
+}: {
+  pathEmail?: string;
+  pathRest: string[];
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromQuery = accountDetailFromSearch(searchParams);
+  const pathSectionSegment = pathRest[0];
+  const pathSection = parseAccountSection(pathSectionSegment);
+  const email = fromQuery?.email ?? pathEmail;
+  const section: AccountDetailTab = fromQuery?.tab ?? pathSection;
+
+  // Migrate legacy `/accounts/{email}/…` → `/accounts?email=&tab=` (static-safe).
+  useEffect(() => {
+    if (!pathEmail || fromQuery) return;
+    if (
+      pathSectionSegment === "overview" ||
+      pathSectionSegment === "compose" ||
+      pathSectionSegment === "inbox" ||
+      pathSectionSegment === "sent"
+    ) {
+      router.replace(accountDetailHref(pathEmail));
+      return;
+    }
+    router.replace(accountDetailHref(pathEmail, section));
+  }, [fromQuery, pathEmail, pathSectionSegment, router, section]);
+
+  if (!email) return <AccountsView />;
+  if (pathEmail && !fromQuery) return null;
+  return <AccountDetailRoutes email={email} section={section} />;
 }
 
 function parseAudienceGroupSection(segment?: string): AudienceGroupSection {
@@ -132,14 +165,11 @@ function parseAudienceGroupSection(segment?: string): AudienceGroupSection {
 
 function AudienceGroupDetailRoutes({
   groupId,
-  rest,
+  section,
 }: {
   groupId: string;
-  rest: string[];
+  section: AudienceGroupSection;
 }) {
-  const [sectionSegment] = rest;
-  const section = parseAudienceGroupSection(sectionSegment);
-
   let page: ReactNode = null;
   if (section === "contacts") {
     page = <AudienceGroupContactsView />;
@@ -164,6 +194,30 @@ function AudienceGroupDetailRoutes({
   );
 }
 
+function AudienceRoutes({
+  pathGroupId,
+  pathRest,
+}: {
+  pathGroupId?: string;
+  pathRest: string[];
+}) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromQuery = audienceDetailFromSearch(searchParams);
+  const pathSection = parseAudienceGroupSection(pathRest[0]);
+  const groupId = fromQuery?.groupId ?? pathGroupId;
+  const section: AudienceDetailTab = fromQuery?.tab ?? pathSection;
+
+  useEffect(() => {
+    if (!pathGroupId || fromQuery) return;
+    router.replace(audienceDetailHref(pathGroupId, section));
+  }, [fromQuery, pathGroupId, router, section]);
+
+  if (!groupId) return <AudienceGroupsView />;
+  if (pathGroupId && !fromQuery) return null;
+  return <AudienceGroupDetailRoutes groupId={groupId} section={section} />;
+}
+
 function parseBroadcastSection(segment?: string): BroadcastSection {
   if (
     segment === "audience" ||
@@ -176,11 +230,9 @@ function parseBroadcastSection(segment?: string): BroadcastSection {
   return "overview";
 }
 
-function BroadcastDetailBody({ rest }: { rest: string[] }) {
+function BroadcastDetailBody({ section }: { section: BroadcastSection }) {
   const { broadcastId, detail, loading, notFound } = useBroadcastDetail();
   const broadcastStore = useBroadcast();
-  const [sectionSegment] = rest;
-  const section = parseBroadcastSection(sectionSegment);
   const status = detail?.broadcast.status;
   const jobActive = broadcastStore.isActive(broadcastId);
   const showDraft =
@@ -231,25 +283,49 @@ function BroadcastDetailBody({ rest }: { rest: string[] }) {
 
 function BroadcastDetailRoutes({
   broadcastId,
-  rest,
+  section,
 }: {
   broadcastId: string;
-  rest: string[];
+  section: BroadcastSection;
 }) {
   return (
     <BroadcastDetailProvider broadcastId={broadcastId}>
-      <BroadcastDetailBody rest={rest} />
+      <BroadcastDetailBody section={section} />
     </BroadcastDetailProvider>
   );
 }
 
-function BroadcastNewRedirect() {
+function BroadcastsRoutes({
+  pathBroadcastId,
+  pathRest,
+  pathIsNew,
+}: {
+  pathBroadcastId?: string;
+  pathRest: string[];
+  pathIsNew?: boolean;
+}) {
   const router = useRouter();
-  const broadcasts = useProductHref("broadcasts");
+  const searchParams = useSearchParams();
+  const fromQuery = broadcastDetailFromSearch(searchParams);
+  const pathSection = parseBroadcastSection(pathRest[0]);
+  const broadcastId = fromQuery?.broadcastId ?? pathBroadcastId;
+  const section: BroadcastDetailTab = fromQuery?.tab ?? pathSection;
+
   useEffect(() => {
-    router.replace(`${broadcasts}?new=1`);
-  }, [broadcasts, router]);
-  return null;
+    if (pathIsNew && !fromQuery) {
+      router.replace("/broadcasts?new=1");
+      return;
+    }
+    if (!pathBroadcastId || fromQuery) return;
+    router.replace(broadcastDetailHref(pathBroadcastId, section));
+  }, [fromQuery, pathBroadcastId, pathIsNew, router, section]);
+
+  if (pathIsNew && !fromQuery) return null;
+  if (!broadcastId) return <BroadcastsView />;
+  if (pathBroadcastId && !fromQuery) return null;
+  return (
+    <BroadcastDetailRoutes broadcastId={broadcastId} section={section} />
+  );
 }
 
 export function DashboardPanelView({ subPath }: PanelViewProps) {
@@ -268,24 +344,45 @@ export function DashboardPanelView({ subPath }: PanelViewProps) {
   }
 
   if (root === "accounts") {
-    if (!second) return <AccountsView />;
-    const email = decodeURIComponent(second);
-    if (!email.includes("@")) return <AccountsView />;
-    return <AccountDetailRoutes email={email} rest={rest} />;
+    const pathEmail =
+      second && decodeURIComponent(second).includes("@")
+        ? decodeURIComponent(second)
+        : undefined;
+    return (
+      <Suspense fallback={null}>
+        <AccountsRoutes pathEmail={pathEmail} pathRest={pathEmail ? rest : []} />
+      </Suspense>
+    );
   }
 
   if (root === "audience") {
-    if (!second) return <AudienceGroupsView />;
-    const groupId = decodeURIComponent(second);
-    return <AudienceGroupDetailRoutes groupId={groupId} rest={rest} />;
+    const pathGroupId = second ? decodeURIComponent(second) : undefined;
+    return (
+      <Suspense fallback={null}>
+        <AudienceRoutes
+          pathGroupId={pathGroupId}
+          pathRest={pathGroupId ? rest : []}
+        />
+      </Suspense>
+    );
   }
 
   if (root === "broadcasts") {
-    if (!second) return <BroadcastsView />;
-    if (second === "new") return <BroadcastNewRedirect />;
-    const broadcastId = decodeURIComponent(second);
+    if (second === "new") {
+      return (
+        <Suspense fallback={null}>
+          <BroadcastsRoutes pathIsNew pathRest={[]} />
+        </Suspense>
+      );
+    }
+    const pathBroadcastId = second ? decodeURIComponent(second) : undefined;
     return (
-      <BroadcastDetailRoutes broadcastId={broadcastId} rest={rest} />
+      <Suspense fallback={null}>
+        <BroadcastsRoutes
+          pathBroadcastId={pathBroadcastId}
+          pathRest={pathBroadcastId ? rest : []}
+        />
+      </Suspense>
     );
   }
 

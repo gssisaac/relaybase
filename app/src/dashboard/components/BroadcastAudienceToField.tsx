@@ -9,6 +9,11 @@ import type {
   AudienceGroupContact,
   AudienceGroupSummary,
 } from "@/email/components/types";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,10 +69,13 @@ export function BroadcastAudienceToField({
     try {
       const results = await Promise.all(
         selectedGroups.map(async (group) => {
-          const res = await fetch(
+          const res = await desktopAwareFetch(
             `${apiBase}/audience-groups/${encodeURIComponent(group.id)}/contacts`,
           );
-          const data = await res.json();
+          const data = await readResponseJson<{
+            contacts?: AudienceGroupContact[];
+            error?: string;
+          }>(res);
           if (!res.ok) {
             throw new Error(data.error ?? `Failed to load ${group.name}`);
           }
@@ -87,7 +95,7 @@ export function BroadcastAudienceToField({
       merged.sort((a, b) => a.email.localeCompare(b.email));
       setContacts(merged);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load contacts");
+      setError(friendlyDesktopFetchError(e, "Failed to load contacts"));
       setContacts([]);
     } finally {
       setLoading(false);

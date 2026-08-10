@@ -8,13 +8,12 @@ import {
   Settings,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { accountDetailHref, useDashboardPaths } from "@/dashboard/paths";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
@@ -41,12 +40,10 @@ export function AccountDetailShell({
   section,
   children,
 }: AccountDetailShellProps) {
-  const pathname = usePathname();
   const { accounts } = useDashboardPaths();
   const { addresses, setAccountFilter, unreadCountForAccount } =
     useEmailMailbox();
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const base = `/accounts/${encodeURIComponent(email)}`;
 
   const address = addresses.find(
     (entry) => entry.email.toLowerCase() === email.toLowerCase(),
@@ -58,11 +55,7 @@ export function AccountDetailShell({
     setAccountFilter(email);
   }, [email, setAccountFilter]);
 
-  const hrefFor = (id: AccountDetailSection) => {
-    if (id === "overview") return base;
-    if (id === "logs") return `${base}/logs`;
-    return `${base}/settings`;
-  };
+  const hrefFor = (id: AccountDetailSection) => accountDetailHref(email, id);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -113,10 +106,7 @@ export function AccountDetailShell({
           {NAV.map((item) => {
             const href = hrefFor(item.id);
             const Icon = item.icon;
-            const active =
-              item.id === section ||
-              pathname === href ||
-              (item.id !== "overview" && pathname.startsWith(`${href}/`));
+            const active = item.id === section;
             return (
               <Link
                 key={item.id}

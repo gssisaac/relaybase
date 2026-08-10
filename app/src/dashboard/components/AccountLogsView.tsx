@@ -20,6 +20,11 @@ import {
   loadAccountLogsCache,
   saveAccountLogsCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "failed" | "success";
@@ -115,17 +120,18 @@ export function AccountLogsView({ email }: { email: string }) {
           status: nextStatus,
           limit: "150",
         });
-        const res = await fetch(`${apiBase}/account-logs?${params}`, {
-          cache: "no-store",
-        });
-        const json = (await res.json()) as AccountLogsResponse & {
-          error?: string;
-        };
+        const res = await desktopAwareFetch(
+          `${apiBase}/account-logs?${params}`,
+          { cache: "no-store" },
+        );
+        const json = await readResponseJson<
+          AccountLogsResponse & { error?: string }
+        >(res);
         if (!res.ok) throw new Error(json.error ?? "Failed to load logs");
         setData(json);
         await saveAccountLogsCache(email, nextStatus, json);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load logs");
+        setError(friendlyDesktopFetchError(e, "Failed to load logs"));
       } finally {
         setLoading(false);
         setRefreshing(false);

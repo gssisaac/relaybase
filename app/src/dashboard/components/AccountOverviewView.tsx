@@ -21,6 +21,11 @@ import {
   loadAccountStatsCache,
   saveAccountStatsCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 type StatsRange = "24h" | "7d" | "30d";
 
@@ -84,15 +89,18 @@ export function AccountOverviewView({ email }: { email: string }) {
 
       try {
         const params = new URLSearchParams({ email, range: nextRange });
-        const res = await fetch(`${apiBase}/account-stats?${params}`, {
-          cache: "no-store",
-        });
-        const data = (await res.json()) as AccountStats & { error?: string };
+        const res = await desktopAwareFetch(
+          `${apiBase}/account-stats?${params}`,
+          { cache: "no-store" },
+        );
+        const data = await readResponseJson<AccountStats & { error?: string }>(
+          res,
+        );
         if (!res.ok) throw new Error(data.error ?? "Failed to load stats");
         setStats(data);
         await saveAccountStatsCache(email, nextRange, data);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load stats");
+        setError(friendlyDesktopFetchError(e, "Failed to load stats"));
       } finally {
         setLoading(false);
         setRefreshing(false);

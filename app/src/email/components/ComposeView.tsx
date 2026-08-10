@@ -16,7 +16,7 @@ import {
   buildForwardPrefillFromSent,
   domainOf,
 } from "@/email/reply-helpers";
-import { useEmailPaths } from "@/email/paths";
+import { emailMessageHref, useEmailPaths } from "@/email/paths";
 
 export const ComposeView = observer(function ComposeView() {
   const { inbox, drafts } = useEmailPaths();
@@ -39,33 +39,25 @@ export const ComposeView = observer(function ComposeView() {
   const store = useEmailMailboxStore();
   const [forwardReady, setForwardReady] = useState(!forwardKey);
 
-  // Old reply links → inbox message sub-page
+  // Old reply links → inbox message detail (`?m=`)
   useEffect(() => {
     if (!isReply || !replyKey) return;
-    const params = new URLSearchParams();
-    if (accountFilter !== "all") {
-      params.set("account", accountFilter);
-    }
-    params.set("reply", "1");
-    if (searchParams.get("replyAll") === "1") {
-      params.set("replyAll", "1");
-    }
-    const qs = params.toString();
     router.replace(
-      `${inbox}/${encodeURIComponent(replyKey)}${qs ? `?${qs}` : ""}`,
+      emailMessageHref(inbox, replyKey, {
+        account: accountFilter,
+        params: {
+          reply: "1",
+          replyAll: searchParams.get("replyAll") === "1" ? "1" : undefined,
+        },
+      }),
     );
   }, [accountFilter, inbox, isReply, replyKey, router, searchParams]);
 
-  // Legacy ?draft= → /email/drafts/:id
+  // Legacy ?draft= → /email/drafts?m=
   useEffect(() => {
     if (!draftParam) return;
-    const params = new URLSearchParams();
-    if (accountFilter !== "all") {
-      params.set("account", accountFilter);
-    }
-    const qs = params.toString();
     router.replace(
-      `${drafts}/${encodeURIComponent(draftParam)}${qs ? `?${qs}` : ""}`,
+      emailMessageHref(drafts, draftParam, { account: accountFilter }),
     );
   }, [accountFilter, draftParam, drafts, router]);
 
@@ -173,11 +165,11 @@ export const ComposeView = observer(function ComposeView() {
 
   const onAfterDiscard = useCallback(() => {
     if (forwardKey) {
-      router.push(`${inbox}/${encodeURIComponent(forwardKey)}`);
+      router.push(emailMessageHref(inbox, forwardKey));
       return;
     }
     if (forwardSentId) {
-      router.push(`${sent}/${encodeURIComponent(forwardSentId)}`);
+      router.push(emailMessageHref(sent, forwardSentId));
       return;
     }
     router.push(inbox);

@@ -8,6 +8,11 @@ import { useBroadcast } from "@/lib/dashboard/BroadcastContext";
 import { useEmailPaths } from "@/email/paths";
 import { EmailAlerts } from "@/email/components/EmailShared";
 import type { BroadcastProgress, BroadcastSendRun } from "@/email/components/types";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -245,15 +250,17 @@ export function BroadcastProgressView() {
     async (opts?: { quiet?: boolean }) => {
       if (!opts?.quiet) setRefreshing(true);
       try {
-        const res = await fetch(
+        const res = await desktopAwareFetch(
           `${apiBase}/broadcasts/${encodeURIComponent(broadcastId)}/progress`,
         );
-        const json = await res.json();
+        const json = await readResponseJson<
+          BroadcastProgress & { error?: string }
+        >(res);
         if (!res.ok) throw new Error(json.error ?? "Failed to load progress");
-        setData(json as BroadcastProgress);
+        setData(json);
         setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load progress");
+        setError(friendlyDesktopFetchError(e, "Failed to load progress"));
       } finally {
         setLoading(false);
         setRefreshing(false);

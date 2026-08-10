@@ -10,6 +10,11 @@ import type {
   AudienceGroupProgress,
   AudienceSyncRun,
 } from "@/email/components/types";
+import {
+  desktopAwareFetch,
+  friendlyDesktopFetchError,
+  readResponseJson,
+} from "@/lib/desktop/api-base";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -263,15 +268,17 @@ export function AudienceGroupProgressView() {
     async (opts?: { quiet?: boolean }) => {
       if (!opts?.quiet) setRefreshing(true);
       try {
-        const res = await fetch(
+        const res = await desktopAwareFetch(
           `${apiBase}/audience-groups/${encodeURIComponent(groupId)}/progress`,
         );
-        const json = await res.json();
+        const json = await readResponseJson<
+          AudienceGroupProgress & { error?: string }
+        >(res);
         if (!res.ok) throw new Error(json.error ?? "Failed to load progress");
-        setData(json as AudienceGroupProgress);
+        setData(json);
         setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load progress");
+        setError(friendlyDesktopFetchError(e, "Failed to load progress"));
       } finally {
         setLoading(false);
         setRefreshing(false);

@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { useBroadcastDetail } from "@/dashboard/components/BroadcastDetailContext";
+import { audienceDetailHref } from "@/dashboard/paths";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -43,7 +44,7 @@ export function BroadcastAudienceView() {
               >
                 <div className="min-w-0">
                   <Link
-                    href={`/audience/${encodeURIComponent(group.id)}`}
+                    href={audienceDetailHref(group.id)}
                     className="font-medium hover:underline"
                   >
                     {group.name}

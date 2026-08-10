@@ -9,14 +9,17 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useBroadcastDetail } from "@/dashboard/components/BroadcastDetailContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import {
+  broadcastDetailHref,
+  useDashboardPaths,
+  type BroadcastDetailTab,
+} from "@/dashboard/paths";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
@@ -49,18 +52,16 @@ export function BroadcastDetailShell({
   section: BroadcastSection;
   children: ReactNode;
 }) {
-  const pathname = usePathname();
   const { broadcasts } = useDashboardPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const { broadcastId, detail, notFound } = useBroadcastDetail();
 
-  const base = `/broadcasts/${encodeURIComponent(broadcastId)}`;
   const title =
     detail?.broadcast.subject?.trim() ||
     (notFound ? "Broadcast not found" : "Untitled draft");
 
   const hrefFor = (id: BroadcastSection) =>
-    id === "overview" ? base : `${base}/${id}`;
+    broadcastDetailHref(broadcastId, id as BroadcastDetailTab);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -104,10 +105,7 @@ export function BroadcastDetailShell({
           {NAV.map((item) => {
             const href = hrefFor(item.id);
             const Icon = item.icon;
-            const active =
-              item.id === section ||
-              pathname === href ||
-              (item.id !== "overview" && pathname.startsWith(`${href}/`));
+            const active = item.id === section;
             return (
               <Link
                 key={item.id}

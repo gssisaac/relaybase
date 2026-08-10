@@ -25,8 +25,8 @@ Browser / mirror keys (scoped by fixed local operator id `"desktop"`):
 | Key pattern | Value |
 |-------------|--------|
 | `relaybase:sidebar:mode:{userId}` | `"email"` \| `"dashboard"` |
-| `relaybase:sidebar:lastPath:email:{userId}` | Full path including query (e.g. `/email/inbox?account=…`) |
-| `relaybase:sidebar:lastPath:dashboard:{userId}` | Full path including query (e.g. `/domains?domain=…`) |
+| `relaybase:sidebar:lastPath:email:{userId}` | Full path including query (e.g. `/email/inbox?account=…&m=…`) |
+| `relaybase:sidebar:lastPath:dashboard:{userId}` | Full path including query (e.g. `/accounts?email=…`) |
 | `relaybase:sidebar-collapsed:{userId}` | `"1"` / `"0"` |
 
 Defaults when nothing is stored:
@@ -76,6 +76,8 @@ app/src/components/RestoreLastRoute.tsx
 ```
 
 `RestoreLastRoute` resolves `userId` as: prop → `fallbackUserId` (`"desktop"`). Cookie login is removed.
+
+Packaged Tauri only pre-renders section roots (`/email/inbox`, `/accounts`, …). Deep selection uses query params (`?m=`, `?email=` / `?tab=`). `normalizeEntryPath` rewrites legacy path segments into those query forms before restore.
 
 ---
 

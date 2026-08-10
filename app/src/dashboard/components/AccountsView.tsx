@@ -605,6 +605,17 @@ export function AccountsView() {
                       domainAddresses.map((a) => a.email),
                     )
                   : null;
+                const countsReady = accountsStore.hasHydratedCounts(
+                  entry.domain,
+                );
+                const domainUnread = countsReady
+                  ? accountsStore
+                      .addressesFor(entry.domain)
+                      .reduce((sum, a) => {
+                        if (a.inboundEnabled === false) return sum;
+                        return sum + (accountsStore.countsFor(entry.domain, a.email)?.unread ?? 0);
+                      }, 0)
+                  : 0;
 
                 return (
                   <Card key={entry.domain}>
@@ -627,6 +638,14 @@ export function AccountsView() {
                               aria-hidden
                             />
                             <span className="truncate">{entry.domain}</span>
+                            {domainUnread > 0 ? (
+                              <span
+                                className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-none text-primary-foreground tabular-nums"
+                                aria-label={`${domainUnread} unread`}
+                              >
+                                {domainUnread > 99 ? "99+" : domainUnread}
+                              </span>
+                            ) : null}
                           </CardTitle>
                           <CardDescription>
                             {accountSummary}

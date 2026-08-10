@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../models/message.dart';
 import 'mobile_api_service.dart';
 
 /// Polls `/mobile/notifications` on an interval, acks events, and notifies
@@ -54,9 +53,4 @@ class SyncService {
     stop();
     _controller.close();
   }
-}
-
-extension _MapPutIfAbsent<K, V> on Map<K, List<V>> {
-  List<V> putIfAbsent(K key, List<V> Function() ifAbsent) =>
-      this[key] ??= ifAbsent();
 }

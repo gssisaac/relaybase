@@ -23,7 +23,7 @@ class SettingsScreen extends ConsumerWidget {
             Expanded(
               child: ListView(
                 children: [
-                  _section('Account', [
+                  _section(context, 'Account', [
                     _row(
                       icon: CupertinoIcons.person_circle,
                       label: 'Worker URL',
@@ -31,7 +31,7 @@ class SettingsScreen extends ConsumerWidget {
                       colors: colors,
                     ),
                   ]),
-                  _section('Sync', [
+                  _section(context, 'Sync', [
                     _row(
                       icon: CupertinoIcons.clock,
                       label: 'Polling interval',
@@ -48,7 +48,7 @@ class SettingsScreen extends ConsumerWidget {
                       colors: colors,
                     ),
                   ]),
-                  _section('Storage', [
+                  _section(context, 'Storage', [
                     _row(
                       icon: CupertinoIcons.trash,
                       label: 'Clear cache',
@@ -57,7 +57,7 @@ class SettingsScreen extends ConsumerWidget {
                       onTap: () => ref.read(settingsProvider.notifier).clearCache(),
                     ),
                   ]),
-                  _section('Session', [
+                  _section(context, 'Session', [
                     _row(
                       icon: CupertinoIcons.square_arrow_right,
                       label: 'Sign out',
@@ -100,7 +100,8 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _section(String title, List<Widget> children) {
+  Widget _section(BuildContext context, String title, List<Widget> children) {
+    final colors = ThemeColors.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -111,7 +112,7 @@ class SettingsScreen extends ConsumerWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: ThemeColors.of(context).onSurfaceVariant,
+              color: colors.onSurfaceVariant,
               letterSpacing: 0.5,
             ),
           ),
@@ -119,7 +120,7 @@ class SettingsScreen extends ConsumerWidget {
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: ThemeColors.of(context).surfaceVariant,
+            color: colors.surfaceVariant,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(children: children),

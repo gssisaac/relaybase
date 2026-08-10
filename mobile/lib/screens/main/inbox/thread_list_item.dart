@@ -48,7 +48,7 @@ class ThreadListItem extends ConsumerWidget {
           minSize: 0,
           onPressed: onTap,
           child: Container(
-            color: unread ? colors.primary.withOpacity(0.04) : colors.surface,
+            color: unread ? colors.primary.withValues(alpha: 0.04) : colors.surface,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,

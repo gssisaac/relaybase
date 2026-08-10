@@ -21,7 +21,7 @@ class StorageService {
   final Map<String, Box<String>> _boxes;
 
   static Future<StorageService> create() async {
-    await Hive.initFlutter;
+    await Hive.initFlutter();
     final boxes = <String, Box<String>>{};
     for (final name in [
       _boxAccounts,

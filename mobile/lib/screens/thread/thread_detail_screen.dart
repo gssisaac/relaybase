@@ -2,12 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/message.dart';
+import '../../../models/thread.dart';
 import '../../../providers/accounts_provider.dart';
 import '../../../providers/thread_provider.dart';
 import '../../../theme/colors.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/loading_shimmer.dart';
-import '../../compose/compose_screen.dart';
+import '../compose/compose_screen.dart';
 import 'action_bar.dart';
 import 'message_card.dart';
 

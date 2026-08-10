@@ -37,7 +37,7 @@ class FolderList extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
       decoration: BoxDecoration(
-        color: selected ? colors.primary.withOpacity(0.12) : CupertinoColors.transparent,
+        color: selected ? colors.primary.withValues(alpha: 0.12) : CupertinoColors.transparent,
         borderRadius: BorderRadius.circular(24),
       ),
       child: CupertinoButton(

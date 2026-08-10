@@ -75,4 +75,21 @@ class MessageDetail {
         references: references,
         readAt: readAt,
       );
+
+  Map<String, dynamic> toJson() => {
+        'key': id,
+        'fromEmail': fromEmail,
+        'toEmail': toEmail,
+        'toEmails': toEmails,
+        'ccEmails': ccEmails,
+        'subject': subject,
+        'bodyText': bodyText,
+        if (bodyHtml != null) 'bodyHtml': bodyHtml,
+        'receivedAt': receivedAt,
+        'attachments': attachments.map((a) => a.toJson()).toList(),
+        'messageId': messageId,
+        'inReplyTo': inReplyTo,
+        'references': references,
+        'readAt': readAt,
+      };
 }

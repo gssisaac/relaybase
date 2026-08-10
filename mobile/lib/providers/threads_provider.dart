@@ -33,6 +33,20 @@ class ThreadsState {
         refreshing: refreshing ?? this.refreshing,
         error: error ?? this.error,
       );
+
+  List<Message> filtered(Folder folder) {
+    switch (folder) {
+      case Folder.starred:
+        return messages.where((m) => m.starred).toList(growable: false);
+      case Folder.allMail:
+      case Folder.inbox:
+        return messages;
+      case Folder.sent:
+      case Folder.drafts:
+      case Folder.trash:
+        return const [];
+    }
+  }
 }
 
 class ThreadsNotifier extends StateNotifier<ThreadsState> {
@@ -98,20 +112,6 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
       await _ref.read(mobileApiProvider).setRead([message.id], read);
     } catch (_) {
       // Best-effort — local state already updated.
-    }
-  }
-
-  List<Message> filtered(Folder folder) {
-    switch (folder) {
-      case Folder.starred:
-        return state.messages.where((m) => m.starred).toList(growable: false);
-      case Folder.allMail:
-      case Folder.inbox:
-        return state.messages;
-      case Folder.sent:
-      case Folder.drafts:
-      case Folder.trash:
-        return const [];
     }
   }
 }

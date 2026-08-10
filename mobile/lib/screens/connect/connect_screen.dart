@@ -205,7 +205,7 @@ class _ScannerViewState extends State<_ScannerView> {
     super.initState();
     _controller = MobileScannerController(
       detectionSpeed: DetectionSpeed.noDuplicates,
-      formats: const [BarcodeFormat.qr],
+      formats: const [BarcodeFormat.qrCode],
     );
   }
 

@@ -28,7 +28,7 @@ class SwipeAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dismissible(
-      key: ValueKey('swipe_${direction.name}_${label}'),
+      key: ValueKey('swipe_${direction.name}_$label'),
       direction: direction == SwipeDirection.left
           ? DismissDirection.endToStart
           : DismissDirection.startToEnd,

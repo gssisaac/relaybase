@@ -41,7 +41,7 @@ class MobileApiService {
   /// Validate the connection (used by the Connect screen).
   Future<void> pingConfig() async {
     final res = await _get('/mobile/config');
-    if (!res.ok) {
+    if (!_ok(res)) {
       throw MobileApiException(
         _errorMessage(res.body) ?? 'Mobile access is not configured',
         status: res.statusCode,
@@ -51,7 +51,7 @@ class MobileApiService {
 
   Future<List<Account>> fetchMailbox() async {
     final res = await _get('/mobile/mailbox');
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load mailbox', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load mailbox', status: res.statusCode);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final addresses = (data['addresses'] as List<dynamic>? ?? const [])
         .map((e) => Account.fromJson(e as Map<String, dynamic>))
@@ -63,7 +63,7 @@ class MobileApiService {
     final query = <String, String>{'limit': limit.toString()};
     if (account != null && account.isNotEmpty) query['account'] = account;
     final res = await _get('/mobile/inbox', query);
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load inbox', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load inbox', status: res.statusCode);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final messages = (data['messages'] as List<dynamic>? ?? const [])
         .map((e) => Message.fromJson(e as Map<String, dynamic>))
@@ -73,7 +73,7 @@ class MobileApiService {
 
   Future<Map<String, AddressCounts>> fetchCounts() async {
     final res = await _get('/mobile/inbox/counts');
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load counts', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load counts', status: res.statusCode);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final counts = <String, AddressCounts>{};
     final raw = data['counts'] as Map<String, dynamic>? ?? const {};
@@ -92,14 +92,14 @@ class MobileApiService {
       'ids': ids,
       'read': read,
     });
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to update read state', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to update read state', status: res.statusCode);
   }
 
   Future<MessageDetail> fetchMessage(String id, {String? domain}) async {
     final query = <String, String>{};
     if (domain != null && domain.isNotEmpty) query['domain'] = domain;
     final res = await _get('/mobile/inbox/$id', query);
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Message not found', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Message not found', status: res.statusCode);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     return MessageDetail.fromJson(data['message'] as Map<String, dynamic>);
   }
@@ -111,7 +111,7 @@ class MobileApiService {
 
   Future<List<Map<String, dynamic>>> fetchSent({int limit = 50}) async {
     final res = await _get('/mobile/sent', {'limit': limit.toString()});
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load sent', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to load sent', status: res.statusCode);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final sent = (data['sent'] as List<dynamic>? ?? const [])
         .map((e) => e as Map<String, dynamic>)
@@ -121,13 +121,13 @@ class MobileApiService {
 
   Future<Map<String, dynamic>> sendEmail(Map<String, dynamic> body) async {
     final res = await _post('/mobile/send', body);
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to send', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to send', status: res.statusCode);
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<List<InboundEvent>> fetchNotifications({int limit = 25}) async {
     final res = await _get('/mobile/notifications', {'limit': limit.toString()});
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to poll notifications', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to poll notifications', status: res.statusCode);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
     final events = (data['events'] as List<dynamic>? ?? const [])
         .map((e) => InboundEvent.fromJson(e as Map<String, dynamic>))
@@ -140,7 +140,7 @@ class MobileApiService {
       'domain': domain,
       'ids': ids,
     });
-    if (!res.ok) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to ack', status: res.statusCode);
+    if (!_ok(res)) throw MobileApiException(_errorMessage(res.body) ?? 'Failed to ack', status: res.statusCode);
   }
 
   // ---- internals ----
@@ -157,6 +157,8 @@ class MobileApiService {
       body: jsonEncode(body),
     );
   }
+
+  bool _ok(http.Response res) => res.statusCode >= 200 && res.statusCode < 300;
 
   String _querySuffix(Map<String, String>? query) {
     if (query == null || query.isEmpty) return '';

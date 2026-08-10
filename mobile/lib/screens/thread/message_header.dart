@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 
 import '../../../theme/colors.dart';
 import '../../../utils/date_format.dart';
-import '../../../widgets/avatar.dart';
 
 /// Collapsible message header: avatar, sender, to/cc line, date.
 class MessageHeader extends StatelessWidget {

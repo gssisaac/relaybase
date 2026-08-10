@@ -1,7 +1,9 @@
 mod cloudflare;
 mod notify;
+mod node_runtime;
 mod secrets;
 mod worker;
+mod wrangler_deploy;
 
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
@@ -378,6 +380,9 @@ pub fn run() {
             save_worker_connection,
             get_desktop_info,
             open_external_url,
+            wrangler_deploy::deploy_routing_worker_v2,
+            wrangler_deploy::kv_health_check,
+            wrangler_deploy::get_bundled_worker_version,
             notify::show_notification,
         ])
         .run(tauri::generate_context!())

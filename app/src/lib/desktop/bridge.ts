@@ -280,6 +280,113 @@ export async function desktopUpdateWorker(
   return invoke("update_routing_worker", { workerJs: workerJs ?? null });
 }
 
+// ---- In-app Wrangler deploy (v2) -------------------------------------------
+
+export type DeployOpts = {
+  enableD1Logs: boolean;
+  rotateAdminToken: boolean;
+};
+
+export type DeployResult = {
+  workerUrl: string;
+  workerScriptName: string;
+  adminToken: string;
+  workerVersion: string;
+  kvNamespaceId: string;
+  r2Bucket: string;
+  d1DatabaseId: string | null;
+  migrationsApplied: string[];
+  deployed: boolean;
+};
+
+export type DeployLogLine = {
+  step: string;
+  stream: "stdout" | "stderr";
+  line: string;
+};
+
+export type DeployStatus = {
+  step: string;
+  state: "running" | "ok" | "failed";
+  message: string;
+};
+
+export type KvHealthResult = {
+  kvNamespaceId: string;
+  srvConfigPresent: boolean;
+  srvKeyPresent: boolean;
+  ok: boolean;
+};
+
+export type WorkerVersionInfo = {
+  ok: boolean;
+  workerVersion: string;
+  migrationsApplied: string[];
+};
+
+/** Run the full in-app deploy (extract → npm install → provision → deploy → secret → migrate). */
+export async function desktopDeployWorker(
+  opts: DeployOpts,
+): Promise<DeployResult> {
+  return invoke("deploy_routing_worker_v2", { opts });
+}
+
+/** Read-only KV key-prefix health check via wrangler. */
+export async function desktopKvHealthCheck(): Promise<KvHealthResult> {
+  return invoke("kv_health_check");
+}
+
+/** Bundled worker version (from the embedded install ZIP manifest). */
+export async function desktopGetBundledWorkerVersion(): Promise<string> {
+  return invoke("get_bundled_worker_version");
+}
+
+/** Probe the deployed Worker's /admin/version. Desktop + browser compatible. */
+export async function desktopGetDeployedWorkerVersion(
+  workerUrl: string,
+  adminToken: string,
+): Promise<WorkerVersionInfo> {
+  const base = workerUrl.replace(/\/$/, "");
+  const res = await fetch(`${base}/admin/version`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  if (!res.ok) {
+    throw new Error(`/admin/version returned HTTP ${res.status}`);
+  }
+  const value = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    workerVersion?: string;
+    migrationsApplied?: string[];
+  };
+  return {
+    ok: Boolean(value.ok),
+    workerVersion: value.workerVersion ?? "",
+    migrationsApplied: Array.isArray(value.migrationsApplied)
+      ? value.migrationsApplied
+      : [],
+  };
+}
+
+type Unlisten = () => void;
+
+/** Subscribe to deploy log lines (streaming stdout/stderr from wrangler). */
+export async function desktopOnDeployLog(
+  cb: (line: DeployLogLine) => void,
+): Promise<Unlisten> {
+  const { listen } = await import("@tauri-apps/api/event");
+  return (await listen<DeployLogLine>("worker-deploy:log", (e) => cb(e.payload))) as Unlisten;
+}
+
+/** Subscribe to deploy step status updates. */
+export async function desktopOnDeployStatus(
+  cb: (status: DeployStatus) => void,
+): Promise<Unlisten> {
+  const { listen } = await import("@tauri-apps/api/event");
+  return (await listen<DeployStatus>("worker-deploy:status", (e) =>
+    cb(e.payload),
+  )) as Unlisten;
+}
+
 export async function desktopSaveLicense(licenseKey: string): Promise<void> {
   return invoke("save_license_key", { licenseKey });
 }

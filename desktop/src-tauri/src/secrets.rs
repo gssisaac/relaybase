@@ -24,6 +24,9 @@ pub struct StoredCredentials {
     pub admin_token: String,
     pub worker_script_name: String,
     pub license_key: String,
+    /// KV namespace id for RELAYBASE_APP, recorded after in-app deploy so the
+    /// desktop app can run `wrangler kv` commands and KV health checks.
+    pub kv_namespace_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

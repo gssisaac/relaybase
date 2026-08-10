@@ -17,6 +17,7 @@ import {
 import { adminOpsLogs } from "./routes/admin-ops-logs";
 import { adminSend } from "./routes/admin-send";
 import { adminStats } from "./routes/admin-stats";
+import { adminVersion } from "./routes/admin-version";
 import { send } from "./routes/send";
 import { v1Inbox } from "./routes/v1-inbox";
 import { v1Webhooks } from "./routes/v1-webhooks";
@@ -54,6 +55,7 @@ app.route("/admin/logs", adminLogs);
 app.route("/admin/ops-logs", adminOpsLogs);
 app.route("/admin/cloudflare", adminCloudflare);
 app.route("/admin/connect", adminConnect);
+app.route("/admin/version", adminVersion);
 app.route("/admin/bootstrap", adminBootstrap);
 app.route("/admin/inbox", adminInbox);
 app.route("/admin/mailbox", adminMailbox);

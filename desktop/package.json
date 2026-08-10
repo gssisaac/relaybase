@@ -10,7 +10,8 @@
     "build:macos": "bash scripts/deploy/build-macos.sh",
     "sync:release": "node scripts/sync-release-artifacts.mjs",
     "upload:r2": "bash scripts/deploy/upload-release-r2.sh",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "prebuild": "pnpm --dir ../.. run pack:worker-install"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4"

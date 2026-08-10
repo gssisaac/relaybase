@@ -179,6 +179,37 @@ pub async fn ensure_r2_bucket(client: &CfClient, name: &str) -> Result<(), Strin
     Ok(())
 }
 
+/// Create a D1 database if missing, returning its uuid. Used by the in-app
+/// deployer when the user opts into dashboard Logs.
+pub async fn ensure_d1_database(client: &CfClient, name: &str) -> Result<String, String> {
+    // List existing databases and match by name.
+    let path = format!("/accounts/{}/d1/database", client.account_id);
+    let list = cf_request(client, reqwest::Method::GET, &format!("{path}?per_page=100"), None).await?;
+    if let Some(arr) = list.get("result").and_then(|v| v.as_array()) {
+        for db in arr {
+            if db.get("name").and_then(|v| v.as_str()) == Some(name) {
+                if let Some(uuid) = db.get("uuid").and_then(|v| v.as_str()) {
+                    if !uuid.is_empty() {
+                        return Ok(uuid.to_string());
+                    }
+                }
+            }
+        }
+    }
+    let created = cf_request(
+        client,
+        reqwest::Method::POST,
+        &path,
+        Some(json!({ "name": name })),
+    )
+    .await?;
+    created
+        .pointer("/result/uuid")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Failed to create D1 database".into())
+}
+
 /// Returns true when a Worker script with this exact name already exists.
 pub async fn worker_script_exists(client: &CfClient, script_name: &str) -> Result<bool, String> {
     let path = format!(

@@ -10,11 +10,11 @@ import {
 } from "./mobile-config.ts";
 
 describe("mobile-config", () => {
-  it("generates a prefixed password and hex salt", () => {
+  it("generates a 12-char alphanumeric password and hex salt", () => {
     const password = generateMobilePassword();
     const salt = generateMobileSalt();
-    assert.ok(password.startsWith("rbm_"));
-    assert.ok(password.length > 20);
+    assert.equal(password.length, 12);
+    assert.ok(/^[A-Za-z0-9]+$/.test(password));
     assert.ok(/^[0-9a-f]+$/.test(salt));
     assert.ok(salt.length > 16);
   });

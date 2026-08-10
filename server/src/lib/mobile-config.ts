@@ -53,9 +53,22 @@ function randomHex(byteLength: number): string {
   return bytesToHex(crypto.getRandomValues(new Uint8Array(byteLength)));
 }
 
-/** Generate a new plain mobile password (URL-safe, ~32 chars). */
+/** Character pool for human-friendly account passwords. */
+const PASSWORD_ALPHABET =
+  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+
+/**
+ * Generate a new plain mobile password — a 12-character human-friendly
+ * alphanumeric string (no ambiguous chars like O/0/1/l), like a normal
+ * account password rather than a long opaque token.
+ */
 export function generateMobilePassword(): string {
-  return `rbm_${randomHex(18)}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  let out = "";
+  for (let i = 0; i < 12; i++) {
+    out += PASSWORD_ALPHABET[bytes[i]! % PASSWORD_ALPHABET.length];
+  }
+  return out;
 }
 
 /** Generate a new per-install salt. */

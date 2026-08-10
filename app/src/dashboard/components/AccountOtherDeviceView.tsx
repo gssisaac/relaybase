@@ -1,6 +1,13 @@
 "use client";
 
-import { Info, QrCode as QrCodeIcon, RefreshCw, Smartphone } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Info,
+  QrCode as QrCodeIcon,
+  RefreshCw,
+  Smartphone,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -45,6 +52,13 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
   const [statusLoading, setStatusLoading] = useState(true);
   const [plainPassword, setPlainPassword] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(t);
+  }, [copied]);
 
   const workerUrl = resolveEmailApiBase();
 
@@ -104,6 +118,16 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
       toast.error(e instanceof Error ? e.message : "Failed to clear password");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function copyPassword() {
+    if (!plainPassword) return;
+    try {
+      await navigator.clipboard.writeText(plainPassword);
+      setCopied(true);
+    } catch {
+      toast.error("Copy failed — select and copy manually");
     }
   }
 
@@ -176,15 +200,31 @@ export function AccountOtherDeviceView({ email }: { email: string }) {
           {plainPassword ? (
             <div className="space-y-1.5">
               <Label htmlFor="mobile-pair-password">Mobile password</Label>
-              <Input
-                id="mobile-pair-password"
-                type="text"
-                value={plainPassword}
-                readOnly
-                className="font-mono text-xs"
-                autoComplete="off"
-                spellCheck={false}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="mobile-pair-password"
+                  type="text"
+                  value={plainPassword}
+                  readOnly
+                  className="font-mono text-xs"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void copyPassword()}
+                  aria-label="Copy password"
+                >
+                  {copied ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
               <p className="text-[11px] text-muted-foreground">
                 Copy this password and scan the QR with the Relaybase mobile
                 app. It won&apos;t be shown again.

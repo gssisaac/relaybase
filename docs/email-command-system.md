@@ -44,7 +44,12 @@ Related (outside the module, thin consumers):
 | `app/src/email/compose-open.ts` | Compose open/resume/force-new policy + adapter hooks |
 | `app/src/email/components/useThreadComposeState.ts` | Inline thread compose panel state |
 | `app/src/app/(dashboard)/DesktopDashboardGate.tsx` | Mounts `EmailCommandRuntimeProvider` + `GlobalCommandPalette` |
-| `app/src/email/components/MailListView.tsx` | List/detail UI; consumes compose-open + command adapter |
+| `app/src/email/components/MailListView.tsx` | **Orchestrator** only: list/detail hooks + pane assembly. No direct store logic. |
+| `app/src/email/components/mail-list-helpers.ts` | Pure mail list helpers (formatting, href, preview, account matching) |
+| `app/src/email/components/useMailListItems.ts` | Derives `items`, `selected`, thread maps, detail loading from store |
+| `app/src/email/components/useMailListKeyboard.ts` | Bubble-phase mail shortcuts (`j`/`k`/`Esc`/`c`/`r`/`a`/`f`) |
+| `app/src/email/components/MailListPane.tsx` | List pane UI (toolbar + rows + empty state) |
+| `app/src/email/components/MailDetailPane.tsx` | Detail pane UI (draft / thread / single message) |
 | `app/src/email/components/ComposeView.tsx` | Renders compose from URL only (no open policy) |
 | `app/src/components/ui/command.tsx` | Generic cmdk primitives |
 | `app/src/components/ui/context-menu.tsx` | Generic context-menu primitives |

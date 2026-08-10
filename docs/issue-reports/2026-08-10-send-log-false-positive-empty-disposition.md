@@ -1,7 +1,7 @@
 # Send log false positive when Cloudflare returns empty disposition
 
 **Date:** 2026-08-10  
-**Status:** Fixed and deployed  
+**Status:** Partially fixed; logging heuristic reverted  
 **Severity:** Medium (misleading ops dashboard; delivery still failed asynchronously)  
 **Components:** `server/src/routes/admin-send.ts`, `server/src/routes/send.ts`, inbound bounce body fallback (`bounce-detect.ts` / `inbound-store.ts`)
 
@@ -21,7 +21,7 @@ Compose forward to `isaac@wedesk.so` appeared successful in Sent and Dashboard L
 
 ## Root cause
 
-### 1. Send routes treated empty disposition as success
+### 1. Empty disposition is not a reliable failure signal
 
 Cloudflare Email Sending returns per-recipient disposition arrays:
 
@@ -31,44 +31,40 @@ Cloudflare Email Sending returns per-recipient disposition arrays:
 
 Asynchronous bounces do **not** appear in the synchronous send response. They arrive later as inbound DSN mail from `bounces@cf-bounce.*`.
 
-Both `/admin/send` (compose) and `/v1/send` (API) only failed closed when:
-
-```ts
-delivered.length === 0 && queued.length === 0 && permanentBounces.length > 0
-```
-
-When Cloudflare returned HTTP 200 / `success: true` with **all three arrays empty**, the Worker logged `ok: true` and returned 200 to the client. LogsView renders OK/Failed from `log.ok`, so the dashboard showed a green OK next to an empty disposition payload.
+Importantly, Cloudflare can also return HTTP 200 / `success: true` with **all three arrays empty** for messages that are later **delivered successfully**. Empty disposition means “no synchronous per-recipient status,” not “failed.”
 
 ### 2. Bounce DSN body looked empty before fallback was live
 
-CF bounce MIME is typically `multipart/report`. `postal-mime` extracts top-level `text/plain` only, so DSN bodies often parse as empty. Bounce detection + `buildBouncePreview()` fallback had already been added in the ops-log commit, but until Worker deploy the production inbox still showed `(empty message)`.
+CF bounce MIME is typically `multipart/report`. `postal-mime` extracts top-level `text/plain` only, so DSN bodies often parse as empty. Bounce detection + `buildBouncePreview()` fallback fills a diagnostic preview when the Worker is deployed.
 
-## Fix
+## Fix history
 
-### Logging (`f3dc228`)
+### Attempt: fail closed on empty disposition (`f3dc228`)
 
-Introduced `noDisposition` (`delivered` and `queued` both empty):
+Logged `ok: false` when `delivered` and `queued` were both empty. Deployed, then observed a **false negative**: compose to `isaac@strum.us` was received by the recipient, but Dashboard Log showed Failed with:
 
-- Log `kind: "send"` with **`ok: false`** and an error explaining empty disposition / possible async bounce.
-- Keep **HTTP 200** for compose/API clients when there are no synchronous `permanent_bounces` (compose still upserts Sent).
-- Keep **HTTP 502** when all recipients are in `permanent_bounces`.
+> Cloudflare returned no delivered/queued recipients. The message may bounce asynchronously.
 
-### Bounce body fallback (prior commit `f61c266`, deployed with this fix)
+### Revert (`e8e0bdf`)
+
+Restored fail-closed only when every recipient is in `permanent_bounces`. Empty disposition without bounces logs OK again. Real async failures still surface as Inbound Bounce rows.
+
+### Bounce body fallback (`f61c266`, remains deployed)
 
 On inbound store, if the message is a bounce and MIME text is empty, fill `bodyText` / preview from DSN diagnostics (minimum: `Bounce: delivery failed`).
 
 ## Deploy
 
 - Worker: `relaybase-api` (`api.relaybase.xyz`)
-- Version ID: `5846ea8c-106f-460b-bed1-a870cc8e092b`
+- Revert Version ID: `e1026892-85b7-4c39-8f37-eec11e2fee2f`
 - Date: 2026-08-10
 
 ## Verification
 
 - [x] `pnpm run typecheck` in `server/`
 - [x] `pnpm test:unit` in `app/` (33 tests)
-- [x] Worker deploy succeeded
-- [ ] Manual: compose send that yields empty disposition → Log Send row shows **Failed**
+- [x] Worker deploy succeeded (including revert)
+- [x] Manual: successful send with empty disposition must not show Failed (strum.us case)
 - [ ] Manual: new inbound bounce → body is not `(empty message)`
 
 ## Out of scope
@@ -80,4 +76,6 @@ On inbound store, if the message is a bounce and MIME text is empty, fill `bodyT
 ## Related commits
 
 - `f61c266` — D1 ops log, bounce detection / body fallback, Dashboard Log page
-- `f3dc228` — Fail closed when CF Email Sending returns empty disposition
+- `f3dc228` — Fail closed when CF Email Sending returns empty disposition (later reverted)
+- `e8e0bdf` — Revert empty-disposition fail-closed heuristic
+- See also: `2026-08-10-strum-us-missing-spf-blocks-inbound-to-cf.md` (unrelated inbound block from Google Workspace)

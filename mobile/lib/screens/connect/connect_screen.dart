@@ -52,22 +52,34 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   Future<void> _connect() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    if (email.isEmpty || password.isEmpty) return;
+    debugPrint('connect: email="$email" passLen=${password.length}');
+    if (email.isEmpty) {
+      _toast('Enter your account email');
+      return;
+    }
     if (!Validators.isEmail(email)) {
       _toast('Enter a valid account email address');
       return;
     }
+    if (password.isEmpty) {
+      _toast('Enter your password');
+      return;
+    }
     // Remember the email immediately so it pre-fills next time, even if this
     // attempt fails.
+    debugPrint('connect: reading storage');
     final storage = await ref.read(storageServiceProvider.future);
     await storage.rememberLastUsed(email: email);
+    debugPrint('connect: storage done, calling auth.connect');
 
     final ok = await ref.read(authProvider.notifier).connect(
           accountEmail: email,
           password: password,
         );
+    debugPrint('connect: auth.connect returned ok=$ok');
     if (!ok && mounted) {
       final error = ref.read(authProvider).error ?? 'Could not connect';
+      debugPrint('connect failed: $error');
       _toast(error);
     }
   }

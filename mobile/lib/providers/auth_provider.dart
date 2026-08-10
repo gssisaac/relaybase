@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/app_config.dart';
@@ -50,13 +51,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final secure = _ref.read(secureStorageProvider);
       final stored = await secure.read();
       if (stored != null) {
-        await _apply(AppConfig(
+        final config = AppConfig(
           workerUrl: stored.workerUrl,
           accountEmail: stored.accountEmail,
           mobilePassword: stored.password,
-        ));
+        );
+        await _apply(config);
+        state = state.copyWith(config: config, loading: false, bootstrapped: true);
+      } else {
+        state = state.copyWith(loading: false, bootstrapped: true);
       }
-      state = state.copyWith(loading: false, bootstrapped: true);
     } catch (e) {
       state = state.copyWith(
         loading: false,
@@ -75,6 +79,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String password,
     String? workerUrl,
   }) async {
+    debugPrint('auth.connect: start email=$accountEmail');
     state = state.copyWith(loading: true, error: null);
     final resolvedWorkerUrl =
         (workerUrl != null && workerUrl.isNotEmpty)
@@ -88,16 +93,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final api = _ref.read(mobileApiProvider);
     api.configure(candidate);
     try {
+      debugPrint('auth.connect: pingConfig ${candidate.normalizedWorkerUrl}');
       await api.pingConfig();
+      debugPrint('auth.connect: ping ok, saving');
       await _ref.read(secureStorageProvider).save(
             workerUrl: candidate.normalizedWorkerUrl,
             accountEmail: candidate.normalizedAccountEmail,
             password: password,
           );
       await _apply(candidate);
-      state = state.copyWith(loading: false);
+      state = state.copyWith(config: candidate, loading: false);
+      debugPrint('auth.connect: success');
       return true;
     } catch (e) {
+      debugPrint('auth.connect: error: $e');
       state = state.copyWith(loading: false, error: e.toString());
       return false;
     }
@@ -127,7 +136,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       const AppConfig(workerUrl: '', accountEmail: '', mobilePassword: ''),
     );
     _ref.read(syncServiceProvider).stop();
-    state = const AuthState(loading: false);
+    state = const AuthState(loading: false, bootstrapped: true);
   }
 
   Future<void> _apply(AppConfig config) async {

@@ -148,16 +148,24 @@ class MobileApiService {
   // ---- internals ----
   Future<http.Response> _get(String path, [Map<String, String>? query]) async {
     final uri = Uri.parse('$_base$path${_querySuffix(query)}');
-    return _client.get(uri, headers: _headers);
+    return _client.get(uri, headers: _headers).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => throw MobileApiException('Request timed out', status: -1),
+    );
   }
 
   Future<http.Response> _post(String path, Map<String, dynamic> body) async {
     final uri = Uri.parse('$_base$path');
-    return _client.post(
-      uri,
-      headers: {..._headers, 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
+    return _client
+        .post(
+          uri,
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => throw MobileApiException('Request timed out', status: -1),
+        );
   }
 
   bool _ok(http.Response res) => res.statusCode >= 200 && res.statusCode < 300;

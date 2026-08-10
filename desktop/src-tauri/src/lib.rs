@@ -8,10 +8,12 @@ mod wrangler_deploy;
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
     clear_credentials, load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
-    load_email_prefs, load_mail_json as read_mail_json, migrate_mail_to_desktop_user,
-    remove_api_key_vault_entry, save_cache_json as write_cache_json, save_credentials,
+    load_desktop_settings, load_email_prefs, load_mail_json as read_mail_json,
+    migrate_mail_to_desktop_user, remove_api_key_vault_entry, save_cache_json as write_cache_json,
+    save_credentials, save_desktop_settings as write_desktop_settings,
     save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
-    upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, EmailPrefs, StoredCredentials,
+    upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, DesktopSettings, EmailPrefs,
+    StoredCredentials,
 };
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
@@ -45,6 +47,16 @@ async fn get_email_prefs() -> Result<Option<EmailPrefs>, String> {
 #[tauri::command]
 async fn save_email_prefs(prefs: EmailPrefs) -> Result<(), String> {
     write_email_prefs(&prefs)
+}
+
+#[tauri::command]
+async fn get_desktop_settings() -> Result<DesktopSettings, String> {
+    Ok(load_desktop_settings()?.unwrap_or_default())
+}
+
+#[tauri::command]
+async fn save_desktop_settings_cmd(settings: DesktopSettings) -> Result<(), String> {
+    write_desktop_settings(&settings)
 }
 
 #[tauri::command]
@@ -361,6 +373,8 @@ pub fn run() {
             clear_stored_credentials,
             get_email_prefs,
             save_email_prefs,
+            get_desktop_settings,
+            save_desktop_settings_cmd,
             get_api_key_vault,
             save_api_key_vault_entry,
             remove_api_key_vault_entry_cmd,

@@ -75,13 +75,12 @@ pkg.scripts = {
 writeFileSync(join(staging, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
 
 // worker-manifest.json — read by the Tauri app to compare bundled vs deployed worker
-// version and to know which migrations the bundled worker expects.
+// version and to know which migrations the bundled worker expects. Customer installs
+// only ever provision + migrate RELAYBASE_LOGS (the dashboard Log page); the waitlist
+// DB is hosted-only, so its migrations are bundled for completeness but not listed here.
 const requiredMigrations = [];
 if (existsSync(join(staging, "migrations-logs"))) {
   requiredMigrations.push("0001_ops_logs");
-}
-if (existsSync(join(staging, "migrations"))) {
-  requiredMigrations.push("0001_waitlist");
 }
 const manifest = {
   workerVersion: pkg.version ?? "0.0.0",

@@ -14,6 +14,8 @@ const CREDENTIALS_FILE: &str = "credentials.json";
 const EMAIL_PREFS_FILE: &str = "email.json";
 /// Local API key plaintext vault. Path: ~/.relaybase/api-keys.json
 const API_KEYS_FILE: &str = "api-keys.json";
+/// Desktop-wide settings (auto-redeploy opt-out, etc.). Path: ~/.relaybase/settings.json
+const SETTINGS_FILE: &str = "settings.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +43,30 @@ impl Default for EmailPrefs {
         Self {
             version: 1,
             account_colors: std::collections::HashMap::new(),
+        }
+    }
+}
+
+/// Desktop-wide settings persisted to ~/.relaybase/settings.json.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopSettings {
+    pub version: u32,
+    /// When true (default), the app auto-redeploys the bundled Worker + runs
+    /// migrations on startup if the bundled worker version is newer than the
+    /// deployed one. Driven by the desktop app after a self-update.
+    pub auto_redeploy_on_update: bool,
+    /// Last user choice for the D1 dashboard-logs opt-in during deploy. Reused
+    /// by the auto-redeploy so a user who enabled Logs once keeps it on.
+    pub enable_d1_logs: bool,
+}
+
+impl Default for DesktopSettings {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            auto_redeploy_on_update: true,
+            enable_d1_logs: false,
         }
     }
 }
@@ -240,6 +266,52 @@ pub fn load_email_prefs() -> Result<Option<EmailPrefs>, String> {
         )
     })?;
     Ok(Some(prefs))
+}
+
+pub fn save_desktop_settings(settings: &DesktopSettings) -> Result<(), String> {
+    let dir = ensure_dir()?;
+    let path = dir.join(SETTINGS_FILE);
+    let json = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    match fs::write(&path, &json) {
+        Ok(()) => {
+            restrict_file_permissions(&path);
+            Ok(())
+        }
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            ensure_dir()?;
+            fs::write(&path, &json).map_err(|e2| {
+                format!(
+                    "Failed to write desktop settings to {} after creating {}: {e2}",
+                    path.display(),
+                    dir.display()
+                )
+            })?;
+            restrict_file_permissions(&path);
+            Ok(())
+        }
+        Err(e) => Err(format!(
+            "Failed to write desktop settings to {}: {e}",
+            path.display()
+        )),
+    }
+}
+
+pub fn load_desktop_settings() -> Result<Option<DesktopSettings>, String> {
+    let dir = relaybase_dir()?;
+    let path = dir.join(SETTINGS_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let json = fs::read_to_string(&path).map_err(|e| {
+        format!("Failed to read desktop settings from {}: {e}", path.display())
+    })?;
+    let settings: DesktopSettings = serde_json::from_str(&json).map_err(|e| {
+        format!(
+            "Invalid desktop settings file {}: {e}. Delete the file and relaunch.",
+            path.display()
+        )
+    })?;
+    Ok(Some(settings))
 }
 
 /// Persist opaque JSON under `~/.relaybase/mail/{relative_path}`.

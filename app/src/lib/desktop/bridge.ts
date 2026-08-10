@@ -324,6 +324,22 @@ export type WorkerVersionInfo = {
   migrationsApplied: string[];
 };
 
+export type DesktopSettings = {
+  version: number;
+  autoRedeployOnUpdate: boolean;
+  enableD1Logs: boolean;
+};
+
+export async function desktopGetDesktopSettings(): Promise<DesktopSettings> {
+  return invoke("get_desktop_settings");
+}
+
+export async function desktopSaveDesktopSettings(
+  settings: DesktopSettings,
+): Promise<void> {
+  return invoke("save_desktop_settings_cmd", { settings });
+}
+
 /** Run the full in-app deploy (extract → npm install → provision → deploy → secret → migrate). */
 export async function desktopDeployWorker(
   opts: DeployOpts,

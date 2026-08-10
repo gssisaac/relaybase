@@ -15,12 +15,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   desktopGetBundledWorkerVersion,
   desktopGetDeployedWorkerVersion,
+  desktopGetDesktopSettings,
+  desktopSaveDesktopSettings,
   explainDesktopError,
   isDesktopRuntime,
   type DesktopErrorHelp,
+  type DesktopSettings,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { getWorkerDeployStore } from "@/lib/desktop/deploy-store";
@@ -55,6 +59,7 @@ export const WorkerDeployPanel = observer(function WorkerDeployPanel({
   const store = useMemo(() => getWorkerDeployStore(), []);
   const [open, setOpen] = useState(false);
   const [enableD1, setEnableD1] = useState(false);
+  const [autoRedeploy, setAutoRedeploy] = useState(true);
   const [bundledVersion, setBundledVersion] = useState<string | null>(null);
   const [deployedVersion, setDeployedVersion] = useState<string | null>(null);
   const [versionError, setVersionError] = useState<DesktopErrorHelp | null>(
@@ -62,6 +67,35 @@ export const WorkerDeployPanel = observer(function WorkerDeployPanel({
   );
 
   const hasWorker = Boolean(workerUrl.trim() && adminToken.trim());
+
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    let cancelled = false;
+    desktopGetDesktopSettings()
+      .then((s: DesktopSettings) => {
+        if (cancelled) return;
+        setAutoRedeploy(s.autoRedeployOnUpdate);
+        setEnableD1(s.enableD1Logs);
+      })
+      .catch(() => {
+        /* defaults are fine */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function persistSettings(patch: Partial<DesktopSettings>) {
+    if (!isDesktopRuntime()) return;
+    void desktopGetDesktopSettings()
+      .then((current) => {
+        const next: DesktopSettings = { ...current, ...patch };
+        return desktopSaveDesktopSettings(next);
+      })
+      .catch(() => {
+        /* best-effort */
+      });
+  }
 
   useEffect(() => {
     if (!isDesktopRuntime()) return;
@@ -152,10 +186,32 @@ export const WorkerDeployPanel = observer(function WorkerDeployPanel({
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <Checkbox
             checked={enableD1}
-            onCheckedChange={(v) => setEnableD1(v === true)}
+            onCheckedChange={(v) => {
+              const next = v === true;
+              setEnableD1(next);
+              persistSettings({ enableD1Logs: next });
+            }}
           />
           Enable dashboard Logs (creates a D1 database + runs migrations)
         </label>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium">Auto-redeploy on app update</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            When the app updates and bundles a newer Worker, redeploy it and run
+            migrations automatically on launch.
+          </p>
+        </div>
+        <Switch
+          checked={autoRedeploy}
+          onCheckedChange={(v) => {
+            const next = v === true;
+            setAutoRedeploy(next);
+            persistSettings({ autoRedeployOnUpdate: next });
+          }}
+        />
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

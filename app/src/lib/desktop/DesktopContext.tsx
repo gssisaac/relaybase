@@ -8,6 +8,7 @@ import {
   isDesktopRuntime,
   type DesktopCredentials,
 } from "@/lib/desktop/bridge";
+import { useAutoRedeployOnUpdate } from "@/lib/desktop/use-auto-redeploy";
 
 type DesktopContextValue = {
   isDesktop: boolean;
@@ -72,6 +73,12 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
       /* best-effort one-shot */
     });
   }, [refresh]);
+
+  // After a self-update the bundled Worker is newer than the deployed one;
+  // silently redeploy + run migrations on launch unless the user opted out.
+  useAutoRedeployOnUpdate(isDesktop, ready, credentials, () => {
+    void refresh();
+  });
 
   const setCredentialsAndGlobals = React.useCallback(
     (creds: DesktopCredentials | null) => {

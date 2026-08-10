@@ -111,10 +111,8 @@ adminSend.post("/", async (c) => {
     });
 
     const hadBounces = result.permanentBounces.length > 0;
-    const allFailed =
-      result.delivered.length === 0 &&
-      result.queued.length === 0 &&
-      hadBounces;
+    const noDisposition =
+      result.delivered.length === 0 && result.queued.length === 0;
 
     const meta: Record<string, unknown> = {
       delivered: result.delivered,
@@ -124,12 +122,27 @@ adminSend.post("/", async (c) => {
       meta.permanentBounces = result.permanentBounces;
     }
 
-    if (allFailed) {
-      const error = `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`;
+    const sent: SentEmail = {
+      id: result.messageId || crypto.randomUUID(),
+      from,
+      to: toJoined ?? "",
+      cc: ccJoined,
+      subject,
+      bodyPreview: previewText(text),
+      sentAt: new Date().toISOString(),
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim(),
+      references: body.references?.trim(),
+    };
+
+    if (noDisposition) {
+      const error = hadBounces
+        ? `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`
+        : "Cloudflare returned no delivered/queued recipients. The message may bounce asynchronously.";
       await recordOpsLog(c.env.RELAYBASE_LOGS, {
         kind: "send",
         ok: false,
-        status: 502,
+        status: hadBounces ? 502 : 200,
         source: "compose",
         domain,
         fromAddr: from,
@@ -139,13 +152,16 @@ adminSend.post("/", async (c) => {
         error,
         metaJson: JSON.stringify(meta),
       });
-      return c.json(
-        {
-          error,
-          messageId: result.messageId,
-        },
-        502,
-      );
+      if (hadBounces) {
+        return c.json(
+          {
+            error,
+            messageId: result.messageId,
+          },
+          502,
+        );
+      }
+      return c.json({ messageId: result.messageId, sent });
     }
 
     // Partial bounce: log as failed so the dashboard catches it, but still
@@ -166,19 +182,6 @@ adminSend.post("/", async (c) => {
         : null,
       metaJson: JSON.stringify(meta),
     });
-
-    const sent: SentEmail = {
-      id: result.messageId || crypto.randomUUID(),
-      from,
-      to: toJoined ?? "",
-      cc: ccJoined,
-      subject,
-      bodyPreview: previewText(text),
-      sentAt: new Date().toISOString(),
-      messageId: result.messageId,
-      inReplyTo: body.inReplyTo?.trim(),
-      references: body.references?.trim(),
-    };
 
     return c.json({ messageId: result.messageId, sent });
   } catch (error) {

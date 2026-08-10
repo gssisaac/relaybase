@@ -200,23 +200,28 @@ send.post("/", async (c) => {
     });
     // CF returns per-recipient disposition. Fail closed when nobody was
     // delivered/queued — especially all-permanent-bounce "success" responses.
+    // Note: asynchronous bounces do not appear here; they arrive later as DSN
+    // inbound mail and are logged separately with kind="bounce".
     const hadBounces = result.permanentBounces.length > 0;
+    const noDisposition =
+      result.delivered.length === 0 && result.queued.length === 0;
     const meta = JSON.stringify({
       delivered: result.delivered,
       queued: result.queued,
       ...(hadBounces ? { permanentBounces: result.permanentBounces } : {}),
     });
 
-    if (
-      result.delivered.length === 0 &&
-      result.queued.length === 0 &&
-      hadBounces
-    ) {
-      const error = `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`;
+    if (noDisposition) {
+      const error = hadBounces
+        ? `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`
+        : "Cloudflare returned no delivered/queued recipients. The message may bounce asynchronously.";
       return logAndRespond(c, {
         ok: false,
-        status: 502,
-        body: { error, messageId: result.messageId },
+        opsOk: false,
+        status: hadBounces ? 502 : 200,
+        body: hadBounces
+          ? { error, messageId: result.messageId }
+          : { messageId: result.messageId },
         record,
         from,
         to: to.join(", "),

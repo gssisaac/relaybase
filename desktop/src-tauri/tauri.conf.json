@@ -34,7 +34,8 @@
         "hiddenTitle": true,
         "trafficLightPosition": { "x": 14, "y": 21 },
         "acceptFirstMouse": true,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "zoomHotkeysEnabled": false
       }
     ],
     "security": {

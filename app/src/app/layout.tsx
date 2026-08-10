@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ZoomHotkeys } from "@/components/ZoomHotkeys";
 
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 import "./globals.css";
@@ -35,6 +36,7 @@ export default function RootLayout({
         <ThemeProvider>
           <TooltipProvider delay={200}>{children}</TooltipProvider>
           <Toaster />
+          <ZoomHotkeys />
         </ThemeProvider>
       </body>
     </html>

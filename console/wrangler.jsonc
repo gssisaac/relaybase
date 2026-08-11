@@ -21,15 +21,15 @@
   "kv_namespaces": [
     {
       "binding": "RELAYBASE_LICENSES",
-      "id": "REPLACE_WITH_RELAYBASE_LICENSES_ID",
-      "preview_id": "REPLACE_WITH_RELAYBASE_LICENSES_ID"
+      "id": "7a5a3e4bd4e5459794cadadc15a42cd7",
+      "preview_id": "7a5a3e4bd4e5459794cadadc15a42cd7"
     }
   ],
   "d1_databases": [
     {
       "binding": "RELAYBASE_ACCOUNTS",
       "database_name": "relaybase-accounts",
-      "database_id": "REPLACE_WITH_RELAYBASE_ACCOUNTS_ID",
+      "database_id": "7628d123-2fdd-48fb-8862-0780e8478c60",
       "migrations_dir": "migrations"
     }
   ]

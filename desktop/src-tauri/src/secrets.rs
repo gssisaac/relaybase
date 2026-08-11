@@ -16,7 +16,7 @@ const EMAIL_PREFS_FILE: &str = "email.json";
 const API_KEYS_FILE: &str = "api-keys.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct StoredCredentials {
     pub account_id: String,
     pub api_token: String,
@@ -27,6 +27,8 @@ pub struct StoredCredentials {
     /// Relaybase console account (console.relaybase.xyz) — separate from the
     /// Cloudflare `account_id`/`api_token` above. Populated after the user
     /// logs in from /setup/account.
+    /// Struct-level `default` keeps older ~/.relaybase/credentials.json files
+    /// (missing these fields) loadable instead of hard-failing save/verify.
     pub relaybase_account_id: String,
     pub relaybase_email: String,
     /// Signed session token from console.relaybase.xyz (stored locally only,

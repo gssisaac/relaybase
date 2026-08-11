@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -30,7 +30,6 @@ type AccountResponse = {
 export default function SetupAccountPage() {
   const router = useRouter();
   const { credentials, refresh } = useDesktop();
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,7 +45,7 @@ export default function SetupAccountPage() {
     setError(null);
     try {
       const res = await fetch(
-        `${CONSOLE_URL.replace(/\/$/, "")}/api/v1/account?action=${mode}`,
+        `${CONSOLE_URL.replace(/\/$/, "")}/api/v1/account?action=login`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -55,7 +54,7 @@ export default function SetupAccountPage() {
       );
       const data = (await res.json()) as AccountResponse;
       if (!res.ok || !data.ok || !data.account) {
-        throw new Error(data.error ?? "Authentication failed");
+        throw new Error(data.error ?? "Login failed");
       }
       await desktopSaveRelaybaseAccount({
         accountId: data.account.id,
@@ -66,7 +65,7 @@ export default function SetupAccountPage() {
       await refresh?.();
       router.replace(alreadyConnected ? "/" : "/setup/install");
     } catch (err) {
-      setError(explainDesktopError(err, "Account login failed"));
+      setError(explainDesktopError(err, "Login failed"));
     } finally {
       setBusy(false);
     }
@@ -77,12 +76,12 @@ export default function SetupAccountPage() {
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">
-            {mode === "login" ? "Log in to Relaybase" : "Create your Relaybase account"}
+            Sign in to Relaybase
           </h1>
           <p className="text-xs text-muted-foreground">
-            Your Relaybase account manages your license, billing, and Worker
-            recovery. Cloudflare account fees are billed separately by
-            Cloudflare to you.
+            This sign-in is for invited teammates only. New accounts are
+            created by your admin on the Relaybase console — Relaybase does
+            not create accounts from this screen.
           </p>
         </div>
 
@@ -100,13 +99,11 @@ export default function SetupAccountPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="password">
-              Password{mode === "signup" ? " (min 8 characters)" : ""}
-            </Label>
+            <Label htmlFor="password">Password</Label>
             <Input
               id="password"
               type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              autoComplete="current-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -115,7 +112,7 @@ export default function SetupAccountPage() {
           <DesktopErrorBanner error={error} />
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            {mode === "login" ? "Log in" : "Create account"}
+            Sign in
           </Button>
         </form>
 
@@ -123,23 +120,16 @@ export default function SetupAccountPage() {
           <button
             type="button"
             className="text-left hover:underline"
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
+            onClick={() => void desktopOpenExternal(`${CONSOLE_URL}/recover`)}
           >
-            {mode === "login"
-              ? "Create an account instead"
-              : "Already have an account? Log in"}
+            Forgot your password?
           </button>
-          {mode === "login" ? (
-            <button
-              type="button"
-              className="text-left hover:underline"
-              onClick={() => void desktopOpenExternal(`${CONSOLE_URL}/recover`)}
-            >
-              Forgot your password?
-            </button>
-          ) : null}
-          <Link href="/setup/install" className="hover:underline">
-            Skip — I&apos;ll set up my account later
+          <Link
+            href="/setup"
+            className="inline-flex items-center gap-1 hover:underline"
+          >
+            <ArrowLeft className="size-3" />
+            Back to start
           </Link>
         </div>
       </div>

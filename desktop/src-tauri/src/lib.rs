@@ -343,7 +343,15 @@ async fn save_worker_connection(
     if token.is_empty() {
         return Err("Admin token is required".into());
     }
-    let mut creds = load_credentials()?.unwrap_or_default();
+    // Prefer merging into existing creds, but never block a successful verify
+    // on a legacy/unreadable credentials.json — overwrite with what we know.
+    let mut creds = match load_credentials() {
+        Ok(existing) => existing.unwrap_or_default(),
+        Err(e) => {
+            log::warn!("load_credentials failed during save_worker_connection: {e}");
+            StoredCredentials::default()
+        }
+    };
     creds.worker_url = base;
     creds.admin_token = token.to_string();
     creds.worker_script_name = worker_script_name

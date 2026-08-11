@@ -31,13 +31,12 @@ function setupPathFor(credentials: {
   adminToken?: string;
   relaybaseSession?: string;
 } | null): string | null {
-  // Account first: a Relaybase console account is required for license,
-  // billing, and ADMIN_TOKEN recovery. If not signed in, start at /setup/account.
-  if (!credentials?.relaybaseSession) {
-    return "/setup/account";
-  }
+  // Install-first: a Relaybase console account is optional and can be added
+  // later from Settings (for license + ADMIN_TOKEN recovery). The only setup
+  // gate is a connected Worker. New users land on the /setup choice screen
+  // (Install on my Cloudflare / I was invited) rather than the login page.
   if (!credentials?.workerUrl || !credentials.adminToken) {
-    return "/setup/install";
+    return "/setup";
   }
   return null;
 }
@@ -140,9 +139,7 @@ function OperatorInner({ children }: { children: ReactNode }) {
   }
 
   const readyToUse = Boolean(
-    credentials?.workerUrl &&
-      credentials.adminToken &&
-      credentials.relaybaseSession,
+    credentials?.workerUrl && credentials.adminToken,
   );
 
   if (!readyToUse) {

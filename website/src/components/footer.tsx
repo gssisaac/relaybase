@@ -37,6 +37,27 @@ export function Footer() {
             Start free
           </Button>
 
+          <div className="flex flex-wrap justify-center gap-4 text-sm">
+            <a
+              href={siteConfig.consoleUrl + "/login"}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Log in
+            </a>
+            <a
+              href={siteConfig.consoleUrl + "/signup"}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Create account
+            </a>
+            <a
+              href={siteConfig.consoleUrl + "/account"}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Account &amp; billing
+            </a>
+          </div>
+
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
             <Link href="/#addresses" className="hover:text-foreground">
               Addresses

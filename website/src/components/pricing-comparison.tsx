@@ -32,6 +32,9 @@ export function PricingComparison() {
             Relaybase is software — not a hosted email intermediary. You pay
             Cloudflare for Email Sending; we never bill monthly for domains.
           </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {siteConfig.pricingNote}
+          </p>
         </div>
 
         <div className="mx-auto mt-12 grid max-w-3xl gap-6 sm:grid-cols-2">

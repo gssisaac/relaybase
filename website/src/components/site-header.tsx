@@ -50,6 +50,12 @@ export function SiteHeader() {
             Free, or ${getCurrentProPrice()} once for Pro
             {isEarlyAccessActive() ? " (Early Access)" : ""}
           </Badge>
+          <a
+            href={siteConfig.consoleUrl + "/login"}
+            className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline"
+          >
+            Log in
+          </a>
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
             Get started
             <ArrowRight data-icon="inline-end" />

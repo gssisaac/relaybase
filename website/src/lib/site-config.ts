@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 const defaultSiteUrl = "https://relaybase.xyz";
 const defaultApiUrl = "https://console.relaybase.xyz";
+const defaultConsoleUrl = "https://console.relaybase.xyz";
 
 export const siteConfig = {
   name: "Relaybase",
@@ -10,6 +11,7 @@ export const siteConfig = {
     "A keyboard-first Mac inbox for every domain on your Cloudflare account — as a Worker you own.",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? defaultSiteUrl,
   apiUrl: process.env.NEXT_PUBLIC_RELAYBASE_API_URL ?? defaultApiUrl,
+  consoleUrl: process.env.NEXT_PUBLIC_CONSOLE_URL ?? defaultConsoleUrl,
   getStartedPath: "/get-started",
   /**
    * Pricing numbers — source of truth is `PRICING.md` (repo root). Only
@@ -47,6 +49,14 @@ export const siteConfig = {
   waitlist: {
     note: "Early Access pricing for the first 300",
   },
+  /**
+   * Clarifies that Relaybase Pro is a one-time software license and that
+   * Cloudflare account fees (e.g. Workers Paid ~$5/mo) are billed
+   * separately by Cloudflare to the customer. Surfaced on pricing/onboarding
+   * so Relaybase is never mistaken for reselling Cloudflare services.
+   */
+  pricingNote:
+    "Relaybase Pro is a one-time software license. Cloudflare account fees (e.g. Workers Paid) are billed separately by Cloudflare to you.",
   keywords: [
     "Relaybase",
     "Cloudflare email client",

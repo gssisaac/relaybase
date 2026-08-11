@@ -3,20 +3,28 @@ import { NextResponse } from "next/server";
 import { readRelaybaseEnvSettings } from "@/relaybase/lib/env-settings";
 import { readEmailSenderSettings } from "@/relaybase/lib/settings";
 
-async function workerConfig() {
+/**
+ * License admin now lives in the console.relaybase.xyz Next.js app (see console/),
+ * not on the product Worker. The Worker no longer serves /v1/license/* after the
+ * central-server split. These admin routes proxy to console's /v1/license/admin.
+ */
+async function consoleConfig() {
   const env = readRelaybaseEnvSettings();
   const stored = await readEmailSenderSettings();
-  const baseUrl = (env.workerUrl || stored.workerUrl || "").replace(/\/$/, "");
+  const baseUrl = (
+    process.env.RELAYBASE_CONSOLE_URL?.trim() ||
+    "https://console.relaybase.xyz"
+  ).replace(/\/$/, "");
   const adminToken = stored.adminToken?.trim() || "";
-  if (!baseUrl || !adminToken) {
-    throw new Error("Worker URL / admin token not configured");
+  if (!adminToken) {
+    throw new Error("Admin token not configured");
   }
   return { baseUrl, adminToken };
 }
 
 export async function GET() {
   try {
-    const { baseUrl, adminToken } = await workerConfig();
+    const { baseUrl, adminToken } = await consoleConfig();
     const res = await fetch(`${baseUrl}/v1/license/admin`, {
       headers: { Authorization: `Bearer ${adminToken}` },
       cache: "no-store",
@@ -34,7 +42,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { baseUrl, adminToken } = await workerConfig();
+    const { baseUrl, adminToken } = await consoleConfig();
     const res = await fetch(`${baseUrl}/v1/license/admin`, {
       method: "POST",
       headers: {
@@ -60,7 +68,7 @@ export async function DELETE(req: Request) {
     if (!id) {
       return NextResponse.json({ error: "id required" }, { status: 400 });
     }
-    const { baseUrl, adminToken } = await workerConfig();
+    const { baseUrl, adminToken } = await consoleConfig();
     const res = await fetch(`${baseUrl}/v1/license/admin/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${adminToken}` },

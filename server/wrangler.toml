@@ -3,9 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 account_id = "3adf03d991843094a7343eebc0a98007"
 
-[[routes]]
-pattern = "api.relaybase.xyz"
-custom_domain = true
+# Isaac personal dogfood Worker. The api.relaybase.xyz custom domain was removed;
+# this Worker now runs on its default workers.dev URL (relaybase-api.gssisaac.worker.dev).
+# Central account/auth/billing/license/recovery live in the separate console.relaybase.xyz
+# Next.js app (see console/). This Worker only serves mail/console/mobile/v1 product routes.
 
 [vars]
 WORKER_SCRIPT_NAME = "relaybase-api"
@@ -24,12 +25,6 @@ preview_id = "fe42e6d5f04741f7a09516f25504581a"
 [[r2_buckets]]
 binding = "INBOUND"
 bucket_name = "relaybase-inbound"
-
-[[d1_databases]]
-binding = "RELAYBASE_WAITLIST"
-database_name = "relaybase-waitlist"
-database_id = "ce28acf3-9eaa-42f9-b89d-9daa6afb00d4"
-migrations_dir = "migrations"
 
 [[d1_databases]]
 binding = "RELAYBASE_LOGS"

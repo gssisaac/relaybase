@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 const defaultSiteUrl = "https://relaybase.xyz";
-const defaultApiUrl = "https://api.relaybase.xyz";
+const defaultApiUrl = "https://console.relaybase.xyz";
 
 export const siteConfig = {
   name: "Relaybase",

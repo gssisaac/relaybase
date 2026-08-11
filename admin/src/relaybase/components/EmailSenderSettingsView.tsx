@@ -80,7 +80,7 @@ const FIELD_DEFS = [
     key: "workerUrl" as const,
     id: "relaybase-worker-url",
     label: "Worker URL",
-    placeholder: "https://api.relaybase.xyz",
+    placeholder: "https://relaybase-api.gssisaac.worker.dev",
   },
   {
     key: "workerScriptName" as const,

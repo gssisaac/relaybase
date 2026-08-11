@@ -456,7 +456,7 @@ export function EmailSettingsKeysView() {
     keys.find((key) => key.apiKey) ??
     null;
   const exampleApiKey = exampleKey?.apiKey ?? "YOUR_API_KEY";
-  const exampleBaseUrl = workerUrl ?? "https://api.relaybase.xyz";
+  const exampleBaseUrl = workerUrl ?? "https://relaybase-api.gssisaac.worker.dev";
   const exampleFrom = "youraccount@yourdomain.com";
   const examples = buildSendExamples({
     baseUrl: exampleBaseUrl,

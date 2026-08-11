@@ -1,9 +1,8 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../../theme/colors.dart';
-import '../../../theme/radii.dart';
 
-/// Subject line field.
+/// Subject line field — Gmail style: no box, just a bottom border separator.
 class SubjectField extends StatefulWidget {
   const SubjectField({super.key, required this.value, required this.onChanged});
   final String value;
@@ -47,17 +46,20 @@ class _SubjectFieldState extends State<SubjectField> {
   @override
   Widget build(BuildContext context) {
     final colors = ThemeColors.of(context);
-    return CupertinoTextField(
-      controller: _controller,
-      focusNode: _focus,
-      placeholder: 'Subject',
-      autocorrect: false,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+    return Container(
       decoration: BoxDecoration(
-        color: colors.surfaceVariant,
-        borderRadius: AppRadii.field,
+        border: Border(bottom: BorderSide(color: colors.divider, width: 0.5)),
       ),
-      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.onSurface),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: CupertinoTextField(
+        controller: _controller,
+        focusNode: _focus,
+        placeholder: 'Subject',
+        autocorrect: false,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: const BoxDecoration(border: Border()),
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.onSurface),
+      ),
     );
   }
 }

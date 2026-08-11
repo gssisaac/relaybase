@@ -5,7 +5,6 @@ import '../../../models/thread.dart';
 import '../../../providers/accounts_provider.dart';
 import '../../../providers/compose_provider.dart';
 import '../../../theme/colors.dart';
-import '../../../theme/radii.dart';
 import 'body_editor.dart';
 import 'compose_app_bar.dart';
 import 'recipient_field.dart';
@@ -161,41 +160,39 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
             ),
             Container(height: 0.5, color: colors.divider),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _fromRow(accounts, colors),
+              child: Column(
+                children: [
+                  _fromRow(accounts, colors),
+                  RecipientField(
+                    label: 'To',
+                    recipients: draft?.to ?? const [],
+                    onChanged: (v) => ref.read(composeProvider.notifier).update(to: v),
+                    onToggleCc: _showCc ? null : () => setState(() => _showCc = true),
+                    onToggleBcc: _showBcc ? null : () => setState(() => _showBcc = true),
+                  ),
+                  if (_showCc)
                     RecipientField(
-                      label: 'To',
-                      recipients: draft?.to ?? const [],
-                      onChanged: (v) => ref.read(composeProvider.notifier).update(to: v),
+                      label: 'Cc',
+                      recipients: draft?.cc ?? const [],
+                      onChanged: (v) => ref.read(composeProvider.notifier).update(cc: v),
                     ),
-                    if (_showCc)
-                      RecipientField(
-                        label: 'Cc',
-                        recipients: draft?.cc ?? const [],
-                        onChanged: (v) => ref.read(composeProvider.notifier).update(cc: v),
-                      ),
-                    if (_showBcc)
-                      RecipientField(
-                        label: 'Bcc',
-                        recipients: draft?.bcc ?? const [],
-                        onChanged: (v) => ref.read(composeProvider.notifier).update(bcc: v),
-                      ),
-                    _toggleRow(colors),
-                    SubjectField(
-                      value: draft?.subject ?? '',
-                      onChanged: (v) => ref.read(composeProvider.notifier).update(subject: v),
+                  if (_showBcc)
+                    RecipientField(
+                      label: 'Bcc',
+                      recipients: draft?.bcc ?? const [],
+                      onChanged: (v) => ref.read(composeProvider.notifier).update(bcc: v),
                     ),
-                    const SizedBox(height: 8),
-                    BodyEditor(
+                  SubjectField(
+                    value: draft?.subject ?? '',
+                    onChanged: (v) => ref.read(composeProvider.notifier).update(subject: v),
+                  ),
+                  Expanded(
+                    child: BodyEditor(
                       value: draft?.body ?? '',
                       onChanged: (v) => ref.read(composeProvider.notifier).update(body: v),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -207,20 +204,37 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   Widget _fromRow(AccountsState accounts, ThemeColors colors) {
     final draft = ref.watch(composeProvider).draft;
     final from = draft?.from ?? widget.initialFrom ?? '';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: colors.divider, width: 0.5)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          Text('From', style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant)),
-          const SizedBox(width: 12),
+          SizedBox(
+            width: 40,
+            child: Text('From', style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant)),
+          ),
+          const SizedBox(width: 8),
           Expanded(
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              color: colors.surfaceVariant,
-              borderRadius: AppRadii.button,
-              onPressed: () => _showFromPicker(accounts),
-              child: Text(from.isEmpty ? 'Select account' : from,
-                  style: TextStyle(fontSize: 14, color: colors.onSurface)),
+            child: GestureDetector(
+              onTap: () => _showFromPicker(accounts),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        from.isEmpty ? 'Select account' : from,
+                        textAlign: TextAlign.left,
+                        style: TextStyle(fontSize: 14, color: colors.onSurface),
+                      ),
+                    ),
+                    Icon(CupertinoIcons.chevron_down, size: 14, color: colors.onSurfaceVariant),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -249,27 +263,6 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
           child: const Text('Cancel'),
         ),
       ),
-    );
-  }
-
-  Widget _toggleRow(ThemeColors colors) {
-    return Row(
-      children: [
-        if (!_showCc)
-          _toggle('Cc', () => setState(() => _showCc = true), colors),
-        if (!_showBcc) ...[
-          const SizedBox(width: 8),
-          _toggle('Bcc', () => setState(() => _showBcc = true), colors),
-        ],
-      ],
-    );
-  }
-
-  Widget _toggle(String label, VoidCallback onTap, ThemeColors colors) {
-    return CupertinoButton(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      onPressed: onTap,
-      child: Text(label, style: TextStyle(fontSize: 13, color: colors.primary)),
     );
   }
 }

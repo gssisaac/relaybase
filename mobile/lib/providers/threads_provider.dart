@@ -37,15 +37,24 @@ class ThreadsState {
   List<Message> filtered(Folder folder) {
     switch (folder) {
       case Folder.starred:
-        return messages.where((m) => m.starred).toList(growable: false);
+        return _sorted(messages.where((m) => m.starred).toList(growable: false));
       case Folder.allMail:
       case Folder.inbox:
-        return messages;
+        return _sorted(messages);
       case Folder.sent:
       case Folder.drafts:
       case Folder.trash:
         return const [];
     }
+  }
+
+  /// Always sort by receivedAt descending so the list order is stable
+  /// regardless of the underlying messages array order (Hive insertion order
+  /// vs API response order can briefly differ during a reload).
+  static List<Message> _sorted(List<Message> input) {
+    final copy = List<Message>.of(input, growable: false);
+    copy.sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+    return copy;
   }
 }
 
@@ -56,6 +65,8 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
 
   String? _accountFilter;
   String? get accountFilter => _accountFilter;
+  bool _loaded = false;
+  int _refreshGeneration = 0;
 
   void setAccountFilter(String? email) {
     _accountFilter = email;
@@ -64,6 +75,12 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
 
   Future<void> load() async {
     if (!_ref.read(authProvider).isConfigured) return;
+    // Skip if already loaded — the state survives across InboxScreen remounts
+    // (the provider is a singleton). Reloading would reset messages to the
+    // Hive cache order and briefly flash a different list order before the
+    // API response arrives.
+    if (_loaded) return;
+    _loaded = true;
     state = state.copyWith(loading: true, error: null);
     try {
       final storage = await _ref.read(storageServiceProvider.future);
@@ -77,17 +94,31 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
 
   Future<void> refresh() async {
     if (!_ref.read(authProvider).isConfigured) return;
+    final generation = ++_refreshGeneration;
     state = state.copyWith(refreshing: true, error: null);
     try {
       final api = _ref.read(mobileApiProvider);
       final messages =
           await api.fetchInbox(account: _accountFilter, limit: 50);
+      // Ignore stale responses — a newer refresh (e.g. account filter change)
+      // may have already completed with fresher data.
+      if (_refreshGeneration != generation) return;
       final storage = await _ref.read(storageServiceProvider.future);
       await storage.saveInbox(messages);
+      if (_refreshGeneration != generation) return;
       state = state.copyWith(messages: messages, refreshing: false);
     } catch (e) {
+      if (_refreshGeneration != generation) return;
       state = state.copyWith(refreshing: false, error: e.toString());
     }
+  }
+
+  /// Clear all state — called on sign out so a re-login does a fresh load.
+  void reset() {
+    _loaded = false;
+    _accountFilter = null;
+    _refreshGeneration++;
+    state = const ThreadsState();
   }
 
   Future<void> toggleStar(Message message) async {

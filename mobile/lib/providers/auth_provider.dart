@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_config.dart';
 import '../config/deep_links.dart';
 import 'app_providers.dart';
+import 'threads_provider.dart';
 
 /// Authentication / pairing state. On boot we read the secure store; if a
 /// config exists we apply it to the API service and start the sync loop.
@@ -132,6 +133,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _ref.read(secureStorageProvider).clear();
     final storage = await _ref.read(storageServiceProvider.future);
     await storage.clearAll();
+    _ref.read(threadsProvider.notifier).reset();
     _ref.read(mobileApiProvider).configure(
       const AppConfig(workerUrl: '', accountEmail: '', mobilePassword: ''),
     );

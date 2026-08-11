@@ -117,25 +117,31 @@ class CupertinoDrawerState extends State<CupertinoDrawer>
 
   @override
   Widget build(BuildContext context) {
-    final child = widget.child;
-    if (!_open && _controller.isDismissed) return child;
+    // Always render a Stack so the child stays at the same position in the
+    // element tree whether the drawer is open or closed. Returning `child`
+    // directly when closed would remount it (and re-run initState) every time
+    // the drawer opens/closes — causing the inbox list to reload and briefly
+    // show a stale/different order.
+    final showOverlay = _open || !_controller.isDismissed;
     return Stack(
       children: [
-        child,
-        GestureDetector(
-          onTap: close,
-          child: FadeTransition(opacity: _fade, child: Container(color: CupertinoColors.black)),
-        ),
-        SlideTransition(
-          position: _offset,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Material(
-              type: MaterialType.transparency,
-              child: SizedBox(width: 320, child: widget.drawer),
+        widget.child,
+        if (showOverlay) ...[
+          GestureDetector(
+            onTap: close,
+            child: FadeTransition(opacity: _fade, child: Container(color: CupertinoColors.black)),
+          ),
+          SlideTransition(
+            position: _offset,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Material(
+                type: MaterialType.transparency,
+                child: SizedBox(width: 320, child: widget.drawer),
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

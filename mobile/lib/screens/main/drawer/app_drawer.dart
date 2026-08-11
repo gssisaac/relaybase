@@ -37,7 +37,6 @@ class AppDrawer extends ConsumerWidget {
                 ref.read(threadsProvider.notifier).setAccountFilter(
                       email.isEmpty ? null : email,
                     );
-                ref.read(threadsProvider.notifier).refresh();
               },
             ),
             Container(height: 0.5, color: colors.divider),

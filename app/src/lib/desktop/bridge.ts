@@ -470,6 +470,72 @@ export async function desktopRegisterWorkerWithConsole(
   return { ok: Boolean(data.ok), error: data.error };
 }
 
+/**
+ * Request a one-time ADMIN_TOKEN recovery token from the Relaybase console.
+ * The token is emailed to the account owner (returned inline in dev).
+ * Requires a Relaybase account session.
+ */
+export async function desktopRequestAdminRecoveryToken(): Promise<{
+  ok: boolean;
+  devToken?: string;
+  error?: string;
+}> {
+  const existing = isDesktopRuntime()
+    ? await desktopGetCredentials()
+    : await loadLocalCredentialsFile();
+  const session = existing?.relaybaseSession?.trim() ?? "";
+  if (!session) {
+    return { ok: false, error: "Not signed in to Relaybase" };
+  }
+  const res = await fetch(
+    `${CONSOLE_URL.replace(/\/$/, "")}/api/v1/account?action=recovery-token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session}`,
+      },
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    devToken?: string;
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), devToken: data.devToken, error: data.error };
+}
+
+/**
+ * Reset the customer Worker's ADMIN_TOKEN using a recovery token issued by
+ * the Relaybase console. The Worker verifies the token with the console and
+ * then stores the new admin token in KV (no wrangler needed).
+ */
+export async function desktopRecoverAdminToken(input: {
+  workerUrl: string;
+  accountEmail: string;
+  recoveryToken: string;
+  newAdminToken: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(
+    `${input.workerUrl.replace(/\/$/, "")}/console/recover-admin`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recoveryToken: input.recoveryToken,
+        newAdminToken: input.newAdminToken,
+        accountEmail: input.accountEmail,
+        workerUrl: input.workerUrl,
+      }),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), error: data.error };
+}
+
 export async function desktopVerifyWorkerConnection(
   workerUrl: string,
   adminToken: string,

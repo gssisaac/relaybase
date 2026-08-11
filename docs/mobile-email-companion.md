@@ -41,7 +41,7 @@ These override older plan drafts (global mobile password, Worker URL login, “a
 |--------|------|
 | **Auth credential** | Per-account mobile password (12-char alphanumeric). **Not** the desktop admin token. **Not** a single global mobile password. |
 | **Login fields** | Account email + password only. Users never enter a Worker URL. |
-| **Worker URL** | Baked into the Flutter build as `AppConfig.defaultWorkerUrl` (`https://api.relaybase.xyz` today). Change the constant + rebuild to retarget. |
+| **Worker URL** | Baked into the Flutter build as `AppConfig.defaultWorkerUrl` (`https://relaybase-api.gssisaac.worker.dev` for the dogfood build; customer builds bake in the customer's own Worker URL). Change the constant + rebuild to retarget. |
 | **Account scope** | Every `/mobile/*` request is scoped to the authenticated email only. No full mailbox catalog, no “All inboxes”, no account switcher across other addresses. |
 | **Desktop provisioning** | Owner enables the address + generates the password in Accounts → account detail → **Other device**. |
 | **Secrets** | Plain password shown once on desktop after generate/regenerate; stored on Worker as salted SHA-256 under `srv:config:mobile:{email}`. Mobile stores email + password in `flutter_secure_storage`. |

@@ -24,12 +24,13 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 
 | Layer | Store | Use for |
 |-------|--------|---------|
-| Remote | Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 inbound | Domains, addresses, audience, broadcasts, key hashes, send logs, inbox |
+| Remote | Product Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 inbound | Domains, addresses, audience, broadcasts, key hashes, send logs, inbox |
 | Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). KV `srv:sendlog:*` stays authoritative for send history. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
-| Local | `~/.relaybase` | Credentials, API key plaintext, mail/UI/dashboard cache |
+| Remote | Console `RELAYBASE_ACCOUNTS` D1 + `RELAYBASE_LICENSES` KV (`console.relaybase.xyz`, Next.js/OpenNext) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription). The product Worker no longer serves `/v1/license/*` or `/v1/waitlist`. |
+| Local | `~/.relaybase` | Credentials, team-login, API key plaintext, mail/UI/dashboard cache |
 | Local (phone) | Flutter secure storage + Hive | Mobile email + password; inbox/draft cache — **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)** |
 
-Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, or a second mail-Worker KV binding. All UI modes call the Worker through `desktopAwareFetch` + `email-api-map.ts`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**. Mobile uses `/mobile/*` with per-account password auth (not admin token).
+Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, a second mail-Worker KV binding, or license/account/billing routes on the product Worker (those live on `console.relaybase.xyz`). All UI modes call the product Worker through `desktopAwareFetch` + `email-api-map.ts`; account/license/billing calls go to `console.relaybase.xyz`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**. Mobile uses `/mobile/*` with per-account password auth (not admin token).
 
 ## Email commands (summary)
 

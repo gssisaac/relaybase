@@ -127,6 +127,7 @@ export function buildMimeMessage(params: {
 /** Body-only archive MIME; attachment binaries live in R2 separately. */
 export function buildStrippedInboundMime(params: {
   fromEmail: string;
+  fromName?: string;
   toEmail: string;
   ccEmails?: string[];
   subject: string;
@@ -142,6 +143,7 @@ export function buildStrippedInboundMime(params: {
 }): ArrayBuffer {
   const mime = buildMimeMessage({
     from: params.fromEmail,
+    fromName: params.fromName,
     to: params.toEmail,
     cc: params.ccEmails?.length ? params.ccEmails : undefined,
     subject: params.subject,

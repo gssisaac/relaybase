@@ -2,6 +2,7 @@ import type {
   RoutingActivityEvent,
   SentEmail,
 } from "@/email/components/types";
+import { formatSenderDisplay } from "@/lib/email/format-sender";
 
 export type ThreadInboundMessage = {
   kind: "inbound";
@@ -124,7 +125,12 @@ function formatParticipantLabel(messages: ThreadMessage[]): string {
     const key = from.trim().toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    ordered.push(from.trim());
+    ordered.push(
+      formatSenderDisplay(
+        msg.kind === "inbound" ? msg.message.fromName : undefined,
+        from,
+      ),
+    );
   }
   if (ordered.length <= 2) return ordered.join(", ");
   return `${ordered[0]}, ${ordered[1]} +${ordered.length - 2}`;

@@ -1,6 +1,7 @@
 import type { Address, RoutingActivityEvent, SentEmail } from "@/email/components/types";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
+import { formatSenderDisplay } from "@/lib/email/format-sender";
 
 export { joinQuotedBody, splitQuotedBody } from "@/email/reply-quote-body";
 
@@ -51,7 +52,10 @@ export function quoteInboundMessage(event: RoutingActivityEvent): string {
         .map((line) => `> ${line}`)
         .join("\n")
     : ">";
-  return `\n\nOn ${formatQuoteDate(event.receivedAt)}, ${event.fromEmail} wrote:\n\n${quoted}`;
+  return `\n\nOn ${formatQuoteDate(event.receivedAt)}, ${formatSenderDisplay(
+    event.fromName,
+    event.fromEmail,
+  )} wrote:\n\n${quoted}`;
 }
 
 export function replyAllCc(

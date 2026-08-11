@@ -1,5 +1,6 @@
 packages:
   - admin
   - app
+  - console
   - desktop
   - website

@@ -1,19 +1,22 @@
 "use client";
 
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   WORKER_INSTALL_ZIP_URL,
+  desktopAutoInstallWorker,
   desktopOpenExternal,
   desktopSaveWorkerConnection,
   desktopVerifyWorkerConnection,
   explainDesktopError,
+  listenInstallLog,
   type DesktopErrorHelp,
+  type InstallLogEvent,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
@@ -59,48 +62,36 @@ const RESOURCE_NAMES = [
     why: "Your routing + admin API process. You deploy it with Wrangler; the Mac app only talks to this URL.",
   },
   {
-    name: "relaybase-keys",
+    name: "relaybase-app",
     kind: "KV",
-    why: "Stores admin config and API keys inside your account.",
-  },
-  {
-    name: "relaybase-api",
-    kind: "KV",
-    why: "Stores Relaybase runtime data next to the Worker.",
+    why: "Stores Relaybase runtime data, admin config, and API keys inside your account.",
   },
   {
     name: "relaybase-inbound",
     kind: "R2",
-    why: "Stores raw inbound email. Create this exact bucket name before deploy.",
+    why: "Stores raw inbound email. Created automatically during auto-install.",
   },
-] as const;
-
-const STEPS = [
-  "Download the install ZIP and unzip it.",
-  "Create KV namespaces and the R2 bucket (commands are in the README), then paste KV ids into wrangler.toml.",
-  "Paste or generate an Admin token, copy the wrangler command, run it, then deploy.",
-  "Paste the *.workers.dev URL + the same Admin token below, then verify (or skip).",
 ] as const;
 
 export function WorkerInstallPanel() {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
+  const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const [cfApiToken, setCfApiToken] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
   const [adminToken, setAdminToken] = useState("");
   const [hydrated, setHydrated] = useState(false);
-  const [busy, setBusy] = useState<"verify" | "skip" | null>(null);
+  const [busy, setBusy] = useState<"auto" | "verify" | "skip" | null>(null);
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [logs, setLogs] = useState<InstallLogEvent[]>([]);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
 
   // Restore draft / saved creds once — never wipe on failed verify.
   useEffect(() => {
     const draft = loadDraft();
-    setWorkerUrl(
-      draft.workerUrl || credentials?.workerUrl || "",
-    );
-    setAdminToken(
-      draft.adminToken || credentials?.adminToken || "",
-    );
+    setWorkerUrl(draft.workerUrl || credentials?.workerUrl || "");
+    setAdminToken(draft.adminToken || credentials?.adminToken || "");
     setHydrated(true);
     // Only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,6 +101,12 @@ export function WorkerInstallPanel() {
     if (!hydrated) return;
     saveDraft({ workerUrl, adminToken });
   }, [hydrated, workerUrl, adminToken]);
+
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   async function persistAndContinue(opts: {
     url: string;
@@ -131,6 +128,54 @@ export function WorkerInstallPanel() {
     router.replace("/");
   }
 
+  async function handleAutoInstall() {
+    setBusy("auto");
+    setError(null);
+    setMessage(null);
+    setLogs([]);
+    const token = cfApiToken.trim();
+    if (!token) {
+      setError({
+        title: "Cloudflare API token required",
+        detail:
+          "Paste a Cloudflare API token with Workers Scripts / KV / R2 edit permissions.",
+        fix: "Create one at dash.cloudflare.com → My Profile → API Tokens.",
+        links: [
+          {
+            label: "Create a Cloudflare API token",
+            href: "https://dash.cloudflare.com/profile/api-tokens",
+          },
+        ],
+      });
+      setBusy(null);
+      return;
+    }
+    let unlisten: (() => void) | null = null;
+    try {
+      unlisten = await listenInstallLog((event) => {
+        setLogs((prev) => [...prev, event]);
+      });
+      const result = await desktopAutoInstallWorker(token);
+      setWorkerUrl(result.workerUrl);
+      setAdminToken(result.adminToken);
+      const connect = await desktopVerifyWorkerConnection(
+        result.workerUrl,
+        result.adminToken,
+      );
+      await persistAndContinue({
+        url: connect.workerUrl,
+        token: result.adminToken,
+        scriptName: connect.workerScriptName,
+        skippedVerify: false,
+      });
+    } catch (err) {
+      setError(explainDesktopError(err, "Auto-install failed"));
+    } finally {
+      if (unlisten) unlisten();
+      setBusy(null);
+    }
+  }
+
   async function handleVerify() {
     setBusy("verify");
     setError(null);
@@ -146,7 +191,6 @@ export function WorkerInstallPanel() {
         skippedVerify: false,
       });
     } catch (err) {
-      // Keep URL/token state — do not reset inputs.
       setWorkerUrl(url);
       setAdminToken(token);
       setError(explainDesktopError(err, "Could not verify Worker"));
@@ -190,30 +234,15 @@ export function WorkerInstallPanel() {
           Install routing Worker
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          You deploy Relaybase into <strong>your</strong> Cloudflare account with
-          Wrangler. This app never asks for Workers, KV, or R2 API permissions —
-          it only needs the Worker URL and admin token after you install.
+          Relaybase runs in <strong>your</strong> Cloudflare account. Enter a
+          Cloudflare API token and the desktop installs the Worker for you —
+          you&apos;ll watch each step in the log below. Your token stays on this
+          Mac and is never sent to Relaybase.
         </p>
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">Download the install package</p>
-        <p className="text-xs text-muted-foreground">
-          Includes a customer <span className="font-mono">wrangler.toml</span>,
-          Worker source, and a step-by-step README.
-        </p>
-        <Button
-          type="button"
-          className="w-full sm:w-auto"
-          onClick={() => void desktopOpenExternal(WORKER_INSTALL_ZIP_URL)}
-        >
-          <Download className="size-3.5" />
-          Download Worker install ZIP
-        </Button>
-      </div>
-
-      <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">What you create (and why)</p>
+        <p className="text-sm font-medium">What gets created (and why)</p>
         <ul className="space-y-3">
           {RESOURCE_NAMES.map((r) => (
             <li key={`${r.kind}-${r.name}`} className="text-sm">
@@ -225,16 +254,95 @@ export function WorkerInstallPanel() {
             </li>
           ))}
         </ul>
+        <p className="text-xs text-muted-foreground">
+          Cloudflare may bill a small Workers Paid plan fee (≈$5/mo) directly
+          to you. Relaybase Pro is a separate software license.
+        </p>
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">Deploy with Wrangler</p>
-        <ol className="list-decimal space-y-2 pl-4 text-xs text-muted-foreground">
-          {STEPS.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">
+            {mode === "auto" ? "Auto-install" : "Manual install"}
+          </p>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:underline"
+            onClick={() => setMode(mode === "auto" ? "manual" : "auto")}
+          >
+            {mode === "auto" ? "Use manual install" : "Use auto-install"}
+          </button>
+        </div>
+
+        {mode === "auto" ? (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-api-token">Cloudflare API token</Label>
+              <Input
+                id="cf-api-token"
+                type="password"
+                value={cfApiToken}
+                onChange={(e) => setCfApiToken(e.target.value)}
+                placeholder="cfut_…"
+                className="font-mono text-xs"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Stored only on this Mac (~/.relaybase). Requires Workers
+                Scripts, KV Storage, and R2 Storage edit scopes.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={!cfApiToken.trim() || busy !== null}
+              onClick={() => void handleAutoInstall()}
+            >
+              {busy === "auto" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Terminal className="size-3.5" />
+              )}
+              Install into my Cloudflare account
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Download the install package and deploy with Wrangler yourself,
+              then paste the Worker URL + admin token below.
+            </p>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => void desktopOpenExternal(WORKER_INSTALL_ZIP_URL)}
+            >
+              <Download className="size-3.5" />
+              Download Worker install ZIP
+            </Button>
+          </>
+        )}
       </div>
+
+      {logs.length > 0 ? (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <p className="text-xs font-medium">Install log</p>
+          <div
+            ref={logEndRef}
+            className="max-h-56 overflow-y-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300"
+          >
+            {logs.map((entry, i) => (
+              <div key={i} className="whitespace-pre-wrap">
+                <span className="text-muted-foreground">
+                  [{entry.step}:{entry.level}]
+                </span>{" "}
+                {entry.line}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <AdminTokenPanel value={adminToken} onChange={setAdminToken} />
 
@@ -297,8 +405,8 @@ export function WorkerInstallPanel() {
             Skip verify &amp; continue
           </Button>
           <p className="text-[11px] text-muted-foreground">
-            Skip saves the URL and token locally and goes to license. Use this
-            when the Worker is already deployed and verify is stuck.
+            Skip saves the URL and token locally and continues. Use this when
+            the Worker is already deployed and verify is stuck.
           </p>
         </div>
       </div>

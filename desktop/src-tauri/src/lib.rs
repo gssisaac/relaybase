@@ -1,8 +1,10 @@
+mod auto_install;
 mod cloudflare;
 mod notify;
 mod secrets;
 mod worker;
 
+use auto_install::{auto_install_worker, merge_into_credentials, AutoInstallResult};
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
     clear_credentials, load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
@@ -171,6 +173,21 @@ async fn clear_relaybase_account() -> Result<StoredCredentials, String> {
     creds.relaybase_tier.clear();
     save_credentials(&creds)?;
     Ok(creds)
+}
+
+/// Background auto-install of the routing Worker into the user's Cloudflare
+/// account via wrangler. Streams `install-log` events to the frontend.
+#[tauri::command]
+async fn auto_install_routing_worker(
+    app: tauri::AppHandle,
+    api_token: String,
+    account_id: Option<String>,
+) -> Result<AutoInstallResult, String> {
+    let result = auto_install_worker(app, api_token, account_id.clone()).await?;
+    let existing = load_credentials()?.unwrap_or_default();
+    let next = merge_into_credentials(&existing, &result, account_id);
+    save_credentials(&next)?;
+    Ok(result)
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -454,6 +471,7 @@ pub fn run() {
             save_license_key,
             save_relaybase_account,
             clear_relaybase_account,
+            auto_install_routing_worker,
             verify_worker_connection,
             save_worker_connection,
             get_desktop_info,

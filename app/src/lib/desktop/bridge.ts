@@ -33,6 +33,20 @@ export type InstallResult = {
   adminRelinked: boolean;
 };
 
+export type AutoInstallResult = {
+  workerUrl: string;
+  workerScriptName: string;
+  adminToken: string;
+  kvNamespaceId: string;
+  r2Bucket: string;
+};
+
+export type InstallLogEvent = {
+  step: string;
+  level: "stdout" | "stderr" | "info";
+  line: string;
+};
+
 export type ResourceCheck = {
   name: string;
   kind: string;
@@ -279,6 +293,40 @@ export async function desktopInstallWorker(
   workerJs?: string,
 ): Promise<InstallResult> {
   return invoke("install_routing_worker", { workerJs: workerJs ?? null });
+}
+
+/**
+ * Background auto-install of the routing Worker into the user's Cloudflare
+ * account via wrangler. Subscribe to `install-log` events via the returned
+ * unsubscribe handle (or use `listenInstallLog`).
+ */
+export async function desktopAutoInstallWorker(
+  apiToken: string,
+  accountId?: string,
+): Promise<AutoInstallResult> {
+  return invoke("auto_install_routing_worker", {
+    apiToken,
+    accountId: accountId ?? null,
+  });
+}
+
+/** Subscribe to `install-log` events emitted during auto-install. */
+export async function listenInstallLog(
+  handler: (event: InstallLogEvent) => void,
+): Promise<() => void> {
+  if (!isDesktopRuntime()) {
+    return () => {
+      /* no-op outside Tauri */
+    };
+  }
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen("install-log", (e) => handler(e.payload as InstallLogEvent));
+  } catch {
+    return () => {
+      /* no-op */
+    };
+  }
 }
 
 export async function desktopUpdateWorker(

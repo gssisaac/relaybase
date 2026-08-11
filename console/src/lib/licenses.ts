@@ -32,6 +32,10 @@ function customerKv(stripeCustomerId: string): string {
   return `srv:license:customer:${stripeCustomerId}`;
 }
 
+function emailKv(email: string): string {
+  return `srv:license:email:${email.trim().toLowerCase()}`;
+}
+
 export function generateLicenseKey(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -79,6 +83,7 @@ export async function createLicense(
   if (stored.stripeCustomerId) {
     await kv.put(customerKv(stored.stripeCustomerId), JSON.stringify(stored));
   }
+  await kv.put(emailKv(stored.email), JSON.stringify(stored));
 
   const { keyHash: _h, ...record } = stored;
   return { record, licenseKey };
@@ -135,6 +140,15 @@ export async function findLicenseByCustomerId(
   stripeCustomerId: string,
 ): Promise<StoredLicense | null> {
   const raw = await kv.get(customerKv(stripeCustomerId));
+  if (!raw) return null;
+  return JSON.parse(raw) as StoredLicense;
+}
+
+export async function findLicenseByEmail(
+  kv: KVNamespace,
+  email: string,
+): Promise<StoredLicense | null> {
+  const raw = await kv.get(emailKv(email));
   if (!raw) return null;
   return JSON.parse(raw) as StoredLicense;
 }

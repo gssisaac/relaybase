@@ -328,6 +328,43 @@ export async function storeInboundEmail(
   return { record, created: true };
 }
 
+/**
+ * Legacy rows written before the MIME-From fix have no `fromName` key and
+ * carry the envelope (VERP) sender as `fromEmail`. Re-parse the archived raw
+ * MIME to recover the human-readable `From:` header and write the corrected
+ * meta back to R2 so subsequent list/detail reads skip the backfill. No-op for
+ * rows already carrying `fromName` (including `""` — a genuinely nameless From).
+ */
+async function backfillLegacyFrom(
+  bucket: R2Bucket,
+  domain: string,
+  meta: InboundEmailMeta,
+): Promise<InboundEmailMeta> {
+  if (meta.fromName !== undefined) return meta;
+  const rawObject = await bucket.get(rawObjectKey(domain, meta.id));
+  if (!rawObject) return meta;
+  try {
+    const parsed = await parseInboundMime(await rawObject.arrayBuffer());
+    const backfilled: InboundEmailMeta = {
+      ...meta,
+      fromEmail: parsed.fromEmail || meta.fromEmail,
+      fromName: parsed.fromName,
+      toEmails: parsed.toEmails.length
+        ? parsed.toEmails
+        : meta.toEmails?.length
+          ? meta.toEmails
+          : [meta.toEmail],
+      ccEmails: parsed.ccEmails.length ? parsed.ccEmails : meta.ccEmails ?? [],
+    };
+    void bucket.put(metaObjectKey(domain, meta.id), JSON.stringify(backfilled), {
+      httpMetadata: { contentType: "application/json" },
+    });
+    return backfilled;
+  } catch {
+    return meta;
+  }
+}
+
 export async function listInboundEmails(
   bucket: R2Bucket,
   filters: { domain?: string; limit?: number } = {},
@@ -344,8 +381,16 @@ export async function listInboundEmails(
     const metaObject = await bucket.get(object.key);
     if (!metaObject) continue;
     const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
+    const normalized = normalizeReadState({
+      ...meta,
+      attachments: meta.attachments ?? [],
+    });
+    // Recover MIME From for legacy rows so the inbox list shows the real
+    // sender instead of the envelope VERP / "Mail Delivery System".
     messages.push(
-      normalizeReadState({ ...meta, attachments: meta.attachments ?? [] }),
+      meta.fromName === undefined
+        ? await backfillLegacyFrom(bucket, domain, normalized)
+        : normalized,
     );
   }
 
@@ -444,7 +489,7 @@ async function getInboundEmailForDomain(
   if (!rawObject) return normalized;
   try {
     const parsed = await parseInboundMime(await rawObject.arrayBuffer());
-    return {
+    const backfilled: InboundEmailMeta = {
       ...normalized,
       fromEmail: parsed.fromEmail || normalized.fromEmail,
       fromName:
@@ -454,6 +499,11 @@ async function getInboundEmailForDomain(
       toEmails: parsed.toEmails.length ? parsed.toEmails : normalized.toEmails,
       ccEmails: parsed.ccEmails.length ? parsed.ccEmails : normalized.ccEmails,
     };
+    // Persist the correction so future reads skip the raw MIME parse.
+    void bucket.put(metaObjectKey(domain, id), JSON.stringify(backfilled), {
+      httpMetadata: { contentType: "application/json" },
+    });
+    return backfilled;
   } catch {
     return normalized;
   }

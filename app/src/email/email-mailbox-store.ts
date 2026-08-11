@@ -762,6 +762,9 @@ export class EmailMailboxStore {
       const fromDisk = await loadPersistedDetail(this.productId, messageId);
       if (
         fromDisk &&
+        (fromDisk.bodyText ||
+          fromDisk.bodyHtml ||
+          fromDisk.attachments?.length) &&
         this.detailGenerationByKey.get(messageId) === generation
       ) {
         runInAction(() => {
@@ -775,16 +778,18 @@ export class EmailMailboxStore {
         `${this.apiBase}/inbox/${encodeURIComponent(messageId)}${inboxDetailQuery(domain)}`,
       );
       const data = await readResponseJson<
-        RoutingActivityEvent & { error?: string }
+        { message: RoutingActivityEvent; error?: string }
       >(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to load");
+      const message = data.message;
+      if (!message) throw new Error("Failed to load");
       if (this.detailGenerationByKey.get(messageId) !== generation) return null;
       runInAction(() => {
-        this.activityDetailByKey[messageId] = data;
+        this.activityDetailByKey[messageId] = message;
         clearLoading();
       });
-      void savePersistedDetail(this.productId, data);
-      return data;
+      void savePersistedDetail(this.productId, message);
+      return message;
     } catch (e) {
       if (this.detailGenerationByKey.get(messageId) === generation) {
         runInAction(() => {

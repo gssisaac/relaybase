@@ -4,17 +4,24 @@ iOS-first Flutter email companion for a customer-deployed Relaybase Worker.
 
 The app exposes **only** the Relaybase email mode (Inbox, Sent, Drafts, Trash,
 Compose) with a Gmail-like list → thread → compose flow. It connects **directly**
-to the customer Cloudflare Worker using a new `/mobile/*` route family
-authenticated by a mobile access password the desktop app configures.
+to the Worker `/mobile/*` routes using a **per-account** mobile password
+provisioned from the desktop app.
 
-## Pairing
+**Policy (source of truth):** [docs/mobile-email-companion.md](../docs/mobile-email-companion.md)
 
-1. In the **desktop** app, open **Settings → Mobile access** and enable it.
-   Copy the generated mobile password.
-2. Open the dashboard **Accounts** sheet → **Other device** tab for the
-   account you want on mobile, enable it, paste the password, and scan the QR
-   with this app. The QR encodes `relaybase://connect?workerUrl=…&password=…`.
-3. You can also enter the Worker URL + password manually on the Connect screen.
+## Sign-in
+
+1. On **desktop**, open **Accounts** → the address → **Other device**.
+2. Enable mobile for that address, then **Generate** (or regenerate) the password.
+3. Copy the password (12 characters). Optionally scan the pairing QR.
+4. On the phone, enter **account email + password**. The Worker URL is baked into
+   the build (`AppConfig.defaultWorkerUrl`) — users never type it.
+
+QR / `relaybase://connect?…` is optional convenience only. Login must work with
+email + password alone.
+
+Each teammate gets **one** address. The Worker scopes every `/mobile/*` call to
+that authenticated email — there is no “All inboxes” on mobile.
 
 ## Setup
 
@@ -34,7 +41,7 @@ to scaffold the native projects, then:
   to `Relaybase`,
 - registers the `relaybase://` URL scheme on iOS (`CFBundleURLTypes` in
   `ios/Runner/Info.plist`) and an `intent-filter` for `relaybase://connect` on
-  Android, so the desktop Other device tab QR deep link opens this app.
+  Android, so an optional Other device QR deep link can open this app.
 
 From the repo root you can also run `pnpm mobile:setup` to scaffold + fetch
 deps in one step.
@@ -45,6 +52,10 @@ deps in one step.
 flutter run -d ios        # iOS (primary target)
 flutter run -d android   # Android (follow-up release)
 ```
+
+**iOS Simulator note:** `mobile_scanner` (ML Kit) needs an x86_64 / Rosetta-capable
+simulator image (e.g. iPhone 16 Pro on iOS 18). Newer arm64-only sims may fail
+to build/link the scanner plugin; use a supported sim or run on device.
 
 ## Build
 
@@ -64,7 +75,7 @@ Convenience scripts are wired into the repo root `package.json`:
 
 - **Riverpod** for state (`lib/providers/`).
 - **Hive** for offline cache (`lib/services/storage_service.dart`).
-- **flutter_secure_storage** for the Worker URL + mobile password
+- **flutter_secure_storage** for account email + mobile password
   (`lib/services/secure_storage_service.dart`).
 - **http** for `/mobile/*` calls (`lib/services/mobile_api_service.dart`).
 - **Cupertino-first** theming branded to match the desktop app (`#e85d2a`
@@ -73,6 +84,3 @@ Convenience scripts are wired into the repo root `package.json`:
 
 Icons are synced from `desktop/src-tauri/icons` (+ `app/public/icon.png` for
 in-app use) via `./scripts/sync-icons.sh` (also run by `setup.sh`).
-
-See `/opt/cursor/artifacts/plans/flutter-mobile-email_1ec50219.plan.md` for
-the full design.

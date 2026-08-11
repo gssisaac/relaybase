@@ -58,7 +58,8 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 |-------------|--------|----------|
 | `srv:config:admin` | `lib/auth.ts` | Legacy admin token JSON `{ token }` (secret preferred) |
 | `srv:config:cloudflare` | `lib/cloudflare-config.ts` | CF account id + API token for Email Sending |
-| `srv:catalog:mailbox` | `lib/catalog-store.ts` | `{ domains[], addresses[] }` — each address: `email`, `domain`, optional `displayName`, optional `inboundEnabled` (`false` = CF Email Routing `drop`; omit/true = Worker receive) |
+| `srv:catalog:mailbox` | `lib/catalog-store.ts` | `{ domains[], addresses[] }` — each address: `email`, `domain`, optional `displayName`, optional `inboundEnabled` (`false` = CF Email Routing `drop`; omit/true = Worker receive), optional `mobileEnabled` (`false` = hide from mobile; omit/true = allowed when password set) |
+| `srv:config:mobile:{email}` | `lib/mobile-config.ts` | Per-account mobile password `{ passwordHash, salt, updatedAt }` — see **[mobile-email-companion.md](./mobile-email-companion.md)** |
 | `srv:catalog:audience` | `lib/catalog-audience.ts` | Flat contacts |
 | `srv:catalog:audience-groups` | `lib/catalog-audience.ts` | Groups, dataSource, sync progress/history |
 | `srv:catalog:broadcasts` | `lib/catalog-broadcasts.ts` | Drafts + send progress/history |
@@ -82,7 +83,9 @@ Operator-only admin endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/
 | `/console/ops-logs` | Ops event log (D1 `RELAYBASE_LOGS`) |
 | `/console/connect` | Desktop self-install probe (admin-token proof) |
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
-| `/mail/inbox`, `/mail/send`, … | Mail I/O |
+| `/console/addresses/mobile-password` | Per-account mobile password (admin token) |
+| `/mail/inbox`, `/mail/send`, … | Mail I/O (desktop / admin token) |
+| `/mobile/*` | Flutter companion (mobile-password auth; single-account scope) — **[mobile-email-companion.md](./mobile-email-companion.md)** |
 
 Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` in `server/src/index.ts` (single catalog, no per-user fan-out).
 
@@ -98,6 +101,7 @@ Inbound message body + `readAt` live here. `~/.relaybase/mail/desktop/inbox.json
 
 - Second KV binding for app data (`KEYS`, `RELAYBASE_API` on the mail Worker)
 - Unprefixed legacy keys (`config:mailbox`, bare `id:`, `key:`) — use `srv:` + migration script `server/scripts/migrate-kv-prefix.mjs`
+- Global mobile password at `srv:config:mobile` (no email suffix) — use `srv:config:mobile:{email}` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
 - Hosted OpenNext `app.relaybase.xyz` as a product API (removed)
 - Cookie multi-tenant sessions for the Mac product

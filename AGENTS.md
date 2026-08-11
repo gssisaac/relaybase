@@ -13,6 +13,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Tab / focus navigation, `data-allow-tab-focus`, or `DisableAppTabFocus` | [docs/tab-focus-policy.md](docs/tab-focus-policy.md) |
 | Audience groups, data-source sync/cron, Progress tab, or Broadcasts (draft → send) | [docs/audience-and-broadcasts.md](docs/audience-and-broadcasts.md) |
 | Inbound Worker storage, conversation threading, account filters, Sent-in-Inbox, `(me)` labels, or compose send → Sent | [docs/inbox-threading-and-multi-account.md](docs/inbox-threading-and-multi-account.md) |
+| Flutter mobile app, `/mobile/*`, per-account mobile password, Other device tab, or teammate account scoping | [docs/mobile-email-companion.md](docs/mobile-email-companion.md) |
 | Send/bounce logging, Dashboard Log page, D1 `RELAYBASE_LOGS`, or `ops_log` schema | [docs/ops-log-d1.md](docs/ops-log-d1.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
 
@@ -25,8 +26,9 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 | Remote | Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 inbound | Domains, addresses, audience, broadcasts, key hashes, send logs, inbox |
 | Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). KV `srv:sendlog:*` stays authoritative for send history. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
 | Local | `~/.relaybase` | Credentials, API key plaintext, mail/UI/dashboard cache |
+| Local (phone) | Flutter secure storage + Hive | Mobile email + password; inbox/draft cache — **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)** |
 
-Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, or a second mail-Worker KV binding. All UI modes call the Worker through `desktopAwareFetch` + `email-api-map.ts`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**.
+Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, or a second mail-Worker KV binding. All UI modes call the Worker through `desktopAwareFetch` + `email-api-map.ts`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**. Mobile uses `/mobile/*` with per-account password auth (not admin token).
 
 ## Email commands (summary)
 
@@ -38,6 +40,17 @@ Mail actions must stay centralized in `app/src/email/commands/`:
 - Compose open/resume/force-new: **`app/src/email/compose-open.ts`** adapters only (`useStandaloneComposeOpener` / `useThreadComposeOpener` / `composeNewHref`). Esc closes without discard; per-message UI Reply/Forward always starts a new draft
 
 Full rules, file map, and add-command checklist: **[docs/email-command-system.md](docs/email-command-system.md)**.
+
+## Mobile email companion (summary)
+
+Flutter app under `mobile/` is a **teammate inbox**, not a second desktop:
+
+- Login = **account email + per-account mobile password** only (Worker URL baked into the build)
+- `/mobile/*` is always scoped to that one address — no “All inboxes”, no other accounts
+- Desktop provisions credentials in Accounts → **Other device** (not a global Settings password)
+- Do not put dashboard/management UI on the phone
+
+Full policy: **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)**.
 
 ## General
 

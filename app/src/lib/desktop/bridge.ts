@@ -375,6 +375,44 @@ export async function desktopSaveRelaybaseAccount(input: {
   return next;
 }
 
+export type DesktopTeamLogin = {
+  workerUrl: string;
+  accountEmail: string;
+  mobilePassword: string;
+};
+
+export async function desktopGetTeamLogin(): Promise<DesktopTeamLogin | null> {
+  if (isDesktopRuntime()) {
+    return invoke("get_team_login");
+  }
+  return null;
+}
+
+export async function desktopSaveTeamLogin(input: {
+  workerUrl: string;
+  accountEmail: string;
+  mobilePassword: string;
+}): Promise<DesktopTeamLogin> {
+  if (isDesktopRuntime()) {
+    return invoke("save_team_login_cmd", {
+      workerUrl: input.workerUrl,
+      accountEmail: input.accountEmail,
+      mobilePassword: input.mobilePassword,
+    });
+  }
+  return {
+    workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
+    accountEmail: input.accountEmail.trim().toLowerCase(),
+    mobilePassword: input.mobilePassword,
+  };
+}
+
+export async function desktopClearTeamLogin(): Promise<void> {
+  if (isDesktopRuntime()) {
+    await invoke("clear_team_login_cmd");
+  }
+}
+
 export async function desktopClearRelaybaseAccount(): Promise<void> {
   if (isDesktopRuntime()) {
     await invoke("clear_relaybase_account");

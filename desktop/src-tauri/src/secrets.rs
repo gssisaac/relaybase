@@ -470,3 +470,50 @@ pub fn migrate_mail_to_desktop_user() -> Result<Option<String>, String> {
     })?;
     Ok(Some(from_name))
 }
+
+// --- Team user login (per-account mobile password) ---
+// Stored separately from admin credentials.json so a teammate never holds
+// the admin token. Path: ~/.relaybase/team-login.json
+
+const TEAM_LOGIN_FILE: &str = "team-login.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamLogin {
+    pub worker_url: String,
+    pub account_email: String,
+    /// Per-account mobile password (plaintext; same model as the Flutter
+    /// companion). Stored locally only and sent to the customer Worker as a
+    /// Bearer over /mobile/*.
+    pub mobile_password: String,
+}
+
+pub fn save_team_login(login: &TeamLogin) -> Result<(), String> {
+    let dir = ensure_dir()?;
+    let path = dir.join(TEAM_LOGIN_FILE);
+    let json = serde_json::to_string_pretty(login).map_err(|e| e.to_string())?;
+    fs::write(&path, &json).map_err(|e| format!("Failed to write team login: {e}"))?;
+    restrict_file_permissions(&path);
+    Ok(())
+}
+
+pub fn load_team_login() -> Result<Option<TeamLogin>, String> {
+    let path = relaybase_dir()?.join(TEAM_LOGIN_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let json = fs::read_to_string(&path).map_err(|e| format!("Failed to read team login: {e}"))?;
+    let login: TeamLogin = serde_json::from_str(&json).map_err(|e| {
+        format!("Invalid team login file: {e}. Delete it and sign in again.")
+    })?;
+    Ok(Some(login))
+}
+
+pub fn clear_team_login() -> Result<(), String> {
+    let path = relaybase_dir()?.join(TEAM_LOGIN_FILE);
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(&path).map_err(|e| format!("Failed to delete team login: {e}"))?;
+    Ok(())
+}

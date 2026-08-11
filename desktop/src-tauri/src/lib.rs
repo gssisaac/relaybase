@@ -7,11 +7,12 @@ mod worker;
 use auto_install::{auto_install_worker, merge_into_credentials, AutoInstallResult};
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
-    clear_credentials, load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
-    load_email_prefs, load_mail_json as read_mail_json, migrate_mail_to_desktop_user,
-    remove_api_key_vault_entry, save_cache_json as write_cache_json, save_credentials,
-    save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
-    upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, EmailPrefs, StoredCredentials,
+    clear_credentials, clear_team_login, load_api_key_vault, load_cache_json as read_cache_json,
+    load_credentials, load_email_prefs, load_mail_json as read_mail_json, load_team_login,
+    migrate_mail_to_desktop_user, remove_api_key_vault_entry, save_cache_json as write_cache_json,
+    save_credentials, save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
+    save_team_login, upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, EmailPrefs,
+    StoredCredentials, TeamLogin,
 };
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
@@ -173,6 +174,31 @@ async fn clear_relaybase_account() -> Result<StoredCredentials, String> {
     creds.relaybase_tier.clear();
     save_credentials(&creds)?;
     Ok(creds)
+}
+
+#[tauri::command]
+async fn get_team_login() -> Result<Option<TeamLogin>, String> {
+    load_team_login()
+}
+
+#[tauri::command]
+async fn save_team_login_cmd(
+    worker_url: String,
+    account_email: String,
+    mobile_password: String,
+) -> Result<TeamLogin, String> {
+    let login = TeamLogin {
+        worker_url: worker_url.trim().trim_end_matches('/').to_string(),
+        account_email: account_email.trim().to_lowercase(),
+        mobile_password: mobile_password,
+    };
+    save_team_login(&login)?;
+    Ok(login)
+}
+
+#[tauri::command]
+async fn clear_team_login_cmd() -> Result<(), String> {
+    clear_team_login()
 }
 
 /// Background auto-install of the routing Worker into the user's Cloudflare
@@ -471,6 +497,9 @@ pub fn run() {
             save_license_key,
             save_relaybase_account,
             clear_relaybase_account,
+            get_team_login,
+            save_team_login_cmd,
+            clear_team_login_cmd,
             auto_install_routing_worker,
             verify_worker_connection,
             save_worker_connection,

@@ -4,15 +4,18 @@ import * as React from "react";
 
 import {
   desktopGetCredentials,
+  desktopGetTeamLogin,
   desktopMigrateMailUserFolder,
   isDesktopRuntime,
   type DesktopCredentials,
+  type DesktopTeamLogin,
 } from "@/lib/desktop/bridge";
 
 type DesktopContextValue = {
   isDesktop: boolean;
   ready: boolean;
   credentials: DesktopCredentials | null;
+  teamLogin: DesktopTeamLogin | null;
   refresh: () => Promise<void>;
   setCredentials: (c: DesktopCredentials | null) => void;
 };
@@ -48,18 +51,23 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = React.useState(false);
   const [credentials, setCredentials] =
     React.useState<DesktopCredentials | null>(null);
+  const [teamLogin, setTeamLogin] = React.useState<DesktopTeamLogin | null>(
+    null,
+  );
 
   const refresh = React.useCallback(async () => {
     const desktop = isDesktopRuntime();
     setIsDesktop(desktop);
     try {
-      const creds = desktop
-        ? await desktopGetCredentials()
-        : await loadLocalCredentials();
+      const [creds, team] = desktop
+        ? await Promise.all([desktopGetCredentials(), desktopGetTeamLogin()])
+        : [await loadLocalCredentials(), null];
       setCredentials(creds);
+      setTeamLogin(team);
       applyCredentialGlobals(creds);
     } catch {
       setCredentials(null);
+      setTeamLogin(null);
       applyCredentialGlobals(null);
     } finally {
       setReady(true);
@@ -86,10 +94,11 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
       isDesktop,
       ready,
       credentials,
+      teamLogin,
       refresh,
       setCredentials: setCredentialsAndGlobals,
     }),
-    [isDesktop, ready, credentials, refresh, setCredentialsAndGlobals],
+    [isDesktop, ready, credentials, teamLogin, refresh, setCredentialsAndGlobals],
   );
 
   return (

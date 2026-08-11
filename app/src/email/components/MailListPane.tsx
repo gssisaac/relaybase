@@ -29,6 +29,7 @@ import {
 } from "@/email/conversation-threading";
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
 import { formatSenderDisplay } from "@/lib/email/format-sender";
+import { extractFirstEmail, SenderAvatar } from "@/email/components/SenderAvatar";
 
 type MailListFolder = "inbox" | "drafts" | "sent" | "trash";
 
@@ -82,7 +83,7 @@ export function MailListPane({
           <div className="min-h-0 flex-1 overflow-auto">
             <EmailTableHeader>
               <span className="flex items-center gap-2">
-                <span className="size-2 shrink-0" aria-hidden />
+                <span className="size-7 shrink-0" aria-hidden />
                 <span>
                   {folder === "sent" || folder === "drafts"
                     ? "To"
@@ -114,6 +115,11 @@ export function MailListPane({
                         subject={subject}
                         preview={preview}
                         date={date}
+                        avatar={
+                          <SenderAvatar
+                            fromEmail={extractFirstEmail(item.message.to)}
+                          />
+                        }
                         status={
                           item.message.replyKey ? (
                             <Badge variant="secondary" className="text-[10px]">
@@ -181,6 +187,19 @@ export function MailListPane({
                       href={messageHref(folderBase, item, accountFilter)}
                       selected={isSelected}
                       unread={unread}
+                      avatar={
+                        isInbox ? (
+                          <SenderAvatar
+                            fromName={item.message.fromName}
+                            fromEmail={item.message.fromEmail}
+                            unread={unread}
+                          />
+                        ) : (
+                          <SenderAvatar
+                            fromEmail={extractFirstEmail(item.message.to)}
+                          />
+                        )
+                      }
                       primary={
                         folder === "trash"
                           ? `${isInbox ? "In" : "Sent"} · ${primary}`

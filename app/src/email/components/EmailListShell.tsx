@@ -138,6 +138,7 @@ export const EmailTableRow = memo(function EmailTableRow({
   status,
   selected,
   unread,
+  avatar,
 }: {
   href?: string;
   onClick?: () => void;
@@ -154,6 +155,8 @@ export const EmailTableRow = memo(function EmailTableRow({
   status?: ReactNode;
   selected?: boolean;
   unread?: boolean;
+  /** Optional sender avatar rendered in place of the unread dot. */
+  avatar?: ReactNode;
 }) {
   const className = cn(
     "grid w-full gap-3 border-b border-border/20 px-4 py-3 text-left text-sm transition-all last:border-b-0 relative outline-none",
@@ -170,13 +173,15 @@ export const EmailTableRow = memo(function EmailTableRow({
   const body = (
     <>
       <div className="flex min-w-0 items-start gap-2">
-        <span
-          className={cn(
-            "mt-1.5 size-2 shrink-0 rounded-full",
-            unread ? "bg-primary" : "bg-transparent",
-          )}
-          aria-hidden
-        />
+        {avatar ?? (
+          <span
+            className={cn(
+              "mt-1.5 size-2 shrink-0 rounded-full",
+              unread ? "bg-primary" : "bg-transparent",
+            )}
+            aria-hidden
+          />
+        )}
         <div className="min-w-0">
           <p
             className={cn(

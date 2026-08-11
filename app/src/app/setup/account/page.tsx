@@ -24,6 +24,7 @@ type AccountResponse = {
   ok?: boolean;
   error?: string;
   account?: { id: string; email: string; createdAt: string };
+  sessionToken?: string;
 };
 
 export default function SetupAccountPage() {
@@ -56,16 +57,10 @@ export default function SetupAccountPage() {
       if (!res.ok || !data.ok || !data.account) {
         throw new Error(data.error ?? "Authentication failed");
       }
-      // The console sets a session cookie on its own domain, but the desktop
-      // needs a bearer-style session to call console APIs cross-origin.
-      // Re-fetch a session token via the console's token endpoint is not yet
-      // wired; for now we store the account id/email and a placeholder
-      // session. The desktop primarily needs the account identity to
-      // register its Worker URL after install.
       await desktopSaveRelaybaseAccount({
         accountId: data.account.id,
         email: data.account.email,
-        session: "", // populated when console issues a bearer token (future)
+        session: data.sessionToken ?? "",
         tier: "free",
       });
       await refresh?.();

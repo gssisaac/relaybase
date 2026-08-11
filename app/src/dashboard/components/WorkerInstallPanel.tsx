@@ -11,6 +11,7 @@ import {
   WORKER_INSTALL_ZIP_URL,
   desktopAutoInstallWorker,
   desktopOpenExternal,
+  desktopRegisterWorkerWithConsole,
   desktopSaveWorkerConnection,
   desktopVerifyWorkerConnection,
   explainDesktopError,
@@ -118,6 +119,12 @@ export function WorkerInstallPanel() {
       workerUrl: opts.url,
       adminToken: opts.token,
       workerScriptName: opts.scriptName,
+    });
+    // Register the Worker URL with the Relaybase console so the account ↔
+    // Worker mapping is known for recovery. Best-effort: a failure here does
+    // not block setup (the user may not be signed in yet).
+    void desktopRegisterWorkerWithConsole(opts.url).catch(() => {
+      /* best-effort */
     });
     setMessage(
       opts.skippedVerify

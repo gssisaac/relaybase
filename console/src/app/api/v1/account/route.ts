@@ -101,9 +101,11 @@ async function handleSignup(req: Request, env: CloudflareEnv): Promise<Response>
   const account = await createAccount(env.RELAYBASE_ACCOUNTS!, email, password);
   const secret = assertEnv(env, "CONSOLE_SESSION_SECRET");
   const token = await createSession(secret, account);
-  return json({ ok: true, account }, 200, {
-    "Set-Cookie": setSessionCookieHeader(token),
-  });
+  return json(
+    { ok: true, account, sessionToken: token },
+    200,
+    { "Set-Cookie": setSessionCookieHeader(token) },
+  );
 }
 
 async function handleLogin(req: Request, env: CloudflareEnv): Promise<Response> {
@@ -120,6 +122,7 @@ async function handleLogin(req: Request, env: CloudflareEnv): Promise<Response> 
     {
       ok: true,
       account: { id: row.id, email: row.email, createdAt: row.created_at },
+      sessionToken: token,
     },
     200,
     { "Set-Cookie": setSessionCookieHeader(token) },

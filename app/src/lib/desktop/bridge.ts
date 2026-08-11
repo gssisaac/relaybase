@@ -396,6 +396,42 @@ export async function desktopClearRelaybaseAccount(): Promise<void> {
   });
 }
 
+const CONSOLE_URL =
+  process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
+
+/**
+ * Register the customer Worker URL with the Relaybase console so the account
+ * ↔ Worker mapping is known for recovery. Requires a Relaybase account
+ * session (relaybaseSession in credentials). No-op if not signed in.
+ */
+export async function desktopRegisterWorkerWithConsole(
+  workerUrl: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const existing = isDesktopRuntime()
+    ? await desktopGetCredentials()
+    : await loadLocalCredentialsFile();
+  const session = existing?.relaybaseSession?.trim() ?? "";
+  if (!session) {
+    return { ok: false, error: "Not signed in to Relaybase" };
+  }
+  const res = await fetch(
+    `${CONSOLE_URL.replace(/\/$/, "")}/api/v1/account?action=worker/register`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session}`,
+      },
+      body: JSON.stringify({ workerUrl }),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), error: data.error };
+}
+
 export async function desktopVerifyWorkerConnection(
   workerUrl: string,
   adminToken: string,

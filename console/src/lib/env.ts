@@ -29,6 +29,14 @@ export async function verifyRequestSession(
   req: Request,
   secret: string,
 ) {
+  // 1) Authorization: Bearer <sessionToken> (desktop / cross-origin clients)
+  const auth = req.headers.get("Authorization") ?? "";
+  if (auth.startsWith("Bearer ")) {
+    const token = auth.slice(7).trim();
+    const session = await verifySession(secret, token);
+    if (session) return session;
+  }
+  // 2) Session cookie (browser flows on console.relaybase.xyz)
   const cookie = parseCookie(req.headers.get("Cookie") ?? "");
   return verifySession(secret, cookie[sessionCookieName()]);
 }

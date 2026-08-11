@@ -29,7 +29,13 @@ const LOCAL_OPERATOR_USER_ID = "desktop";
 function setupPathFor(credentials: {
   workerUrl?: string;
   adminToken?: string;
+  relaybaseSession?: string;
 } | null): string | null {
+  // Account first: a Relaybase console account is required for license,
+  // billing, and ADMIN_TOKEN recovery. If not signed in, start at /setup/account.
+  if (!credentials?.relaybaseSession) {
+    return "/setup/account";
+  }
   if (!credentials?.workerUrl || !credentials.adminToken) {
     return "/setup/install";
   }
@@ -96,7 +102,9 @@ function OperatorInner({ children }: { children: ReactNode }) {
   }
 
   const readyToUse = Boolean(
-    credentials?.workerUrl && credentials.adminToken,
+    credentials?.workerUrl &&
+      credentials.adminToken &&
+      credentials.relaybaseSession,
   );
 
   if (!readyToUse) {

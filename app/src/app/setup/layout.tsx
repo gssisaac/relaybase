@@ -18,7 +18,15 @@ function SetupShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
-    if (credentials?.workerUrl && credentials.adminToken) {
+    // Only leave setup once the user has a Relaybase account session AND a
+    // connected Worker. Without the session check, a user with an existing
+    // Worker but no account would bounce between /setup/install and the
+    // dashboard gate (which now requires a session).
+    if (
+      credentials?.workerUrl &&
+      credentials.adminToken &&
+      credentials.relaybaseSession
+    ) {
       router.replace("/");
     }
   }, [ready, credentials, router]);

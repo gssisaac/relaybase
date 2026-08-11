@@ -3,6 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -168,214 +169,229 @@ export function LogsView() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">Logs</h2>
-          <p className="text-xs text-muted-foreground">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <DesktopTitleBar
+        className="px-4 py-3"
+        end={
+          <>
+            <div className="inline-flex rounded-lg bg-muted p-0.5">
+              {STATUS_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setStatusFilter(option.value)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs",
+                    statusFilter === option.value
+                      ? "bg-background font-medium shadow-sm"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <Input
+              placeholder="Filter by domain…"
+              defaultValue={domainFilter}
+              onChange={(e) => domainDebounce(e.target.value)}
+              className="h-8 w-40 text-xs"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={refreshing}
+              aria-label="Refresh logs"
+              onClick={() => void load(statusFilter, domainFilter, true)}
+            >
+              <RefreshCw
+                className={refreshing ? "size-4 animate-spin" : "size-4"}
+              />
+            </Button>
+          </>
+        }
+      >
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            Logs
+          </h1>
+          <p className="text-sm text-muted-foreground">
             Send, bounce, and API events across all accounts
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg bg-muted p-0.5">
-            {STATUS_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setStatusFilter(option.value)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-xs",
-                  statusFilter === option.value
-                    ? "bg-background font-medium shadow-sm"
-                    : "text-muted-foreground",
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          <Input
-            placeholder="Filter by domain…"
-            defaultValue={domainFilter}
-            onChange={(e) => domainDebounce(e.target.value)}
-            className="h-8 w-40 text-xs"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={refreshing}
-            onClick={() => void load(statusFilter, domainFilter, true)}
-          >
-            <RefreshCw
-              className={refreshing ? "size-4 animate-spin" : "size-4"}
-            />
-          </Button>
+      </DesktopTitleBar>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+          <EmailAlerts error={error} message={null} />
+
+          {summary ? (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span>
+                Total{" "}
+                <span className="tabular-nums text-foreground">
+                  {summary.total}
+                </span>
+              </span>
+              <span>·</span>
+              <span>
+                Failed{" "}
+                <span className="tabular-nums text-foreground">
+                  {summary.failed}
+                </span>
+              </span>
+              <span>·</span>
+              <span>
+                Failed 24h{" "}
+                <span className="tabular-nums text-foreground">
+                  {summary.failedLast24h}
+                </span>
+              </span>
+              {!data?.workerConnected ? (
+                <>
+                  <span>·</span>
+                  <span className="text-amber-600">Worker not connected</span>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          <Table>
+            <TableHeader>
+              <TableRow className="border-b hover:bg-transparent">
+                <TableHead className="w-[140px]">When</TableHead>
+                <TableHead className="w-[90px]">Source</TableHead>
+                <TableHead className="w-[80px]">Status</TableHead>
+                <TableHead className="w-[90px]">Kind</TableHead>
+                <TableHead>Subject</TableHead>
+                <TableHead className="hidden sm:table-cell">Peer</TableHead>
+                <TableHead className="hidden md:table-cell">Domain</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="[&_tr]:border-0">
+              {logs.map((log) => (
+                <TableRow
+                  key={log.id}
+                  className={cn(
+                    "cursor-pointer",
+                    selectedId === log.id && "bg-muted/50",
+                  )}
+                  onClick={() =>
+                    setSelectedId((prev) => (prev === log.id ? null : log.id))
+                  }
+                >
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                    {formatDate(log.at)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">
+                      {sourceLabel(log.source)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={log.ok ? "default" : "destructive"}
+                      className="text-[10px]"
+                    >
+                      {log.ok ? "OK" : "Failed"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-[10px]">
+                      {kindLabel(log.kind)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="max-w-[240px] truncate text-sm">
+                    {log.subject || "—"}
+                  </TableCell>
+                  <TableCell className="hidden max-w-[200px] truncate text-xs text-muted-foreground sm:table-cell">
+                    {peerFor(log)}
+                  </TableCell>
+                  <TableCell className="hidden max-w-[140px] truncate text-xs text-muted-foreground md:table-cell">
+                    {log.domain || "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!loading && logs.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
+                    No logs yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {loading && logs.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+
+          {selected ? (
+            <div className="space-y-2 rounded-lg border border-border p-4 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{sourceLabel(selected.source)}</Badge>
+                <Badge variant="outline">{kindLabel(selected.kind)}</Badge>
+                <Badge variant={selected.ok ? "default" : "destructive"}>
+                  {selected.ok ? "OK" : "Failed"}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {formatDate(selected.at)}
+                </span>
+              </div>
+              <p className="font-medium">{selected.subject || "—"}</p>
+              <dl className="grid gap-2 text-xs sm:grid-cols-2">
+                <div>
+                  <dt className="text-muted-foreground">From</dt>
+                  <dd>{selected.fromAddr || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">To</dt>
+                  <dd>{selected.toAddr || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Domain</dt>
+                  <dd>{selected.domain || "—"}</dd>
+                </div>
+                {selected.status != null ? (
+                  <div>
+                    <dt className="text-muted-foreground">HTTP status</dt>
+                    <dd className="tabular-nums">{selected.status}</dd>
+                  </div>
+                ) : null}
+                {selected.keyPrefix ? (
+                  <div>
+                    <dt className="text-muted-foreground">API key</dt>
+                    <dd>{selected.keyPrefix}</dd>
+                  </div>
+                ) : null}
+                {selected.error ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted-foreground">Error</dt>
+                    <dd className="text-destructive">{selected.error}</dd>
+                  </div>
+                ) : null}
+                {selected.metaJson ? (
+                  <div className="sm:col-span-2">
+                    <dt className="text-muted-foreground">Details</dt>
+                    <dd className="break-all font-mono text-xs text-muted-foreground">
+                      {selected.metaJson}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </div>
+          ) : null}
         </div>
       </div>
-
-      <EmailAlerts error={error} message={null} />
-
-      {summary ? (
-        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span>
-            Total{" "}
-            <span className="tabular-nums text-foreground">{summary.total}</span>
-          </span>
-          <span>·</span>
-          <span>
-            Failed{" "}
-            <span className="tabular-nums text-foreground">{summary.failed}</span>
-          </span>
-          <span>·</span>
-          <span>
-            Failed 24h{" "}
-            <span className="tabular-nums text-foreground">
-              {summary.failedLast24h}
-            </span>
-          </span>
-          {!data?.workerConnected ? (
-            <>
-              <span>·</span>
-              <span className="text-amber-600">Worker not connected</span>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-
-      <Table>
-        <TableHeader>
-          <TableRow className="border-b hover:bg-transparent">
-            <TableHead className="w-[140px]">When</TableHead>
-            <TableHead className="w-[90px]">Source</TableHead>
-            <TableHead className="w-[80px]">Status</TableHead>
-            <TableHead className="w-[90px]">Kind</TableHead>
-            <TableHead>Subject</TableHead>
-            <TableHead className="hidden sm:table-cell">Peer</TableHead>
-            <TableHead className="hidden md:table-cell">Domain</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_tr]:border-0">
-          {logs.map((log) => (
-            <TableRow
-              key={log.id}
-              className={cn(
-                "cursor-pointer",
-                selectedId === log.id && "bg-muted/50",
-              )}
-              onClick={() =>
-                setSelectedId((prev) => (prev === log.id ? null : log.id))
-              }
-            >
-              <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                {formatDate(log.at)}
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline" className="text-[10px]">
-                  {sourceLabel(log.source)}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge
-                  variant={log.ok ? "default" : "destructive"}
-                  className="text-[10px]"
-                >
-                  {log.ok ? "OK" : "Failed"}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline" className="text-[10px]">
-                  {kindLabel(log.kind)}
-                </Badge>
-              </TableCell>
-              <TableCell className="max-w-[240px] truncate text-sm">
-                {log.subject || "—"}
-              </TableCell>
-              <TableCell className="hidden max-w-[200px] truncate text-xs text-muted-foreground sm:table-cell">
-                {peerFor(log)}
-              </TableCell>
-              <TableCell className="hidden max-w-[140px] truncate text-xs text-muted-foreground md:table-cell">
-                {log.domain || "—"}
-              </TableCell>
-            </TableRow>
-          ))}
-          {!loading && logs.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={7}
-                className="py-10 text-center text-sm text-muted-foreground"
-              >
-                No logs yet.
-              </TableCell>
-            </TableRow>
-          ) : null}
-          {loading && logs.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={7}
-                className="py-10 text-center text-sm text-muted-foreground"
-              >
-                Loading…
-              </TableCell>
-            </TableRow>
-          ) : null}
-        </TableBody>
-      </Table>
-
-      {selected ? (
-        <div className="space-y-2 rounded-lg border border-border p-4 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{sourceLabel(selected.source)}</Badge>
-            <Badge variant="outline">{kindLabel(selected.kind)}</Badge>
-            <Badge variant={selected.ok ? "default" : "destructive"}>
-              {selected.ok ? "OK" : "Failed"}
-            </Badge>
-            <span className="text-xs text-muted-foreground">
-              {formatDate(selected.at)}
-            </span>
-          </div>
-          <p className="font-medium">{selected.subject || "—"}</p>
-          <dl className="grid gap-2 text-xs sm:grid-cols-2">
-            <div>
-              <dt className="text-muted-foreground">From</dt>
-              <dd>{selected.fromAddr || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">To</dt>
-              <dd>{selected.toAddr || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Domain</dt>
-              <dd>{selected.domain || "—"}</dd>
-            </div>
-            {selected.status != null ? (
-              <div>
-                <dt className="text-muted-foreground">HTTP status</dt>
-                <dd className="tabular-nums">{selected.status}</dd>
-              </div>
-            ) : null}
-            {selected.keyPrefix ? (
-              <div>
-                <dt className="text-muted-foreground">API key</dt>
-                <dd>{selected.keyPrefix}</dd>
-              </div>
-            ) : null}
-            {selected.error ? (
-              <div className="sm:col-span-2">
-                <dt className="text-muted-foreground">Error</dt>
-                <dd className="text-destructive">{selected.error}</dd>
-              </div>
-            ) : null}
-            {selected.metaJson ? (
-              <div className="sm:col-span-2">
-                <dt className="text-muted-foreground">Details</dt>
-                <dd className="break-all font-mono text-xs text-muted-foreground">
-                  {selected.metaJson}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -345,26 +345,29 @@ function DesktopSettingsBody() {
             size="sm"
             variant="outline"
             disabled={statusBusy || workerBusy}
+            aria-label="Refresh status"
             onClick={() => void handleRefreshStatus()}
           >
             {statusBusy ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
             ) : (
-              <RefreshCw className="size-3.5" />
+              <RefreshCw className="size-4" />
             )}
-            Refresh status
           </Button>
         }
       >
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            Settings
+          </h1>
           <p className="text-sm text-muted-foreground">
             Cloudflare assist, routing Worker, and inbound R2 status.
           </p>
         </div>
       </DesktopTitleBar>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
       <ConnectionCard
         icon={Cloud}
         title="Cloudflare connection"
@@ -662,6 +665,7 @@ function DesktopSettingsBody() {
         </CardContent>
       </Card>
       </div>
+      </div>
     </div>
   );
 }
@@ -675,21 +679,25 @@ export function SettingsView() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <DesktopTitleBar className="px-4 py-3">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
+            <h1 className="truncate text-lg font-semibold tracking-tight">
+              Settings
+            </h1>
             <p className="text-sm text-muted-foreground">
               Cloudflare, Worker, and R2 connection management.
             </p>
           </div>
         </DesktopTitleBar>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <Alert>
-            <AlertTitle>Desktop app required</AlertTitle>
-            <AlertDescription>
-              Connection settings are managed in the Relaybase desktop app
-              (stored under ~/.relaybase). Open Settings there to verify
-              Cloudflare, your routing Worker, and inbound R2.
-            </AlertDescription>
-          </Alert>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+            <Alert>
+              <AlertTitle>Desktop app required</AlertTitle>
+              <AlertDescription>
+                Connection settings are managed in the Relaybase desktop app
+                (stored under ~/.relaybase). Open Settings there to verify
+                Cloudflare, your routing Worker, and inbound R2.
+              </AlertDescription>
+            </Alert>
+          </div>
         </div>
       </div>
     );

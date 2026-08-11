@@ -322,14 +322,17 @@ export function DomainsView() {
         }
       >
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight">Domains</h1>
+          <h1 className="truncate text-lg font-semibold tracking-tight">
+            Domains
+          </h1>
           <p className="text-sm text-muted-foreground">
             Domains from your Cloudflare account. Refresh to pull in new zones.
           </p>
         </div>
       </DesktopTitleBar>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
       <EmailAlerts
         error={error ?? localError}
         message={message}
@@ -511,7 +514,6 @@ export function DomainsView() {
           )}
         </CardContent>
       </Card>
-      </div>
 
       <Dialog
         open={Boolean(removeTarget)}
@@ -626,6 +628,8 @@ export function DomainsView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
+      </div>
     </div>
   );
 }

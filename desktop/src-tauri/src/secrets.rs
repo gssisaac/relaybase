@@ -24,6 +24,16 @@ pub struct StoredCredentials {
     pub admin_token: String,
     pub worker_script_name: String,
     pub license_key: String,
+    /// Relaybase console account (console.relaybase.xyz) — separate from the
+    /// Cloudflare `account_id`/`api_token` above. Populated after the user
+    /// logs in from /setup/account.
+    pub relaybase_account_id: String,
+    pub relaybase_email: String,
+    /// Signed session token from console.relaybase.xyz (stored locally only,
+    /// never sent to the product Worker).
+    pub relaybase_session: String,
+    /// License tier mirrored from the console for feature gating.
+    pub relaybase_tier: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

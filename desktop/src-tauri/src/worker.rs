@@ -257,6 +257,10 @@ pub async fn adopt_worker(
         admin_token,
         worker_script_name: script_name,
         license_key: existing.license_key.clone(),
+        relaybase_account_id: existing.relaybase_account_id.clone(),
+        relaybase_email: existing.relaybase_email.clone(),
+        relaybase_session: existing.relaybase_session.clone(),
+        relaybase_tier: existing.relaybase_tier.clone(),
     };
 
     Ok((result, creds))
@@ -315,6 +319,10 @@ pub async fn install_worker(
         admin_token,
         worker_script_name: script_name,
         license_key: existing.license_key.clone(),
+        relaybase_account_id: existing.relaybase_account_id.clone(),
+        relaybase_email: existing.relaybase_email.clone(),
+        relaybase_session: existing.relaybase_session.clone(),
+        relaybase_tier: existing.relaybase_tier.clone(),
     };
 
     Ok((result, creds))

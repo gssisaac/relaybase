@@ -146,6 +146,33 @@ async fn save_license_key(license_key: String) -> Result<(), String> {
     save_credentials(&creds)
 }
 
+#[tauri::command]
+async fn save_relaybase_account(
+    account_id: String,
+    email: String,
+    session: String,
+    tier: Option<String>,
+) -> Result<StoredCredentials, String> {
+    let mut creds = load_credentials()?.unwrap_or_default();
+    creds.relaybase_account_id = account_id.trim().to_string();
+    creds.relaybase_email = email.trim().to_string();
+    creds.relaybase_session = session.trim().to_string();
+    creds.relaybase_tier = tier.unwrap_or_default().trim().to_string();
+    save_credentials(&creds)?;
+    Ok(creds)
+}
+
+#[tauri::command]
+async fn clear_relaybase_account() -> Result<StoredCredentials, String> {
+    let mut creds = load_credentials()?.unwrap_or_default();
+    creds.relaybase_account_id.clear();
+    creds.relaybase_email.clear();
+    creds.relaybase_session.clear();
+    creds.relaybase_tier.clear();
+    save_credentials(&creds)?;
+    Ok(creds)
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkerConnectResult {
@@ -366,7 +393,7 @@ pub fn run() {
             // target="_blank", which the webview turns into a new-window
             // request. Route those to the system browser and deny the in-app
             // window so external links never open inside Relaybase.
-            tauri::WebviewWindowBuilder::new(
+            let builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
@@ -377,12 +404,20 @@ pub fn run() {
             .resizable(true)
             .fullscreen(false)
             .decorations(true)
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .traffic_light_position(tauri::LogicalPosition::new(14.0, 21.0))
             .accept_first_mouse(true)
             .disable_drag_drop_handler()
-            .zoom_hotkeys_enabled(false)
+            .zoom_hotkeys_enabled(false);
+
+            // macOS-only window chrome options. These Tauri 2.x builder
+            // methods are gated to macOS; calling them unconditionally breaks
+            // `cargo check` on Linux/Windows.
+            #[cfg(target_os = "macos")]
+            let builder = builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true)
+                .traffic_light_position(tauri::LogicalPosition::new(14.0, 21.0));
+
+            builder
             .on_new_window(move |url, _features| {
                 let s = url.as_str().to_string();
                 if s.starts_with("http://") || s.starts_with("https://") {
@@ -417,6 +452,8 @@ pub fn run() {
             install_routing_worker,
             update_routing_worker,
             save_license_key,
+            save_relaybase_account,
+            clear_relaybase_account,
             verify_worker_connection,
             save_worker_connection,
             get_desktop_info,

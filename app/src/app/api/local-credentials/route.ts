@@ -16,6 +16,10 @@ type CredentialsFile = {
   adminToken?: string;
   workerScriptName?: string;
   licenseKey?: string;
+  relaybaseAccountId?: string;
+  relaybaseEmail?: string;
+  relaybaseSession?: string;
+  relaybaseTier?: string;
 };
 
 function credentialsPath(): string {
@@ -33,6 +37,10 @@ export async function GET() {
       adminToken: parsed.adminToken ?? "",
       workerScriptName: parsed.workerScriptName ?? "",
       licenseKey: parsed.licenseKey ?? "",
+      relaybaseAccountId: parsed.relaybaseAccountId ?? "",
+      relaybaseEmail: parsed.relaybaseEmail ?? "",
+      relaybaseSession: parsed.relaybaseSession ?? "",
+      relaybaseTier: parsed.relaybaseTier ?? "",
     });
   } catch {
     return NextResponse.json(null);
@@ -55,6 +63,10 @@ export async function PUT(req: Request) {
     adminToken: body.adminToken?.trim() ?? "",
     workerScriptName: body.workerScriptName?.trim() ?? "",
     licenseKey: body.licenseKey?.trim() ?? "",
+    relaybaseAccountId: body.relaybaseAccountId?.trim() ?? "",
+    relaybaseEmail: body.relaybaseEmail?.trim() ?? "",
+    relaybaseSession: body.relaybaseSession?.trim() ?? "",
+    relaybaseTier: body.relaybaseTier?.trim() ?? "",
   };
   await writeFile(credentialsPath(), `${JSON.stringify(next, null, 2)}\n`, {
     mode: 0o600,

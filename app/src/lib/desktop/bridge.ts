@@ -7,6 +7,13 @@ export type DesktopCredentials = {
   adminToken: string;
   workerScriptName: string;
   licenseKey: string;
+  /** Relaybase console account (console.relaybase.xyz). */
+  relaybaseAccountId: string;
+  relaybaseEmail: string;
+  /** Signed session token, stored locally only. */
+  relaybaseSession: string;
+  /** License tier mirrored from the console ("free" | "pro"). */
+  relaybaseTier: string;
 };
 
 export type ZoneSummary = {
@@ -284,6 +291,63 @@ export async function desktopSaveLicense(licenseKey: string): Promise<void> {
   return invoke("save_license_key", { licenseKey });
 }
 
+export async function desktopSaveRelaybaseAccount(input: {
+  accountId: string;
+  email: string;
+  session: string;
+  tier?: string;
+}): Promise<DesktopCredentials> {
+  if (isDesktopRuntime()) {
+    return invoke("save_relaybase_account", {
+      accountId: input.accountId,
+      email: input.email,
+      session: input.session,
+      tier: input.tier ?? null,
+    });
+  }
+  const existing = await loadLocalCredentialsFile();
+  const next: DesktopCredentials = {
+    accountId: existing?.accountId ?? "",
+    apiToken: existing?.apiToken ?? "",
+    workerUrl: existing?.workerUrl ?? "",
+    adminToken: existing?.adminToken ?? "",
+    workerScriptName: existing?.workerScriptName ?? "",
+    licenseKey: existing?.licenseKey ?? "",
+    relaybaseAccountId: input.accountId,
+    relaybaseEmail: input.email,
+    relaybaseSession: input.session,
+    relaybaseTier: input.tier ?? "",
+  };
+  const res = await fetch("/api/local-credentials", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
+  });
+  if (!res.ok) throw new Error("Failed to save Relaybase account to ~/.relaybase");
+  return next;
+}
+
+export async function desktopClearRelaybaseAccount(): Promise<void> {
+  if (isDesktopRuntime()) {
+    await invoke("clear_relaybase_account");
+    return;
+  }
+  const existing = await loadLocalCredentialsFile();
+  if (!existing) return;
+  const next: DesktopCredentials = {
+    ...existing,
+    relaybaseAccountId: "",
+    relaybaseEmail: "",
+    relaybaseSession: "",
+    relaybaseTier: "",
+  };
+  await fetch("/api/local-credentials", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
+  });
+}
+
 export async function desktopVerifyWorkerConnection(
   workerUrl: string,
   adminToken: string,
@@ -337,6 +401,10 @@ export async function desktopSaveWorkerConnection(input: {
     workerScriptName:
       input.workerScriptName?.trim() || existing?.workerScriptName || "",
     licenseKey: existing?.licenseKey ?? "",
+    relaybaseAccountId: existing?.relaybaseAccountId ?? "",
+    relaybaseEmail: existing?.relaybaseEmail ?? "",
+    relaybaseSession: existing?.relaybaseSession ?? "",
+    relaybaseTier: existing?.relaybaseTier ?? "",
   };
   const res = await fetch("/api/local-credentials", {
     method: "PUT",
@@ -363,6 +431,10 @@ export async function desktopClearCredentials(): Promise<void> {
       adminToken: "",
       workerScriptName: "",
       licenseKey: "",
+      relaybaseAccountId: "",
+      relaybaseEmail: "",
+      relaybaseSession: "",
+      relaybaseTier: "",
     }),
   });
 }

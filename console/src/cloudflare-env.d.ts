@@ -38,7 +38,7 @@ interface D1PreparedStatement {
 interface D1Result<T = unknown> {
   results?: T[];
   success: boolean;
-  meta?: unknown;
+  meta?: { changes?: number; [k: string]: unknown };
 };
 
 interface CloudflareEnv {

@@ -47,6 +47,7 @@ interface CloudflareEnv {
   RELAYBASE_ACCOUNTS?: D1Database;
   // Secrets (wrangler secret put)
   CONSOLE_SESSION_SECRET?: string;
+  RELAYBASE_ADMIN_TOKEN?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_PRO?: string;

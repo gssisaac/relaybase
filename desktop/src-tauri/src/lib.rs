@@ -296,9 +296,10 @@ async fn get_desktop_info() -> Result<serde_json::Value, String> {
     }))
 }
 
-/// Open https links in the system browser (webview <a target=_blank> is blocked).
-#[tauri::command]
-async fn open_external_url(url: String) -> Result<(), String> {
+/// Open an http(s) URL in the system browser. Used both by the
+/// `open_external_url` IPC command and the webview `on_new_window` handler
+/// (email `<a target="_blank">` links must not open an in-app window).
+fn open_url_in_os_browser(url: &str) -> Result<(), String> {
     let url = url.trim();
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("Only http(s) URLs can be opened".into());
@@ -329,8 +330,15 @@ async fn open_external_url(url: String) -> Result<(), String> {
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows", unix)))]
     {
+        let _ = url;
         Err("Opening external URLs is not supported on this platform".into())
     }
+}
+
+/// Open https links in the system browser (webview <a target=_blank> is blocked).
+#[tauri::command]
+async fn open_external_url(url: String) -> Result<(), String> {
+    open_url_in_os_browser(&url)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -346,11 +354,46 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            // Seed ~/.relaybase/app-icon.png for notification identity image.
+            // Seed ~/.relaybase/icon.png for notification identity image.
             if let Err(e) = notify::ensure_notification_icon() {
                 log::warn!("notification icon seed failed: {e}");
             }
-            let _ = app;
+
+            // Build the main window programmatically (rather than via the
+            // tauri.conf.json `app.windows` array) so we can attach an
+            // `on_new_window` handler. Email HTML is rendered in a sandboxed
+            // <iframe sandbox="allow-same-origin allow-popups">; links use
+            // target="_blank", which the webview turns into a new-window
+            // request. Route those to the system browser and deny the in-app
+            // window so external links never open inside Relaybase.
+            tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("Relaybase")
+            .inner_size(1280.0, 840.0)
+            .min_inner_size(960.0, 640.0)
+            .resizable(true)
+            .fullscreen(false)
+            .decorations(true)
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true)
+            .traffic_light_position(tauri::LogicalPosition::new(14.0, 21.0))
+            .accept_first_mouse(true)
+            .disable_drag_drop_handler()
+            .zoom_hotkeys_enabled(false)
+            .on_new_window(move |url, _features| {
+                let s = url.as_str().to_string();
+                if s.starts_with("http://") || s.starts_with("https://") {
+                    if let Err(e) = open_url_in_os_browser(&s) {
+                        log::warn!("open_external_url failed: {e}");
+                    }
+                }
+                tauri::webview::NewWindowResponse::Deny
+            })
+            .build()?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -19,25 +19,7 @@
     "frontendDist": "../../app/out"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Relaybase",
-        "width": 1280,
-        "height": 840,
-        "minWidth": 960,
-        "minHeight": 640,
-        "resizable": true,
-        "fullscreen": false,
-        "decorations": true,
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true,
-        "trafficLightPosition": { "x": 14, "y": 21 },
-        "acceptFirstMouse": true,
-        "dragDropEnabled": false,
-        "zoomHotkeysEnabled": false
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }

@@ -54,15 +54,31 @@ export function EmailHtmlFrame({
       setupDone = true;
 
       // Force links to open in a new tab (email links should never navigate
-      // the app window).
+      // the app window). <base target="_blank"> covers anchors/forms without
+      // an explicit target, but some emails set target="_self" or omit it on
+      // <form action>; rewrite every link/form explicitly so WKWebView always
+      // raises a new-window request that on_new_window (lib.rs) routes to the
+      // OS browser. This is DOM mutation from the parent (same-origin), so it
+      // works even though the iframe sandbox omits allow-scripts.
       const base = doc.createElement("base");
       base.target = "_blank";
       doc.head.appendChild(base);
+
+      doc.querySelectorAll("a[href]").forEach((a) => {
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+      });
+      doc.querySelectorAll("form").forEach((f) => {
+        f.setAttribute("target", "_blank");
+      });
 
       // Intercept link clicks and route them through desktopOpenExternal so
       // they open in the system browser. The sandbox omits allow-popups, so
       // target="_blank" alone is silently blocked; and inside the Tauri
       // webview, target="_blank" would not reach the OS browser anyway.
+      // The explicit target="_blank" rewrite above is the primary mechanism
+      // (reliable in WKWebView); this click handler is a secondary net for
+      // browsers and for hrefs the new-window path might drop.
       const onClick = (e: MouseEvent) => {
         if (e.defaultPrevented) return;
         const target = e.target;
@@ -71,12 +87,18 @@ export function EmailHtmlFrame({
         if (!anchor) return;
         const href = anchor.getAttribute("href");
         if (!href) return;
-        // Only handle http(s) links; let mailto/tel/relative anchors behave
-        // as-is (they have no external handler here).
-        if (!/^https?:\/\//i.test(href)) return;
-        e.preventDefault();
-        e.stopPropagation();
-        void desktopOpenExternal(href);
+        // Handle absolute http(s) and protocol-relative (//host) links.
+        // Resolve protocol-relative against the current origin so the OS
+        // browser gets a full URL.
+        if (/^https?:\/\//i.test(href)) {
+          e.preventDefault();
+          e.stopPropagation();
+          void desktopOpenExternal(href);
+        } else if (href.startsWith("//")) {
+          e.preventDefault();
+          e.stopPropagation();
+          void desktopOpenExternal(`https:${href}`);
+        }
       };
       clickHandler = onClick;
       doc.addEventListener("click", onClick, true);

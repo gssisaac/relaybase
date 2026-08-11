@@ -478,6 +478,31 @@ pub fn run() {
                 }
                 tauri::webview::NewWindowResponse::Deny
             })
+            // Safety net: if a link ever navigates the main webview itself
+            // (e.g. a top-level <a> without target, or an iframe whose
+            // in-place navigation bubbles up), deny the in-app load and
+            // route the URL to the system browser. App-internal navigations
+            // (dev server / static export) are still allowed.
+            .on_navigation(move |url| {
+                let s = url.as_str().to_string();
+                if s.starts_with("http://") || s.starts_with("https://") {
+                    // Only intercept external hosts — never block the app's
+                    // own dev URL (http://127.0.0.1:32830 / localhost) or the
+                    // tauri.localhost / asset:// app origin, otherwise the
+                    // shell would stop loading routes.
+                    let is_app_origin = s.starts_with("http://127.0.0.1")
+                        || s.starts_with("http://localhost")
+                        || s.starts_with("https://127.0.0.1")
+                        || s.starts_with("https://localhost");
+                    if !is_app_origin {
+                        if let Err(e) = open_url_in_os_browser(&s) {
+                            log::warn!("on_navigation open_external_url failed: {e}");
+                        }
+                        return false;
+                    }
+                }
+                true
+            })
             .build()?;
 
             Ok(())

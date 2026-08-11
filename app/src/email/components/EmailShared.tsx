@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
 
+import { EmailHtmlFrame } from "@/email/components/EmailHtmlFrame";
 import type { InboundAttachment } from "@/email/components/types";
 import {
   desktopAwareFetch,
@@ -125,9 +126,9 @@ export function InboundEmailBody({
 
   if (safeHtml) {
     return (
-      <div
-        className="email-html-body w-full font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:max-w-full [&_img]:rounded-md"
-        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      <EmailHtmlFrame
+        html={safeHtml}
+        className="email-html-frame w-full overflow-hidden rounded-md border border-border"
       />
     );
   }
@@ -199,13 +200,13 @@ export function InboundEmailDetail({
   return (
     <div className="space-y-4">
       {safeHtml ? (
-        <div
+        <EmailHtmlFrame
+          html={safeHtml}
           className={
             plain
-              ? "email-html-body w-full font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md"
-              : "email-html-body w-full rounded-md border border-border bg-muted/20 p-4 font-sans text-sm leading-relaxed text-foreground [&_*]:!font-[inherit] [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md"
+              ? "email-html-frame w-full"
+              : "email-html-frame w-full overflow-hidden rounded-md border border-border"
           }
-          dangerouslySetInnerHTML={{ __html: safeHtml }}
         />
       ) : plain ? (
         <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">

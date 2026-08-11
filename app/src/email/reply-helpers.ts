@@ -113,12 +113,12 @@ export function resolveReplyFrom(
     return fromAccount;
   }
   const toEmail = event.toEmail?.trim() ?? "";
+  // Match the inbound envelope To — do not fall back to addresses[0]
+  // (wrong From when viewing All inboxes).
   return (
     addresses.find(
       (a) => toEmail && a.email.toLowerCase() === toEmail.toLowerCase(),
-    )?.email ||
-    addresses[0]?.email ||
-    ""
+    )?.email || ""
   );
 }
 
@@ -192,7 +192,6 @@ export function buildReplyPrefillFromSentMessage(
       : null) ||
     addresses.find((a) => a.email.toLowerCase() === sent.from.toLowerCase())
       ?.email ||
-    addresses[0]?.email ||
     "";
   const parentId = sent.messageId?.trim();
   return {
@@ -261,7 +260,7 @@ export function buildReplyPrefillFromParts(
   const focus = parts[parts.length - 1];
   if (!focus) {
     return {
-      from: addresses[0]?.email ?? "",
+      from: "",
       to: "",
       cc: "",
       subject: replySubject(""),
@@ -312,17 +311,12 @@ function resolveForwardFrom(
       addresses.find(
         (a) => a.email.toLowerCase() === firstSent.message.from.toLowerCase(),
       )?.email ||
-      addresses[0]?.email ||
       ""
     );
   }
-  return (
-    (options?.fromAccount && options.fromAccount !== "all"
-      ? options.fromAccount
-      : null) ||
-    addresses[0]?.email ||
-    ""
-  );
+  return options?.fromAccount && options.fromAccount !== "all"
+    ? options.fromAccount
+    : "";
 }
 
 /** Forward prefill — single trimmed message, no reply threading headers. */

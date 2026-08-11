@@ -156,7 +156,9 @@ export function useComposeDraftController({
     sendText,
   };
 
-  // Resolve From from draft / fallbacks / first account.
+  // Resolve From from draft / fallbacks only — never invent a From from
+  // addresses[0]. When no account is selected (All inboxes), leave From
+  // empty so the user must pick one (mistake prevention).
   // When the preferred account changes (e.g. sidebar Compose account),
   // apply it even if the current From is still a valid address.
   const preferredFrom =
@@ -186,7 +188,7 @@ export function useComposeDraftController({
       setSendFrom(preferredFrom);
       return;
     }
-    setSendFrom(addresses[0]?.email ?? "");
+    if (sendFrom) setSendFrom("");
   }, [addresses, preferredFrom, sendFrom]);
 
   function flushDraft() {

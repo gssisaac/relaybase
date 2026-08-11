@@ -2,13 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { desktopOpenExternal } from "@/lib/desktop/bridge";
+
 /**
  * Renders untrusted HTML email content inside a sandboxed <iframe> so the
  * email's <style> blocks cannot leak into the app shell (inbox list, title
  * bar, etc.) and vice-versa.
  *
- * - sandbox="allow-same-origin" (no allow-scripts): blocks script execution
- *   while still permitting same-origin blob:/api image URLs to load.
+ * - sandbox="allow-same-origin allow-popups" (no allow-scripts): blocks
+ *   script execution while still permitting same-origin blob:/api image URLs
+ *   to load. allow-popups lets target="_blank" work as a fallback in regular
+ *   browsers; inside the Tauri webview a click interceptor routes links to
+ *   the OS browser via the open_external_url command (window.open is blocked).
  * - Height auto-fits the content via a ResizeObserver on the iframe document.
  * - A minimal base stylesheet is prepended so emails without their own
  *   background render readably; emails that ship their own <style> win.
@@ -29,6 +34,8 @@ export function EmailHtmlFrame({
     let cancelled = false;
     let ro: ResizeObserver | null = null;
     const timers: number[] = [];
+    let clickHandler: ((e: MouseEvent) => void) | null = null;
+    let setupDone = false;
 
     const measure = () => {
       if (cancelled) return;
@@ -40,16 +47,39 @@ export function EmailHtmlFrame({
       if (h > 0) setHeight((prev) => (prev !== h ? h : prev));
     };
 
-    const onLoad = () => {
-      if (cancelled) return;
+    const setup = () => {
+      if (cancelled || setupDone) return;
       const doc = iframe.contentDocument;
-      if (!doc || !doc.head) return;
+      if (!doc || !doc.head || !doc.body) return;
+      setupDone = true;
 
       // Force links to open in a new tab (email links should never navigate
       // the app window).
       const base = doc.createElement("base");
       base.target = "_blank";
       doc.head.appendChild(base);
+
+      // Intercept link clicks and route them through desktopOpenExternal so
+      // they open in the system browser. The sandbox omits allow-popups, so
+      // target="_blank" alone is silently blocked; and inside the Tauri
+      // webview, target="_blank" would not reach the OS browser anyway.
+      const onClick = (e: MouseEvent) => {
+        if (e.defaultPrevented) return;
+        const target = e.target;
+        if (!(target instanceof Element)) return;
+        const anchor = target.closest("a");
+        if (!anchor) return;
+        const href = anchor.getAttribute("href");
+        if (!href) return;
+        // Only handle http(s) links; let mailto/tel/relative anchors behave
+        // as-is (they have no external handler here).
+        if (!/^https?:\/\//i.test(href)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        void desktopOpenExternal(href);
+      };
+      clickHandler = onClick;
+      doc.addEventListener("click", onClick, true);
 
       // Sensible defaults. Prepended so the email's own <style> (if any)
       // already in the document head wins over these.
@@ -78,10 +108,20 @@ export function EmailHtmlFrame({
       });
     };
 
+    const onLoad = () => setup();
+
     iframe.addEventListener("load", onLoad);
+    // Belt-and-suspenders: the `load` event for srcDoc can race with the
+    // effect in some webviews (WKWebView). Poll briefly until the document
+    // is parseable, then attach. setup() is idempotent via setupDone.
+    [0, 30, 80, 160, 300, 600].forEach((t) => {
+      timers.push(window.setTimeout(setup, t));
+    });
     return () => {
       cancelled = true;
       iframe.removeEventListener("load", onLoad);
+      const doc = iframe.contentDocument;
+      if (clickHandler) doc?.removeEventListener("click", clickHandler, true);
       ro?.disconnect();
       timers.forEach((t) => window.clearTimeout(t));
     };
@@ -92,7 +132,7 @@ export function EmailHtmlFrame({
       ref={iframeRef}
       title="Email content"
       srcDoc={html}
-      sandbox="allow-same-origin"
+      sandbox="allow-same-origin allow-popups"
       className={className}
       style={{
         width: "100%",

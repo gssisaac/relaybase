@@ -19,6 +19,8 @@ export type InboundEmailMeta = {
   id: string;
   domain: string;
   fromEmail: string;
+  /** Display name from the MIME `From:` header. Empty/absent on legacy rows. */
+  fromName?: string;
   toEmail: string;
   /** All To recipients from the MIME headers (may include more than `toEmail`). */
   toEmails?: string[];
@@ -184,7 +186,8 @@ async function pruneOldMessages(bucket: R2Bucket, domain: string): Promise<void>
 export async function storeInboundEmail(
   bucket: R2Bucket,
   params: {
-    fromEmail: string;
+    /** Envelope sender (MAIL FROM / Return-Path) — used for bounce detection. */
+    envelopeFrom: string;
     toEmail: string;
     subject: string;
     messageId: string | null;
@@ -245,7 +248,7 @@ export async function storeInboundEmail(
     decodeMimeHeader(params.subject) ||
     "(no subject)";
 
-  const isBounce = isBounceMessage(params.raw, params.fromEmail);
+  const isBounce = isBounceMessage(params.raw, params.envelopeFrom);
   const bounceDiagnostic = isBounce ? parseBounceDiagnostic(params.raw) : null;
   const bouncePreview = bounceDiagnostic
     ? buildBouncePreview(bounceDiagnostic)
@@ -260,10 +263,17 @@ export async function storeInboundEmail(
   const toEmails = parsed.toEmails.length
     ? parsed.toEmails
     : [params.toEmail];
+  // Prefer the MIME `From:` header (human-readable address) over the envelope
+  // sender, which for mailing-list/bounce mail is a VERP path like
+  // `bounce+abc=user@example.com`. Fall back to the envelope only when the
+  // MIME From is missing (e.g. some delivery-status notifications).
+  const fromEmail = parsed.fromEmail || params.envelopeFrom;
+  const fromName = parsed.fromName;
   const record: InboundEmailMeta = {
     id,
     domain,
-    fromEmail: params.fromEmail,
+    fromEmail,
+    fromName,
     toEmail: params.toEmail,
     toEmails,
     ccEmails: parsed.ccEmails,
@@ -289,7 +299,8 @@ export async function storeInboundEmail(
   const rawBody =
     attachmentMeta.length > 0
       ? buildStrippedInboundMime({
-          fromEmail: params.fromEmail,
+          fromEmail,
+          fromName,
           toEmail: params.toEmail,
           ccEmails: parsed.ccEmails,
           subject,
@@ -303,7 +314,7 @@ export async function storeInboundEmail(
   await bucket.put(rawObjectKey(domain, id), rawBody, {
     httpMetadata: { contentType: "message/rfc822" },
     customMetadata: {
-      from: params.fromEmail,
+      from: params.envelopeFrom,
       to: params.toEmail,
       domain,
     },
@@ -418,19 +429,30 @@ async function getInboundEmailForDomain(
 
   const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
   const normalized = normalizeReadState(normalizeRecipientLists(meta));
-  if (meta.toEmails?.length || meta.ccEmails?.length) {
+  // Backfill from raw MIME for older messages: legacy rows have no `fromName`
+  // key and may have empty To/Cc lists. New rows always carry `fromName`
+  // (possibly empty string) and populated recipient lists, so this only runs
+  // for pre-migration data.
+  const needsBackfill =
+    normalized.fromName === undefined ||
+    !(normalized.toEmails?.length || normalized.ccEmails?.length);
+  if (!needsBackfill) {
     return normalized;
   }
 
-  // Backfill To/Cc from archived raw MIME for older messages.
   const rawObject = await bucket.get(rawObjectKey(domain, id));
   if (!rawObject) return normalized;
   try {
     const parsed = await parseInboundMime(await rawObject.arrayBuffer());
     return {
       ...normalized,
+      fromEmail: parsed.fromEmail || normalized.fromEmail,
+      fromName:
+        normalized.fromName === undefined
+          ? parsed.fromName
+          : normalized.fromName,
       toEmails: parsed.toEmails.length ? parsed.toEmails : normalized.toEmails,
-      ccEmails: parsed.ccEmails,
+      ccEmails: parsed.ccEmails.length ? parsed.ccEmails : normalized.ccEmails,
     };
   } catch {
     return normalized;

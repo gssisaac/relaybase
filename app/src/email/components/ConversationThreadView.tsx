@@ -35,6 +35,7 @@ import {
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
 import type { ForwardThreadPart } from "@/email/reply-helpers";
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
+import { formatSenderDisplay } from "@/lib/email/format-sender";
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : String(n);
@@ -74,7 +75,10 @@ function messageIdentity(msg: ThreadMessage) {
 }
 
 function fromLabel(msg: ThreadMessage) {
-  return msg.kind === "inbound" ? msg.message.fromEmail : msg.message.from;
+  if (msg.kind === "inbound") {
+    return formatSenderDisplay(msg.message.fromName, msg.message.fromEmail);
+  }
+  return msg.message.from;
 }
 
 function snippetFor(msg: ThreadMessage, detail: RoutingActivityEvent | null) {

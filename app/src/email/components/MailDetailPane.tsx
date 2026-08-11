@@ -16,6 +16,7 @@ import {
 } from "@/email/components/mail-list-helpers";
 import type { MailListItem } from "@/email/components/types";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
+import { formatSenderDisplay } from "@/lib/email/format-sender";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { emailMessageHref } from "@/email/paths";
 import type { ThreadComposeMode } from "@/email/components/ConversationThreadView";
@@ -346,7 +347,10 @@ export function MailDetailPane({
         <div className="mb-6 space-y-1 border-b border-border/30 pb-4">
           <p className="text-sm">
             <span className="text-muted-foreground">From </span>
-            {activityDetail.fromEmail}
+            {formatSenderDisplay(
+              activityDetail.fromName,
+              activityDetail.fromEmail,
+            )}
           </p>
           <p className="text-sm">
             <span className="text-muted-foreground">To </span>

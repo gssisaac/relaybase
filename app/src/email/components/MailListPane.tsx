@@ -28,6 +28,7 @@ import {
   type ConversationThread,
 } from "@/email/conversation-threading";
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
+import { formatSenderDisplay } from "@/lib/email/format-sender";
 
 type MailListFolder = "inbox" | "drafts" | "sent" | "trash";
 
@@ -139,7 +140,11 @@ export function MailListPane({
                     ? threadByInboundKey.get(item.message.key)
                     : null;
                 const primary = isInbox
-                  ? (thread?.participantLabel ?? item.message.fromEmail)
+                  ? (thread?.participantLabel ??
+                    formatSenderDisplay(
+                      item.message.fromName,
+                      item.message.fromEmail,
+                    ))
                   : item.message.to;
                 const subject = thread?.subject ?? item.message.subject;
                 const attachmentCount = isInbox

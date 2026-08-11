@@ -9,6 +9,7 @@ export function serializeInboundListItem(message: InboundEmailMeta) {
   return {
     key: message.id,
     fromEmail: message.fromEmail,
+    fromName: message.fromName ?? null,
     toEmail: message.toEmail,
     toEmails: message.toEmails?.length ? message.toEmails : [message.toEmail],
     ccEmails: message.ccEmails ?? [],
@@ -30,6 +31,7 @@ export function serializeInboundMessage(message: InboundEmailMeta) {
   return {
     key: message.id,
     fromEmail: message.fromEmail,
+    fromName: message.fromName ?? null,
     toEmail: message.toEmail,
     toEmails: message.toEmails?.length ? message.toEmails : [message.toEmail],
     ccEmails: message.ccEmails ?? [],

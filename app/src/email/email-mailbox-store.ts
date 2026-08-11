@@ -1211,6 +1211,7 @@ function pickListFields(
 ): Pick<
   RoutingActivityEvent,
   | "fromEmail"
+  | "fromName"
   | "toEmail"
   | "toEmails"
   | "ccEmails"
@@ -1228,6 +1229,7 @@ function pickListFields(
 > {
   return {
     fromEmail: msg.fromEmail,
+    fromName: msg.fromName ?? null,
     toEmail: msg.toEmail,
     toEmails: msg.toEmails,
     ccEmails: msg.ccEmails,

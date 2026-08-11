@@ -16,7 +16,7 @@ export async function handleInboundEmail(
 ): Promise<StoreInboundEmailResult> {
   const raw = await new Response(message.raw).arrayBuffer();
   const result = await storeInboundEmail(env.INBOUND, {
-    fromEmail: message.from,
+    envelopeFrom: message.from,
     toEmail: message.to,
     subject: message.headers.get("subject")?.trim() || "(no subject)",
     messageId: message.headers.get("message-id")?.trim() || null,

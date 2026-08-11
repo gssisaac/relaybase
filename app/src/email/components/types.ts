@@ -98,6 +98,8 @@ export type Address = {
 export type RoutingActivityEvent = {
   key: string;
   fromEmail: string;
+  /** Display name from the MIME `From:` header, or null when absent/legacy. */
+  fromName?: string | null;
   toEmail: string;
   /** All To recipients from MIME headers when available. */
   toEmails?: string[];

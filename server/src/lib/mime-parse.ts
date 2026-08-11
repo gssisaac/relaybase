@@ -19,6 +19,8 @@ export type ParsedInboundEmail = {
   subject: string;
   bodyText: string;
   bodyHtml: string | null;
+  fromEmail: string;
+  fromName: string;
   toEmails: string[];
   ccEmails: string[];
   attachments: ParsedAttachment[];
@@ -44,6 +46,31 @@ function collectAddresses(entries: Address[] | undefined): string[] {
     }
   }
   return emails;
+}
+
+/**
+ * Extract a single display sender (name + address) from a parsed `From`/`Sender`
+ * address. postal-mime returns either a mailbox `{ name, address }` or a group
+ * `{ name, group: Mailbox[] }`; for groups we take the first mailbox. Returns
+ * empty strings when the header is absent so callers can fall back to the
+ * envelope sender.
+ */
+function pickFromAddress(entry: Address | undefined): {
+  name: string;
+  address: string;
+} {
+  if (!entry) return { name: "", address: "" };
+  if (entry.group?.length) {
+    const first = entry.group[0];
+    return {
+      name: decodeMimeHeader(first?.name ?? "") || "",
+      address: first?.address?.trim() ?? "",
+    };
+  }
+  return {
+    name: decodeMimeHeader(entry.name ?? "") || "",
+    address: entry.address?.trim() ?? "",
+  };
 }
 
 function attachmentBytes(content: Uint8Array | ArrayBuffer | string): ArrayBuffer {
@@ -85,10 +112,14 @@ export async function parseInboundMime(raw: ArrayBuffer): Promise<ParsedInboundE
     decodeMimeHeader(email.subject) ||
     decodeMimeHeader(email.headers.find((header) => header.key === "subject")?.value);
 
+  const from = pickFromAddress(email.from ?? email.sender);
+
   return {
     subject,
     bodyText: email.text?.trim() ?? "",
     bodyHtml: email.html?.trim() || null,
+    fromEmail: from.address,
+    fromName: from.name,
     toEmails: collectAddresses(email.to),
     ccEmails: collectAddresses(email.cc),
     attachments,

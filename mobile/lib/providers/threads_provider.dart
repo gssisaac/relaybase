@@ -81,13 +81,16 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
     // API response arrives.
     if (_loaded) return;
     _loaded = true;
+    if (!mounted) return;
     state = state.copyWith(loading: true, error: null);
     try {
       final storage = await _ref.read(storageServiceProvider.future);
+      if (!mounted) return;
       final cached = storage.loadInbox();
       state = state.copyWith(messages: cached, loading: false);
       await refresh();
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(loading: false, error: e.toString());
     }
   }
@@ -95,6 +98,7 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
   Future<void> refresh() async {
     if (!_ref.read(authProvider).isConfigured) return;
     final generation = ++_refreshGeneration;
+    if (!mounted) return;
     state = state.copyWith(refreshing: true, error: null);
     try {
       final api = _ref.read(mobileApiProvider);
@@ -102,13 +106,13 @@ class ThreadsNotifier extends StateNotifier<ThreadsState> {
           await api.fetchInbox(account: _accountFilter, limit: 50);
       // Ignore stale responses — a newer refresh (e.g. account filter change)
       // may have already completed with fresher data.
-      if (_refreshGeneration != generation) return;
+      if (_refreshGeneration != generation || !mounted) return;
       final storage = await _ref.read(storageServiceProvider.future);
       await storage.saveInbox(messages);
-      if (_refreshGeneration != generation) return;
+      if (_refreshGeneration != generation || !mounted) return;
       state = state.copyWith(messages: messages, refreshing: false);
     } catch (e) {
-      if (_refreshGeneration != generation) return;
+      if (_refreshGeneration != generation || !mounted) return;
       state = state.copyWith(refreshing: false, error: e.toString());
     }
   }

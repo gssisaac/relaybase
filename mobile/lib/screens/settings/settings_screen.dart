@@ -27,6 +27,12 @@ class SettingsScreen extends ConsumerWidget {
                   _section(context, 'Account', [
                     _row(
                       icon: CupertinoIcons.person_circle,
+                      label: 'Active account',
+                      value: auth.config?.normalizedAccountEmail ?? 'Not connected',
+                      colors: colors,
+                    ),
+                    _row(
+                      icon: CupertinoIcons.globe,
                       label: 'Worker URL',
                       value: auth.config?.normalizedWorkerUrl ?? 'Not connected',
                       colors: colors,
@@ -61,7 +67,7 @@ class SettingsScreen extends ConsumerWidget {
                   _section(context, 'Session', [
                     _row(
                       icon: CupertinoIcons.square_arrow_right,
-                      label: 'Sign out',
+                      label: 'Sign out all accounts',
                       value: '',
                       colors: colors,
                       destructive: true,

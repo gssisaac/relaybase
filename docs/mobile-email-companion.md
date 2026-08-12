@@ -171,7 +171,16 @@ Legacy global `srv:config:mobile` (no email suffix) is **obsolete**; do not rest
 - Real-time WebSocket sync
 - Pixel-perfect Gmail cloning
 - Windows / macOS Flutter shells
-- Multi-account sessions on one phone for one teammate
+
+## Multi-account on one phone
+
+A teammate may store more than one mailbox address on the same device and switch between them from the drawer. Rules:
+
+- Each account keeps its **own** per-account mobile password (`srv:config:mobile:{email}`); nothing is shared across accounts.
+- Credentials for every stored account live in `flutter_secure_storage` under `relaybase.managedAccounts` (a JSON list). The active account is also mirrored into the legacy `relaybase.workerUrl` / `relaybase.accountEmail` / `relaybase.mobilePassword` keys so `MobileApiService` can keep reading the active config directly.
+- `/mobile/*` is still scoped to the **active** account only. Switching accounts re-applies that account's config and re-scopes all requests — there is never an "All inboxes" view and a teammate never sees another address's mail.
+- Offline Hive cache is namespaced per account (`relaybase_threads::<email>`, `…_messages::`, `…_sent::`, `…_drafts::`) so switching accounts never leaks another address's cached mail into the inbox.
+- Removing the last stored account signs the user out (returns to the Connect screen).
 
 ---
 

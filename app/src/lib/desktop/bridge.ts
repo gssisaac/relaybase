@@ -7,6 +7,13 @@ export type DesktopCredentials = {
   adminToken: string;
   workerScriptName: string;
   licenseKey: string;
+  /** Relaybase console account (console.relaybase.xyz). */
+  relaybaseAccountId: string;
+  relaybaseEmail: string;
+  /** Signed session token, stored locally only. */
+  relaybaseSession: string;
+  /** License tier mirrored from the console ("free" | "pro"). */
+  relaybaseTier: string;
 };
 
 export type ZoneSummary = {
@@ -24,6 +31,20 @@ export type InstallResult = {
   r2Bucket: string;
   skipped: boolean;
   adminRelinked: boolean;
+};
+
+export type AutoInstallResult = {
+  workerUrl: string;
+  workerScriptName: string;
+  adminToken: string;
+  kvNamespaceId: string;
+  r2Bucket: string;
+};
+
+export type InstallLogEvent = {
+  step: string;
+  level: "stdout" | "stderr" | "info";
+  line: string;
 };
 
 export type ResourceCheck = {
@@ -274,6 +295,40 @@ export async function desktopInstallWorker(
   return invoke("install_routing_worker", { workerJs: workerJs ?? null });
 }
 
+/**
+ * Background auto-install of the routing Worker into the user's Cloudflare
+ * account via wrangler. Subscribe to `install-log` events via the returned
+ * unsubscribe handle (or use `listenInstallLog`).
+ */
+export async function desktopAutoInstallWorker(
+  apiToken: string,
+  accountId?: string,
+): Promise<AutoInstallResult> {
+  return invoke("auto_install_routing_worker", {
+    apiToken,
+    accountId: accountId ?? null,
+  });
+}
+
+/** Subscribe to `install-log` events emitted during auto-install. */
+export async function listenInstallLog(
+  handler: (event: InstallLogEvent) => void,
+): Promise<() => void> {
+  if (!isDesktopRuntime()) {
+    return () => {
+      /* no-op outside Tauri */
+    };
+  }
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen("install-log", (e) => handler(e.payload as InstallLogEvent));
+  } catch {
+    return () => {
+      /* no-op */
+    };
+  }
+}
+
 export async function desktopUpdateWorker(
   workerJs?: string,
 ): Promise<InstallResult> {
@@ -282,6 +337,203 @@ export async function desktopUpdateWorker(
 
 export async function desktopSaveLicense(licenseKey: string): Promise<void> {
   return invoke("save_license_key", { licenseKey });
+}
+
+export async function desktopSaveRelaybaseAccount(input: {
+  accountId: string;
+  email: string;
+  session: string;
+  tier?: string;
+}): Promise<DesktopCredentials> {
+  if (isDesktopRuntime()) {
+    return invoke("save_relaybase_account", {
+      accountId: input.accountId,
+      email: input.email,
+      session: input.session,
+      tier: input.tier ?? null,
+    });
+  }
+  const existing = await loadLocalCredentialsFile();
+  const next: DesktopCredentials = {
+    accountId: existing?.accountId ?? "",
+    apiToken: existing?.apiToken ?? "",
+    workerUrl: existing?.workerUrl ?? "",
+    adminToken: existing?.adminToken ?? "",
+    workerScriptName: existing?.workerScriptName ?? "",
+    licenseKey: existing?.licenseKey ?? "",
+    relaybaseAccountId: input.accountId,
+    relaybaseEmail: input.email,
+    relaybaseSession: input.session,
+    relaybaseTier: input.tier ?? "",
+  };
+  const res = await fetch("/api/local-credentials", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
+  });
+  if (!res.ok) throw new Error("Failed to save Relaybase account to ~/.relaybase");
+  return next;
+}
+
+export type DesktopTeamLogin = {
+  workerUrl: string;
+  accountEmail: string;
+  mobilePassword: string;
+};
+
+export async function desktopGetTeamLogin(): Promise<DesktopTeamLogin | null> {
+  if (isDesktopRuntime()) {
+    return invoke("get_team_login");
+  }
+  return null;
+}
+
+export async function desktopSaveTeamLogin(input: {
+  workerUrl: string;
+  accountEmail: string;
+  mobilePassword: string;
+}): Promise<DesktopTeamLogin> {
+  if (isDesktopRuntime()) {
+    return invoke("save_team_login_cmd", {
+      workerUrl: input.workerUrl,
+      accountEmail: input.accountEmail,
+      mobilePassword: input.mobilePassword,
+    });
+  }
+  return {
+    workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
+    accountEmail: input.accountEmail.trim().toLowerCase(),
+    mobilePassword: input.mobilePassword,
+  };
+}
+
+export async function desktopClearTeamLogin(): Promise<void> {
+  if (isDesktopRuntime()) {
+    await invoke("clear_team_login_cmd");
+  }
+}
+
+export async function desktopClearRelaybaseAccount(): Promise<void> {
+  if (isDesktopRuntime()) {
+    await invoke("clear_relaybase_account");
+    return;
+  }
+  const existing = await loadLocalCredentialsFile();
+  if (!existing) return;
+  const next: DesktopCredentials = {
+    ...existing,
+    relaybaseAccountId: "",
+    relaybaseEmail: "",
+    relaybaseSession: "",
+    relaybaseTier: "",
+  };
+  await fetch("/api/local-credentials", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
+  });
+}
+
+const CONSOLE_URL =
+  process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
+
+/**
+ * Register the customer Worker URL with the Relaybase console so the account
+ * ↔ Worker mapping is known for recovery. Requires a Relaybase account
+ * session (relaybaseSession in credentials). No-op if not signed in.
+ */
+export async function desktopRegisterWorkerWithConsole(
+  workerUrl: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const existing = isDesktopRuntime()
+    ? await desktopGetCredentials()
+    : await loadLocalCredentialsFile();
+  const session = existing?.relaybaseSession?.trim() ?? "";
+  if (!session) {
+    return { ok: false, error: "Not signed in to Relaybase" };
+  }
+  const res = await fetch(
+    `${CONSOLE_URL.replace(/\/$/, "")}/api/v1/account?action=worker/register`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session}`,
+      },
+      body: JSON.stringify({ workerUrl }),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), error: data.error };
+}
+
+/**
+ * Request a one-time ADMIN_TOKEN recovery token from the Relaybase console.
+ * The token is emailed to the account owner (returned inline in dev).
+ * Requires a Relaybase account session.
+ */
+export async function desktopRequestAdminRecoveryToken(): Promise<{
+  ok: boolean;
+  devToken?: string;
+  error?: string;
+}> {
+  const existing = isDesktopRuntime()
+    ? await desktopGetCredentials()
+    : await loadLocalCredentialsFile();
+  const session = existing?.relaybaseSession?.trim() ?? "";
+  if (!session) {
+    return { ok: false, error: "Not signed in to Relaybase" };
+  }
+  const res = await fetch(
+    `${CONSOLE_URL.replace(/\/$/, "")}/api/v1/account?action=recovery-token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session}`,
+      },
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    devToken?: string;
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), devToken: data.devToken, error: data.error };
+}
+
+/**
+ * Reset the customer Worker's ADMIN_TOKEN using a recovery token issued by
+ * the Relaybase console. The Worker verifies the token with the console and
+ * then stores the new admin token in KV (no wrangler needed).
+ */
+export async function desktopRecoverAdminToken(input: {
+  workerUrl: string;
+  accountEmail: string;
+  recoveryToken: string;
+  newAdminToken: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(
+    `${input.workerUrl.replace(/\/$/, "")}/console/recover-admin`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recoveryToken: input.recoveryToken,
+        newAdminToken: input.newAdminToken,
+        accountEmail: input.accountEmail,
+        workerUrl: input.workerUrl,
+      }),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+  };
+  return { ok: Boolean(data.ok), error: data.error };
 }
 
 export async function desktopVerifyWorkerConnection(
@@ -337,6 +589,10 @@ export async function desktopSaveWorkerConnection(input: {
     workerScriptName:
       input.workerScriptName?.trim() || existing?.workerScriptName || "",
     licenseKey: existing?.licenseKey ?? "",
+    relaybaseAccountId: existing?.relaybaseAccountId ?? "",
+    relaybaseEmail: existing?.relaybaseEmail ?? "",
+    relaybaseSession: existing?.relaybaseSession ?? "",
+    relaybaseTier: existing?.relaybaseTier ?? "",
   };
   const res = await fetch("/api/local-credentials", {
     method: "PUT",
@@ -363,6 +619,10 @@ export async function desktopClearCredentials(): Promise<void> {
       adminToken: "",
       workerScriptName: "",
       licenseKey: "",
+      relaybaseAccountId: "",
+      relaybaseEmail: "",
+      relaybaseSession: "",
+      relaybaseTier: "",
     }),
   });
 }

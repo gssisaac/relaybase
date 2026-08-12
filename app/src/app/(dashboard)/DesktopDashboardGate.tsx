@@ -29,20 +29,51 @@ const LOCAL_OPERATOR_USER_ID = "desktop";
 function setupPathFor(credentials: {
   workerUrl?: string;
   adminToken?: string;
+  relaybaseSession?: string;
 } | null): string | null {
+  // Install-first: a Relaybase console account is optional and can be added
+  // later from Settings (for license + ADMIN_TOKEN recovery). The only setup
+  // gate is a connected Worker. New users land on the /setup choice screen
+  // (Install on my Cloudflare / I was invited) rather than the login page.
   if (!credentials?.workerUrl || !credentials.adminToken) {
-    return "/setup/install";
+    return "/setup";
   }
   return null;
 }
 
 function DashboardShell({
   userId,
+  teamMode = false,
   children,
 }: {
   userId: string;
+  teamMode?: boolean;
   children: ReactNode;
 }) {
+  if (teamMode) {
+    // Email-only shell for team users. No management sidebar/console — they
+    // only get the inbox scoped to their account. The full /mobile/* routing
+    // is wired in the email views; this shell keeps them out of admin pages.
+    return (
+      <SessionProvider userId={userId}>
+        <DomainProvider>
+          <MailAccountsProvider>
+            <EmailMailboxProvider>
+              <EmailCommandRuntimeProvider>
+                <DisableAppTabFocus />
+                <div className="flex h-svh overflow-hidden bg-background">
+                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                    {children}
+                  </main>
+                </div>
+                <GlobalCommandPalette />
+              </EmailCommandRuntimeProvider>
+            </EmailMailboxProvider>
+          </MailAccountsProvider>
+        </DomainProvider>
+      </SessionProvider>
+    );
+  }
   return (
     <SessionProvider userId={userId}>
       <DomainProvider>
@@ -79,19 +110,31 @@ function DashboardShell({
 
 function OperatorInner({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const { ready, credentials } = useDesktop();
+  const { ready, credentials, teamLogin } = useDesktop();
 
   useEffect(() => {
     if (!ready) return;
+    // Team users (per-account mobile password) skip the admin/account setup
+    // path entirely — they render the email-only shell below.
+    if (teamLogin) return;
     const path = setupPathFor(credentials);
     if (path) router.replace(path);
-  }, [ready, credentials, router]);
+  }, [ready, credentials, teamLogin, router]);
 
   if (!ready) {
     return (
       <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
         Loading…
       </div>
+    );
+  }
+
+  // Team user: email-only mode (no admin token, no management console).
+  if (teamLogin) {
+    return (
+      <DashboardShell userId={teamLogin.accountEmail} teamMode>
+        {children}
+      </DashboardShell>
     );
   }
 

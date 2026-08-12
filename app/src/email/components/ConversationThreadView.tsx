@@ -20,6 +20,7 @@ import {
 import { InboundEmailDetail } from "@/email/components/EmailShared";
 import { InlineForwardComposer } from "@/email/components/InlineForwardComposer";
 import { InlineReplyComposer } from "@/email/components/InlineReplyComposer";
+import { QuotedReplyBlock } from "@/email/components/QuotedReplyBlock";
 import { ThreadDraftRows } from "@/email/components/ThreadDraftRows";
 import type {
   Address,
@@ -33,8 +34,12 @@ import {
   type ThreadMessage,
 } from "@/email/conversation-threading";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
+import { SenderAvatar, extractFirstEmail } from "@/email/components/SenderAvatar";
 import type { ForwardThreadPart } from "@/email/reply-helpers";
-import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
+import {
+  normalizeQuoteForDisplay,
+  trimQuotedHistoryForThread,
+} from "@/email/reply-quote-body";
 import { formatSenderDisplay } from "@/lib/email/format-sender";
 
 function pad2(n: number) {
@@ -95,15 +100,6 @@ function snippetFor(msg: ThreadMessage, detail: RoutingActivityEvent | null) {
     bodyHtml: source.bodyHtml,
   });
   return trimmed.bodyText.replace(/\s+/g, " ").trim();
-}
-
-function initials(from: string) {
-  const local = from.split("@")[0] || from;
-  const parts = local.replace(/[._-]+/g, " ").trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
-  }
-  return local.slice(0, 2).toUpperCase() || "?";
 }
 
 function latestInboundKey(thread: ConversationThread): string | null {
@@ -352,6 +348,12 @@ export const ConversationThreadView = observer(function ConversationThreadView({
           const from = fromLabel(msg);
           const snippet = snippetFor(msg, detail);
           const at = msg.at;
+          const avatarEmail =
+            msg.kind === "inbound"
+              ? msg.message.fromEmail
+              : extractFirstEmail(msg.message.from);
+          const avatarName =
+            msg.kind === "inbound" ? msg.message.fromName : undefined;
 
           return (
             <div key={id} className="shrink-0">
@@ -362,12 +364,10 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                     className="flex min-w-0 flex-1 items-start gap-3 text-left transition-colors hover:opacity-90"
                     onClick={() => setExpandedId(null)}
                   >
-                    <span
-                      className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary"
-                      aria-hidden
-                    >
-                      {initials(from)}
-                    </span>
+                    <SenderAvatar
+                      fromName={avatarName}
+                      fromEmail={avatarEmail}
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
                         {from}
@@ -457,12 +457,10 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                   className="flex w-full shrink-0 items-start gap-3 px-1 py-3 text-left transition-colors hover:opacity-90"
                   onClick={() => setExpandedId(id)}
                 >
-                  <span
-                    className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary"
-                    aria-hidden
-                  >
-                    {initials(from)}
-                  </span>
+                  <SenderAvatar
+                    fromName={avatarName}
+                    fromEmail={avatarEmail}
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
                       {from}
@@ -486,7 +484,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
               {expanded ? (
                 <div className="flex shrink-0 items-start gap-3 px-1">
                   {/* Match avatar column so body aligns with from-address. */}
-                  <span className="size-8 shrink-0" aria-hidden />
+                  <span className="size-7 shrink-0" aria-hidden />
                   <div className="min-w-0 flex-1 shrink-0 space-y-4 pr-1">
                     {msg.kind === "inbound" ? (
                       <>
@@ -535,6 +533,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                                 bodyText={trimmed.bodyText}
                                 bodyHtml={trimmed.bodyHtml}
                                 plain
+                                quoteText={trimmed.quoteText}
                                 attachments={
                                   detail?.attachments ??
                                   msg.message.attachments ??
@@ -561,13 +560,25 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                             </p>
                           ) : null}
                         </div>
-                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                          {
-                            trimQuotedHistoryForThread({
-                              bodyText: msg.message.bodyPreview,
-                            }).bodyText
-                          }
-                        </pre>
+                        {(() => {
+                          const sentTrimmed = trimQuotedHistoryForThread({
+                            bodyText: msg.message.bodyPreview,
+                          });
+                          return (
+                            <>
+                              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                                {sentTrimmed.bodyText}
+                              </pre>
+                              {sentTrimmed.quoteText ? (
+                                <QuotedReplyBlock
+                                  quote={normalizeQuoteForDisplay(
+                                    sentTrimmed.quoteText,
+                                  )}
+                                />
+                              ) : null}
+                            </>
+                          );
+                        })()}
                       </>
                     )}
                     {/* Explicit spacer — pb on flex children can be crushed by shrink. */}

@@ -56,6 +56,10 @@ function readDesktopCredentialsFromWindow(): DesktopCredentials | null {
     adminToken,
     workerScriptName: "",
     licenseKey: "",
+    relaybaseAccountId: "",
+    relaybaseEmail: "",
+    relaybaseSession: "",
+    relaybaseTier: "",
   };
 }
 

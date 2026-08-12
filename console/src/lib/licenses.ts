@@ -1,12 +1,20 @@
 import { sha256Hex } from "./crypto";
 
+export type LicenseTier = "free" | "pro";
+export type LicenseStatus = "active" | "past_due" | "canceled" | "revoked";
+
 export type LicenseRecord = {
   id: string;
   email: string;
   keyPrefix: string;
   createdAt: string;
   active: boolean;
+  tier: LicenseTier;
   stripeSessionId: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  currentPeriodEnd: string | null;
+  status: LicenseStatus;
   note: string | null;
 };
 
@@ -20,6 +28,14 @@ function idKv(id: string): string {
   return `srv:license:id:${id}`;
 }
 
+function customerKv(stripeCustomerId: string): string {
+  return `srv:license:customer:${stripeCustomerId}`;
+}
+
+function emailKv(email: string): string {
+  return `srv:license:email:${email.trim().toLowerCase()}`;
+}
+
 export function generateLicenseKey(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -31,7 +47,12 @@ export async function createLicense(
   kv: KVNamespace,
   params: {
     email: string;
+    tier?: LicenseTier;
     stripeSessionId?: string | null;
+    stripeCustomerId?: string | null;
+    stripeSubscriptionId?: string | null;
+    currentPeriodEnd?: string | null;
+    status?: LicenseStatus;
     note?: string | null;
   },
 ): Promise<{ record: LicenseRecord; licenseKey: string }> {
@@ -47,13 +68,22 @@ export async function createLicense(
     keyPrefix,
     createdAt,
     active: true,
+    tier: params.tier ?? "pro",
     stripeSessionId: params.stripeSessionId ?? null,
+    stripeCustomerId: params.stripeCustomerId ?? null,
+    stripeSubscriptionId: params.stripeSubscriptionId ?? null,
+    currentPeriodEnd: params.currentPeriodEnd ?? null,
+    status: params.status ?? "active",
     note: params.note ?? null,
     keyHash,
   };
 
   await kv.put(keyKv(keyHash), JSON.stringify(stored));
   await kv.put(idKv(id), JSON.stringify(stored));
+  if (stored.stripeCustomerId) {
+    await kv.put(customerKv(stored.stripeCustomerId), JSON.stringify(stored));
+  }
+  await kv.put(emailKv(stored.email), JSON.stringify(stored));
 
   const { keyHash: _h, ...record } = stored;
   return { record, licenseKey };
@@ -96,7 +126,49 @@ export async function revokeLicense(
   if (!raw) return false;
   const stored = JSON.parse(raw) as StoredLicense;
   stored.active = false;
+  stored.status = "revoked";
   await kv.put(keyKv(stored.keyHash), JSON.stringify(stored));
   await kv.put(idKv(id), JSON.stringify(stored));
+  if (stored.stripeCustomerId) {
+    await kv.put(customerKv(stored.stripeCustomerId), JSON.stringify(stored));
+  }
   return true;
+}
+
+export async function findLicenseByCustomerId(
+  kv: KVNamespace,
+  stripeCustomerId: string,
+): Promise<StoredLicense | null> {
+  const raw = await kv.get(customerKv(stripeCustomerId));
+  if (!raw) return null;
+  return JSON.parse(raw) as StoredLicense;
+}
+
+export async function findLicenseByEmail(
+  kv: KVNamespace,
+  email: string,
+): Promise<StoredLicense | null> {
+  const raw = await kv.get(emailKv(email));
+  if (!raw) return null;
+  return JSON.parse(raw) as StoredLicense;
+}
+
+export async function updateLicense(
+  kv: KVNamespace,
+  id: string,
+  patch: Partial<Omit<LicenseRecord, "id" | "keyHash">>,
+): Promise<LicenseRecord | null> {
+  const raw = await kv.get(idKv(id));
+  if (!raw) return null;
+  const stored = JSON.parse(raw) as StoredLicense;
+  const next: StoredLicense = { ...stored, ...patch };
+  await kv.put(keyKv(stored.keyHash), JSON.stringify(next));
+  await kv.put(idKv(id), JSON.stringify(next));
+  if (next.stripeCustomerId && next.stripeCustomerId !== stored.stripeCustomerId) {
+    await kv.put(customerKv(next.stripeCustomerId), JSON.stringify(next));
+  } else if (next.stripeCustomerId) {
+    await kv.put(customerKv(next.stripeCustomerId), JSON.stringify(next));
+  }
+  const { keyHash: _h, ...record } = next;
+  return record;
 }

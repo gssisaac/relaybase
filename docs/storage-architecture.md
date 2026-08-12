@@ -6,11 +6,12 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | Cloudflare Worker `RELAYBASE_APP` KV (+ R2 inbound) | Domains, addresses, audience, broadcasts, API key hashes, send logs, licenses, webhooks |
+| **Remote** | Product Worker `RELAYBASE_APP` KV (+ R2 inbound) | Domains, addresses, audience, broadcasts, API key hashes, send logs, webhooks |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. KV `srv:sendlog:*` remains authoritative for send history. |
-| **Local** | `~/.relaybase` | Credentials, API key plaintext vault, mail/UI cache, dashboard cache |
+| **Remote** | Console `RELAYBASE_ACCOUNTS` D1 + `RELAYBASE_LICENSES` KV (`console.relaybase.xyz`) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription) |
+| **Local** | `~/.relaybase` | Credentials, API key plaintext vault, mail/UI cache, dashboard cache, team login |
 
-Marketing waitlist stays on D1 `RELAYBASE_WAITLIST` (website only) — **out of scope** for this doc.
+Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
 
 Local Mac layout and Tauri commands: **[relaybase-home-storage.md](./relaybase-home-storage.md)**.  
 Audience/broadcast product rules: **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**.
@@ -28,20 +29,27 @@ flowchart TB
     UI["Next HMR or static Tauri export"]
     Fetch["desktopAwareFetch → email-api-map"]
   end
-  subgraph worker [api.relaybase.xyz]
+  subgraph worker [customer *.workers.dev / isaac dogfood relaybase-api.gssisaac.worker.dev]
     KV["KV RELAYBASE_APP\nsrv:* keys"]
     R2["R2 relaybase-inbound"]
     D1["D1 RELAYBASE_LOGS\nops events"]
   end
+  subgraph console [console.relaybase.xyz]
+    ConsoleKV["KV RELAYBASE_LICENSES\nsrv:license:*"]
+    ConsoleD1["D1 RELAYBASE_ACCOUNTS\naccounts, account_workers, recovery, waitlist"]
+  end
   UI --> Fetch
   Fetch -->|"admin Bearer"| worker
+  Fetch -->|"account session / recovery"| console
   UI --> Home
   worker --> KV
   worker --> R2
   worker --> D1
+  console --> ConsoleKV
+  console --> ConsoleD1
 ```
 
-All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** path: map `/api/email/*` → Worker `/console/*` (management) and `/mail/*` (mail operations) via [`app/src/lib/desktop/email-api-map.ts`](../app/src/lib/desktop/email-api-map.ts) and [`desktopAwareFetch`](../app/src/lib/desktop/api-base.ts). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
+All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** product path: map `/api/email/*` → product Worker `/console/*` (management) and `/mail/*` (mail operations) via [`app/src/lib/desktop/email-api-map.ts`](../app/src/lib/desktop/email-api-map.ts) and [`desktopAwareFetch`](../app/src/lib/desktop/api-base.ts). Account/license/billing calls go to `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
 
 Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 
@@ -64,7 +72,7 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 | `srv:catalog:audience-groups` | `lib/catalog-audience.ts` | Groups, dataSource, sync progress/history |
 | `srv:catalog:broadcasts` | `lib/catalog-broadcasts.ts` | Drafts + send progress/history |
 | `srv:key:{sha256}` / `srv:id:{uuid}` | `lib/keys.ts` | API key records (**hash only**, no plaintext) |
-| `srv:license:key:{hash}` / `srv:license:id:{uuid}` | `lib/licenses.ts` | License records |
+| `srv:config:owner:email` / `srv:config:owner:worker_url` | `routes/console/register-owner.ts` | Console account that owns this Worker (for ADMIN_TOKEN recovery) |
 | `srv:sendlog:_index` / `srv:sendlog:{uuid}` | `lib/send-logs.ts` | Send history (authoritative “sent”)
 | `RELAYBASE_LOGS`.`ops_log` | `lib/ops-logs.ts` | Ops-event log: compose/API/broadcast sends + inbound bounces (dashboard Log page) | |
 | `srv:event:pending:{domain}:{id}` | `lib/inbound-events.ts` | Inbox notification queue |
@@ -82,10 +90,14 @@ Operator-only admin endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/
 | `/console/keys` (+ rotate, PATCH active) | API keys |
 | `/console/ops-logs` | Ops event log (D1 `RELAYBASE_LOGS`) |
 | `/console/connect` | Desktop self-install probe (admin-token proof) |
+| `/console/register-owner` | Record the console account that owns this Worker (admin token; for ADMIN_TOKEN recovery) |
+| `/console/recover-admin` | Reset ADMIN_TOKEN via a one-time console recovery token (unauth by design; verifies with `console.relaybase.xyz`) |
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
 | `/console/addresses/mobile-password` | Per-account mobile password (admin token) |
 | `/mail/inbox`, `/mail/send`, … | Mail I/O (desktop / admin token) |
-| `/mobile/*` | Flutter companion (mobile-password auth; single-account scope) — **[mobile-email-companion.md](./mobile-email-companion.md)** |
+| `/mobile/*` | Flutter companion + desktop team-user login (mobile-password auth; single-account scope) — **[mobile-email-companion.md](./mobile-email-companion.md)** |
+
+Account / license / billing / recovery-token issuance are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`, `/api/v1/recovery/verify-admin-token`), not on the product Worker.
 
 Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` in `server/src/index.ts` (single catalog, no per-user fan-out).
 

@@ -30,7 +30,8 @@ Server/worker data (Cloudflare KV `RELAYBASE_APP`, R2, D1 waitlist) is separate 
 
 ```text
 ~/.relaybase/                      # mode 0700
-├── credentials.json               # Cloudflare + Worker + license (0600)
+├── credentials.json               # Cloudflare + Worker + Relaybase console account (0600)
+├── team-login.json                # team-user mobile password login (0600; admin-less)
 ├── email.json                     # account colors / email prefs (0600)
 ├── api-keys.json                  # plaintext API key vault (0600)
 ├── app-icon.png                   # notification identity image (seeded from bundle)
@@ -68,12 +69,26 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 
 | Field | Purpose |
 |-------|---------|
-| `accountId` | Cloudflare account |
-| `apiToken` | Cloudflare API token |
+| `accountId` | Cloudflare account (for optional zone/Email assist) |
+| `apiToken` | Cloudflare API token (used by Tauri auto-install + zone assist; never sent to Relaybase) |
 | `workerUrl` | Deployed Worker base URL |
-| `adminToken` | Worker admin token |
+| `adminToken` | Worker admin token (wrangler secret OR KV `srv:config:admin`; resettable via recovery) |
 | `workerScriptName` | Wrangler script name |
-| `licenseKey` | License |
+| `licenseKey` | License key (legacy; verify now via `console.relaybase.xyz`) |
+| `relaybaseAccountId` | Relaybase console account id (`console.relaybase.xyz`) |
+| `relaybaseEmail` | Relaybase console account email |
+| `relaybaseSession` | Signed console session token (stored locally; sent as `Authorization: Bearer` to console APIs) |
+| `relaybaseTier` | License tier mirrored from the console (`free` / `pro`) |
+
+### `team-login.json`
+
+Team-user login (per-account mobile password; separate from admin credentials). Written by Rust (`secrets.rs`).
+
+| Field | Purpose |
+|-------|---------|
+| `workerUrl` | Customer Worker base URL |
+| `accountEmail` | The teammate's account email |
+| `mobilePassword` | Per-account mobile password (same model as the Flutter companion) |
 
 ### `email.json`
 

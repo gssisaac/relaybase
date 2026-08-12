@@ -32,6 +32,8 @@ import {
   CF_REQUIRED_TOKEN_PERMISSIONS,
   WORKER_INSTALL_ZIP_URL,
   desktopOpenExternal,
+  desktopRecoverAdminToken,
+  desktopRequestAdminRecoveryToken,
   desktopSaveCfCredentials,
   desktopSaveWorkerConnection,
   desktopVerifyCfToken,
@@ -190,6 +192,89 @@ function DesktopSettingsBody() {
   const [workerError, setWorkerError] = useState<DesktopErrorHelp | null>(null);
   const [cfMessage, setCfMessage] = useState<string | null>(null);
   const [workerMessage, setWorkerMessage] = useState<string | null>(null);
+
+  // ADMIN_TOKEN recovery state.
+  const [recoveryToken, setRecoveryToken] = useState("");
+  const [newAdminToken, setNewAdminToken] = useState("");
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryError, setRecoveryError] =
+    useState<DesktopErrorHelp | null>(null);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+
+  async function handleRequestRecoveryToken() {
+    setRecoveryBusy(true);
+    setRecoveryError(null);
+    setRecoveryMessage(null);
+    setRecoveryToken("");
+    try {
+      const result = await desktopRequestAdminRecoveryToken();
+      if (!result.ok) throw new Error(result.error ?? "Could not issue recovery token");
+      if (result.devToken) {
+        setRecoveryToken(result.devToken);
+        setRecoveryMessage(
+          "Recovery token issued (dev mode). Paste it below with a new admin token.",
+        );
+      } else {
+        setRecoveryMessage("A recovery token was emailed to your account address.");
+      }
+    } catch (err) {
+      setRecoveryError(
+        explainDesktopError(err, "Could not issue recovery token"),
+      );
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }
+
+  async function handleRecoverAdmin() {
+    setRecoveryBusy(true);
+    setRecoveryError(null);
+    setRecoveryMessage(null);
+    const url = (credentials?.workerUrl ?? "").trim();
+    const email = (credentials?.relaybaseEmail ?? "").trim();
+    const token = recoveryToken.trim();
+    const next = newAdminToken.trim();
+    if (!url || !email || !token || !next) {
+      setRecoveryError({
+        title: "All fields are required",
+        detail: "Worker URL, account email, recovery token, and a new admin token are all required.",
+        fix: "Request a recovery token, then paste it and a new admin token here.",
+      });
+      setRecoveryBusy(false);
+      return;
+    }
+    if (next.length < 16) {
+      setRecoveryError({
+        title: "New admin token too short",
+        detail: "The new admin token must be at least 16 characters.",
+        fix: "Use a longer token (e.g. openssl rand -hex 24).",
+      });
+      setRecoveryBusy(false);
+      return;
+    }
+    try {
+      const result = await desktopRecoverAdminToken({
+        workerUrl: url,
+        accountEmail: email,
+        recoveryToken: token,
+        newAdminToken: next,
+      });
+      if (!result.ok) throw new Error(result.error ?? "Recovery failed");
+      await desktopSaveWorkerConnection({
+        workerUrl: url,
+        adminToken: next,
+        workerScriptName: credentials?.workerScriptName,
+      });
+      await refreshCredentials();
+      setRecoveryToken("");
+      setNewAdminToken("");
+      setRecoveryMessage("Admin token reset. You can now use the new token.");
+    } catch (err) {
+      setRecoveryError(explainDesktopError(err, "Admin token recovery failed"));
+    } finally {
+      setRecoveryBusy(false);
+    }
+  }
 
   function resetCfDraft() {
     setAccountId(credentials?.accountId ?? "");
@@ -605,6 +690,88 @@ function DesktopSettingsBody() {
           </div>
         )}
       </ConnectionCard>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Shield
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+            <CardTitle className="text-sm">Reset admin token</CardTitle>
+          </div>
+          <CardDescription>
+            Lost your ADMIN_TOKEN? Request a one-time recovery token from the
+            Relaybase console (emailed to your account address), then set a new
+            admin token here — no Wrangler needed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="recovery-token">Recovery token</Label>
+            <Input
+              id="recovery-token"
+              value={recoveryToken}
+              onChange={(e) => setRecoveryToken(e.target.value)}
+              placeholder="token from your email"
+              className="font-mono text-xs"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-admin-token">New admin token</Label>
+            <Input
+              id="new-admin-token"
+              type="password"
+              value={newAdminToken}
+              onChange={(e) => setNewAdminToken(e.target.value)}
+              placeholder="rb_admin_… (min 16 chars)"
+              className="font-mono text-xs"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          <DesktopErrorBanner error={recoveryError} />
+          {recoveryMessage ? (
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">
+              {recoveryMessage}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={recoveryBusy || !credentials?.relaybaseSession}
+              onClick={() => void handleRequestRecoveryToken()}
+            >
+              {recoveryBusy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : null}
+              Request recovery token
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={
+                recoveryBusy ||
+                !recoveryToken.trim() ||
+                !newAdminToken.trim() ||
+                !credentials?.workerUrl
+              }
+              onClick={() => void handleRecoverAdmin()}
+            >
+              Reset admin token
+            </Button>
+          </div>
+          {!credentials?.relaybaseSession ? (
+            <p className="text-[11px] text-muted-foreground">
+              Sign in to your Relaybase account to use admin token recovery.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3">

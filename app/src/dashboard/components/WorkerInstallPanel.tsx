@@ -1,46 +1,68 @@
 "use client";
 
-import { Download, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Loader2,
+  Terminal,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  WORKER_INSTALL_ZIP_URL,
-  desktopOpenExternal,
+  desktopAutoInstallWorker,
+  desktopRegisterWorkerWithConsole,
   desktopSaveWorkerConnection,
   desktopVerifyWorkerConnection,
   explainDesktopError,
+  listenInstallLog,
   type DesktopErrorHelp,
+  type InstallLogEvent,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { AdminTokenPanel } from "@/dashboard/components/AdminTokenPanel";
+import { ResourceAside, SetupStepper } from "@/dashboard/components/SetupWizardParts";
+import { StepTwoBody } from "@/dashboard/components/SetupStepTwo";
 
 const DRAFT_KEY = "relaybase.setup.install.draft";
 
 type Draft = {
-  workerUrl: string;
+  cfApiToken: string;
   adminToken: string;
+  workerUrl: string;
 };
 
 function loadDraft(): Draft {
   if (typeof window === "undefined") {
-    return { workerUrl: "", adminToken: "" };
+    return { cfApiToken: "", adminToken: "", workerUrl: "" };
   }
   try {
     const raw = sessionStorage.getItem(DRAFT_KEY);
-    if (!raw) return { workerUrl: "", adminToken: "" };
+    if (!raw) return { cfApiToken: "", adminToken: "", workerUrl: "" };
     const parsed = JSON.parse(raw) as Partial<Draft>;
     return {
-      workerUrl: typeof parsed.workerUrl === "string" ? parsed.workerUrl : "",
+      cfApiToken:
+        typeof parsed.cfApiToken === "string" ? parsed.cfApiToken : "",
       adminToken:
         typeof parsed.adminToken === "string" ? parsed.adminToken : "",
+      workerUrl:
+        typeof parsed.workerUrl === "string" ? parsed.workerUrl : "",
     };
   } catch {
-    return { workerUrl: "", adminToken: "" };
+    return { cfApiToken: "", adminToken: "", workerUrl: "" };
   }
 }
 
@@ -52,256 +74,341 @@ function saveDraft(draft: Draft) {
   }
 }
 
-const RESOURCE_NAMES = [
-  {
-    name: "relaybase-api",
-    kind: "Worker",
-    why: "Your routing + admin API process. You deploy it with Wrangler; the Mac app only talks to this URL.",
-  },
-  {
-    name: "relaybase-keys",
-    kind: "KV",
-    why: "Stores admin config and API keys inside your account.",
-  },
-  {
-    name: "relaybase-api",
-    kind: "KV",
-    why: "Stores Relaybase runtime data next to the Worker.",
-  },
-  {
-    name: "relaybase-inbound",
-    kind: "R2",
-    why: "Stores raw inbound email. Create this exact bucket name before deploy.",
-  },
-] as const;
-
-const STEPS = [
-  "Download the install ZIP and unzip it.",
-  "Create KV namespaces and the R2 bucket (commands are in the README), then paste KV ids into wrangler.toml.",
-  "Paste or generate an Admin token, copy the wrangler command, run it, then deploy.",
-  "Paste the *.workers.dev URL + the same Admin token below, then verify (or skip).",
-] as const;
+function generateAdminToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+    "",
+  );
+  return `rb_admin_${hex}`;
+}
 
 export function WorkerInstallPanel() {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
+  const [step, setStep] = useState<1 | 2>(1);
+  const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const [cfApiToken, setCfApiToken] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
   const [adminToken, setAdminToken] = useState("");
   const [hydrated, setHydrated] = useState(false);
-  const [busy, setBusy] = useState<"verify" | "skip" | null>(null);
+  const [busy, setBusy] = useState<"auto" | "verify" | null>(null);
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [logs, setLogs] = useState<InstallLogEvent[]>([]);
+  const [autoDone, setAutoDone] = useState<{
+    workerUrl: string;
+    adminToken: string;
+  } | null>(null);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [doneUrl, setDoneUrl] = useState("");
+  const logEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Restore draft / saved creds once — never wipe on failed verify.
   useEffect(() => {
     const draft = loadDraft();
-    setWorkerUrl(
-      draft.workerUrl || credentials?.workerUrl || "",
-    );
-    setAdminToken(
-      draft.adminToken || credentials?.adminToken || "",
-    );
+    setCfApiToken(draft.cfApiToken);
+    setWorkerUrl(draft.workerUrl || credentials?.workerUrl || "");
+    setAdminToken(draft.adminToken || credentials?.adminToken || "");
     setHydrated(true);
-    // Only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    saveDraft({ workerUrl, adminToken });
-  }, [hydrated, workerUrl, adminToken]);
+    saveDraft({ cfApiToken, adminToken, workerUrl });
+  }, [hydrated, cfApiToken, adminToken, workerUrl]);
+
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  useEffect(() => {
+    if (step === 2 && mode === "manual" && !adminToken.trim()) {
+      setAdminToken(generateAdminToken());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, mode]);
+
+  useEffect(() => {
+    if (!copiedToken) return;
+    const t = window.setTimeout(() => setCopiedToken(false), 2000);
+    return () => window.clearTimeout(t);
+  }, [copiedToken]);
 
   async function persistAndContinue(opts: {
     url: string;
     token: string;
     scriptName?: string;
-    skippedVerify: boolean;
   }) {
     await desktopSaveWorkerConnection({
       workerUrl: opts.url,
       adminToken: opts.token,
       workerScriptName: opts.scriptName,
     });
-    setMessage(
-      opts.skippedVerify
-        ? `Saved ${opts.url} (verify skipped). Continuing…`
-        : `Connected to ${opts.url}`,
-    );
+    void desktopRegisterWorkerWithConsole(opts.url).catch(() => {
+      /* best-effort */
+    });
     await refresh();
     router.replace("/");
   }
 
-  async function handleVerify() {
-    setBusy("verify");
+  async function handleAutoInstall() {
+    setBusy("auto");
     setError(null);
     setMessage(null);
-    const url = workerUrl;
+    setLogs([]);
+    setAutoDone(null);
+    const token = cfApiToken.trim();
+    if (!token) {
+      setError({
+        title: "Cloudflare API token required",
+        detail:
+          "Paste a Cloudflare API token with Workers Scripts / KV / R2 edit permissions.",
+        fix: "Create one at dash.cloudflare.com → My Profile → API Tokens.",
+        links: [
+          {
+            label: "Create a Cloudflare API token",
+            href: "https://dash.cloudflare.com/profile/api-tokens",
+          },
+        ],
+      });
+      setBusy(null);
+      return;
+    }
+    let unlisten: (() => void) | null = null;
+    try {
+      unlisten = await listenInstallLog((event) => {
+        setLogs((prev) => [...prev, event]);
+      });
+      const result = await desktopAutoInstallWorker(token);
+      const connect = await desktopVerifyWorkerConnection(
+        result.workerUrl,
+        result.adminToken,
+      );
+      await desktopSaveWorkerConnection({
+        workerUrl: connect.workerUrl,
+        adminToken: result.adminToken,
+        workerScriptName: connect.workerScriptName,
+      });
+      void desktopRegisterWorkerWithConsole(connect.workerUrl).catch(() => {
+        /* best-effort */
+      });
+      await refresh();
+      setAutoDone({
+        workerUrl: connect.workerUrl,
+        adminToken: result.adminToken,
+      });
+      setMessage(`Connected to ${connect.workerUrl}`);
+    } catch (err) {
+      setError(explainDesktopError(err, "Auto-install failed"));
+    } finally {
+      if (unlisten) unlisten();
+      setBusy(null);
+    }
+  }
+
+  async function handleDoneVerify() {
+    setBusy("verify");
+    setError(null);
+    const url = doneUrl.trim();
     const token = adminToken;
     try {
       const result = await desktopVerifyWorkerConnection(url, token);
+      setDoneOpen(false);
       await persistAndContinue({
         url: result.workerUrl,
         token,
         scriptName: result.workerScriptName,
-        skippedVerify: false,
       });
     } catch (err) {
-      // Keep URL/token state — do not reset inputs.
-      setWorkerUrl(url);
-      setAdminToken(token);
       setError(explainDesktopError(err, "Could not verify Worker"));
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleSkip() {
-    setBusy("skip");
-    setError(null);
-    setMessage(null);
-    const url = workerUrl.trim();
-    const token = adminToken.trim();
-    try {
-      if (!url || !token) {
-        throw new Error("Worker URL and Admin token are required to continue.");
-      }
-      await persistAndContinue({
-        url,
-        token,
-        scriptName: "relaybase-api",
-        skippedVerify: true,
-      });
-    } catch (err) {
-      setWorkerUrl(workerUrl);
-      setAdminToken(adminToken);
-      setError(explainDesktopError(err, "Could not save connection"));
-    } finally {
-      setBusy(null);
-    }
+  async function copyAutoToken() {
+    if (!autoDone?.adminToken) return;
+    await navigator.clipboard.writeText(autoDone.adminToken);
+    setCopiedToken(true);
   }
 
+  const canContinueFromStep1 =
+    mode === "manual" || cfApiToken.trim().length > 0;
+
   return (
-    <div className="mx-auto max-w-lg space-y-6 p-6">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Setup
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-          Install routing Worker
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          You deploy Relaybase into <strong>your</strong> Cloudflare account with
-          Wrangler. This app never asks for Workers, KV, or R2 API permissions —
-          it only needs the Worker URL and admin token after you install.
-        </p>
-      </div>
-
-      <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">Download the install package</p>
-        <p className="text-xs text-muted-foreground">
-          Includes a customer <span className="font-mono">wrangler.toml</span>,
-          Worker source, and a step-by-step README.
-        </p>
-        <Button
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <div className="flex items-center justify-between gap-3">
+        <SetupStepper step={step} />
+        <button
           type="button"
-          className="w-full sm:w-auto"
-          onClick={() => void desktopOpenExternal(WORKER_INSTALL_ZIP_URL)}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+          onClick={() => router.push("/setup")}
         >
-          <Download className="size-3.5" />
-          Download Worker install ZIP
-        </Button>
+          <ArrowLeft className="size-3" />
+          Back to start
+        </button>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">What you create (and why)</p>
-        <ul className="space-y-3">
-          {RESOURCE_NAMES.map((r) => (
-            <li key={`${r.kind}-${r.name}`} className="text-sm">
-              <p className="font-mono text-xs">
-                <span className="text-muted-foreground">{r.kind}</span>{" "}
-                <span className="font-medium text-foreground">{r.name}</span>
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{r.why}</p>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <div className="flex gap-6">
+        <div className="min-w-0 flex-1 space-y-6">
+          {/* STEP 1 */}
+          {step === 1 ? (
+            <>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Step 1 of 2
+                </p>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+                  Get ready
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Relaybase runs entirely in <strong>your</strong> Cloudflare
+                  account. Your email, API keys, and routing data never touch
+                  Relaybase servers. Cloudflare bills you directly (&#8776;$5/mo
+                  Workers Paid plan).
+                </p>
+              </div>
 
-      <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">Deploy with Wrangler</p>
-        <ol className="list-decimal space-y-2 pl-4 text-xs text-muted-foreground">
-          {STEPS.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </div>
+              <div className="space-y-3 rounded-lg border border-border p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Install method</p>
+                  <Tabs
+                    value={mode}
+                    onValueChange={(v) =>
+                      setMode(v === "manual" ? "manual" : "auto")
+                    }
+                  >
+                    <TabsList>
+                      <TabsTrigger value="auto">Recommended</TabsTrigger>
+                      <TabsTrigger value="manual">Manual</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {mode === "auto"
+                    ? "The desktop installs the Worker for you in the background — you watch each step in the log. Your Cloudflare API token stays on this Mac."
+                    : "You run the install commands yourself in a terminal, then come back and verify. Use this if you prefer full control."}
+                </p>
+              </div>
 
-      <AdminTokenPanel value={adminToken} onChange={setAdminToken} />
+              {mode === "auto" ? (
+                <div className="space-y-3 rounded-lg border border-border p-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cf-api-token">Cloudflare API token</Label>
+                    <Input
+                      id="cf-api-token"
+                      type="password"
+                      value={cfApiToken}
+                      onChange={(e) => setCfApiToken(e.target.value)}
+                      placeholder="cfut_…"
+                      className="font-mono text-xs"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Stored only on this Mac (~/.relaybase). Requires Workers
+                      Scripts, KV Storage, and R2 Storage edit scopes.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 rounded-lg border border-border p-4 text-xs text-muted-foreground">
+                  You&apos;ll generate an admin token on the next step and copy a
+                  single command that downloads, unpacks, and deploys the
+                  Worker. No Cloudflare API token is needed for manual install.
+                </div>
+              )}
 
-      <div className="space-y-3 rounded-lg border border-border p-4">
-        <p className="text-sm font-medium">Connect</p>
-        <div className="space-y-1.5">
-          <Label htmlFor="worker-url">Worker URL</Label>
-          <Input
-            id="worker-url"
-            value={workerUrl}
-            onChange={(e) => setWorkerUrl(e.target.value)}
-            placeholder="https://relaybase-api.<subdomain>.workers.dev"
-            className="font-mono text-xs"
-            autoComplete="off"
-          />
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+                  onClick={() => router.push("/setup")}
+                >
+                  <ArrowLeft className="size-3" />
+                  Back to start
+                </button>
+                <Button
+                  type="button"
+                  disabled={!canContinueFromStep1}
+                  onClick={() => setStep(2)}
+                >
+                  Continue
+                </Button>
+              </div>
+            </>
+          ) : (
+            <StepTwoBody
+              mode={mode}
+              autoDone={autoDone}
+              busy={busy}
+              error={error}
+              message={message}
+              logs={logs}
+              logEndRef={logEndRef}
+              cfApiToken={cfApiToken}
+              adminToken={adminToken}
+              setAdminToken={setAdminToken}
+              copiedToken={copiedToken}
+              onCopyAutoToken={() => void copyAutoToken()}
+              onAutoInstall={() => void handleAutoInstall()}
+              onPrev={() => setStep(1)}
+              onOpenDone={() => {
+                setDoneUrl(workerUrl);
+                setDoneOpen(true);
+              }}
+            />
+          )}
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="admin-token-verify">Admin token (for Verify)</Label>
-          <Input
-            id="admin-token-verify"
-            type="password"
-            value={adminToken}
-            onChange={(e) => setAdminToken(e.target.value)}
-            placeholder="Paste the token you put in wrangler secret"
-            className="font-mono text-xs"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
+        <ResourceAside />
+      </div>
 
-        <DesktopErrorBanner error={error} />
-        {message ? (
-          <p className="text-sm text-emerald-700 dark:text-emerald-400">
-            {message}
+      <Dialog open={doneOpen} onOpenChange={setDoneOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify your Worker</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Paste the <span className="font-mono">*.workers.dev</span> URL that
+            <span className="font-mono"> wrangler deploy</span> printed. We&apos;ll
+            verify it with the admin token you generated.
           </p>
-        ) : null}
-
-        <div className="flex flex-col gap-2">
-          <Button
-            type="button"
-            className="w-full"
-            disabled={!workerUrl.trim() || !adminToken.trim() || busy !== null}
-            onClick={() => void handleVerify()}
-          >
-            {busy === "verify" ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : null}
-            Verify &amp; continue
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            disabled={!workerUrl.trim() || !adminToken.trim() || busy !== null}
-            onClick={() => void handleSkip()}
-          >
-            {busy === "skip" ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : null}
-            Skip verify &amp; continue
-          </Button>
-          <p className="text-[11px] text-muted-foreground">
-            Skip saves the URL and token locally and goes to license. Use this
-            when the Worker is already deployed and verify is stuck.
-          </p>
-        </div>
-      </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="done-worker-url">Worker URL</Label>
+            <Input
+              id="done-worker-url"
+              value={doneUrl}
+              onChange={(e) => setDoneUrl(e.target.value)}
+              placeholder="https://relaybase-api.<subdomain>.workers.dev"
+              className="font-mono text-xs"
+              autoComplete="off"
+            />
+          </div>
+          <DesktopErrorBanner error={error} />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDoneOpen(false)}
+              disabled={busy !== null}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!doneUrl.trim() || busy !== null}
+              onClick={() => void handleDoneVerify()}
+            >
+              {busy === "verify" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : null}
+              Verify &amp; continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 
 const LICENSE_API =
-  process.env.NEXT_PUBLIC_LICENSE_API_URL ?? "https://api.relaybase.xyz";
+  process.env.NEXT_PUBLIC_LICENSE_API_URL ?? "https://console.relaybase.xyz";
 
 export function LicenseActivatePanel() {
   const router = useRouter();

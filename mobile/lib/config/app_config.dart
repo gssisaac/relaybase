@@ -12,7 +12,10 @@ class AppConfig {
   });
 
   /// The Worker URL this build connects to. Users never type this.
-  static const String defaultWorkerUrl = 'https://api.relaybase.xyz';
+  /// Points at the Relaybase dogfood Worker; production customer builds bake in
+  /// the customer's own Worker URL. Central account/billing lives at
+  /// console.relaybase.xyz (separate Next.js app), not here.
+  static const String defaultWorkerUrl = 'https://relaybase-api.gssisaac.worker.dev';
 
   final String workerUrl;
   final String accountEmail;

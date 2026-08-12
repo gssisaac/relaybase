@@ -1,15 +1,18 @@
+mod auto_install;
 mod cloudflare;
 mod notify;
 mod secrets;
 mod worker;
 
+use auto_install::{auto_install_worker, merge_into_credentials, AutoInstallResult};
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
-    clear_credentials, load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
-    load_email_prefs, load_mail_json as read_mail_json, migrate_mail_to_desktop_user,
-    remove_api_key_vault_entry, save_cache_json as write_cache_json, save_credentials,
-    save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
-    upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, EmailPrefs, StoredCredentials,
+    clear_credentials, clear_team_login, load_api_key_vault, load_cache_json as read_cache_json,
+    load_credentials, load_email_prefs, load_mail_json as read_mail_json, load_team_login,
+    migrate_mail_to_desktop_user, remove_api_key_vault_entry, save_cache_json as write_cache_json,
+    save_credentials, save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
+    save_team_login, upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, EmailPrefs,
+    StoredCredentials, TeamLogin,
 };
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
@@ -146,6 +149,73 @@ async fn save_license_key(license_key: String) -> Result<(), String> {
     save_credentials(&creds)
 }
 
+#[tauri::command]
+async fn save_relaybase_account(
+    account_id: String,
+    email: String,
+    session: String,
+    tier: Option<String>,
+) -> Result<StoredCredentials, String> {
+    let mut creds = load_credentials()?.unwrap_or_default();
+    creds.relaybase_account_id = account_id.trim().to_string();
+    creds.relaybase_email = email.trim().to_string();
+    creds.relaybase_session = session.trim().to_string();
+    creds.relaybase_tier = tier.unwrap_or_default().trim().to_string();
+    save_credentials(&creds)?;
+    Ok(creds)
+}
+
+#[tauri::command]
+async fn clear_relaybase_account() -> Result<StoredCredentials, String> {
+    let mut creds = load_credentials()?.unwrap_or_default();
+    creds.relaybase_account_id.clear();
+    creds.relaybase_email.clear();
+    creds.relaybase_session.clear();
+    creds.relaybase_tier.clear();
+    save_credentials(&creds)?;
+    Ok(creds)
+}
+
+#[tauri::command]
+async fn get_team_login() -> Result<Option<TeamLogin>, String> {
+    load_team_login()
+}
+
+#[tauri::command]
+async fn save_team_login_cmd(
+    worker_url: String,
+    account_email: String,
+    mobile_password: String,
+) -> Result<TeamLogin, String> {
+    let login = TeamLogin {
+        worker_url: worker_url.trim().trim_end_matches('/').to_string(),
+        account_email: account_email.trim().to_lowercase(),
+        mobile_password: mobile_password,
+    };
+    save_team_login(&login)?;
+    Ok(login)
+}
+
+#[tauri::command]
+async fn clear_team_login_cmd() -> Result<(), String> {
+    clear_team_login()
+}
+
+/// Background auto-install of the routing Worker into the user's Cloudflare
+/// account via wrangler. Streams `install-log` events to the frontend.
+#[tauri::command]
+async fn auto_install_routing_worker(
+    app: tauri::AppHandle,
+    api_token: String,
+    account_id: Option<String>,
+) -> Result<AutoInstallResult, String> {
+    let result = auto_install_worker(app, api_token, account_id.clone()).await?;
+    let existing = load_credentials()?.unwrap_or_default();
+    let next = merge_into_credentials(&existing, &result, account_id);
+    save_credentials(&next)?;
+    Ok(result)
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkerConnectResult {
@@ -273,7 +343,15 @@ async fn save_worker_connection(
     if token.is_empty() {
         return Err("Admin token is required".into());
     }
-    let mut creds = load_credentials()?.unwrap_or_default();
+    // Prefer merging into existing creds, but never block a successful verify
+    // on a legacy/unreadable credentials.json — overwrite with what we know.
+    let mut creds = match load_credentials() {
+        Ok(existing) => existing.unwrap_or_default(),
+        Err(e) => {
+            log::warn!("load_credentials failed during save_worker_connection: {e}");
+            StoredCredentials::default()
+        }
+    };
     creds.worker_url = base;
     creds.admin_token = token.to_string();
     creds.worker_script_name = worker_script_name
@@ -366,7 +444,7 @@ pub fn run() {
             // target="_blank", which the webview turns into a new-window
             // request. Route those to the system browser and deny the in-app
             // window so external links never open inside Relaybase.
-            tauri::WebviewWindowBuilder::new(
+            let builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
@@ -377,12 +455,20 @@ pub fn run() {
             .resizable(true)
             .fullscreen(false)
             .decorations(true)
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .traffic_light_position(tauri::LogicalPosition::new(14.0, 21.0))
             .accept_first_mouse(true)
             .disable_drag_drop_handler()
-            .zoom_hotkeys_enabled(false)
+            .zoom_hotkeys_enabled(false);
+
+            // macOS-only window chrome options. These Tauri 2.x builder
+            // methods are gated to macOS; calling them unconditionally breaks
+            // `cargo check` on Linux/Windows.
+            #[cfg(target_os = "macos")]
+            let builder = builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true)
+                .traffic_light_position(tauri::LogicalPosition::new(14.0, 21.0));
+
+            builder
             .on_new_window(move |url, _features| {
                 let s = url.as_str().to_string();
                 if s.starts_with("http://") || s.starts_with("https://") {
@@ -391,6 +477,31 @@ pub fn run() {
                     }
                 }
                 tauri::webview::NewWindowResponse::Deny
+            })
+            // Safety net: if a link ever navigates the main webview itself
+            // (e.g. a top-level <a> without target, or an iframe whose
+            // in-place navigation bubbles up), deny the in-app load and
+            // route the URL to the system browser. App-internal navigations
+            // (dev server / static export) are still allowed.
+            .on_navigation(move |url| {
+                let s = url.as_str().to_string();
+                if s.starts_with("http://") || s.starts_with("https://") {
+                    // Only intercept external hosts — never block the app's
+                    // own dev URL (http://127.0.0.1:32830 / localhost) or the
+                    // tauri.localhost / asset:// app origin, otherwise the
+                    // shell would stop loading routes.
+                    let is_app_origin = s.starts_with("http://127.0.0.1")
+                        || s.starts_with("http://localhost")
+                        || s.starts_with("https://127.0.0.1")
+                        || s.starts_with("https://localhost");
+                    if !is_app_origin {
+                        if let Err(e) = open_url_in_os_browser(&s) {
+                            log::warn!("on_navigation open_external_url failed: {e}");
+                        }
+                        return false;
+                    }
+                }
+                true
             })
             .build()?;
 
@@ -417,6 +528,12 @@ pub fn run() {
             install_routing_worker,
             update_routing_worker,
             save_license_key,
+            save_relaybase_account,
+            clear_relaybase_account,
+            get_team_login,
+            save_team_login_cmd,
+            clear_team_login_cmd,
+            auto_install_routing_worker,
             verify_worker_connection,
             save_worker_connection,
             get_desktop_info,

@@ -18,6 +18,9 @@ function SetupShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
+    // Leave setup once a Worker is connected. A Relaybase console account is
+    // optional (added later from Settings for license + ADMIN_TOKEN recovery),
+    // so we do not gate the dashboard on relaybaseSession here.
     if (credentials?.workerUrl && credentials.adminToken) {
       router.replace("/");
     }

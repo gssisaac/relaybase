@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "relaybase-console",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "routes": [
+    { "pattern": "console.relaybase.xyz", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "relaybase-console"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "RELAYBASE_LICENSES",
+      "id": "7a5a3e4bd4e5459794cadadc15a42cd7",
+      "preview_id": "7a5a3e4bd4e5459794cadadc15a42cd7"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "RELAYBASE_ACCOUNTS",
+      "database_name": "relaybase-accounts",
+      "database_id": "7628d123-2fdd-48fb-8862-0780e8478c60",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

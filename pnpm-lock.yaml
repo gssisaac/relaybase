@@ -67,7 +67,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.7
-        version: 16.2.7(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.7(@typescript-eslint/parser@8.66.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -158,13 +158,71 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.7
-        version: 16.2.7(@typescript-eslint/parser@8.66.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.7(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.3
       typescript:
         specifier: ^5
         version: 5.9.3
+
+  console:
+    dependencies:
+      '@opennextjs/cloudflare':
+        specifier: ^1.20.1
+        version: 1.20.2(encoding@0.1.13)(next@16.2.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(wrangler@4.120.0)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.30.0(react@19.2.4)
+      next:
+        specifier: 16.2.7
+        version: 16.2.7(@babel/core@7.29.7)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: 19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: 19.2.4
+        version: 19.2.4(react@19.2.4)
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: ^4
+        version: 4.3.3
+      '@types/node':
+        specifier: ^20
+        version: 20.19.43
+      '@types/react':
+        specifier: ^19
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.4(@types/react@19.2.18)
+      eslint:
+        specifier: ^9
+        version: 9.39.5(jiti@2.7.0)
+      eslint-config-next:
+        specifier: 16.2.7
+        version: 16.2.7(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+      tailwindcss:
+        specifier: ^4
+        version: 4.3.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.110.0
+        version: 4.120.0
 
   desktop:
     devDependencies:

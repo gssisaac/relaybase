@@ -16,7 +16,7 @@ const EMAIL_PREFS_FILE: &str = "email.json";
 const API_KEYS_FILE: &str = "api-keys.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct StoredCredentials {
     pub account_id: String,
     pub api_token: String,
@@ -24,6 +24,18 @@ pub struct StoredCredentials {
     pub admin_token: String,
     pub worker_script_name: String,
     pub license_key: String,
+    /// Relaybase console account (console.relaybase.xyz) — separate from the
+    /// Cloudflare `account_id`/`api_token` above. Populated after the user
+    /// logs in from /setup/account.
+    /// Struct-level `default` keeps older ~/.relaybase/credentials.json files
+    /// (missing these fields) loadable instead of hard-failing save/verify.
+    pub relaybase_account_id: String,
+    pub relaybase_email: String,
+    /// Signed session token from console.relaybase.xyz (stored locally only,
+    /// never sent to the product Worker).
+    pub relaybase_session: String,
+    /// License tier mirrored from the console for feature gating.
+    pub relaybase_tier: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -459,4 +471,51 @@ pub fn migrate_mail_to_desktop_user() -> Result<Option<String>, String> {
         )
     })?;
     Ok(Some(from_name))
+}
+
+// --- Team user login (per-account mobile password) ---
+// Stored separately from admin credentials.json so a teammate never holds
+// the admin token. Path: ~/.relaybase/team-login.json
+
+const TEAM_LOGIN_FILE: &str = "team-login.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamLogin {
+    pub worker_url: String,
+    pub account_email: String,
+    /// Per-account mobile password (plaintext; same model as the Flutter
+    /// companion). Stored locally only and sent to the customer Worker as a
+    /// Bearer over /mobile/*.
+    pub mobile_password: String,
+}
+
+pub fn save_team_login(login: &TeamLogin) -> Result<(), String> {
+    let dir = ensure_dir()?;
+    let path = dir.join(TEAM_LOGIN_FILE);
+    let json = serde_json::to_string_pretty(login).map_err(|e| e.to_string())?;
+    fs::write(&path, &json).map_err(|e| format!("Failed to write team login: {e}"))?;
+    restrict_file_permissions(&path);
+    Ok(())
+}
+
+pub fn load_team_login() -> Result<Option<TeamLogin>, String> {
+    let path = relaybase_dir()?.join(TEAM_LOGIN_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let json = fs::read_to_string(&path).map_err(|e| format!("Failed to read team login: {e}"))?;
+    let login: TeamLogin = serde_json::from_str(&json).map_err(|e| {
+        format!("Invalid team login file: {e}. Delete it and sign in again.")
+    })?;
+    Ok(Some(login))
+}
+
+pub fn clear_team_login() -> Result<(), String> {
+    let path = relaybase_dir()?.join(TEAM_LOGIN_FILE);
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(&path).map_err(|e| format!("Failed to delete team login: {e}"))?;
+    Ok(())
 }

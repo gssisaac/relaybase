@@ -114,7 +114,7 @@ function QuoteSegments({ segments }: { segments: Seg[] }) {
         return (
           <div
             key={i}
-            className="border-l-2 border-foreground/35 pl-2.5"
+            className="border-l border-foreground/30 pl-2"
           >
             <QuoteSegments segments={seg.children} />
           </div>

@@ -11,6 +11,8 @@ import {
 } from "./routes/console/mailbox";
 import { consoleKeys } from "./routes/console/keys";
 import { consoleOpsLogs } from "./routes/console/ops-logs";
+import { consoleRecoverAdmin } from "./routes/console/recover-admin";
+import { consoleRegisterOwner } from "./routes/console/register-owner";
 import { consoleStats } from "./routes/console/stats";
 import { mailInbox } from "./routes/mail/inbox";
 import { mailSend } from "./routes/mail/send";
@@ -18,8 +20,6 @@ import { mobile } from "./routes/mobile";
 import { send } from "./routes/send";
 import { v1Inbox } from "./routes/v1-inbox";
 import { v1Webhooks } from "./routes/v1-webhooks";
-import { license } from "./routes/license";
-import { waitlistOptions, waitlistPost } from "./routes/waitlist";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -51,6 +51,8 @@ app.get("/health", async (c) => {
 app.route("/console/keys", consoleKeys);
 app.route("/console/ops-logs", consoleOpsLogs);
 app.route("/console/connect", consoleConnect);
+app.route("/console/register-owner", consoleRegisterOwner);
+app.route("/console/recover-admin", consoleRecoverAdmin);
 app.route("/console/mailbox", consoleMailbox);
 app.route("/console/domains", consoleDomains);
 app.route("/console/addresses", consoleAddresses);
@@ -68,9 +70,6 @@ app.route("/mobile", mobile);
 app.route("/v1/inbox", v1Inbox);
 app.route("/v1/webhooks", v1Webhooks);
 app.route("/v1/send", send);
-app.route("/v1/license", license);
-app.options("/v1/waitlist", waitlistOptions);
-app.post("/v1/waitlist", waitlistPost);
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 

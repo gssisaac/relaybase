@@ -513,11 +513,21 @@ export function AudienceGroupsView() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Domain</TableHead>
-                      <TableHead>Contacts</TableHead>
-                      <TableHead>Data source</TableHead>
-                      <TableHead>Last sync</TableHead>
+                      <TableHead className="h-9 text-xs font-normal text-muted-foreground">
+                        Name
+                      </TableHead>
+                      <TableHead className="h-9 text-xs font-normal text-muted-foreground">
+                        Domain
+                      </TableHead>
+                      <TableHead className="h-9 text-xs font-normal text-muted-foreground">
+                        Contacts
+                      </TableHead>
+                      <TableHead className="h-9 text-xs font-normal text-muted-foreground">
+                        Data source
+                      </TableHead>
+                      <TableHead className="h-9 text-xs font-normal text-muted-foreground">
+                        Last sync
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -125,6 +125,13 @@ export const CF_REQUIRED_TOKEN_PERMISSIONS = [
   "Zone — Zone — Read",
 ] as const;
 
+/** Scopes needed for desktop auto-install (Wrangler deploy + KV + R2). */
+export const CF_INSTALL_TOKEN_PERMISSIONS = [
+  "Account — Workers Scripts — Edit",
+  "Account — Workers KV Storage — Edit",
+  "Account — Workers R2 Storage — Edit",
+] as const;
+
 export type WorkerConnectResult = {
   ok: boolean;
   product: string;

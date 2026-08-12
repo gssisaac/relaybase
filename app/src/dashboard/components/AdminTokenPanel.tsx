@@ -1,11 +1,14 @@
 "use client";
 
-import { Check, Copy, RefreshCw } from "lucide-react";
+import { Check, Copy, Info, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { WORKER_INSTALL_ZIP_URL } from "@/lib/desktop/bridge";
 
 function generateAdminToken(): string {
@@ -81,38 +84,46 @@ export function AdminTokenPanel({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border p-4">
+    <div className="space-y-3">
       <div>
-        <p className="text-sm font-medium">Admin token</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium">Admin token</p>
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Admin token details"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Info className="size-3.5" />
+                </button>
+              }
+            />
+            <PopoverContent align="start" side="bottom" className="max-w-xs">
+              <p className="text-xs text-muted-foreground">
+                Not a Cloudflare API token. Generate one here (or paste a token
+                you already set on the Worker). Copy the full command below, run
+                it in a terminal, then come back and verify with the same token.
+              </p>
+            </PopoverContent>
+          </Popover>
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Not a Cloudflare API token. Generate one here (or paste a token you
-          already set on the Worker). Copy the full command below, run it in a
-          terminal, then come back and verify with the same token.
+          Generate or paste a token, then run the command below.
         </p>
       </div>
 
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="admin-token-input">Admin token</Label>
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {value ? maskToken(value) : "—"}
-          </span>
-        </div>
-        <Input
-          id="admin-token-input"
-          type="password"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Paste existing token or use Generate / Rotate"
-          className="font-mono text-xs"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <div className="flex flex-wrap gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+          {value ? maskToken(value) : "—"}
+        </span>
+        <div className="flex items-center gap-1.5">
           <Button
             type="button"
-            size="sm"
+            size="icon-sm"
             variant="outline"
+            aria-label="Copy admin token"
             disabled={!value}
             onClick={() => void copyTokenOnly()}
           >
@@ -121,11 +132,15 @@ export function AdminTokenPanel({
             ) : (
               <Copy className="size-3.5" />
             )}
-            {copied === "token" ? "Copied" : "Copy token"}
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={rotate}>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="outline"
+            aria-label={value.trim() ? "Rotate admin token" : "Generate admin token"}
+            onClick={rotate}
+          >
             <RefreshCw className="size-3.5" />
-            {value.trim() ? "Rotate" : "Generate"}
           </Button>
         </div>
       </div>

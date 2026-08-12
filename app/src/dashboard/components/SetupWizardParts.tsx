@@ -1,20 +1,42 @@
 "use client";
 
-const RESOURCE_NAMES = [
+import { Info } from "lucide-react";
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { CloudflareModuleIcon } from "@/dashboard/components/CloudflareModuleIcon";
+
+export const RESOURCE_NAMES = [
   {
     name: "relaybase-api",
     kind: "Worker",
     why: "Your routing + admin API process. You deploy it with Wrangler; the Mac app only talks to this URL.",
+    detail:
+      "This is the small program Relaybase runs inside your Cloudflare account. It's the brain that handles sending and receiving email, manages your addresses, and talks to the Mac app. The Mac app only ever contacts this one address (your Worker URL) using your admin token — Relaybase's own servers never see your mail.",
   },
   {
     name: "relaybase-app",
     kind: "KV",
     why: "Stores Relaybase runtime data, admin config, and API keys inside your account.",
+    detail:
+      "Think of this as Relaybase's filing cabinet inside your Cloudflare account. It holds everything the app needs to run: your domains, addresses, audience lists, broadcasts, API keys, and settings. It lives entirely in your account — Relaybase can't read it.",
   },
   {
     name: "relaybase-inbound",
     kind: "R2",
     why: "Stores raw inbound email. Created automatically during install.",
+    detail:
+      "This is where incoming email is stored the moment it arrives, before Relaybase sorts it into your inbox. It's a private storage bucket in your Cloudflare account, created automatically during install. Only you and your Worker can see what's inside.",
+  },
+  {
+    name: "relaybase-logs",
+    kind: "D1",
+    why: "Optional ops-event log (compose/API/broadcast sends + inbound bounces) for the Dashboard Log page.",
+    detail:
+      "This is a small database that keeps a history of what was sent and any bounced emails, so you can review it later on the Dashboard Log page. It's optional for a self-install — you can skip it if you don't need the Log page, and your main send history is still kept safely elsewhere.",
   },
 ] as const;
 
@@ -51,25 +73,55 @@ function StepDot({ active, n, label }: { active: boolean; n: number; label: stri
   );
 }
 
-export function ResourceAside() {
+/**
+ * Always-visible "What we install" panel shown on Step 1 (Get ready).
+ * Lists every Cloudflare resource Relaybase creates in the user's account,
+ * each with a Cloudflare-style product icon for instant recognition.
+ */
+export function WhatWeInstall() {
   return (
-    <aside className="hidden w-72 shrink-0 space-y-3 rounded-lg border border-border p-4 md:block">
-      <p className="text-sm font-medium">What gets created (and why)</p>
+    <div className="space-y-3 rounded-lg border border-border p-4">
+      <p className="text-sm font-medium">What we install in your account</p>
       <ul className="space-y-3">
         {RESOURCE_NAMES.map((r) => (
-          <li key={`${r.kind}-${r.name}`} className="text-sm">
-            <p className="font-mono text-xs">
-              <span className="text-muted-foreground">{r.kind}</span>{" "}
-              <span className="font-medium text-foreground">{r.name}</span>
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{r.why}</p>
+          <li key={`${r.kind}-${r.name}`} className="flex items-start gap-3">
+            <CloudflareModuleIcon
+              kind={r.kind}
+              className="mt-0.5 size-5 shrink-0"
+            />
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 font-mono text-xs">
+                <span className="text-muted-foreground">{r.kind}</span>{" "}
+                <span className="font-medium text-foreground">{r.name}</span>
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label={`${r.kind} ${r.name} details`}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Info className="size-3" />
+                      </button>
+                    }
+                  />
+                  <PopoverContent
+                    align="start"
+                    side="bottom"
+                    className="max-w-xs"
+                  >
+                    <p className="text-xs text-muted-foreground">{r.detail}</p>
+                  </PopoverContent>
+                </Popover>
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{r.why}</p>
+            </div>
           </li>
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Cloudflare may bill a small Workers Paid plan fee (&#8776;$5/mo) directly
-        to you. Relaybase Pro is a separate software license.
+        Requires a Cloudflare Workers Paid plan (Pro and up).
       </p>
-    </aside>
+    </div>
   );
 }

@@ -34,7 +34,8 @@ import {
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { AdminTokenPanel } from "@/dashboard/components/AdminTokenPanel";
-import { ResourceAside, SetupStepper } from "@/dashboard/components/SetupWizardParts";
+import { CfInstallTokenGuide } from "@/dashboard/components/CfInstallTokenGuide";
+import { SetupStepper, WhatWeInstall } from "@/dashboard/components/SetupWizardParts";
 import { StepTwoBody } from "@/dashboard/components/SetupStepTwo";
 
 const DRAFT_KEY = "relaybase.setup.install.draft";
@@ -253,8 +254,8 @@ export function WorkerInstallPanel() {
         </button>
       </div>
 
-      <div className="flex gap-6">
-        <div className="min-w-0 flex-1 space-y-6">
+      <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* STEP 1 */}
           {step === 1 ? (
             <>
@@ -268,10 +269,12 @@ export function WorkerInstallPanel() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Relaybase runs entirely in <strong>your</strong> Cloudflare
                   account. Your email, API keys, and routing data never touch
-                  Relaybase servers. Cloudflare bills you directly (&#8776;$5/mo
-                  Workers Paid plan).
+                  Relaybase servers. Requires a Cloudflare Workers Paid plan
+                  (Pro and up).
                 </p>
               </div>
+
+              <WhatWeInstall />
 
               <div className="space-y-3 rounded-lg border border-border p-4">
                 <div className="flex items-center justify-between">
@@ -309,10 +312,7 @@ export function WorkerInstallPanel() {
                       autoComplete="off"
                       spellCheck={false}
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      Stored only on this Mac (~/.relaybase). Requires Workers
-                      Scripts, KV Storage, and R2 Storage edit scopes.
-                    </p>
+                    <CfInstallTokenGuide />
                   </div>
                 </div>
               ) : (
@@ -364,7 +364,6 @@ export function WorkerInstallPanel() {
             />
           )}
         </div>
-        <ResourceAside />
       </div>
 
       <Dialog open={doneOpen} onOpenChange={setDoneOpen}>

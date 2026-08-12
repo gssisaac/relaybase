@@ -4,6 +4,7 @@ import { requireMobilePassword, type MobileAuthResult } from "../lib/mobile-auth
 import {
   mobileEnabledAddresses,
   readMailbox,
+  updateAddressProfile,
   type MailboxAddress,
 } from "../lib/catalog-store";
 import {
@@ -56,6 +57,63 @@ mobile.get("/config", async (c) => {
   // Auth already ran in the middleware; return minimal public metadata.
   const email = c.get("authEmail");
   return c.json({ ok: true, mobile: true, email });
+});
+
+/** The authenticated teammate's own profile (display name + signature). */
+mobile.get("/profile", async (c) => {
+  const addresses = c.get("mobileAddresses");
+  const address = addresses[0];
+  return c.json({
+    ok: true,
+    email: c.get("authEmail"),
+    displayName: address?.displayName ?? "",
+    signature: address?.signature ?? "",
+  });
+});
+
+/** Update the teammate's own profile (display name + signature). */
+mobile.patch("/profile", async (c) => {
+  const email = c.get("authEmail");
+  let body: { displayName?: unknown; signature?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const patch: { displayName?: string; signature?: string } = {};
+  if (body.displayName !== undefined) {
+    if (typeof body.displayName !== "string") {
+      return c.json({ error: "displayName must be a string" }, 400);
+    }
+    const trimmed = body.displayName.trim();
+    if (trimmed.length > 128) {
+      return c.json({ error: "displayName must be 128 characters or fewer" }, 400);
+    }
+    patch.displayName = trimmed;
+  }
+  if (body.signature !== undefined) {
+    if (typeof body.signature !== "string") {
+      return c.json({ error: "signature must be a string" }, 400);
+    }
+    if (body.signature.length > 1024) {
+      return c.json({ error: "signature must be 1024 characters or fewer" }, 400);
+    }
+    patch.signature = body.signature;
+  }
+  const updated = await updateAddressProfile(
+    c.env.RELAYBASE_APP,
+    email,
+    patch,
+  );
+  if (!updated) {
+    return c.json({ error: "Account not found" }, 404);
+  }
+  return c.json({
+    ok: true,
+    email: updated.email,
+    displayName: updated.displayName ?? "",
+    signature: updated.signature ?? "",
+  });
 });
 
 /** All domains + addresses the mobile app is allowed to see. */

@@ -6,6 +6,8 @@ export type MailboxAddress = {
   email: string;
   domain: string;
   displayName?: string;
+  /** Per-account plain-text signature appended to new drafts. */
+  signature?: string;
   /**
    * When false, Cloudflare Email Routing uses action `drop`.
    * Omit / true = receive via Worker. Missing on read ⇒ treat as true.
@@ -24,15 +26,19 @@ export function normalizeMailboxAddress(input: {
   email: string;
   domain: string;
   displayName?: string;
+  signature?: string;
   inboundEnabled?: boolean;
   mobileEnabled?: boolean;
 }): MailboxAddress {
   const displayName =
     typeof input.displayName === "string" ? input.displayName.trim() : "";
+  const signature =
+    typeof input.signature === "string" ? input.signature : "";
   return {
     email: input.email.trim().toLowerCase(),
     domain: normalizeDomain(input.domain),
     ...(displayName ? { displayName } : {}),
+    ...(signature ? { signature } : {}),
     ...(input.inboundEnabled === false ? { inboundEnabled: false } : {}),
     ...(input.mobileEnabled === false ? { mobileEnabled: false } : {}),
   };
@@ -104,6 +110,7 @@ export async function readMailbox(kv: KVNamespace): Promise<MailboxData> {
               domain: a.domain,
               displayName:
                 typeof a.displayName === "string" ? a.displayName : undefined,
+              signature: typeof a.signature === "string" ? a.signature : undefined,
               inboundEnabled:
                 a.inboundEnabled === false
                   ? false
@@ -255,6 +262,42 @@ export async function removeAddress(
 /** Addresses the mobile app is allowed to see (mobileEnabled !== false). */
 export function mobileEnabledAddresses(data: MailboxData): MailboxAddress[] {
   return data.addresses.filter((a) => a.mobileEnabled !== false);
+}
+
+/**
+ * Merge profile fields (displayName, signature) into a single address record.
+ * Used by the team `/mobile/profile` endpoint so a teammate can edit their own
+ * identity without an admin token. Writes the same `srv:catalog:mailbox` KV
+ * record as the admin `PATCH /console/addresses` — no conflict since both go
+ * through this function.
+ */
+export async function updateAddressProfile(
+  kv: KVNamespace,
+  emailInput: string,
+  patch: { displayName?: string; signature?: string },
+): Promise<MailboxAddress | null> {
+  const email = emailInput.trim().toLowerCase();
+  const data = await readMailbox(kv);
+  const idx = data.addresses.findIndex((a) => a.email === email);
+  if (idx < 0) return null;
+  const prev = data.addresses[idx]!;
+  const displayName =
+    patch.displayName !== undefined
+      ? patch.displayName.trim()
+      : (prev.displayName ?? "");
+  const signature =
+    patch.signature !== undefined ? patch.signature : (prev.signature ?? "");
+  const next = normalizeMailboxAddress({
+    email: prev.email,
+    domain: prev.domain,
+    displayName: displayName || undefined,
+    signature: signature || undefined,
+    inboundEnabled: prev.inboundEnabled,
+    mobileEnabled: prev.mobileEnabled,
+  });
+  data.addresses[idx] = next;
+  await writeMailbox(kv, data);
+  return next;
 }
 
 /** Unique domains that have at least one mobile-enabled address. */

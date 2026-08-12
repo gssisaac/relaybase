@@ -27,12 +27,17 @@ export function normalizeEntryPath(path: string): string {
   const params = new URLSearchParams(query);
 
   const emailSection = pathname.match(
-    /^\/email\/(inbox|drafts|sent|compose|trash)(?:\/(.*))?$/,
+    /^\/email\/(inbox|drafts|sent|compose|trash|settings)(?:\/(.*))?$/,
   );
   if (emailSection) {
     const section = emailSection[1]!;
     const rest = emailSection[2];
-    if (rest && section !== "compose" && !params.get("m")) {
+    if (
+      rest &&
+      section !== "compose" &&
+      section !== "settings" &&
+      !params.get("m")
+    ) {
       try {
         params.set("m", decodeURIComponent(rest));
       } catch {

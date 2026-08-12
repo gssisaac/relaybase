@@ -14,6 +14,7 @@ import {
   writeEnabledAccounts,
 } from "@/email/enabled-accounts";
 import type { Address } from "@/email/components/types";
+import type { DesktopTeamLogin } from "@/lib/desktop/bridge";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
@@ -30,11 +31,13 @@ export class MailAccountsStore {
   availableAddresses: Address[] = [];
   enabledAccounts: string[] = [];
   accountColors: AccountColorMap = {};
+  signatures: Record<string, string> = {};
   loading = true;
   error: string | null = null;
 
   private userId = "";
   private apiBase = "/api/email";
+  private teamLogin: DesktopTeamLogin | null = null;
   private hydrated = false;
   private prefsReady = false;
   private started = false;
@@ -61,17 +64,27 @@ export class MailAccountsStore {
     );
   }
 
-  configure(input: { userId: string; apiBase: string }) {
+  get isTeamMode(): boolean {
+    return Boolean(this.teamLogin);
+  }
+
+  configure(input: {
+    userId: string;
+    apiBase: string;
+    teamLogin?: DesktopTeamLogin | null;
+  }) {
     const userChanged = this.userId !== input.userId;
     const apiChanged =
       this.apiBase !== (input.apiBase.replace(/\/$/, "") || "/api/email");
+    const teamChanged = this.teamLogin !== (input.teamLogin ?? null);
     this.userId = input.userId;
     this.apiBase = input.apiBase.replace(/\/$/, "") || "/api/email";
+    this.teamLogin = input.teamLogin ?? null;
     if (userChanged) {
       this.hydrated = false;
       void this.hydrateEnabled();
     }
-    if (this.started && (userChanged || apiChanged)) {
+    if (this.started && (userChanged || apiChanged || teamChanged)) {
       void this.refreshAddresses();
     }
   }
@@ -113,6 +126,21 @@ export class MailAccountsStore {
 
   async refreshAddresses(): Promise<void> {
     if (!this.apiBase) return;
+    // Team mode: the authenticated account is the only one in scope. Seed it
+    // directly from teamLogin instead of calling the admin /console/addresses
+    // endpoint (team users have no admin token).
+    if (this.teamLogin) {
+      const email = this.teamLogin.accountEmail.toLowerCase();
+      const seeded: Address = { email, domain: email.split("@")[1] ?? "" };
+      runInAction(() => {
+        this.availableAddresses = [seeded];
+        this.enabledAccounts = [email];
+        this.loading = false;
+        this.error = null;
+      });
+      this.ensureColors();
+      return;
+    }
     runInAction(() => {
       this.loading = true;
       this.error = null;
@@ -166,6 +194,36 @@ export class MailAccountsStore {
     writeEnabledAccounts(this.userId, next);
   }
 
+  /** Persist a per-account signature to local email prefs (phase 1). */
+  setSignature(email: string, signature: string) {
+    const key = email.trim().toLowerCase();
+    const next = { ...this.signatures, [key]: signature };
+    this.signatures = next;
+    void saveEmailPrefs({
+      version: 1,
+      accountColors: this.accountColors,
+      signatures: next,
+    });
+  }
+
+  getSignature(email: string): string {
+    return this.signatures[email.trim().toLowerCase()] ?? "";
+  }
+
+  /** Persist a per-account color to local email prefs. */
+  setAccountColor(email: string, color: string) {
+    const key = email.trim().toLowerCase();
+    const nextColors = { ...this.accountColors };
+    if (color) nextColors[key] = color;
+    else delete nextColors[key];
+    this.accountColors = nextColors;
+    void saveEmailPrefs({
+      version: 1,
+      accountColors: nextColors,
+      signatures: this.signatures,
+    });
+  }
+
   private pruneEnabledToAvailable() {
     if (!this.hydrated || this.loading || this.error) return;
     if (this.availableAddresses.length === 0) return;
@@ -185,6 +243,7 @@ export class MailAccountsStore {
       const prefs = await loadEmailPrefs();
       runInAction(() => {
         this.accountColors = prefs.accountColors;
+        this.signatures = prefs.signatures ?? {};
         this.prefsReady = true;
       });
       this.ensureColors();
@@ -203,7 +262,11 @@ export class MailAccountsStore {
     );
     if (changed) {
       this.accountColors = nextMap;
-      void saveEmailPrefs({ version: 1, accountColors: nextMap });
+      void saveEmailPrefs({
+        version: 1,
+        accountColors: nextMap,
+        signatures: this.signatures,
+      });
     }
   }
 }

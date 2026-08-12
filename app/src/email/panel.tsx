@@ -10,6 +10,7 @@ import {
 import { EmailPageSuspenseFallback } from "@/email/components/EmailPageSuspenseFallback";
 import { ComposeView } from "@/email/components/ComposeView";
 import { MailListView } from "@/email/components/MailListView";
+import { EmailSettingsView } from "@/email/components/EmailSettingsView";
 import { emailMessageIdFromSearch, useEmailPaths } from "@/email/paths";
 
 function EmailsInboxRedirect() {
@@ -43,13 +44,22 @@ function SuspenseComposeView() {
   );
 }
 
+function SuspenseEmailSettingsView() {
+  return (
+    <Suspense fallback={<EmailPageSuspenseFallback />}>
+      <EmailSettingsView />
+    </Suspense>
+  );
+}
+
 function mailboxSection(second?: string): EmailMailboxSection | null {
   if (
     second === "inbox" ||
     second === "drafts" ||
     second === "sent" ||
     second === "compose" ||
-    second === "trash"
+    second === "trash" ||
+    second === "settings"
   ) {
     return second;
   }
@@ -74,7 +84,9 @@ function EmailMailboxRoutesInner({
   const messageId = emailMessageIdFromSearch(searchParams, rest);
 
   let page: ReactNode = null;
-  if (
+  if (section === "settings") {
+    page = <SuspenseEmailSettingsView />;
+  } else if (
     section === "inbox" ||
     section === "drafts" ||
     section === "sent" ||

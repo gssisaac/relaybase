@@ -640,6 +640,7 @@ async function loadLocalCredentialsFile(): Promise<DesktopCredentials | null> {
 export type DesktopEmailPrefs = {
   version: number;
   accountColors: Record<string, string>;
+  signatures?: Record<string, string>;
 };
 
 export async function desktopGetEmailPrefs(): Promise<DesktopEmailPrefs | null> {

@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
 import { useDashboardPaths } from "@/dashboard/paths";
 import { AddEmailAccountDialog } from "@/email/components/AddEmailAccountDialog";
+import { AddTeamAccountDialog } from "@/email/components/AddTeamAccountDialog";
 import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
 import { useMailAccounts } from "@/email/components/MailAccountsContext";
 import {
@@ -38,7 +39,7 @@ import {
   type SidebarMode,
 } from "@/email/sidebar-mode";
 import { composeNewHref } from "@/email/compose-open";
-import { emailFolderHref, type EmailFolder } from "@/email/paths";
+import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/paths";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -54,9 +55,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
+import { Settings } from "lucide-react";
 
 /** Matches the product email mark (envelope on orange), as a Lucide stroke. */
 const EMAIL_TITLE_ICON_COLOR = "#D8663B";
@@ -84,11 +87,15 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
 
 function TitleMenuItems({
   mode,
+  teamMode,
   onAddAccount,
+  onOpenSettings,
   onSwitchMode,
 }: {
   mode: SidebarMode;
+  teamMode: boolean;
   onAddAccount: () => void;
+  onOpenSettings: () => void;
   onSwitchMode: () => void;
 }) {
   return (
@@ -99,14 +106,22 @@ function TitleMenuItems({
           Add account
         </DropdownMenuItem>
       ) : null}
-      <DropdownMenuItem onClick={onSwitchMode}>
-        {mode === "email" ? (
-          <LayoutGrid className="size-3.5" />
-        ) : (
-          <Mail className="size-3.5" />
-        )}
-        {mode === "email" ? "Open dashboard" : "Open email"}
-      </DropdownMenuItem>
+      {mode === "email" ? (
+        <DropdownMenuItem onClick={onOpenSettings}>
+          <Settings className="size-3.5" />
+          Settings
+        </DropdownMenuItem>
+      ) : null}
+      {teamMode ? null : (
+        <DropdownMenuItem onClick={onSwitchMode}>
+          {mode === "email" ? (
+            <LayoutGrid className="size-3.5" />
+          ) : (
+            <Mail className="size-3.5" />
+          )}
+          {mode === "email" ? "Open dashboard" : "Open email"}
+        </DropdownMenuItem>
+      )}
     </>
   );
 }
@@ -145,7 +160,7 @@ function FolderTree({
 }: {
   label: string;
   icon: LucideIcon;
-  folder: EmailFolder;
+  folder: Exclude<EmailFolder, "settings">;
   pathname: string;
   accountParam: string | null;
   accounts: { email: string; displayName?: string }[];
@@ -465,16 +480,22 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-export function UserSidebar() {
+export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const userId = useProductId();
   const router = useRouter();
+  const { teamLogin } = useDesktop();
+  const { settings: settingsHref } = useEmailPaths();
+  const isTeam = teamMode || Boolean(teamLogin);
   const [addOpen, setAddOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() =>
     readSidebarCollapsed(userId),
   );
-  const mode = useMemo(() => modeFromPathname(pathname), [pathname]);
+  const detectedMode = useMemo(() => modeFromPathname(pathname), [pathname]);
+  // Team mode is locked to email — never show dashboard nav even on a
+  // dashboard URL (team users can't reach those routes anyway).
+  const mode: SidebarMode = isTeam ? "email" : detectedMode;
   const {
     isDesktop,
     dragRegionClassName,
@@ -515,6 +536,17 @@ export function UserSidebar() {
       writeSidebarCollapsed(userId, next);
       return next;
     });
+  }
+
+  function openSettings() {
+    const account =
+      searchParams.get("account")?.trim() ||
+      searchParams.get("from")?.trim() ||
+      null;
+    const href = account
+      ? `${settingsHref}?account=${encodeURIComponent(account)}`
+      : settingsHref;
+    router.push(href);
   }
 
   const titleLabel = mode === "email" ? "Email" : "Relaybase console";
@@ -568,6 +600,7 @@ export function UserSidebar() {
               aria-label={modeToggleLabel}
               title={modeToggleLabel}
               onClick={switchModeTarget}
+              hidden={isTeam}
             >
               <ArrowLeftRight />
             </Button>
@@ -588,7 +621,9 @@ export function UserSidebar() {
               <DropdownMenuContent align="start" sideOffset={8}>
                 <TitleMenuItems
                   mode={mode}
+                  teamMode={isTeam}
                   onAddAccount={() => setAddOpen(true)}
+                  onOpenSettings={openSettings}
                   onSwitchMode={switchModeTarget}
                 />
               </DropdownMenuContent>
@@ -638,7 +673,9 @@ export function UserSidebar() {
                   <DropdownMenuContent align="start" sideOffset={8}>
                     <TitleMenuItems
                       mode={mode}
+                      teamMode={isTeam}
                       onAddAccount={() => setAddOpen(true)}
+                      onOpenSettings={openSettings}
                       onSwitchMode={switchModeTarget}
                     />
                   </DropdownMenuContent>
@@ -651,6 +688,7 @@ export function UserSidebar() {
                   aria-label={modeToggleLabel}
                   title={modeToggleLabel}
                   onClick={switchModeTarget}
+                  hidden={isTeam}
                 >
                   <ArrowLeftRight className="size-3.5" />
                 </Button>
@@ -678,7 +716,15 @@ export function UserSidebar() {
         )}
       </nav>
 
-      <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} />
+      {isTeam && teamLogin ? (
+        <AddTeamAccountDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          workerUrl={teamLogin.workerUrl}
+        />
+      ) : (
+        <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} />
+      )}
     </aside>
   );
 }

@@ -8,17 +8,19 @@ import type { AccountColorMap } from "@/email/account-colors";
 export type EmailPrefs = {
   version: 1;
   accountColors: AccountColorMap;
+  /** Per-account plain-text signatures (phase 1 local store; phase 2 → KV). */
+  signatures: Record<string, string>;
 };
 
 const LOCAL_KEY = "relaybase:email.json";
 
 export function emptyEmailPrefs(): EmailPrefs {
-  return { version: 1, accountColors: {} };
+  return { version: 1, accountColors: {}, signatures: {} };
 }
 
 function normalizePrefs(raw: unknown): EmailPrefs {
   if (!raw || typeof raw !== "object") return emptyEmailPrefs();
-  const obj = raw as { version?: unknown; accountColors?: unknown };
+  const obj = raw as { version?: unknown; accountColors?: unknown; signatures?: unknown };
   const colors: AccountColorMap = {};
   if (obj.accountColors && typeof obj.accountColors === "object") {
     for (const [key, value] of Object.entries(
@@ -29,7 +31,17 @@ function normalizePrefs(raw: unknown): EmailPrefs {
       }
     }
   }
-  return { version: 1, accountColors: colors };
+  const signatures: Record<string, string> = {};
+  if (obj.signatures && typeof obj.signatures === "object") {
+    for (const [key, value] of Object.entries(
+      obj.signatures as Record<string, unknown>,
+    )) {
+      if (typeof key === "string" && typeof value === "string") {
+        signatures[key.trim().toLowerCase()] = value;
+      }
+    }
+  }
+  return { version: 1, accountColors: colors, signatures };
 }
 
 function readLocalPrefs(): EmailPrefs {

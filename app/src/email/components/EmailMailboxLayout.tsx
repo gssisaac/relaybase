@@ -12,7 +12,8 @@ export type EmailMailboxSection =
   | "inbox"
   | "drafts"
   | "sent"
-  | "trash";
+  | "trash"
+  | "settings";
 
 type EmailMailboxLayoutProps = {
   section: EmailMailboxSection;

@@ -318,6 +318,7 @@ consoleAddresses.patch("/", async (c) => {
   let body: {
     email?: string;
     displayName?: string | null;
+    signature?: string | null;
     inboundEnabled?: boolean;
     mobileEnabled?: boolean;
   };
@@ -345,6 +346,12 @@ consoleAddresses.patch("/", async (c) => {
       : body.displayName === null
         ? ""
         : undefined;
+  const signature =
+    typeof body.signature === "string"
+      ? body.signature
+      : body.signature === null
+        ? ""
+        : undefined;
   const inboundEnabled =
     typeof body.inboundEnabled === "boolean"
       ? body.inboundEnabled
@@ -356,6 +363,7 @@ consoleAddresses.patch("/", async (c) => {
 
   if (
     displayName === undefined &&
+    signature === undefined &&
     typeof body.inboundEnabled !== "boolean" &&
     typeof body.mobileEnabled !== "boolean"
   ) {
@@ -367,6 +375,8 @@ consoleAddresses.patch("/", async (c) => {
     domain: current.domain,
     displayName:
       displayName !== undefined ? displayName || undefined : current.displayName,
+    signature:
+      signature !== undefined ? signature || undefined : current.signature,
     inboundEnabled,
     mobileEnabled,
   });

@@ -51,9 +51,10 @@ function DashboardShell({
   children: ReactNode;
 }) {
   if (teamMode) {
-    // Email-only shell for team users. No management sidebar/console — they
-    // only get the inbox scoped to their account. The full /mobile/* routing
-    // is wired in the email views; this shell keeps them out of admin pages.
+    // Email-only shell for team users. They get the same Email sidebar as the
+    // admin operator (Add account, Settings, folder tree) but no dashboard
+    // switch — team mode is locked to email. The full /mobile/* routing is
+    // wired in the email views; this shell keeps them out of admin pages.
     return (
       <SessionProvider userId={userId}>
         <DomainProvider>
@@ -62,6 +63,13 @@ function DashboardShell({
               <EmailCommandRuntimeProvider>
                 <DisableAppTabFocus />
                 <div className="flex h-svh overflow-hidden bg-background">
+                  <Suspense
+                    fallback={
+                      <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                    }
+                  >
+                    <UserSidebar teamMode />
+                  </Suspense>
                   <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     {children}
                   </main>

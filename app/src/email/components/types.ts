@@ -89,6 +89,8 @@ export type Address = {
   email: string;
   domain?: string;
   displayName?: string;
+  /** Per-account plain-text signature appended to new drafts. */
+  signature?: string;
   /** When false, inbound is dropped at Cloudflare. Omit/true = receive. */
   inboundEnabled?: boolean;
   /** When false, the mobile app cannot see or send from this address. Omit/true = allowed. */

@@ -20,6 +20,7 @@ import {
 import { InboundEmailDetail } from "@/email/components/EmailShared";
 import { InlineForwardComposer } from "@/email/components/InlineForwardComposer";
 import { InlineReplyComposer } from "@/email/components/InlineReplyComposer";
+import { QuotedReplyBlock } from "@/email/components/QuotedReplyBlock";
 import { ThreadDraftRows } from "@/email/components/ThreadDraftRows";
 import type {
   Address,
@@ -35,7 +36,10 @@ import {
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
 import { SenderAvatar, extractFirstEmail } from "@/email/components/SenderAvatar";
 import type { ForwardThreadPart } from "@/email/reply-helpers";
-import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
+import {
+  normalizeQuoteForDisplay,
+  trimQuotedHistoryForThread,
+} from "@/email/reply-quote-body";
 import { formatSenderDisplay } from "@/lib/email/format-sender";
 
 function pad2(n: number) {
@@ -529,6 +533,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                                 bodyText={trimmed.bodyText}
                                 bodyHtml={trimmed.bodyHtml}
                                 plain
+                                quoteText={trimmed.quoteText}
                                 attachments={
                                   detail?.attachments ??
                                   msg.message.attachments ??
@@ -555,13 +560,25 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                             </p>
                           ) : null}
                         </div>
-                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                          {
-                            trimQuotedHistoryForThread({
-                              bodyText: msg.message.bodyPreview,
-                            }).bodyText
-                          }
-                        </pre>
+                        {(() => {
+                          const sentTrimmed = trimQuotedHistoryForThread({
+                            bodyText: msg.message.bodyPreview,
+                          });
+                          return (
+                            <>
+                              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                                {sentTrimmed.bodyText}
+                              </pre>
+                              {sentTrimmed.quoteText ? (
+                                <QuotedReplyBlock
+                                  quote={normalizeQuoteForDisplay(
+                                    sentTrimmed.quoteText,
+                                  )}
+                                />
+                              ) : null}
+                            </>
+                          );
+                        })()}
                       </>
                     )}
                     {/* Explicit spacer — pb on flex children can be crushed by shrink. */}

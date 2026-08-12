@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   joinQuotedBody,
+  normalizeQuoteForDisplay,
   splitQuotedBody,
   splitQuotedHtml,
   trimQuotedHistoryForThread,
@@ -83,6 +84,23 @@ describe("splitQuotedBody / joinQuotedBody", () => {
     assert.equal(split.reply, "Can I use it for free?");
     assert.ok(split.quote?.startsWith("On Sun,"));
   });
+
+  it("inline-splits collapsed `On … wrote:` not on its own line", () => {
+    // bodyPreview-style: whitespace collapsed, reply + header on one line.
+    const body =
+      "Thanks for relying On Aug 12, 2026, 12:34 PM, Isaac Lee wrote: > Hi Isaac, > > I think so too.";
+    const split = splitQuotedBody(body);
+    assert.equal(split.reply, "Thanks for relying");
+    assert.ok(split.quote?.startsWith("On Aug 12, 2026"));
+    assert.ok(split.quote?.includes("> Hi Isaac"));
+  });
+
+  it("does not inline-split prose that merely contains `On … wrote:`", () => {
+    const body = "On Tuesday I wrote a note about the meeting.";
+    const split = splitQuotedBody(body);
+    assert.equal(split.quote, null);
+    assert.equal(split.reply, body);
+  });
 });
 
 describe("splitQuotedHtml / trimQuotedHistoryForThread", () => {
@@ -117,5 +135,38 @@ describe("splitQuotedHtml / trimQuotedHistoryForThread", () => {
     assert.match(quoted, /> Can I use it for free\?/);
     assert.doesNotMatch(quoted, /Prior/);
     assert.doesNotMatch(quoted, /Older/);
+  });
+});
+
+describe("normalizeQuoteForDisplay", () => {
+  it("passes multiline quotes through unchanged", () => {
+    const quote =
+      "On Aug 9, 2026, 1:50 PM, a@b.com wrote:\n\n> Prior\n> > Older";
+    assert.equal(normalizeQuoteForDisplay(quote), quote);
+  });
+
+  it("re-expands a whitespace-collapsed quote into line-per-quote form", () => {
+    const collapsed =
+      "On Aug 12, 2026, 12:34 PM, Isaac Lee wrote: > Hi Isaac, > > I think so too. > > Best, > > Isaac Lee";
+    const out = normalizeQuoteForDisplay(collapsed);
+    const lines = out.split("\n");
+    assert.ok(lines[0]!.startsWith("On Aug 12, 2026"));
+    assert.ok(lines.includes("> Hi Isaac,"));
+    // Collapsed `> >` (a blank `>` line + a depth-1 line) re-expands to a
+    // depth-2 rail — an inherent ambiguity of un-collapsing; acceptable behind
+    // the ··· expander.
+    assert.ok(lines.includes("> > I think so too."));
+    assert.ok(lines.includes("> > Best,"));
+    assert.ok(lines.includes("> > Isaac Lee"));
+  });
+
+  it("re-expands deeply nested collapsed quotes preserving depth runs", () => {
+    const collapsed =
+      "On Aug 12, 2026, 12:34 PM, Isaac Lee wrote: > > > > Hey, > > > > The best AI users";
+    const out = normalizeQuoteForDisplay(collapsed);
+    const lines = out.split("\n");
+    assert.ok(lines[0]!.startsWith("On Aug 12, 2026"));
+    assert.ok(lines.includes("> > > > Hey,"));
+    assert.ok(lines.includes("> > > > The best AI users"));
   });
 });

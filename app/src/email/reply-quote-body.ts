@@ -2,6 +2,12 @@ const QUOTE_HEADER_RE = /^On .+ wrote:\s*$/;
 /** Gmail often wraps: `On … <email>\nwrote:` */
 const QUOTE_HEADER_TWO_LINE_RE = /^On .+\nwrote:\s*$/;
 const QUOTED_LINE_RE = /^>/;
+/**
+ * Inline (not line-anchored) `On … wrote:` — catches headers that survived
+ * whitespace-collapse (e.g. `bodyPreview`) or ran on past `wrote:` on the
+ * same line. Used only as a fallback when the strict line-anchored pass fails.
+ */
+const INLINE_QUOTE_HEADER_RE = /On [^\n]+?\bwrote:/;
 
 function isQuoteHeaderAt(lines: string[], i: number): number {
   const line = lines[i]!;
@@ -46,6 +52,21 @@ export function splitQuotedBody(body: string): {
     const reply = replyBeforeQuoteHeader(lines, i);
     const quote = lines.slice(i).join("\n");
     return { reply, quote: quote.length ? quote : null };
+  }
+
+  // Fallback: inline `On … wrote:` not on its own line (whitespace-collapsed
+  // `bodyPreview`, or a header that ran on past `wrote:`). Only accept when the
+  // remainder carries `>` quote markers so plain prose is not mis-split.
+  const inlineMatch = INLINE_QUOTE_HEADER_RE.exec(normalized);
+  if (inlineMatch && inlineMatch.index != null && inlineMatch.index > 0) {
+    const tail = normalized.slice(inlineMatch.index);
+    if (/>/.test(tail)) {
+      const reply = normalized.slice(0, inlineMatch.index).replace(/\s+$/g, "");
+      const quote = tail;
+      if (reply.trim() || quote.length) {
+        return { reply, quote: quote.length ? quote : null };
+      }
+    }
   }
 
   // Fallback: blank line then a run of quoted lines through EOF.
@@ -173,4 +194,23 @@ export function trimQuotedHistoryForThread(input: {
     bodyHtml: undefined,
     quoteText: null,
   };
+}
+
+/**
+ * Re-expand a whitespace-collapsed quote (e.g. derived from `bodyPreview`,
+ * where the server collapses `\s+` → ` `) into line-per-quote form so the
+ * `···` expander (`QuotedReplyBlock`) can parse `>` depth and render nested
+ * rails. Idempotent on already-multiline quotes: those pass through unchanged.
+ *
+ * Strategy for single-line input:
+ *  1. Put each `On … wrote:` header on its own line.
+ *  2. Start a new line before each `>` marker preceded by non-`>` content,
+ *     keeping consecutive `>` runs (depth) together on one line.
+ */
+export function normalizeQuoteForDisplay(quote: string): string {
+  if (quote.includes("\n")) return quote;
+  let s = quote;
+  s = s.replace(/\s*(On [^\n]*?\bwrote:)/g, "\n$1");
+  s = s.replace(/([^>\n])\s+(>+)/g, "$1\n$2");
+  return s.replace(/^\n+/, "").trim();
 }

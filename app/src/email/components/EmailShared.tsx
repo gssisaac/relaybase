@@ -8,11 +8,13 @@ import { useEffect, useMemo, useState } from "react";
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
 
 import { EmailHtmlFrame } from "@/email/components/EmailHtmlFrame";
+import { QuotedReplyBlock } from "@/email/components/QuotedReplyBlock";
 import type { InboundAttachment } from "@/email/components/types";
 import {
   desktopAwareFetch,
   isWorkerBacked,
 } from "@/lib/desktop/api-base";
+import { normalizeQuoteForDisplay } from "@/email/reply-quote-body";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -169,6 +171,7 @@ export function InboundEmailDetail({
   bodyHtml,
   plain = false,
   attachments = [],
+  quoteText = null,
 }: {
   productId: string;
   messageKey: string;
@@ -178,6 +181,8 @@ export function InboundEmailDetail({
   /** No border/background card around the body (conversation stack). */
   plain?: boolean;
   attachments?: InboundAttachment[];
+  /** Trailing quoted history to hide behind a `···` expander. */
+  quoteText?: string | null;
 }) {
   const attachmentPath = (attachmentId: string) =>
     emailInboxAttachmentPath(messageKey, attachmentId, domain);
@@ -195,6 +200,11 @@ export function InboundEmailDetail({
   );
   const fileAttachments = attachments.filter(
     (attachment) => !attachment.contentType.startsWith("image/"),
+  );
+
+  const normalizedQuote = useMemo(
+    () => (quoteText ? normalizeQuoteForDisplay(quoteText) : null),
+    [quoteText],
   );
 
   return (
@@ -219,6 +229,8 @@ export function InboundEmailDetail({
           </p>
         </div>
       )}
+
+      {normalizedQuote ? <QuotedReplyBlock quote={normalizedQuote} /> : null}
 
       {attachments.length > 0 ? (
         <div className="space-y-3">

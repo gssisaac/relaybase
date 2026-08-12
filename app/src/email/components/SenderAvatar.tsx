@@ -43,7 +43,7 @@ export function SenderAvatar({
   const initials = senderInitials(fromName, fromEmail);
 
   return (
-    <span className={cn("relative mt-0.5 flex size-7 shrink-0", className)} aria-hidden>
+    <span className={cn("relative flex size-7 shrink-0", className)} aria-hidden>
       <span
         className={cn(
           "flex size-7 items-center justify-center overflow-hidden rounded-full",

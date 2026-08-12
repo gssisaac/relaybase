@@ -159,7 +159,7 @@ export const EmailTableRow = memo(function EmailTableRow({
   avatar?: ReactNode;
 }) {
   const className = cn(
-    "grid w-full gap-3 border-b border-border/20 px-4 py-3 text-left text-sm transition-all last:border-b-0 relative outline-none",
+    "grid w-full gap-3 border-b border-border/20 px-4 py-2 text-left text-sm transition-all last:border-b-0 relative outline-none",
     status
       ? "grid-cols-[1fr_auto_auto] sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]"
       : "grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]",
@@ -172,11 +172,11 @@ export const EmailTableRow = memo(function EmailTableRow({
 
   const body = (
     <>
-      <div className="flex min-w-0 items-start gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         {avatar ?? (
           <span
             className={cn(
-              "mt-1.5 size-2 shrink-0 rounded-full",
+              "size-2 shrink-0 rounded-full",
               unread ? "bg-primary" : "bg-transparent",
             )}
             aria-hidden

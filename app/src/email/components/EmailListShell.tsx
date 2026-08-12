@@ -186,7 +186,7 @@ export const EmailTableRow = memo(function EmailTableRow({
           <p
             className={cn(
               "truncate text-foreground",
-              unread ? "font-semibold" : "font-medium",
+              unread ? "font-semibold" : "font-normal",
             )}
           >
             {primary}
@@ -200,7 +200,7 @@ export const EmailTableRow = memo(function EmailTableRow({
         <span
           className={cn(
             "text-foreground",
-            unread ? "font-semibold" : "font-medium",
+            unread ? "font-semibold" : "font-normal",
           )}
         >
           {subject || "(no subject)"}

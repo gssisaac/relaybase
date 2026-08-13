@@ -74,7 +74,7 @@ export function normalizeEntryPath(path: string): string {
   }
 
   const audienceMatch = pathname.match(
-    /^\/audience\/([^/]+)(?:\/(contacts|send|progress|history|settings|overview))?\/?$/,
+    /^\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
   );
   if (audienceMatch) {
     let groupId = audienceMatch[1]!;
@@ -86,13 +86,7 @@ export function normalizeEntryPath(path: string): string {
     const next = new URLSearchParams();
     next.set("id", groupId);
     const tabSeg = audienceMatch[2];
-    if (
-      tabSeg === "contacts" ||
-      tabSeg === "send" ||
-      tabSeg === "progress" ||
-      tabSeg === "history" ||
-      tabSeg === "settings"
-    ) {
+    if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
     return `/audience?${next.toString()}`;

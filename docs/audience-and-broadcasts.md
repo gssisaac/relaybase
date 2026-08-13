@@ -30,7 +30,7 @@ Audience is no longer a flat domain contact list. The unit of work is an **Audie
 - Holds **contacts** (`manual` and/or `synced`)
 - Optional **generic JSON data source** + credential
 - Optional **scheduled cron** refresh
-- Detail pages with tabs (like Accounts)
+- Detail opens as a right-side **Sheet** on `/audience` (list stays mounted), with three tabs: Audience list, Send history, Settings (mirrors `AccountDetailSheet` pattern)
 
 Legacy flat contacts without `groupId` are migrated into a per-domain **“Manual subscribers”** group on read.
 
@@ -54,13 +54,10 @@ Lifecycle:
 
 | Path | View |
 |------|------|
-| `/audience` | Group list + Add group dialog |
-| `/audience/:groupId` | Overview |
-| `/audience/:groupId/contacts` | Contacts |
-| `/audience/:groupId/send` | Starts broadcast flow (preselects group) |
-| `/audience/:groupId/progress` | Live sync/cron progress |
-| `/audience/:groupId/history` | Broadcasts that include this group |
-| `/audience/:groupId/settings` | Name, default sender, data source, cron, delete |
+| `/audience` | Group list + Add group dialog; row click opens detail **Sheet** via `?id=&tab=` |
+| `/audience?id=<groupId>` | Sheet — Audience list (default tab) |
+| `/audience?id=<groupId>&tab=history` | Sheet — Send history (broadcasts that include this group) |
+| `/audience?id=<groupId>&tab=settings` | Sheet — Name, default sender, data source, cron, delete |
 | `/broadcasts` | List + **New broadcast** dialog (audience only) |
 | `/broadcasts/new` | Redirects to `/broadcasts?new=1` |
 | `/broadcasts/:id` | Draft compose **or** sent Overview |
@@ -68,7 +65,7 @@ Lifecycle:
 | `/broadcasts/:id/content` | Sent — content tab (+ reuse into new draft) |
 | `/broadcasts/:id/progress` | Live send progress while sending; past runs when idle |
 
-Deep-link from Audience Send: `/broadcasts?new=1&groupId=<id>` opens the create dialog with that group pre-checked.
+Legacy `/audience/:groupId[/contacts|history|settings]` segments are normalized to `/audience?id=&tab=`. Starting a broadcast for a group happens from the Broadcasts page audience picker (the per-group Send tab was removed).
 
 ---
 

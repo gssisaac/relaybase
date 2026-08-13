@@ -58,13 +58,7 @@ export function useDashboardPaths() {
 
 export type AccountDetailTab = "overview" | "logs" | "settings" | "other-device";
 
-export type AudienceDetailTab =
-  | "overview"
-  | "contacts"
-  | "send"
-  | "progress"
-  | "history"
-  | "settings";
+export type AudienceDetailTab = "contacts" | "history" | "settings";
 
 export type BroadcastDetailTab =
   | "overview"
@@ -102,11 +96,11 @@ export function accountDetailFromSearch(searchParams: {
 /** Audience group detail — `/audience?id=&tab=`. */
 export function audienceDetailHref(
   groupId: string,
-  tab: AudienceDetailTab = "overview",
+  tab: AudienceDetailTab = "contacts",
 ): string {
   const params = new URLSearchParams();
   params.set("id", groupId.trim());
-  if (tab !== "overview") params.set("tab", tab);
+  if (tab !== "contacts") params.set("tab", tab);
   return `/audience?${params.toString()}`;
 }
 
@@ -117,13 +111,7 @@ export function audienceDetailFromSearch(searchParams: {
   if (!groupId) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
   const tab: AudienceDetailTab =
-    raw === "contacts" ||
-    raw === "send" ||
-    raw === "progress" ||
-    raw === "history" ||
-    raw === "settings"
-      ? raw
-      : "overview";
+    raw === "history" || raw === "settings" ? raw : "contacts";
   return { groupId, tab };
 }
 

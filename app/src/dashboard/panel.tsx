@@ -17,19 +17,6 @@ import {
   type AudienceDetailTab,
   type BroadcastDetailTab,
 } from "@/dashboard/paths";
-import {
-  AudienceGroupDetailProvider,
-} from "@/dashboard/components/AudienceGroupDetailContext";
-import {
-  AudienceGroupDetailShell,
-  type AudienceGroupSection,
-} from "@/dashboard/components/AudienceGroupDetailShell";
-import { AudienceGroupContactsView } from "@/dashboard/components/AudienceGroupContactsView";
-import { AudienceGroupHistoryView } from "@/dashboard/components/AudienceGroupHistoryView";
-import { AudienceGroupOverviewView } from "@/dashboard/components/AudienceGroupOverviewView";
-import { AudienceGroupProgressView } from "@/dashboard/components/AudienceGroupProgressView";
-import { AudienceGroupSendView } from "@/dashboard/components/AudienceGroupSendView";
-import { AudienceGroupSettingsView } from "@/dashboard/components/AudienceGroupSettingsView";
 import { AudienceGroupsView } from "@/dashboard/components/AudienceGroupsView";
 import {
   BroadcastDetailProvider,
@@ -109,51 +96,6 @@ function AccountsRoutes({
   return <AccountsView />;
 }
 
-function parseAudienceGroupSection(segment?: string): AudienceGroupSection {
-  if (
-    segment === "contacts" ||
-    segment === "send" ||
-    segment === "progress" ||
-    segment === "history" ||
-    segment === "settings" ||
-    segment === "overview"
-  ) {
-    return segment === "overview" ? "overview" : segment;
-  }
-  return "overview";
-}
-
-function AudienceGroupDetailRoutes({
-  groupId,
-  section,
-}: {
-  groupId: string;
-  section: AudienceGroupSection;
-}) {
-  let page: ReactNode = null;
-  if (section === "contacts") {
-    page = <AudienceGroupContactsView />;
-  } else if (section === "send") {
-    page = <AudienceGroupSendView />;
-  } else if (section === "progress") {
-    page = <AudienceGroupProgressView />;
-  } else if (section === "history") {
-    page = <AudienceGroupHistoryView />;
-  } else if (section === "settings") {
-    page = <AudienceGroupSettingsView />;
-  } else {
-    page = <AudienceGroupOverviewView />;
-  }
-
-  return (
-    <AudienceGroupDetailProvider groupId={groupId}>
-      <AudienceGroupDetailShell section={section}>
-        {page}
-      </AudienceGroupDetailShell>
-    </AudienceGroupDetailProvider>
-  );
-}
-
 function AudienceRoutes({
   pathGroupId,
   pathRest,
@@ -164,18 +106,18 @@ function AudienceRoutes({
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromQuery = audienceDetailFromSearch(searchParams);
-  const pathSection = parseAudienceGroupSection(pathRest[0]);
-  const groupId = fromQuery?.groupId ?? pathGroupId;
-  const section: AudienceDetailTab = fromQuery?.tab ?? pathSection;
 
+  // Migrate legacy `/audience/{groupId}[/tab]` → `/audience?id=&tab=` (static-safe).
   useEffect(() => {
     if (!pathGroupId || fromQuery) return;
-    router.replace(audienceDetailHref(pathGroupId, section));
-  }, [fromQuery, pathGroupId, router, section]);
+    const tabSeg = pathRest[0];
+    const tab: AudienceDetailTab =
+      tabSeg === "history" || tabSeg === "settings" ? tabSeg : "contacts";
+    router.replace(audienceDetailHref(pathGroupId, tab));
+  }, [fromQuery, pathGroupId, pathRest, router]);
 
-  if (!groupId) return <AudienceGroupsView />;
   if (pathGroupId && !fromQuery) return null;
-  return <AudienceGroupDetailRoutes groupId={groupId} section={section} />;
+  return <AudienceGroupsView />;
 }
 
 function parseBroadcastSection(segment?: string): BroadcastSection {

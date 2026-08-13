@@ -4,7 +4,7 @@ navTitle: "Why we built Relaybase"
 description: "Relaybase didn't start as a product idea. It started with a CDN going down during a live ticketing launch, a scramble onto Cloudflare, and a $5/month email setup we kept reusing."
 keyword: "Relaybase origin story"
 order: 11
-date: "2026-07-13"
+date: "2026-08-13"
 image: "/images/resources/why-we-built-relaybase-hero.webp"
 imageAlt: "A flat vector illustration showing a broken browser with a traffic spike on the left, a teal migration arrow in the middle, and a stable Cloudflare edge cloud with email envelopes and a single price tag on the right"
 ---

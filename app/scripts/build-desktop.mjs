@@ -66,6 +66,7 @@ try {
     { path: ["email", "sent"] },
     { path: ["email", "compose"] },
     { path: ["email", "trash"] },
+    { path: ["email", "settings"] },
   ];
 }
 

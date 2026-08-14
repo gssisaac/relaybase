@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 
+import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { UserSidebar } from "@/components/layout/UserSidebar";
@@ -50,6 +51,13 @@ function DashboardShell({
   teamMode?: boolean;
   children: ReactNode;
 }) {
+  const pathname = usePathname();
+  // Email settings is a fullscreen takeover: it renders its own side area
+  // (with macOS traffic-light inset + back button) and hides the main app
+  // sidebar so it can occupy the whole window.
+  const isEmailSettings =
+    pathname === "/email/settings" || pathname.startsWith("/email/settings?");
+
   if (teamMode) {
     // Email-only shell for team users. They get the same Email sidebar as the
     // admin operator (Add account, Settings, folder tree) but no dashboard
@@ -63,17 +71,20 @@ function DashboardShell({
               <EmailCommandRuntimeProvider>
                 <DisableAppTabFocus />
                 <div className="flex h-svh overflow-hidden bg-background">
-                  <Suspense
-                    fallback={
-                      <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                    }
-                  >
-                    <UserSidebar teamMode />
-                  </Suspense>
+                  {isEmailSettings ? null : (
+                    <Suspense
+                      fallback={
+                        <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                      }
+                    >
+                      <UserSidebar teamMode />
+                    </Suspense>
+                  )}
                   <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     {children}
                   </main>
                 </div>
+                <AppHotkeys />
                 <GlobalCommandPalette />
               </EmailCommandRuntimeProvider>
             </EmailMailboxProvider>
@@ -93,18 +104,21 @@ function DashboardShell({
                 <EmailCommandRuntimeProvider>
                   <DisableAppTabFocus />
                   <div className="flex h-svh overflow-hidden bg-background">
-                    <Suspense
-                      fallback={
-                        <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                      }
-                    >
-                      <UserSidebar />
-                    </Suspense>
+                    {isEmailSettings ? null : (
+                      <Suspense
+                        fallback={
+                          <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                        }
+                      >
+                        <UserSidebar />
+                      </Suspense>
+                    )}
                     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                      <DomainProgressBanner />
+                      {isEmailSettings ? null : <DomainProgressBanner />}
                       {children}
                     </main>
                   </div>
+                  <AppHotkeys />
                   <GlobalCommandPalette />
                 </EmailCommandRuntimeProvider>
               </EmailMailboxProvider>

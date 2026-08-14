@@ -1,10 +1,11 @@
 "use client";
 
-import { LogOut, Trash2 } from "lucide-react";
+import { ArrowLeft, LogOut, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebarSpacer";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,7 @@ import { ACCOUNT_COLOR_PALETTE } from "@/email/account-colors";
 import { useEmailPaths } from "@/email/paths";
 import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import {
   desktopClearCredentials,
   desktopClearRelaybaseAccount,
@@ -68,8 +70,10 @@ export function EmailSettingsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productId = useProductId();
-  const { apiBase } = useEmailPaths();
+  const { apiBase, inbox } = useEmailPaths();
   const { teamLogin, refresh: refreshDesktop } = useDesktop();
+  const { dragRegionProps, dragRegionClassName, noDragClassName } =
+    useDesktopChrome();
   const isTeam = Boolean(teamLogin);
   const {
     availableAddresses,
@@ -298,118 +302,179 @@ export function EmailSettingsView() {
   if (!accounts.length) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <DesktopTitleBar className="px-4 py-3">
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold tracking-tight">
-              Email settings
-            </h1>
+        {/* Side area — fullscreen takeover left column */}
+        <aside
+          {...dragRegionProps}
+          className={cn(
+            "flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
+            dragRegionClassName,
+          )}
+        >
+          <MacDesktopTitlebarSpacer />
+          <div
+            className={cn("px-2 pb-2 pt-1", noDragClassName)}
+            {...(dragRegionProps ? { "data-tauri-drag-region": "false" } : {})}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-muted-foreground"
+              onClick={() => router.push(inbox)}
+            >
+              <ArrowLeft className="size-3.5" />
+              Back to email
+            </Button>
           </div>
-        </DesktopTitleBar>
-        <div className="mx-auto w-full max-w-[640px] p-4">
-          <p className="text-sm text-muted-foreground">
-            No accounts yet. Add one from the sidebar.
-          </p>
+        </aside>
+
+        {/* Right pane */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <DesktopTitleBar className="px-4 py-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold tracking-tight">
+                Email settings
+              </h1>
+            </div>
+          </DesktopTitleBar>
+          <div className="mx-auto w-full max-w-[640px] p-4">
+            <p className="text-sm text-muted-foreground">
+              No accounts yet. Add one from the sidebar.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <DesktopTitleBar className="px-4 py-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold tracking-tight">
-            Email settings
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Per-account display name and signature.
-          </p>
-        </div>
-      </DesktopTitleBar>
+    <div className="flex min-h-0 flex-1 overflow-hidden">
+      {/* Side area — fullscreen takeover left column. Acts as the macOS
+          window-drag region; interactive children opt out via noDrag. */}
+      <aside
+        {...dragRegionProps}
+        className={cn(
+          "flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground",
+          dragRegionClassName,
+        )}
+      >
+        <MacDesktopTitlebarSpacer />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Inner account sidebar */}
-        <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-          <nav
-            className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2"
-            aria-label="Accounts"
+        <div
+          className={cn("shrink-0 px-2 pb-2 pt-1", noDragClassName)}
+          {...(dragRegionProps ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-muted-foreground"
+            onClick={() => router.push(inbox)}
           >
-            {accounts.map((account) => {
-              const active =
-                account.email.toLowerCase() === activeEmail.toLowerCase();
-              return (
-                <button
-                  key={account.email}
-                  type="button"
-                  onClick={() => setSelectedEmail(account.email)}
-                  title={account.email}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors",
-                    active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-                  )}
-                >
-                  <span
-                    className="size-2 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor:
-                        accountColors[account.email.toLowerCase()] ??
-                        ACCOUNT_COLOR_PALETTE[0],
-                    }}
-                    aria-hidden
-                  />
-                  <span className="min-w-0 flex-1 truncate">
-                    {account.email}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
+            <ArrowLeft className="size-3.5" />
+            Back to email
+          </Button>
+        </div>
 
-          {/* Sign out — global, at the bottom of the account sidebar */}
-          <div className="shrink-0 border-t border-sidebar-border p-2">
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive"
-                    disabled={signingOut}
-                  />
-                }
+        <nav
+          className={cn(
+            "flex flex-1 flex-col gap-0.5 overflow-y-auto p-2",
+            noDragClassName,
+          )}
+          aria-label="Accounts"
+          {...(dragRegionProps ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          {accounts.map((account) => {
+            const active =
+              account.email.toLowerCase() === activeEmail.toLowerCase();
+            return (
+              <button
+                key={account.email}
+                type="button"
+                onClick={() => setSelectedEmail(account.email)}
+                title={account.email}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium transition-colors",
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                )}
               >
-                <LogOut className="size-3.5" />
-                Sign out of Relaybase
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Sign out of Relaybase?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {isTeam
-                      ? "Clears your team login from this device and returns you to the sign-in page."
-                      : "Clears your admin credentials from this device and returns you to setup."}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    disabled={signingOut}
-                    onClick={() => void handleSignOut()}
-                  >
-                    {signingOut ? "Signing out…" : "Sign out"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </aside>
+                <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor:
+                      accountColors[account.email.toLowerCase()] ??
+                      ACCOUNT_COLOR_PALETTE[0],
+                  }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  {account.email}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
 
-        {/* Right pane: selected account settings */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[640px] space-y-6 p-4">
-              <EmailAlerts error={error} message={null} />
+        {/* Sign out — global, at the bottom of the account sidebar */}
+        <div
+          className={cn(
+            "shrink-0 border-t border-sidebar-border p-2",
+            noDragClassName,
+          )}
+          {...(dragRegionProps ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive"
+                  disabled={signingOut}
+                />
+              }
+            >
+              <LogOut className="size-3.5" />
+              Sign out of Relaybase
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sign out of Relaybase?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {isTeam
+                    ? "Clears your team login from this device and returns you to the sign-in page."
+                    : "Clears your admin credentials from this device and returns you to setup."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={signingOut}
+                  onClick={() => void handleSignOut()}
+                >
+                  {signingOut ? "Signing out…" : "Sign out"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </aside>
+
+      {/* Right pane: selected account settings */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <DesktopTitleBar className="px-4 py-3">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold tracking-tight">
+              Email settings
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Per-account display name and signature.
+            </p>
+          </div>
+        </DesktopTitleBar>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[640px] space-y-6 p-4">
+            <EmailAlerts error={error} message={null} />
 
               <Card>
                 <CardHeader>
@@ -569,7 +634,6 @@ export function EmailSettingsView() {
               ) : null}
             </div>
           </div>
-        </div>
       </div>
     </div>
   );

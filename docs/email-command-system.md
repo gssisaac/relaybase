@@ -22,6 +22,8 @@ Relaybase mail actions must behave like a Superhuman-style command system:
 
 Do **not** reintroduce dashboard “Open Dashboard / Open Domains / …” navigation into the mail Cmd+K palette. That palette is mail-command only.
 
+The `GlobalCommandPalette` *may* host a separate **App-level group** (heading “App”, rendered above the mail groups) for global navigation such as “Go to settings” (`⌘,` / `Ctrl+,`). App commands are defined locally in `GlobalCommandPalette.tsx` — they are **not** added to `EMAIL_COMMAND_DEFS` / `email-command-store.ts`, are not selection-filtered, and are always available (even when no mailbox scope is published). The mail command registry remains mail-action only. The shared settings-URL logic lives in `app/src/lib/navigation/open-settings.ts` (`useOpenSettings`), reused by the `AppHotkeys` (`⌘,`) listener.
+
 ---
 
 ## Folder structure
@@ -203,7 +205,7 @@ External packages/components import from `@/email/commands` (barrel). Do not dee
 
 ### Don’t
 
-- Don’t add dashboard/settings “Open …” navigation back into mail Cmd+K.
+- Don’t add dashboard/settings “Open …” navigation back into mail Cmd+K. (A separate App-level group in the palette is allowed — see the note above; the mail command registry itself stays mail-only.)
 - Don’t duplicate command labels/shortcuts in three places.
 - Don’t show unavailable commands as disabled rows in palette/menu.
 - Don’t put `commandRuntimeFor` / scope publish / context-menu rendering back into a growing god-component; use the adapter + `EmailCommandContextMenu`.

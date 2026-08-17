@@ -118,7 +118,7 @@ export function ListToolbar({
 
 export function EmailTableHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="grid select-none grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] gap-3 border-b border-border/30 bg-muted/10 px-4 py-1.5 text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
+    <div className="grid select-none grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] items-center gap-3 border-b border-border/30 bg-muted/10 px-4 py-1.5 text-left text-xs font-medium text-muted-foreground sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)_auto_auto]">
       {children}
     </div>
   );

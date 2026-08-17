@@ -93,7 +93,7 @@ export function MailListPane({
                 </span>
               </span>
               <span>Subject</span>
-              <span className="text-right">Date</span>
+              <span>Date</span>
             </EmailTableHeader>
             <div>
               {items.map((item) => {

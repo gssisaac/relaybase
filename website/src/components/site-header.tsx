@@ -2,9 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getCurrentProPrice, isEarlyAccessActive, siteConfig } from "@/lib/site-config";
+import { siteConfig } from "@/lib/site-config";
 
 const navItems = [
   { href: "/#addresses", label: "Addresses" },
@@ -46,16 +45,6 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <Badge variant="teal" className="hidden sm:inline-flex">
-            Free, or ${getCurrentProPrice()} once for Pro
-            {isEarlyAccessActive() ? " (Early Access)" : ""}
-          </Badge>
-          <a
-            href={siteConfig.consoleUrl + "/login"}
-            className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline"
-          >
-            Log in
-          </a>
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
             Get started
             <ArrowRight data-icon="inline-end" />

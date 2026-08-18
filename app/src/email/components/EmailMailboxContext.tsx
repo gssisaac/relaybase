@@ -11,6 +11,7 @@ import { reaction } from "mobx";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useMailAccounts } from "@/email/components/MailAccountsContext";
+import { useSenderIconStore } from "@/email/components/SenderIconContext";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
 import { EmailSendUndoneNavigator } from "@/email/components/EmailSendUndoneNavigator";
 import { useEmailPaths } from "@/email/paths";
@@ -82,6 +83,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const { apiBase } = useEmailPaths();
   const { enabledAddresses, enabledAccounts, availableAddresses } =
     useMailAccounts();
+  const senderIconStore = useSenderIconStore();
   const [store, setStore] = useState(() => new EmailMailboxStore());
 
   // Turbopack/HMR keeps the old MobX instance after EmailMailboxStore gains
@@ -98,6 +100,14 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
       liveStore.stop();
     };
   }, [liveStore]);
+
+  // Account switch: drop in-memory sender favicons from the previous product.
+  // Persisted favicon status stays — domains overlap across accounts.
+  useEffect(() => {
+    return () => {
+      senderIconStore.clear();
+    };
+  }, [senderIconStore, productId]);
 
   useEffect(() => {
     liveStore.configure({

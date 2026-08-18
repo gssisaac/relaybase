@@ -36,6 +36,7 @@ Server/worker data (Cloudflare KV `RELAYBASE_APP`, R2, D1 waitlist) is separate 
 ├── api-keys.json                  # plaintext API key vault (0600)
 ├── app-icon.png                   # notification identity image (seeded from bundle)
 ├── cache/                         # opaque dashboard/API response cache
+│   ├── favicon-status.json        # sender favicon ok/failed status (images stay memory-only)
 │   └── dashboard/
 │       ├── stats-{range}.json
 │       ├── api-keys-{range}.json

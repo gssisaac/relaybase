@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 export function IntroVideo() {
   return (
     <section className="border-b border-border bg-well py-16 md:py-20">
-      <div className="mx-auto max-w-4xl px-6">
+      <div className="mx-auto max-w-[1000px] px-6">
         <div className="mx-auto max-w-xl text-center">
           <Badge variant="outline" className="mb-4 bg-white">
             60-second intro
@@ -17,12 +17,14 @@ export function IntroVideo() {
           </p>
         </div>
 
-        <div className="mx-auto mt-8 max-w-3xl overflow-hidden rounded-2xl border border-border bg-black shadow-sm">
+        <div className="mx-auto mt-8 w-full max-w-[1000px] overflow-hidden rounded-2xl border border-border bg-black shadow-sm">
           <video
-            className="aspect-video w-full"
-            controls
+            className="aspect-[1280/898] h-auto w-full object-cover"
+            autoPlay
+            muted
+            loop
             playsInline
-            preload="metadata"
+            preload="auto"
             poster="/video/relaybase-intro-poster.jpg"
           >
             <source src="/video/relaybase-intro.mp4" type="video/mp4" />

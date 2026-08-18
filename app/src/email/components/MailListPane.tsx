@@ -273,12 +273,23 @@ export function MailListPane({
   // updates messageId — offscreen rows have no DOM node to scroll to).
   useEffect(() => {
     if (selectedIndex < 0) return;
-    listRef.current?.scrollToRow({ index: selectedIndex, align: "auto" });
+    try {
+      listRef.current?.scrollToRow({ index: selectedIndex, align: "auto" });
+    } catch {
+      // Row not mounted yet (list still measuring) — ignore.
+    }
   }, [listRef, selectedIndex]);
 
   // Back to the top when the visible dataset changes wholesale.
+  const itemCount = items.length;
   useEffect(() => {
-    listRef.current?.scrollToRow({ index: 0, behavior: "instant" });
+    if (itemCount === 0) return;
+    try {
+      listRef.current?.scrollToRow({ index: 0, behavior: "instant" });
+    } catch {
+      // Empty/remeasuring list — ignore.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountFilter, folder, listRef, search]);
 
   const showSentinel = hasMore || loadingMore;

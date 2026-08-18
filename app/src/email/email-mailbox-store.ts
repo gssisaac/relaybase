@@ -946,6 +946,11 @@ export class EmailMailboxStore {
         this.config = cfgResult.data;
       });
 
+      // Whole-mailbox + per-address counts refresh even when the mail lists
+      // themselves are served from cache. Cheap on the Worker (compact
+      // index aggregate) — best-effort.
+      void this.refreshInboxCounts(domains, generation);
+
       if (skipMailNetwork) {
         return;
       }
@@ -975,10 +980,6 @@ export class EmailMailboxStore {
           return { domain, result };
         }),
       );
-
-      // Per-address counts power the account-filtered header total. Cheap on
-      // the Worker (compact index aggregate) — best-effort.
-      void this.refreshInboxCounts(domains, generation);
 
       if (this.refreshGeneration !== generation) return;
 
@@ -1193,10 +1194,15 @@ export class EmailMailboxStore {
     }
   }
 
-  /** Best-effort per-address counts (drives the account-filtered header). */
+  /**
+   * Best-effort whole-mailbox counts from `/inbox/counts` — per-address
+   * (account-filtered header) plus per-domain totals (all-accounts header).
+   */
   private async refreshInboxCounts(domains: string[], generation: number) {
     if (!this.apiBase || domains.length === 0) return;
     const merged: Record<string, { total: number; unread: number }> = {};
+    const totals: Record<string, number> = {};
+    const unreads: Record<string, number> = {};
     await Promise.all(
       domains.map(async (domain) => {
         try {
@@ -1206,9 +1212,15 @@ export class EmailMailboxStore {
           if (!res.ok) return;
           const data = await readResponseJson<{
             counts?: Record<string, { total: number; unread: number }>;
+            totalAll?: number;
+            unreadAll?: number;
           }>(res);
           for (const [email, value] of Object.entries(data.counts ?? {})) {
             merged[email.toLowerCase()] = value;
+          }
+          if (typeof data.totalAll === "number") totals[domain] = data.totalAll;
+          if (typeof data.unreadAll === "number") {
+            unreads[domain] = data.unreadAll;
           }
         } catch {
           // keep previous counts
@@ -1216,12 +1228,19 @@ export class EmailMailboxStore {
       }),
     );
     if (this.refreshGeneration !== generation) return;
-    if (Object.keys(merged).length === 0) return;
+    if (
+      Object.keys(merged).length === 0 &&
+      Object.keys(totals).length === 0
+    ) {
+      return;
+    }
     runInAction(() => {
       this.inboxCountsByAddress = {
         ...this.inboxCountsByAddress,
         ...merged,
       };
+      this.inboxTotalByDomain = { ...this.inboxTotalByDomain, ...totals };
+      this.inboxUnreadByDomain = { ...this.inboxUnreadByDomain, ...unreads };
     });
   }
 

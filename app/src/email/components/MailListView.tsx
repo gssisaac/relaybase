@@ -58,6 +58,9 @@ export const MailListView = observer(function MailListView({
     selectedThread,
     activityDetail,
     detailLoading,
+    hasMore,
+    loadingMore,
+    loadMore,
   } = useMailListItems({
     folder,
     messageId,
@@ -162,6 +165,9 @@ export const MailListView = observer(function MailListView({
             emptyTrash={store.emptyTrash}
             isUnread={store.isUnread}
             commandRuntimeFor={commandRuntimeFor}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={loadMore}
           />
         </div>
 

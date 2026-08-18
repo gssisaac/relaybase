@@ -85,20 +85,33 @@ async function writeJson(relativePath: string, value: unknown): Promise<void> {
   writeLocalJson(relativePath, value);
 }
 
+export type PersistedInboxCache = {
+  messages: RoutingActivityEvent[];
+  nextBeforeByDomain?: Record<string, string | null>;
+  hasMoreByDomain?: Record<string, boolean>;
+};
+
 export async function loadPersistedInbox(
   productId: string,
-): Promise<RoutingActivityEvent[] | null> {
-  const data = await readJson<{ messages?: RoutingActivityEvent[] }>(
-    inboxPath(productId),
-  );
-  return data?.messages ?? null;
+): Promise<PersistedInboxCache | null> {
+  const data = await readJson<PersistedInboxCache>(inboxPath(productId));
+  if (!data?.messages) return null;
+  return {
+    messages: data.messages,
+    nextBeforeByDomain: data.nextBeforeByDomain ?? {},
+    hasMoreByDomain: data.hasMoreByDomain ?? {},
+  };
 }
 
 export async function savePersistedInbox(
   productId: string,
-  messages: RoutingActivityEvent[],
+  cache: PersistedInboxCache,
 ): Promise<void> {
-  await writeJson(inboxPath(productId), { messages });
+  await writeJson(inboxPath(productId), {
+    messages: cache.messages,
+    nextBeforeByDomain: cache.nextBeforeByDomain ?? {},
+    hasMoreByDomain: cache.hasMoreByDomain ?? {},
+  });
 }
 
 export async function loadPersistedSent(

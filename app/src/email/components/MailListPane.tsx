@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { FilePen, Inbox, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 
@@ -47,6 +48,9 @@ export type MailListPaneProps = {
   emptyTrash: () => void;
   isUnread: (key: string) => boolean;
   commandRuntimeFor: (item: MailListItem) => EmailCommandRuntime;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 };
 
 export function MailListPane({
@@ -63,7 +67,29 @@ export function MailListPane({
   emptyTrash,
   isUnread,
   commandRuntimeFor,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: MailListPaneProps) {
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!hasMore || !onLoadMore) return;
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting) && !loadingMore) {
+          onLoadMore();
+        }
+      },
+      { root: listRef.current, rootMargin: "160px", threshold: 0 },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, onLoadMore]);
+
   return (
     <EmailListContainer plain>
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -80,7 +106,7 @@ export function MailListPane({
           }
         />
         {items.length > 0 ? (
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
             <EmailTableHeader>
               <span className="flex items-center gap-2">
                 <span className="size-7 shrink-0" aria-hidden />
@@ -216,6 +242,14 @@ export function MailListPane({
                   </EmailCommandContextMenu>
                 );
               })}
+              {hasMore || loadingMore ? (
+                <div
+                  ref={sentinelRef}
+                  className="px-4 py-3 text-center text-xs text-muted-foreground"
+                >
+                  {loadingMore ? "Loading more…" : "Scroll to load more"}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : (

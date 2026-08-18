@@ -104,10 +104,12 @@ Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` in `server/src
 ### R2 `INBOUND`
 
 ```text
+inbound/{domain}/_list.json
 inbound/{domain}/{messageId}/meta.json | raw.eml | attachments/…
+inbound/{domain}/by-message-id/{encodedMessageId}
 ```
 
-Inbound message body + `readAt` live here. `~/.relaybase/mail/desktop/inbox.json` is cache only.
+Inbound message body + `readAt` live here. `_list.json` is the compact per-domain list index (no bodyText/bodyHtml) used by `GET /mail/inbox` cursor pages. `~/.relaybase/mail/desktop/inbox.json` is cache only. Retention is the most recent 5000 messages per domain.
 
 ### Forbidden (do not reintroduce)
 

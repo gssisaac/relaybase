@@ -178,7 +178,7 @@ export function useMailListItems({
           ? sentItems
           : [...inboxItems, ...sentItems];
 
-    return source
+    const sorted = source
       .sort(
         (a, b) =>
           new Date(itemSortAt(b)).getTime() - new Date(itemSortAt(a)).getTime(),
@@ -208,7 +208,11 @@ export function useMailListItems({
           item.message.bodyPreview.toLowerCase().includes(q)
         );
       });
-  }, [draftItems, folder, inboxItems, search, sentItems]);
+    if (folder === "sent" && !q) {
+      return sorted.slice(0, store.sentRenderLimit);
+    }
+    return sorted;
+  }, [draftItems, folder, inboxItems, search, sentItems, store.sentRenderLimit]);
 
   const selectedThread = useMemo(() => {
     if (folder !== "inbox" || !messageId) return null;
@@ -318,6 +322,16 @@ export function useMailListItems({
     }
   }, [accountFilter, folder, router, searchParams, sent]);
 
+  const loadMore = useCallback(() => {
+    if (folder === "inbox") {
+      void store.loadMoreInbox();
+      return;
+    }
+    if (folder === "sent") {
+      store.loadMoreSent();
+    }
+  }, [folder, store]);
+
   return {
     store,
     activity,
@@ -336,6 +350,14 @@ export function useMailListItems({
     activityDetail,
     detailLoading,
     detailDomain,
+    hasMore:
+      folder === "inbox"
+        ? store.inboxHasMore
+        : folder === "sent" && !search.trim()
+          ? store.sentHasMore
+          : false,
+    loadingMore: folder === "inbox" ? store.inboxLoadingMore : false,
+    loadMore,
   };
 }
 

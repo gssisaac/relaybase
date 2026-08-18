@@ -40,8 +40,23 @@ export type InboundEmailMeta = {
   readAt?: string | null;
 };
 
-const MAX_MESSAGES = 500;
+export const MAX_MESSAGES = 5000;
 const PREFIX = "inbound";
+const LIST_INDEX_VERSION = 1 as const;
+
+/** Compact list row stored in `inbound/{domain}/_list.json` (no bodyText/bodyHtml). */
+export type InboundListEntry = Omit<InboundEmailMeta, "bodyText" | "bodyHtml">;
+
+type ListIndexFile = {
+  version: typeof LIST_INDEX_VERSION;
+  messages: InboundListEntry[];
+};
+
+export type ListInboundEmailsPage = {
+  messages: InboundEmailMeta[];
+  nextBefore: string | null;
+  hasMore: boolean;
+};
 
 function domainFromAddress(address: string): string {
   const at = address.lastIndexOf("@");
@@ -72,6 +87,178 @@ function attachmentObjectKey(
 
 function listPrefix(domain: string): string {
   return `${PREFIX}/${domain.trim().toLowerCase()}/`;
+}
+
+function listIndexKey(domain: string): string {
+  return `${listPrefix(domain)}_list.json`;
+}
+
+function toListEntry(meta: InboundEmailMeta): InboundListEntry {
+  return {
+    id: meta.id,
+    domain: meta.domain,
+    fromEmail: meta.fromEmail,
+    fromName: meta.fromName,
+    toEmail: meta.toEmail,
+    toEmails: meta.toEmails,
+    ccEmails: meta.ccEmails,
+    subject: meta.subject,
+    receivedAt: meta.receivedAt,
+    messageId: meta.messageId,
+    inReplyTo: meta.inReplyTo,
+    references: meta.references,
+    size: meta.size,
+    bodyPreview: meta.bodyPreview,
+    attachments: meta.attachments ?? [],
+    readAt: meta.readAt,
+  };
+}
+
+function fromListEntry(entry: InboundListEntry): InboundEmailMeta {
+  return {
+    ...entry,
+    attachments: entry.attachments ?? [],
+    bodyText: "",
+    bodyHtml: null,
+  };
+}
+
+function sortListEntries(messages: InboundListEntry[]): InboundListEntry[] {
+  return [...messages].sort((a, b) => {
+    const byDate = b.receivedAt.localeCompare(a.receivedAt);
+    if (byDate !== 0) return byDate;
+    return b.id.localeCompare(a.id);
+  });
+}
+
+function dedupeListEntries(messages: InboundListEntry[]): InboundListEntry[] {
+  const deduped: InboundListEntry[] = [];
+  const seenIds = new Set<string>();
+  const seenMessageIds = new Set<string>();
+  for (const message of messages) {
+    if (seenIds.has(message.id)) continue;
+    seenIds.add(message.id);
+    const rfc = normalizeInboundMessageId(message.messageId);
+    if (rfc) {
+      if (seenMessageIds.has(rfc)) continue;
+      seenMessageIds.add(rfc);
+    }
+    deduped.push(message);
+  }
+  return deduped;
+}
+
+function parseListCursor(
+  before: string | undefined,
+): { receivedAt: string; id: string | null } | null {
+  const raw = before?.trim();
+  if (!raw) return null;
+  const sep = raw.lastIndexOf("|");
+  if (sep <= 0) return { receivedAt: raw, id: null };
+  return { receivedAt: raw.slice(0, sep), id: raw.slice(sep + 1) || null };
+}
+
+function encodeListCursor(entry: InboundListEntry): string {
+  return `${entry.receivedAt}|${entry.id}`;
+}
+
+function isBeforeCursor(
+  entry: InboundListEntry,
+  cursor: { receivedAt: string; id: string | null },
+): boolean {
+  const byDate = entry.receivedAt.localeCompare(cursor.receivedAt);
+  if (byDate < 0) return true;
+  if (byDate > 0) return false;
+  if (!cursor.id) return false;
+  return entry.id.localeCompare(cursor.id) < 0;
+}
+
+async function loadListIndex(
+  bucket: R2Bucket,
+  domain: string,
+): Promise<InboundListEntry[] | null> {
+  const object = await bucket.get(listIndexKey(domain));
+  if (!object) return null;
+  try {
+    const parsed = JSON.parse(await object.text()) as ListIndexFile;
+    if (parsed.version !== LIST_INDEX_VERSION || !Array.isArray(parsed.messages)) {
+      return null;
+    }
+    return parsed.messages;
+  } catch {
+    return null;
+  }
+}
+
+async function saveListIndex(
+  bucket: R2Bucket,
+  domain: string,
+  messages: InboundListEntry[],
+): Promise<void> {
+  const file: ListIndexFile = {
+    version: LIST_INDEX_VERSION,
+    messages: sortListEntries(dedupeListEntries(messages)).slice(0, MAX_MESSAGES),
+  };
+  await bucket.put(listIndexKey(domain), JSON.stringify(file), {
+    httpMetadata: { contentType: "application/json" },
+  });
+}
+
+async function scanMetaEntries(
+  bucket: R2Bucket,
+  domain: string,
+): Promise<InboundListEntry[]> {
+  const messages: InboundListEntry[] = [];
+  let cursor: string | undefined;
+  do {
+    const listed = await bucket.list({
+      prefix: listPrefix(domain),
+      limit: 1000,
+      cursor,
+    });
+    for (const object of listed.objects) {
+      if (!object.key.endsWith("/meta.json")) continue;
+      const metaObject = await bucket.get(object.key);
+      if (!metaObject) continue;
+      const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
+      messages.push(
+        toListEntry(
+          normalizeReadState(
+            normalizeRecipientLists({
+              ...meta,
+              attachments: meta.attachments ?? [],
+            }),
+          ),
+        ),
+      );
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return sortListEntries(dedupeListEntries(messages)).slice(0, MAX_MESSAGES);
+}
+
+async function ensureListIndex(
+  bucket: R2Bucket,
+  domain: string,
+): Promise<InboundListEntry[]> {
+  const existing = await loadListIndex(bucket, domain);
+  if (existing) return sortListEntries(dedupeListEntries(existing));
+  const rebuilt = await scanMetaEntries(bucket, domain);
+  await saveListIndex(bucket, domain, rebuilt);
+  return rebuilt;
+}
+
+async function upsertListEntry(
+  bucket: R2Bucket,
+  domain: string,
+  meta: InboundEmailMeta,
+): Promise<void> {
+  const index = await ensureListIndex(bucket, domain);
+  const next = [
+    toListEntry(meta),
+    ...index.filter((entry) => entry.id !== meta.id),
+  ];
+  await saveListIndex(bucket, domain, next);
 }
 
 /** Normalize RFC Message-ID for comparison (`<id@host>` → `id@host`). */
@@ -117,23 +304,30 @@ async function findExistingByMessageId(
     }
   }
 
-  // Pre-index messages (or a lost index object): scan once and backfill.
-  const listed = await bucket.list({
-    prefix: listPrefix(domain),
-    limit: MAX_MESSAGES + 50,
-  });
-  for (const object of listed.objects) {
-    if (!object.key.endsWith("/meta.json")) continue;
-    const metaObject = await bucket.get(object.key);
-    if (!metaObject) continue;
-    const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
-    if (normalizeInboundMessageId(meta.messageId) !== normalizedMessageId) {
-      continue;
+  const listIndex = await loadListIndex(bucket, domain);
+  if (listIndex) {
+    const hit = listIndex.find(
+      (entry) =>
+        normalizeInboundMessageId(entry.messageId) === normalizedMessageId,
+    );
+    if (hit) {
+      const existing = await getInboundEmailForDomain(bucket, domain, hit.id);
+      if (existing) {
+        await writeMessageIdIndex(bucket, domain, normalizedMessageId, hit.id);
+        return existing;
+      }
     }
-    await writeMessageIdIndex(bucket, domain, normalizedMessageId, meta.id);
-    return normalizeReadState(normalizeRecipientLists(meta));
   }
-  return null;
+
+  // Pre-index messages (or a lost index object): scan once and backfill.
+  const scanned = await scanMetaEntries(bucket, domain);
+  const hit = scanned.find(
+    (entry) =>
+      normalizeInboundMessageId(entry.messageId) === normalizedMessageId,
+  );
+  if (!hit) return null;
+  await writeMessageIdIndex(bucket, domain, normalizedMessageId, hit.id);
+  return getInboundEmailForDomain(bucket, domain, hit.id);
 }
 
 export type StoreInboundEmailResult = {
@@ -165,22 +359,15 @@ async function deleteMessageObjects(
 }
 
 async function pruneOldMessages(bucket: R2Bucket, domain: string): Promise<void> {
-  const listed = await bucket.list({ prefix: listPrefix(domain), limit: MAX_MESSAGES + 50 });
-  const metas: Array<{ id: string; receivedAt: string }> = [];
+  const index = await ensureListIndex(bucket, domain);
+  const sorted = sortListEntries(index);
+  const stale = sorted.slice(MAX_MESSAGES);
+  if (stale.length === 0) return;
 
-  for (const object of listed.objects) {
-    if (!object.key.endsWith("/meta.json")) continue;
-    const id = object.key.slice(listPrefix(domain).length).replace(/\/meta\.json$/, "");
-    const metaObject = await bucket.get(object.key);
-    if (!metaObject) continue;
-    const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
-    metas.push({ id, receivedAt: meta.receivedAt });
+  for (const entry of stale) {
+    await deleteMessageObjects(bucket, domain, entry.id);
   }
-
-  metas.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-  for (const stale of metas.slice(MAX_MESSAGES)) {
-    await deleteMessageObjects(bucket, domain, stale.id);
-  }
+  await saveListIndex(bucket, domain, sorted.slice(0, MAX_MESSAGES));
 }
 
 export async function storeInboundEmail(
@@ -324,6 +511,7 @@ export async function storeInboundEmail(
     await writeMessageIdIndex(bucket, domain, normalizedMessageId, id);
   }
 
+  await upsertListEntry(bucket, domain, record);
   await pruneOldMessages(bucket, domain);
   return { record, created: true };
 }
@@ -365,49 +553,48 @@ async function backfillLegacyFrom(
   }
 }
 
-export async function listInboundEmails(
+export async function listInboundEmailsPage(
   bucket: R2Bucket,
-  filters: { domain?: string; limit?: number } = {},
-): Promise<InboundEmailMeta[]> {
+  filters: { domain?: string; limit?: number; before?: string } = {},
+): Promise<ListInboundEmailsPage> {
   const domain = filters.domain?.trim().toLowerCase();
-  if (!domain) return [];
+  if (!domain) {
+    return { messages: [], nextBefore: null, hasMore: false };
+  }
 
   const limit = Math.min(Math.max(filters.limit ?? 50, 1), MAX_MESSAGES);
-  const listed = await bucket.list({ prefix: listPrefix(domain), limit: MAX_MESSAGES + 50 });
-  const messages: InboundEmailMeta[] = [];
+  const index = await ensureListIndex(bucket, domain);
+  const cursor = parseListCursor(filters.before);
+  const filtered = cursor
+    ? index.filter((entry) => isBeforeCursor(entry, cursor))
+    : index;
+  const page = filtered.slice(0, limit);
+  const hasMore = filtered.length > limit;
+  const last = page[page.length - 1];
 
-  for (const object of listed.objects) {
-    if (!object.key.endsWith("/meta.json")) continue;
-    const metaObject = await bucket.get(object.key);
-    if (!metaObject) continue;
-    const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
-    const normalized = normalizeReadState({
-      ...meta,
-      attachments: meta.attachments ?? [],
-    });
-    // Recover MIME From for legacy rows so the inbox list shows the real
-    // sender instead of the envelope VERP / "Mail Delivery System".
+  const messages: InboundEmailMeta[] = [];
+  for (const entry of page) {
+    const normalized = normalizeReadState(normalizeRecipientLists(fromListEntry(entry)));
     messages.push(
-      meta.fromName === undefined
+      entry.fromName === undefined
         ? await backfillLegacyFrom(bucket, domain, normalized)
         : normalized,
     );
   }
 
-  messages.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+  return {
+    messages,
+    nextBefore: hasMore && last ? encodeListCursor(last) : null,
+    hasMore,
+  };
+}
 
-  // Collapse historical To+Cc duplicates that predate Message-ID indexing.
-  const deduped: InboundEmailMeta[] = [];
-  const seenMessageIds = new Set<string>();
-  for (const message of messages) {
-    const rfc = normalizeInboundMessageId(message.messageId);
-    if (rfc) {
-      if (seenMessageIds.has(rfc)) continue;
-      seenMessageIds.add(rfc);
-    }
-    deduped.push(message);
-  }
-  return deduped.slice(0, limit);
+export async function listInboundEmails(
+  bucket: R2Bucket,
+  filters: { domain?: string; limit?: number; before?: string } = {},
+): Promise<InboundEmailMeta[]> {
+  const page = await listInboundEmailsPage(bucket, filters);
+  return page.messages;
 }
 
 export async function getInboundEmail(
@@ -562,6 +749,15 @@ export async function setInboundReadState(
       updated.push(id);
     }),
   );
+
+  if (updated.length > 0) {
+    const index = await ensureListIndex(bucket, normalizedDomain);
+    const updatedSet = new Set(updated);
+    const nextIndex = index.map((entry) =>
+      updatedSet.has(entry.id) ? { ...entry, readAt } : entry,
+    );
+    await saveListIndex(bucket, normalizedDomain, nextIndex);
+  }
 
   return { updated };
 }

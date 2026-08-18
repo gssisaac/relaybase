@@ -9,6 +9,7 @@ import {
   getInboundEmail,
   getInboundEmailInDomain,
   listInboundEmails,
+  MAX_MESSAGES,
   setInboundReadState,
   type InboundEmailMeta,
 } from "../inbound-store";
@@ -42,7 +43,7 @@ function messageAddresses(message: InboundEmailMeta): Set<string> {
 /**
  * List inbox messages across multiple domains (mobile "all inboxes" view),
  * optionally filtered to a single recipient address. Messages are sorted by
- * `receivedAt` descending and capped at `limit` (max 500).
+ * `receivedAt` descending and capped at `limit` (max MAX_MESSAGES).
  *
  * Shared by `/mobile/inbox`. The desktop `/mail/inbox` route stays
  * single-domain and calls `listInboundEmails` directly.
@@ -52,7 +53,7 @@ export async function listInboxForDomains(
   domains: string[],
   options: ListInboxOptions = {},
 ): Promise<InboxListItem[]> {
-  const limit = Math.min(Math.max(options.limit ?? 50, 1), 500);
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), MAX_MESSAGES);
   const account = options.account?.trim().toLowerCase() || null;
 
   const collected: InboundEmailMeta[] = [];
@@ -61,7 +62,7 @@ export async function listInboxForDomains(
     if (!normalized) continue;
     const messages = await listInboundEmails(env.INBOUND, {
       domain: normalized,
-      limit: 500,
+      limit: MAX_MESSAGES,
     });
     for (const message of messages) {
       if (account) {
@@ -86,7 +87,7 @@ export async function inboxCountsForDomains(
     if (!normalized) continue;
     const messages = await listInboundEmails(env.INBOUND, {
       domain: normalized,
-      limit: 500,
+      limit: MAX_MESSAGES,
     });
     merged.push(...messages);
   }
@@ -151,7 +152,7 @@ export async function setInboxReadStateMultiDomain(
     if (idSet.size === 0) break;
     const messages = await listInboundEmails(env.INBOUND, {
       domain: normalized,
-      limit: 500,
+      limit: MAX_MESSAGES,
     });
     const idsInDomain: string[] = [];
     for (const message of messages) {

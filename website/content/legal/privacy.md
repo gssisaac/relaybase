@@ -63,7 +63,7 @@ To provision a domain, a Customer's DNS is configured so that Cloudflare Email S
 ## 5. Logs and operational data
 
 - **Send logs**: For each send attempt, we record success/failure status, the domain, a masked API key prefix (not the full key), `from`, `to`, `subject`, a provider message ID, and any error message. Logs are retained on a rolling basis — the most recent 500 entries per environment; older entries are automatically deleted as new ones are recorded.
-- **Inbound message store**: Inbound messages (metadata and body) are retained on a rolling basis per domain — the most recent 500 messages; older messages and their attachments are automatically deleted as new ones arrive. A Customer can also delete stored messages sooner via the dashboard or API.
+- **Inbound message store**: Inbound messages (metadata and body) are retained on a rolling basis per domain — the most recent 5000 messages; older messages and their attachments are automatically deleted as new ones arrive. A Customer can also delete stored messages sooner via the dashboard or API.
 - **API keys**: We store a hash of each API key, not the plaintext value, along with the domain it is scoped to, a label, and a truncated prefix for identification in logs.
 
 ## 6. How we use information

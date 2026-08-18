@@ -16,6 +16,7 @@ import { consoleRegisterOwner } from "./routes/console/register-owner";
 import { consoleStats } from "./routes/console/stats";
 import { mailInbox } from "./routes/mail/inbox";
 import { mailSend } from "./routes/mail/send";
+import { mailSent } from "./routes/mail/sent";
 import { mobile } from "./routes/mobile";
 import { send } from "./routes/send";
 import { v1Inbox } from "./routes/v1-inbox";
@@ -63,6 +64,7 @@ app.route("/console/stats", consoleStats);
 // End-user mail operations (admin-token auth).
 app.route("/mail/inbox", mailInbox);
 app.route("/mail/send", mailSend);
+app.route("/mail/sent", mailSent);
 
 // Flutter mobile app (mobile-password auth). Peer to /v1/*.
 app.route("/mobile", mobile);

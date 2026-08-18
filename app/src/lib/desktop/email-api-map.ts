@@ -47,8 +47,7 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
     return `/mail/send${search}`;
   }
   if (rest === "/sent" || rest.startsWith("/sent/")) {
-    // Sent list comes from send logs; clients that still hit /sent get empty.
-    return "empty-sent";
+    return `/mail/sent${search}`;
   }
   if (rest === "/inbox/notifications") {
     return `/mail/inbox/notifications${search}`;

@@ -4,7 +4,7 @@ import { requireAdmin } from "../../lib/auth";
 import { readAudienceCatalog } from "../../lib/catalog-audience";
 import { readBroadcasts } from "../../lib/catalog-broadcasts";
 import { readMailbox } from "../../lib/catalog-store";
-import { listInboundEmails } from "../../lib/inbound-store";
+import { listInboundEmails, MAX_MESSAGES } from "../../lib/inbound-store";
 import { listKeys } from "../../lib/keys";
 import { listSendLogs, type SendLogEntry } from "../../lib/send-logs";
 import {
@@ -159,7 +159,7 @@ consoleStats.get("/account-stats", async (c) => {
     readMailbox(c.env.RELAYBASE_APP),
     listSendLogs(c.env.RELAYBASE_APP, { limit: 500 }),
     domain
-      ? listInboundEmails(c.env.INBOUND, { domain, limit: 500 })
+      ? listInboundEmails(c.env.INBOUND, { domain, limit: MAX_MESSAGES })
       : Promise.resolve([]),
   ]);
 
@@ -234,7 +234,7 @@ consoleStats.get("/account-logs", async (c) => {
   const [sendLogs, inbound] = await Promise.all([
     listSendLogs(c.env.RELAYBASE_APP, { limit: 500 }),
     domain
-      ? listInboundEmails(c.env.INBOUND, { domain, limit: 500 })
+      ? listInboundEmails(c.env.INBOUND, { domain, limit: MAX_MESSAGES })
       : Promise.resolve([]),
   ]);
 

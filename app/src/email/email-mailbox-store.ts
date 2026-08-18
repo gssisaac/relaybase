@@ -53,6 +53,8 @@ import {
 import { inboundMatchesAccount } from "@/email/conversation-threading";
 import { notifyNewMail } from "@/lib/desktop/notify";
 
+const INBOX_PAGE_SIZE = 50;
+const SENT_PAGE_SIZE = 50;
 const NOTIFICATION_POLL_MS = 20_000;
 const SEND_TOAST_ID = "email-send";
 const TRASH_UNDO_TOAST_ID = "mail-trash-undo";
@@ -133,6 +135,10 @@ export class EmailMailboxStore {
   private bound = false;
   /** True after a successful disk hydrate or network mail fetch this session. */
   private mailReady = false;
+  inboxNextBeforeByDomain: Record<string, string | null> = {};
+  inboxHasMoreByDomain: Record<string, boolean> = {};
+  inboxLoadingMore = false;
+  sentRenderLimit = SENT_PAGE_SIZE;
   private notificationPollTimer: ReturnType<typeof setInterval> | null = null;
   private notificationPollInFlight = false;
 
@@ -240,6 +246,22 @@ export class EmailMailboxStore {
 
   get relaybaseOk(): boolean {
     return this.config?.relaybaseConfigured ?? false;
+  }
+
+  get inboxHasMore(): boolean {
+    const domains = this.domainsKey ? this.domainsKey.split("\0").filter(Boolean) : [];
+    if (domains.length === 0) return false;
+    return domains.some((domain) => this.inboxHasMoreByDomain[domain] !== false);
+  }
+
+  get sentHasMore(): boolean {
+    return this.visibleSent.length > this.sentRenderLimit;
+  }
+
+  private inboxCursorsReady(): boolean {
+    const domains = this.domainsKey ? this.domainsKey.split("\0").filter(Boolean) : [];
+    if (domains.length === 0) return true;
+    return domains.every((domain) => domain in this.inboxHasMoreByDomain);
   }
 
   /**
@@ -464,6 +486,10 @@ export class EmailMailboxStore {
       this.mailReady = false;
       this.readOverrides = {};
       this.pendingLegacyReadKeys = null;
+      this.inboxNextBeforeByDomain = {};
+      this.inboxHasMoreByDomain = {};
+      this.inboxLoadingMore = false;
+      this.sentRenderLimit = SENT_PAGE_SIZE;
       this.hydrateFromStale();
     } else if (domainsChanged && nextDomainsKey) {
       this.hydrateInboxSentFromStale();
@@ -482,7 +508,6 @@ export class EmailMailboxStore {
     if (this.bootstrapGeneration !== generation) return;
     await this.loadPersistedMail();
     if (this.bootstrapGeneration !== generation) return;
-    // Soft refresh: skips inbox/sent network when disk/memory already has mail.
     await this.refresh(false);
     if (this.bootstrapGeneration !== generation) return;
     await this.reconcileLegacyReadState();
@@ -812,7 +837,8 @@ export class EmailMailboxStore {
     const needsReadAtHydrate = this.activity.some(
       (m) => !("readAt" in m) || m.readAt === undefined,
     );
-    const skipMailNetwork = !force && hasMail && !needsReadAtHydrate;
+    const skipMailNetwork =
+      !force && hasMail && !needsReadAtHydrate && this.inboxCursorsReady();
     const hasData = this.config !== null || hasMail;
     if (!hasData) this.loading = true;
     this.refreshing = true;
@@ -849,14 +875,12 @@ export class EmailMailboxStore {
       }
 
       const inboxResults = await Promise.all(
-        domains.map((domain) =>
-          fetchEmailCachedOptional<{ messages?: RoutingActivityEvent[] }>(
-            this.productId,
-            `inbox:${domain}`,
-            `${this.apiBase}/inbox${domainQuery(domain, { limit: "100" })}`,
-            { refresh: force },
-          ),
-        ),
+        domains.map(async (domain) => {
+          const page = await this.fetchInboxPage(domain, {
+            limit: INBOX_PAGE_SIZE,
+          });
+          return { domain, page };
+        }),
       );
 
       const sentResults = await Promise.all(
@@ -875,20 +899,24 @@ export class EmailMailboxStore {
       runInAction(() => {
         const mergedInbox: RoutingActivityEvent[] = [];
         let inboxFailed = false;
+        const nextBefore = { ...this.inboxNextBeforeByDomain };
+        const hasMore = { ...this.inboxHasMoreByDomain };
         for (const result of inboxResults) {
-          if (!result.ok) {
+          if (!result.page) {
             inboxFailed = true;
             continue;
           }
-          mergedInbox.push(...(result.data?.messages ?? []));
+          mergedInbox.push(...result.page.messages);
+          if (!(result.domain in hasMore)) {
+            nextBefore[result.domain] = result.page.nextBefore;
+            hasMore[result.domain] = result.page.hasMore;
+          }
         }
-        const previousInbox = new Map(
+        const inboxByKey = new Map(
           this.activity.map((msg) => [msg.key, msg] as const),
         );
-        const inboxByKey = new Map<string, RoutingActivityEvent>();
-        // Network is source of truth for membership; keep richer local bodies.
         for (const msg of mergedInbox) {
-          const prev = previousInbox.get(msg.key);
+          const prev = inboxByKey.get(msg.key);
           inboxByKey.set(
             msg.key,
             prev && (prev.bodyText || prev.bodyHtml || prev.attachments?.length)
@@ -896,7 +924,11 @@ export class EmailMailboxStore {
               : msg,
           );
         }
-        this.activity = [...inboxByKey.values()];
+        this.activity = [...inboxByKey.values()].sort((a, b) =>
+          b.receivedAt.localeCompare(a.receivedAt),
+        );
+        this.inboxNextBeforeByDomain = nextBefore;
+        this.inboxHasMoreByDomain = hasMore;
         if (inboxFailed && domains.length > 0) {
           this.error = "Failed to load received mail from Relaybase";
         }
@@ -947,6 +979,110 @@ export class EmailMailboxStore {
     }
   }
 
+  private async fetchInboxPage(
+    domain: string,
+    options: { limit?: number; before?: string } = {},
+  ): Promise<{
+    messages: RoutingActivityEvent[];
+    nextBefore: string | null;
+    hasMore: boolean;
+  } | null> {
+    const extra: Record<string, string> = {
+      limit: String(options.limit ?? INBOX_PAGE_SIZE),
+    };
+    if (options.before) extra.before = options.before;
+    try {
+      const res = await desktopAwareFetch(
+        `${this.apiBase}/inbox${domainQuery(domain, extra)}`,
+      );
+      const data = await readResponseJson<{
+        messages?: RoutingActivityEvent[];
+        nextBefore?: string | null;
+        hasMore?: boolean;
+        error?: string;
+      }>(res);
+      if (!res.ok) return null;
+      return {
+        messages: data.messages ?? [],
+        nextBefore: data.nextBefore ?? null,
+        hasMore: Boolean(data.hasMore),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async loadMoreInbox() {
+    if (
+      !this.productId ||
+      !this.apiBase ||
+      this.inboxLoadingMore ||
+      !this.inboxHasMore
+    ) {
+      return;
+    }
+    const domains = this.domainsKey
+      ? this.domainsKey.split("\0").filter(Boolean)
+      : [];
+    if (domains.length === 0) return;
+
+    this.inboxLoadingMore = true;
+    try {
+      const results = await Promise.all(
+        domains.map(async (domain) => {
+          if (this.inboxHasMoreByDomain[domain] === false) return null;
+          const before =
+            this.inboxNextBeforeByDomain[domain] ||
+            oldestInboxCursor(this.activity, domain);
+          if (!before) return null;
+          const page = await this.fetchInboxPage(domain, {
+            limit: INBOX_PAGE_SIZE,
+            before,
+          });
+          return page ? { domain, page } : null;
+        }),
+      );
+
+      runInAction(() => {
+        const inboxByKey = new Map(
+          this.activity.map((msg) => [msg.key, msg] as const),
+        );
+        const nextBefore = { ...this.inboxNextBeforeByDomain };
+        const hasMore = { ...this.inboxHasMoreByDomain };
+        for (const result of results) {
+          if (!result) continue;
+          for (const msg of result.page.messages) {
+            const prev = inboxByKey.get(msg.key);
+            inboxByKey.set(
+              msg.key,
+              prev &&
+                (prev.bodyText || prev.bodyHtml || prev.attachments?.length)
+                ? { ...prev, ...pickListFields(msg) }
+                : msg,
+            );
+          }
+          nextBefore[result.domain] = result.page.nextBefore;
+          hasMore[result.domain] = result.page.hasMore;
+        }
+        this.activity = [...inboxByKey.values()].sort((a, b) =>
+          b.receivedAt.localeCompare(a.receivedAt),
+        );
+        this.inboxNextBeforeByDomain = nextBefore;
+        this.inboxHasMoreByDomain = hasMore;
+      });
+      void this.persistMailLists();
+    } finally {
+      runInAction(() => {
+        this.inboxLoadingMore = false;
+      });
+    }
+  }
+
+  loadMoreSent() {
+    if (!this.sentHasMore) return;
+    this.sentRenderLimit += SENT_PAGE_SIZE;
+  }
+
   private async loadPersistedMail() {
     if (!this.productId) return;
     const [inbox, sent, drafts] = await Promise.all([
@@ -955,11 +1091,19 @@ export class EmailMailboxStore {
       loadPersistedDrafts(this.productId),
     ]);
     runInAction(() => {
-      if (inbox && inbox.length > 0) {
+      if (inbox && inbox.messages.length > 0) {
         const inboxByKey = new Map<string, RoutingActivityEvent>();
         for (const msg of this.activity) inboxByKey.set(msg.key, msg);
-        for (const msg of inbox) inboxByKey.set(msg.key, msg);
+        for (const msg of inbox.messages) inboxByKey.set(msg.key, msg);
         this.activity = [...inboxByKey.values()];
+        this.inboxNextBeforeByDomain = {
+          ...this.inboxNextBeforeByDomain,
+          ...inbox.nextBeforeByDomain,
+        };
+        this.inboxHasMoreByDomain = {
+          ...this.inboxHasMoreByDomain,
+          ...inbox.hasMoreByDomain,
+        };
         this.mailReady = true;
         this.loading = false;
       }
@@ -996,7 +1140,11 @@ export class EmailMailboxStore {
 
   private persistMailLists() {
     if (!this.productId) return;
-    void savePersistedInbox(this.productId, this.activity);
+    void savePersistedInbox(this.productId, {
+      messages: this.activity,
+      nextBeforeByDomain: this.inboxNextBeforeByDomain,
+      hasMoreByDomain: this.inboxHasMoreByDomain,
+    });
     void savePersistedSent(this.productId, this.sent);
   }
 
@@ -1208,6 +1356,22 @@ export class EmailMailboxStore {
     window.removeEventListener(EMAIL_SEND_SUCCEEDED, this.onSendSucceeded);
     window.removeEventListener(EMAIL_SEND_FAILED, this.onSendFailed);
   }
+}
+
+function oldestInboxCursor(
+  messages: RoutingActivityEvent[],
+  domain: string,
+): string | null {
+  const needle = domain.trim().toLowerCase();
+  let oldest: RoutingActivityEvent | null = null;
+  for (const message of messages) {
+    if (domainOf(message.toEmail) !== needle) continue;
+    if (!oldest || message.receivedAt.localeCompare(oldest.receivedAt) < 0) {
+      oldest = message;
+    }
+  }
+  if (!oldest) return null;
+  return `${oldest.receivedAt}|${oldest.key}`;
 }
 
 /** Prefer network list metadata while preserving locally cached body fields. */

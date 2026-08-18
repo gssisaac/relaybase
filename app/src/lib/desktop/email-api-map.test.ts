@@ -55,7 +55,7 @@ describe("mapEmailApiToWorker", () => {
   });
 
   it("handles sent and onboard specials", () => {
-    assert.equal(mapEmailApiToWorker("/api/email/sent"), "empty-sent");
+    assert.equal(mapEmailApiToWorker("/api/email/sent"), "/mail/sent");
     assert.equal(
       mapEmailApiToWorker("/api/email/domains/onboard"),
       "/console/domains",

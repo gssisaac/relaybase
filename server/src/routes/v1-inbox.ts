@@ -9,6 +9,8 @@ import {
   getInboundAttachment,
   getInboundEmail,
   listInboundEmails,
+  listInboundEmailsPage,
+  MAX_MESSAGES,
   setInboundReadState,
 } from "../lib/inbound-store";
 import {
@@ -53,13 +55,17 @@ v1Inbox.get("/messages", async (c) => {
   if (auth instanceof Response) return auth;
 
   const limit = Number(c.req.query("limit") ?? "50");
-  const messages = await listInboundEmails(c.env.INBOUND, {
+  const before = c.req.query("before")?.trim() || undefined;
+  const page = await listInboundEmailsPage(c.env.INBOUND, {
     domain: auth.record.domain,
     limit: Number.isFinite(limit) ? limit : 50,
+    before,
   });
 
   return c.json({
-    messages: messages.map(serializeInboundListItem),
+    messages: page.messages.map(serializeInboundListItem),
+    nextBefore: page.nextBefore,
+    hasMore: page.hasMore,
   });
 });
 
@@ -69,7 +75,7 @@ v1Inbox.get("/messages/counts", async (c) => {
 
   const messages = await listInboundEmails(c.env.INBOUND, {
     domain: auth.record.domain,
-    limit: 500,
+    limit: MAX_MESSAGES,
   });
   return c.json(aggregateInboundCounts(messages));
 });

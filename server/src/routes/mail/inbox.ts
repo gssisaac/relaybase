@@ -12,6 +12,8 @@ import {
   getInboundAttachment,
   getInboundEmail,
   listInboundEmails,
+  listInboundEmailsPage,
+  MAX_MESSAGES,
   setInboundReadState,
 } from "../../lib/inbound-store";
 import {
@@ -84,7 +86,7 @@ mailInbox.get("/counts", async (c) => {
 
   const messages = await listInboundEmails(c.env.INBOUND, {
     domain,
-    limit: 500,
+    limit: MAX_MESSAGES,
   });
   return c.json(aggregateInboundCounts(messages));
 });
@@ -128,13 +130,17 @@ mailInbox.get("/", async (c) => {
   }
 
   const limit = Number(c.req.query("limit") ?? "50");
-  const messages = await listInboundEmails(c.env.INBOUND, {
+  const before = c.req.query("before")?.trim() || undefined;
+  const page = await listInboundEmailsPage(c.env.INBOUND, {
     domain,
     limit: Number.isFinite(limit) ? limit : 50,
+    before,
   });
 
   return c.json({
-    messages: messages.map(serializeInboundListItem),
+    messages: page.messages.map(serializeInboundListItem),
+    nextBefore: page.nextBefore,
+    hasMore: page.hasMore,
   });
 });
 

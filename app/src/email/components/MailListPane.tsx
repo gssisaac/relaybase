@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FilePen, Inbox, Send, Trash2 } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import Link from "next/link";
@@ -37,6 +37,7 @@ import {
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
 import { formatSenderDisplay } from "@/lib/email/format-sender";
 import { extractFirstEmail, SenderAvatar } from "@/email/components/SenderAvatar";
+import { SenderHoverCard } from "@/email/components/SenderHoverCard";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,27 @@ type MailListFolder = "inbox" | "drafts" | "sent" | "trash";
 const MAIL_ROW_HEIGHT = 45;
 /** Start fetching the next page this many rows before the end. */
 const LOAD_MORE_THRESHOLD = 10;
+/**
+ * Multiplier of the visible viewport height to keep rendered on each side
+ * of the scroll window. react-window unmounts rows outside the visible +
+ * overscan region; with the previous fixed overscanCount of 8 (~360px) the
+ * mail list would visibly blank out already-rendered rows during momentum
+ * scroll because they were unmounted and had to re-mount on the way back.
+ * Keeping ~2 viewports of overscan on each side (≈5 viewports mounted total)
+ * makes the rendered "window" several times the screen, so already-loaded
+ * rows stay mounted across normal scroll jumps.
+ */
+const OVERSCAN_VIEWPORTS = 2;
+/** Minimum overscan rows (used before the container has been measured). */
+const MIN_OVERSCAN_ROWS = 8;
+/**
+ * How many skeleton placeholder rows to render at the bottom while a page
+ * is being fetched. The list is append-only (no gap rows in the middle), so
+ * the only genuinely-unloaded region is the next page; these skeletons give
+ * immediate visual feedback that more is coming instead of a single text
+ * sentinel or a blank gap.
+ */
+const PLACEHOLDER_ROWS = 8;
 
 const FOLDER_TITLES: Record<MailListFolder, string> = {
   inbox: "Inbox",
@@ -93,6 +115,35 @@ type MailRowProps = {
 };
 
 /**
+ * Skeleton placeholder rendered for rows beyond the loaded items while a
+ * page is being fetched. Mirrors the EmailTableRow grid layout (avatar +
+ * primary line + subject/preview line + date) so the loading region reads
+ * as "more rows coming" rather than a blank gap.
+ */
+function MailRowSkeleton({ style }: { style: React.CSSProperties }) {
+  return (
+    <div
+      style={style}
+      className="grid w-full animate-pulse gap-3 border-b border-border/20 px-4 py-2 text-left text-sm grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]"
+      aria-hidden
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="size-7 shrink-0 rounded-full bg-muted" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <span className="block h-3 w-3/4 rounded bg-muted" />
+          <span className="block h-2.5 w-1/2 rounded bg-muted/70" />
+        </div>
+      </div>
+      <div className="min-w-0 space-y-1.5 self-center">
+        <span className="block h-3 w-2/3 rounded bg-muted" />
+        <span className="block h-2.5 w-full rounded bg-muted/70" />
+      </div>
+      <span className="h-3 w-12 shrink-0 self-center rounded bg-muted" />
+    </div>
+  );
+}
+
+/**
  * Virtualized row. `observer` so per-row observable reads (unread state via
  * `isUnread`) keep reacting even though only visible rows are mounted.
  */
@@ -111,13 +162,17 @@ const MailRow = observer(function MailRow({
 }: RowComponentProps<MailRowProps>) {
   const item = items[index];
   if (!item) {
-    // Trailing sentinel row (only rendered while more pages exist).
+    // Past the last loaded item: skeleton while fetching, sentinel hint
+    // when more pages exist but we haven't started loading the next one.
+    if (loadingMore) {
+      return <MailRowSkeleton style={style} />;
+    }
     return (
       <div
         style={style}
         className="flex items-center justify-center text-xs text-muted-foreground"
       >
-        {loadingMore ? "Loading more…" : "Scroll to load more"}
+        Scroll to load more
       </div>
     );
   }
@@ -139,7 +194,12 @@ const MailRow = observer(function MailRow({
             preview={preview}
             date={date}
             avatar={
-              <SenderAvatar fromEmail={extractFirstEmail(item.message.to)} />
+              <SenderHoverCard
+                fromEmail={extractFirstEmail(item.message.to)}
+                triggerClassName="size-7"
+              >
+                <SenderAvatar fromEmail={extractFirstEmail(item.message.to)} />
+              </SenderHoverCard>
             }
             status={
               item.message.replyKey ? (
@@ -204,13 +264,24 @@ const MailRow = observer(function MailRow({
           unread={unread}
           avatar={
             isInbox ? (
-              <SenderAvatar
+              <SenderHoverCard
                 fromName={item.message.fromName}
                 fromEmail={item.message.fromEmail}
-                unread={unread}
-              />
+                triggerClassName="size-7"
+              >
+                <SenderAvatar
+                  fromName={item.message.fromName}
+                  fromEmail={item.message.fromEmail}
+                  unread={unread}
+                />
+              </SenderHoverCard>
             ) : (
-              <SenderAvatar fromEmail={extractFirstEmail(item.message.to)} />
+              <SenderHoverCard
+                fromEmail={extractFirstEmail(item.message.to)}
+                triggerClassName="size-7"
+              >
+                <SenderAvatar fromEmail={extractFirstEmail(item.message.to)} />
+              </SenderHoverCard>
             )
           }
           primary={
@@ -256,6 +327,24 @@ export function MailListPane({
   const listRef = useListRef(null);
   const { dragRegionClassName, dragRegionProps } = useDesktopChrome();
 
+  // Track the list container height so overscan can be sized as a multiple
+  // of the viewport (see OVERSCAN_VIEWPORTS). Falls back to a sensible
+  // minimum until the first onResize fires.
+  const [containerHeight, setContainerHeight] = useState(0);
+  const overscanCount = useMemo(() => {
+    if (containerHeight <= 0) return MIN_OVERSCAN_ROWS;
+    return Math.max(
+      MIN_OVERSCAN_ROWS,
+      Math.ceil((containerHeight * OVERSCAN_VIEWPORTS) / MAIL_ROW_HEIGHT),
+    );
+  }, [containerHeight]);
+  const onResize = useCallback(
+    (size: { height: number; width: number }) => {
+      setContainerHeight(size.height);
+    },
+    [],
+  );
+
   // Selected index; for threaded inbox the selected message may be any
   // message inside a row's conversation.
   const selectedIndex = useMemo(() => {
@@ -293,7 +382,12 @@ export function MailListPane({
   }, [accountFilter, folder, listRef, search]);
 
   const showSentinel = hasMore || loadingMore;
-  const rowCount = items.length + (showSentinel ? 1 : 0);
+  // While a page is being fetched, render multiple skeleton placeholder
+  // rows so the loading region reads as "more rows coming" instead of a
+  // single text line / blank gap. When more pages exist but we haven't
+  // started loading yet, keep a single sentinel row.
+  const sentinelCount = loadingMore ? PLACEHOLDER_ROWS : showSentinel ? 1 : 0;
+  const rowCount = items.length + sentinelCount;
 
   const onRowsRendered = useCallback(
     (visibleRows: { startIndex: number; stopIndex: number }) => {
@@ -377,7 +471,8 @@ export function MailListPane({
               rowCount={rowCount}
               rowHeight={MAIL_ROW_HEIGHT}
               rowKey={rowKey}
-              overscanCount={8}
+              overscanCount={overscanCount}
+              onResize={onResize}
               onRowsRendered={onRowsRendered}
               rowProps={{
                 items,

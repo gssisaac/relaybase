@@ -35,6 +35,7 @@ import {
 } from "@/email/conversation-threading";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
 import { SenderAvatar, extractFirstEmail } from "@/email/components/SenderAvatar";
+import { SenderHoverCard } from "@/email/components/SenderHoverCard";
 import type { ForwardThreadPart } from "@/email/reply-helpers";
 import {
   normalizeQuoteForDisplay,
@@ -364,10 +365,16 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                     className="flex min-w-0 flex-1 items-start gap-3 text-left transition-colors hover:opacity-90"
                     onClick={() => setExpandedId(null)}
                   >
-                    <SenderAvatar
+                    <SenderHoverCard
                       fromName={avatarName}
                       fromEmail={avatarEmail}
-                    />
+                      triggerClassName="size-7"
+                    >
+                      <SenderAvatar
+                        fromName={avatarName}
+                        fromEmail={avatarEmail}
+                      />
+                    </SenderHoverCard>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
                         {from}
@@ -457,10 +464,16 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                   className="flex w-full shrink-0 items-start gap-3 px-1 py-3 text-left transition-colors hover:opacity-90"
                   onClick={() => setExpandedId(id)}
                 >
-                  <SenderAvatar
+                  <SenderHoverCard
                     fromName={avatarName}
                     fromEmail={avatarEmail}
-                  />
+                    triggerClassName="size-7"
+                  >
+                    <SenderAvatar
+                      fromName={avatarName}
+                      fromEmail={avatarEmail}
+                    />
+                  </SenderHoverCard>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
                       {from}

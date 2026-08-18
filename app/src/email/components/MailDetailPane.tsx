@@ -16,7 +16,7 @@ import {
 } from "@/email/components/mail-list-helpers";
 import type { MailListItem } from "@/email/components/types";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { formatSenderDisplay } from "@/lib/email/format-sender";
+import { formatSenderDisplay, splitRecipients } from "@/lib/email/format-sender";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { emailMessageHref } from "@/email/paths";
 import type { ThreadComposeMode } from "@/email/components/ConversationThreadView";
@@ -27,6 +27,8 @@ import type {
   RoutingActivityEvent,
 } from "@/email/components/types";
 import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
+import { SenderHoverCard } from "@/email/components/SenderHoverCard";
+import { extractFirstEmail } from "@/email/components/SenderAvatar";
 
 export type MailDetailPaneProps = {
   folder: "inbox" | "drafts" | "sent" | "trash";
@@ -235,17 +237,54 @@ export function MailDetailPane({
         <div className="mb-6 space-y-1 border-b border-border/30 pb-4">
           <p className="text-sm">
             <span className="text-muted-foreground">To </span>
-            {m.to}
+            {splitRecipients(m.to).map((r, i) => (
+              <SenderHoverCard
+                key={`to-${i}-${r.email ?? r.raw}`}
+                fromName={r.name}
+                fromEmail={r.email}
+                triggerClassName="inline"
+              >
+                <span className="underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                  {r.raw}
+                </span>
+              </SenderHoverCard>
+            )).reduce<React.ReactNode[]>((acc, el, i) => {
+              if (i > 0) acc.push(", ");
+              acc.push(el);
+              return acc;
+            }, [])}
           </p>
           {m.cc ? (
             <p className="text-sm">
               <span className="text-muted-foreground">Cc </span>
-              {m.cc}
+              {splitRecipients(m.cc).map((r, i) => (
+                <SenderHoverCard
+                  key={`cc-${i}-${r.email ?? r.raw}`}
+                  fromName={r.name}
+                  fromEmail={r.email}
+                  triggerClassName="inline"
+                >
+                  <span className="underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                    {r.raw}
+                  </span>
+                </SenderHoverCard>
+              )).reduce<React.ReactNode[]>((acc, el, i) => {
+                if (i > 0) acc.push(", ");
+                acc.push(el);
+                return acc;
+              }, [])}
             </p>
           ) : null}
           <p className="text-sm">
             <span className="text-muted-foreground">From </span>
-            {m.from}
+            <SenderHoverCard
+              fromEmail={extractFirstEmail(m.from)}
+              triggerClassName="inline"
+            >
+              <span className="underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                {m.from}
+              </span>
+            </SenderHoverCard>
           </p>
           <p className="text-xs text-muted-foreground">
             {formatDetailDate(m.sentAt)}
@@ -347,22 +386,58 @@ export function MailDetailPane({
         <div className="mb-6 space-y-1 border-b border-border/30 pb-4">
           <p className="text-sm">
             <span className="text-muted-foreground">From </span>
-            {formatSenderDisplay(
-              activityDetail.fromName,
-              activityDetail.fromEmail,
-            )}
+            <SenderHoverCard
+              fromName={activityDetail.fromName}
+              fromEmail={activityDetail.fromEmail}
+              triggerClassName="inline"
+            >
+              <span className="underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                {formatSenderDisplay(
+                  activityDetail.fromName,
+                  activityDetail.fromEmail,
+                )}
+              </span>
+            </SenderHoverCard>
           </p>
           <p className="text-sm">
             <span className="text-muted-foreground">To </span>
             {(activityDetail.toEmails?.length
               ? activityDetail.toEmails
               : [activityDetail.toEmail]
-            ).join(", ")}
+            ).map((addr, i) => (
+              <SenderHoverCard
+                key={`${addr}-${i}`}
+                fromEmail={addr}
+                triggerClassName="inline"
+              >
+                <span className="underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                  {addr}
+                </span>
+              </SenderHoverCard>
+            )).reduce<React.ReactNode[]>((acc, el, i) => {
+              if (i > 0) acc.push(", ");
+              acc.push(el);
+              return acc;
+            }, [])}
           </p>
           {(activityDetail.ccEmails?.length ?? 0) > 0 ? (
             <p className="text-sm">
               <span className="text-muted-foreground">Cc </span>
-              {activityDetail.ccEmails!.join(", ")}
+              {activityDetail.ccEmails!.map((addr, i) => (
+                <SenderHoverCard
+                  key={`cc-${addr}-${i}`}
+                  fromEmail={addr}
+                  triggerClassName="inline"
+                >
+                  <span className="underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                    {addr}
+                  </span>
+                </SenderHoverCard>
+              )).reduce<React.ReactNode[]>((acc, el, i) => {
+                if (i > 0) acc.push(", ");
+                acc.push(el);
+                return acc;
+              }, [])}
             </p>
           ) : null}
           <p className="text-xs text-muted-foreground">

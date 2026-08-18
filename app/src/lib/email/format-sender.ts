@@ -70,3 +70,31 @@ export function senderInitials(
   }
   return source.slice(0, 2).toUpperCase() || "?";
 }
+
+/**
+ * Split a comma-separated `To`/`Cc`/`From` string into individual recipient
+ * entries, preserving the original display text for each part.
+ *
+ * Handles `"Name" <email>` / `Name <email>` / `email` forms. Does not attempt
+ * to parse commas inside quoted display names (rare in practice for this
+ * app's stored sent/draft addresses).
+ */
+export function splitRecipients(
+  s: string | undefined | null,
+): Array<{ name?: string; email?: string; raw: string }> {
+  if (!s) return [];
+  const out: Array<{ name?: string; email?: string; raw: string }> = [];
+  for (const part of s.split(",")) {
+    const raw = part.trim();
+    if (!raw) continue;
+    const m = raw.match(/^(.*?)\s*<([^>]+@[^>]+)>\s*$/);
+    if (m) {
+      const name = m[1]!.trim().replace(/^["']|["']$/g, "");
+      out.push({ name: name || undefined, email: m[2], raw });
+      continue;
+    }
+    const emailMatch = raw.match(/([^\s]+@[^\s]+)/);
+    out.push({ name: undefined, email: emailMatch?.[1], raw });
+  }
+  return out;
+}

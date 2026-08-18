@@ -9,10 +9,15 @@ import {
   getInboundEmail,
   getInboundEmailInDomain,
   listInboundEmails,
+  listInboundIndexEntries,
   MAX_MESSAGES,
   setInboundReadState,
   type InboundEmailMeta,
 } from "../inbound-store";
+import {
+  searchInboundEmails,
+  type InboundSearchPage,
+} from "../inbound-search";
 import { aggregateInboundCounts, type InboundCountsResult } from "../inbound-counts";
 import {
   serializeInboundListItem,
@@ -48,11 +53,19 @@ function messageAddresses(message: InboundEmailMeta): Set<string> {
  * Shared by `/mobile/inbox`. The desktop `/mail/inbox` route stays
  * single-domain and calls `listInboundEmails` directly.
  */
+export type InboxListPage = {
+  messages: InboxListItem[];
+  /** Total messages matching the account scope across all domains. */
+  total: number;
+  /** Unread messages matching the account scope across all domains. */
+  unread: number;
+};
+
 export async function listInboxForDomains(
   env: Env,
   domains: string[],
   options: ListInboxOptions = {},
-): Promise<InboxListItem[]> {
+): Promise<InboxListPage> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), MAX_MESSAGES);
   const account = options.account?.trim().toLowerCase() || null;
 
@@ -73,7 +86,32 @@ export async function listInboxForDomains(
   }
 
   collected.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
-  return collected.slice(0, limit).map(serializeInboundListItem);
+  const unread = collected.filter((message) => !message.readAt).length;
+  return {
+    messages: collected.slice(0, limit).map(serializeInboundListItem),
+    total: collected.length,
+    unread,
+  };
+}
+
+/**
+ * Full-text search across the supplied domains, optionally scoped to one
+ * recipient account (mobile). Returns null when the search index binding is
+ * not configured.
+ */
+export async function searchInboxForDomains(
+  env: Env,
+  domains: string[],
+  options: { q: string; limit?: number; before?: string; account?: string },
+): Promise<InboundSearchPage | null> {
+  if (!env.RELAYBASE_INBOX_INDEX) return null;
+  return searchInboundEmails(env.RELAYBASE_INBOX_INDEX, {
+    domains,
+    q: options.q,
+    limit: options.limit,
+    before: options.before,
+    account: options.account,
+  });
 }
 
 /** Per-address total/unread counts across the supplied domains. */
@@ -81,15 +119,13 @@ export async function inboxCountsForDomains(
   env: Env,
   domains: string[],
 ): Promise<InboundCountsResult> {
-  const merged: InboundEmailMeta[] = [];
+  // Counts only need To/Cc + readAt from the compact index — no per-message
+  // meta.json loads.
+  const merged = [];
   for (const domain of domains) {
     const normalized = domain.trim().toLowerCase();
     if (!normalized) continue;
-    const messages = await listInboundEmails(env.INBOUND, {
-      domain: normalized,
-      limit: MAX_MESSAGES,
-    });
-    merged.push(...messages);
+    merged.push(...(await listInboundIndexEntries(env.INBOUND, normalized)));
   }
   return aggregateInboundCounts(merged);
 }
@@ -150,13 +186,11 @@ export async function setInboxReadStateMultiDomain(
     const normalized = domain.trim().toLowerCase();
     if (!normalized) continue;
     if (idSet.size === 0) break;
-    const messages = await listInboundEmails(env.INBOUND, {
-      domain: normalized,
-      limit: MAX_MESSAGES,
-    });
+    // Resolve ids against the compact index (no meta.json loads).
+    const entries = await listInboundIndexEntries(env.INBOUND, normalized);
     const idsInDomain: string[] = [];
-    for (const message of messages) {
-      if (idSet.has(message.id)) idsInDomain.push(message.id);
+    for (const entry of entries) {
+      if (idSet.has(entry.id)) idsInDomain.push(entry.id);
     }
     if (!idsInDomain.length) continue;
     const result = await setInboundReadState(
@@ -164,6 +198,7 @@ export async function setInboxReadStateMultiDomain(
       normalized,
       idsInDomain,
       readAt,
+      env.RELAYBASE_INBOX_INDEX,
     );
     for (const id of result.updated) {
       updated.push(id);

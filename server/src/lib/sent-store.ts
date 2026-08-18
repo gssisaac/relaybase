@@ -40,3 +40,63 @@ export async function listStoredSent(
     return [];
   }
 }
+
+export type StoredSentPage = {
+  sent: StoredSentEmail[];
+  /** Cursor for the next page: `{sentAt}|{id}`. */
+  nextBefore: string | null;
+  hasMore: boolean;
+  /** Total sent messages for the domain (whole index, not this page). */
+  total: number;
+};
+
+function parseSentCursor(
+  before: string | undefined,
+): { sentAt: string; id: string | null } | null {
+  const raw = before?.trim();
+  if (!raw) return null;
+  const sep = raw.lastIndexOf("|");
+  if (sep <= 0) return { sentAt: raw, id: null };
+  return { sentAt: raw.slice(0, sep), id: raw.slice(sep + 1) || null };
+}
+
+function isBeforeSentCursor(
+  message: StoredSentEmail,
+  cursor: { sentAt: string; id: string | null },
+): boolean {
+  const byDate = message.sentAt.localeCompare(cursor.sentAt);
+  if (byDate < 0) return true;
+  if (byDate > 0) return false;
+  if (!cursor.id) return false;
+  return message.id.localeCompare(cursor.id) < 0;
+}
+
+const MAX_SENT_PAGE = 5000;
+
+/**
+ * Cursor-paginated sent list (newest first). The whole `_sent.json` index is
+ * still loaded server-side (single R2 object) but only one page crosses the
+ * wire, and `total` comes for free.
+ */
+export async function listStoredSentPage(
+  bucket: R2Bucket,
+  domain: string,
+  options: { limit?: number; before?: string } = {},
+): Promise<StoredSentPage> {
+  const all = await listStoredSent(bucket, domain);
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), MAX_SENT_PAGE);
+  const cursor = parseSentCursor(options.before);
+  const filtered = cursor
+    ? all.filter((message) => isBeforeSentCursor(message, cursor))
+    : all;
+  const page = filtered.slice(0, limit);
+  const hasMore = filtered.length > limit;
+  const last = page[page.length - 1];
+
+  return {
+    sent: page,
+    nextBefore: hasMore && last ? `${last.sentAt}|${last.id}` : null,
+    hasMore,
+    total: all.length,
+  };
+}

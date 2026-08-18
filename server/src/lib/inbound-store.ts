@@ -5,6 +5,11 @@ import {
 } from "./bounce-detect";
 import { decodeMimeHeader, parseInboundMime } from "./mime-parse";
 import { buildStrippedInboundMime } from "./mime";
+import {
+  deleteSearchRows,
+  updateSearchReadState,
+  upsertSearchRows,
+} from "./inbound-search";
 
 export type InboundAttachmentMeta = {
   id: string;
@@ -56,6 +61,10 @@ export type ListInboundEmailsPage = {
   messages: InboundEmailMeta[];
   nextBefore: string | null;
   hasMore: boolean;
+  /** Total retained messages for the domain (whole index, not this page). */
+  total: number;
+  /** Unread messages for the domain (whole index, not this page). */
+  unread: number;
 };
 
 function domainFromAddress(address: string): string {
@@ -358,7 +367,11 @@ async function deleteMessageObjects(
   } while (cursor);
 }
 
-async function pruneOldMessages(bucket: R2Bucket, domain: string): Promise<void> {
+async function pruneOldMessages(
+  bucket: R2Bucket,
+  domain: string,
+  searchIndex?: D1Database,
+): Promise<void> {
   const index = await ensureListIndex(bucket, domain);
   const sorted = sortListEntries(index);
   const stale = sorted.slice(MAX_MESSAGES);
@@ -368,6 +381,14 @@ async function pruneOldMessages(bucket: R2Bucket, domain: string): Promise<void>
     await deleteMessageObjects(bucket, domain, entry.id);
   }
   await saveListIndex(bucket, domain, sorted.slice(0, MAX_MESSAGES));
+
+  if (searchIndex) {
+    try {
+      await deleteSearchRows(searchIndex, stale.map((entry) => entry.id));
+    } catch (error) {
+      console.error("Failed to prune inbound search rows", error);
+    }
+  }
 }
 
 export async function storeInboundEmail(
@@ -383,6 +404,8 @@ export async function storeInboundEmail(
     size: number;
     raw: ArrayBuffer;
   },
+  /** Optional D1 FTS index — writes are best-effort (R2 is authoritative). */
+  searchIndex?: D1Database,
 ): Promise<StoreInboundEmailResult> {
   const receivedAt = new Date().toISOString();
   const domain = domainFromAddress(params.toEmail);
@@ -512,7 +535,16 @@ export async function storeInboundEmail(
   }
 
   await upsertListEntry(bucket, domain, record);
-  await pruneOldMessages(bucket, domain);
+
+  if (searchIndex) {
+    try {
+      await upsertSearchRows(searchIndex, [record]);
+    } catch (error) {
+      console.error("Failed to index inbound email for search", error);
+    }
+  }
+
+  await pruneOldMessages(bucket, domain, searchIndex);
   return { record, created: true };
 }
 
@@ -553,13 +585,39 @@ async function backfillLegacyFrom(
   }
 }
 
+/**
+ * Unread test with the same legacy fallback as `normalizeReadState`: rows
+ * written before read tracking existed have no `readAt` key at all and are
+ * treated as already read.
+ */
+function isUnreadEntry(entry: InboundListEntry): boolean {
+  if (!("readAt" in entry)) return false;
+  return !entry.readAt;
+}
+
+/**
+ * Whole-domain compact index (read-state normalized), for cheap count
+ * aggregation without loading any per-message `meta.json`.
+ */
+export async function listInboundIndexEntries(
+  bucket: R2Bucket,
+  domain: string,
+): Promise<InboundListEntry[]> {
+  const normalized = domain.trim().toLowerCase();
+  if (!normalized) return [];
+  const index = await ensureListIndex(bucket, normalized);
+  return index.map((entry) =>
+    "readAt" in entry ? entry : { ...entry, readAt: entry.receivedAt },
+  );
+}
+
 export async function listInboundEmailsPage(
   bucket: R2Bucket,
   filters: { domain?: string; limit?: number; before?: string } = {},
 ): Promise<ListInboundEmailsPage> {
   const domain = filters.domain?.trim().toLowerCase();
   if (!domain) {
-    return { messages: [], nextBefore: null, hasMore: false };
+    return { messages: [], nextBefore: null, hasMore: false, total: 0, unread: 0 };
   }
 
   const limit = Math.min(Math.max(filters.limit ?? 50, 1), MAX_MESSAGES);
@@ -571,6 +629,11 @@ export async function listInboundEmailsPage(
   const page = filtered.slice(0, limit);
   const hasMore = filtered.length > limit;
   const last = page[page.length - 1];
+
+  let unread = 0;
+  for (const entry of index) {
+    if (isUnreadEntry(entry)) unread += 1;
+  }
 
   const messages: InboundEmailMeta[] = [];
   for (const entry of page) {
@@ -586,6 +649,8 @@ export async function listInboundEmailsPage(
     messages,
     nextBefore: hasMore && last ? encodeListCursor(last) : null,
     hasMore,
+    total: index.length,
+    unread,
   };
 }
 
@@ -730,6 +795,8 @@ export async function setInboundReadState(
   domain: string,
   ids: string[],
   readAt: string | null,
+  /** Optional D1 FTS index — writes are best-effort (R2 is authoritative). */
+  searchIndex?: D1Database,
 ): Promise<{ updated: string[] }> {
   const normalizedDomain = domain.trim().toLowerCase();
   const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
@@ -757,6 +824,14 @@ export async function setInboundReadState(
       updatedSet.has(entry.id) ? { ...entry, readAt } : entry,
     );
     await saveListIndex(bucket, normalizedDomain, nextIndex);
+
+    if (searchIndex) {
+      try {
+        await updateSearchReadState(searchIndex, updated, readAt);
+      } catch (error) {
+        console.error("Failed to sync read state to search index", error);
+      }
+    }
   }
 
   return { updated };

@@ -1,12 +1,5 @@
-import { PlayCircle } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
 
-/**
- * PLACEHOLDER — swap the dashed box below for the real 60-second intro
- * video embed once it's produced. Section chrome (badge, heading, layout)
- * is final; only the media itself is a stand-in.
- */
 export function IntroVideo() {
   return (
     <section className="border-b border-border bg-well py-16 md:py-20">
@@ -24,11 +17,16 @@ export function IntroVideo() {
           </p>
         </div>
 
-        <div className="mx-auto mt-8 flex aspect-video max-w-3xl flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-white/60">
-          <PlayCircle className="size-12 text-muted-foreground/40" />
-          <p className="text-sm font-medium text-muted-foreground">
-            Video coming soon
-          </p>
+        <div className="mx-auto mt-8 max-w-3xl overflow-hidden rounded-2xl border border-border bg-black shadow-sm">
+          <video
+            className="aspect-video w-full"
+            controls
+            playsInline
+            preload="metadata"
+            poster="/video/relaybase-intro-poster.jpg"
+          >
+            <source src="/video/relaybase-intro.mp4" type="video/mp4" />
+          </video>
         </div>
       </div>
     </section>

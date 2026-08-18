@@ -4,6 +4,8 @@ import { observer } from "mobx-react-lite";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { MIN_SERVER_SEARCH_LENGTH } from "@/email/email-mailbox-store";
+
 import { useEmailCommandRuntimeAdapter } from "@/email/commands";
 import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
@@ -46,7 +48,25 @@ export const MailListView = observer(function MailListView({
 
   useEffect(() => {
     setSearch("");
-  }, [folder, store.accountFilter]);
+    store.clearSearch();
+  }, [folder, store, store.accountFilter]);
+
+  // Debounced server-side search for inbox/sent. Short queries (or other
+  // folders) clear server results and fall back to local filtering.
+  useEffect(() => {
+    const q = search.trim();
+    if (
+      (folder !== "inbox" && folder !== "sent") ||
+      q.length < MIN_SERVER_SEARCH_LENGTH
+    ) {
+      store.clearSearch();
+      return;
+    }
+    const timer = setTimeout(() => {
+      void store.searchMail(folder, q);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [folder, search, store]);
 
   const {
     accountFilter,
@@ -58,6 +78,9 @@ export const MailListView = observer(function MailListView({
     selectedThread,
     activityDetail,
     detailLoading,
+    serverSearch,
+    searchTotal,
+    searchLoading,
     hasMore,
     loadingMore,
     loadMore,
@@ -66,6 +89,28 @@ export const MailListView = observer(function MailListView({
     messageId,
     search,
   });
+
+  // Whole-mailbox counts for the list header. Account-filtered inbox counts
+  // come from the per-address `/inbox/counts` aggregate; drafts/trash are
+  // fully local so their loaded length is exact.
+  const accountCounts =
+    accountFilter !== "all" ? store.inboxCountsForAccount(accountFilter) : null;
+  const totalCount =
+    folder === "inbox"
+      ? accountFilter === "all"
+        ? store.inboxTotal
+        : accountCounts?.total ?? null
+      : folder === "sent"
+        ? accountFilter === "all"
+          ? store.sentTotal
+          : null
+        : items.length;
+  const unreadCount =
+    folder === "inbox"
+      ? accountFilter === "all"
+        ? store.inboxUnreadTotal
+        : accountCounts?.unread ?? null
+      : null;
 
   const {
     composeMode,
@@ -168,6 +213,10 @@ export const MailListView = observer(function MailListView({
             hasMore={hasMore}
             loadingMore={loadingMore}
             onLoadMore={loadMore}
+            totalCount={totalCount}
+            unreadCount={unreadCount}
+            searchTotal={serverSearch ? searchTotal : null}
+            searchLoading={serverSearch ? searchLoading : false}
           />
         </div>
 

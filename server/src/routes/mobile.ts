@@ -14,8 +14,11 @@ import {
   inboxCountsForDomains,
   listInboxForDomains,
   listInboxNotificationsForDomains,
+  searchInboxForDomains,
   setInboxReadStateMultiDomain,
 } from "../lib/mail/list-inbox";
+import { MIN_SEARCH_QUERY_LENGTH } from "../lib/inbound-search";
+import { serializeInboundListItem } from "../lib/inbound-serialize";
 import { sendMailMessage, type SendMailBody } from "../lib/mail/send-message";
 import { listSendLogs } from "../lib/send-logs";
 
@@ -140,11 +143,48 @@ mobile.get("/inbox", async (c) => {
     authEmail ||
     undefined;
   const limit = Number(c.req.query("limit") ?? "50");
-  const messages = await listInboxForDomains(c.env, domains, {
+  const page = await listInboxForDomains(c.env, domains, {
     account,
     limit: Number.isFinite(limit) ? limit : 50,
   });
-  return c.json({ messages });
+  return c.json({
+    messages: page.messages,
+    total: page.total,
+    unread: page.unread,
+  });
+});
+
+/**
+ * Full-text search across mobile-enabled domains, always scoped to the
+ * authenticated account's To+Cc membership. Flat results, newest first.
+ */
+mobile.get("/inbox/search", async (c) => {
+  const domains = c.get("mobileDomains");
+  const authEmail = c.get("authEmail");
+  const q = c.req.query("q")?.trim() ?? "";
+  if (q.length < MIN_SEARCH_QUERY_LENGTH) {
+    return c.json(
+      { error: `q must be at least ${MIN_SEARCH_QUERY_LENGTH} characters` },
+      400,
+    );
+  }
+  const limit = Number(c.req.query("limit") ?? "50");
+  const before = c.req.query("before")?.trim() || undefined;
+  const page = await searchInboxForDomains(c.env, domains, {
+    q,
+    limit: Number.isFinite(limit) ? limit : 50,
+    before,
+    account: authEmail,
+  });
+  if (!page) {
+    return c.json({ error: "Search index is not configured" }, 503);
+  }
+  return c.json({
+    messages: page.messages.map(serializeInboundListItem),
+    total: page.total,
+    nextBefore: page.nextBefore,
+    hasMore: page.hasMore,
+  });
 });
 
 /** Per-address total/unread counts across mobile-enabled domains. */
@@ -218,10 +258,14 @@ mobile.get("/inbox/:id/attachments/:attachmentId", async (c) => {
 /** Sent history (read from `srv:sendlog:*`). */
 mobile.get("/sent", async (c) => {
   const limit = Number(c.req.query("limit") ?? "50");
-  const { logs } = await listSendLogs(c.env.RELAYBASE_APP, {
+  const { logs, summary } = await listSendLogs(c.env.RELAYBASE_APP, {
     limit: Number.isFinite(limit) ? limit : 50,
   });
-  return c.json({ sent: logs });
+  return c.json({
+    sent: logs,
+    total: summary.total,
+    hasMore: summary.total > logs.length,
+  });
 });
 
 /** Send email. `from` must be a mobile-enabled address. */

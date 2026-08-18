@@ -8,6 +8,7 @@
 |-------|--------|------|
 | **Remote** | Product Worker `RELAYBASE_APP` KV (+ R2 inbound) | Domains, addresses, audience, broadcasts, API key hashes, send logs, webhooks |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. KV `srv:sendlog:*` remains authoritative for send history. |
+| **Remote** | D1 `RELAYBASE_INBOX_INDEX` (optional) | FTS5 full-text search index over inbound mail (`inbound_search_fts`). Derived from R2 — R2 `meta.json` stays authoritative; the index is rebuildable via `server/scripts/backfill-inbound-search.mjs`. See **[inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md)**. |
 | **Remote** | Console `RELAYBASE_ACCOUNTS` D1 + `RELAYBASE_LICENSES` KV (`console.relaybase.xyz`) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription) |
 | **Local** | `~/.relaybase` | Credentials, API key plaintext vault, mail/UI cache, dashboard cache, team login |
 
@@ -33,6 +34,7 @@ flowchart TB
     KV["KV RELAYBASE_APP\nsrv:* keys"]
     R2["R2 relaybase-inbound"]
     D1["D1 RELAYBASE_LOGS\nops events"]
+    D1Search["D1 RELAYBASE_INBOX_INDEX\ninbound_search_fts (FTS5)"]
   end
   subgraph console [console.relaybase.xyz]
     ConsoleKV["KV RELAYBASE_LICENSES\nsrv:license:*"]
@@ -45,6 +47,7 @@ flowchart TB
   worker --> KV
   worker --> R2
   worker --> D1
+  worker --> D1Search
   console --> ConsoleKV
   console --> ConsoleD1
 ```
@@ -109,7 +112,15 @@ inbound/{domain}/{messageId}/meta.json | raw.eml | attachments/…
 inbound/{domain}/by-message-id/{encodedMessageId}
 ```
 
-Inbound message body + `readAt` live here. `_list.json` is the compact per-domain list index (no bodyText/bodyHtml) used by `GET /mail/inbox` cursor pages. `~/.relaybase/mail/desktop/inbox.json` is cache only. Retention is the most recent 5000 messages per domain.
+Inbound message body + `readAt` live here. `_list.json` is the compact per-domain list index (no bodyText/bodyHtml) used by `GET /mail/inbox` cursor pages — it also drives the `total`/`unread` counts echoed on list responses and the `/mail/inbox/counts` aggregate. `~/.relaybase/mail/desktop/inbox.json` is cache only. Retention is the most recent 5000 messages per domain.
+
+`inbound/{domain}/_sent.json` is the per-domain stored-sent index (Takeout import); `GET /mail/sent` serves cursor pages (`limit`/`before`) and substring search (`q`) from it.
+
+### D1 `RELAYBASE_INBOX_INDEX` (search index)
+
+Optional binding (`server/wrangler.toml`, `migrations-inbox/`). One FTS5 table `inbound_search_fts`; indexed columns: subject, from, to, cc, body text. Synced best-effort by `server/src/lib/inbound-store.ts` (insert on ingest, delete on prune, `read_at` on mark-read) — R2 stays the source of truth, so the index can always be rebuilt with `server/scripts/backfill-inbound-search.mjs`. Queried by `GET /mail/inbox/search`, `/v1/inbox/messages/search`, and `/mobile/inbox/search` (account-scoped) via `server/src/lib/inbound-search.ts`. Without the binding those endpoints return 503 and the desktop falls back to local filtering.
+
+Full design (schema, query safety, sync call sites, backfill, client wiring, list-header counts, Sent pagination): **[inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md)**.
 
 ### Forbidden (do not reintroduce)
 

@@ -8,11 +8,14 @@ import {
 import {
   getInboundAttachment,
   getInboundEmail,
-  listInboundEmails,
   listInboundEmailsPage,
-  MAX_MESSAGES,
+  listInboundIndexEntries,
   setInboundReadState,
 } from "../lib/inbound-store";
+import {
+  MIN_SEARCH_QUERY_LENGTH,
+  searchInboundEmails,
+} from "../lib/inbound-search";
 import {
   serializeInboundListItem,
   serializeInboundMessage,
@@ -66,6 +69,8 @@ v1Inbox.get("/messages", async (c) => {
     messages: page.messages.map(serializeInboundListItem),
     nextBefore: page.nextBefore,
     hasMore: page.hasMore,
+    total: page.total,
+    unread: page.unread,
   });
 });
 
@@ -73,11 +78,44 @@ v1Inbox.get("/messages/counts", async (c) => {
   const auth = await requireApiKey(c);
   if (auth instanceof Response) return auth;
 
-  const messages = await listInboundEmails(c.env.INBOUND, {
-    domain: auth.record.domain,
-    limit: MAX_MESSAGES,
+  const entries = await listInboundIndexEntries(
+    c.env.INBOUND,
+    auth.record.domain,
+  );
+  return c.json(aggregateInboundCounts(entries));
+});
+
+// Server-side full-text search (subject/from/to/cc/body). Flat results.
+v1Inbox.get("/messages/search", async (c) => {
+  const auth = await requireApiKey(c);
+  if (auth instanceof Response) return auth;
+
+  const q = c.req.query("q")?.trim() ?? "";
+  if (q.length < MIN_SEARCH_QUERY_LENGTH) {
+    return c.json(
+      { error: `q must be at least ${MIN_SEARCH_QUERY_LENGTH} characters` },
+      400,
+    );
+  }
+  if (!c.env.RELAYBASE_INBOX_INDEX) {
+    return c.json({ error: "Search index is not configured" }, 503);
+  }
+
+  const limit = Number(c.req.query("limit") ?? "50");
+  const before = c.req.query("before")?.trim() || undefined;
+  const page = await searchInboundEmails(c.env.RELAYBASE_INBOX_INDEX, {
+    domains: [auth.record.domain],
+    q,
+    limit: Number.isFinite(limit) ? limit : 50,
+    before,
   });
-  return c.json(aggregateInboundCounts(messages));
+
+  return c.json({
+    messages: page.messages.map(serializeInboundListItem),
+    total: page.total,
+    nextBefore: page.nextBefore,
+    hasMore: page.hasMore,
+  });
 });
 
 v1Inbox.post("/messages/read", async (c) => {
@@ -105,6 +143,7 @@ v1Inbox.post("/messages/read", async (c) => {
     auth.record.domain,
     ids,
     readAt,
+    c.env.RELAYBASE_INBOX_INDEX,
   );
   return c.json(result);
 });

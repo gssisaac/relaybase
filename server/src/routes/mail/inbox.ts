@@ -11,11 +11,14 @@ import {
 import {
   getInboundAttachment,
   getInboundEmail,
-  listInboundEmails,
   listInboundEmailsPage,
-  MAX_MESSAGES,
+  listInboundIndexEntries,
   setInboundReadState,
 } from "../../lib/inbound-store";
+import {
+  MIN_SEARCH_QUERY_LENGTH,
+  searchInboundEmails,
+} from "../../lib/inbound-search";
 import {
   ackPendingEvents,
   listPendingEvents,
@@ -84,11 +87,48 @@ mailInbox.get("/counts", async (c) => {
     return c.json({ error: "domain query parameter is required" }, 400);
   }
 
-  const messages = await listInboundEmails(c.env.INBOUND, {
-    domain,
-    limit: MAX_MESSAGES,
+  // Counts only need To/Cc + readAt, all present on the compact `_list.json`
+  // index — no per-message meta.json loads.
+  const entries = await listInboundIndexEntries(c.env.INBOUND, domain);
+  return c.json(aggregateInboundCounts(entries));
+});
+
+// Server-side full-text search (subject/from/to/cc/body) over the D1 FTS
+// index. Results are flat messages (no thread grouping), newest first.
+mailInbox.get("/search", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const domain = c.req.query("domain")?.trim().toLowerCase();
+  if (!domain) {
+    return c.json({ error: "domain query parameter is required" }, 400);
+  }
+  const q = c.req.query("q")?.trim() ?? "";
+  if (q.length < MIN_SEARCH_QUERY_LENGTH) {
+    return c.json(
+      { error: `q must be at least ${MIN_SEARCH_QUERY_LENGTH} characters` },
+      400,
+    );
+  }
+  if (!c.env.RELAYBASE_INBOX_INDEX) {
+    return c.json({ error: "Search index is not configured" }, 503);
+  }
+
+  const limit = Number(c.req.query("limit") ?? "50");
+  const before = c.req.query("before")?.trim() || undefined;
+  const page = await searchInboundEmails(c.env.RELAYBASE_INBOX_INDEX, {
+    domains: [domain],
+    q,
+    limit: Number.isFinite(limit) ? limit : 50,
+    before,
   });
-  return c.json(aggregateInboundCounts(messages));
+
+  return c.json({
+    messages: page.messages.map(serializeInboundListItem),
+    total: page.total,
+    nextBefore: page.nextBefore,
+    hasMore: page.hasMore,
+  });
 });
 
 // Bulk mark-read/unread (desktop client + Cmd+K mail commands).
@@ -116,7 +156,13 @@ mailInbox.post("/read", async (c) => {
   }
 
   const readAt = body.read ? new Date().toISOString() : null;
-  const result = await setInboundReadState(c.env.INBOUND, domain, ids, readAt);
+  const result = await setInboundReadState(
+    c.env.INBOUND,
+    domain,
+    ids,
+    readAt,
+    c.env.RELAYBASE_INBOX_INDEX,
+  );
   return c.json(result);
 });
 
@@ -141,6 +187,8 @@ mailInbox.get("/", async (c) => {
     messages: page.messages.map(serializeInboundListItem),
     nextBefore: page.nextBefore,
     hasMore: page.hasMore,
+    total: page.total,
+    unread: page.unread,
   });
 });
 

@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
-import { listStoredSent } from "../../lib/sent-store";
+import { listStoredSentPage } from "../../lib/sent-store";
 
 const mailSent = new Hono<{ Bindings: Env }>();
 
+// Cursor-paginated (newest first). Without `limit` the full index is
+// returned in one page, which keeps older clients working.
 mailSent.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
@@ -14,8 +16,23 @@ mailSent.get("/", async (c) => {
     return c.json({ error: "domain query parameter is required" }, 400);
   }
 
-  const sent = await listStoredSent(c.env.INBOUND, domain);
-  return c.json({ sent });
+  const rawLimit = c.req.query("limit");
+  const limit = rawLimit ? Number(rawLimit) : undefined;
+  const before = c.req.query("before")?.trim() || undefined;
+  const q = c.req.query("q")?.trim() || undefined;
+  const page = await listStoredSentPage(c.env.INBOUND, domain, {
+    // No limit param → legacy full-index response.
+    limit: rawLimit && Number.isFinite(limit) ? limit : 5000,
+    before,
+    q,
+  });
+
+  return c.json({
+    sent: page.sent,
+    nextBefore: page.nextBefore,
+    hasMore: page.hasMore,
+    total: page.total,
+  });
 });
 
 export { mailSent };

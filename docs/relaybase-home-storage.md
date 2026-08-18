@@ -44,8 +44,8 @@ Server/worker data (Cloudflare KV `RELAYBASE_APP`, R2, D1 waitlist) is separate 
 │       └── …
 └── mail/
     └── desktop/                   # fixed local operator id
-        ├── inbox.json             # accumulated inbox pages + nextBefore/hasMore per domain
-        ├── sent.json
+        ├── inbox.json             # accumulated inbox pages + nextBefore/hasMore + total/unread per domain
+        ├── sent.json              # accumulated sent pages + nextBefore/hasMore/total per domain
         ├── drafts.json
         ├── details/
         │   └── {messageKey}.json

@@ -23,6 +23,7 @@ import {
   threadMatchesSearch,
   type ConversationThread,
 } from "@/email/conversation-threading";
+import { trashEntryKey } from "@/email/trash-store";
 
 type MailListFolder = Extract<
   EmailMailboxSection,
@@ -62,6 +63,15 @@ export function useMailListItems({
   const inboxSource = folder === "trash" ? trashedActivity : activity;
   const sentSource = folder === "trash" ? trashedSent : sentMessages;
 
+  /**
+   * Server-side search mode: the Worker returns flat matching messages, so
+   * list items bypass thread grouping and the local search filter. Falls
+   * back to local filtering when the Worker search index is unavailable.
+   */
+  const serverSearch =
+    (folder === "inbox" || folder === "sent") &&
+    store.searchActiveFor(folder, search);
+
   /** Inbox conversations (inbound + matching sent). Trash stays flat. */
   const inboxThreads = useMemo((): ConversationThread[] => {
     if (folder !== "inbox") return [];
@@ -74,9 +84,11 @@ export function useMailListItems({
       ) {
         return false;
       }
-      return threadMatchesSearch(thread, search);
+      // Server search renders its own flat results; keep every thread here
+      // so opening a search hit still lands in its conversation view.
+      return serverSearch || threadMatchesSearch(thread, search);
     });
-  }, [accountFilter, activity, folder, search, sentMessages]);
+  }, [accountFilter, activity, folder, search, sentMessages, serverSearch]);
 
   const threadByInboundKey = useMemo(() => {
     const map = new Map<string, ConversationThread>();
@@ -165,7 +177,44 @@ export function useMailListItems({
     [accountFilter, drafts, folder],
   );
 
+  const searchInboxResults = store.searchInboxResults;
+  const searchSentResults = store.searchSentResults;
+  const trashKeys = store.trashKeys;
+
+  /** Flat server search results, filtered by trash + account locally. */
+  const searchItems = useMemo((): MailListItem[] => {
+    if (!serverSearch) return [];
+    if (folder === "inbox") {
+      return searchInboxResults
+        .filter((m) => !trashKeys.has(trashEntryKey("inbox", m.key)))
+        .map((m) => ({
+          kind: "inbox" as const,
+          id: `inbox:${m.key}`,
+          message: m,
+        }))
+        .filter((item) => matchesAccount(item, accountFilter));
+    }
+    return searchSentResults
+      .filter((m) => !trashKeys.has(trashEntryKey("sent", m.id)))
+      .map((m) => ({
+        kind: "sent" as const,
+        id: `sent:${m.id}`,
+        message: m,
+      }))
+      .filter((item) => matchesAccount(item, accountFilter));
+  }, [
+    accountFilter,
+    folder,
+    searchInboxResults,
+    searchSentResults,
+    serverSearch,
+    trashKeys,
+  ]);
+
   const items = useMemo((): MailListItem[] => {
+    if (serverSearch) {
+      return searchItems;
+    }
     const q = search.trim().toLowerCase();
     if (folder === "inbox") {
       // Already filtered/sorted by groupConversations + thread filters.
@@ -208,11 +257,8 @@ export function useMailListItems({
           item.message.bodyPreview.toLowerCase().includes(q)
         );
       });
-    if (folder === "sent" && !q) {
-      return sorted.slice(0, store.sentRenderLimit);
-    }
     return sorted;
-  }, [draftItems, folder, inboxItems, search, sentItems, store.sentRenderLimit]);
+  }, [draftItems, folder, inboxItems, search, searchItems, sentItems, serverSearch]);
 
   const selectedThread = useMemo(() => {
     if (folder !== "inbox" || !messageId) return null;
@@ -301,13 +347,15 @@ export function useMailListItems({
     // Thread view loads its own details; only need a domain for fallback single-message.
     if (folder === "inbox" && selectedThread) return "";
     const inboxPool = folder === "trash" ? trashedActivity : activity;
-    const listHit = inboxPool.find((m) => m.key === messageId);
+    const listHit =
+      inboxPool.find((m) => m.key === messageId) ??
+      searchInboxResults.find((m) => m.key === messageId);
     if (folder === "trash" && !listHit) return "";
     return (
       (listHit ? domainOf(listHit.toEmail) : "") ||
       (accountFilter !== "all" ? domainOf(accountFilter) : "")
     );
-  }, [accountFilter, activity, folder, messageId, selectedThread, trashedActivity]);
+  }, [accountFilter, activity, folder, messageId, searchInboxResults, selectedThread, trashedActivity]);
 
   useEffect(() => {
     if (!messageId || folder === "sent" || folder === "drafts") return;
@@ -323,14 +371,18 @@ export function useMailListItems({
   }, [accountFilter, folder, router, searchParams, sent]);
 
   const loadMore = useCallback(() => {
+    if (serverSearch) {
+      void store.loadMoreSearch();
+      return;
+    }
     if (folder === "inbox") {
       void store.loadMoreInbox();
       return;
     }
     if (folder === "sent") {
-      store.loadMoreSent();
+      void store.loadMoreSent();
     }
-  }, [folder, store]);
+  }, [folder, serverSearch, store]);
 
   return {
     store,
@@ -350,13 +402,23 @@ export function useMailListItems({
     activityDetail,
     detailLoading,
     detailDomain,
-    hasMore:
-      folder === "inbox"
+    serverSearch,
+    searchTotal: serverSearch ? store.searchTotal : null,
+    searchLoading: serverSearch ? store.searchLoading : false,
+    hasMore: serverSearch
+      ? store.searchHasMore
+      : folder === "inbox"
         ? store.inboxHasMore
         : folder === "sent" && !search.trim()
           ? store.sentHasMore
           : false,
-    loadingMore: folder === "inbox" ? store.inboxLoadingMore : false,
+    loadingMore: serverSearch
+      ? store.searchLoadingMore
+      : folder === "inbox"
+        ? store.inboxLoadingMore
+        : folder === "sent"
+          ? store.sentLoadingMore
+          : false,
     loadMore,
   };
 }

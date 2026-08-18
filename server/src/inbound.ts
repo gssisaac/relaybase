@@ -15,16 +15,20 @@ export async function handleInboundEmail(
   env: Env,
 ): Promise<StoreInboundEmailResult> {
   const raw = await new Response(message.raw).arrayBuffer();
-  const result = await storeInboundEmail(env.INBOUND, {
-    envelopeFrom: message.from,
-    toEmail: message.to,
-    subject: message.headers.get("subject")?.trim() || "(no subject)",
-    messageId: message.headers.get("message-id")?.trim() || null,
-    inReplyTo: message.headers.get("in-reply-to")?.trim() || null,
-    references: message.headers.get("references")?.trim() || null,
-    size: message.rawSize,
-    raw,
-  });
+  const result = await storeInboundEmail(
+    env.INBOUND,
+    {
+      envelopeFrom: message.from,
+      toEmail: message.to,
+      subject: message.headers.get("subject")?.trim() || "(no subject)",
+      messageId: message.headers.get("message-id")?.trim() || null,
+      inReplyTo: message.headers.get("in-reply-to")?.trim() || null,
+      references: message.headers.get("references")?.trim() || null,
+      size: message.rawSize,
+      raw,
+    },
+    env.RELAYBASE_INBOX_INDEX,
+  );
 
   if (isBounceMessage(raw, message.from)) {
     const diagnostic = parseBounceDiagnostic(raw);

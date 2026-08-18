@@ -89,6 +89,9 @@ export type PersistedInboxCache = {
   messages: RoutingActivityEvent[];
   nextBeforeByDomain?: Record<string, string | null>;
   hasMoreByDomain?: Record<string, boolean>;
+  /** Whole-mailbox totals from the Worker (per domain). */
+  totalByDomain?: Record<string, number>;
+  unreadByDomain?: Record<string, number>;
 };
 
 export async function loadPersistedInbox(
@@ -100,6 +103,8 @@ export async function loadPersistedInbox(
     messages: data.messages,
     nextBeforeByDomain: data.nextBeforeByDomain ?? {},
     hasMoreByDomain: data.hasMoreByDomain ?? {},
+    totalByDomain: data.totalByDomain ?? {},
+    unreadByDomain: data.unreadByDomain ?? {},
   };
 }
 
@@ -111,21 +116,42 @@ export async function savePersistedInbox(
     messages: cache.messages,
     nextBeforeByDomain: cache.nextBeforeByDomain ?? {},
     hasMoreByDomain: cache.hasMoreByDomain ?? {},
+    totalByDomain: cache.totalByDomain ?? {},
+    unreadByDomain: cache.unreadByDomain ?? {},
   });
 }
 
+export type PersistedSentCache = {
+  sent: SentEmail[];
+  nextBeforeByDomain?: Record<string, string | null>;
+  hasMoreByDomain?: Record<string, boolean>;
+  totalByDomain?: Record<string, number>;
+};
+
 export async function loadPersistedSent(
   productId: string,
-): Promise<SentEmail[] | null> {
-  const data = await readJson<{ sent?: SentEmail[] }>(sentPath(productId));
-  return data?.sent ?? null;
+): Promise<PersistedSentCache | null> {
+  // Legacy shape was `{ sent }` only — extra fields default to empty.
+  const data = await readJson<PersistedSentCache>(sentPath(productId));
+  if (!data?.sent) return null;
+  return {
+    sent: data.sent,
+    nextBeforeByDomain: data.nextBeforeByDomain ?? {},
+    hasMoreByDomain: data.hasMoreByDomain ?? {},
+    totalByDomain: data.totalByDomain ?? {},
+  };
 }
 
 export async function savePersistedSent(
   productId: string,
-  sent: SentEmail[],
+  cache: PersistedSentCache,
 ): Promise<void> {
-  await writeJson(sentPath(productId), { sent });
+  await writeJson(sentPath(productId), {
+    sent: cache.sent,
+    nextBeforeByDomain: cache.nextBeforeByDomain ?? {},
+    hasMoreByDomain: cache.hasMoreByDomain ?? {},
+    totalByDomain: cache.totalByDomain ?? {},
+  });
 }
 
 export async function loadPersistedDrafts(

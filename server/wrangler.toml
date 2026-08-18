@@ -31,3 +31,16 @@ binding = "RELAYBASE_LOGS"
 database_name = "relaybase-logs"
 database_id = "ceea55c5-04cd-4501-846e-0ea62971f8e9"
 migrations_dir = "migrations-logs"
+
+# Inbound mail full-text search (FTS5). Before deploying, create the DB with:
+#   wrangler d1 create relaybase-inbox-index
+# paste the returned database_id below, then run:
+#   wrangler d1 migrations apply relaybase-inbox-index --remote
+#   node scripts/backfill-inbound-search.mjs   # one-time backfill
+# The binding is optional in code (Env.RELAYBASE_INBOX_INDEX?) — without it,
+# search endpoints return 503 and ingest skips indexing.
+[[d1_databases]]
+binding = "RELAYBASE_INBOX_INDEX"
+database_name = "relaybase-inbox-index"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations-inbox"

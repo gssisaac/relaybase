@@ -1,5 +1,15 @@
 import type { InboundEmailMeta } from "./inbound-store";
 
+/**
+ * Minimal shape needed to aggregate counts — satisfied by both the full
+ * `InboundEmailMeta` and the compact `InboundListEntry` index rows, so
+ * counts can be computed from `_list.json` without loading any `meta.json`.
+ */
+export type InboundCountableMessage = Pick<
+  InboundEmailMeta,
+  "toEmail" | "toEmails" | "ccEmails" | "readAt"
+>;
+
 export type InboundAddressCounts = {
   total: number;
   unread: number;
@@ -16,7 +26,7 @@ export type InboundCountsResult = {
  * client's `inboundMatchesAccount` (app/src/email/conversation-threading.ts),
  * kept here as a standalone copy since server code should not import `app/`.
  */
-function messageAddresses(message: InboundEmailMeta): Set<string> {
+function messageAddresses(message: InboundCountableMessage): Set<string> {
   const addresses = new Set<string>();
   const add = (value: string | null | undefined) => {
     const trimmed = value?.trim().toLowerCase();
@@ -30,7 +40,7 @@ function messageAddresses(message: InboundEmailMeta): Set<string> {
 
 /** Per-address total/unread counts across every retained message for a domain. */
 export function aggregateInboundCounts(
-  messages: InboundEmailMeta[],
+  messages: InboundCountableMessage[],
 ): InboundCountsResult {
   const counts: Record<string, InboundAddressCounts> = {};
   let totalAll = 0;

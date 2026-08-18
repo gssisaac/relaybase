@@ -55,6 +55,9 @@ import { notifyNewMail } from "@/lib/desktop/notify";
 
 const INBOX_PAGE_SIZE = 50;
 const SENT_PAGE_SIZE = 50;
+const SEARCH_PAGE_SIZE = 50;
+/** Server-side search kicks in from this query length (matches Worker). */
+export const MIN_SERVER_SEARCH_LENGTH = 2;
 const NOTIFICATION_POLL_MS = 20_000;
 const SEND_TOAST_ID = "email-send";
 const TRASH_UNDO_TOAST_ID = "mail-trash-undo";
@@ -138,7 +141,30 @@ export class EmailMailboxStore {
   inboxNextBeforeByDomain: Record<string, string | null> = {};
   inboxHasMoreByDomain: Record<string, boolean> = {};
   inboxLoadingMore = false;
-  sentRenderLimit = SENT_PAGE_SIZE;
+  /** Whole-mailbox totals from the Worker list responses (per domain). */
+  inboxTotalByDomain: Record<string, number> = {};
+  inboxUnreadByDomain: Record<string, number> = {};
+  /** Per-address total/unread from `/inbox/counts` (account-filter header). */
+  inboxCountsByAddress: Record<string, { total: number; unread: number }> = {};
+  sentNextBeforeByDomain: Record<string, string | null> = {};
+  sentHasMoreByDomain: Record<string, boolean> = {};
+  sentTotalByDomain: Record<string, number> = {};
+  sentLoadingMore = false;
+
+  /** Server-side search (D1 FTS for inbox; `_sent.json` filter for sent). */
+  searchQuery = "";
+  searchFolder: "inbox" | "sent" | null = null;
+  searchInboxResults: RoutingActivityEvent[] = [];
+  searchSentResults: SentEmail[] = [];
+  searchTotal = 0;
+  searchLoading = false;
+  searchLoadingMore = false;
+  /** True when the Worker has no search index (fall back to local filter). */
+  searchUnavailable = false;
+  searchNextBeforeByDomain: Record<string, string | null> = {};
+  searchHasMoreByDomain: Record<string, boolean> = {};
+  private searchGeneration = 0;
+
   private notificationPollTimer: ReturnType<typeof setInterval> | null = null;
   private notificationPollInFlight = false;
 
@@ -255,7 +281,49 @@ export class EmailMailboxStore {
   }
 
   get sentHasMore(): boolean {
-    return this.visibleSent.length > this.sentRenderLimit;
+    const domains = this.domainsKey ? this.domainsKey.split("\0").filter(Boolean) : [];
+    if (domains.length === 0) return false;
+    return domains.some((domain) => this.sentHasMoreByDomain[domain] !== false);
+  }
+
+  private get enabledDomains(): string[] {
+    return this.domainsKey ? this.domainsKey.split("\0").filter(Boolean) : [];
+  }
+
+  /** Whole-mailbox inbox total across enabled domains, or null before first fetch. */
+  get inboxTotal(): number | null {
+    return sumByDomain(this.enabledDomains, this.inboxTotalByDomain);
+  }
+
+  /** Whole-mailbox unread total across enabled domains, or null before first fetch. */
+  get inboxUnreadTotal(): number | null {
+    return sumByDomain(this.enabledDomains, this.inboxUnreadByDomain);
+  }
+
+  /** Whole-mailbox sent total across enabled domains, or null before first fetch. */
+  get sentTotal(): number | null {
+    return sumByDomain(this.enabledDomains, this.sentTotalByDomain);
+  }
+
+  /** Whole-mailbox totals for a single address (server counts), or null. */
+  inboxCountsForAccount(
+    email: string,
+  ): { total: number; unread: number } | null {
+    return this.inboxCountsByAddress[email.trim().toLowerCase()] ?? null;
+  }
+
+  /** True when list views should render server search results for `folder`. */
+  searchActiveFor(folder: string, query: string): boolean {
+    return (
+      !this.searchUnavailable &&
+      this.searchFolder === folder &&
+      this.searchQuery.length >= MIN_SERVER_SEARCH_LENGTH &&
+      query.trim().length >= MIN_SERVER_SEARCH_LENGTH
+    );
+  }
+
+  get searchHasMore(): boolean {
+    return Object.values(this.searchHasMoreByDomain).some(Boolean);
   }
 
   private inboxCursorsReady(): boolean {
@@ -282,6 +350,7 @@ export class EmailMailboxStore {
     return (
       this.activity.find((m) => m.key === key) ??
       this.activityDetailByKey[key] ??
+      this.searchInboxResults.find((m) => m.key === key) ??
       null
     );
   }
@@ -489,7 +558,14 @@ export class EmailMailboxStore {
       this.inboxNextBeforeByDomain = {};
       this.inboxHasMoreByDomain = {};
       this.inboxLoadingMore = false;
-      this.sentRenderLimit = SENT_PAGE_SIZE;
+      this.inboxTotalByDomain = {};
+      this.inboxUnreadByDomain = {};
+      this.inboxCountsByAddress = {};
+      this.sentNextBeforeByDomain = {};
+      this.sentHasMoreByDomain = {};
+      this.sentTotalByDomain = {};
+      this.sentLoadingMore = false;
+      this.clearSearch();
       this.hydrateFromStale();
     } else if (domainsChanged && nextDomainsKey) {
       this.hydrateInboxSentFromStale();
@@ -870,6 +946,11 @@ export class EmailMailboxStore {
         this.config = cfgResult.data;
       });
 
+      // Whole-mailbox + per-address counts refresh even when the mail lists
+      // themselves are served from cache. Cheap on the Worker (compact
+      // index aggregate) — best-effort.
+      void this.refreshInboxCounts(domains, generation);
+
       if (skipMailNetwork) {
         return;
       }
@@ -884,14 +965,20 @@ export class EmailMailboxStore {
       );
 
       const sentResults = await Promise.all(
-        domains.map((domain) =>
-          fetchEmailCachedOptional<{ sent?: SentEmail[] }>(
+        domains.map(async (domain) => {
+          const result = await fetchEmailCachedOptional<{
+            sent?: SentEmail[];
+            nextBefore?: string | null;
+            hasMore?: boolean;
+            total?: number;
+          }>(
             this.productId,
             `sent:${domain}`,
-            `${this.apiBase}/sent${domainQuery(domain)}`,
+            `${this.apiBase}/sent${domainQuery(domain, { limit: String(SENT_PAGE_SIZE) })}`,
             { refresh: force },
-          ),
-        ),
+          );
+          return { domain, result };
+        }),
       );
 
       if (this.refreshGeneration !== generation) return;
@@ -901,6 +988,8 @@ export class EmailMailboxStore {
         let inboxFailed = false;
         const nextBefore = { ...this.inboxNextBeforeByDomain };
         const hasMore = { ...this.inboxHasMoreByDomain };
+        const inboxTotals = { ...this.inboxTotalByDomain };
+        const inboxUnreads = { ...this.inboxUnreadByDomain };
         for (const result of inboxResults) {
           if (!result.page) {
             inboxFailed = true;
@@ -910,6 +999,12 @@ export class EmailMailboxStore {
           if (!(result.domain in hasMore)) {
             nextBefore[result.domain] = result.page.nextBefore;
             hasMore[result.domain] = result.page.hasMore;
+          }
+          if (result.page.total != null) {
+            inboxTotals[result.domain] = result.page.total;
+          }
+          if (result.page.unread != null) {
+            inboxUnreads[result.domain] = result.page.unread;
           }
         }
         const inboxByKey = new Map(
@@ -929,6 +1024,8 @@ export class EmailMailboxStore {
         );
         this.inboxNextBeforeByDomain = nextBefore;
         this.inboxHasMoreByDomain = hasMore;
+        this.inboxTotalByDomain = inboxTotals;
+        this.inboxUnreadByDomain = inboxUnreads;
         if (inboxFailed && domains.length > 0) {
           this.error = "Failed to load received mail from Relaybase";
         }
@@ -937,12 +1034,25 @@ export class EmailMailboxStore {
           this.sent.map((msg) => [msg.id, msg] as const),
         );
         const sentById = new Map<string, SentEmail>();
-        for (const result of sentResults) {
+        const sentNextBefore = { ...this.sentNextBeforeByDomain };
+        const sentHasMore = { ...this.sentHasMoreByDomain };
+        const sentTotals = { ...this.sentTotalByDomain };
+        for (const { domain, result } of sentResults) {
           if (!result.ok) continue;
           for (const msg of result.data?.sent ?? []) {
             sentById.set(msg.id, previousSent.get(msg.id) ?? msg);
           }
+          if (!(domain in sentHasMore)) {
+            sentNextBefore[domain] = result.data?.nextBefore ?? null;
+            sentHasMore[domain] = Boolean(result.data?.hasMore);
+          }
+          if (typeof result.data?.total === "number") {
+            sentTotals[domain] = result.data.total;
+          }
         }
+        this.sentNextBeforeByDomain = sentNextBefore;
+        this.sentHasMoreByDomain = sentHasMore;
+        this.sentTotalByDomain = sentTotals;
         // Keep locally known sent mail when a force refresh races a just-written
         // record (remote KV can lag behind the send response).
         for (const [id, msg] of previousSent) {
@@ -986,6 +1096,8 @@ export class EmailMailboxStore {
     messages: RoutingActivityEvent[];
     nextBefore: string | null;
     hasMore: boolean;
+    total: number | null;
+    unread: number | null;
   } | null> {
     const extra: Record<string, string> = {
       limit: String(options.limit ?? INBOX_PAGE_SIZE),
@@ -999,6 +1111,8 @@ export class EmailMailboxStore {
         messages?: RoutingActivityEvent[];
         nextBefore?: string | null;
         hasMore?: boolean;
+        total?: number;
+        unread?: number;
         error?: string;
       }>(res);
       if (!res.ok) return null;
@@ -1006,6 +1120,8 @@ export class EmailMailboxStore {
         messages: data.messages ?? [],
         nextBefore: data.nextBefore ?? null,
         hasMore: Boolean(data.hasMore),
+        total: typeof data.total === "number" ? data.total : null,
+        unread: typeof data.unread === "number" ? data.unread : null,
       };
     } catch {
       return null;
@@ -1078,9 +1194,361 @@ export class EmailMailboxStore {
     }
   }
 
-  loadMoreSent() {
-    if (!this.sentHasMore) return;
-    this.sentRenderLimit += SENT_PAGE_SIZE;
+  /**
+   * Best-effort whole-mailbox counts from `/inbox/counts` — per-address
+   * (account-filtered header) plus per-domain totals (all-accounts header).
+   */
+  private async refreshInboxCounts(domains: string[], generation: number) {
+    if (!this.apiBase || domains.length === 0) return;
+    const merged: Record<string, { total: number; unread: number }> = {};
+    const totals: Record<string, number> = {};
+    const unreads: Record<string, number> = {};
+    await Promise.all(
+      domains.map(async (domain) => {
+        try {
+          const res = await desktopAwareFetch(
+            `${this.apiBase}/inbox/counts${domainQuery(domain)}`,
+          );
+          if (!res.ok) return;
+          const data = await readResponseJson<{
+            counts?: Record<string, { total: number; unread: number }>;
+            totalAll?: number;
+            unreadAll?: number;
+          }>(res);
+          for (const [email, value] of Object.entries(data.counts ?? {})) {
+            merged[email.toLowerCase()] = value;
+          }
+          if (typeof data.totalAll === "number") totals[domain] = data.totalAll;
+          if (typeof data.unreadAll === "number") {
+            unreads[domain] = data.unreadAll;
+          }
+        } catch {
+          // keep previous counts
+        }
+      }),
+    );
+    if (this.refreshGeneration !== generation) return;
+    if (
+      Object.keys(merged).length === 0 &&
+      Object.keys(totals).length === 0
+    ) {
+      return;
+    }
+    runInAction(() => {
+      this.inboxCountsByAddress = {
+        ...this.inboxCountsByAddress,
+        ...merged,
+      };
+      this.inboxTotalByDomain = { ...this.inboxTotalByDomain, ...totals };
+      this.inboxUnreadByDomain = { ...this.inboxUnreadByDomain, ...unreads };
+    });
+  }
+
+  private async fetchSentPage(
+    domain: string,
+    options: { limit?: number; before?: string; q?: string } = {},
+  ): Promise<{
+    sent: SentEmail[];
+    nextBefore: string | null;
+    hasMore: boolean;
+    total: number | null;
+  } | null> {
+    const extra: Record<string, string> = {
+      limit: String(options.limit ?? SENT_PAGE_SIZE),
+    };
+    if (options.before) extra.before = options.before;
+    if (options.q) extra.q = options.q;
+    try {
+      const res = await desktopAwareFetch(
+        `${this.apiBase}/sent${domainQuery(domain, extra)}`,
+      );
+      if (!res.ok) return null;
+      const data = await readResponseJson<{
+        sent?: SentEmail[];
+        nextBefore?: string | null;
+        hasMore?: boolean;
+        total?: number;
+      }>(res);
+      return {
+        sent: data.sent ?? [],
+        nextBefore: data.nextBefore ?? null,
+        hasMore: Boolean(data.hasMore),
+        total: typeof data.total === "number" ? data.total : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async loadMoreSent() {
+    if (
+      !this.productId ||
+      !this.apiBase ||
+      this.sentLoadingMore ||
+      !this.sentHasMore
+    ) {
+      return;
+    }
+    const domains = this.domainsKey
+      ? this.domainsKey.split("\0").filter(Boolean)
+      : [];
+    if (domains.length === 0) return;
+
+    this.sentLoadingMore = true;
+    try {
+      const results = await Promise.all(
+        domains.map(async (domain) => {
+          if (this.sentHasMoreByDomain[domain] === false) return null;
+          const before =
+            this.sentNextBeforeByDomain[domain] ||
+            oldestSentCursor(this.sent, domain);
+          if (!before) return null;
+          const page = await this.fetchSentPage(domain, {
+            limit: SENT_PAGE_SIZE,
+            before,
+          });
+          return page ? { domain, page } : null;
+        }),
+      );
+
+      runInAction(() => {
+        const sentById = new Map(this.sent.map((msg) => [msg.id, msg] as const));
+        const nextBefore = { ...this.sentNextBeforeByDomain };
+        const hasMore = { ...this.sentHasMoreByDomain };
+        const totals = { ...this.sentTotalByDomain };
+        for (const result of results) {
+          if (!result) continue;
+          for (const msg of result.page.sent) {
+            if (!sentById.has(msg.id)) sentById.set(msg.id, msg);
+          }
+          nextBefore[result.domain] = result.page.nextBefore;
+          hasMore[result.domain] = result.page.hasMore;
+          if (result.page.total != null) {
+            totals[result.domain] = result.page.total;
+          }
+        }
+        this.sent = [...sentById.values()];
+        this.sentNextBeforeByDomain = nextBefore;
+        this.sentHasMoreByDomain = hasMore;
+        this.sentTotalByDomain = totals;
+      });
+      void this.persistMailLists();
+    } finally {
+      runInAction(() => {
+        this.sentLoadingMore = false;
+      });
+    }
+  }
+
+  /**
+   * Server-side search. Inbox queries the Worker's D1 FTS index; sent
+   * filters the Worker's `_sent.json`. Results are flat (no thread
+   * grouping). Falls back to local filtering when the index is missing.
+   */
+  async searchMail(folder: "inbox" | "sent", query: string) {
+    const q = query.trim();
+    if (!this.productId || !this.apiBase) return;
+    if (q.length < MIN_SERVER_SEARCH_LENGTH) {
+      this.clearSearch();
+      return;
+    }
+    const domains = this.domainsKey
+      ? this.domainsKey.split("\0").filter(Boolean)
+      : [];
+    if (domains.length === 0) return;
+
+    const generation = ++this.searchGeneration;
+    runInAction(() => {
+      this.searchFolder = folder;
+      this.searchQuery = q;
+      this.searchLoading = true;
+    });
+
+    let unavailable = false;
+    let anyOk = false;
+    const inboxMerged: RoutingActivityEvent[] = [];
+    const sentMerged: SentEmail[] = [];
+    let total = 0;
+    const nextBefore: Record<string, string | null> = {};
+    const hasMore: Record<string, boolean> = {};
+
+    await Promise.all(
+      domains.map(async (domain) => {
+        try {
+          if (folder === "inbox") {
+            const res = await desktopAwareFetch(
+              `${this.apiBase}/inbox/search${domainQuery(domain, {
+                q,
+                limit: String(SEARCH_PAGE_SIZE),
+              })}`,
+            );
+            if (res.status === 503) {
+              unavailable = true;
+              return;
+            }
+            if (!res.ok) return;
+            const data = await readResponseJson<{
+              messages?: RoutingActivityEvent[];
+              total?: number;
+              nextBefore?: string | null;
+              hasMore?: boolean;
+            }>(res);
+            anyOk = true;
+            inboxMerged.push(...(data.messages ?? []));
+            total += data.total ?? 0;
+            nextBefore[domain] = data.nextBefore ?? null;
+            hasMore[domain] = Boolean(data.hasMore);
+            return;
+          }
+          const page = await this.fetchSentPage(domain, {
+            limit: SEARCH_PAGE_SIZE,
+            q,
+          });
+          if (!page) return;
+          anyOk = true;
+          sentMerged.push(...page.sent);
+          total += page.total ?? page.sent.length;
+          nextBefore[domain] = page.nextBefore;
+          hasMore[domain] = page.hasMore;
+        } catch {
+          // per-domain search failure — fall through
+        }
+      }),
+    );
+
+    if (this.searchGeneration !== generation) return;
+    runInAction(() => {
+      if (unavailable || !anyOk) {
+        // No usable server results — local filtering takes over.
+        this.searchUnavailable = true;
+        this.searchLoading = false;
+        return;
+      }
+      this.searchUnavailable = false;
+      this.searchInboxResults = inboxMerged.sort((a, b) =>
+        b.receivedAt.localeCompare(a.receivedAt),
+      );
+      this.searchSentResults = sentMerged.sort((a, b) =>
+        b.sentAt.localeCompare(a.sentAt),
+      );
+      this.searchTotal = total;
+      this.searchNextBeforeByDomain = nextBefore;
+      this.searchHasMoreByDomain = hasMore;
+      this.searchLoading = false;
+    });
+  }
+
+  async loadMoreSearch() {
+    if (
+      !this.searchFolder ||
+      this.searchLoading ||
+      this.searchLoadingMore ||
+      this.searchUnavailable ||
+      !this.searchHasMore
+    ) {
+      return;
+    }
+    const folder = this.searchFolder;
+    const q = this.searchQuery;
+    const generation = this.searchGeneration;
+    const domains = Object.entries(this.searchHasMoreByDomain)
+      .filter(([, more]) => more)
+      .map(([domain]) => domain);
+    if (domains.length === 0) return;
+
+    this.searchLoadingMore = true;
+    try {
+      const results = await Promise.all(
+        domains.map(async (domain) => {
+          const before = this.searchNextBeforeByDomain[domain];
+          if (!before) return null;
+          try {
+            if (folder === "inbox") {
+              const res = await desktopAwareFetch(
+                `${this.apiBase}/inbox/search${domainQuery(domain, {
+                  q,
+                  limit: String(SEARCH_PAGE_SIZE),
+                  before,
+                })}`,
+              );
+              if (!res.ok) return null;
+              const data = await readResponseJson<{
+                messages?: RoutingActivityEvent[];
+                nextBefore?: string | null;
+                hasMore?: boolean;
+              }>(res);
+              return {
+                domain,
+                inbox: data.messages ?? [],
+                sent: [] as SentEmail[],
+                nextBefore: data.nextBefore ?? null,
+                hasMore: Boolean(data.hasMore),
+              };
+            }
+            const page = await this.fetchSentPage(domain, {
+              limit: SEARCH_PAGE_SIZE,
+              q,
+              before,
+            });
+            if (!page) return null;
+            return {
+              domain,
+              inbox: [] as RoutingActivityEvent[],
+              sent: page.sent,
+              nextBefore: page.nextBefore,
+              hasMore: page.hasMore,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      if (this.searchGeneration !== generation) return;
+      runInAction(() => {
+        const inboxByKey = new Map(
+          this.searchInboxResults.map((m) => [m.key, m] as const),
+        );
+        const sentById = new Map(
+          this.searchSentResults.map((m) => [m.id, m] as const),
+        );
+        const nextBefore = { ...this.searchNextBeforeByDomain };
+        const hasMore = { ...this.searchHasMoreByDomain };
+        for (const result of results) {
+          if (!result) continue;
+          for (const msg of result.inbox) inboxByKey.set(msg.key, msg);
+          for (const msg of result.sent) sentById.set(msg.id, msg);
+          nextBefore[result.domain] = result.nextBefore;
+          hasMore[result.domain] = result.hasMore;
+        }
+        this.searchInboxResults = [...inboxByKey.values()].sort((a, b) =>
+          b.receivedAt.localeCompare(a.receivedAt),
+        );
+        this.searchSentResults = [...sentById.values()].sort((a, b) =>
+          b.sentAt.localeCompare(a.sentAt),
+        );
+        this.searchNextBeforeByDomain = nextBefore;
+        this.searchHasMoreByDomain = hasMore;
+      });
+    } finally {
+      runInAction(() => {
+        this.searchLoadingMore = false;
+      });
+    }
+  }
+
+  clearSearch() {
+    this.searchGeneration += 1;
+    this.searchQuery = "";
+    this.searchFolder = null;
+    this.searchInboxResults = [];
+    this.searchSentResults = [];
+    this.searchTotal = 0;
+    this.searchLoading = false;
+    this.searchLoadingMore = false;
+    this.searchUnavailable = false;
+    this.searchNextBeforeByDomain = {};
+    this.searchHasMoreByDomain = {};
   }
 
   private async loadPersistedMail() {
@@ -1104,14 +1572,34 @@ export class EmailMailboxStore {
           ...this.inboxHasMoreByDomain,
           ...inbox.hasMoreByDomain,
         };
+        this.inboxTotalByDomain = {
+          ...inbox.totalByDomain,
+          ...this.inboxTotalByDomain,
+        };
+        this.inboxUnreadByDomain = {
+          ...inbox.unreadByDomain,
+          ...this.inboxUnreadByDomain,
+        };
         this.mailReady = true;
         this.loading = false;
       }
-      if (sent && sent.length > 0) {
+      if (sent && sent.sent.length > 0) {
         const sentById = new Map<string, SentEmail>();
         for (const msg of this.sent) sentById.set(msg.id, msg);
-        for (const msg of sent) sentById.set(msg.id, msg);
+        for (const msg of sent.sent) sentById.set(msg.id, msg);
         this.sent = [...sentById.values()];
+        this.sentNextBeforeByDomain = {
+          ...this.sentNextBeforeByDomain,
+          ...sent.nextBeforeByDomain,
+        };
+        this.sentHasMoreByDomain = {
+          ...this.sentHasMoreByDomain,
+          ...sent.hasMoreByDomain,
+        };
+        this.sentTotalByDomain = {
+          ...sent.totalByDomain,
+          ...this.sentTotalByDomain,
+        };
         this.mailReady = true;
         this.loading = false;
       }
@@ -1144,8 +1632,15 @@ export class EmailMailboxStore {
       messages: this.activity,
       nextBeforeByDomain: this.inboxNextBeforeByDomain,
       hasMoreByDomain: this.inboxHasMoreByDomain,
+      totalByDomain: this.inboxTotalByDomain,
+      unreadByDomain: this.inboxUnreadByDomain,
     });
-    void savePersistedSent(this.productId, this.sent);
+    void savePersistedSent(this.productId, {
+      sent: this.sent,
+      nextBeforeByDomain: this.sentNextBeforeByDomain,
+      hasMoreByDomain: this.sentHasMoreByDomain,
+      totalByDomain: this.sentTotalByDomain,
+    });
   }
 
   private persistDrafts() {
@@ -1356,6 +1851,38 @@ export class EmailMailboxStore {
     window.removeEventListener(EMAIL_SEND_SUCCEEDED, this.onSendSucceeded);
     window.removeEventListener(EMAIL_SEND_FAILED, this.onSendFailed);
   }
+}
+
+function sumByDomain(
+  domains: string[],
+  byDomain: Record<string, number>,
+): number | null {
+  let sum = 0;
+  let seen = false;
+  for (const domain of domains) {
+    const value = byDomain[domain];
+    if (typeof value === "number") {
+      sum += value;
+      seen = true;
+    }
+  }
+  return seen ? sum : null;
+}
+
+function oldestSentCursor(
+  messages: SentEmail[],
+  domain: string,
+): string | null {
+  const needle = domain.trim().toLowerCase();
+  let oldest: SentEmail | null = null;
+  for (const message of messages) {
+    if (domainOf(message.from) !== needle) continue;
+    if (!oldest || message.sentAt.localeCompare(oldest.sentAt) < 0) {
+      oldest = message;
+    }
+  }
+  if (!oldest) return null;
+  return `${oldest.sentAt}|${oldest.id}`;
 }
 
 function oldestInboxCursor(

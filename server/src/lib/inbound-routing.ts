@@ -49,20 +49,115 @@ function matchesAddress(
   );
 }
 
+const MX_CONFLICT_ERROR_CODE = 2008;
+
+function isMxConflictError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes(`[${MX_CONFLICT_ERROR_CODE}]`);
+}
+
+function isCloudflareMxContent(content: string): boolean {
+  return content.trim().toLowerCase().endsWith("mx.cloudflare.net");
+}
+
+export type MxConflictRecord = {
+  id: string;
+  name: string;
+  content: string;
+  priority?: number;
+};
+
+/**
+ * Apex MX records pointing to a non-Cloudflare mail provider. Only records at
+ * the zone apex (name == domain or "@") are considered; subdomain MX records
+ * do not conflict with Email Routing.
+ */
+export async function findConflictingMxRecords(
+  cf: CloudflareClient,
+  zoneId: string,
+  domain: string,
+): Promise<MxConflictRecord[]> {
+  const apexNames = new Set([domain.toLowerCase(), "@"]);
+  const mxRecords = await cf.listDnsRecords(zoneId, { type: "MX" });
+  return mxRecords
+    .filter(
+      (record) =>
+        apexNames.has(record.name.toLowerCase()) &&
+        !isCloudflareMxContent(record.content),
+    )
+    .map((record) => ({
+      id: record.id,
+      name: record.name,
+      content: record.content,
+      priority: record.priority,
+    }));
+}
+
+/**
+ * Delete apex MX records that point to a non-Cloudflare mail provider so that
+ * Cloudflare Email Routing can be enabled. Only records at the zone apex
+ * (name == domain or "@") are touched; subdomain MX records are left alone.
+ */
+export async function clearConflictingMxRecords(
+  cf: CloudflareClient,
+  zoneId: string,
+  domain: string,
+): Promise<{ removed: MxConflictRecord[] }> {
+  const conflicts = await findConflictingMxRecords(cf, zoneId, domain);
+  for (const record of conflicts) {
+    await cf.deleteDnsRecord(zoneId, record.id);
+  }
+  return { removed: conflicts };
+}
+
+/** Thrown when Email Routing cannot be enabled due to non-Cloudflare MX records. */
+export class MxConflictError extends Error {
+  domain: string;
+  zoneId: string;
+  mxConflicts: MxConflictRecord[];
+
+  constructor(domain: string, zoneId: string, mxConflicts: MxConflictRecord[]) {
+    super(
+      `Non-Cloudflare MX records exist for ${domain}. Remove them (or approve removal) to enable Email Routing.`,
+    );
+    this.name = "MxConflictError";
+    this.domain = domain;
+    this.zoneId = zoneId;
+    this.mxConflicts = mxConflicts;
+  }
+}
+
 /**
  * Ensure Email Routing is enabled and each address has a literal-To rule:
  * receive → Worker, inboundEnabled false → drop.
+ *
+ * When `forceMxResolve` is false (default) and enabling Email Routing fails
+ * because non-Cloudflare MX records exist, throws `MxConflictError` carrying
+ * the conflicting records so the caller can prompt the user for approval.
+ * When `forceMxResolve` is true, those conflicting apex MX records are
+ * deleted and the enable is retried.
  */
 export async function ensureInboundRouting(
   cf: CloudflareClient,
   domain: string,
   entries: InboundRoutingEntry[],
   workerScriptName: string,
+  opts: { forceMxResolve?: boolean } = {},
 ): Promise<InboundRoutingResult> {
   const zoneId = await resolveZoneId(cf, domain);
   const routing = await cf.getEmailRoutingSettings(zoneId);
   if (!routing.enabled) {
-    await cf.enableEmailRouting(zoneId);
+    try {
+      await cf.enableEmailRouting(zoneId);
+    } catch (error) {
+      if (!isMxConflictError(error)) throw error;
+      if (opts.forceMxResolve) {
+        await clearConflictingMxRecords(cf, zoneId, domain);
+        await cf.enableEmailRouting(zoneId);
+      } else {
+        const mxConflicts = await findConflictingMxRecords(cf, zoneId, domain);
+        throw new MxConflictError(domain, zoneId, mxConflicts);
+      }
+    }
   }
 
   const existing = await cf.listEmailRoutingRules(zoneId);

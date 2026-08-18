@@ -4,6 +4,7 @@ import { requireAdmin } from "../../lib/auth";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
 import {
   ensureInboundRouting,
+  MxConflictError,
   removeInboundWorkerRouting,
 } from "../../lib/inbound-routing";
 import {
@@ -201,6 +202,7 @@ consoleAddresses.post("/", async (c) => {
     inboundEnabled?: boolean;
     inboundEnabledByLocalPart?: Record<string, boolean>;
     domain?: string;
+    forceMxResolve?: boolean;
   };
   try {
     body = await c.req.json();
@@ -287,8 +289,21 @@ consoleAddresses.post("/", async (c) => {
         inboundEnabled: entry.inboundEnabled,
       })),
       c.env.WORKER_SCRIPT_NAME,
+      { forceMxResolve: body.forceMxResolve === true },
     );
   } catch (error) {
+    if (error instanceof MxConflictError) {
+      return c.json(
+        {
+          error:
+            "Non-Cloudflare MX records exist for this domain. Remove them to enable Email Routing.",
+          mxConflict: true,
+          domain: error.domain,
+          mxConflicts: error.mxConflicts,
+        },
+        409,
+      );
+    }
     const message =
       error instanceof Error
         ? error.message

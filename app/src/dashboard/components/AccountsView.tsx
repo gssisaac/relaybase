@@ -1128,6 +1128,92 @@ export function AccountsView() {
           </DialogContent>
         </Dialog>
 
+        <Dialog
+          open={Boolean(accountsStore.mxConflictDomain)}
+          onOpenChange={(open) => {
+            if (!open && !accountsStore.mxResolving) {
+              accountsStore.clearMxConflict();
+            }
+          }}
+        >
+          <DialogContent
+            className="sm:max-w-lg"
+            showCloseButton={!accountsStore.mxResolving}
+          >
+            <DialogHeader>
+              <DialogTitle>Conflicting MX records</DialogTitle>
+              <DialogDescription className="text-left">
+                <span className="font-mono text-foreground">
+                  {accountsStore.mxConflictDomain}
+                </span>{" "}
+                already has apex MX records for another mail provider (for
+                example Google Workspace). Cloudflare Email Routing cannot
+                share those records.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 text-sm">
+              <p className="font-medium text-destructive">
+                Deleting them will stop inbound mail delivery to the previous
+                provider. Existing Workspace (or other) inboxes for this domain
+                will no longer receive mail.
+              </p>
+              <p className="text-muted-foreground">
+                Sending DNS on{" "}
+                <span className="font-mono">
+                  cf-bounce.{accountsStore.mxConflictDomain}
+                </span>{" "}
+                is not affected.
+              </p>
+            </div>
+            {accountsStore.mxConflicts.length ? (
+              <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Records to delete
+                </p>
+                <ul className="space-y-1.5 font-mono text-xs">
+                  {accountsStore.mxConflicts.map((mx) => (
+                    <li key={mx.id} className="break-all">
+                      MX {mx.name} → {mx.content}
+                      {mx.priority != null ? ` (priority ${mx.priority})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No conflicting apex MX records are listed. Confirming will retry
+                enabling Email Routing.
+              </p>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={accountsStore.mxResolving}
+                onClick={() => accountsStore.clearMxConflict()}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={accountsStore.mxResolving}
+                onClick={() => {
+                  void accountsStore.resolveMxConflict().catch(() => {
+                    // error toast + state handled in store
+                  });
+                }}
+              >
+                {accountsStore.mxResolving
+                  ? "Deleting & continuing…"
+                  : "Delete MX & enable Routing"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <AccountDetailSheet
           email={accountDetail?.email ?? ""}
           tab={accountDetail?.tab ?? "overview"}

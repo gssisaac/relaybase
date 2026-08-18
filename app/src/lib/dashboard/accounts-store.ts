@@ -113,6 +113,25 @@ export type CreateAddressesInput = {
   inboundEnabledByLocalPart?: Record<string, boolean>;
 };
 
+export type MxConflictRecord = {
+  id: string;
+  name: string;
+  content: string;
+  priority?: number;
+};
+
+class CreateMxConflictError extends Error {
+  mxConflicts: MxConflictRecord[];
+  domain: string;
+
+  constructor(domain: string, mxConflicts: MxConflictRecord[]) {
+    super("Non-Cloudflare MX records exist for this domain.");
+    this.name = "CreateMxConflictError";
+    this.domain = domain;
+    this.mxConflicts = mxConflicts;
+  }
+}
+
 export type AddressCounts = {
   total: number;
   unread: number;
@@ -137,6 +156,15 @@ export class AccountsStore {
   mobilePendingEmails: string[] = [];
   /** Emails optimistically inserted while create() is in flight. */
   creatingEmails: string[] = [];
+  /** Pending create blocked by a non-Cloudflare MX conflict, awaiting approval. */
+  mxConflictDomain: string | null = null;
+  mxConflicts: MxConflictRecord[] = [];
+  mxResolving = false;
+  /** Last create input blocked by MX conflict, replayed on approval. */
+  private mxConflictPending: {
+    domain: string;
+    input: CreateAddressesInput;
+  } | null = null;
 
   productId = "";
   apiBase = "/api/email";
@@ -364,6 +392,7 @@ export class AccountsStore {
   async create(
     domain: string,
     input: CreateAddressesInput,
+    opts: { forceMxResolve?: boolean } = {},
   ): Promise<Address[]> {
     const key = domain.trim().toLowerCase();
     if (!key) throw new Error("Select a domain before adding senders");
@@ -402,14 +431,29 @@ export class AccountsStore {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input),
+          body: JSON.stringify({
+            ...input,
+            ...(opts.forceMxResolve ? { forceMxResolve: true } : {}),
+          }),
         },
       );
       const data = await readResponseJson<{
         address?: Address;
         addresses?: Address[];
         error?: string;
+        mxConflict?: boolean;
+        domain?: string;
+        mxConflicts?: MxConflictRecord[];
       }>(res);
+      if (data.mxConflict) {
+        const conflicts = data.mxConflicts ?? [];
+        runInAction(() => {
+          this.mxConflictDomain = data.domain ?? key;
+          this.mxConflicts = conflicts;
+          this.mxConflictPending = { domain: key, input };
+        });
+        throw new CreateMxConflictError(data.domain ?? key, conflicts);
+      }
       if (!res.ok) throw new Error(data.error ?? "Failed to add");
 
       const created =
@@ -443,6 +487,31 @@ export class AccountsStore {
 
       return created;
     } catch (e) {
+      if (e instanceof CreateMxConflictError) {
+        let reverted: Address[] = [];
+        runInAction(() => {
+          const current = this.addressesByDomain[key] ?? [];
+          const preexisting = new Set(
+            snapshotBefore.map((a) => a.email.toLowerCase()),
+          );
+          reverted = current.filter((a) => {
+            const email = a.email.toLowerCase();
+            if (!optimisticEmails.has(email)) return true;
+            return preexisting.has(email);
+          });
+          const byEmail = new Map(
+            reverted.map((a) => [a.email.toLowerCase(), a] as const),
+          );
+          for (const address of snapshotBefore) {
+            if (optimisticEmails.has(address.email.toLowerCase())) {
+              byEmail.set(address.email.toLowerCase(), address);
+            }
+          }
+          reverted = [...byEmail.values()];
+          this.addressesByDomain[key] = reverted;
+        });
+        throw e;
+      }
       const message = e instanceof Error ? e.message : "Failed to add";
       let reverted: Address[] = [];
       runInAction(() => {
@@ -475,6 +544,48 @@ export class AccountsStore {
         this.creatingEmails = this.creatingEmails.filter(
           (email) => !optimisticEmails.has(email),
         );
+      });
+    }
+  }
+
+  clearMxConflict() {
+    runInAction(() => {
+      this.mxConflictDomain = null;
+      this.mxConflicts = [];
+      this.mxConflictPending = null;
+      this.mxResolving = false;
+    });
+  }
+
+  /** Re-run the blocked create after the user approves MX record removal. */
+  async resolveMxConflict(): Promise<Address[]> {
+    const pending = this.mxConflictPending;
+    if (!pending) {
+      this.clearMxConflict();
+      return [];
+    }
+    const { domain, input } = pending;
+    runInAction(() => {
+      this.mxResolving = true;
+    });
+    try {
+      const created = await this.create(domain, input, { forceMxResolve: true });
+      this.clearMxConflict();
+      return created;
+    } catch (e) {
+      if (e instanceof CreateMxConflictError) {
+        runInAction(() => {
+          this.mxConflictDomain = domain;
+          this.mxConflicts = e.mxConflicts;
+          this.mxConflictPending = { domain, input };
+        });
+      } else {
+        this.clearMxConflict();
+      }
+      throw e;
+    } finally {
+      runInAction(() => {
+        this.mxResolving = false;
       });
     }
   }

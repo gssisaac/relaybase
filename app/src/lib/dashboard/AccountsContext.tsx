@@ -81,6 +81,9 @@ export function useAccounts(): AccountsStore {
         message: store.message,
         inboundPending: store.inboundPendingEmails.slice(),
         creatingEmails: store.creatingEmails.slice(),
+        mxConflictDomain: store.mxConflictDomain,
+        mxConflicts: store.mxConflicts.slice(),
+        mxResolving: store.mxResolving,
       }),
       () => setTick((t) => t + 1),
     );

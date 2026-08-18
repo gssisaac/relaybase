@@ -57,6 +57,16 @@ export type CfEmailRoutingSettings = {
   enabled: boolean;
 };
 
+export type CfDnsRecord = {
+  id: string;
+  type: string;
+  name: string;
+  content: string;
+  proxied: boolean;
+  ttl: number;
+  priority?: number;
+};
+
 export type CfEmailRoutingAction = {
   type: "forward" | "drop" | "worker";
   value?: string[];
@@ -321,6 +331,26 @@ export class CloudflareClient {
       (item) => item.name.toLowerCase() === domain.trim().toLowerCase(),
     );
     return zone?.id ?? data.result?.[0]?.id ?? null;
+  }
+
+  async listDnsRecords(
+    zoneId: string,
+    opts: { type?: string; name?: string } = {},
+  ): Promise<CfDnsRecord[]> {
+    const params = new URLSearchParams();
+    if (opts.type) params.set("type", opts.type);
+    if (opts.name) params.set("name", opts.name);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    const data = await this.request<CfDnsRecord[]>(
+      `/zones/${zoneId}/dns_records${query}`,
+    );
+    return data.result ?? [];
+  }
+
+  async deleteDnsRecord(zoneId: string, recordId: string): Promise<void> {
+    await this.request<null>(`/zones/${zoneId}/dns_records/${recordId}`, {
+      method: "DELETE",
+    });
   }
 
   async getEmailRoutingSettings(zoneId: string): Promise<CfEmailRoutingSettings> {

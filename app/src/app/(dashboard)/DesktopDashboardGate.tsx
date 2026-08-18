@@ -24,6 +24,7 @@ import {
 } from "@/email/commands";
 import { MailAccountsProvider } from "@/email/components/MailAccountsContext";
 import { EmailMailboxProvider } from "@/email/components/EmailMailboxContext";
+import { SenderIconProvider } from "@/email/components/SenderIconContext";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
 
@@ -67,27 +68,29 @@ function DashboardShell({
       <SessionProvider userId={userId}>
         <DomainProvider>
           <MailAccountsProvider>
-            <EmailMailboxProvider>
-              <EmailCommandRuntimeProvider>
-                <DisableAppTabFocus />
-                <div className="flex h-svh overflow-hidden bg-background">
-                  {isEmailSettings ? null : (
-                    <Suspense
-                      fallback={
-                        <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                      }
-                    >
-                      <UserSidebar teamMode />
-                    </Suspense>
-                  )}
-                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                    {children}
-                  </main>
-                </div>
-                <AppHotkeys />
-                <GlobalCommandPalette />
-              </EmailCommandRuntimeProvider>
-            </EmailMailboxProvider>
+            <SenderIconProvider>
+              <EmailMailboxProvider>
+                <EmailCommandRuntimeProvider>
+                  <DisableAppTabFocus />
+                  <div className="flex h-svh overflow-hidden bg-background">
+                    {isEmailSettings ? null : (
+                      <Suspense
+                        fallback={
+                          <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                        }
+                      >
+                        <UserSidebar teamMode />
+                      </Suspense>
+                    )}
+                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                      {children}
+                    </main>
+                  </div>
+                  <AppHotkeys />
+                  <GlobalCommandPalette />
+                </EmailCommandRuntimeProvider>
+              </EmailMailboxProvider>
+            </SenderIconProvider>
           </MailAccountsProvider>
         </DomainProvider>
       </SessionProvider>
@@ -100,28 +103,30 @@ function DashboardShell({
           <BroadcastProvider>
             <MailAccountsProvider>
               <AccountsSyncBridge />
-              <EmailMailboxProvider>
-                <EmailCommandRuntimeProvider>
-                  <DisableAppTabFocus />
-                  <div className="flex h-svh overflow-hidden bg-background">
-                    {isEmailSettings ? null : (
-                      <Suspense
-                        fallback={
-                          <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                        }
-                      >
-                        <UserSidebar />
-                      </Suspense>
-                    )}
-                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                      {isEmailSettings ? null : <DomainProgressBanner />}
-                      {children}
-                    </main>
-                  </div>
-                  <AppHotkeys />
-                  <GlobalCommandPalette />
-                </EmailCommandRuntimeProvider>
-              </EmailMailboxProvider>
+              <SenderIconProvider>
+                <EmailMailboxProvider>
+                  <EmailCommandRuntimeProvider>
+                    <DisableAppTabFocus />
+                    <div className="flex h-svh overflow-hidden bg-background">
+                      {isEmailSettings ? null : (
+                        <Suspense
+                          fallback={
+                            <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                          }
+                        >
+                          <UserSidebar />
+                        </Suspense>
+                      )}
+                      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                        {isEmailSettings ? null : <DomainProgressBanner />}
+                        {children}
+                      </main>
+                    </div>
+                    <AppHotkeys />
+                    <GlobalCommandPalette />
+                  </EmailCommandRuntimeProvider>
+                </EmailMailboxProvider>
+              </SenderIconProvider>
             </MailAccountsProvider>
           </BroadcastProvider>
         </AccountsProvider>

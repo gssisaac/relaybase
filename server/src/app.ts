@@ -14,6 +14,7 @@ import { consoleOpsLogs } from "./routes/console/ops-logs";
 import { consoleRecoverAdmin } from "./routes/console/recover-admin";
 import { consoleRegisterOwner } from "./routes/console/register-owner";
 import { consoleStats } from "./routes/console/stats";
+import { mailFavicon } from "./routes/mail/favicon";
 import { mailInbox } from "./routes/mail/inbox";
 import { mailSend } from "./routes/mail/send";
 import { mailSent } from "./routes/mail/sent";
@@ -65,6 +66,7 @@ app.route("/console/stats", consoleStats);
 app.route("/mail/inbox", mailInbox);
 app.route("/mail/send", mailSend);
 app.route("/mail/sent", mailSent);
+app.route("/mail/favicon", mailFavicon);
 
 // Flutter mobile app (mobile-password auth). Peer to /v1/*.
 app.route("/mobile", mobile);

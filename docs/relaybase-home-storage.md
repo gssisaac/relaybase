@@ -36,6 +36,7 @@ Server/worker data (Cloudflare KV `RELAYBASE_APP`, R2, D1 waitlist) is separate 
 ├── api-keys.json                  # plaintext API key vault (0600)
 ├── app-icon.png                   # notification identity image (seeded from bundle)
 ├── cache/                         # opaque dashboard/API response cache
+│   ├── favicon-status.json        # sender favicon ok/failed status (images stay memory-only)
 │   └── dashboard/
 │       ├── stats-{range}.json
 │       ├── api-keys-{range}.json
@@ -123,7 +124,17 @@ Opaque JSON via `get_mail_json` / `save_mail_json`.
 
 ### `cache/**`
 
-Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelopes (`dashboard-cache-disk.ts`) and TTL write-through (`dashboard-client-cache.ts` → `dashboard/ttl-*.json`).
+Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelopes (`dashboard-cache-disk.ts`), TTL write-through (`dashboard-client-cache.ts` → `dashboard/ttl-*.json`), and sender favicon **status** (`favicon-status.json` — image bytes stay memory-only; see **[sender-favicon-cache.md](./sender-favicon-cache.md)**).
+
+#### `cache/favicon-status.json`
+
+| Field | Meaning |
+|-------|---------|
+| `version` | `1` |
+| `domains.{domain}.ok` | `true` = proxy returned a data URL; `false` = confirmed no favicon |
+| `domains.{domain}.at` | Unix ms when status was recorded |
+
+Failed domains are not re-probed for 24h. Transient fetch errors are not written here. TS: `app/src/email/sender-icon-store.ts`.
 
 ---
 

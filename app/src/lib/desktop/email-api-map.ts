@@ -46,6 +46,9 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/send" || rest.startsWith("/send/")) {
     return `/mail/send${search}`;
   }
+  if (rest === "/favicon" || rest.startsWith("/favicon/")) {
+    return `/mail/favicon${search}`;
+  }
   if (rest === "/sent" || rest.startsWith("/sent/")) {
     return `/mail/sent${search}`;
   }

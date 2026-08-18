@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FilePen, Inbox, Send, Trash2 } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import Link from "next/link";
@@ -54,11 +54,11 @@ const LOAD_MORE_THRESHOLD = 10;
  * overscan region; with the previous fixed overscanCount of 8 (~360px) the
  * mail list would visibly blank out already-rendered rows during momentum
  * scroll because they were unmounted and had to re-mount on the way back.
- * Keeping ~2 viewports of overscan on each side (≈5 viewports mounted total)
- * makes the rendered "window" several times the screen, so already-loaded
- * rows stay mounted across normal scroll jumps.
+ * Keeping ~1 viewport of overscan on each side (≈3 viewports mounted total)
+ * balances scroll smoothness against the per-row render cost (hover cards,
+ * command menu resolution, preview trimming).
  */
-const OVERSCAN_VIEWPORTS = 2;
+const OVERSCAN_VIEWPORTS = 1;
 /** Minimum overscan rows (used before the container has been measured). */
 const MIN_OVERSCAN_ROWS = 8;
 /**
@@ -120,6 +120,7 @@ type MailRowProps = {
   isUnread: (key: string) => boolean;
   commandRuntimeFor: (item: MailListItem) => EmailCommandRuntime;
   loadingMore: boolean;
+  hasMore: boolean;
   listItemStateStore?: ListItemStateStore;
 };
 
@@ -153,210 +154,213 @@ function MailRowSkeleton({ style }: { style: React.CSSProperties }) {
 }
 
 /**
- * Virtualized row. `observer` so per-row observable reads (unread state via
- * `isUnread`) keep reacting even though only visible rows are mounted.
+ * Virtualized row. `memo(observer(...))` so react-window scroll repositioning
+ * does not force every visible row to re-render on every scroll frame. The
+ * `memo` shallow-compares props (index, style, rowProps) and skips re-renders
+ * when they are unchanged. Per-row work (recipient parsing, date formatting,
+ * preview trimming, command-runtime construction, hover-card element creation)
+ * runs inline but only when the row actually re-renders (item change,
+ * selection change, etc.), not on every scroll tick.
  */
-const MailRow = observer(function MailRow({
-  index,
-  style,
-  items,
-  folder,
-  messageId,
-  folderBase,
-  accountFilter,
-  threadByInboundKey,
-  isUnread,
-  commandRuntimeFor,
-  loadingMore,
-  listItemStateStore,
-}: RowComponentProps<MailRowProps>) {
-  const item = items[index];
-  if (!item) {
-    // Past the last loaded item: skeleton while fetching, sentinel hint
-    // when more pages exist but we haven't started loading the next one.
-    if (loadingMore) {
-      return <MailRowSkeleton style={style} />;
+const MailRow = memo(
+  observer(function MailRow({
+    index,
+    style,
+    items,
+    folder,
+    messageId,
+    folderBase,
+    accountFilter,
+    threadByInboundKey,
+    isUnread,
+    commandRuntimeFor,
+    loadingMore,
+    hasMore,
+    listItemStateStore,
+  }: RowComponentProps<MailRowProps>): React.ReactElement | null {
+    const item = items[index];
+    if (!item) {
+      // Past the last loaded item: skeleton while fetching, sentinel hint
+      // when more pages exist but we haven't started loading the next one.
+      if (loadingMore) {
+        return <MailRowSkeleton style={style} />;
+      }
+      if (!hasMore) {
+        return null;
+      }
+      return (
+        <div
+          style={style}
+          className="flex items-center justify-center text-xs text-muted-foreground"
+        >
+          Scroll to load more
+        </div>
+      );
     }
-    return (
-      <div
-        style={style}
-        className="flex items-center justify-center text-xs text-muted-foreground"
-      >
-        Scroll to load more
-      </div>
-    );
-  }
 
-  if (item.kind === "draft") {
-    const primary = item.message.to || "(no recipient)";
-    const firstRecipient = splitRecipients(item.message.to)[0];
-    const recipientName = firstRecipient?.name;
-    const recipientEmail =
-      firstRecipient?.email ?? extractFirstEmail(item.message.to);
-    const subject = item.message.subject || "(no subject)";
-    const date = formatDate(item.message.updatedAt);
-    const preview = previewText(item);
-    const isSelected = item.message.id === messageId;
     const rowKey = itemKey(item);
-    return (
-      <div
-        style={style}
-        className="overflow-hidden"
-        onMouseEnter={() => listItemStateStore?.setFocus(rowKey, "hover")}
+    const onMouseEnter = listItemStateStore
+      ? () => listItemStateStore.setFocus(rowKey, "hover")
+      : undefined;
+
+    if (item.kind === "draft") {
+      const firstRecipient = splitRecipients(item.message.to)[0];
+      const recipientName = firstRecipient?.name;
+      const recipientEmail =
+        firstRecipient?.email ?? extractFirstEmail(item.message.to);
+      const primary = item.message.to || "(no recipient)";
+      const subject = item.message.subject || "(no subject)";
+      const date = formatDate(item.message.updatedAt);
+      const preview = previewText(item);
+      const isSelected = item.message.id === messageId;
+      const href = messageHref(folderBase, item, accountFilter);
+      const runtime = commandRuntimeFor(item);
+      const avatar = (
+        <SenderHoverCard
+          fromEmail={recipientEmail}
+          triggerClassName="size-7"
+        >
+          <SenderAvatar fromEmail={recipientEmail} />
+        </SenderHoverCard>
+      );
+      const primaryLabel = (
+        <SenderHoverLabel
+          fromName={recipientName}
+          fromEmail={recipientEmail}
+        >
+          {primary}
+        </SenderHoverLabel>
+      );
+      const status = item.message.replyKey
+        ? "Reply"
+        : item.message.forwardKey
+          ? "Forward"
+          : "Draft";
+      return (
+        <div style={style} className="overflow-hidden" onMouseEnter={onMouseEnter}>
+          <EmailCommandContextMenu runtime={runtime}>
+            <EmailTableRow
+              href={href}
+              selected={isSelected}
+              primary={primaryLabel}
+              subject={subject}
+              preview={preview}
+              date={date}
+              avatar={avatar}
+              status={
+                <Badge variant="secondary" className="text-[10px]">
+                  {status}
+                </Badge>
+              }
+            />
+          </EmailCommandContextMenu>
+        </div>
+      );
+    }
+
+    const isInbox = item.kind === "inbox";
+    const thread =
+      isInbox && folder === "inbox"
+        ? threadByInboundKey.get(item.message.key) ?? null
+        : null;
+    const firstRecipient = isInbox ? undefined : splitRecipients(item.message.to)[0];
+    const recipientEmail = isInbox
+      ? undefined
+      : (firstRecipient?.email ?? extractFirstEmail(item.message.to));
+    const recipientName = isInbox ? undefined : firstRecipient?.name;
+    const primary = isInbox
+      ? (thread?.participantLabel ??
+        formatSenderDisplay(item.message.fromName, item.message.fromEmail))
+      : item.message.to;
+    const senderName = isInbox ? item.message.fromName : undefined;
+    const senderEmail = isInbox ? item.message.fromEmail : recipientEmail;
+    const subject = thread?.subject ?? item.message.subject;
+    const attachmentCount = isInbox
+      ? item.message.attachmentCount ?? item.message.attachments?.length ?? 0
+      : 0;
+    const date = formatDate(
+      thread?.latestAt ??
+        (isInbox ? item.message.receivedAt : item.message.sentAt),
+    );
+    const previewRaw = thread?.preview || previewText(item);
+    const preview = trimQuotedHistoryForThread({
+      bodyText: previewRaw,
+    }).bodyText.replace(/\s+/g, " ").trim();
+    const isSelected =
+      isInbox && folder === "inbox" && thread && messageId
+        ? thread.inboundKeys.includes(messageId)
+        : itemKey(item) === messageId;
+    const unread =
+      isInbox && folder === "inbox"
+        ? thread
+          ? threadUnreadKeys(thread, isUnread).length > 0
+          : isUnread(item.message.key)
+        : undefined;
+    const stackCount =
+      thread && thread.messageCount > 1 ? thread.messageCount : undefined;
+    const href = messageHref(folderBase, item, accountFilter);
+    const runtime = commandRuntimeFor(item);
+    const avatar = isInbox ? (
+      <SenderHoverCard
+        fromName={item.message.fromName}
+        fromEmail={item.message.fromEmail}
+        triggerClassName="size-7"
       >
-        <EmailCommandContextMenu runtime={commandRuntimeFor(item)}>
+        <SenderAvatar
+          fromName={item.message.fromName}
+          fromEmail={item.message.fromEmail}
+          unread={unread}
+        />
+      </SenderHoverCard>
+    ) : (
+      <SenderHoverCard
+        fromEmail={recipientEmail}
+        triggerClassName="size-7"
+      >
+        <SenderAvatar fromEmail={recipientEmail} />
+      </SenderHoverCard>
+    );
+    const primaryLabel =
+      folder === "trash" ? (
+        <>
+          {isInbox ? "In" : "Sent"} ·{" "}
+          <SenderHoverLabel
+            fromName={isInbox ? senderName : recipientName}
+            fromEmail={senderEmail}
+          >
+            {primary}
+          </SenderHoverLabel>
+        </>
+      ) : (
+        <SenderHoverLabel
+          fromName={isInbox ? senderName : recipientName}
+          fromEmail={senderEmail}
+        >
+          {primary}
+        </SenderHoverLabel>
+      );
+    return (
+      <div style={style} className="overflow-hidden" onMouseEnter={onMouseEnter}>
+        <EmailCommandContextMenu runtime={runtime}>
           <EmailTableRow
-            href={messageHref(folderBase, item, accountFilter)}
+            href={href}
             selected={isSelected}
-            primary={
-              <SenderHoverLabel
-                fromName={recipientName}
-                fromEmail={recipientEmail}
-              >
-                {primary}
-              </SenderHoverLabel>
+            unread={unread}
+            avatar={avatar}
+            primary={primaryLabel}
+            subject={subject || "(no subject)"}
+            stackCount={stackCount}
+            subjectAddon={
+              attachmentCount > 0 ? ` (${attachmentCount})` : undefined
             }
-            subject={subject}
             preview={preview}
             date={date}
-            avatar={
-              <SenderHoverCard
-                fromEmail={extractFirstEmail(item.message.to)}
-                triggerClassName="size-7"
-              >
-                <SenderAvatar fromEmail={extractFirstEmail(item.message.to)} />
-              </SenderHoverCard>
-            }
-            status={
-              item.message.replyKey ? (
-                <Badge variant="secondary" className="text-[10px]">
-                  Reply
-                </Badge>
-              ) : item.message.forwardKey ? (
-                <Badge variant="secondary" className="text-[10px]">
-                  Forward
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="text-[10px]">
-                  Draft
-                </Badge>
-              )
-            }
           />
         </EmailCommandContextMenu>
       </div>
     );
-  }
-
-  const isInbox = item.kind === "inbox";
-  const thread =
-    isInbox && folder === "inbox"
-      ? threadByInboundKey.get(item.message.key)
-      : null;
-  const primary = isInbox
-    ? (thread?.participantLabel ??
-      formatSenderDisplay(item.message.fromName, item.message.fromEmail))
-    : item.message.to;
-  const senderName = isInbox ? item.message.fromName : undefined;
-  const senderEmail = isInbox
-    ? item.message.fromEmail
-    : (() => {
-        const first = splitRecipients(item.message.to)[0];
-        return first?.email ?? extractFirstEmail(item.message.to);
-      })();
-  const recipientName = isInbox
-    ? undefined
-    : splitRecipients(item.message.to)[0]?.name;
-  const subject = thread?.subject ?? item.message.subject;
-  const attachmentCount = isInbox
-    ? item.message.attachmentCount ?? item.message.attachments?.length ?? 0
-    : 0;
-  const date = formatDate(
-    thread?.latestAt ??
-      (isInbox ? item.message.receivedAt : item.message.sentAt),
-  );
-  const previewRaw = thread?.preview || previewText(item);
-  const preview = trimQuotedHistoryForThread({
-    bodyText: previewRaw,
-  }).bodyText.replace(/\s+/g, " ").trim();
-  const isSelected =
-    isInbox && folder === "inbox" && thread && messageId
-      ? thread.inboundKeys.includes(messageId)
-      : itemKey(item) === messageId;
-  const unread =
-    isInbox && folder === "inbox"
-      ? thread
-        ? threadUnreadKeys(thread, isUnread).length > 0
-        : isUnread(item.message.key)
-      : undefined;
-  const stackCount =
-    thread && thread.messageCount > 1 ? thread.messageCount : undefined;
-  const rowKey = itemKey(item);
-  return (
-    <div
-      style={style}
-      className="overflow-hidden"
-      onMouseEnter={() => listItemStateStore?.setFocus(rowKey, "hover")}
-    >
-      <EmailCommandContextMenu runtime={commandRuntimeFor(item)}>
-        <EmailTableRow
-          href={messageHref(folderBase, item, accountFilter)}
-          selected={isSelected}
-          unread={unread}
-          avatar={
-            isInbox ? (
-              <SenderHoverCard
-                fromName={item.message.fromName}
-                fromEmail={item.message.fromEmail}
-                triggerClassName="size-7"
-              >
-                <SenderAvatar
-                  fromName={item.message.fromName}
-                  fromEmail={item.message.fromEmail}
-                  unread={unread}
-                />
-              </SenderHoverCard>
-            ) : (
-              <SenderHoverCard
-                fromEmail={extractFirstEmail(item.message.to)}
-                triggerClassName="size-7"
-              >
-                <SenderAvatar fromEmail={extractFirstEmail(item.message.to)} />
-              </SenderHoverCard>
-            )
-          }
-          primary={
-            folder === "trash" ? (
-              <>
-                {isInbox ? "In" : "Sent"} ·{" "}
-                <SenderHoverLabel
-                  fromName={isInbox ? senderName : recipientName}
-                  fromEmail={senderEmail}
-                >
-                  {primary}
-                </SenderHoverLabel>
-              </>
-            ) : (
-              <SenderHoverLabel
-                fromName={isInbox ? senderName : recipientName}
-                fromEmail={senderEmail}
-              >
-                {primary}
-              </SenderHoverLabel>
-            )
-          }
-          subject={subject || "(no subject)"}
-          stackCount={stackCount}
-          subjectAddon={
-            attachmentCount > 0 ? ` (${attachmentCount})` : undefined
-          }
-          preview={preview}
-          date={date}
-        />
-      </EmailCommandContextMenu>
-    </div>
-  );
-});
+  }),
+);
 
 export function MailListPane({
   folder,
@@ -438,7 +442,12 @@ export function MailListPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountFilter, folder, listRef, search]);
 
-  const showSentinel = hasMore || loadingMore;
+  // Hide the trailing sentinel once every known item is already in the list
+  // (e.g. Sent · 34 with 34 rows loaded). Store-level hasMore can stay true
+  // when another enabled domain still has pages even though this view is full.
+  const reachedKnownTotal =
+    typeof totalCount === "number" && items.length >= totalCount;
+  const showSentinel = !reachedKnownTotal && (hasMore || loadingMore);
   // The sentinel/skeleton only makes sense when the list overflows the
   // viewport — it signals "scroll to see more". When the loaded items fit
   // entirely on screen (e.g. a 5-item inbox), there's nothing to scroll to,
@@ -458,29 +467,77 @@ export function MailListPane({
         : 0;
   const rowCount = items.length + sentinelCount;
 
+  const lastFocusKeyRef = useRef<string | null>(null);
+  const lastLoadMoreIndexRef = useRef<number>(-1);
+  useEffect(() => {
+    // Allow another load-more attempt after a fetch finishes or the list grows.
+    if (!loadingMore) {
+      lastLoadMoreIndexRef.current = -1;
+    }
+  }, [loadingMore, items.length]);
   const onRowsRendered = useCallback(
     (visibleRows: { startIndex: number; stopIndex: number }) => {
       // Keep the keyboard focus anchor synced to the topmost visible row
       // so arrow navigation starts from the viewport instead of jumping
       // to item 0 when no URL selection or hover anchor exists. The store
       // ignores visible-top updates while an explicit hover anchor is set.
+      // Deduplicate: only write when the top row key actually changes, so
+      // we don't fire a MobX action on every intermediate scroll frame.
       if (listItemStateStore && items[visibleRows.startIndex]) {
-        listItemStateStore.setFocus(
-          itemKey(items[visibleRows.startIndex]!),
-          "visible-top",
-        );
+        const key = itemKey(items[visibleRows.startIndex]!);
+        if (key !== lastFocusKeyRef.current) {
+          lastFocusKeyRef.current = key;
+          listItemStateStore.setFocus(key, "visible-top");
+        }
       }
-      if (!hasMore || loadingMore || !onLoadMore) return;
+      if (reachedKnownTotal || !hasMore || loadingMore || !onLoadMore) return;
       if (visibleRows.stopIndex >= items.length - LOAD_MORE_THRESHOLD) {
+        // Guard against repeated calls: once we've triggered a load for a
+        // given stop index, don't fire again until the next page arrives
+        // (loadingMore flips to true) or the list grows past this index.
+        if (visibleRows.stopIndex === lastLoadMoreIndexRef.current) return;
+        lastLoadMoreIndexRef.current = visibleRows.stopIndex;
         onLoadMore();
       }
     },
-    [hasMore, items, loadingMore, onLoadMore, listItemStateStore],
+    [reachedKnownTotal, hasMore, items, loadingMore, onLoadMore, listItemStateStore],
   );
 
   const rowKey = useCallback(
     (index: number, props: MailRowProps) => props.items[index]?.id ?? `row-${index}`,
     [],
+  );
+
+  // Memoize the rowProps object so that parent re-renders (triggered by
+  // MailListView observer updates) do not create a new object reference
+  // and force react-window to re-render every mounted row.
+  const rowPropsMemo = useMemo<MailRowProps>(
+    () => ({
+      items,
+      folder,
+      messageId,
+      folderBase,
+      accountFilter,
+      threadByInboundKey,
+      isUnread,
+      commandRuntimeFor,
+      loadingMore,
+      hasMore: showSentinel,
+      listItemStateStore,
+    }),
+    [
+      items,
+      folder,
+      messageId,
+      folderBase,
+      accountFilter,
+      threadByInboundKey,
+      isUnread,
+      commandRuntimeFor,
+      loadingMore,
+      showSentinel,
+      listItemStateStore,
+    ],
   );
 
   const title = FOLDER_TITLES[folder];
@@ -546,25 +603,16 @@ export function MailListPane({
             <List
               listRef={listRef}
               className="min-h-0 flex-1"
-              rowComponent={MailRow}
+              rowComponent={
+                MailRow as unknown as (props: RowComponentProps<MailRowProps>) => React.ReactElement | null
+              }
               rowCount={rowCount}
               rowHeight={MAIL_ROW_HEIGHT}
               rowKey={rowKey}
               overscanCount={overscanCount}
               onResize={onResize}
               onRowsRendered={onRowsRendered}
-              rowProps={{
-                items,
-                folder,
-                messageId,
-                folderBase,
-                accountFilter,
-                threadByInboundKey,
-                isUnread,
-                commandRuntimeFor,
-                loadingMore,
-                listItemStateStore,
-              }}
+              rowProps={rowPropsMemo}
             />
           </>
         ) : searchLoading ? (

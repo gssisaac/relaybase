@@ -56,6 +56,32 @@ export function useDashboardPaths() {
   };
 }
 
+export type SettingsTab =
+  | "cloudflare"
+  | "worker"
+  | "admin-token"
+  | "inbound-r2"
+  | "d1";
+
+const SETTINGS_TABS: SettingsTab[] = [
+  "cloudflare",
+  "worker",
+  "inbound-r2",
+  "d1",
+  "admin-token",
+];
+
+export function settingsTabHref(tab: SettingsTab = "cloudflare"): string {
+  return `/settings/${tab}`;
+}
+
+export function settingsTabFromSegment(segment?: string): SettingsTab {
+  if (segment && SETTINGS_TABS.includes(segment as SettingsTab)) {
+    return segment as SettingsTab;
+  }
+  return "cloudflare";
+}
+
 export type AccountDetailTab = "overview" | "logs" | "settings" | "other-device";
 
 export type AudienceDetailTab = "contacts" | "history" | "settings";

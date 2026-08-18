@@ -16,6 +16,7 @@ import {
   type AccountDetailTab,
   type AudienceDetailTab,
   type BroadcastDetailTab,
+  settingsTabFromSegment,
 } from "@/dashboard/paths";
 import { AudienceGroupsView } from "@/dashboard/components/AudienceGroupsView";
 import {
@@ -41,10 +42,10 @@ import { UserDashboardView } from "@/dashboard/components/UserDashboardView";
 
 function SettingsRedirect() {
   const router = useRouter();
-  const settings = useProductHref("settings");
+  const cloudflare = useProductHref("settings", "cloudflare");
   useEffect(() => {
-    router.replace(settings);
-  }, [router, settings]);
+    router.replace(cloudflare);
+  }, [cloudflare, router]);
   return null;
 }
 
@@ -239,10 +240,10 @@ export function DashboardPanelView({ subPath }: PanelViewProps) {
     if (second === "keys" || second === "aws") {
       return <KeysRedirect />;
     }
-    if (second) {
+    if (!second) {
       return <SettingsRedirect />;
     }
-    return <SettingsView />;
+    return <SettingsView tab={settingsTabFromSegment(second)} />;
   }
 
   if (root === "accounts") {

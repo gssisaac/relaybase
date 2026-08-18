@@ -14,7 +14,7 @@ import {
 } from "@/lib/dashboard/connection-status";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 
-export const CONNECTION_STATUS_CACHE_KEY = "connection-status";
+export const CONNECTION_STATUS_CACHE_KEY = "connection-status-v2";
 
 export function useConnectionStatus() {
   const desktop = useOptionalDesktop();

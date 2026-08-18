@@ -283,7 +283,7 @@ export class EmailMailboxStore {
   get sentHasMore(): boolean {
     const domains = this.domainsKey ? this.domainsKey.split("\0").filter(Boolean) : [];
     if (domains.length === 0) return false;
-    return domains.some((domain) => this.sentHasMoreByDomain[domain] !== false);
+    return domains.some((domain) => this.sentHasMoreByDomain[domain] === true);
   }
 
   private get enabledDomains(): string[] {
@@ -1062,6 +1062,14 @@ export class EmailMailboxStore {
         if (sentById.size > 0 || force || this.sent.length === 0) {
           this.sent = [...sentById.values()];
         }
+        for (const domain of domains) {
+          reconcileSentHasMoreForDomain(
+            this.sent,
+            domain,
+            this.sentHasMoreByDomain,
+            this.sentTotalByDomain,
+          );
+        }
         this.mailReady = true;
         this.pruneConfirmedOverrides();
       });
@@ -1298,11 +1306,13 @@ export class EmailMailboxStore {
     try {
       const results = await Promise.all(
         domains.map(async (domain) => {
-          if (this.sentHasMoreByDomain[domain] === false) return null;
+          if (this.sentHasMoreByDomain[domain] !== true) return null;
           const before =
             this.sentNextBeforeByDomain[domain] ||
             oldestSentCursor(this.sent, domain);
-          if (!before) return null;
+          if (!before) {
+            return { domain, page: null };
+          }
           const page = await this.fetchSentPage(domain, {
             limit: SENT_PAGE_SIZE,
             before,
@@ -1318,16 +1328,24 @@ export class EmailMailboxStore {
         const totals = { ...this.sentTotalByDomain };
         for (const result of results) {
           if (!result) continue;
+          if (result.page === null) {
+            hasMore[result.domain] = false;
+            continue;
+          }
           for (const msg of result.page.sent) {
             if (!sentById.has(msg.id)) sentById.set(msg.id, msg);
           }
           nextBefore[result.domain] = result.page.nextBefore;
-          hasMore[result.domain] = result.page.hasMore;
+          hasMore[result.domain] =
+            result.page.sent.length > 0 && result.page.hasMore;
           if (result.page.total != null) {
             totals[result.domain] = result.page.total;
           }
         }
         this.sent = [...sentById.values()];
+        for (const domain of domains) {
+          reconcileSentHasMoreForDomain(this.sent, domain, hasMore, totals);
+        }
         this.sentNextBeforeByDomain = nextBefore;
         this.sentHasMoreByDomain = hasMore;
         this.sentTotalByDomain = totals;
@@ -1867,6 +1885,29 @@ function sumByDomain(
     }
   }
   return seen ? sum : null;
+}
+
+function countSentForDomain(messages: SentEmail[], domain: string): number {
+  const needle = domain.trim().toLowerCase();
+  let count = 0;
+  for (const message of messages) {
+    if (domainOf(message.from) === needle) count++;
+  }
+  return count;
+}
+
+/** Clear stale hasMore when every message for the domain is already local. */
+function reconcileSentHasMoreForDomain(
+  messages: SentEmail[],
+  domain: string,
+  hasMore: Record<string, boolean>,
+  totals: Record<string, number>,
+): void {
+  const total = totals[domain];
+  if (typeof total !== "number") return;
+  if (countSentForDomain(messages, domain) >= total) {
+    hasMore[domain] = false;
+  }
 }
 
 function oldestSentCursor(

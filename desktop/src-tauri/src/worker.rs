@@ -33,6 +33,20 @@ export default {
         product: "relaybase",
         workerScriptName: env.WORKER_SCRIPT_NAME || "relaybase-api",
         inbound: { r2Configured: !!env.INBOUND, bucketName: env.INBOUND_BUCKET_NAME || "relaybase-inbound" },
+        d1: {
+          logs: {
+            configured: !!env.RELAYBASE_LOGS,
+            databaseName: "relaybase-logs",
+            binding: "RELAYBASE_LOGS",
+            sizeBytes: null,
+          },
+          inboxIndex: {
+            configured: !!env.RELAYBASE_INBOX_INDEX,
+            databaseName: "relaybase-inbox-index",
+            binding: "RELAYBASE_INBOX_INDEX",
+            sizeBytes: null,
+          },
+        },
       });
     }
     return Response.json({ error: "Relaybase Worker stub — replace with full server build via Update Worker", stub: true }, { status: 501 });

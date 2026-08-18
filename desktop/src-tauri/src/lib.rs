@@ -216,6 +216,105 @@ async fn auto_install_routing_worker(
     Ok(result)
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct D1BindingSnapshot {
+    configured: bool,
+    database_name: String,
+    binding: String,
+    size_bytes: Option<u64>,
+}
+
+impl Default for D1BindingSnapshot {
+    fn default() -> Self {
+        Self {
+            configured: false,
+            database_name: String::new(),
+            binding: String::new(),
+            size_bytes: None,
+        }
+    }
+}
+
+fn default_d1_logs() -> D1BindingSnapshot {
+    D1BindingSnapshot {
+        configured: false,
+        database_name: "relaybase-logs".into(),
+        binding: "RELAYBASE_LOGS".into(),
+        size_bytes: None,
+    }
+}
+
+fn default_d1_inbox_index() -> D1BindingSnapshot {
+    D1BindingSnapshot {
+        configured: false,
+        database_name: "relaybase-inbox-index".into(),
+        binding: "RELAYBASE_INBOX_INDEX".into(),
+        size_bytes: None,
+    }
+}
+
+fn parse_d1_binding(value: &serde_json::Value, kind: &str) -> D1BindingSnapshot {
+    let defaults = if kind == "logs" {
+        default_d1_logs()
+    } else {
+        default_d1_inbox_index()
+    };
+    let Some(d1) = value.get("d1") else {
+        return defaults;
+    };
+
+    if let Some(nested) = d1.get(kind) {
+        return D1BindingSnapshot {
+            configured: nested
+                .get("configured")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            database_name: nested
+                .get("databaseName")
+                .and_then(|v| v.as_str())
+                .unwrap_or(defaults.database_name.as_str())
+                .into(),
+            binding: nested
+                .get("binding")
+                .and_then(|v| v.as_str())
+                .unwrap_or(defaults.binding.as_str())
+                .into(),
+            size_bytes: nested.get("sizeBytes").and_then(|v| v.as_u64()),
+        };
+    }
+
+    if kind == "logs" {
+        D1BindingSnapshot {
+            configured: d1
+                .get("logsConfigured")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            database_name: d1
+                .get("logsDatabaseName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("relaybase-logs")
+                .into(),
+            binding: "RELAYBASE_LOGS".into(),
+            size_bytes: None,
+        }
+    } else {
+        D1BindingSnapshot {
+            configured: d1
+                .get("inboxIndexConfigured")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            database_name: d1
+                .get("inboxIndexDatabaseName")
+                .and_then(|v| v.as_str())
+                .unwrap_or("relaybase-inbox-index")
+                .into(),
+            binding: "RELAYBASE_INBOX_INDEX".into(),
+            size_bytes: None,
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkerConnectResult {
@@ -230,6 +329,8 @@ struct WorkerConnectResult {
     r2_object_count: Option<u64>,
     /// True when the Worker stopped scanning early (large bucket).
     r2_usage_truncated: Option<bool>,
+    d1_logs: D1BindingSnapshot,
+    d1_inbox_index: D1BindingSnapshot,
 }
 
 fn normalize_worker_url(raw: &str) -> Result<String, String> {
@@ -249,6 +350,98 @@ fn normalize_worker_url(raw: &str) -> Result<String, String> {
         return Err("Worker URL must be http(s)".into());
     }
     Ok(with_scheme.trim_end_matches('/').to_string())
+}
+
+async fn probe_d1_when_connect_omits(
+    http: &reqwest::Client,
+    base: &str,
+    token: &str,
+) -> (bool, bool) {
+    let auth = format!("Bearer {token}");
+    let mut logs_configured = false;
+    let mut inbox_configured = false;
+
+    if let Ok(res) = http
+        .get(format!("{base}/health"))
+        .send()
+        .await
+    {
+        if res.status().is_success() {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if json.get("d1").is_some() {
+                    logs_configured = json
+                        .pointer("/d1/logsConfigured")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    inbox_configured = json
+                        .pointer("/d1/inboxIndexConfigured")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    return (logs_configured, inbox_configured);
+                }
+            }
+        }
+    }
+
+    if let Ok(res) = http
+        .get(format!("{base}/console/ops-logs?limit=1"))
+        .header("Authorization", &auth)
+        .send()
+        .await
+    {
+        if res.status().is_success() {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                if let Some(v) = json.get("d1Configured").and_then(|v| v.as_bool()) {
+                    logs_configured = v;
+                } else if json
+                    .pointer("/summary/total")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0)
+                    > 0
+                {
+                    logs_configured = true;
+                }
+            }
+        }
+    }
+
+    if let Ok(res) = http
+        .get(format!("{base}/console/domains"))
+        .header("Authorization", &auth)
+        .send()
+        .await
+    {
+        if res.status().is_success() {
+            if let Ok(json) = res.json::<serde_json::Value>().await {
+                let domain = json.get("domains").and_then(|domains| {
+                    domains.as_array().and_then(|entries| {
+                        entries.iter().find_map(|entry| {
+                            entry
+                                .get("domain")
+                                .and_then(|v| v.as_str())
+                                .map(str::trim)
+                                .filter(|s| !s.is_empty())
+                                .map(|s| s.to_string())
+                        })
+                    })
+                });
+                if let Some(domain) = domain {
+                    if let Ok(search) = http
+                        .get(format!(
+                            "{base}/mail/inbox/search?domain={domain}&q=te&limit=1"
+                        ))
+                        .header("Authorization", &auth)
+                        .send()
+                        .await
+                    {
+                        inbox_configured = search.status().as_u16() != 503;
+                    }
+                }
+            }
+        }
+    }
+
+    (logs_configured, inbox_configured)
 }
 
 /// Verify user-deployed Worker via GET /console/connect (admin Bearer).
@@ -302,6 +495,18 @@ async fn verify_worker_connection(
     }
 
     let usage = value.pointer("/inbound/usage");
+    let mut d1_logs = parse_d1_binding(&value, "logs");
+    let mut d1_inbox_index = parse_d1_binding(&value, "inboxIndex");
+
+    if value.get("d1").is_none()
+        && !d1_logs.configured
+        && !d1_inbox_index.configured
+    {
+        let (logs, inbox) = probe_d1_when_connect_omits(&http, &base, token).await;
+        d1_logs.configured = logs;
+        d1_inbox_index.configured = inbox;
+    }
+
     Ok(WorkerConnectResult {
         ok: true,
         product: "relaybase".into(),
@@ -329,6 +534,8 @@ async fn verify_worker_connection(
         r2_usage_truncated: usage
             .and_then(|u| u.get("truncated"))
             .and_then(|v| v.as_bool()),
+        d1_logs,
+        d1_inbox_index,
     })
 }
 

@@ -1,4 +1,8 @@
-"use client";
+import {
+  d1BindingFromPayload,
+  type D1BindingSnapshot,
+} from "@/lib/dashboard/d1-binding-status";
+import { probeD1WhenConnectOmits } from "@/lib/dashboard/d1-fallback-probe";
 
 export type DesktopCredentials = {
   accountId: string;
@@ -144,6 +148,8 @@ export type WorkerConnectResult = {
   r2ObjectCount?: number | null;
   /** True when the Worker stopped scanning early (large bucket). */
   r2UsageTruncated?: boolean | null;
+  d1Logs: D1BindingSnapshot;
+  d1InboxIndex: D1BindingSnapshot;
 };
 
 export type DesktopErrorLink = {
@@ -563,8 +569,35 @@ export async function desktopVerifyWorkerConnection(
   }
   const value = (await connect.json().catch(() => ({}))) as {
     workerScriptName?: string;
-    inbound?: { r2Configured?: boolean; bucketName?: string };
+    inbound?: {
+      r2Configured?: boolean;
+      bucketName?: string;
+      usage?: {
+        totalBytes?: number;
+        objectCount?: number;
+        truncated?: boolean;
+      };
+    };
+    d1?: Parameters<typeof d1BindingFromPayload>[0];
   };
+  const usage = value.inbound?.usage;
+  let d1Logs = d1BindingFromPayload(value.d1, "logs");
+  let d1InboxIndex = d1BindingFromPayload(value.d1, "inboxIndex");
+
+  if (
+    !value.d1 ||
+    (!d1Logs.configured &&
+      !d1InboxIndex.configured &&
+      !value.d1.logs &&
+      !value.d1.inboxIndex)
+  ) {
+    const fallback = await probeD1WhenConnectOmits(base, adminToken);
+    if (fallback.d1Logs.configured || fallback.d1InboxIndex.configured) {
+      d1Logs = fallback.d1Logs;
+      d1InboxIndex = fallback.d1InboxIndex;
+    }
+  }
+
   return {
     ok: true,
     product: "relaybase",
@@ -572,6 +605,11 @@ export async function desktopVerifyWorkerConnection(
     workerUrl: base,
     r2Configured: Boolean(value.inbound?.r2Configured),
     inboundBucketName: value.inbound?.bucketName ?? "",
+    r2TotalBytes: usage?.totalBytes ?? null,
+    r2ObjectCount: usage?.objectCount ?? null,
+    r2UsageTruncated: usage?.truncated ?? null,
+    d1Logs,
+    d1InboxIndex,
   };
 }
 

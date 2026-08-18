@@ -15,7 +15,10 @@
 | Broadcast send (dual-write KV + D1) | `server/src/lib/catalog-broadcasts.ts` |
 | Inbound bounce logging | `server/src/inbound.ts`, `server/src/lib/inbound-store.ts` |
 | Logs API | `server/src/routes/console/ops-logs.ts` → `/console/ops-logs` |
+| D1 probe helper | `server/src/lib/d1-status.ts` (`probeD1Connection`) |
+| Connect probe (D1 + R2) | `server/src/routes/console/connect.ts` → `/console/connect` |
 | Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/logs` → `/console/ops-logs`) |
+| Connection status UI | `app/src/lib/dashboard/connection-status.ts`, `app/src/dashboard/components/ConnectionStatusCards.tsx`, `app/src/dashboard/components/SettingsView.tsx` |
 | Dashboard nav | `app/src/dashboard/paths.ts` (Log tab after API Keys) |
 | Dashboard route | `app/src/dashboard/panel.tsx` (`case "logs"`) |
 | Log page UI | `app/src/dashboard/components/LogsView.tsx` |
@@ -108,6 +111,48 @@ Server-side Sent storage (replacing `empty-sent`) is **out of scope** for this p
 
 ---
 
+## D1 configured probe
+
+`server/src/lib/d1-status.ts` checks whether each optional D1 binding is present **and** migrated (expected table exists in `sqlite_master`):
+
+| Binding | Table | Database name |
+|---------|-------|---------------|
+| `RELAYBASE_LOGS` | `ops_log` | `relaybase-logs` |
+| `RELAYBASE_INBOX_INDEX` | `inbound_search_fts` | `relaybase-inbox-index` |
+
+Exposed on:
+
+- `GET /console/connect` (admin token) — desktop Settings + dashboard home connection cards
+- `GET /health` — public health (no admin proof)
+- `GET /console/ops-logs` — adds `d1Configured: boolean` (logs binding only) for the Log page summary
+
+Connect payload shape:
+
+```json
+{
+  "d1": {
+    "logs": {
+      "configured": true,
+      "databaseName": "relaybase-logs",
+      "binding": "RELAYBASE_LOGS",
+      "sizeBytes": 49152
+    },
+    "inboxIndex": {
+      "configured": true,
+      "databaseName": "relaybase-inbox-index",
+      "binding": "RELAYBASE_INBOX_INDEX",
+      "sizeBytes": 37433344
+    }
+  }
+}
+```
+
+`sizeBytes` comes from the Cloudflare D1 API (`file_size`) when Worker secrets `CF_ACCOUNT_ID` + `CF_API_TOKEN` are set; otherwise null.
+
+Probe is read-only and soft-fails (returns `false` on D1 errors). Customer installs without D1 bindings keep working.
+
+---
+
 ## Dashboard Log page
 
 Nav order in `app/src/dashboard/paths.ts`: … API Keys → **Log** → Settings (icon: `ScrollText`).
@@ -116,7 +161,9 @@ Route: `/logs` → `LogsView` (`app/src/dashboard/components/LogsView.tsx`).
 
 API: `GET /console/ops-logs?limit&status&domain` (`server/src/routes/console/ops-logs.ts`). Client maps `/api/email/logs` → `/console/ops-logs` in `email-api-map.ts`.
 
-UI columns: When · Source · Status · Kind · Subject · Peer · Domain. Filters: all/success/failed + domain search. Summary: total, failed, failed-24h. Selecting a row shows full detail including `error` and `metaJson`.
+UI columns: When · Source · Status · Kind · Subject · Peer · Domain. Filters: all/success/failed + domain search. Summary: total, failed, failed-24h, plus **D1 not configured** when `d1Configured` is false. Selecting a row shows full detail including `error` and `metaJson`.
+
+Dashboard home (`ConnectionStatusCards`) and Settings show a **D1** status card alongside Cloudflare / Worker / R2. Labels: **Configured** (both bindings), **Logs configured** / **Search configured** (one binding), or **Not configured**.
 
 ---
 
@@ -139,4 +186,6 @@ UI columns: When · Source · Status · Kind · Subject · Peer · Domain. Filte
 - [ ] Partial-bounce path keeps KV `ok: true` and D1 `ok: false` (dashboard catches near-failures).
 - [ ] Bounce fallback only fills `bodyText` when parsed body is empty — normal mail bodies are untouched.
 - [ ] `LogsView` filters and summary still render when `workerConnected` is false.
+- [ ] `probeD1Connection` still returns `false` (not throw) when a binding is missing or D1 errors.
+- [ ] `/console/connect` and connection-status UI still show D1 as optional (not configured ≠ Worker unhealthy).
 - [ ] Migration applied to remote D1 (`wrangler d1 migrations apply relaybase-logs --remote`) and Worker redeployed.

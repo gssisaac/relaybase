@@ -52,6 +52,7 @@ type LogsResponse = {
     failedLast24h: number;
   };
   workerConnected: boolean;
+  d1Configured?: boolean;
 };
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
@@ -251,6 +252,11 @@ export function LogsView() {
                 <>
                   <span>·</span>
                   <span className="text-amber-600">Worker not connected</span>
+                </>
+              ) : data.d1Configured === false ? (
+                <>
+                  <span>·</span>
+                  <span className="text-amber-600">D1 not configured</span>
                 </>
               ) : null}
             </div>

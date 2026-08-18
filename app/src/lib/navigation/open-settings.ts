@@ -5,7 +5,7 @@ import { useCallback, useMemo } from "react";
 
 import { modeFromPathname } from "@/email/sidebar-mode";
 import { useEmailPaths } from "@/email/paths";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { settingsTabHref } from "@/dashboard/paths";
 
 /**
  * Navigate to the settings page for the current sidebar mode:
@@ -20,7 +20,6 @@ export function useOpenSettings(): () => void {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { settings: emailSettingsHref } = useEmailPaths();
-  const { settingsBase: dashboardSettingsHref } = useDashboardPaths();
 
   const href = useMemo(() => {
     const mode = modeFromPathname(pathname);
@@ -33,8 +32,8 @@ export function useOpenSettings(): () => void {
         ? `${emailSettingsHref}?account=${encodeURIComponent(account)}`
         : emailSettingsHref;
     }
-    return dashboardSettingsHref;
-  }, [pathname, searchParams, emailSettingsHref, dashboardSettingsHref]);
+    return settingsTabHref("cloudflare");
+  }, [pathname, searchParams, emailSettingsHref]);
 
   return useCallback(() => {
     router.push(href);

@@ -118,6 +118,10 @@ export function normalizeEntryPath(path: string): string {
     return `/broadcasts?${next.toString()}`;
   }
 
+  if (pathname === "/settings" || pathname === "/settings/") {
+    return "/settings/cloudflare";
+  }
+
   if (pathname === "/" || !pathname.startsWith("/")) {
     return DEFAULT_DASHBOARD_PATH;
   }

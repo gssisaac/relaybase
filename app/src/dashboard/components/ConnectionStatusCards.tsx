@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Cloud, HardDrive, Loader2, Server } from "lucide-react";
+import { Cloud, Database, HardDrive, Loader2, Server } from "lucide-react";
 
 import {
   Card,
@@ -15,6 +15,7 @@ import {
   type HealthStatus,
   type HealthTone,
 } from "@/lib/dashboard/connection-status";
+import { settingsTabHref } from "@/dashboard/paths";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
@@ -87,7 +88,7 @@ function CompactConnectionCard({
   );
 }
 
-export function ConnectionStatusCards({ settingsHref }: { settingsHref: string }) {
+export function ConnectionStatusCards() {
   const { isDesktop } = useDesktopChrome();
   const desktop = useOptionalDesktop();
   const { snapshot, loading, refreshing } = useConnectionStatus();
@@ -105,24 +106,30 @@ export function ConnectionStatusCards({ settingsHref }: { settingsHref: string }
   });
 
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <CompactConnectionCard
         icon={Cloud}
         title="Cloudflare"
         health={health.cf}
-        href={settingsHref}
+        href={settingsTabHref("cloudflare")}
       />
       <CompactConnectionCard
         icon={Server}
         title="Routing Worker"
         health={health.worker}
-        href={settingsHref}
+        href={settingsTabHref("worker")}
       />
       <CompactConnectionCard
         icon={HardDrive}
         title="Inbound R2"
         health={health.r2}
-        href={settingsHref}
+        href={settingsTabHref("inbound-r2")}
+      />
+      <CompactConnectionCard
+        icon={Database}
+        title="D1"
+        health={health.d1}
+        href={settingsTabHref("d1")}
       />
     </div>
   );

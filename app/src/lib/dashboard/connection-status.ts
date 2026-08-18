@@ -1,5 +1,11 @@
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 import { desktopVerifyWorkerConnection } from "@/lib/desktop/bridge";
+import {
+  D1_INBOX_INDEX_DEFAULT,
+  D1_LOGS_DEFAULT,
+  type D1BindingSnapshot,
+} from "@/lib/dashboard/d1-binding-status";
+import { probeD1WhenConnectOmits } from "@/lib/dashboard/d1-fallback-probe";
 
 export type HealthTone = "ok" | "bad" | "pending" | "neutral";
 
@@ -20,6 +26,8 @@ export type ConnectionStatusSnapshot = {
     r2TotalBytes?: number | null;
     r2ObjectCount?: number | null;
     r2UsageTruncated?: boolean | null;
+    d1Logs: D1BindingSnapshot;
+    d1InboxIndex: D1BindingSnapshot;
   } | null;
 };
 
@@ -43,6 +51,8 @@ export function workerStatusFromConnect(
     r2TotalBytes: result.r2TotalBytes ?? null,
     r2ObjectCount: result.r2ObjectCount ?? null,
     r2UsageTruncated: result.r2UsageTruncated ?? null,
+    d1Logs: result.d1Logs,
+    d1InboxIndex: result.d1InboxIndex,
   };
 }
 
@@ -59,9 +69,21 @@ export async function probeConnectionStatus(
 
   try {
     const result = await desktopVerifyWorkerConnection(url, token);
+    const worker = workerStatusFromConnect(result);
+    if (
+      worker.ok &&
+      !worker.d1Logs.configured &&
+      !worker.d1InboxIndex.configured
+    ) {
+      const fallback = await probeD1WhenConnectOmits(url.replace(/\/$/, ""), token);
+      if (fallback.d1Logs.configured || fallback.d1InboxIndex.configured) {
+        worker.d1Logs = fallback.d1Logs;
+        worker.d1InboxIndex = fallback.d1InboxIndex;
+      }
+    }
     return {
       cfConnected,
-      worker: workerStatusFromConnect(result),
+      worker,
     };
   } catch {
     return {
@@ -75,6 +97,8 @@ export async function probeConnectionStatus(
         r2TotalBytes: null,
         r2ObjectCount: null,
         r2UsageTruncated: null,
+        d1Logs: { ...D1_LOGS_DEFAULT },
+        d1InboxIndex: { ...D1_INBOX_INDEX_DEFAULT },
       },
     };
   }
@@ -87,6 +111,7 @@ export function connectionHealthFromSnapshot(
   cf: HealthStatus;
   worker: HealthStatus;
   r2: HealthStatus;
+  d1: HealthStatus;
 } {
   const pending = options?.pending ?? false;
   const hasWorker =
@@ -153,5 +178,43 @@ export function connectionHealthFromSnapshot(
             detail: "Bind INBOUND R2 in wrangler.toml.",
           };
 
-  return { cf, worker, r2 };
+  const logsOk = snapshot?.worker?.d1Logs.configured === true;
+  const searchOk = snapshot?.worker?.d1InboxIndex.configured === true;
+  const d1: HealthStatus = !hasWorker
+    ? {
+        tone: "bad",
+        label: "Unavailable",
+        detail: "Connect a routing Worker first.",
+      }
+    : pending && !snapshot?.worker
+      ? {
+          tone: "pending",
+          label: "Checking…",
+          detail: "Probing D1 bindings.",
+        }
+      : logsOk && searchOk
+        ? {
+            tone: "ok",
+            label: "Configured",
+            detail: "Ops log and inbox search bindings work.",
+          }
+        : logsOk
+          ? {
+              tone: "ok",
+              label: "Logs configured",
+              detail: "Ops log is ready. Inbox search is not bound.",
+            }
+          : searchOk
+            ? {
+                tone: "ok",
+                label: "Search configured",
+                detail: "Inbox search is ready. Ops log is not bound.",
+              }
+            : {
+                tone: "bad",
+                label: "Not configured",
+                detail: "Bind RELAYBASE_LOGS in wrangler.toml.",
+              };
+
+  return { cf, worker, r2, d1 };
 }

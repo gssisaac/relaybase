@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
 import { desktopCors } from "./lib/cors";
+import { probeD1Connection } from "./lib/d1-status";
 import { consoleAudienceGroups } from "./routes/console/audience-groups";
 import { consoleBroadcasts } from "./routes/console/broadcasts";
 import { consoleConnect } from "./routes/console/connect";
@@ -39,13 +40,22 @@ async function checkInboundR2(bucket: R2Bucket): Promise<boolean> {
 app.use("*", desktopCors);
 
 app.get("/health", async (c) => {
-  const r2Configured = await checkInboundR2(c.env.INBOUND);
+  const [r2Configured, d1] = await Promise.all([
+    checkInboundR2(c.env.INBOUND),
+    probeD1Connection(
+      c.env.RELAYBASE_LOGS,
+      c.env.RELAYBASE_INBOX_INDEX,
+      c.env.CF_ACCOUNT_ID,
+      c.env.CF_API_TOKEN,
+    ),
+  ]);
   return c.json({
     ok: true,
     inbound: {
       r2Configured,
       bucketName: c.env.INBOUND_BUCKET_NAME,
     },
+    d1,
   });
 });
 

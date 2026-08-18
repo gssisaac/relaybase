@@ -35,13 +35,13 @@ import {
 } from "@/email/conversation-threading";
 import { useEmailMailboxStore } from "@/email/components/EmailMailboxContext";
 import { SenderAvatar, extractFirstEmail } from "@/email/components/SenderAvatar";
-import { SenderHoverCard } from "@/email/components/SenderHoverCard";
+import { SenderHoverCard, SenderHoverLabel } from "@/email/components/SenderHoverCard";
 import type { ForwardThreadPart } from "@/email/reply-helpers";
 import {
   normalizeQuoteForDisplay,
   trimQuotedHistoryForThread,
 } from "@/email/reply-quote-body";
-import { formatSenderDisplay } from "@/lib/email/format-sender";
+import { formatSenderDisplay, splitRecipients } from "@/lib/email/format-sender";
 
 function pad2(n: number) {
   return n < 10 ? `0${n}` : String(n);
@@ -218,6 +218,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
 }) {
   const store = useEmailMailboxStore();
   const latestId = messageIdentity(thread.messages[thread.messages.length - 1]!);
+  const isSingleMessage = thread.messages.length === 1;
   const [expandedId, setExpandedId] = useState<string | null>(latestId);
   const inboundKey = thread.inboundKeys.join("\0");
   const canAct = folder !== "trash";
@@ -341,7 +342,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
       <div className="divide-y divide-border/30">
         {thread.messages.map((msg) => {
           const id = messageIdentity(msg);
-          const expanded = expandedId === id;
+          const expanded = isSingleMessage || expandedId === id;
           const detail =
             msg.kind === "inbound" ? store.getCachedDetail(msg.id) : null;
           const loading =
@@ -354,7 +355,23 @@ export const ConversationThreadView = observer(function ConversationThreadView({
               ? msg.message.fromEmail
               : extractFirstEmail(msg.message.from);
           const avatarName =
-            msg.kind === "inbound" ? msg.message.fromName : undefined;
+            msg.kind === "inbound"
+              ? msg.message.fromName
+              : splitRecipients(msg.message.from)[0]?.name;
+          const meSuffix =
+            msg.kind === "sent" && sentIsMeForAccount(from, accountFilter) ? (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                (me)
+              </span>
+            ) : null;
+          const senderLabel = (
+            <>
+              <SenderHoverLabel fromName={avatarName} fromEmail={avatarEmail}>
+                {from}
+              </SenderHoverLabel>
+              {meSuffix}
+            </>
+          );
 
           return (
             <div key={id} className="shrink-0">
@@ -363,7 +380,9 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                   <button
                     type="button"
                     className="flex min-w-0 flex-1 items-start gap-3 text-left transition-colors hover:opacity-90"
-                    onClick={() => setExpandedId(null)}
+                    onClick={() => {
+                      if (!isSingleMessage) setExpandedId(null);
+                    }}
                   >
                     <SenderHoverCard
                       fromName={avatarName}
@@ -377,13 +396,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                     </SenderHoverCard>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {from}
-                        {msg.kind === "sent" &&
-                        sentIsMeForAccount(from, accountFilter) ? (
-                          <span className="ml-2 text-xs font-normal text-muted-foreground">
-                            (me)
-                          </span>
-                        ) : null}
+                        {senderLabel}
                       </p>
                     </div>
                   </button>
@@ -476,13 +489,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                   </SenderHoverCard>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">
-                      {from}
-                      {msg.kind === "sent" &&
-                      sentIsMeForAccount(from, accountFilter) ? (
-                        <span className="ml-2 text-xs font-normal text-muted-foreground">
-                          (me)
-                        </span>
-                      ) : null}
+                      {senderLabel}
                     </p>
                     <p className="mt-0.5 truncate text-sm text-muted-foreground">
                       {snippet || "(no preview)"}

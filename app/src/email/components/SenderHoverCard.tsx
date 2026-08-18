@@ -81,6 +81,54 @@ export function SenderHoverCard({
     setOpen(true);
   }
 
+  const card = (
+    <PreviewCardContent
+      side={side}
+      align={align}
+      sideOffset={6}
+      className={cn("w-72 p-3", className)}
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-primary">
+          <span className="text-sm font-semibold leading-none">
+            {senderInitials(fromName, fromEmail)}
+          </span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">
+            {displayName}
+          </p>
+          {hasName && email ? (
+            <p className="truncate text-xs text-muted-foreground">{email}</p>
+          ) : null}
+        </div>
+      </div>
+      {email ? (
+        <div className="mt-3 flex items-center justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={onCopy}
+            aria-label="Copy email address"
+          >
+            {copied ? (
+              <>
+                <Check />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy />
+                Copy email
+              </>
+            )}
+          </Button>
+        </div>
+      ) : null}
+    </PreviewCardContent>
+  );
+
   return (
     <PreviewCard open={open} onOpenChange={setOpen}>
       <PreviewCardTrigger
@@ -94,51 +142,43 @@ export function SenderHoverCard({
           <SenderAvatar fromName={fromName} fromEmail={fromEmail} />
         )}
       </PreviewCardTrigger>
-      <PreviewCardContent
-        side={side}
-        align={align}
-        sideOffset={6}
-        className={cn("w-72 p-3", className)}
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-primary">
-            <span className="text-sm font-semibold leading-none">
-              {senderInitials(fromName, fromEmail)}
-            </span>
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">
-              {displayName}
-            </p>
-            {hasName && email ? (
-              <p className="truncate text-xs text-muted-foreground">{email}</p>
-            ) : null}
-          </div>
-        </div>
-        {email ? (
-          <div className="mt-3 flex items-center justify-end gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={onCopy}
-              aria-label="Copy email address"
-            >
-              {copied ? (
-                <>
-                  <Check />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy />
-                  Copy email
-                </>
-              )}
-            </Button>
-          </div>
-        ) : null}
-      </PreviewCardContent>
+      {card}
     </PreviewCard>
+  );
+}
+
+/** Dotted-underline label used as a hover-card trigger for sender names. */
+export function SenderHoverLabel({
+  fromName,
+  fromEmail,
+  children,
+  className,
+  side,
+  align,
+}: {
+  fromName?: string | null;
+  fromEmail?: string;
+  children: React.ReactNode;
+  className?: string;
+  side?: "top" | "bottom" | "left" | "right";
+  align?: "start" | "center" | "end";
+}) {
+  return (
+    <SenderHoverCard
+      fromName={fromName}
+      fromEmail={fromEmail}
+      side={side}
+      align={align}
+      triggerClassName="min-w-0 max-w-full truncate"
+    >
+      <span
+        className={cn(
+          "truncate underline decoration-dotted underline-offset-2 hover:decoration-solid",
+          className,
+        )}
+      >
+        {children}
+      </span>
+    </SenderHoverCard>
   );
 }

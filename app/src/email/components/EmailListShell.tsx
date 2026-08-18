@@ -143,8 +143,8 @@ export const EmailTableRow = memo(function EmailTableRow({
   href?: string;
   onClick?: () => void;
   onContextMenu?: React.MouseEventHandler<HTMLElement>;
-  primary: string;
-  secondary?: string;
+  primary: ReactNode;
+  secondary?: ReactNode;
   subject: string;
   /** Conversation size — rendered flush against the subject (no gap). */
   stackCount?: number;

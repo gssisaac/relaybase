@@ -35,9 +35,9 @@ import {
   type ConversationThread,
 } from "@/email/conversation-threading";
 import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
-import { formatSenderDisplay } from "@/lib/email/format-sender";
+import { formatSenderDisplay, splitRecipients } from "@/lib/email/format-sender";
 import { extractFirstEmail, SenderAvatar } from "@/email/components/SenderAvatar";
-import { SenderHoverCard } from "@/email/components/SenderHoverCard";
+import { SenderHoverCard, SenderHoverLabel } from "@/email/components/SenderHoverCard";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
@@ -179,6 +179,10 @@ const MailRow = observer(function MailRow({
 
   if (item.kind === "draft") {
     const primary = item.message.to || "(no recipient)";
+    const firstRecipient = splitRecipients(item.message.to)[0];
+    const recipientName = firstRecipient?.name;
+    const recipientEmail =
+      firstRecipient?.email ?? extractFirstEmail(item.message.to);
     const subject = item.message.subject || "(no subject)";
     const date = formatDate(item.message.updatedAt);
     const preview = previewText(item);
@@ -189,7 +193,14 @@ const MailRow = observer(function MailRow({
           <EmailTableRow
             href={messageHref(folderBase, item, accountFilter)}
             selected={isSelected}
-            primary={primary}
+            primary={
+              <SenderHoverLabel
+                fromName={recipientName}
+                fromEmail={recipientEmail}
+              >
+                {primary}
+              </SenderHoverLabel>
+            }
             subject={subject}
             preview={preview}
             date={date}
@@ -231,6 +242,16 @@ const MailRow = observer(function MailRow({
     ? (thread?.participantLabel ??
       formatSenderDisplay(item.message.fromName, item.message.fromEmail))
     : item.message.to;
+  const senderName = isInbox ? item.message.fromName : undefined;
+  const senderEmail = isInbox
+    ? item.message.fromEmail
+    : (() => {
+        const first = splitRecipients(item.message.to)[0];
+        return first?.email ?? extractFirstEmail(item.message.to);
+      })();
+  const recipientName = isInbox
+    ? undefined
+    : splitRecipients(item.message.to)[0]?.name;
   const subject = thread?.subject ?? item.message.subject;
   const attachmentCount = isInbox
     ? item.message.attachmentCount ?? item.message.attachments?.length ?? 0
@@ -285,9 +306,24 @@ const MailRow = observer(function MailRow({
             )
           }
           primary={
-            folder === "trash"
-              ? `${isInbox ? "In" : "Sent"} · ${primary}`
-              : primary
+            folder === "trash" ? (
+              <>
+                {isInbox ? "In" : "Sent"} ·{" "}
+                <SenderHoverLabel
+                  fromName={isInbox ? senderName : recipientName}
+                  fromEmail={senderEmail}
+                >
+                  {primary}
+                </SenderHoverLabel>
+              </>
+            ) : (
+              <SenderHoverLabel
+                fromName={isInbox ? senderName : recipientName}
+                fromEmail={senderEmail}
+              >
+                {primary}
+              </SenderHoverLabel>
+            )
           }
           subject={subject || "(no subject)"}
           stackCount={stackCount}

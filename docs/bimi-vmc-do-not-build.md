@@ -134,3 +134,11 @@ Before building any part of BIMI/VMC display again, get explicit answers to:
 
 If the answer to (1) breaks the $10/domain pricing model, or (2)/(3) haven't
 been verified, do not build it.
+
+## What Relaybase uses instead (in-app avatars)
+
+The desktop mail UI shows **sender-domain favicons** (when the site serves one)
+or **two-letter initials** as a fallback — not BIMI logos in the recipient's
+Gmail. That is a local list/thread decoration only; it does not change how
+Gmail renders mail for recipients. Implementation: **[sender-favicon-cache.md](./sender-favicon-cache.md)**.
+Do not conflate this favicon cache with BIMI/VMC inbox branding.

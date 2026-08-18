@@ -97,7 +97,7 @@ Operator-only admin endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/
 | `/console/recover-admin` | Reset ADMIN_TOKEN via a one-time console recovery token (unauth by design; verifies with `console.relaybase.xyz`) |
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
 | `/console/addresses/mobile-password` | Per-account mobile password (admin token) |
-| `/mail/inbox`, `/mail/send`, … | Mail I/O (desktop / admin token) |
+| `/mail/inbox`, `/mail/send`, `/mail/favicon`, … | Mail I/O (desktop / admin token). Favicon proxy: **[sender-favicon-cache.md](./sender-favicon-cache.md)** |
 | `/mobile/*` | Flutter companion + desktop team-user login (mobile-password auth; single-account scope) — **[mobile-email-companion.md](./mobile-email-companion.md)** |
 
 Account / license / billing / recovery-token issuance are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`, `/api/v1/recovery/verify-admin-token`), not on the product Worker.

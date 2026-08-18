@@ -9,6 +9,7 @@
 | Worker ingest / Message-ID dedupe | `server/src/lib/inbound-store.ts`, `server/src/inbound.ts`, `server/src/index.ts` |
 | Conversation grouping | `app/src/email/conversation-threading.ts` |
 | Inbox list / account filter | `app/src/email/components/MailListView.tsx` |
+| Sender avatars (favicon cache) | `app/src/email/components/SenderAvatar.tsx`, `app/src/email/sender-icon-store.ts` — **[sender-favicon-cache.md](./sender-favicon-cache.md)** |
 | Thread UI (`(me)`) | `app/src/email/components/ConversationThreadView.tsx` |
 | Enabled-account visibility | `app/src/email/email-mailbox-store.ts` |
 | Compose → Sent upsert | `app/src/email/components/useComposeDraftController.ts`, `email-send-events.ts` |

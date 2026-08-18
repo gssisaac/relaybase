@@ -9,7 +9,7 @@ import {
   Inbox,
   LayoutGrid,
   Loader2,
-  Mail,
+  Mails,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
@@ -61,15 +61,15 @@ import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 import { Settings } from "lucide-react";
 
-/** Matches the product email mark (envelope on orange), as a Lucide stroke. */
-const EMAIL_TITLE_ICON_COLOR = "#D8663B";
+/** Matches the product mail mark (orange), as a Lucide stroke. */
+const MAILBOX_TITLE_ICON_COLOR = "#D8663B";
 
 function TitleIcon({ mode }: { mode: SidebarMode }) {
   if (mode === "email") {
     return (
-      <Mail
+      <Mails
         className="size-4 shrink-0"
-        style={{ color: EMAIL_TITLE_ICON_COLOR }}
+        style={{ color: MAILBOX_TITLE_ICON_COLOR }}
         aria-hidden
       />
     );
@@ -117,9 +117,9 @@ function TitleMenuItems({
           {mode === "email" ? (
             <LayoutGrid className="size-3.5" />
           ) : (
-            <Mail className="size-3.5" />
+            <Mails className="size-3.5" />
           )}
-          {mode === "email" ? "Open dashboard" : "Open email"}
+          {mode === "email" ? "Open dashboard" : "Open mailbox"}
         </DropdownMenuItem>
       )}
     </>
@@ -549,9 +549,9 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
     router.push(href);
   }
 
-  const titleLabel = mode === "email" ? "Email" : "Relaybase console";
+  const titleLabel = mode === "email" ? "Mailbox" : "Relaybase console";
   const modeToggleLabel =
-    mode === "email" ? "Switch to dashboard" : "Switch to email";
+    mode === "email" ? "Switch to dashboard" : "Switch to mailbox";
   const switchModeTarget = () =>
     switchMode(mode === "email" ? "dashboard" : "email");
 
@@ -703,7 +703,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
           "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-2",
           noDragClassName,
         )}
-        aria-label={mode === "email" ? "Email" : "Dashboard"}
+        aria-label={mode === "email" ? "Mailbox" : "Dashboard"}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         {mode === "email" ? (

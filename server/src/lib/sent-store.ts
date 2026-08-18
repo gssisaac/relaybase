@@ -73,22 +73,44 @@ function isBeforeSentCursor(
 
 const MAX_SENT_PAGE = 5000;
 
+function sentMatchesQuery(message: StoredSentEmail, tokens: string[]): boolean {
+  const haystack = [
+    message.subject,
+    message.to,
+    message.cc ?? "",
+    message.from,
+    message.bodyPreview,
+  ]
+    .join(" ")
+    .toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+}
+
 /**
- * Cursor-paginated sent list (newest first). The whole `_sent.json` index is
+ * Cursor-paginated sent list (newest first), with optional `q` substring
+ * search over subject/to/cc/from/preview. The whole `_sent.json` index is
  * still loaded server-side (single R2 object) but only one page crosses the
- * wire, and `total` comes for free.
+ * wire; `total` counts the (search-filtered) index, not the page.
  */
 export async function listStoredSentPage(
   bucket: R2Bucket,
   domain: string,
-  options: { limit?: number; before?: string } = {},
+  options: { limit?: number; before?: string; q?: string } = {},
 ): Promise<StoredSentPage> {
   const all = await listStoredSent(bucket, domain);
+  const tokens = (options.q ?? "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const matching = tokens.length
+    ? all.filter((message) => sentMatchesQuery(message, tokens))
+    : all;
   const limit = Math.min(Math.max(options.limit ?? 50, 1), MAX_SENT_PAGE);
   const cursor = parseSentCursor(options.before);
   const filtered = cursor
-    ? all.filter((message) => isBeforeSentCursor(message, cursor))
-    : all;
+    ? matching.filter((message) => isBeforeSentCursor(message, cursor))
+    : matching;
   const page = filtered.slice(0, limit);
   const hasMore = filtered.length > limit;
   const last = page[page.length - 1];
@@ -97,6 +119,6 @@ export async function listStoredSentPage(
     sent: page,
     nextBefore: hasMore && last ? `${last.sentAt}|${last.id}` : null,
     hasMore,
-    total: all.length,
+    total: matching.length,
   };
 }

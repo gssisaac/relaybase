@@ -19,10 +19,12 @@ mailSent.get("/", async (c) => {
   const rawLimit = c.req.query("limit");
   const limit = rawLimit ? Number(rawLimit) : undefined;
   const before = c.req.query("before")?.trim() || undefined;
+  const q = c.req.query("q")?.trim() || undefined;
   const page = await listStoredSentPage(c.env.INBOUND, domain, {
     // No limit param → legacy full-index response.
     limit: rawLimit && Number.isFinite(limit) ? limit : 5000,
     before,
+    q,
   });
 
   return c.json({

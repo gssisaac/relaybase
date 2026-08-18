@@ -10,6 +10,7 @@ import {
   itemKey,
   messageHref,
 } from "@/email/components/mail-list-helpers";
+import type { ListItemStateStore } from "@/email/components/list-item-state-store";
 import type { MailListItem } from "@/email/components/types";
 import type { ThreadComposeMode } from "@/email/components/ConversationThreadView";
 import type { ConversationThread } from "@/email/conversation-threading";
@@ -37,6 +38,7 @@ export function useMailListKeyboard({
   paletteOpen,
   threadByInboundKey,
   threadInboundKeysFor,
+  listItemStateStore,
   moveToTrash,
   restoreFromTrash,
 }: {
@@ -60,6 +62,7 @@ export function useMailListKeyboard({
   paletteOpen: boolean;
   threadByInboundKey: Map<string, ConversationThread>;
   threadInboundKeysFor: (key: string) => string[];
+  listItemStateStore: ListItemStateStore;
   moveToTrash: (kind: "inbox" | "sent", id: string) => void;
   restoreFromTrash: (kind: "inbox" | "sent", id: string) => void;
 }) {
@@ -81,16 +84,24 @@ export function useMailListKeyboard({
         return;
       }
 
+      // Resolve the keyboard navigation anchor. URL selection takes precedence;
+      // otherwise use the hover/visible-top focus managed by ListItemStateStore;
+      // finally fall back to the first item so arrows never jump out of the list.
+      const anchorKey =
+        messageId ??
+        listItemStateStore.focusKey ??
+        (items.length > 0 ? itemKey(items[0]!) : undefined);
+
       const currentIndex = items.findIndex((item) => {
         if (
           folder === "inbox" &&
           item.kind === "inbox" &&
-          messageId
+          anchorKey
         ) {
           const thread = threadByInboundKey.get(item.message.key);
-          if (thread) return thread.inboundKeys.includes(messageId);
+          if (thread) return thread.inboundKeys.includes(anchorKey);
         }
-        return itemKey(item) === messageId;
+        return itemKey(item) === anchorKey;
       });
 
       if (e.key === "ArrowDown" || e.key === "j") {
@@ -207,5 +218,6 @@ export function useMailListKeyboard({
     store,
     threadByInboundKey,
     threadInboundKeysFor,
+    listItemStateStore,
   ]);
 }

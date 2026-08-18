@@ -19,11 +19,19 @@ import { useStandaloneComposeOpener } from "@/email/compose-open";
 import { EmailListContainer } from "@/email/components/EmailListShell";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { cn } from "@/lib/utils";
+import { ListItemStateStore } from "@/email/components/list-item-state-store";
 
 type MailListViewProps = {
   folder: Extract<EmailMailboxSection, "inbox" | "drafts" | "sent" | "trash">;
   messageId?: string;
 };
+
+type MailListFolder = Extract<
+  EmailMailboxSection,
+  "inbox" | "drafts" | "sent" | "trash"
+>;
+
+const FOLDER_KEYS: readonly MailListFolder[] = ["inbox", "drafts", "sent", "trash"];
 
 export const MailListView = observer(function MailListView({
   folder,
@@ -42,6 +50,15 @@ export const MailListView = observer(function MailListView({
           : trash;
   const router = useRouter();
 
+  // One independent ListItemStateStore per folder so each retains its own
+  // keyboard focus anchor across folder switches.
+  const [listItemStores] = useState(() => {
+    const map = {} as Record<MailListFolder, ListItemStateStore>;
+    for (const key of FOLDER_KEYS) map[key] = new ListItemStateStore();
+    return map;
+  });
+  const listItemStateStore = listItemStores[folder];
+
   const [search, setSearch] = useState("");
   const { openCompose: openStandaloneCompose, openComposeNew, composeNewHref } =
     useStandaloneComposeOpener();
@@ -49,7 +66,14 @@ export const MailListView = observer(function MailListView({
   useEffect(() => {
     setSearch("");
     store.clearSearch();
-  }, [folder, store, store.accountFilter]);
+    listItemStateStore.clearFocus();
+  }, [folder, listItemStateStore, store, store.accountFilter]);
+
+  // Clear the keyboard focus anchor when the search text changes, because
+  // the filtered list may no longer contain the previously focused item.
+  useEffect(() => {
+    listItemStateStore.clearFocus();
+  }, [listItemStateStore, search]);
 
   // Debounced server-side search for inbox/sent. Short queries (or other
   // folders) clear server results and fall back to local filtering.
@@ -168,6 +192,7 @@ export const MailListView = observer(function MailListView({
     paletteOpen,
     threadByInboundKey,
     threadInboundKeysFor,
+    listItemStateStore,
     moveToTrash: store.moveToTrash,
     restoreFromTrash: store.restoreFromTrash,
   });
@@ -217,6 +242,7 @@ export const MailListView = observer(function MailListView({
             unreadCount={unreadCount}
             searchTotal={serverSearch ? searchTotal : null}
             searchLoading={serverSearch ? searchLoading : false}
+            listItemStateStore={listItemStateStore}
           />
         </div>
 

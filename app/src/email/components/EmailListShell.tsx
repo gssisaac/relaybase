@@ -128,6 +128,7 @@ export const EmailTableRow = memo(function EmailTableRow({
   href,
   onClick,
   onContextMenu,
+  onMouseEnter,
   primary,
   secondary,
   subject,
@@ -143,6 +144,7 @@ export const EmailTableRow = memo(function EmailTableRow({
   href?: string;
   onClick?: () => void;
   onContextMenu?: React.MouseEventHandler<HTMLElement>;
+  onMouseEnter?: React.MouseEventHandler<HTMLElement>;
   primary: ReactNode;
   secondary?: ReactNode;
   subject: string;
@@ -182,7 +184,7 @@ export const EmailTableRow = memo(function EmailTableRow({
             aria-hidden
           />
         )}
-        <div className="min-w-0">
+        <div className={cn("min-w-0", unread === false && "dark:opacity-80")}>
           <p
             className={cn(
               "truncate text-foreground",
@@ -196,7 +198,7 @@ export const EmailTableRow = memo(function EmailTableRow({
           ) : null}
         </div>
       </div>
-      <div className="min-w-0 truncate">
+      <div className={cn("min-w-0 truncate", unread === false && "dark:opacity-80")}>
         <span
           className={cn(
             "text-foreground",
@@ -224,18 +226,33 @@ export const EmailTableRow = memo(function EmailTableRow({
       </div>
       {status ? (
         <>
-          <span className="hidden text-xs text-muted-foreground sm:block">
+          <span
+            className={cn(
+              "hidden text-xs text-muted-foreground sm:block",
+              unread === false && "dark:opacity-80",
+            )}
+          >
             {date}
           </span>
           <div className="flex items-center justify-end gap-2 sm:min-w-[72px]">
-            <span className="text-xs text-muted-foreground sm:hidden">
+            <span
+              className={cn(
+                "text-xs text-muted-foreground sm:hidden",
+                unread === false && "dark:opacity-80",
+              )}
+            >
               {date}
             </span>
             {status}
           </div>
         </>
       ) : (
-        <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+        <span
+          className={cn(
+            "shrink-0 whitespace-nowrap text-xs text-muted-foreground",
+            unread === false && "dark:opacity-80",
+          )}
+        >
           {date}
         </span>
       )}
@@ -244,7 +261,12 @@ export const EmailTableRow = memo(function EmailTableRow({
 
   if (href) {
     return (
-      <Link href={href} className={className} onContextMenu={onContextMenu}>
+      <Link
+        href={href}
+        className={className}
+        onContextMenu={onContextMenu}
+        onMouseEnter={onMouseEnter}
+      >
         {body}
       </Link>
     );
@@ -255,6 +277,7 @@ export const EmailTableRow = memo(function EmailTableRow({
       type="button"
       onClick={onClick}
       onContextMenu={onContextMenu}
+      onMouseEnter={onMouseEnter}
       className={className}
     >
       {body}

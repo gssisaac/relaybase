@@ -38,6 +38,7 @@ import { trimQuotedHistoryForThread } from "@/email/reply-quote-body";
 import { formatSenderDisplay, splitRecipients } from "@/lib/email/format-sender";
 import { extractFirstEmail, SenderAvatar } from "@/email/components/SenderAvatar";
 import { SenderHoverCard, SenderHoverLabel } from "@/email/components/SenderHoverCard";
+import type { ListItemStateStore } from "@/email/components/list-item-state-store";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +101,13 @@ export type MailListPaneProps = {
   /** Server search: total matches (null when search is inactive). */
   searchTotal?: number | null;
   searchLoading?: boolean;
+  /**
+   * MobX store holding the keyboard-navigation focus anchor for this
+   * folder. Updated by row hover and the visible-top fallback; consumed
+   * by `useMailListKeyboard` to resolve the "current" row when no URL
+   * selection exists.
+   */
+  listItemStateStore?: ListItemStateStore;
 };
 
 type MailRowProps = {
@@ -112,6 +120,7 @@ type MailRowProps = {
   isUnread: (key: string) => boolean;
   commandRuntimeFor: (item: MailListItem) => EmailCommandRuntime;
   loadingMore: boolean;
+  listItemStateStore?: ListItemStateStore;
 };
 
 /**
@@ -159,6 +168,7 @@ const MailRow = observer(function MailRow({
   isUnread,
   commandRuntimeFor,
   loadingMore,
+  listItemStateStore,
 }: RowComponentProps<MailRowProps>) {
   const item = items[index];
   if (!item) {
@@ -187,8 +197,13 @@ const MailRow = observer(function MailRow({
     const date = formatDate(item.message.updatedAt);
     const preview = previewText(item);
     const isSelected = item.message.id === messageId;
+    const rowKey = itemKey(item);
     return (
-      <div style={style} className="overflow-hidden">
+      <div
+        style={style}
+        className="overflow-hidden"
+        onMouseEnter={() => listItemStateStore?.setFocus(rowKey, "hover")}
+      >
         <EmailCommandContextMenu runtime={commandRuntimeFor(item)}>
           <EmailTableRow
             href={messageHref(folderBase, item, accountFilter)}
@@ -273,11 +288,16 @@ const MailRow = observer(function MailRow({
       ? thread
         ? threadUnreadKeys(thread, isUnread).length > 0
         : isUnread(item.message.key)
-      : false;
+      : undefined;
   const stackCount =
     thread && thread.messageCount > 1 ? thread.messageCount : undefined;
+  const rowKey = itemKey(item);
   return (
-    <div style={style} className="overflow-hidden">
+    <div
+      style={style}
+      className="overflow-hidden"
+      onMouseEnter={() => listItemStateStore?.setFocus(rowKey, "hover")}
+    >
       <EmailCommandContextMenu runtime={commandRuntimeFor(item)}>
         <EmailTableRow
           href={messageHref(folderBase, item, accountFilter)}
@@ -359,6 +379,7 @@ export function MailListPane({
   unreadCount = null,
   searchTotal = null,
   searchLoading = false,
+  listItemStateStore,
 }: MailListPaneProps) {
   const listRef = useListRef(null);
   const { dragRegionClassName, dragRegionProps } = useDesktopChrome();
@@ -418,21 +439,43 @@ export function MailListPane({
   }, [accountFilter, folder, listRef, search]);
 
   const showSentinel = hasMore || loadingMore;
-  // While a page is being fetched, render multiple skeleton placeholder
-  // rows so the loading region reads as "more rows coming" instead of a
-  // single text line / blank gap. When more pages exist but we haven't
-  // started loading yet, keep a single sentinel row.
-  const sentinelCount = loadingMore ? PLACEHOLDER_ROWS : showSentinel ? 1 : 0;
+  // The sentinel/skeleton only makes sense when the list overflows the
+  // viewport — it signals "scroll to see more". When the loaded items fit
+  // entirely on screen (e.g. a 5-item inbox), there's nothing to scroll to,
+  // so showing 8 skeleton placeholders below a short list is just noise.
+  // The background load-more (onRowsRendered) still fires to auto-fill the
+  // screen if more items exist on the server; we only suppress the visual.
+  const listFitsViewport =
+    containerHeight > 0
+      ? items.length * MAIL_ROW_HEIGHT <= containerHeight
+      : items.length <= MIN_OVERSCAN_ROWS;
+  const sentinelCount = listFitsViewport
+    ? 0
+    : loadingMore
+      ? PLACEHOLDER_ROWS
+      : showSentinel
+        ? 1
+        : 0;
   const rowCount = items.length + sentinelCount;
 
   const onRowsRendered = useCallback(
     (visibleRows: { startIndex: number; stopIndex: number }) => {
+      // Keep the keyboard focus anchor synced to the topmost visible row
+      // so arrow navigation starts from the viewport instead of jumping
+      // to item 0 when no URL selection or hover anchor exists. The store
+      // ignores visible-top updates while an explicit hover anchor is set.
+      if (listItemStateStore && items[visibleRows.startIndex]) {
+        listItemStateStore.setFocus(
+          itemKey(items[visibleRows.startIndex]!),
+          "visible-top",
+        );
+      }
       if (!hasMore || loadingMore || !onLoadMore) return;
       if (visibleRows.stopIndex >= items.length - LOAD_MORE_THRESHOLD) {
         onLoadMore();
       }
     },
-    [hasMore, items.length, loadingMore, onLoadMore],
+    [hasMore, items, loadingMore, onLoadMore, listItemStateStore],
   );
 
   const rowKey = useCallback(
@@ -520,6 +563,7 @@ export function MailListPane({
                 isUnread,
                 commandRuntimeFor,
                 loadingMore,
+                listItemStateStore,
               }}
             />
           </>

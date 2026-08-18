@@ -14,9 +14,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import PostalMime, { decodeWords } from "postal-mime";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const WRANGLER_TOML = join(__dirname, "..", "wrangler.toml");
 
 const APPLY = process.argv.includes("--apply");
 const SENT_ONLY = process.argv.includes("--sent-index");
@@ -28,7 +31,23 @@ const DEFAULT_MBOX =
   "/Users/isaaclee/operation/33.wedesk.so/Takeout/Mail/All mail Including Spam and Trash.mbox";
 const DEFAULT_EMAIL = "isaac@wedesk.so";
 const BUCKET = "relaybase-inbound";
-const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || "3adf03d991843094a7343eebc0a98007";
+
+function accountIdFromWranglerToml() {
+  let text;
+  try {
+    text = readFileSync(WRANGLER_TOML, "utf8");
+  } catch {
+    return null;
+  }
+  const head = text.split(/\n\[\[/)[0];
+  const match = head.match(/account_id\s*=\s*"([^"]+)"/);
+  return match ? match[1] : null;
+}
+
+const ACCOUNT_ID =
+  process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ||
+  accountIdFromWranglerToml() ||
+  "";
 const CONCURRENCY = 6;
 const SKIP_LABELS = new Set(["spam", "trash", "drafts"]);
 
@@ -345,6 +364,11 @@ async function writeSentIndex(sent) {
 async function main() {
   if (!DOMAIN) {
     throw new Error(`Invalid mailbox email: ${MAILBOX_EMAIL}`);
+  }
+  if (APPLY && !ACCOUNT_ID) {
+    throw new Error(
+      "CLOUDFLARE_ACCOUNT_ID is required for --apply (or set account_id in server/wrangler.toml)",
+    );
   }
 
   console.log(`${APPLY ? "APPLY" : "DRY-RUN"} ${MBOX_PATH}`);

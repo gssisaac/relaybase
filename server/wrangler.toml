@@ -42,5 +42,5 @@ migrations_dir = "migrations-logs"
 [[d1_databases]]
 binding = "RELAYBASE_INBOX_INDEX"
 database_name = "relaybase-inbox-index"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "bef720aa-950f-4a66-928e-155efcc5c64a"
 migrations_dir = "migrations-inbox"

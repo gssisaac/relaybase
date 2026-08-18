@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 /**
- * One-time backfill of the D1 FTS5 search index (`inbound_search_fts`) from
- * the R2 inbound store. Run after creating the database and applying
- * migrations (see server/wrangler.toml [[d1_databases]] RELAYBASE_INBOX_INDEX).
+ * One-time (or re-runnable) backfill of the D1 FTS5 search index
+ * (`inbound_search_fts`) from the R2 inbound store. Run after creating the
+ * database and applying migrations (see server/wrangler.toml
+ * [[d1_databases]] RELAYBASE_INBOX_INDEX).
  *
  * Usage (from server/):
- *   node scripts/backfill-inbound-search.mjs --database-id <uuid>
+ *   pnpm run backfill:search                                   # all domains, database_id from wrangler.toml
+ *   pnpm run backfill:search:domain -- wedesk.so               # one domain
+ *   pnpm run backfill:search:dry                               # dry-run (no D1 writes)
+ *   node scripts/backfill-inbound-search.mjs --database-id <uuid>            # explicit id
  *   node scripts/backfill-inbound-search.mjs --database-id <uuid> --domain wedesk.so
+ *   D1_DATABASE_ID=<uuid> pnpm run backfill:search                            # via env var
+ *
+ * `--database-id` is optional when run from `server/`: the script reads
+ * `database_id` for the `RELAYBASE_INBOX_INDEX` binding from
+ * `wrangler.toml`. CLI flag > `D1_DATABASE_ID` env var > wrangler.toml.
  *
  * Requires CLOUDFLARE_API_TOKEN (or a wrangler login token on this machine)
  * and CLOUDFLARE_ACCOUNT_ID (defaults to server/wrangler.toml's account).
@@ -17,12 +26,17 @@
 
 import { homedir } from "node:os";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SERVER_DIR = join(__dirname, "..");
+const WRANGLER_TOML = join(SERVER_DIR, "wrangler.toml");
 
 const BUCKET = "relaybase-inbound";
-const ACCOUNT_ID =
-  process.env.CLOUDFLARE_ACCOUNT_ID || "3adf03d991843094a7343eebc0a98007";
-const CONCURRENCY = 6;
+/** Parallel R2 GETs. Keep this modest — the R2 REST API 429s around 6. */
+const CONCURRENCY = 2;
+const R2_RETRY_MAX = 8;
 /** Rows per INSERT — 18 columns × 5 rows = 90 bound params (D1 limit: 100). */
 const INSERT_CHUNK = 5;
 /** Cap indexed body text; full bodies stay in R2 meta.json. */
@@ -44,8 +58,62 @@ function argValues(name) {
   return values;
 }
 
-const DATABASE_ID = argValue("--database-id", process.env.D1_DATABASE_ID || "");
+function argFlag(name) {
+  return process.argv.includes(name);
+}
+
+/**
+ * Parse server/wrangler.toml for the RELAYBASE_INBOX_INDEX binding's
+ * database_id. Lightweight TOML scan — avoids a TOML dependency for one
+ * value. Looks for the binding block, then the next `database_id = "..."`
+ * line within it.
+ */
+function databaseIdFromWranglerToml() {
+  let text;
+  try {
+    text = readFileSync(WRANGLER_TOML, "utf8");
+  } catch {
+    return null;
+  }
+  const blocks = text.split(/\n\[\[d1_databases\]\]/);
+  for (const block of blocks) {
+    if (/binding\s*=\s*"RELAYBASE_INBOX_INDEX"/.test(block)) {
+      const idMatch = block.match(/database_id\s*=\s*"([^"]+)"/);
+      if (idMatch && !idMatch[1].startsWith("REPLACE_WITH_")) {
+        return idMatch[1];
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse server/wrangler.toml for `account_id` at the top level (the first
+ * `account_id = "..."` outside any [[...]] table).
+ */
+function accountIdFromWranglerToml() {
+  let text;
+  try {
+    text = readFileSync(WRANGLER_TOML, "utf8");
+  } catch {
+    return null;
+  }
+  // Top-level account_id appears before any [[...]] block.
+  const head = text.split(/\n\[\[/)[0];
+  const match = head.match(/account_id\s*=\s*"([^"]+)"/);
+  return match ? match[1] : null;
+}
+
+const DRY_RUN = argFlag("--dry-run");
+const DATABASE_ID =
+  argValue("--database-id", process.env.D1_DATABASE_ID || "") ||
+  databaseIdFromWranglerToml() ||
+  "";
 const DOMAIN_ARGS = argValues("--domain").map((d) => d.trim().toLowerCase());
+const ACCOUNT_ID =
+  process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ||
+  accountIdFromWranglerToml() ||
+  "";
 
 function wranglerOauthToken() {
   const candidates = [
@@ -72,10 +140,32 @@ if (!TOKEN) {
 }
 if (!DATABASE_ID) {
   console.error(
-    "--database-id <uuid> is required (the RELAYBASE_INBOX_INDEX D1 database)",
+    "--database-id <uuid> is required (or set D1_DATABASE_ID, or run from server/ so it can be read from wrangler.toml)",
   );
   process.exit(1);
 }
+if (!ACCOUNT_ID) {
+  console.error(
+    "CLOUDFLARE_ACCOUNT_ID is required (or set account_id in server/wrangler.toml)",
+  );
+  process.exit(1);
+}
+
+if (DRY_RUN) {
+  console.log("Dry-run mode: D1 will not be written. Counts only.\n");
+}
+
+const SOURCE = argValue("--database-id", "")
+  ? "CLI --database-id"
+  : process.env.D1_DATABASE_ID
+    ? "D1_DATABASE_ID env"
+    : "wrangler.toml";
+const ACCOUNT_SOURCE = process.env.CLOUDFLARE_ACCOUNT_ID
+  ? "CLOUDFLARE_ACCOUNT_ID env"
+  : "wrangler.toml";
+console.log(`Database ID source: ${SOURCE}`);
+console.log(`Account ID source: ${ACCOUNT_SOURCE}`);
+console.log(`Bucket: ${BUCKET}\n`);
 
 const API = "https://api.cloudflare.com/client/v4";
 const AUTH_HEADERS = { Authorization: `Bearer ${TOKEN}` };
@@ -84,13 +174,34 @@ function objectUrl(key) {
   return `${API}/accounts/${ACCOUNT_ID}/r2/buckets/${BUCKET}/objects/${encodeURIComponent(key).replaceAll("%2F", "/")}`;
 }
 
-async function r2GetText(key) {
-  const res = await fetch(objectUrl(key), { headers: AUTH_HEADERS });
-  if (res.status === 404) return null;
-  if (!res.ok) {
-    throw new Error(`R2 GET ${key} failed: ${res.status} ${await res.text()}`);
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(res, attempt) {
+  const header = res.headers.get("retry-after");
+  const parsed = header ? Number(header) : NaN;
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return Math.min(parsed * 1000, 60_000);
   }
-  return res.text();
+  return Math.min(1000 * 2 ** attempt, 30_000);
+}
+
+async function r2GetText(key) {
+  for (let attempt = 0; attempt <= R2_RETRY_MAX; attempt += 1) {
+    const res = await fetch(objectUrl(key), { headers: AUTH_HEADERS });
+    if (res.status === 404) return null;
+    if (res.status === 429 && attempt < R2_RETRY_MAX) {
+      const wait = retryAfterMs(res, attempt);
+      console.warn(`  R2 429 on ${key} — retry ${attempt + 1}/${R2_RETRY_MAX} in ${wait}ms`);
+      await sleep(wait);
+      continue;
+    }
+    if (!res.ok) {
+      throw new Error(`R2 GET ${key} failed: ${res.status} ${await res.text()}`);
+    }
+    return res.text();
+  }
 }
 
 async function r2ListDelimitedPrefixes(prefix) {
@@ -102,7 +213,14 @@ async function r2ListDelimitedPrefixes(prefix) {
     url.searchParams.set("delimiter", "/");
     url.searchParams.set("per_page", "1000");
     if (cursor) url.searchParams.set("cursor", cursor);
-    const res = await fetch(url, { headers: AUTH_HEADERS });
+    let res;
+    for (let attempt = 0; attempt <= R2_RETRY_MAX; attempt += 1) {
+      res = await fetch(url, { headers: AUTH_HEADERS });
+      if (res.status !== 429 || attempt === R2_RETRY_MAX) break;
+      const wait = retryAfterMs(res, attempt);
+      console.warn(`  R2 list 429 — retry ${attempt + 1}/${R2_RETRY_MAX} in ${wait}ms`);
+      await sleep(wait);
+    }
     if (!res.ok) {
       throw new Error(`R2 list failed: ${res.status} ${await res.text()}`);
     }
@@ -199,7 +317,7 @@ async function backfillDomain(domain) {
   }
   const parsed = JSON.parse(listRaw);
   const entries = Array.isArray(parsed.messages) ? parsed.messages : [];
-  console.log(`  ${domain}: ${entries.length} messages`);
+  console.log(`  ${domain}: ${entries.length} messages to index`);
 
   let indexed = 0;
   let missing = 0;
@@ -215,6 +333,11 @@ async function backfillDomain(domain) {
     }
     return JSON.parse(metaRaw);
   });
+
+  if (DRY_RUN) {
+    console.log(`  ${domain}: dry-run — would index ${metas.length} row(s)`);
+    return { indexed: metas.length, missing };
+  }
 
   for (let i = 0; i < metas.length; i += INSERT_CHUNK) {
     const chunk = metas.slice(i, i + INSERT_CHUNK);
@@ -251,17 +374,23 @@ async function main() {
     console.log("No domains found — nothing to backfill.");
     return;
   }
-  console.log(`Backfilling ${domains.length} domain(s): ${domains.join(", ")}`);
+  console.log(`Backfilling ${domains.length} domain(s): ${domains.join(", ")}\n`);
 
   let totalIndexed = 0;
+  let totalMissing = 0;
   for (const domain of domains) {
     const { indexed, missing } = await backfillDomain(domain);
     totalIndexed += indexed;
+    totalMissing += missing;
     if (missing > 0) {
       console.warn(`  ${domain}: ${missing} entries had no meta.json (indexed without body)`);
     }
   }
-  console.log(`Done. Indexed ${totalIndexed} message(s).`);
+  const verb = DRY_RUN ? "would index" : "indexed";
+  console.log(`\nDone. ${verb} ${totalIndexed} message(s).`);
+  if (totalMissing > 0) {
+    console.log(`${totalMissing} message(s) had no meta.json and were indexed without body text.`);
+  }
 }
 
 main().catch((error) => {

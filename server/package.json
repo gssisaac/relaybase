@@ -12,7 +12,10 @@
     "migrate:kv-prefix": "node scripts/migrate-kv-prefix.mjs",
     "migrate:kv-prefix:apply": "node scripts/migrate-kv-prefix.mjs --apply",
     "import:mbox": "node scripts/import-mbox.mjs",
-    "import:mbox:apply": "node scripts/import-mbox.mjs --apply"
+    "import:mbox:apply": "node scripts/import-mbox.mjs --apply",
+    "backfill:search": "node scripts/backfill-inbound-search.mjs",
+    "backfill:search:domain": "node scripts/backfill-inbound-search.mjs --domain",
+    "backfill:search:dry": "node scripts/backfill-inbound-search.mjs --dry-run"
   },
   "dependencies": {
     "hono": "^4.7.11",

@@ -133,7 +133,7 @@ cd server
 wrangler d1 create relaybase-inbox-index
 # paste the returned database_id into wrangler.toml's RELAYBASE_INBOX_INDEX entry
 wrangler d1 migrations apply relaybase-inbox-index --remote
-node scripts/backfill-inbound-search.mjs --database-id <uuid>   # one-time backfill of existing mail
+pnpm run backfill:search   # one-time backfill of existing mail (database_id read from wrangler.toml)
 ```
 
 `server/wrangler.toml`:
@@ -275,20 +275,64 @@ KV send logs and does not support `q`.
 One-time (or re-runnable) script to populate D1 from mail that was
 ingested before the index existed, or to rebuild after schema changes.
 Talks to the Cloudflare API directly (R2 + D1 REST) rather than going
-through the Worker, so it can run standalone with just an API token:
+through the Worker, so it can run standalone with just an API token.
+
+### When to run it
+
+| Situation | Why |
+|-----------|-----|
+| First time enabling search on an install with existing R2 mail | New inbound mail auto-indexes on ingest, but **messages already in R2 are not retroactively indexed** — search will miss them until backfill runs. |
+| After an FTS5 schema migration (`server/migrations-inbox/000X_*.sql`) | New/changed columns need to be re-populated from R2. |
+| After deleting and recreating the D1 database | The index is empty again. |
+| After a D1 outage that dropped rows | Re-run is safe (idempotent). |
+
+Without backfill, **new** mail still auto-indexes (see "Sync on write"
+above) — only **historical** mail stays unsearchable until the script runs.
+
+### How to run
+
+Preferred entry points (defined in `server/package.json`):
+
+```bash
+cd server
+pnpm run backfill:search                       # all domains; database_id read from wrangler.toml
+pnpm run backfill:search:domain -- wedesk.so  # one domain
+pnpm run backfill:search:dry                  # dry-run: counts only, no D1 writes
+```
+
+Or invoke the script directly (useful outside `server/`):
 
 ```bash
 node scripts/backfill-inbound-search.mjs --database-id <uuid>
 node scripts/backfill-inbound-search.mjs --database-id <uuid> --domain wedesk.so
+node scripts/backfill-inbound-search.mjs --dry-run
 ```
 
+### `database_id` resolution
+
+The script resolves the D1 database id in this order (first match wins):
+
+1. `--database-id <uuid>` CLI flag
+2. `D1_DATABASE_ID` environment variable
+3. The `database_id` of the `RELAYBASE_INBOX_INDEX` binding parsed from
+   `server/wrangler.toml` (skips placeholder values like
+   `REPLACE_WITH_D1_DATABASE_ID`)
+
+So once `wrangler.toml` has the real id pasted in, you can just run
+`pnpm run backfill:search` with no flags. The script logs which source it
+used (`Database ID source: wrangler.toml`).
+
+### Behavior
+
 - Requires `CLOUDFLARE_API_TOKEN` (or falls back to a local `wrangler`
-  OAuth token) and `CLOUDFLARE_ACCOUNT_ID`.
+  OAuth token) and `CLOUDFLARE_ACCOUNT_ID` (defaults to the
+  `account_id` parsed from `wrangler.toml`).
 - Without `--domain`, auto-discovers every domain by listing R2 prefixes
   under `inbound/`.
 - Per domain: loads `_list.json`, then `meta.json` per entry (so
   `body_text` is populated — `_list.json` alone has no body) with
-  `CONCURRENCY = 6` parallel fetches. Missing `meta.json` (rare, e.g. a
+  `CONCURRENCY = 2` parallel fetches (R2 REST 429s at higher
+  parallelism; each GET retries with backoff). Missing `meta.json` (rare, e.g. a
   race with a live prune) falls back to indexing just the compact entry.
 - Inserts in chunks of `INSERT_CHUNK = 5` rows (18 columns × 5 rows = 90
   bound params, under D1's 100-param limit per statement) and deletes by
@@ -296,6 +340,10 @@ node scripts/backfill-inbound-search.mjs --database-id <uuid> --domain wedesk.so
   ingest without duplicating rows.
 - `MAX_BODY_TEXT = 100_000` matches the cap applied on live ingest in
   `inbound-search.ts`.
+- `--dry-run` skips all D1 writes and reports how many rows per domain
+  *would* be indexed — useful to sanity-check before a large backfill.
+- Per-domain progress is printed to stdout (`{domain}: indexed N/M`)
+  and a final summary line (`Done. indexed N message(s).`).
 
 Run once after creating the D1 database and applying migrations, before
 relying on search results being complete.

@@ -188,13 +188,20 @@ export const EmailTableRow = memo(function EmailTableRow({
           <p
             className={cn(
               "truncate text-foreground",
-              unread ? "font-semibold" : "font-normal",
+              unread ? "font-semibold dark:text-white" : "font-normal",
             )}
           >
             {primary}
           </p>
           {secondary ? (
-            <p className="truncate text-xs text-muted-foreground">{secondary}</p>
+            <p
+              className={cn(
+                "truncate text-xs text-muted-foreground",
+                unread && "dark:text-white/75",
+              )}
+            >
+              {secondary}
+            </p>
           ) : null}
         </div>
       </div>
@@ -202,23 +209,37 @@ export const EmailTableRow = memo(function EmailTableRow({
         <span
           className={cn(
             "text-foreground",
-            unread ? "font-semibold" : "font-normal",
+            unread ? "font-semibold dark:text-white" : "font-normal",
           )}
         >
           {subject || "(no subject)"}
           {stackCount != null && stackCount > 1 ? (
-            <span className="font-normal text-muted-foreground tabular-nums">
+            <span
+              className={cn(
+                "font-normal tabular-nums",
+                unread ? "text-muted-foreground dark:text-white/70" : "text-muted-foreground",
+              )}
+            >
               {stackCount}
             </span>
           ) : null}
           {subjectAddon ? (
-            <span className="font-normal text-muted-foreground">
+            <span
+              className={cn(
+                "font-normal",
+                unread ? "text-muted-foreground dark:text-white/70" : "text-muted-foreground",
+              )}
+            >
               {subjectAddon}
             </span>
           ) : null}
         </span>
         {preview ? (
-          <span className="text-muted-foreground">
+          <span
+            className={cn(
+              unread ? "text-muted-foreground dark:text-white/80" : "text-muted-foreground",
+            )}
+          >
             {" — "}
             {preview}
           </span>
@@ -229,6 +250,7 @@ export const EmailTableRow = memo(function EmailTableRow({
           <span
             className={cn(
               "hidden text-xs text-muted-foreground sm:block",
+              unread && "dark:text-white/75",
               unread === false && "dark:opacity-80",
             )}
           >
@@ -238,6 +260,7 @@ export const EmailTableRow = memo(function EmailTableRow({
             <span
               className={cn(
                 "text-xs text-muted-foreground sm:hidden",
+                unread && "dark:text-white/75",
                 unread === false && "dark:opacity-80",
               )}
             >
@@ -250,6 +273,7 @@ export const EmailTableRow = memo(function EmailTableRow({
         <span
           className={cn(
             "shrink-0 whitespace-nowrap text-xs text-muted-foreground",
+            unread && "dark:text-white/75",
             unread === false && "dark:opacity-80",
           )}
         >

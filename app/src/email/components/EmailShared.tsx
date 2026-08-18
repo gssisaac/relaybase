@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 
-import { AlertCircle, Check, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Check, Download, Paperclip, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
 
@@ -14,6 +15,18 @@ import {
   desktopAwareFetch,
   isWorkerBacked,
 } from "@/lib/desktop/api-base";
+import {
+  desktopOpenAttachment,
+  isDesktopRuntime,
+} from "@/lib/desktop/bridge";
+import { FileTypeIcon } from "@/lib/file-icons";
+import {
+  downloadAllAttachments,
+  downloadAttachment,
+  fetchAttachmentBlob,
+  showDownloadAllSuccessToast,
+  showDownloadSuccessToast,
+} from "@/lib/attachments";
 import { normalizeQuoteForDisplay } from "@/email/reply-quote-body";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -202,6 +215,31 @@ export function InboundEmailDetail({
     (attachment) => !attachment.contentType.startsWith("image/"),
   );
 
+  const downloadItems = useMemo(
+    () =>
+      attachments.map((attachment) => ({
+        path: attachmentPath(attachment.id),
+        filename: attachment.filename,
+      })),
+    [attachments, domain, messageKey],
+  );
+
+  const handleDownloadAll = useCallback(async () => {
+    const loading = toast.loading(
+      `Downloading ${attachments.length} files…`,
+    );
+    try {
+      const results = await downloadAllAttachments(downloadItems);
+      toast.dismiss(loading);
+      showDownloadAllSuccessToast(results);
+    } catch (err) {
+      toast.dismiss(loading);
+      toast.error(
+        err instanceof Error ? err.message : "Could not download attachments",
+      );
+    }
+  }, [attachments.length, downloadItems]);
+
   const normalizedQuote = useMemo(
     () => (quoteText ? normalizeQuoteForDisplay(quoteText) : null),
     [quoteText],
@@ -234,9 +272,25 @@ export function InboundEmailDetail({
 
       {attachments.length > 0 ? (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">
-            Attachments ({attachments.length})
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-sm font-medium">
+              <Paperclip
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+              Attachments ({attachments.length})
+            </h3>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => void handleDownloadAll()}
+            >
+              <Download className="size-3.5" aria-hidden />
+              Download all
+            </Button>
+          </div>
           {imageAttachments.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {imageAttachments.map((attachment) => (
@@ -244,6 +298,7 @@ export function InboundEmailDetail({
                   key={attachment.id}
                   path={attachmentPath(attachment.id)}
                   filename={attachment.filename}
+                  contentType={attachment.contentType}
                   size={attachment.size}
                   image
                 />
@@ -257,6 +312,7 @@ export function InboundEmailDetail({
                   <AuthedAttachmentCard
                     path={attachmentPath(attachment.id)}
                     filename={attachment.filename}
+                    contentType={attachment.contentType}
                     size={attachment.size}
                   />
                 </li>
@@ -269,57 +325,149 @@ export function InboundEmailDetail({
   );
 }
 
+function AttachmentDownloadButton({
+  path,
+  filename,
+  className,
+}: {
+  path: string;
+  filename: string;
+  className?: string;
+}) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = useCallback(
+    async (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (downloading) return;
+      setDownloading(true);
+      const loading = toast.loading(`Downloading ${filename}…`);
+      try {
+        const result = await downloadAttachment(path, filename);
+        toast.dismiss(loading);
+        showDownloadSuccessToast(result);
+      } catch (err) {
+        toast.dismiss(loading);
+        toast.error(
+          err instanceof Error ? err.message : "Could not download attachment",
+        );
+      } finally {
+        setDownloading(false);
+      }
+    },
+    [downloading, filename, path],
+  );
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className={className ?? "size-7 shrink-0 text-muted-foreground"}
+      onClick={(e) => void handleDownload(e)}
+      disabled={downloading}
+      aria-label={`Download ${filename}`}
+    >
+      <Download className="size-3.5" aria-hidden />
+    </Button>
+  );
+}
+
 function AuthedAttachmentCard({
   path,
   filename,
+  contentType,
   size,
   image = false,
 }: {
   path: string;
   filename: string;
+  contentType?: string;
   size: number;
   image?: boolean;
 }) {
   const url = useAuthedAttachmentUrl(path);
+
+  const handleOpen = useCallback(
+    async (e: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!isDesktopRuntime() || !url) return;
+      e.preventDefault();
+      const loading = toast.loading("Opening attachment…");
+      try {
+        const blob = await fetchAttachmentBlob(path);
+        const buffer = await blob.arrayBuffer();
+        await desktopOpenAttachment(filename, new Uint8Array(buffer));
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Could not open attachment",
+        );
+      } finally {
+        toast.dismiss(loading);
+      }
+    },
+    [path, url, filename],
+  );
+
   if (!url) {
     return (
-      <div className="px-3 py-2 text-sm text-muted-foreground">
-        {filename} · {formatFileSize(size)}
+      <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+        <FileTypeIcon filename={filename} contentType={contentType} />
+        <span className="min-w-0 flex-1 truncate">
+          {filename} · {formatFileSize(size)}
+        </span>
+        <AttachmentDownloadButton path={path} filename={filename} />
       </div>
     );
   }
   if (image) {
     return (
+      <div className="overflow-hidden rounded-md border border-border bg-muted/20">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleOpen}
+          className="block"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={filename}
+            className="max-h-80 w-full object-contain bg-background"
+          />
+        </a>
+        <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <FileTypeIcon
+            filename={filename}
+            contentType={contentType}
+            className="size-3.5"
+          />
+          <span className="min-w-0 flex-1 truncate">
+            {filename} · {formatFileSize(size)}
+          </span>
+          <AttachmentDownloadButton path={path} filename={filename} />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted/40">
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="block overflow-hidden rounded-md border border-border bg-muted/20"
+        onClick={handleOpen}
+        className="flex min-w-0 flex-1 items-center gap-2"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt={filename}
-          className="max-h-80 w-full object-contain bg-background"
-        />
-        <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-          {filename} · {formatFileSize(size)}
-        </div>
+        <FileTypeIcon filename={filename} contentType={contentType} />
+        <span className="truncate font-medium">{filename}</span>
       </a>
-    );
-  }
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-muted/40"
-    >
-      <span className="truncate font-medium">{filename}</span>
       <span className="shrink-0 text-xs text-muted-foreground">
         {formatFileSize(size)}
       </span>
-    </a>
+      <AttachmentDownloadButton path={path} filename={filename} />
+    </div>
   );
 }
 

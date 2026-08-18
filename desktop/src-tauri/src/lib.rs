@@ -419,6 +419,132 @@ async fn open_external_url(url: String) -> Result<(), String> {
     open_url_in_os_browser(&url)
 }
 
+/// Open an attachment with the OS default application. The frontend base64-encodes
+/// the attachment bytes (already fetched via the authenticated blob URL) and
+/// passes them here; we decode, write a temp file with the original extension,
+/// and hand it to the OS opener so Preview / Acrobat / Photos opens it directly.
+#[tauri::command]
+async fn open_local_file_with_default_app(name: String, base64_data: String) -> Result<(), String> {
+    use base64::Engine as _;
+    let bytes = base64::prelude::BASE64_STANDARD
+        .decode(base64_data.as_bytes())
+        .map_err(|e| format!("Invalid attachment data: {e}"))?;
+    let ext = name
+        .rsplit('.')
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or("bin");
+    let temp = std::env::temp_dir()
+        .join(format!("relaybase-attach-{}.{ext}", uuid::Uuid::new_v4()));
+    std::fs::write(&temp, &bytes)
+        .map_err(|e| format!("Failed to write temp file: {e}"))?;
+    open::that(&temp).map_err(|e| format!("Failed to open file: {e}"))?;
+    Ok(())
+}
+
+fn downloads_dir() -> std::path::PathBuf {
+    dirs::download_dir().unwrap_or_else(std::env::temp_dir)
+}
+
+fn unique_download_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let safe_name = name
+        .trim()
+        .replace(['/', '\\'], "_")
+        .chars()
+        .filter(|c| *c != '\0')
+        .collect::<String>();
+    let safe_name = if safe_name.is_empty() {
+        "download".into()
+    } else {
+        safe_name
+    };
+    let mut candidate = dir.join(&safe_name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let path = std::path::Path::new(&safe_name);
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("download");
+    let ext = path.extension().and_then(|s| s.to_str());
+    for i in 1..100 {
+        let next = match ext {
+            Some(ext) if !ext.is_empty() => format!("{stem} ({i}).{ext}"),
+            _ => format!("{stem} ({i})"),
+        };
+        candidate = dir.join(next);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    dir.join(format!(
+        "{stem}-{}.{ext}",
+        uuid::Uuid::new_v4(),
+        ext = ext.unwrap_or("bin")
+    ))
+}
+
+/// Save a downloaded attachment to the user's Downloads folder and return the path.
+#[tauri::command]
+async fn save_download_file(name: String, base64_data: String) -> Result<String, String> {
+    use base64::Engine as _;
+    let bytes = base64::prelude::BASE64_STANDARD
+        .decode(base64_data.as_bytes())
+        .map_err(|e| format!("Invalid attachment data: {e}"))?;
+    let path = unique_download_path(&downloads_dir(), &name);
+    std::fs::write(&path, &bytes).map_err(|e| format!("Failed to save download: {e}"))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Open a local file path with the OS default application.
+#[tauri::command]
+async fn open_file_path(path: String) -> Result<(), String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("File path is empty".into());
+    }
+    open::that(path).map_err(|e| format!("Failed to open file: {e}"))
+}
+
+/// Reveal a downloaded file in the system file manager.
+#[tauri::command]
+async fn reveal_file_in_folder(path: String) -> Result<(), String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("File path is empty".into());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", path])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal file: {e}"))?;
+        return Ok(());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .args(["/select,", path])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal file: {e}"))?;
+        return Ok(());
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let parent = std::path::Path::new(path)
+            .parent()
+            .ok_or_else(|| "File has no parent folder".to_string())?;
+        open::that(parent).map_err(|e| format!("Failed to open folder: {e}"))?;
+        return Ok(());
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", unix)))]
+    {
+        let _ = path;
+        Err("Reveal in folder is not supported on this platform".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -538,6 +664,10 @@ pub fn run() {
             save_worker_connection,
             get_desktop_info,
             open_external_url,
+            open_local_file_with_default_app,
+            save_download_file,
+            open_file_path,
+            reveal_file_in_folder,
             notify::show_notification,
         ])
         .run(tauri::generate_context!())

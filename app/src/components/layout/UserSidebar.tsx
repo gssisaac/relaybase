@@ -347,7 +347,7 @@ function EmailModeNav({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-1">
       {enabledAddresses.length === 0 ? (
         <div className="space-y-2 px-2 py-2">
           {!collapsed ? (
@@ -558,7 +558,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 select-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-out",
+        "flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-out",
         collapsed ? "w-14" : "w-52",
       )}
     >
@@ -700,7 +700,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
 
       <nav
         className={cn(
-          "flex flex-1 flex-col gap-1 overflow-y-auto p-2",
+          "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-2",
           noDragClassName,
         )}
         aria-label={mode === "email" ? "Email" : "Dashboard"}

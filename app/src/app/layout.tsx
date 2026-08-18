@@ -30,7 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} min-h-screen font-sans antialiased`}
+        className={`${inter.variable} h-svh overflow-hidden font-sans antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider>

@@ -6,11 +6,12 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | Product Worker `RELAYBASE_APP` KV (+ R2 inbound) | Domains, addresses, audience, broadcasts, API key hashes, send logs, webhooks |
+| **Remote** | Product Worker `RELAYBASE_APP` KV (+ R2 inbound) | Domains, addresses, audience, broadcasts, API key hashes, dashboard auth token hashes (`srv:authtoken:*`), send logs, webhooks |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. KV `srv:sendlog:*` remains authoritative for send history. |
 | **Remote** | D1 `RELAYBASE_INBOX_INDEX` (optional) | FTS5 full-text search index over inbound mail (`inbound_search_fts`). Derived from R2 — R2 `meta.json` stays authoritative; the index is rebuildable via `server/scripts/backfill-inbound-search.mjs`. See **[inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md)**. |
-| **Remote** | Console `RELAYBASE_ACCOUNTS` D1 + `RELAYBASE_LICENSES` KV (`console.relaybase.xyz`) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription) |
-| **Local** | `~/.relaybase` | Credentials, API key plaintext vault, mail/UI cache, dashboard cache, team login |
+| **Remote** | Kembo operations KV `KEMBO_OPS` (`kembo/admin`, worker `kembo-admin`) | Operator config only: product Worker URL + service admin token (`workerUrl`, `adminToken`). **Never** Cloudflare credentials, end-user tokens, or plaintext API keys. |
+| **Remote** | Console `KEMBO_ACCOUNTS` D1 (`kembo-accounts`) + `KEMBO_LICENSES` KV (`kembo-licenses`) (`console.relaybase.xyz`, worker `kembo-console`) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription) |
+| **Local** | `~/.relaybase` | Credentials, API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login |
 
 Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
 
@@ -37,8 +38,8 @@ flowchart TB
     D1Search["D1 RELAYBASE_INBOX_INDEX\ninbound_search_fts (FTS5)"]
   end
   subgraph console [console.relaybase.xyz]
-    ConsoleKV["KV RELAYBASE_LICENSES\nsrv:license:*"]
-    ConsoleD1["D1 RELAYBASE_ACCOUNTS\naccounts, account_workers, recovery, waitlist"]
+    ConsoleKV["KV KEMBO_LICENSES\nsrv:license:*"]
+    ConsoleD1["D1 KEMBO_ACCOUNTS\naccounts, account_workers, recovery, waitlist"]
   end
   UI --> Fetch
   Fetch -->|"admin Bearer"| worker
@@ -67,14 +68,16 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 
 | Key pattern | Module | Contents |
 |-------------|--------|----------|
-| `srv:config:admin` | `lib/auth.ts` | Legacy admin token JSON `{ token }` (secret preferred) |
-| `srv:config:cloudflare` | `lib/cloudflare-config.ts` | CF account id + API token for Email Sending |
+| `srv:config:admin` | `lib/auth.ts` | Legacy admin token JSON `{ token }` — superseded by the `ADMIN_TOKEN` wrangler secret; cleared by `scripts/clear-worker-bootstrap-kv.mjs` |
+| `srv:config:cloudflare` | `lib/cloudflare-config.ts` | Legacy CF account id + API token — superseded by `CF_ACCOUNT_ID` / `CF_API_TOKEN` wrangler secrets; cleared by `scripts/clear-worker-bootstrap-kv.mjs` |
+| `srv:catalog:branding` | `lib/branding.ts` | Per-domain DMARC config `{ dmarcPolicy, dmarcRua }` (managed via `/console/branding`) |
 | `srv:catalog:mailbox` | `lib/catalog-store.ts` | `{ domains[], addresses[] }` — each address: `email`, `domain`, optional `displayName`, optional `inboundEnabled` (`false` = CF Email Routing `drop`; omit/true = Worker receive), optional `mobileEnabled` (`false` = hide from mobile; omit/true = allowed when password set) |
 | `srv:config:mobile:{email}` | `lib/mobile-config.ts` | Per-account mobile password `{ passwordHash, salt, updatedAt }` — see **[mobile-email-companion.md](./mobile-email-companion.md)** |
 | `srv:catalog:audience` | `lib/catalog-audience.ts` | Flat contacts |
 | `srv:catalog:audience-groups` | `lib/catalog-audience.ts` | Groups, dataSource, sync progress/history |
 | `srv:catalog:broadcasts` | `lib/catalog-broadcasts.ts` | Drafts + send progress/history |
 | `srv:key:{sha256}` / `srv:id:{uuid}` | `lib/keys.ts` | API key records (**hash only**, no plaintext) |
+| `srv:authtoken:{id}` / `srv:authtoken:hash:{sha256}` / `srv:authtoken:_index` | `lib/auth-tokens.ts` | Dashboard auth token records (**hash only**; plaintext returned once at issue via `POST /console/auth-tokens`) |
 | `srv:config:owner:email` / `srv:config:owner:worker_url` | `routes/console/register-owner.ts` | Console account that owns this Worker (for ADMIN_TOKEN recovery) |
 | `srv:sendlog:_index` / `srv:sendlog:{uuid}` | `lib/send-logs.ts` | Send history (authoritative “sent”)
 | `RELAYBASE_LOGS`.`ops_log` | `lib/ops-logs.ts` | Ops-event log: compose/API/broadcast sends + inbound bounces (dashboard Log page) | |
@@ -83,7 +86,7 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 
 ### HTTP surface (Bearer admin token)
 
-Operator-only admin endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/logs`) have been removed from the worker and moved into the admin Next.js server, which writes the worker's KV directly via the Cloudflare API. The worker now exposes only end-user routes:
+The product Worker resolves Cloudflare credentials and the admin token from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`, `ADMIN_TOKEN`), set via the desktop install flow. The legacy `srv:config:cloudflare` / `srv:config:admin` KV bootstrap keys are cleared by `scripts/clear-worker-bootstrap-kv.mjs`. The admin Next.js server no longer writes the Worker's KV directly — it proxies to the Worker's `/console/*` routes. The Worker exposes:
 
 | Route | Purpose |
 |-------|---------|
@@ -91,7 +94,10 @@ Operator-only admin endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/
 | `/console/audience-groups` (+ contacts/sync/progress) | Audience |
 | `/console/broadcasts` (+ send/progress) | Broadcasts |
 | `/console/keys` (+ rotate, PATCH active) | API keys |
+| `/console/auth-tokens` (POST issue / GET list / DELETE revoke / POST verify) | Dashboard auth tokens (`rb-auth-…`) — stored hash-only at `srv:authtoken:*`; plaintext returned once at issue |
 | `/console/ops-logs` | Ops event log (D1 `RELAYBASE_LOGS`) |
+| `/console/send-logs` | Send history read from `srv:sendlog:*` (admin Logs page / Sent tab) |
+| `/console/branding` (GET status / PUT merge / POST apply DNS) | Per-domain DMARC config at `srv:catalog:branding` + DMARC TXT via the Worker's Cloudflare client |
 | `/console/connect` | Desktop self-install probe (admin-token proof) |
 | `/console/register-owner` | Record the console account that owns this Worker (admin token; for ADMIN_TOKEN recovery) |
 | `/console/recover-admin` | Reset ADMIN_TOKEN via a one-time console recovery token (unauth by design; verifies with `console.relaybase.xyz`) |
@@ -125,6 +131,8 @@ Full design (schema, query safety, sync call sites, backfill, client wiring, lis
 ### Forbidden (do not reintroduce)
 
 - Second KV binding for app data (`KEYS`, `RELAYBASE_API` on the mail Worker)
+- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) or the admin token stored in `KEMBO_OPS` — the Worker reads them from wrangler secrets; `KEMBO_OPS` holds only `workerUrl` + `adminToken` (operator config)
+- End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `KEMBO_OPS` (kembo operations KV) — tokens live in the product Worker's `RELAYBASE_APP` KV (`srv:authtoken:*`, hash-only); plaintext API keys live only in `~/.relaybase/api-keys.json`
 - Unprefixed legacy keys (`config:mailbox`, bare `id:`, `key:`) — use `srv:` + migration script `server/scripts/migrate-kv-prefix.mjs`
 - Global mobile password at `srv:config:mobile` (no email suffix) — use `srv:config:mobile:{email}` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
@@ -132,6 +140,25 @@ Full design (schema, query safety, sync call sites, backfill, client wiring, lis
 - Cookie multi-tenant sessions for the Mac product
 
 Customer install template: one KV `relaybase-app` bound as `RELAYBASE_APP` — see `server/customer-install/`.
+
+---
+
+## Remote — Kembo operations KV `KEMBO_OPS`
+
+Binding: `kembo/admin/wrangler.jsonc` → `KEMBO_OPS`. The admin Next.js server reads/writes one key: `product:relaybase:settings.json` (store id `relaybase`, file `settings.json`), holding only operator config:
+
+| Field | Purpose |
+|-------|---------|
+| `workerUrl` | Product Worker URL (e.g. `https://relaybase-api.<subdomain>.workers.dev`) — admin proxies `/console/*` and `/mail/send` here |
+| `adminToken` | Service admin token. Must match the Worker's `ADMIN_TOKEN` wrangler secret. Also authorizes the console license proxy (`kembo/admin/src/app/api/licenses/route.ts`) |
+
+Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
+
+- CF credentials → Worker wrangler secrets `CF_ACCOUNT_ID` / `CF_API_TOKEN` (set by the desktop install flow).
+- DMARC branding → Worker KV `srv:catalog:branding` via `/console/branding`.
+- Send logs → Worker KV `srv:sendlog:*` via `/console/send-logs`.
+
+Legacy fields (`workerScriptName`, `cloudflareAccountId`, `cloudflareApiToken`, `cloudflareZoneId`, `cloudflareDnsApiToken`, `inboundR2BucketName`, `domainBranding`, `sentEmails`, `dashboardAuthTokens`, `apiKeyVault`) are still read for migration but never written back. Strip them from existing settings.json files on save.
 
 ---
 
@@ -143,7 +170,7 @@ Highlights for the consolidated model:
 
 | Path | Purpose |
 |------|---------|
-| `credentials.json` | Worker URL + admin token (+ CF account fields) |
+| `credentials.json` | Worker URL + admin token (+ CF account id + API token, pushed to the Worker as `CF_ACCOUNT_ID` / `CF_API_TOKEN` secrets during install) |
 | `api-keys.json` | Plaintext API secrets (Worker has hashes only) |
 | `email.json` | Account colors |
 | `mail/desktop/**` | Mail + UI cache; fixed userId |
@@ -182,14 +209,14 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Sent history | `srv:sendlog:*` | mail sent JSON optional |
 | API key existence | `srv:id:` / `srv:key:` | `cache/dashboard/api-keys-*` |
 | API key plaintext | `~/.relaybase/api-keys.json` | — |
-| Waitlist | D1 `RELAYBASE_WAITLIST` (website) | — |
+| Waitlist | D1 `KEMBO_ACCOUNTS` (`kembo-accounts`, table `waitlist`) | — |
 
 ---
 
 ## Agent checklist
 
 1. Do **not** add `DevUser*` / `userdata:` / repo `data/users` for product state.
-2. Do **not** add a new Cloudflare KV binding beside `RELAYBASE_APP` for the mail Worker (waitlist D1 excluded).
+2. Do **not** add a new Cloudflare KV binding beside `RELAYBASE_APP` for the mail Worker.
 3. New KV keys must start with `srv:` (or live under `srv:catalog:` for catalog blobs).
 4. Packaged and `next`/Tauri must share one fetch path — no `isPackagedDesktopShell`-only product API.
 5. Plaintext secrets that the Worker cannot store → `~/.relaybase` only (`credentials.json`, `api-keys.json`).

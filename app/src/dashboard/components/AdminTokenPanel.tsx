@@ -28,11 +28,17 @@ function maskToken(token: string): string {
 /**
  * Build the full one-shot manual install script: download + unzip + npm install
  * + wrangler KV/R2/secret/deploy. The admin token is embedded so the user
- * copies one block and runs it in a terminal.
+ * copies one block and runs it in a terminal. When Cloudflare credentials are
+ * supplied (from ~/.relaybase), they are also pushed as Worker secrets so the
+ * Worker can send mail without admin syncing them into KV.
  */
-function fullInstallCommand(token: string, zipUrl: string): string {
+function fullInstallCommand(
+  token: string,
+  zipUrl: string,
+  cf?: { accountId: string; apiToken: string },
+): string {
   const escaped = token.replace(/'/g, `'\\''`);
-  return [
+  const lines = [
     `curl -L -o relaybase-worker-install.zip '${zipUrl}'`,
     `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
     `cd relaybase-worker-install`,
@@ -40,8 +46,25 @@ function fullInstallCommand(token: string, zipUrl: string): string {
     `npx wrangler kv namespace create relaybase-app`,
     `npx wrangler r2 bucket create relaybase-inbound`,
     `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,
-    `npx wrangler deploy`,
-  ].join("\n");
+  ];
+  if (cf?.accountId.trim() && cf?.apiToken.trim()) {
+    const acct = cf.accountId.replace(/'/g, `'\\''`);
+    const tok = cf.apiToken.replace(/'/g, `'\\''`);
+    lines.push(`printf '%s' '${acct}' | npx wrangler secret put CF_ACCOUNT_ID`);
+    lines.push(`printf '%s' '${tok}' | npx wrangler secret put CF_API_TOKEN`);
+  } else {
+    lines.push(
+      `# Optional: set CF_ACCOUNT_ID and CF_API_TOKEN secrets so the Worker can send mail`,
+    );
+    lines.push(
+      `# printf '%s' '<account-id>' | npx wrangler secret put CF_ACCOUNT_ID`,
+    );
+    lines.push(
+      `# printf '%s' '<api-token>' | npx wrangler secret put CF_API_TOKEN`,
+    );
+  }
+  lines.push(`npx wrangler deploy`);
+  return lines.join("\n");
 }
 
 async function copyText(value: string): Promise<void> {
@@ -51,9 +74,13 @@ async function copyText(value: string): Promise<void> {
 export function AdminTokenPanel({
   value,
   onChange,
+  cfAccountId,
+  cfApiToken,
 }: {
   value: string;
   onChange: (token: string) => void;
+  cfAccountId?: string;
+  cfApiToken?: string;
 }) {
   const [copied, setCopied] = useState<"cmd" | "token" | null>(null);
 
@@ -73,7 +100,12 @@ export function AdminTokenPanel({
 
   async function copyCommand() {
     if (!value) return;
-    await copyText(fullInstallCommand(value, WORKER_INSTALL_ZIP_URL));
+    await copyText(
+      fullInstallCommand(value, WORKER_INSTALL_ZIP_URL, {
+        accountId: cfAccountId ?? "",
+        apiToken: cfApiToken ?? "",
+      }),
+    );
     setCopied("cmd");
   }
 
@@ -167,7 +199,10 @@ export function AdminTokenPanel({
         </div>
         <pre className="overflow-x-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300">
           {value
-            ? fullInstallCommand(value, WORKER_INSTALL_ZIP_URL)
+            ? fullInstallCommand(value, WORKER_INSTALL_ZIP_URL, {
+                accountId: cfAccountId ?? "",
+                apiToken: cfApiToken ?? "",
+              })
             : "Generate a token to reveal the full command."}
         </pre>
         <p className="text-[11px] text-muted-foreground">

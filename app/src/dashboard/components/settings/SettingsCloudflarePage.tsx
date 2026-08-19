@@ -44,9 +44,12 @@ export function SettingsCloudflarePage() {
         title="Cloudflare connection"
         description={
           <>
-            Optional API token for zone import and Email Routing assist. Stored
-            only in <span className="font-mono">~/.relaybase</span> — not
-            required to deploy the Worker.
+            Cloudflare API token used to import zones and — once the Worker is
+            deployed — authorize it to send mail. Stored only in{" "}
+            <span className="font-mono">~/.relaybase</span> and pushed to the
+            Worker as <span className="font-mono">CF_ACCOUNT_ID</span> /{" "}
+            <span className="font-mono">CF_API_TOKEN</span> secrets during
+            install.
           </>
         }
         editing={cfEditing}

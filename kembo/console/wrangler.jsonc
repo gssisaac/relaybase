@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kembo-console",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-12",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "routes": [
+    { "pattern": "console.relaybase.xyz", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "kembo-console"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KEMBO_LICENSES",
+      "id": "e56178afc7c945ab9cb73b87c851fec4",
+      "preview_id": "e56178afc7c945ab9cb73b87c851fec4"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "KEMBO_ACCOUNTS",
+      "database_name": "kembo-accounts",
+      "database_id": "a82c9e04-07f1-4f4a-9a7f-9c09f5338764",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

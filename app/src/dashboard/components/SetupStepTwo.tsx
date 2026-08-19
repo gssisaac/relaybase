@@ -19,6 +19,7 @@ export function StepTwoBody({
   logs,
   logEndRef,
   cfApiToken,
+  cfAccountId,
   adminToken,
   setAdminToken,
   copiedToken,
@@ -35,6 +36,7 @@ export function StepTwoBody({
   logs: InstallLogEvent[];
   logEndRef: RefObject<HTMLDivElement | null>;
   cfApiToken: string;
+  cfAccountId?: string;
   adminToken: string;
   setAdminToken: (t: string) => void;
   copiedToken: boolean;
@@ -145,7 +147,12 @@ export function StepTwoBody({
             prints your Worker URL, come back and tap &ldquo;I&apos;m
             done&rdquo;.
           </p>
-          <AdminTokenPanel value={adminToken} onChange={setAdminToken} />
+          <AdminTokenPanel
+            value={adminToken}
+            onChange={setAdminToken}
+            cfAccountId={cfAccountId}
+            cfApiToken={cfApiToken}
+          />
           <DesktopErrorBanner error={error} />
           <Button
             type="button"

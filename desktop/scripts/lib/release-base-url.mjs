@@ -36,7 +36,7 @@ export function resolveReleaseBaseUrl(root, env = process.env) {
     return fromEnv.replace(/\/$/, '');
   }
 
-  const cloudflareConfig = path.join(root, '..', 'website', 'cloudflare', 'config.json');
+  const cloudflareConfig = path.join(root, '..', '..', 'kembo', 'website', 'cloudflare', 'config.json');
   if (fs.existsSync(cloudflareConfig)) {
     try {
       const cfg = JSON.parse(fs.readFileSync(cloudflareConfig, 'utf8'));

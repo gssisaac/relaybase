@@ -15,7 +15,7 @@ import { resolveDownloadCdnBaseUrl, resolveReleaseBaseUrl } from './lib/release-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const tauriConfPath = path.join(root, 'src-tauri', 'tauri.conf.json');
-const websiteRelease = path.join(root, '..', 'website', 'public', 'release');
+const websiteRelease = path.join(root, '..', '..', 'kembo', 'website', 'public', 'release');
 const dmgDir = path.join(root, 'src-tauri', 'target', 'release', 'bundle', 'dmg');
 const macosDir = path.join(root, 'src-tauri', 'target', 'release', 'bundle', 'macos');
 

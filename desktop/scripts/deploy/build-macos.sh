@@ -118,14 +118,14 @@ fi
 echo "→ Syncing DMG and updater artifacts to website/public/release"
 node "$ROOT/scripts/sync-release-artifacts.mjs"
 
-LATEST_JSON="$ROOT/../website/public/release/latest.json"
+LATEST_JSON="$ROOT/../../kembo/website/public/release/latest.json"
 if [[ ! -f "$LATEST_JSON" ]]; then
-  echo "✗ website/public/release/latest.json was not created."
+  echo "✗ kembo/website/public/release/latest.json was not created."
   echo "  Updater bundles (.app.tar.gz + .sig) are required for in-app auto-update."
   echo "  Ensure TAURI_SIGNING_PRIVATE_KEY_PATH is set and createUpdaterArtifacts is true."
   exit 1
 fi
-echo "→ Updater manifest: website/public/release/latest.json"
+echo "→ Updater manifest: kembo/website/public/release/latest.json"
 
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" || -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
   echo "→ Uploading release binaries to Cloudflare R2"

@@ -3,6 +3,7 @@ import type { Env } from "./env";
 import { desktopCors } from "./lib/cors";
 import { probeD1Connection } from "./lib/d1-status";
 import { consoleAudienceGroups } from "./routes/console/audience-groups";
+import { consoleAuthTokens } from "./routes/console/auth-tokens";
 import { consoleBroadcasts } from "./routes/console/broadcasts";
 import { consoleConnect } from "./routes/console/connect";
 import {
@@ -10,10 +11,12 @@ import {
   consoleDomains,
   consoleMailbox,
 } from "./routes/console/mailbox";
+import { consoleBranding } from "./routes/console/branding";
 import { consoleKeys } from "./routes/console/keys";
 import { consoleOpsLogs } from "./routes/console/ops-logs";
 import { consoleRecoverAdmin } from "./routes/console/recover-admin";
 import { consoleRegisterOwner } from "./routes/console/register-owner";
+import { consoleSendLogs } from "./routes/console/send-logs";
 import { consoleStats } from "./routes/console/stats";
 import { mailFavicon } from "./routes/mail/favicon";
 import { mailInbox } from "./routes/mail/inbox";
@@ -61,7 +64,10 @@ app.get("/health", async (c) => {
 
 // End-user management (admin-token auth).
 app.route("/console/keys", consoleKeys);
+app.route("/console/auth-tokens", consoleAuthTokens);
 app.route("/console/ops-logs", consoleOpsLogs);
+app.route("/console/send-logs", consoleSendLogs);
+app.route("/console/branding", consoleBranding);
 app.route("/console/connect", consoleConnect);
 app.route("/console/register-owner", consoleRegisterOwner);
 app.route("/console/recover-admin", consoleRecoverAdmin);

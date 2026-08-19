@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-RELEASE_DIR="$ROOT/../website/public/release"
+RELEASE_DIR="$ROOT/../../kembo/website/public/release"
 BUCKET="${RELAYBASE_RELEASE_R2_BUCKET:-relaybase-releases}"
 META_PATH="$RELEASE_DIR/artifacts.json"
 IMMUTABLE_CACHE_CONTROL="public, max-age=31536000, immutable"
@@ -25,8 +25,8 @@ TGZ="$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz"
 SIG="$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz.sig"
 
 # Prefer website wrangler if present; otherwise use desktop's pnpm dlx.
-if [[ -f "$ROOT/../website/package.json" ]]; then
-  WRANGLER=(pnpm --dir "$ROOT/../website" dlx wrangler@4)
+if [[ -f "$ROOT/../../kembo/website/package.json" ]]; then
+  WRANGLER=(pnpm --dir "$ROOT/../../kembo/website" dlx wrangler@4)
 else
   WRANGLER=(pnpm --dir "$ROOT" dlx wrangler@4)
 fi

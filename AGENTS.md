@@ -26,13 +26,14 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 
 | Layer | Store | Use for |
 |-------|--------|---------|
-| Remote | Product Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 inbound | Domains, addresses, audience, broadcasts, key hashes, send logs, inbox |
+| Remote | Product Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 inbound | Domains, addresses, audience, broadcasts, key hashes (`srv:key:*`), dashboard auth token hashes (`srv:authtoken:*`), send logs, inbox |
 | Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). KV `srv:sendlog:*` stays authoritative for send history. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
-| Remote | Console `RELAYBASE_ACCOUNTS` D1 + `RELAYBASE_LICENSES` KV (`console.relaybase.xyz`, Next.js/OpenNext) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription). The product Worker no longer serves `/v1/license/*` or `/v1/waitlist`. |
-| Local | `~/.relaybase` | Credentials, team-login, API key plaintext, mail/UI/dashboard cache |
+| Remote | Kembo operations KV `KEMBO_OPS` (`kembo/admin`, worker `kembo-admin`) | Operator config only: product Worker URL + service admin token (`workerUrl`, `adminToken`). **Never** Cloudflare credentials, end-user tokens, or plaintext API keys. CF creds + admin token live on the Worker as wrangler secrets; DMARC branding at `srv:catalog:branding`; send logs at `srv:sendlog:*`. |
+| Remote | Console `KEMBO_ACCOUNTS` D1 (`kembo-accounts`) + `KEMBO_LICENSES` KV (`kembo-licenses`) (`console.relaybase.xyz`, Next.js/OpenNext, worker `kembo-console`) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription). The product Worker no longer serves `/v1/license/*` or `/v1/waitlist`. |
+| Local | `~/.relaybase` | Credentials, team-login, API key plaintext vault (`api-keys.json`), mail/UI/dashboard cache |
 | Local (phone) | Flutter secure storage + Hive | Mobile email + password; inbox/draft cache — **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)** |
 
-Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, a second mail-Worker KV binding, or license/account/billing routes on the product Worker (those live on `console.relaybase.xyz`). All UI modes call the product Worker through `desktopAwareFetch` + `email-api-map.ts`; account/license/billing calls go to `console.relaybase.xyz`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**. Mobile uses `/mobile/*` with per-account password auth (not admin token).
+Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, a second mail-Worker KV binding, or license/account/billing routes on the product Worker (those live on `console.relaybase.xyz`). Do **not** store Cloudflare credentials, end-user dashboard auth tokens, or plaintext API keys in `KEMBO_OPS` — `KEMBO_OPS` holds only `workerUrl` + `adminToken`; CF creds come from Worker wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), tokens live in the product Worker's `RELAYBASE_APP` KV (`srv:authtoken:*`, hash-indexed), and plaintext API keys live only in `~/.relaybase/api-keys.json`. All UI modes call the product Worker through `desktopAwareFetch` + `email-api-map.ts`; account/license/billing calls go to `console.relaybase.xyz`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**. Mobile uses `/mobile/*` with per-account password auth (not admin token).
 
 ## Email commands (summary)
 

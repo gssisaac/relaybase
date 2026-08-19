@@ -33,7 +33,7 @@ function firstNonEmpty(...values) {
   return "";
 }
 
-const envFile = loadDotEnv(path.join(root, "admin", ".env.local"));
+const envFile = loadDotEnv(path.join(root, "kembo", "admin", ".env.local"));
 const settingsPath = path.join(root, "data", "products", "relaybase", "settings.json");
 const settings = fs.existsSync(settingsPath)
   ? JSON.parse(fs.readFileSync(settingsPath, "utf8"))

@@ -22,6 +22,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
+use crate::cloudflare::resolve_account_id;
 use crate::secrets::StoredCredentials;
 use crate::worker::DEFAULT_SCRIPT;
 
@@ -36,6 +37,7 @@ pub struct AutoInstallResult {
     pub admin_token: String,
     pub kv_namespace_id: String,
     pub r2_bucket: String,
+    pub account_id: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -280,12 +282,32 @@ fn parse_worker_url(output: &str) -> Option<String> {
 pub async fn auto_install_worker(
     app: AppHandle,
     api_token: String,
-    _account_id: Option<String>,
+    account_id: Option<String>,
 ) -> Result<AutoInstallResult, String> {
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
         return Err("A Cloudflare API token is required.".into());
     }
+
+    // Resolve the Cloudflare account id (use the provided one, else look it up)
+    // so we can push CF_ACCOUNT_ID as a Worker secret alongside CF_API_TOKEN.
+    let account_id = match account_id
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+    {
+        Some(id) => id,
+        None => {
+            let _ = app.emit(
+                "install-log",
+                LogEvent {
+                    step: "prepare".into(),
+                    level: "info".into(),
+                    line: "Resolving Cloudflare account id from API token…".into(),
+                },
+            );
+            resolve_account_id(&api_token).await?
+        }
+    };
 
     let template = resolve_template_dir()?;
     let _ = app.emit(
@@ -375,6 +397,44 @@ pub async fn auto_install_worker(
         },
     );
 
+    // 3b) Cloudflare runtime secrets so the Worker can send mail without the
+    //     ops dashboard syncing them into KV.
+    run_wrangler(
+        &app,
+        "secret",
+        &work_dir,
+        &["secret", "put", "CF_ACCOUNT_ID"],
+        &api_token,
+        Some(account_id.as_bytes()),
+    )
+    .await?;
+    let _ = app.emit(
+        "install-log",
+        LogEvent {
+            step: "secret".into(),
+            level: "info".into(),
+            line: "CF_ACCOUNT_ID secret set".to_string(),
+        },
+    );
+
+    run_wrangler(
+        &app,
+        "secret",
+        &work_dir,
+        &["secret", "put", "CF_API_TOKEN"],
+        &api_token,
+        Some(api_token.as_bytes()),
+    )
+    .await?;
+    let _ = app.emit(
+        "install-log",
+        LogEvent {
+            step: "secret".into(),
+            level: "info".into(),
+            line: "CF_API_TOKEN secret set".to_string(),
+        },
+    );
+
     // 4) Deploy
     let deploy_out = run_wrangler(
         &app,
@@ -406,6 +466,7 @@ pub async fn auto_install_worker(
         admin_token,
         kv_namespace_id: kv_id,
         r2_bucket: R2_BUCKET.to_string(),
+        account_id,
     })
 }
 
@@ -417,7 +478,10 @@ pub fn merge_into_credentials(
     account_id: Option<String>,
 ) -> StoredCredentials {
     StoredCredentials {
-        account_id: account_id.unwrap_or_else(|| existing.account_id.clone()),
+        account_id: account_id
+            .filter(|a| !a.trim().is_empty())
+            .or_else(|| (!result.account_id.is_empty()).then(|| result.account_id.clone()))
+            .unwrap_or_else(|| existing.account_id.clone()),
         api_token: existing.api_token.clone(),
         worker_url: result.worker_url.clone(),
         admin_token: result.admin_token.clone(),

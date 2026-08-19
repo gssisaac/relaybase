@@ -20,6 +20,7 @@ const staging = join(serverRoot, "dist", "relaybase-worker-install");
 const zipPath = join(serverRoot, "dist", "relaybase-worker-install.zip");
 const websiteOut = join(
   repoRoot,
+  "kembo",
   "website",
   "public",
   "downloads",

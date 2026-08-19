@@ -51,10 +51,10 @@ echo "  → desktop/app-icon.png (1024)"
 echo "  → desktop/src-tauri/icons/* (tauri icon)"
 
 # Website public assets
-"${IM[@]}" "$MASTER" -resize 512x512 -strip PNG32:"$ROOT/website/public/icon.png"
-"${IM[@]}" "$MASTER" -resize 32x32 -strip PNG32:"$ROOT/website/public/favicon.png"
-"${IM[@]}" "$MASTER" -resize 180x180 -strip PNG32:"$ROOT/website/public/apple-touch-icon.png"
-echo "  → website/public/{icon,favicon,apple-touch-icon}.png"
+"${IM[@]}" "$MASTER" -resize 512x512 -strip PNG32:"$ROOT/kembo/website/public/icon.png"
+"${IM[@]}" "$MASTER" -resize 32x32 -strip PNG32:"$ROOT/kembo/website/public/favicon.png"
+"${IM[@]}" "$MASTER" -resize 180x180 -strip PNG32:"$ROOT/kembo/website/public/apple-touch-icon.png"
+echo "  → kembo/website/public/{icon,favicon,apple-touch-icon}.png"
 
 # Desktop Next app favicon / sidebar mark
 "${IM[@]}" "$MASTER" -resize 256x256 -strip PNG32:"$ROOT/app/public/icon.png"

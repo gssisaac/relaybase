@@ -121,8 +121,8 @@ delete-by-`id` + insert in the same `db.batch()` call (see
 
 Migrations for this database live in `server/migrations-inbox/`, separate
 from `server/migrations-logs/` (`RELAYBASE_LOGS`) and `server/migrations/`
-(`RELAYBASE_WAITLIST`) — never mix migration directories across the three
-D1 databases.
+(legacy — the old `relaybase-waitlist` D1 it targeted has been deleted) — never
+mix migration directories across D1 databases.
 
 ---
 
@@ -430,8 +430,9 @@ fetch path.
 - **Never interpolate raw user input into a `MATCH` expression.** Always
   go through `buildFtsMatchQuery`.
 - **Migrations for this database live in `server/migrations-inbox/`
-  only.** Do not add rows to `server/migrations/` (`RELAYBASE_WAITLIST`)
-  or `server/migrations-logs/` (`RELAYBASE_LOGS`).
+  only.** Do not add rows to `server/migrations/` (legacy — the old
+  `relaybase-waitlist` D1 has been deleted) or `server/migrations-logs/`
+  (`RELAYBASE_LOGS`).
 - **Search results are flat, not threaded.** Do not attempt to run
   `groupConversations` over search results — indexed rows don't carry
   enough Sent-side data to reconstruct a thread reliably. If a hit needs

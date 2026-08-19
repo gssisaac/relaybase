@@ -351,6 +351,7 @@ export function WorkerInstallPanel() {
               logs={logs}
               logEndRef={logEndRef}
               cfApiToken={cfApiToken}
+              cfAccountId={credentials?.accountId ?? ""}
               adminToken={adminToken}
               setAdminToken={setAdminToken}
               copiedToken={copiedToken}

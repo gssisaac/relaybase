@@ -24,10 +24,10 @@ This structurally removes:
 | Deployable | URL / artifact | Role |
 |---|---|---|
 | Product Worker | customer `*.workers.dev` + isaac dogfood `relaybase-api.gssisaac.worker.dev` | mail/console/mobile/v1 product routes only (no license/account/billing) |
-| Console | `console.relaybase.xyz` (Next.js, OpenNext) | account, auth, license, Stripe billing, recovery-token issuance |
-| Website | `relaybase.xyz` (static) | marketing; login/signup/account links → `console.relaybase.xyz` |
-| Admin | `admin.relaybase.xyz` (OpenNext) | internal ops; license admin proxies to `console.relaybase.xyz` |
-| Customer install template | `server/customer-install/` (packed to `website/public/downloads/relaybase-worker-install.zip`) | sanitized Worker template for customer accounts |
+| Console (kembo) | `console.relaybase.xyz` (Next.js, OpenNext, worker `kembo-console`) | account, auth, license, Stripe billing, recovery-token issuance |
+| Website (kembo) | `relaybase.xyz` (static, worker `kembo-website`) | marketing; login/signup/account links → `console.relaybase.xyz` |
+| Admin (kembo) | `admin.relaybase.xyz` (OpenNext, worker `kembo-admin`) | internal ops; license admin proxies to `console.relaybase.xyz`. Binds `KEMBO_OPS` (operator config only) — never end-user tokens or plaintext API keys |
+| Customer install template | `server/customer-install/` (packed to `kembo/website/public/downloads/relaybase-worker-install.zip`) | sanitized Worker template for customer accounts |
 
 The old `api.relaybase.xyz` custom domain was removed; isaac's dogfood Worker runs on its default `relaybase-api.gssisaac.worker.dev` URL.
 

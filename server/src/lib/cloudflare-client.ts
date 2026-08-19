@@ -347,10 +347,90 @@ export class CloudflareClient {
     return data.result ?? [];
   }
 
+  async createDnsRecord(
+    zoneId: string,
+    record: {
+      type: string;
+      name: string;
+      content: string;
+      proxied?: boolean;
+      priority?: number;
+      ttl?: number;
+    },
+  ): Promise<CfDnsRecord> {
+    const data = await this.request<CfDnsRecord>(
+      `/zones/${zoneId}/dns_records`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: record.type,
+          name: record.name,
+          content: record.content,
+          proxied: record.proxied ?? false,
+          priority: record.priority,
+          ttl: record.ttl ?? 1,
+        }),
+      },
+    );
+    return data.result;
+  }
+
+  async updateDnsRecord(
+    zoneId: string,
+    recordId: string,
+    record: {
+      type: string;
+      name: string;
+      content: string;
+      proxied?: boolean;
+      priority?: number;
+      ttl?: number;
+    },
+  ): Promise<CfDnsRecord> {
+    const data = await this.request<CfDnsRecord>(
+      `/zones/${zoneId}/dns_records/${recordId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          type: record.type,
+          name: record.name,
+          content: record.content,
+          proxied: record.proxied ?? false,
+          priority: record.priority,
+          ttl: record.ttl ?? 1,
+        }),
+      },
+    );
+    return data.result;
+  }
+
   async deleteDnsRecord(zoneId: string, recordId: string): Promise<void> {
     await this.request<null>(`/zones/${zoneId}/dns_records/${recordId}`, {
       method: "DELETE",
     });
+  }
+
+  /** Match by type + normalized name; update if found, else create. */
+  async upsertDnsRecord(
+    zoneId: string,
+    record: {
+      type: string;
+      name: string;
+      content: string;
+      proxied?: boolean;
+      priority?: number;
+      ttl?: number;
+    },
+  ): Promise<CfDnsRecord> {
+    const records = await this.listDnsRecords(zoneId, { type: record.type });
+    const targetName = record.name.toLowerCase();
+    const existing = records.find(
+      (r) => r.type === record.type && r.name.toLowerCase() === targetName,
+    );
+    if (existing) {
+      return this.updateDnsRecord(zoneId, existing.id, record);
+    }
+    return this.createDnsRecord(zoneId, record);
   }
 
   async getEmailRoutingSettings(zoneId: string): Promise<CfEmailRoutingSettings> {

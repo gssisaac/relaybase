@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
 CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);
 ```
 
-Migrations live in `server/migrations-logs/` (separate from `server/migrations/` used by `RELAYBASE_WAITLIST`) so the two D1 databases never collide.
+Migrations live in `server/migrations-logs/` (separate from `server/migrations/`, which is legacy and no longer bound — the old `relaybase-waitlist` D1 it targeted was deleted) so D1 migration directories never collide.
 
 ---
 
@@ -174,7 +174,7 @@ Dashboard home (`ConnectionStatusCards`) and Settings show a **D1** status card 
 - **Customer install ZIP keeps D1 optional.** `server/customer-install/wrangler.toml` has the binding commented out; `recordOpsLog` no-ops when the binding is missing.
 - **Soft-fail only.** A D1 write error must never break a send or an inbound store. Helpers catch + `console.error`; routes continue.
 - **Bounce detection is best-effort.** Missed bounces are acceptable; false bounce classification of normal mail is not. Only fill fallback `bodyText` when the parsed body is empty.
-- **Migrations dir is `migrations-logs/`.** Do not add product-log migrations under `server/migrations/` (that dir belongs to `RELAYBASE_WAITLIST`).
+- **Migrations dir is `migrations-logs/`.** Do not add product-log migrations under `server/migrations/` (that dir is legacy — the old `relaybase-waitlist` D1 it targeted has been deleted).
 
 ---
 

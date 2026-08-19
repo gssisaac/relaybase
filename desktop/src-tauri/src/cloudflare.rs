@@ -79,6 +79,22 @@ pub async fn verify_token(account_id: &str, api_token: &str) -> Result<TokenVeri
     })
 }
 
+/// Resolve the Cloudflare account id for a token by listing `/accounts`.
+/// Used to push `CF_ACCOUNT_ID` as a Worker secret during auto-install when
+/// the caller does not already know the account id.
+pub async fn resolve_account_id(api_token: &str) -> Result<String, String> {
+    let client = CfClient {
+        account_id: String::new(),
+        api_token: api_token.to_string(),
+    };
+    let value = cf_request(&client, reqwest::Method::GET, "/accounts?per_page=50", None).await?;
+    let id = value
+        .pointer("/result/0/id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "No Cloudflare accounts accessible with this token.".to_string())?;
+    Ok(id.to_string())
+}
+
 pub async fn list_zones(client: &CfClient) -> Result<Vec<ZoneSummary>, String> {
     let mut zones = Vec::new();
     let mut page = 1u32;

@@ -59,6 +59,7 @@ try {
     { path: ["keys"] },
     { path: ["audience"] },
     { path: ["broadcasts"] },
+    { path: ["logs"] },
     { path: ["settings"] },
     { path: ["email"] },
     { path: ["email", "inbox"] },

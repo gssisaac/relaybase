@@ -37,7 +37,7 @@ export function SettingsInboundR2Page() {
         usedBytes={configured ? (workerStatus?.r2TotalBytes ?? null) : null}
         limitBytes={R2_INBOUND_SIZE_LIMIT_BYTES}
         pending={sizePending}
-        truncated={workerStatus?.r2UsageTruncated}
+        truncated={workerStatus?.r2UsageTruncated ?? undefined}
         footer={
           hasWorker ? (
             <div>

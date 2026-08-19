@@ -85,12 +85,16 @@ describe("normalizeEntryPath", () => {
     assert.equal(normalizeEntryPath("/broadcasts/new"), "/broadcasts?new=1");
   });
 
-  it("defaults bare /settings to cloudflare tab", () => {
-    assert.equal(normalizeEntryPath("/settings"), "/settings/cloudflare");
-    assert.equal(normalizeEntryPath("/settings/"), "/settings/cloudflare");
+  it("defaults bare /settings to the settings root", () => {
+    assert.equal(normalizeEntryPath("/settings"), "/settings");
+    assert.equal(normalizeEntryPath("/settings/"), "/settings");
     assert.equal(
       normalizeEntryPath("/settings/worker"),
-      "/settings/worker",
+      "/settings?tab=worker",
+    );
+    assert.equal(
+      normalizeEntryPath("/settings/cloudflare"),
+      "/settings",
     );
   });
 });

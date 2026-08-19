@@ -13,10 +13,12 @@ import {
   audienceDetailHref,
   broadcastDetailFromSearch,
   broadcastDetailHref,
+  settingsTabFromSearch,
+  settingsTabFromSegment,
+  settingsTabHref,
   type AccountDetailTab,
   type AudienceDetailTab,
   type BroadcastDetailTab,
-  settingsTabFromSegment,
 } from "@/dashboard/paths";
 import { AudienceGroupsView } from "@/dashboard/components/AudienceGroupsView";
 import {
@@ -40,13 +42,20 @@ import { LogsView } from "@/dashboard/components/LogsView";
 import { SettingsView } from "@/dashboard/components/SettingsView";
 import { UserDashboardView } from "@/dashboard/components/UserDashboardView";
 
-function SettingsRedirect() {
+function SettingsRoutes({ pathTab }: { pathTab?: string }) {
   const router = useRouter();
-  const cloudflare = useProductHref("settings", "cloudflare");
+  const searchParams = useSearchParams();
+  const fromQuery = settingsTabFromSearch(searchParams);
+
+  // Migrate legacy `/settings/{tab}` → `/settings?tab=` (static-export safe).
   useEffect(() => {
-    router.replace(cloudflare);
-  }, [cloudflare, router]);
-  return null;
+    if (!pathTab || fromQuery) return;
+    router.replace(settingsTabHref(settingsTabFromSegment(pathTab)));
+  }, [fromQuery, pathTab, router]);
+
+  if (pathTab && !fromQuery) return null;
+  const tab = fromQuery?.tab ?? settingsTabFromSegment(pathTab);
+  return <SettingsView tab={tab} />;
 }
 
 function KeysRedirect() {
@@ -240,10 +249,13 @@ export function DashboardPanelView({ subPath }: PanelViewProps) {
     if (second === "keys" || second === "aws") {
       return <KeysRedirect />;
     }
-    if (!second) {
-      return <SettingsRedirect />;
-    }
-    return <SettingsView tab={settingsTabFromSegment(second)} />;
+    const pathTab =
+      second && second !== "keys" && second !== "aws" ? second : undefined;
+    return (
+      <Suspense fallback={null}>
+        <SettingsRoutes pathTab={pathTab} />
+      </Suspense>
+    );
   }
 
   if (root === "accounts") {

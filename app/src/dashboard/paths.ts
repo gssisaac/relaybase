@@ -72,7 +72,19 @@ const SETTINGS_TABS: SettingsTab[] = [
 ];
 
 export function settingsTabHref(tab: SettingsTab = "cloudflare"): string {
-  return `/settings/${tab}`;
+  if (tab === "cloudflare") return "/settings";
+  return `/settings?tab=${tab}`;
+}
+
+export function settingsTabFromSearch(searchParams: {
+  get: (name: string) => string | null;
+}): { tab: SettingsTab } | null {
+  const raw = searchParams.get("tab")?.trim().toLowerCase();
+  if (!raw) return null;
+  if (SETTINGS_TABS.includes(raw as SettingsTab)) {
+    return { tab: raw as SettingsTab };
+  }
+  return null;
 }
 
 export function settingsTabFromSegment(segment?: string): SettingsTab {

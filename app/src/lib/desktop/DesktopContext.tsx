@@ -10,6 +10,10 @@ import {
   type DesktopCredentials,
   type DesktopTeamLogin,
 } from "@/lib/desktop/bridge";
+import {
+  readDesktopSessionCache,
+  writeDesktopSessionCache,
+} from "@/lib/desktop/desktop-session-cache";
 
 type DesktopContextValue = {
   isDesktop: boolean;
@@ -47,13 +51,22 @@ async function loadLocalCredentials(): Promise<DesktopCredentials | null> {
 }
 
 export function DesktopProvider({ children }: { children: React.ReactNode }) {
-  const [isDesktop, setIsDesktop] = React.useState(false);
-  const [ready, setReady] = React.useState(false);
-  const [credentials, setCredentials] =
-    React.useState<DesktopCredentials | null>(null);
-  const [teamLogin, setTeamLogin] = React.useState<DesktopTeamLogin | null>(
-    null,
+  const cached = readDesktopSessionCache();
+  const [isDesktop, setIsDesktop] = React.useState(
+    () => cached?.isDesktop ?? isDesktopRuntime(),
   );
+  const [ready, setReady] = React.useState(() => cached?.ready ?? false);
+  const [credentials, setCredentials] = React.useState<DesktopCredentials | null>(
+    () => cached?.credentials ?? null,
+  );
+  const [teamLogin, setTeamLogin] = React.useState<DesktopTeamLogin | null>(
+    () => cached?.teamLogin ?? null,
+  );
+
+  React.useLayoutEffect(() => {
+    const snap = readDesktopSessionCache();
+    if (snap?.credentials) applyCredentialGlobals(snap.credentials);
+  }, []);
 
   const refresh = React.useCallback(async () => {
     const desktop = isDesktopRuntime();
@@ -65,10 +78,22 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
       setCredentials(creds);
       setTeamLogin(team);
       applyCredentialGlobals(creds);
+      writeDesktopSessionCache({
+        isDesktop: desktop,
+        ready: true,
+        credentials: creds,
+        teamLogin: team,
+      });
     } catch {
       setCredentials(null);
       setTeamLogin(null);
       applyCredentialGlobals(null);
+      writeDesktopSessionCache({
+        isDesktop: desktop,
+        ready: true,
+        credentials: null,
+        teamLogin: null,
+      });
     } finally {
       setReady(true);
     }
@@ -85,6 +110,13 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     (creds: DesktopCredentials | null) => {
       setCredentials(creds);
       applyCredentialGlobals(creds);
+      const snap = readDesktopSessionCache();
+      writeDesktopSessionCache({
+        isDesktop: snap?.isDesktop ?? isDesktopRuntime(),
+        ready: true,
+        credentials: creds,
+        teamLogin: snap?.teamLogin ?? null,
+      });
     },
     [],
   );

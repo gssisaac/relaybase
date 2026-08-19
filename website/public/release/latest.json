@@ -1,11 +1,11 @@
 {
   "version": "0.1.0",
   "notes": "# Relaybase 0.1.0\n\n## Highlights\n- First signed macOS desktop release\n- Cloudflare Email Routing Worker install from the Mac app\n- Inbox, compose, and multi-domain account management\n\n## Changes\n- Initial Tauri shell with notarized DMG distribution\n- Auto-update artifacts hosted on download.relaybase.xyz",
-  "pub_date": "2026-08-10T11:01:51.178Z",
+  "pub_date": "2026-08-19T09:27:25.980Z",
   "platforms": {
     "darwin-aarch64": {
       "url": "https://download.relaybase.xyz/Relaybase.0.1.0.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmZHMUhrU1F6QjNYQWFOTHkrU3ZCQVBCcDgvR0tzZklPUFZQcWxORWFBZ1JLNFhmMktsS3BFZllhNCthTVRnbVkrU1AvUm5kLytkYis2MFBFNmw5NndzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2MzU5Njk2CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKZnc0YlJVV1NuV2ZRb0VZL2tKWnNUVXVVd3Z0RUFCb1ZvQ2NwZ0FCb3ZYS1pFd3ZFaS8vQlNVT3dsUzBCSDRSWTh6MU4rL3ZNejEyYktqSzNZNG9HRHc9PQo="
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlFDeDFoczRoS2FWVFhHbnpmYmVWbVE5Ri91eTdobkZYNGh0d2NKcy9zcmxHWjM3NE5hSCtYMitPWWl3Ti9LRDJ2cUFHTXU1cHNZajF6VXdYVmErWEFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MTMxNjE3CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKOTVpRjIvTFFQUnhrUFp3NXd1dUtzZXNMMTd5WjJYdnRoWm4xbXRHQWc1SjlrZTBPWmg5eGYzSW50SVkvRFhyVkZqdS9Bdk0xSWhTaWFLVE90NjVsQUE9PQo="
     }
   }
 }

@@ -37,7 +37,10 @@ export function EmailShell({
     audience,
     settingsBase,
   ].some(
-    (href) => pathname === href || pathname.startsWith(`${href}/`),
+    (href) =>
+      pathname === href ||
+      pathname.startsWith(`${href}/`) ||
+      pathname.startsWith(`${href}?`),
   );
   const isMailbox =
     forceFullBleed ||

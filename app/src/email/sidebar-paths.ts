@@ -119,7 +119,27 @@ export function normalizeEntryPath(path: string): string {
   }
 
   if (pathname === "/settings" || pathname === "/settings/") {
-    return "/settings/cloudflare";
+    return "/settings";
+  }
+
+  const settingsMatch = pathname.match(/^\/settings\/([^/]+)\/?$/);
+  if (settingsMatch) {
+    let tab = settingsMatch[1]!;
+    try {
+      tab = decodeURIComponent(tab);
+    } catch {
+      /* keep raw */
+    }
+    const allowed = [
+      "cloudflare",
+      "worker",
+      "admin-token",
+      "inbound-r2",
+      "d1",
+    ] as const;
+    if ((allowed as readonly string[]).includes(tab)) {
+      return tab === "cloudflare" ? "/settings" : `/settings?tab=${tab}`;
+    }
   }
 
   if (pathname === "/" || !pathname.startsWith("/")) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
@@ -16,7 +16,6 @@ import {
   DesktopProvider,
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
-import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { DomainProgressBanner } from "@/dashboard/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -193,24 +192,6 @@ export function DesktopDashboardGate({
   /** Ignored — kept for call-site compatibility during migration. */
   userId?: string;
 }) {
-  const [desktop, setDesktop] = useState<boolean | null>(null);
-
-  useLayoutEffect(() => {
-    const sync = () => setDesktop(isDesktopRuntime());
-    sync();
-    const t = window.setTimeout(sync, 50);
-    return () => window.clearTimeout(t);
-  }, []);
-
-  // Wait one frame so Tauri inject can be detected before choosing shell chrome.
-  if (desktop === null) {
-    return (
-      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
-  }
-
   return (
     <DesktopShell>
       <DesktopProvider>

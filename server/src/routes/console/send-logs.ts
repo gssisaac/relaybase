@@ -17,7 +17,7 @@ consoleSendLogs.get("/", async (c) => {
     return c.json({ error: "status must be all, failed, or success" }, 400);
   }
 
-  const result = await listSendLogs(c.env.RELAYBASE_APP, {
+  const result = await listSendLogs(c.env.INBOUND, {
     limit: Number.isFinite(limit) ? limit : 100,
     status: status as "all" | "failed" | "success",
     domain: domain || undefined,

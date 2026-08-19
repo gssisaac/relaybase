@@ -56,7 +56,7 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
         ok: !mismatch,
         summary: mismatch
           ? legacyWorkerName
-            ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-inbound`
+            ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-mailbox`
             : `Worker inbound bucket mismatch (worker: ${health.inbound.bucketName}, expected: ${expectedBucket})`
           : `Worker inbound bucket matches (${expectedBucket})`,
         detail: mismatch

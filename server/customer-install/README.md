@@ -19,7 +19,7 @@ This package deploys the Relaybase routing Worker into **your** Cloudflare accou
 
 ```bash
 npx wrangler kv namespace create relaybase-app
-npx wrangler r2 bucket create relaybase-inbound
+npx wrangler r2 bucket create relaybase-mailbox
 ```
 
 Copy the KV **id** into `wrangler.toml` (replace the `REPLACE_WITH_relaybase-app_ID` placeholder).
@@ -76,5 +76,5 @@ Account, license, billing, and recovery-token issuance are **not** on this Worke
 | Verify → unauthorized | Admin token in the app must match `ADMIN_TOKEN` secret (or the KV `srv:config:admin` value set by recovery) |
 | Verify → not Relaybase | Wrong URL, or deploy failed — open `/health` in a browser |
 | Deploy fails on KV id | Paste real namespace ids into `wrangler.toml` |
-| R2 not configured in `/health` | Ensure bucket `relaybase-inbound` exists and is bound as `INBOUND` |
+| R2 not configured in `/health` | Ensure bucket `relaybase-mailbox` exists and is bound as `INBOUND` |
 | Lost ADMIN_TOKEN | Desktop app → Settings → Reset admin token (uses a `console.relaybase.xyz` recovery token; no Wrangler) |

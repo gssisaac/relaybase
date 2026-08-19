@@ -59,7 +59,7 @@ export type KeyRecord = {
 ```bash
 npx wrangler kv namespace create relaybase-keys
 npx wrangler kv namespace create relaybase-api
-npx wrangler r2 bucket create relaybase-inbound
+npx wrangler r2 bucket create relaybase-mailbox
 ```
 ```
 

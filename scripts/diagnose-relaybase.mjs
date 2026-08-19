@@ -59,9 +59,10 @@ function resolveInboundR2BucketName(stored) {
   if (
     !trimmed ||
     trimmed === "flare-email-inbound" ||
-    trimmed.startsWith("flare-email-inbound-")
+    trimmed.startsWith("flare-email-inbound-") ||
+    trimmed === "relaybase-inbound"
   ) {
-    return "relaybase-inbound";
+    return "relaybase-mailbox";
   }
   return String(stored ?? "").trim();
 }
@@ -154,11 +155,11 @@ if (workerUrl) {
       !mismatch,
       mismatch
         ? health.inbound.bucketName.toLowerCase().startsWith("flare-email-inbound")
-          ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-inbound`
+          ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-mailbox`
           : `Bucket mismatch — worker: ${health.inbound.bucketName}, config: ${bucketName}`
         : `Worker bucket matches (${bucketName})`,
       mismatch
-        ? "Redeploy worker: server/wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-inbound, then npm run deploy --prefix server"
+        ? "Redeploy worker: server/wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-mailbox, then npm run deploy --prefix server"
         : undefined,
     );
   }

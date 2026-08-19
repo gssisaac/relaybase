@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Import a Gmail Takeout mbox into relaybase-inbound as inbound/{domain}/{id}/.
+ * Import a Gmail Takeout mbox into relaybase-mailbox as inbound/{domain}/{id}/
+ * (and sent/{domain}/_list.json for Sent-labeled messages).
  *
  * Usage (from server/):
  *   node scripts/import-mbox.mjs
@@ -30,7 +31,7 @@ const LOCAL_SENT_PATH = argValue(
 const DEFAULT_MBOX =
   "/Users/isaaclee/operation/33.wedesk.so/Takeout/Mail/All mail Including Spam and Trash.mbox";
 const DEFAULT_EMAIL = "isaac@wedesk.so";
-const BUCKET = "relaybase-inbound";
+const BUCKET = "relaybase-mailbox";
 
 function accountIdFromWranglerToml() {
   let text;
@@ -353,7 +354,7 @@ function mergeLocalSent(sent) {
 
 async function writeSentIndex(sent) {
   await r2Put(
-    `inbound/${DOMAIN}/_sent.json`,
+    `sent/${DOMAIN}/_list.json`,
     JSON.stringify({ version: 1, messages: sent }),
     "application/json",
   );

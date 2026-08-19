@@ -167,7 +167,7 @@ relaybase/
 
 ## Worker — deploy
 
-The product Worker (`server/`) deploys into the **customer's** Cloudflare account (end-user side). It binds a single KV namespace as `RELAYBASE_APP` (catalog, keys, auth tokens, send logs) plus the `INBOUND` R2 bucket and D1 databases.
+The product Worker (`server/`) deploys into the **customer's** Cloudflare account (end-user side). It binds a single KV namespace as `RELAYBASE_APP` (catalog, keys, auth tokens) plus the `INBOUND` R2 mailbox bucket and D1 databases.
 
 ```bash
 cd server
@@ -191,8 +191,8 @@ Bindings in `server/wrangler.toml`:
 
 | Binding | Resource | Purpose |
 |---------|----------|---------|
-| `RELAYBASE_APP` | Workers KV | Catalog, API key hashes (`srv:key:*`), dashboard auth token hashes (`srv:authtoken:*`), send logs, inbound events, webhook registry |
-| `INBOUND` | R2 `relaybase-inbound` | Raw inbound mail (`meta.json`, `raw.eml`, attachments) |
+| `RELAYBASE_APP` | Workers KV | Catalog, API key hashes (`srv:key:*`), dashboard auth token hashes (`srv:authtoken:*`), inbound events, webhook registry |
+| `INBOUND` | R2 `relaybase-mailbox` | Mailbox objects: inbound mail (`inbound/{domain}/…`) and sent mail (`sent/{domain}/…`, `sent/_sendlog/…`) |
 | `RELAYBASE_LOGS` | D1 `relaybase-logs` | Ops-event log (compose/API/broadcast sends + inbound bounces) |
 | `RELAYBASE_INBOX_INDEX` | D1 `relaybase-inbox-index` | FTS5 inbound search index (optional) |
 
@@ -219,7 +219,7 @@ Bindings in `server/wrangler.toml`:
 | `RELAYBASE_CF_API_TOKEN` | Email Sending / account API |
 | `RELAYBASE_CF_ZONE_ID` | Zone for Email Routing |
 | `RELAYBASE_CF_DNS_API_TOKEN` | DNS / routing rules token |
-| `RELAYBASE_INBOUND_R2_BUCKET` | Inbound bucket name |
+| `RELAYBASE_INBOUND_R2_BUCKET` | Mailbox bucket name (`relaybase-mailbox`) |
 
 ### Consuming services (your apps)
 

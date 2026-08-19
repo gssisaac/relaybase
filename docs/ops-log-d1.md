@@ -29,7 +29,7 @@ Read this before changing send/bounce logging, adding a Log page event kind, or 
 
 ## Why a second log store
 
-Relaybase already had KV `srv:sendlog:*` (`server/src/lib/send-logs.ts`) for send history. That store is **authoritative** for Account Logs (`/console/stats/account-logs`) and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route, now a direct KV read from the admin server). Do **not** remove or rewrite KV send logs.
+Relaybase already had send history in `server/src/lib/send-logs.ts` (now R2 `sent/_sendlog/*`; previously KV `srv:sendlog:*`). That store is **authoritative** for Account Logs (`/console/stats/account-logs`) and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route). Do **not** point those at D1.
 
 Two gaps motivated D1 `RELAYBASE_LOGS`:
 
@@ -77,7 +77,7 @@ Migrations live in `server/migrations-logs/` (separate from `server/migrations/`
 | Source | Route | Kinds | Notes |
 |--------|-------|-------|-------|
 | Compose | `POST /mail/send` | `send`, `api_error` | Validation errors, all-bounce, CF exception, success, partial bounce. Also returns a `sent` object so the client upserts Sent. |
-| API | `POST /v1/send` | `send`, `api_error` | Dual-write: KV `srv:sendlog:*` (unchanged) + D1 `ops_log`. Partial bounce keeps KV `ok: true` but D1 `ok: false` so the dashboard catches it. |
+| API | `POST /v1/send` | `send`, `api_error` | Dual-write: R2 `sent/_sendlog/*` + D1 `ops_log` (+ mailbox `sent/{domain}/_list.json` on success). Partial bounce keeps send-log `ok: true` but D1 `ok: false` so the dashboard catches it. |
 | Broadcast | `catalog-broadcasts.ts` | `send` | Dual-write per recipient (KV + D1). |
 | Inbound | `server/src/inbound.ts` | `bounce` | Detected via `bounce-detect.ts`; logged with `Final-Recipient`, `Diagnostic-Code`, `Status` when present. |
 
@@ -105,9 +105,7 @@ Do **not** overwrite `bodyText` on normal mail — only fill the fallback when t
 
 ## Compose → Sent
 
-`/mail/send` now returns `{ messageId, sent }` on success, where `sent` is a `SentEmail`-shaped object (`app/src/email/components/types.ts`). The client (`useComposeDraftController.ts`) already upserts `sent` into the mailbox store and unions it on refresh — no client change was needed.
-
-Server-side Sent storage (replacing `empty-sent`) is **out of scope** for this pass. The local `~/.relaybase/.../sent.json` upsert is the only Sent source for compose; remote KV Sent remains untouched.
+`/mail/send` now returns `{ messageId, sent }` on success, where `sent` is a `SentEmail`-shaped object (`app/src/email/components/types.ts`). The Worker also upserts that record into R2 `sent/{domain}/_list.json` (mailbox Sent) and `sent/_sendlog/*` (operational send history). The client (`useComposeDraftController.ts`) upserts `sent` into the local mailbox store and unions it on refresh.
 
 ---
 
@@ -169,8 +167,8 @@ Dashboard home (`ConnectionStatusCards`) and Settings show a **D1** status card 
 
 ## Rules
 
-- **KV `srv:sendlog:*` stays authoritative** for Account Logs and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route, now a direct KV read). Do not point those at D1.
-- **D1 `ops_log` is additive.** New event kinds go here; do not duplicate into KV.
+- **R2 `sent/_sendlog/*` stays authoritative** for Account Logs and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route). Do not point those at D1.
+- **D1 `ops_log` is additive.** New event kinds go here; do not duplicate into the send-log store.
 - **Customer install ZIP keeps D1 optional.** `server/customer-install/wrangler.toml` has the binding commented out; `recordOpsLog` no-ops when the binding is missing.
 - **Soft-fail only.** A D1 write error must never break a send or an inbound store. Helpers catch + `console.error`; routes continue.
 - **Bounce detection is best-effort.** Missed bounces are acceptable; false bounce classification of normal mail is not. Only fill fallback `bodyText` when the parsed body is empty.
@@ -182,8 +180,8 @@ Dashboard home (`ConnectionStatusCards`) and Settings show a **D1** status card 
 
 - [ ] `recordOpsLog` still no-ops when `RELAYBASE_LOGS` is undefined (customer install).
 - [ ] New event kind added to the `OpsLogKind` union and the `kind` column comment.
-- [ ] `/v1/send` and broadcast still write KV `srv:sendlog:*` (do not drop the dual-write).
-- [ ] Partial-bounce path keeps KV `ok: true` and D1 `ok: false` (dashboard catches near-failures).
+- [ ] `/v1/send` and broadcast still write R2 `sent/_sendlog/*` (do not drop the dual-write).
+- [ ] Partial-bounce path keeps send-log `ok: true` and D1 `ok: false` (dashboard catches near-failures).
 - [ ] Bounce fallback only fills `bodyText` when parsed body is empty — normal mail bodies are untouched.
 - [ ] `LogsView` filters and summary still render when `workerConnected` is false.
 - [ ] `probeD1Connection` still returns `false` (not throw) when a binding is missing or D1 errors.

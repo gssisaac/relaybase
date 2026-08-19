@@ -523,7 +523,7 @@ async fn verify_worker_connection(
         inbound_bucket_name: value
             .pointer("/inbound/bucketName")
             .and_then(|v| v.as_str())
-            .unwrap_or("relaybase-inbound")
+            .unwrap_or("relaybase-mailbox")
             .into(),
         r2_total_bytes: usage
             .and_then(|u| u.get("totalBytes"))

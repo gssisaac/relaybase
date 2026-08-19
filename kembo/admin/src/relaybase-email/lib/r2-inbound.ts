@@ -1,17 +1,23 @@
-/** Shared R2 bucket — domains are separated by object key prefix, not bucket name. */
-export const INBOUND_R2_BUCKET_NAME = "relaybase-inbound";
+/** Shared R2 mailbox bucket — inbound and sent are separated by object key prefix. */
+export const MAILBOX_R2_BUCKET_NAME = "relaybase-mailbox";
+/** @deprecated Use MAILBOX_R2_BUCKET_NAME */
+export const INBOUND_R2_BUCKET_NAME = MAILBOX_R2_BUCKET_NAME;
 
 export function defaultInboundR2BucketName(_serviceId?: string): string {
-  return INBOUND_R2_BUCKET_NAME;
+  return MAILBOX_R2_BUCKET_NAME;
 }
 
 const LEGACY_INBOUND_R2_BUCKET_PREFIX = "flare-email-inbound";
+const LEGACY_INBOUND_R2_BUCKET_NAMES = new Set([
+  LEGACY_INBOUND_R2_BUCKET_PREFIX,
+  "relaybase-inbound",
+]);
 
 export function isLegacyInboundR2BucketName(name?: string | null): boolean {
   const trimmed = name?.trim().toLowerCase() ?? "";
   return (
     !trimmed ||
-    trimmed === LEGACY_INBOUND_R2_BUCKET_PREFIX ||
+    LEGACY_INBOUND_R2_BUCKET_NAMES.has(trimmed) ||
     trimmed.startsWith(`${LEGACY_INBOUND_R2_BUCKET_PREFIX}-`)
   );
 }

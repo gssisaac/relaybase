@@ -151,7 +151,7 @@ export class EmailMailboxStore {
   sentTotalByDomain: Record<string, number> = {};
   sentLoadingMore = false;
 
-  /** Server-side search (D1 FTS for inbox; `_sent.json` filter for sent). */
+  /** Server-side search (D1 FTS for inbox; `_list.json` filter for sent). */
   searchQuery = "";
   searchFolder: "inbox" | "sent" | null = null;
   searchInboxResults: RoutingActivityEvent[] = [];
@@ -1360,7 +1360,7 @@ export class EmailMailboxStore {
 
   /**
    * Server-side search. Inbox queries the Worker's D1 FTS index; sent
-   * filters the Worker's `_sent.json`. Results are flat (no thread
+   * filters the Worker's sent `_list.json`. Results are flat (no thread
    * grouping). Falls back to local filtering when the index is missing.
    */
   async searchMail(folder: "inbox" | "sent", query: string) {

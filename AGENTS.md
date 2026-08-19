@@ -7,6 +7,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | When you are changing… | Read first |
 |------------------------|------------|
 | **Where data lives** (KV, R2, `~/.relaybase`, API routing, new durable fields) | [docs/storage-architecture.md](docs/storage-architecture.md) |
+| Mailbox R2 bucket (`relaybase-mailbox`), `inbound/` / `sent/` prefixes, send-log move off KV, or bucket copy scripts | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Email Cmd+K, row context menus, mail action shortcuts, or anything under `app/src/email/commands/` | [docs/email-command-system.md](docs/email-command-system.md) |
 | App entry redirects, sidebar email↔dashboard persistence, last-route restore | [docs/last-route-restore.md](docs/last-route-restore.md) |
@@ -26,9 +27,9 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 
 | Layer | Store | Use for |
 |-------|--------|---------|
-| Remote | Product Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 inbound | Domains, addresses, audience, broadcasts, key hashes (`srv:key:*`), dashboard auth token hashes (`srv:authtoken:*`), send logs, inbox |
-| Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). KV `srv:sendlog:*` stays authoritative for send history. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
-| Remote | Kembo operations KV `KEMBO_OPS` (`kembo/admin`, worker `kembo-admin`) | Operator config only: product Worker URL + service admin token (`workerUrl`, `adminToken`). **Never** Cloudflare credentials, end-user tokens, or plaintext API keys. CF creds + admin token live on the Worker as wrangler secrets; DMARC branding at `srv:catalog:branding`; send logs at `srv:sendlog:*`. |
+| Remote | Product Worker KV `RELAYBASE_APP` (`srv:*` keys) + R2 mailbox | Domains, addresses, audience, broadcasts, key hashes (`srv:key:*`), dashboard auth token hashes (`srv:authtoken:*`), inbox |
+| Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). R2 `sent/_sendlog/*` stays authoritative for send history. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
+| Remote | Kembo operations KV `KEMBO_OPS` (`kembo/admin`, worker `kembo-admin`) | Operator config only: product Worker URL + service admin token (`workerUrl`, `adminToken`). **Never** Cloudflare credentials, end-user tokens, or plaintext API keys. CF creds + admin token live on the Worker as wrangler secrets; DMARC branding at `srv:catalog:branding`; send logs at R2 `sent/_sendlog/*`. |
 | Remote | Console `KEMBO_ACCOUNTS` D1 (`kembo-accounts`) + `KEMBO_LICENSES` KV (`kembo-licenses`) (`console.relaybase.xyz`, Next.js/OpenNext, worker `kembo-console`) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription). The product Worker no longer serves `/v1/license/*` or `/v1/waitlist`. |
 | Local | `~/.relaybase` | Credentials, team-login, API key plaintext vault (`api-keys.json`), mail/UI/dashboard cache |
 | Local (phone) | Flutter secure storage + Hive | Mobile email + password; inbox/draft cache — **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)** |

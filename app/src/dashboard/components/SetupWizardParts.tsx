@@ -25,11 +25,11 @@ export const RESOURCE_NAMES = [
       "Think of this as Relaybase's filing cabinet inside your Cloudflare account. It holds everything the app needs to run: your domains, addresses, audience lists, broadcasts, API keys, and settings. It lives entirely in your account — Relaybase can't read it.",
   },
   {
-    name: "relaybase-inbound",
+    name: "relaybase-mailbox",
     kind: "R2",
-    why: "Stores raw inbound email. Created automatically during install.",
+    why: "Stores inbound and sent mail. Created automatically during install.",
     detail:
-      "This is where incoming email is stored the moment it arrives, before Relaybase sorts it into your inbox. It's a private storage bucket in your Cloudflare account, created automatically during install. Only you and your Worker can see what's inside.",
+      "This is where incoming and sent email is stored in your Cloudflare account. Incoming mail lands under inbound/, sent mail under sent/. Only you and your Worker can see what's inside.",
   },
   {
     name: "relaybase-logs",

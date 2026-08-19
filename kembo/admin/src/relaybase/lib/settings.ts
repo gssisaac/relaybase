@@ -21,7 +21,7 @@ const SETTINGS_FILE = "settings.json";
  * operator dashboard needs to reach the worker and authorize calls live
  * here — Cloudflare credentials, DMARC branding, and send logs now live on
  * the product worker (wrangler secrets + `srv:catalog:branding` +
- * `srv:sendlog:*`).
+ * R2 `sent/_sendlog/*`).
  */
 export type EmailSenderSettings = {
   /** Product worker URL (e.g. https://relaybase-api.<subdomain>.workers.dev). */

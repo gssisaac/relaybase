@@ -44,7 +44,7 @@ function fullInstallCommand(
     `cd relaybase-worker-install`,
     `npm install`,
     `npx wrangler kv namespace create relaybase-app`,
-    `npx wrangler r2 bucket create relaybase-inbound`,
+    `npx wrangler r2 bucket create relaybase-mailbox`,
     `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,
   ];
   if (cf?.accountId.trim() && cf?.apiToken.trim()) {

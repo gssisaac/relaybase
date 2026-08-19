@@ -5,7 +5,7 @@ import type { EmailSenderSentEmail } from "@/relaybase/components/types";
 import { apiError } from "@/lib/api/api-error";
 
 /**
- * Sent-mail list now reads from the product worker's `srv:sendlog:*` store
+ * Sent-mail list now reads from the product worker's R2 send-log store
  * via `/console/send-logs`. The legacy local `sentEmails` cache in the
  * operations KV has been removed.
  */

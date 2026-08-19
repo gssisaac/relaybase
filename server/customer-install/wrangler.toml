@@ -5,7 +5,7 @@ compatibility_date = "2025-06-01"
 
 [vars]
 WORKER_SCRIPT_NAME = "relaybase-api"
-INBOUND_BUCKET_NAME = "relaybase-inbound"
+INBOUND_BUCKET_NAME = "relaybase-mailbox"
 
 [triggers]
 crons = ["*/15 * * * *"]
@@ -16,7 +16,7 @@ id = "REPLACE_WITH_relaybase-app_ID"
 
 [[r2_buckets]]
 binding = "INBOUND"
-bucket_name = "relaybase-inbound"
+bucket_name = "relaybase-mailbox"
 
 # Optional — hosted-only product ops logs. Omit if you don't need dashboard Logs.
 # [[d1_databases]]

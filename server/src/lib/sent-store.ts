@@ -12,24 +12,26 @@ export type StoredSentEmail = {
 };
 
 const SENT_INDEX_VERSION = 1 as const;
+const MAX_SENT = 5000;
+const PREFIX = "sent";
 
 type SentIndexFile = {
   version: typeof SENT_INDEX_VERSION;
   messages: StoredSentEmail[];
 };
 
+const JSON_META = { httpMetadata: { contentType: "application/json" } };
+
 function sentIndexKey(domain: string): string {
+  return `${PREFIX}/${domain.trim().toLowerCase()}/_list.json`;
+}
+
+/** Pre-mailbox-bucket location (Takeout import wrote under inbound/). */
+function legacySentIndexKey(domain: string): string {
   return `inbound/${domain.trim().toLowerCase()}/_sent.json`;
 }
 
-export async function listStoredSent(
-  bucket: R2Bucket,
-  domain: string,
-): Promise<StoredSentEmail[]> {
-  const normalized = domain.trim().toLowerCase();
-  if (!normalized) return [];
-  const object = await bucket.get(sentIndexKey(normalized));
-  if (!object) return [];
+async function parseSentIndex(object: R2ObjectBody): Promise<StoredSentEmail[]> {
   try {
     const parsed = JSON.parse(await object.text()) as SentIndexFile;
     if (parsed.version !== SENT_INDEX_VERSION || !Array.isArray(parsed.messages)) {
@@ -39,6 +41,45 @@ export async function listStoredSent(
   } catch {
     return [];
   }
+}
+
+export async function listStoredSent(
+  bucket: R2Bucket,
+  domain: string,
+): Promise<StoredSentEmail[]> {
+  const normalized = domain.trim().toLowerCase();
+  if (!normalized) return [];
+  const object = await bucket.get(sentIndexKey(normalized));
+  if (object) return parseSentIndex(object);
+  const legacy = await bucket.get(legacySentIndexKey(normalized));
+  if (!legacy) return [];
+  return parseSentIndex(legacy);
+}
+
+export async function upsertStoredSent(
+  bucket: R2Bucket,
+  domain: string,
+  message: StoredSentEmail,
+): Promise<StoredSentEmail> {
+  const normalized = domain.trim().toLowerCase();
+  if (!normalized) return message;
+  const existing = await listStoredSent(bucket, normalized);
+  const next = [
+    message,
+    ...existing.filter((row) => {
+      if (row.id === message.id) return false;
+      if (message.messageId && row.messageId === message.messageId) return false;
+      return true;
+    }),
+  ]
+    .sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+    .slice(0, MAX_SENT);
+  await bucket.put(
+    sentIndexKey(normalized),
+    JSON.stringify({ version: SENT_INDEX_VERSION, messages: next } satisfies SentIndexFile),
+    JSON_META,
+  );
+  return message;
 }
 
 export type StoredSentPage = {
@@ -88,7 +129,7 @@ function sentMatchesQuery(message: StoredSentEmail, tokens: string[]): boolean {
 
 /**
  * Cursor-paginated sent list (newest first), with optional `q` substring
- * search over subject/to/cc/from/preview. The whole `_sent.json` index is
+ * search over subject/to/cc/from/preview. The whole `_list.json` index is
  * still loaded server-side (single R2 object) but only one page crosses the
  * wire; `total` counts the (search-filtered) index, not the page.
  */

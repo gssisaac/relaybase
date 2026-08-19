@@ -4,7 +4,7 @@
 //! Flow (each step streams `install-log` events to the frontend):
 //!   1. Resolve the customer-install template directory (wrangler.toml + src).
 //!   2. `wrangler kv namespace create relaybase-app` → parse id, patch wrangler.toml.
-//!   3. `wrangler r2 bucket create relaybase-inbound`.
+//!   3. `wrangler r2 bucket create relaybase-mailbox`.
 //!   4. Generate an admin token; `wrangler secret put ADMIN_TOKEN` (stdin).
 //!   5. `wrangler deploy` → parse the `*.workers.dev` URL.
 //!   6. Return { workerUrl, adminToken, workerScriptName }.
@@ -27,7 +27,7 @@ use crate::secrets::StoredCredentials;
 use crate::worker::DEFAULT_SCRIPT;
 
 const KV_NAMESPACE: &str = "relaybase-app";
-const R2_BUCKET: &str = "relaybase-inbound";
+const R2_BUCKET: &str = "relaybase-mailbox";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

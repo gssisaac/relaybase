@@ -6,8 +6,8 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | Product Worker `RELAYBASE_APP` KV (+ R2 inbound) | Domains, addresses, audience, broadcasts, API key hashes, dashboard auth token hashes (`srv:authtoken:*`), send logs, webhooks |
-| **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. KV `srv:sendlog:*` remains authoritative for send history. |
+| **Remote** | Product Worker `RELAYBASE_APP` KV (+ R2 mailbox) | Domains, addresses, audience, broadcasts, API key hashes, dashboard auth token hashes (`srv:authtoken:*`), webhooks |
+| **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. |
 | **Remote** | D1 `RELAYBASE_INBOX_INDEX` (optional) | FTS5 full-text search index over inbound mail (`inbound_search_fts`). Derived from R2 — R2 `meta.json` stays authoritative; the index is rebuildable via `server/scripts/backfill-inbound-search.mjs`. See **[inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md)**. |
 | **Remote** | Kembo operations KV `KEMBO_OPS` (`kembo/admin`, worker `kembo-admin`) | Operator config only: product Worker URL + service admin token (`workerUrl`, `adminToken`). **Never** Cloudflare credentials, end-user tokens, or plaintext API keys. |
 | **Remote** | Console `KEMBO_ACCOUNTS` D1 (`kembo-accounts`) + `KEMBO_LICENSES` KV (`kembo-licenses`) (`console.relaybase.xyz`, worker `kembo-console`) | Accounts, account_workers, account_recovery, waitlist; license records (tier/stripe/subscription) |
@@ -33,7 +33,7 @@ flowchart TB
   end
   subgraph worker [customer *.workers.dev / isaac dogfood relaybase-api.gssisaac.worker.dev]
     KV["KV RELAYBASE_APP\nsrv:* keys"]
-    R2["R2 relaybase-inbound"]
+    R2["R2 relaybase-mailbox"]
     D1["D1 RELAYBASE_LOGS\nops events"]
     D1Search["D1 RELAYBASE_INBOX_INDEX\ninbound_search_fts (FTS5)"]
   end
@@ -79,8 +79,6 @@ Every key is prefixed with `srv:` so app/catalog data never collides with other 
 | `srv:key:{sha256}` / `srv:id:{uuid}` | `lib/keys.ts` | API key records (**hash only**, no plaintext) |
 | `srv:authtoken:{id}` / `srv:authtoken:hash:{sha256}` / `srv:authtoken:_index` | `lib/auth-tokens.ts` | Dashboard auth token records (**hash only**; plaintext returned once at issue via `POST /console/auth-tokens`) |
 | `srv:config:owner:email` / `srv:config:owner:worker_url` | `routes/console/register-owner.ts` | Console account that owns this Worker (for ADMIN_TOKEN recovery) |
-| `srv:sendlog:_index` / `srv:sendlog:{uuid}` | `lib/send-logs.ts` | Send history (authoritative “sent”)
-| `RELAYBASE_LOGS`.`ops_log` | `lib/ops-logs.ts` | Ops-event log: compose/API/broadcast sends + inbound bounces (dashboard Log page) | |
 | `srv:event:pending:{domain}:{id}` | `lib/inbound-events.ts` | Inbox notification queue |
 | `srv:webhook:*` | `lib/webhooks.ts` | Webhook regs / secrets / fail markers |
 
@@ -96,7 +94,7 @@ The product Worker resolves Cloudflare credentials and the admin token from wran
 | `/console/keys` (+ rotate, PATCH active) | API keys |
 | `/console/auth-tokens` (POST issue / GET list / DELETE revoke / POST verify) | Dashboard auth tokens (`rb-auth-…`) — stored hash-only at `srv:authtoken:*`; plaintext returned once at issue |
 | `/console/ops-logs` | Ops event log (D1 `RELAYBASE_LOGS`) |
-| `/console/send-logs` | Send history read from `srv:sendlog:*` (admin Logs page / Sent tab) |
+| `/console/send-logs` | Send history read from R2 `sent/_sendlog/*` (admin Logs page / Sent tab) |
 | `/console/branding` (GET status / PUT merge / POST apply DNS) | Per-domain DMARC config at `srv:catalog:branding` + DMARC TXT via the Worker's Cloudflare client |
 | `/console/connect` | Desktop self-install probe (admin-token proof) |
 | `/console/register-owner` | Record the console account that owns this Worker (admin token; for ADMIN_TOKEN recovery) |
@@ -110,17 +108,25 @@ Account / license / billing / recovery-token issuance are on `console.relaybase.
 
 Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` in `server/src/index.ts` (single catalog, no per-user fan-out).
 
-### R2 `INBOUND`
+### R2 `INBOUND` (bucket `relaybase-mailbox`)
+
+Bucket rename, key prefixes, KV → R2 send-log move, and copy scripts: **[mailbox-r2.md](./mailbox-r2.md)**.
 
 ```text
 inbound/{domain}/_list.json
 inbound/{domain}/{messageId}/meta.json | raw.eml | attachments/…
 inbound/{domain}/by-message-id/{encodedMessageId}
+
+sent/{domain}/_list.json
+sent/_sendlog/_index.json
+sent/_sendlog/{uuid}.json
 ```
 
-Inbound message body + `readAt` live here. `_list.json` is the compact per-domain list index (no bodyText/bodyHtml) used by `GET /mail/inbox` cursor pages — it also drives the `total`/`unread` counts echoed on list responses and the `/mail/inbox/counts` aggregate. `~/.relaybase/mail/desktop/inbox.json` is cache only. Retention is the most recent 5000 messages per domain.
+Inbound message body + `readAt` live under `inbound/`. `_list.json` is the compact per-domain list index (no bodyText/bodyHtml) used by `GET /mail/inbox` cursor pages — it also drives the `total`/`unread` counts echoed on list responses and the `/mail/inbox/counts` aggregate. `~/.relaybase/mail/desktop/inbox.json` is cache only. Retention is the most recent 5000 messages per domain.
 
-`inbound/{domain}/_sent.json` is the per-domain stored-sent index (Takeout import); `GET /mail/sent` serves cursor pages (`limit`/`before`) and substring search (`q`) from it.
+`sent/{domain}/_list.json` is the per-domain stored-sent index (compose, API send, Takeout import). `GET /mail/sent` serves cursor pages (`limit`/`before`) and substring search (`q`) from it. Operational send history (ok/fail, API key, bounce) lives at `sent/_sendlog/*` and is read by `/console/send-logs`. The Worker binding name stays `INBOUND`. The Cloudflare bucket is `relaybase-mailbox` (new installs and this dogfood account). Legacy installs may still use `relaybase-inbound` until copied. Both use the same `inbound/` and `sent/` key prefixes. Legacy `inbound/{domain}/_sent.json` is still read if the new key is missing.
+
+`RELAYBASE_LOGS`.`ops_log` (`lib/ops-logs.ts`) is the dashboard Log page event stream (compose/API/broadcast sends + inbound bounces).
 
 ### D1 `RELAYBASE_INBOX_INDEX` (search index)
 
@@ -156,7 +162,7 @@ Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
 
 - CF credentials → Worker wrangler secrets `CF_ACCOUNT_ID` / `CF_API_TOKEN` (set by the desktop install flow).
 - DMARC branding → Worker KV `srv:catalog:branding` via `/console/branding`.
-- Send logs → Worker KV `srv:sendlog:*` via `/console/send-logs`.
+- Send logs → Worker R2 `sent/_sendlog/*` via `/console/send-logs`.
 
 Legacy fields (`workerScriptName`, `cloudflareAccountId`, `cloudflareApiToken`, `cloudflareZoneId`, `cloudflareDnsApiToken`, `inboundR2BucketName`, `domainBranding`, `sentEmails`, `dashboardAuthTokens`, `apiKeyVault`) are still read for migration but never written back. Strip them from existing settings.json files on save.
 
@@ -206,7 +212,7 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Accounts domain card expand | `mail/desktop/ui/accounts.json` | localStorage mirror |
 | Inbox / unread | R2 `meta.json` (`readAt`) | `mail/desktop/inbox.json`, `ui/read.json` |
 | Audience / broadcasts | `srv:catalog:audience*` / `broadcasts` | — |
-| Sent history | `srv:sendlog:*` | mail sent JSON optional |
+| Sent history | R2 `sent/{domain}/_list.json` + `sent/_sendlog/*` | mail sent JSON optional |
 | API key existence | `srv:id:` / `srv:key:` | `cache/dashboard/api-keys-*` |
 | API key plaintext | `~/.relaybase/api-keys.json` | — |
 | Waitlist | D1 `KEMBO_ACCOUNTS` (`kembo-accounts`, table `waitlist`) | — |

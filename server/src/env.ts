@@ -1,5 +1,6 @@
 export type Env = {
   RELAYBASE_APP: KVNamespace;
+  /** Mailbox R2 (`relaybase-mailbox`): inbound/{domain}/… and sent/{domain}/… */
   INBOUND: R2Bucket;
   /** Hosted Relaybase account only — product ops/send logs. */
   RELAYBASE_LOGS?: D1Database;

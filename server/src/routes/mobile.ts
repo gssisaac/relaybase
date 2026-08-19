@@ -255,10 +255,10 @@ mobile.get("/inbox/:id/attachments/:attachmentId", async (c) => {
   });
 });
 
-/** Sent history (read from `srv:sendlog:*`). */
+/** Sent history (read from R2 `sent/_sendlog/*`). */
 mobile.get("/sent", async (c) => {
   const limit = Number(c.req.query("limit") ?? "50");
-  const { logs, summary } = await listSendLogs(c.env.RELAYBASE_APP, {
+  const { logs, summary } = await listSendLogs(c.env.INBOUND, {
     limit: Number.isFinite(limit) ? limit : 50,
   });
   return c.json({

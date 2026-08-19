@@ -9,7 +9,7 @@ export type InboundR2Usage = {
 const MAX_LIST_PAGES = 20;
 
 /**
- * Sum object sizes in the inbound R2 bucket via binding list.
+ * Sum object sizes in the mailbox R2 bucket via binding list.
  * Returns null when the binding is missing or list fails.
  */
 export async function measureInboundR2Usage(
@@ -38,7 +38,7 @@ export async function measureInboundR2Usage(
 
     return { objectCount, totalBytes, truncated };
   } catch (error) {
-    console.error("Inbound R2 usage failed", error);
+    console.error("Mailbox R2 usage failed", error);
     return null;
   }
 }

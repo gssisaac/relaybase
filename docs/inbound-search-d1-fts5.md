@@ -43,7 +43,7 @@ that opted out) or a sync write fails, nothing about mail delivery,
 storage, or read-state breaks — search endpoints return `503` and the
 desktop client falls back to local (in-memory, already-loaded) filtering.
 
-Sent mail search does **not** use D1. `_sent.json` is a single R2 object
+Sent mail search does **not** use D1. `sent/{domain}/_list.json` is a single R2 object
 per domain that the Worker already loads in full for pagination, so a
 plain substring filter over that array (`sentMatchesQuery` in
 `sent-store.ts`) is cheap enough without a second index.
@@ -263,10 +263,10 @@ normal inbox/sent views, but bypasses `groupConversations`
 
 Sent search reuses the existing paginated route instead of a dedicated
 endpoint: `GET /mail/sent?domain=&q=&limit=&before=` — `q` filters
-`listStoredSentPage`'s already-loaded `_sent.json` array in memory
+`listStoredSentPage`'s already-loaded `_list.json` array in memory
 (`sentMatchesQuery` over subject/to/cc/from/preview) before applying the
 cursor, so `total` reflects the filtered count. `/mobile/sent` stays on
-KV send logs and does not support `q`.
+R2 send logs (`sent/_sendlog/*`) and does not support `q`.
 
 ---
 
@@ -439,24 +439,20 @@ fetch path.
   to be viewed in-thread, that happens by opening the message ID by the
   normal detail path, not by threading the search page itself.
 - **Sent search does not use D1.** Do not add a Sent FTS index unless
-  `_sent.json` size profiling shows the in-memory filter is a real
-  bottleneck — see the data-integrity gap below first.
+  `_list.json` size profiling shows the in-memory filter is a real
+  bottleneck.
 - **Customer installs must keep working without the binding.** Every
   D1 call site (`inbound-store.ts`, routes) must handle
   `RELAYBASE_INBOX_INDEX` being `undefined`/missing without throwing.
 
 ---
 
-## Known gap (out of scope here)
+## Known gap (closed for compose/API)
 
-`inbound/{domain}/_sent.json` is only written by
-`server/scripts/import-mbox.mjs` (Takeout import) — the live compose send
-path does not append to it. Sent totals and Sent search are therefore
-incomplete for any mail sent since the last mbox import, until the
-compose/API/broadcast send paths are updated to also persist into
-`_sent.json` (or an equivalent Sent store). This is flagged here
-deliberately; do not treat Sent counts as ground truth until that gap is
-closed.
+Live compose (`/mail/send`), mobile send, and `/v1/send` now upsert into
+`sent/{domain}/_list.json`. Broadcasts still write only `sent/_sendlog/*`
+(not the mailbox Sent index) so a mass send does not flood the Sent folder.
+Takeout import writes the same `_list.json` via `server/scripts/import-mbox.mjs`.
 
 ---
 

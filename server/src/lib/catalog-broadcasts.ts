@@ -2,7 +2,7 @@
  * Broadcast drafts + send progress (Worker KV).
  * Key: srv:catalog:broadcasts
  *
- *   Send history for each message is recorded in srv:sendlog:* via recordSendLog
+ *   Send history for each message is recorded in R2 sent/_sendlog/* via recordSendLog
   and also in D1 RELAYBASE_LOGS via recordOpsLog.
  */
 
@@ -367,7 +367,7 @@ export async function sendBroadcast(
           text,
           html,
         });
-        await recordSendLog(kv, {
+        await recordSendLog(env.INBOUND, {
           ok: true,
           status: 200,
           domain,
@@ -394,7 +394,7 @@ export async function sendBroadcast(
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to send";
-        await recordSendLog(kv, {
+        await recordSendLog(env.INBOUND, {
           ok: false,
           status: 502,
           domain,

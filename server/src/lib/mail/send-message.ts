@@ -2,6 +2,8 @@ import type { Env } from "../../env";
 import { createCloudflareClient } from "../cloudflare-config";
 import { recordOpsLog } from "../ops-logs";
 import { previewText } from "../inbound-store";
+import { recordSendLog } from "../send-logs";
+import { upsertStoredSent } from "../sent-store";
 import {
   findInvalidRecipients,
   normalizeRecipients,
@@ -27,6 +29,17 @@ export type SendMailResult = {
 
 export type SendMailSource = "compose" | "api" | "mobile";
 
+async function persistSendLog(
+  env: Env,
+  entry: Parameters<typeof recordSendLog>[1],
+): Promise<void> {
+  try {
+    await recordSendLog(env.INBOUND, entry);
+  } catch (error) {
+    console.error("Failed to record send log", error);
+  }
+}
+
 /**
  * Shared send pipeline used by `/mail/send` (admin token) and `/mobile/send`
  * (mobile password). Validates the body, calls the Cloudflare Email Routing
@@ -51,6 +64,18 @@ export async function sendMailMessage(
   const ccJoined = cc.length ? cc.join(", ") : undefined;
 
   if (!from || !to.length || !subject || !text) {
+    await persistSendLog(env, {
+      ok: false,
+      status: 400,
+      domain,
+      keyId: null,
+      keyPrefix: null,
+      keyLabel: source,
+      from: from ?? null,
+      to: toJoined,
+      subject: subject ?? null,
+      error: "from, to, subject, and text are required",
+    });
     await recordOpsLog(env.RELAYBASE_LOGS, {
       kind: "api_error",
       ok: false,
@@ -72,6 +97,18 @@ export async function sendMailMessage(
 
   const invalid = [...findInvalidRecipients(to), ...findInvalidRecipients(cc)];
   if (invalid.length) {
+    await persistSendLog(env, {
+      ok: false,
+      status: 400,
+      domain,
+      keyId: null,
+      keyPrefix: null,
+      keyLabel: source,
+      from,
+      to: toJoined,
+      subject,
+      error: `Invalid email address: ${invalid.join(", ")}`,
+    });
     await recordOpsLog(env.RELAYBASE_LOGS, {
       kind: "api_error",
       ok: false,
@@ -122,6 +159,19 @@ export async function sendMailMessage(
 
     if (allFailed) {
       const error = `All recipients permanently bounced: ${result.permanentBounces.join(", ")}`;
+      await persistSendLog(env, {
+        ok: false,
+        status: 502,
+        domain,
+        keyId: null,
+        keyPrefix: null,
+        keyLabel: source,
+        from,
+        to: toJoined,
+        subject,
+        messageId: result.messageId,
+        error,
+      });
       await recordOpsLog(env.RELAYBASE_LOGS, {
         kind: "send",
         ok: false,
@@ -144,6 +194,21 @@ export async function sendMailMessage(
     }
 
     const ok = !hadBounces;
+    await persistSendLog(env, {
+      ok,
+      status: 200,
+      domain,
+      keyId: null,
+      keyPrefix: null,
+      keyLabel: source,
+      from,
+      to: toJoined,
+      subject,
+      messageId: result.messageId,
+      error: hadBounces
+        ? `Some recipients permanently bounced: ${result.permanentBounces.join(", ")}`
+        : undefined,
+    });
     await recordOpsLog(env.RELAYBASE_LOGS, {
       kind: "send",
       ok,
@@ -172,6 +237,13 @@ export async function sendMailMessage(
       inReplyTo: body.inReplyTo?.trim(),
       references: body.references?.trim(),
     };
+    if (domain) {
+      try {
+        await upsertStoredSent(env.INBOUND, domain, sent);
+      } catch (error) {
+        console.error("Failed to persist sent mail", error);
+      }
+    }
 
     return {
       response: new Response(
@@ -182,6 +254,18 @@ export async function sendMailMessage(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to send email";
+    await persistSendLog(env, {
+      ok: false,
+      status: 502,
+      domain,
+      keyId: null,
+      keyPrefix: null,
+      keyLabel: source,
+      from,
+      to: toJoined,
+      subject,
+      error: message,
+    });
     await recordOpsLog(env.RELAYBASE_LOGS, {
       kind: "send",
       ok: false,

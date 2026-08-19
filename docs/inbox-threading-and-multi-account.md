@@ -98,8 +98,8 @@ Do **not** reintroduce “every Sent is me” when an account filter is active.
 Related reliability rules (compose Unsend → `POST /api/email/send`):
 
 1. **Never fake success** when the Relaybase worker is not configured — return `503` instead of writing a local-only Sent row.
-2. On success, upsert the response `sent` record into the mailbox store **before** force-refresh so a lagging remote KV read cannot wipe the new row.
-3. Force refresh of Sent must **union** prior local Sent with the network list (remote KV is eventually consistent in local OpenNext + remote bindings).
+2. On success, upsert the response `sent` record into the mailbox store **before** force-refresh so a lagging remote R2 read cannot wipe the new row.
+3. Force refresh of Sent must **union** prior local Sent with the network list (remote R2 is eventually consistent in local OpenNext + remote bindings).
 4. `readUserEmailData` unions FS + KV `sent` arrays so `/api/email/sent` stays honest in local dev.
 5. Worker `/v1/send` must fail when every recipient is in `permanent_bounces` and none are delivered/queued.
 

@@ -5,6 +5,8 @@ import { emailMatchesDomain } from "../lib/crypto";
 import { createCloudflareClient } from "../lib/cloudflare-config";
 import { recordOpsLog } from "../lib/ops-logs";
 import { recordSendLog } from "../lib/send-logs";
+import { previewText } from "../lib/inbound-store";
+import { upsertStoredSent } from "../lib/sent-store";
 import {
   findInvalidRecipients,
   normalizeRecipients,
@@ -53,7 +55,7 @@ async function logAndRespond(
 ): Promise<Response> {
   const fields = keyFields(params.record ?? null);
   try {
-    await recordSendLog(c.env.RELAYBASE_APP, {
+    await recordSendLog(c.env.INBOUND, {
       ok: params.ok,
       status: params.status,
       ...fields,
@@ -92,7 +94,7 @@ send.post("/", async (c) => {
   const auth = await requireApiKey(c);
   if (auth instanceof Response) {
     try {
-      await recordSendLog(c.env.RELAYBASE_APP, {
+      await recordSendLog(c.env.INBOUND, {
         ok: false,
         status: 401,
         domain: null,
@@ -229,6 +231,22 @@ send.post("/", async (c) => {
         error,
         metaJson: meta,
       });
+    }
+    try {
+      await upsertStoredSent(c.env.INBOUND, record.domain, {
+        id: result.messageId || crypto.randomUUID(),
+        from,
+        to: to.join(", "),
+        cc: cc.length ? cc.join(", ") : undefined,
+        subject,
+        bodyPreview: previewText(text),
+        sentAt: new Date().toISOString(),
+        messageId: result.messageId,
+        inReplyTo: body.inReplyTo?.trim(),
+        references: body.references?.trim(),
+      });
+    } catch (error) {
+      console.error("Failed to persist sent mail", error);
     }
     return logAndRespond(c, {
       ok: true,

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 pub const DEFAULT_SCRIPT: &str = "relaybase-api";
 pub const APP_NS: &str = "relaybase-app";
-pub const R2_BUCKET: &str = "relaybase-inbound";
+pub const R2_BUCKET: &str = "relaybase-mailbox";
 
 /// Minimal Worker stub shipped with the app when a full server build is not embedded.
 /// Production releases should replace this via `worker_js_override` from the release channel
@@ -32,7 +32,7 @@ export default {
         ok: true,
         product: "relaybase",
         workerScriptName: env.WORKER_SCRIPT_NAME || "relaybase-api",
-        inbound: { r2Configured: !!env.INBOUND, bucketName: env.INBOUND_BUCKET_NAME || "relaybase-inbound" },
+        inbound: { r2Configured: !!env.INBOUND, bucketName: env.INBOUND_BUCKET_NAME || "relaybase-mailbox" },
         d1: {
           logs: {
             configured: !!env.RELAYBASE_LOGS,

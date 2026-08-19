@@ -33,7 +33,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_DIR = join(__dirname, "..");
 const WRANGLER_TOML = join(SERVER_DIR, "wrangler.toml");
 
-const BUCKET = "relaybase-inbound";
+const BUCKET = "relaybase-mailbox";
 /** Parallel R2 GETs. Keep this modest — the R2 REST API 429s around 6. */
 const CONCURRENCY = 2;
 const R2_RETRY_MAX = 8;

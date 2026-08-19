@@ -41,7 +41,7 @@ consoleConnect.get("/", async (c) => {
     workerScriptName: c.env.WORKER_SCRIPT_NAME || "relaybase-api",
     inbound: {
       r2Configured,
-      bucketName: c.env.INBOUND_BUCKET_NAME || "relaybase-inbound",
+      bucketName: c.env.INBOUND_BUCKET_NAME || "relaybase-mailbox",
       usage,
     },
     d1,

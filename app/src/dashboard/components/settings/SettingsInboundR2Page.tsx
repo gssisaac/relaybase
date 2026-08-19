@@ -15,21 +15,21 @@ export function SettingsInboundR2Page() {
 
   const pending = statusBusy && workerStatus == null;
   const configured = workerStatus?.r2Configured ?? false;
-  const bucketName = workerStatus?.inboundBucketName || "relaybase-inbound";
+  const bucketName = workerStatus?.inboundBucketName || "relaybase-mailbox";
   const sizePending =
     pending || (statusBusy && configured && workerStatus?.r2TotalBytes == null);
 
   return (
     <SettingsPageBody>
       <p className="text-sm text-muted-foreground">
-        Inbound email storage probed via{" "}
+        Inbound and sent email storage probed via{" "}
         <span className="font-mono">GET /console/connect</span>. Bar shows
         usage against the 10 GB included R2 storage reference.
       </p>
       <StorageBindingCard
         icon={HardDrive}
-        title="Inbound R2"
-        description="Raw MIME payloads for received mail. Create the bucket in your account before deploy."
+        title="Mailbox R2"
+        description="Raw MIME for received mail under inbound/, plus sent mail under sent/. Create the bucket in your account before deploy."
         status={r2Health}
         resourceLabel="Bucket"
         resourceName={bucketName}

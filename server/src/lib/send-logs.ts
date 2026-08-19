@@ -21,30 +21,41 @@ export type SendLogSummary = {
 };
 
 const MAX_LOGS = 500;
-const INDEX_KEY = "srv:sendlog:_index";
+const INDEX_KEY = "sent/_sendlog/_index.json";
 
 function logKey(id: string): string {
-  return `srv:sendlog:${id}`;
+  return `sent/_sendlog/${id}.json`;
+}
+
+const JSON_META = { httpMetadata: { contentType: "application/json" } };
+
+async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
+  const object = await bucket.get(key);
+  if (!object) return null;
+  try {
+    return JSON.parse(await object.text()) as T;
+  } catch {
+    return null;
+  }
 }
 
 export async function recordSendLog(
-  kv: KVNamespace,
+  bucket: R2Bucket,
   entry: Omit<SendLogEntry, "id" | "at"> & { id?: string; at?: string },
 ): Promise<SendLogEntry> {
   const id = entry.id ?? crypto.randomUUID();
   const at = entry.at ?? new Date().toISOString();
   const record: SendLogEntry = { ...entry, id, at };
 
-  await kv.put(logKey(id), JSON.stringify(record));
+  await bucket.put(logKey(id), JSON.stringify(record), JSON_META);
 
-  const rawIndex = await kv.get(INDEX_KEY);
-  const index: string[] = rawIndex ? JSON.parse(rawIndex) : [];
+  const index = (await readJson<string[]>(bucket, INDEX_KEY)) ?? [];
   const next = [id, ...index.filter((item) => item !== id)].slice(0, MAX_LOGS);
-  await kv.put(INDEX_KEY, JSON.stringify(next));
+  await bucket.put(INDEX_KEY, JSON.stringify(next), JSON_META);
 
   for (const staleId of index.slice(MAX_LOGS - 1)) {
     if (!next.includes(staleId)) {
-      await kv.delete(logKey(staleId));
+      await bucket.delete(logKey(staleId));
     }
   }
 
@@ -82,7 +93,7 @@ function summarize(logs: SendLogEntry[]): SendLogSummary {
 }
 
 export async function listSendLogs(
-  kv: KVNamespace,
+  bucket: R2Bucket,
   filters: {
     limit?: number;
     status?: "all" | "failed" | "success";
@@ -90,24 +101,22 @@ export async function listSendLogs(
   } = {},
 ): Promise<{ logs: SendLogEntry[]; summary: SendLogSummary }> {
   const limit = Math.min(Math.max(filters.limit ?? 100, 1), MAX_LOGS);
-  const rawIndex = await kv.get(INDEX_KEY);
-  const index: string[] = rawIndex ? JSON.parse(rawIndex) : [];
+  const index = (await readJson<string[]>(bucket, INDEX_KEY)) ?? [];
 
   const logs: SendLogEntry[] = [];
   for (const id of index) {
     if (logs.length >= limit) break;
-    const raw = await kv.get(logKey(id));
-    if (!raw) continue;
-    const log = JSON.parse(raw) as SendLogEntry;
+    const log = await readJson<SendLogEntry>(bucket, logKey(id));
+    if (!log) continue;
     if (!matchesFilters(log, filters)) continue;
     logs.push(log);
   }
 
   const allForSummary: SendLogEntry[] = [];
   for (const id of index) {
-    const raw = await kv.get(logKey(id));
-    if (!raw) continue;
-    allForSummary.push(JSON.parse(raw) as SendLogEntry);
+    const log = await readJson<SendLogEntry>(bucket, logKey(id));
+    if (!log) continue;
+    allForSummary.push(log);
   }
 
   return { logs, summary: summarize(allForSummary) };

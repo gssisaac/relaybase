@@ -12,8 +12,8 @@ The **install token** (Workers Scripts / R2 / D1 / Secrets Store — used by Tau
 |-------|------|
 | **Cloudflare OAuth client** | One public PKCE client on the operator’s CF account. Grant types: `authorization_code` + **`refresh_token`**. Token auth: **None (PKCE)**. Redirect URI: `https://console.relaybase.xyz/oauth/callback`. |
 | **`console.relaybase.xyz`** | Public `/api/v1/oauth/config` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `kembo-ops`. |
-| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, saves tokens to `~/.relaybase/credentials.json`. Keeps `installToken` in sync with the OAuth access token for existing wrangler call sites. |
-| **`~/.relaybase`** | Sole store for OAuth access/refresh tokens and resolved CF account id. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
+| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION` static mutex — never written to disk). Overlays the access token into `installToken` for existing wrangler call sites. App restart clears the session. |
+| **`~/.relaybase`** | Stores only the resolved CF account id (from the OAuth response). OAuth access/refresh tokens are **not** persisted — they live in Tauri memory only. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
 
 No KV, no D1, and no Relaybase console **session** is required to connect Cloudflare.
 
@@ -87,23 +87,23 @@ Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `
 
 ## Local credentials fields
 
-Added to `credentials.json` (camelCase in JSON):
+OAuth access/refresh tokens are **not** written to `credentials.json` — they live in Tauri process memory only and are cleared on app restart. Only the CF account id is persisted on disk:
 
 | Field | Purpose |
 |-------|---------|
-| `cfOauthAccessToken` | Short-lived access token (mirrored in `installToken`) |
-| `cfOauthRefreshToken` | Refresh token when issued; empty if user must re-connect after expiry |
-| `cfOauthAccessExpiresAt` | ISO expiry |
-| `cfOauthAccountId` | CF account id from token response (also `accountId`) |
+| `accountId` | CF account id from the OAuth token response (persisted on disk) |
+| `installToken` | Legacy manual install token (persisted on disk); cleared when an OAuth session is active |
+
+The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) holds `access_token`, `refresh_token`, `access_expires_at`, `account_id` and is overlaid into IPC credentials for the lifetime of the process.
 
 ---
 
 ## Settings + setup UX
 
 - **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + admin token copy). No separate install button.
-- **Connect with Cloudflare** — same OAuth flow on **Settings → Cloudflare** (button label unchanged).
+- **Settings → Cloudflare** — the standalone "Connect with Cloudflare" connection card is **removed**. OAuth is now requested at push time only: clicking **Verify, save & push** (labelled **Authorize & push** when no install token is in memory) opens the browser for a short-lived authorization kept in memory only and cleared on restart. After OAuth completes, the server token push runs automatically.
 - **Manual install** — admin token + terminal command inline on the install page; no Progress page.
-- **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. **Verify, save & push** requires OAuth connected first.
+- **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. Pushed to the Worker as the `CF_API_TOKEN` wrangler secret via `wrangler secret put`. The Worker's `CF_API_TOKEN` secret (reported by `GET /console/connect` as `cfApiTokenSet`) is the source of truth for whether sending is configured — device-local storage is not a management signal, only a convenience for re-pushing.
 - Do **not** ask the user to paste a Workers Scripts / R2 API token. That legacy field is replaced by OAuth. Install does not create KV.
 
 Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected” / install ZIP messaging.

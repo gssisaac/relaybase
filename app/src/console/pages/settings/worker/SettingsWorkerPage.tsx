@@ -3,6 +3,7 @@
 import { Download, Loader2, Server } from "lucide-react";
 
 import { AdminTokenPanel } from "@/console/components/setup/AdminTokenPanel";
+import { WorkerVersionSettingsCard } from "@/console/components/WorkerUpdateBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,6 +147,10 @@ export function SettingsWorkerPage() {
                 label="Admin token"
                 value={maskSecret(credentials?.adminToken ?? "")}
               />
+              <SummaryRow
+                label="Version"
+                value={`v${credentials?.workerVersion?.trim() || "unknown"}`}
+              />
             </div>
             <Button
               type="button"
@@ -160,6 +165,8 @@ export function SettingsWorkerPage() {
           </div>
         )}
       </ConnectionCard>
+
+      <WorkerVersionSettingsCard />
     </SettingsPageBody>
   );
 }

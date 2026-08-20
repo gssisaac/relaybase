@@ -1127,6 +1127,8 @@ struct WorkerConnectResult {
     version: String,
     worker_script_name: String,
     worker_url: String,
+    /// CF account id reported by the Worker (from CF_ACCOUNT_ID secret).
+    account_id: String,
     r2_configured: bool,
     inbound_bucket_name: String,
     /// Sum of object sizes in the inbound R2 bucket (bytes). None if unknown.
@@ -1364,6 +1366,12 @@ async fn verify_worker_connection(
             .unwrap_or("relaybase-api")
             .into(),
         worker_url: base,
+        account_id: value
+            .get("accountId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string(),
         r2_configured: value
             .pointer("/inbound/r2Configured")
             .and_then(|v| v.as_bool())

@@ -17,9 +17,10 @@ export type HealthStatus = {
 };
 
 export type ConnectionStatusSnapshot = {
-  /** True when a server token (Email Sending Edit) is saved locally AND has
-   * been pushed to the Worker (pushedAt set). This is what the dashboard
-   * "Cloudflare" card reflects — not the install token. */
+  /** True when the Worker reports a CF_API_TOKEN wrangler secret is set
+   * (the live probe is the source of truth). Falls back to the local
+   * serverToken + pushedAt signal only when the probe can't run. This is what
+   * the dashboard "Cloudflare" card reflects. */
   cfConnected: boolean;
   /** True when an install token (Workers Scripts Edit) is saved locally.
    * Used only inside Settings; not shown on the dashboard card. */
@@ -28,6 +29,8 @@ export type ConnectionStatusSnapshot = {
     ok: boolean;
     workerUrl: string;
     workerScriptName: string;
+    /** CF account id reported by the Worker (from CF_ACCOUNT_ID secret). */
+    accountId: string;
     r2Configured: boolean;
     inboundBucketName: string;
     r2TotalBytes?: number | null;
@@ -81,6 +84,7 @@ export function workerStatusFromConnect(
     ok: result.ok,
     workerUrl: result.workerUrl,
     workerScriptName: result.workerScriptName,
+    accountId: result.accountId?.trim() ?? "",
     r2Configured: result.r2Configured,
     inboundBucketName: result.inboundBucketName || "relaybase-mailbox",
     r2TotalBytes: result.r2TotalBytes ?? null,
@@ -96,13 +100,13 @@ export function workerStatusFromConnect(
 export async function probeConnectionStatus(
   credentials: DesktopCredentials | null | undefined,
 ): Promise<ConnectionStatusSnapshot> {
-  const cfConnected = cfServerTokenConfigured(credentials);
+  const localCfConnected = cfServerTokenConfigured(credentials);
   const cfInstallTokenPresentVal = cfInstallTokenPresent(credentials);
   const url = credentials?.workerUrl?.trim();
   const token = credentials?.adminToken?.trim();
 
   if (!url || !token) {
-    return { cfConnected, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
+    return { cfConnected: localCfConnected, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
   }
 
   try {
@@ -119,6 +123,11 @@ export async function probeConnectionStatus(
         worker.d1InboxIndex = fallback.d1InboxIndex;
       }
     }
+    // The Worker's CF_API_TOKEN secret is the source of truth for whether
+    // sending is configured. Device-local storage is not a management
+    // signal — only a convenience for re-pushing. When the probe succeeds,
+    // use it; fall back to the local signal only when the probe can't run.
+    const cfConnected = worker.ok ? worker.cfApiTokenSet : localCfConnected;
     return {
       cfConnected,
       cfInstallTokenPresent: cfInstallTokenPresentVal,
@@ -126,12 +135,13 @@ export async function probeConnectionStatus(
     };
   } catch {
     return {
-      cfConnected,
+      cfConnected: localCfConnected,
       cfInstallTokenPresent: cfInstallTokenPresentVal,
       worker: {
         ok: false,
         workerUrl: url,
         workerScriptName: credentials?.workerScriptName || "relaybase-api",
+        accountId: credentials?.accountId?.trim() ?? "",
         r2Configured: false,
         inboundBucketName: "relaybase-mailbox",
         r2TotalBytes: null,
@@ -163,25 +173,16 @@ export function connectionHealthFromSnapshot(
   const cf: HealthStatus = snapshot?.cfConnected
     ? {
         tone: "ok",
-        label: "Server token configured",
-        detail: "Email Sending Edit token saved and pushed to the Worker.",
+        label: "Configured",
+        detail:
+          "Email Sending Edit token pushed to the Worker as the CF_API_TOKEN secret. Sending is enabled.",
       }
-    : snapshot?.worker?.cfApiTokenSet
-      ? {
-          // A CF_API_TOKEN secret exists on the Worker (often a stale install
-          // token from pre-fix auto-install) but no server token is saved or
-          // pushed locally — sending will fail with [10000]. Do NOT show green.
-          tone: "bad",
-          label: "Wrong token on Worker",
-          detail:
-            "Worker has a CF_API_TOKEN secret (likely the old install token without Email Sending Edit). Add a server token in Settings and push it.",
-        }
-      : {
-          tone: "bad",
-          label: "Not configured",
-          detail:
-            "Add an Email Sending Edit token in Settings and push it to enable sending.",
-        };
+    : {
+        tone: "bad",
+        label: "Not configured",
+        detail:
+          "Add an Email Sending Edit token in Settings and push it to the Worker to enable sending.",
+      };
 
   const worker: HealthStatus = !hasWorker
     ? {

@@ -16,7 +16,7 @@ import { useDesktop } from "@/lib/desktop/DesktopContext";
 const DISMISS_KEY = "relaybase.worker-update-banner.dismissed";
 
 export function WorkerUpdateBanner() {
-  const { credentials } = useDesktop();
+  const { credentials, teamLogin } = useDesktop();
   const [check, setCheck] = useState<WorkerUpdateCheck | null>(null);
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,6 +28,7 @@ export function WorkerUpdateBanner() {
 
   useEffect(() => {
     if (!isDesktopRuntime()) return;
+    if (teamLogin) return;
     if (!credentials?.workerUrl?.trim() || !credentials.adminToken?.trim()) {
       return;
     }
@@ -46,40 +47,45 @@ export function WorkerUpdateBanner() {
     return () => {
       active = false;
     };
-  }, [credentials?.workerUrl, credentials?.adminToken, credentials?.workerVersion]);
+  }, [credentials?.workerUrl, credentials?.adminToken, credentials?.workerVersion, teamLogin]);
 
+  if (teamLogin) return null;
   if (loading || !check?.updateAvailable) return null;
   if (dismissedVersion === check.latestVersion) return null;
 
   const current = check.currentVersion?.trim() || "unknown";
 
   return (
-    <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-        <p className="text-sm text-foreground">
+    <div className="shrink-0 border-t border-amber-500/30 bg-amber-500/10 px-2 py-2">
+      <div className="flex items-start gap-2">
+        <p className="min-w-0 flex-1 text-[11px] leading-tight text-foreground">
           Worker update available{" "}
-          <span className="font-mono text-xs">
+          <span className="font-mono">
             v{current} → v{check.latestVersion}
           </span>
         </p>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/settings/cloudflare" />}>
-            Update now
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Dismiss Worker update banner"
-            onClick={() => {
-              sessionStorage.setItem(DISMISS_KEY, check.latestVersion);
-              setDismissedVersion(check.latestVersion);
-            }}
-          >
-            <X className="size-3.5" />
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Dismiss Worker update banner"
+          onClick={() => {
+            sessionStorage.setItem(DISMISS_KEY, check.latestVersion);
+            setDismissedVersion(check.latestVersion);
+          }}
+        >
+          <X className="size-3" />
+        </Button>
       </div>
+      <Button
+        size="sm"
+        variant="outline"
+        nativeButton={false}
+        render={<Link href="/settings/worker" />}
+        className="mt-1.5 h-7 w-full text-[11px]"
+      >
+        Update now
+      </Button>
     </div>
   );
 }

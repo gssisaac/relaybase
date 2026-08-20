@@ -16,6 +16,7 @@ import {
 } from "@/lib/dashboard/connection-status";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
+  desktopGetCredentials,
   desktopPushServerToken,
   desktopRecoverAdminToken,
   desktopRequestAdminRecoveryToken,
@@ -71,10 +72,8 @@ type SettingsConnectionContextValue = {
   workerError: DesktopErrorHelp | null;
   cfMessage: string | null;
   workerMessage: string | null;
-  // CF OAuth (install token)
-  cfOAuthConnected: boolean;
-  cfOAuthAccountId: string;
-  cfOAuthExpiresAt: string;
+  // CF OAuth (install token) — push-time authorize flow
+  cfInstallTokenAvailable: boolean;
   oauthBusy: boolean;
   oauthError: DesktopErrorHelp | null;
   handleStartCfOAuth: () => Promise<void>;
@@ -117,8 +116,13 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   } = useConnectionStatus();
 
   const workerStatus = snapshot?.worker ?? null;
-  const cfConnected =
-    snapshot?.cfConnected ?? cfServerTokenConfigured(credentials);
+  // The Worker's CF_API_TOKEN secret is the source of truth for whether
+  // sending is configured. Device-local storage is not a management signal.
+  // When the probe has run, use it; fall back to the local signal only when
+  // the probe can't run (no worker status yet).
+  const cfConnected = workerStatus
+    ? Boolean(workerStatus.cfApiTokenSet)
+    : (snapshot?.cfConnected ?? cfServerTokenConfigured(credentials));
   const serverTokenPushed = Boolean(
     credentials?.serverToken?.trim() && credentials?.serverTokenPushedAt?.trim(),
   );
@@ -148,13 +152,30 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     useState<DesktopErrorHelp | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
-  // CF OAuth (install token) state.
+  // CF OAuth (install token) state. Used internally for the push-time
+  // authorize flow — not a persistent connection.
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
   // The state minted by the most recent `start_cf_oauth`. The deep-link
   // handler only accepts a callback whose state matches this (CSRF + guards
   // against stale cold-start links).
   const oauthStartStateRef = useRef<string | null>(null);
+  // Set when the user clicked "Verify, save & push" without an install token
+  // in memory. After OAuth completes, the onComplete handler runs the push.
+  const pendingPushRef = useRef(false);
+  // Mirror of the server-token draft so the OAuth onComplete callback (which
+  // closes over mount-time state) can read the latest typed value.
+  const serverTokenRef = useRef("");
+
+  // CF OAuth (install token) derived state. An install token is available
+  // when an OAuth session is in memory (access or refresh token present) or
+  // a legacy manual install token is on disk. Used to gate the server-token
+  // push and to trigger the authorize-then-push flow.
+  const cfInstallTokenAvailable = Boolean(
+    credentials?.cfOauthRefreshToken?.trim() ||
+      credentials?.cfOauthAccessToken?.trim() ||
+      credentials?.installToken?.trim(),
+  );
 
   function resetCfDraft() {
     setAccountId(credentials?.accountId ?? "");
@@ -169,6 +190,10 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     setWorkerError(null);
     setWorkerMessage(null);
   }
+
+  useEffect(() => {
+    serverTokenRef.current = serverToken;
+  }, [serverToken]);
 
   useEffect(() => {
     if (!cfEditing) {
@@ -188,26 +213,33 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     // token is present; the server-token form is opened manually.
   }, [credentials]);
 
-  async function handleSaveServerToken() {
+  async function runServerTokenPush(override?: {
+    accountId?: string;
+    serverToken?: string;
+  }) {
     setCfBusy(true);
     setServerPushBusy(true);
     setCfError(null);
     setCfMessage(null);
     try {
-      // Account id now comes from the CF OAuth flow (stored in credentials).
+      const token = override?.serverToken ?? serverToken;
+      // Account id comes from the CF OAuth flow (stored in credentials).
       // Fall back to the draft only for legacy/manual setups.
-      const acctId = credentials?.accountId?.trim() || accountId.trim();
+      const acctId =
+        override?.accountId?.trim() ||
+        credentials?.accountId?.trim() ||
+        accountId.trim();
       if (!acctId) {
         throw new Error(
-          "Connect your Cloudflare account first (Connect with Cloudflare).",
+          "Authorize with Cloudflare first to push the server token.",
         );
       }
-      const result = await desktopVerifyCfToken(acctId, serverToken, "server");
+      const result = await desktopVerifyCfToken(acctId, token, "server");
       if (!result.ok) throw new Error(result.message);
       // Pass empty install token — save_cf_credentials preserves the existing
-      // install token (now sourced from CF OAuth). Settings only manages the
-      // server token.
-      await desktopSaveCfCredentials(acctId, "", serverToken);
+      // install token (now sourced from CF OAuth memory). Settings only
+      // manages the server token.
+      await desktopSaveCfCredentials(acctId, "", token);
       // Push the server token to the Worker as the CF_API_TOKEN wrangler secret.
       const push = await desktopPushServerToken();
       if (!push.ok) throw new Error(push.message);
@@ -227,6 +259,20 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     }
   }
 
+  async function handleSaveServerToken() {
+    // No install token in memory or on disk: request a short-lived Cloudflare
+    // authorization (memory only — cleared on app restart). After OAuth
+    // completes, the pending-push effect runs the push automatically.
+    if (!cfInstallTokenAvailable) {
+      pendingPushRef.current = true;
+      setCfError(null);
+      setCfMessage("Authorize with Cloudflare to push the server token.");
+      await handleStartCfOAuth();
+      return;
+    }
+    await runServerTokenPush();
+  }
+
   // Rust completes OAuth (localhost:32831 in tauri:dev, or relaybase:// in
   // a bundled app) and emits cf-oauth-complete / cf-oauth-error.
   useEffect(() => {
@@ -241,10 +287,22 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
           await refreshConnectionStatus();
           setOauthBusy(false);
           setOauthError(null);
+          // If the user clicked "Verify, save & push" without an install
+          // token, run the deferred push now that OAuth populated the
+          // in-memory install token + account id.
+          if (pendingPushRef.current) {
+            pendingPushRef.current = false;
+            const fresh = await desktopGetCredentials();
+            await runServerTokenPush({
+              accountId: fresh?.accountId,
+              serverToken: serverTokenRef.current,
+            });
+          }
         })();
       },
       onError: (message) => {
         if (!active) return;
+        pendingPushRef.current = false;
         setOauthError(explainCfOAuthError(message));
         setOauthBusy(false);
       },
@@ -397,19 +455,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const searchOk = workerStatus?.d1InboxIndex?.configured === true;
   const appOk = workerStatus?.d1App?.configured === true;
 
-  // CF OAuth (install token) derived state. Connected when the access or
-  // refresh token is present (refresh may be missing if the OAuth client
-  // did not issue one). The access token is short-lived and refreshed by Rust.
-  const cfOAuthConnected = Boolean(
-    credentials?.cfOauthRefreshToken?.trim() ||
-      credentials?.cfOauthAccessToken?.trim(),
-  );
-  const cfOAuthAccountId =
-    credentials?.cfOauthAccountId?.trim() ||
-    credentials?.accountId?.trim() ||
-    "";
-  const cfOAuthExpiresAt = credentials?.cfOauthAccessExpiresAt?.trim() ?? "";
-
   const workerHealth: HealthBlock = !hasWorker
     ? {
         tone: "bad",
@@ -549,9 +594,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       workerError,
       cfMessage,
       workerMessage,
-      cfOAuthConnected,
-      cfOAuthAccountId,
-      cfOAuthExpiresAt,
+      cfInstallTokenAvailable,
       oauthBusy,
       oauthError,
       handleStartCfOAuth,
@@ -597,9 +640,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       workerError,
       cfMessage,
       workerMessage,
-      cfOAuthConnected,
-      cfOAuthAccountId,
-      cfOAuthExpiresAt,
+      cfInstallTokenAvailable,
       oauthBusy,
       oauthError,
       recoveryToken,

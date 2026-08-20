@@ -248,6 +248,8 @@ export type WorkerConnectResult = {
   version: string;
   workerScriptName: string;
   workerUrl: string;
+  /** CF account id reported by the Worker (from CF_ACCOUNT_ID secret). */
+  accountId: string;
   r2Configured: boolean;
   inboundBucketName: string;
   /** Sum of inbound R2 object sizes in bytes, when the Worker reported usage. */
@@ -1020,6 +1022,7 @@ export async function desktopVerifyWorkerConnection(
   const value = (await connect.json().catch(() => ({}))) as {
     version?: string;
     workerScriptName?: string;
+    accountId?: string;
     inbound?: {
       r2Configured?: boolean;
       bucketName?: string;
@@ -1057,6 +1060,7 @@ export async function desktopVerifyWorkerConnection(
     version: value.version?.trim() || "unknown",
     workerScriptName: value.workerScriptName ?? "relaybase-api",
     workerUrl: base,
+    accountId: value.accountId?.trim() ?? "",
     r2Configured: Boolean(value.inbound?.r2Configured),
     inboundBucketName: value.inbound?.bucketName ?? "",
     r2TotalBytes: usage?.totalBytes ?? null,

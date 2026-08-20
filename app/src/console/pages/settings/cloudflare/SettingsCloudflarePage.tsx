@@ -1,18 +1,16 @@
 "use client";
 
-import { ExternalLink, Loader2, Shield, ShieldCheck } from "lucide-react";
+import { ExternalLink, Loader2, Shield } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { WorkerVersionSettingsCard } from "@/console/components/WorkerUpdateBanner";
 import {
   CF_API_TOKENS_URL,
   CF_REQUIRED_TOKEN_PERMISSIONS,
   desktopOpenExternal,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
-import { formatRelativeDate } from "@/lib/utils";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
 import {
   ConnectionCard,
@@ -22,23 +20,13 @@ import {
   maskSecret,
 } from "@/console/pages/settings/settings-shared";
 
-function accessTokenExpiryDetail(iso: string): string {
-  const expiresAt = new Date(iso);
-  if (Number.isNaN(expiresAt.getTime())) return "";
-  const relative = formatRelativeDate(iso);
-  if (expiresAt.getTime() <= Date.now()) {
-    return ` Access token expired ${relative}.`;
-  }
-  return ` Access token expires ${relative}.`;
-}
-
 export function SettingsCloudflarePage() {
   const {
     credentials,
+    workerStatus,
     cfConnected,
     serverToken,
     setServerToken,
-    serverTokenPushed,
     cfEditing,
     setCfEditing,
     cfBusy,
@@ -47,70 +35,25 @@ export function SettingsCloudflarePage() {
     cfMessage,
     resetCfDraft,
     handleSaveServerToken,
-    cfOAuthConnected,
-    cfOAuthAccountId,
-    cfOAuthExpiresAt,
+    cfInstallTokenAvailable,
     oauthBusy,
     oauthError,
-    handleStartCfOAuth,
   } = useSettingsConnection();
+
+  // Live Worker probe: the Worker's CF_API_TOKEN secret is the source of
+  // truth for whether sending is configured (device-local storage is not a
+  // management signal).
+  const accountId =
+    workerStatus?.accountId?.trim() || credentials?.accountId?.trim() || "—";
 
   return (
     <SettingsPageBody>
-      {/* Cloudflare account via OAuth — replaces the manually-pasted install
-          token (Workers Scripts / KV / R2 Edit). The OAuth callback lives on
-          console.relaybase.xyz (confidential client); the desktop stores the
-          short-lived access token + refresh token in ~/.relaybase and
-          refreshes via the console. This is the token used by wrangler to
-          push the server token (CF_API_TOKEN) to the Worker. */}
-      <ConnectionCard
-        icon={cfOAuthConnected ? ShieldCheck : Shield}
-        title="Cloudflare account (OAuth)"
-        description={
-          <>
-            Connect your Cloudflare account to authorize Relaybase to deploy
-            and push secrets (Workers Scripts / KV / R2 Edit). Done via
-            Cloudflare OAuth — no token to paste. The access token is
-            short-lived and refreshed automatically through the Relaybase
-            console.
-          </>
-        }
-      >
-        <HealthStatus
-          tone={cfOAuthConnected ? "ok" : "bad"}
-          label={
-            cfOAuthConnected
-              ? "Connected via OAuth"
-              : "Not connected"
-          }
-          detail={
-            cfOAuthConnected
-              ? `Account ${cfOAuthAccountId || credentials?.accountId || "—"} is authorized. Relaybase can deploy and push secrets.${
-                  cfOAuthExpiresAt
-                    ? accessTokenExpiryDetail(cfOAuthExpiresAt)
-                    : ""
-                }`
-              : "Click Connect with Cloudflare to authorize Relaybase. You'll be sent to Cloudflare to approve, then return here."
-          }
-        />
-        <DesktopErrorBanner error={oauthError} />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={oauthBusy}
-            onClick={() => void handleStartCfOAuth()}
-          >
-            {oauthBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {cfOAuthConnected ? "Reconnect with Cloudflare" : "Connect with Cloudflare"}
-          </Button>
-        </div>
-      </ConnectionCard>
-
       {/* Server token — Account → Email Sending → Edit. Pushed to the Worker
           as the CF_API_TOKEN wrangler secret so the Worker can send mail.
-          This is the only Cloudflare token managed in Settings; the install
-          token (Workers Scripts/KV/R2 Edit) is obtained via OAuth above. */}
+          This is the only Cloudflare token managed in Settings. The install
+          token (Workers Scripts / KV / R2 Edit) is obtained via a short-lived
+          Cloudflare OAuth authorization requested at push time and kept in
+          memory only — cleared on app restart. */}
       <ConnectionCard
         icon={Shield}
         title="Cloudflare server token (Email Sending)"
@@ -118,7 +61,7 @@ export function SettingsCloudflarePage() {
           <>
             Token with Account → Email Sending → Edit. Pushed to the Worker as
             the <span className="font-mono">CF_API_TOKEN</span> wrangler secret
-            so the Worker can send mail. Stored locally and pushed via{" "}
+            so the Worker can send mail. Pushed via{" "}
             <span className="font-mono">wrangler secret put</span>; never
             written to KV.
           </>
@@ -131,19 +74,11 @@ export function SettingsCloudflarePage() {
       >
         <HealthStatus
           tone={cfConnected ? "ok" : "bad"}
-          label={
-            cfConnected
-              ? "Pushed to Worker"
-              : serverToken.trim()
-                ? "Saved locally — not pushed"
-                : "Not set"
-          }
+          label={cfConnected ? "Configured" : "Not configured"}
           detail={
             cfConnected
-              ? "Server token saved and pushed to the Worker. Sending is enabled."
-              : serverToken.trim()
-                ? "Saved locally but not pushed. Click Verify, save & push to enable sending."
-                : "Add an Email Sending Edit token and push it to enable sending."
+              ? "Email Sending Edit token pushed to the Worker as the CF_API_TOKEN secret. Sending is enabled."
+              : "Add an Email Sending Edit token and push it to the Worker to enable sending."
           }
         />
         {cfEditing ? (
@@ -159,9 +94,10 @@ export function SettingsCloudflarePage() {
                 ))}
               </ul>
               <p className="mt-2 text-muted-foreground">
-                The install token (Workers Scripts / KV / R2 Edit) is obtained
-                via the OAuth connection above — there is no separate install
-                token to paste. Connect with Cloudflare first if you haven&apos;t.
+                The install token (Workers Scripts / KV / R2 Edit) is requested
+                via a short-lived Cloudflare authorization when you push — there
+                is no separate install token to paste. The authorization is
+                kept in memory only and cleared on app restart.
               </p>
               <button
                 type="button"
@@ -190,6 +126,7 @@ export function SettingsCloudflarePage() {
             </div>
 
             <DesktopErrorBanner error={cfError} />
+            <DesktopErrorBanner error={oauthError} />
             {cfMessage ? (
               <p className="text-sm text-emerald-700 dark:text-emerald-400">
                 {cfMessage}
@@ -200,21 +137,21 @@ export function SettingsCloudflarePage() {
               <Button
                 type="button"
                 size="sm"
-                disabled={
-                  !serverToken.trim() || cfBusy || !cfOAuthConnected
-                }
+                disabled={!serverToken.trim() || cfBusy || oauthBusy}
                 onClick={() => void handleSaveServerToken()}
               >
-                {serverPushBusy ? (
+                {serverPushBusy || oauthBusy ? (
                   <Loader2 className="size-3.5 animate-spin" />
                 ) : null}
-                Verify, save &amp; push
+                {cfInstallTokenAvailable
+                  ? "Verify, save & push"
+                  : "Authorize & push"}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={cfBusy}
+                disabled={cfBusy || oauthBusy}
                 onClick={() => {
                   resetCfDraft();
                   setCfEditing(false);
@@ -223,33 +160,29 @@ export function SettingsCloudflarePage() {
                 Cancel
               </Button>
             </div>
-            {!cfOAuthConnected ? (
+            {!cfInstallTokenAvailable ? (
               <p className="text-xs text-muted-foreground">
-                Connect your Cloudflare account (above) first — Relaybase
-                needs the OAuth install token to push the server token to the
-                Worker.
+                Relaybase needs a short-lived Cloudflare authorization to push
+                the server token. Click Authorize &amp; push to approve in your
+                browser — the token stays in memory only and is cleared on
+                restart.
               </p>
             ) : null}
           </>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            <SummaryRow
-              label="Account ID"
-              value={credentials?.accountId?.trim() || "—"}
-            />
+            <SummaryRow label="Account ID" value={accountId} />
             <SummaryRow
               label="Server token"
               value={maskSecret(credentials?.serverToken ?? "")}
             />
             <SummaryRow
               label="Push status"
-              value={serverTokenPushed ? "Pushed to Worker" : "Not pushed"}
+              value={cfConnected ? "Pushed to the Worker" : "Not pushed"}
             />
           </div>
         )}
       </ConnectionCard>
-
-      <WorkerVersionSettingsCard />
     </SettingsPageBody>
   );
 }

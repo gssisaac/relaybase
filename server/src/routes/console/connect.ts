@@ -41,6 +41,10 @@ consoleConnect.get("/", async (c) => {
     product: "relaybase",
     version: c.env.WORKER_VERSION?.trim() || "unknown",
     workerScriptName: c.env.WORKER_SCRIPT_NAME || "relaybase-api",
+    // CF account id (from the CF_ACCOUNT_ID secret). Surfaced so the desktop
+    // can display/manage the server token without a separate OAuth connection
+    // or manual entry.
+    accountId: c.env.CF_ACCOUNT_ID?.trim() || "",
     inbound: {
       r2Configured,
       bucketName: c.env.INBOUND_BUCKET_NAME || "relaybase-mailbox",

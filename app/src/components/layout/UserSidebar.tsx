@@ -22,6 +22,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
+import { WorkerUpdateBanner } from "@/console/components/WorkerUpdateBanner";
 import { useDashboardPaths } from "@/console/lib/paths";
 import { AddEmailAccountDialog } from "@/email/components/accounts/AddEmailAccountDialog";
 import { AddTeamAccountDialog } from "@/email/components/accounts/AddTeamAccountDialog";
@@ -755,6 +756,8 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
           <DashboardModeNav collapsed={collapsed} />
         )}
       </nav>
+
+      {!isTeam ? <WorkerUpdateBanner /> : null}
 
       {isTeam && teamLogin ? (
         <AddTeamAccountDialog

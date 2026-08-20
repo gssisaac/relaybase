@@ -1,4 +1,4 @@
-import { BroadcastsView } from "@/dashboard/components/BroadcastsView";
+import { BroadcastsView } from "@/console/pages/broadcasts/BroadcastsView";
 
 export default function Page() {
   return <BroadcastsView />;

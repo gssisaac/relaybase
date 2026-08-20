@@ -5,7 +5,7 @@ import { useCallback, useMemo } from "react";
 
 import { modeFromPathname } from "@/email/sidebar-mode";
 import { useEmailPaths } from "@/email/lib/paths";
-import { settingsTabHref } from "@/dashboard/paths";
+import { settingsTabHref } from "@/console/lib/paths";
 
 /**
  * Navigate to the settings page for the current sidebar mode:

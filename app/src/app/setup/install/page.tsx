@@ -1,6 +1,6 @@
 "use client";
 
-import { WorkerInstallPanel } from "@/dashboard/components/WorkerInstallPanel";
+import { WorkerInstallPanel } from "@/console/components/setup/WorkerInstallPanel";
 
 export default function SetupInstallPage() {
   return <WorkerInstallPanel />;

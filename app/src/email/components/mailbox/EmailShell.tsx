@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
-import { useDashboardPaths } from "@/dashboard/paths";
+import { useDashboardPaths } from "@/console/lib/paths";
 import { useEmailPaths } from "@/email/lib/paths";
 import { cn } from "@/lib/utils";
 

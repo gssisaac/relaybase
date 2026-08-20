@@ -16,7 +16,7 @@ import {
   DesktopProvider,
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
-import { DomainProgressBanner } from "@/dashboard/components/DomainProgressBanner";
+import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
   GlobalCommandPalette,

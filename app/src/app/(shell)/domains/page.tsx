@@ -1,4 +1,4 @@
-import { DomainsView } from "@/dashboard/components/DomainsView";
+import { DomainsView } from "@/console/pages/domains/DomainsView";
 
 export default function Page() {
   return <DomainsView />;

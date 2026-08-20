@@ -22,7 +22,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { useDashboardPaths } from "@/console/lib/paths";
 import { AddEmailAccountDialog } from "@/email/components/accounts/AddEmailAccountDialog";
 import { AddTeamAccountDialog } from "@/email/components/accounts/AddTeamAccountDialog";
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
@@ -64,7 +64,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
+import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import {

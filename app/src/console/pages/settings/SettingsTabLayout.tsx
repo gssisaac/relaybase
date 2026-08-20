@@ -2,12 +2,12 @@
 
 import { usePathname } from "next/navigation";
 
-import { SettingsConnectionProvider } from "@/dashboard/components/settings/SettingsConnectionContext";
-import { SettingsShell } from "@/dashboard/components/settings/SettingsShell";
+import { SettingsConnectionProvider } from "@/console/pages/settings/SettingsConnectionContext";
+import { SettingsShell } from "@/console/pages/settings/SettingsShell";
 import {
   SETTINGS_TABS,
   type SettingsTab,
-} from "@/dashboard/paths";
+} from "@/console/lib/paths";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";

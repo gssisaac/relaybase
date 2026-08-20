@@ -1,4 +1,4 @@
-import { UserDashboardView } from "@/dashboard/components/UserDashboardView";
+import { UserDashboardView } from "@/console/pages/dashboard/UserDashboardView";
 
 export default function Page() {
   return <UserDashboardView />;

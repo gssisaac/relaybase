@@ -6,7 +6,7 @@ import { reaction } from "mobx";
 import { AccountsStore } from "@/lib/dashboard/accounts-store";
 import { useDomainStore } from "@/lib/dashboard/DomainContext";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDashboardPaths } from "@/dashboard/paths";
+import { useDashboardPaths } from "@/console/lib/paths";
 
 const AccountsStoreContext = React.createContext<AccountsStore | null>(null);
 

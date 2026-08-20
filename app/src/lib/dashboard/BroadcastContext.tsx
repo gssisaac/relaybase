@@ -3,7 +3,7 @@
 import * as React from "react";
 import { reaction } from "mobx";
 
-import { useDashboardPaths } from "@/dashboard/paths";
+import { useDashboardPaths } from "@/console/lib/paths";
 import { BroadcastStore } from "@/lib/dashboard/broadcast-store";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 

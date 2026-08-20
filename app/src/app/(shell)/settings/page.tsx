@@ -1,4 +1,4 @@
-import { SettingsCloudflarePage } from "@/dashboard/components/settings/SettingsCloudflarePage";
+import { SettingsCloudflarePage } from "@/console/pages/settings/cloudflare/SettingsCloudflarePage";
 
 export default function Page() {
   return <SettingsCloudflarePage />;

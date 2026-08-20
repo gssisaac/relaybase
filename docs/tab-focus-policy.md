@@ -33,7 +33,7 @@ Constant for the marker: `ALLOW_TAB_FOCUS_ATTR` (`"data-allow-tab-focus"`).
 
 | UI | File | Marker |
 |----|------|--------|
-| Compose (standalone + reply compact) | `app/src/email/components/ComposeForm.tsx` | `data-allow-tab-focus` on the form root |
+| Compose (standalone + reply compact) | `app/src/email/components/compose/ComposeForm.tsx` | `data-allow-tab-focus` on the form root |
 
 Compose field order (when present): From (select) → To → Cc → Subject → body. Send remains click / ⌘Enter.
 

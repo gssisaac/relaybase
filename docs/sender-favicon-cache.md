@@ -6,11 +6,11 @@
 
 | Area | Path |
 |------|------|
-| Avatar UI | `app/src/email/components/SenderAvatar.tsx` |
-| MobX cache store | `app/src/email/sender-icon-store.ts` |
-| React context | `app/src/email/components/SenderIconContext.tsx` |
-| Provider wiring | `app/src/app/(dashboard)/DesktopDashboardGate.tsx` |
-| Account switch clear | `app/src/email/components/EmailMailboxContext.tsx` |
+| Avatar UI | `app/src/email/components/sender/SenderAvatar.tsx` |
+| MobX cache store | `app/src/email/lib/sender/sender-icon-store.ts` |
+| React context | `app/src/email/components/sender/SenderIconContext.tsx` |
+| Provider wiring | `app/src/app/_shell/DesktopDashboardGate.tsx` |
+| Account switch clear | `app/src/email/components/mailbox/EmailMailboxContext.tsx` |
 | API map | `app/src/lib/desktop/email-api-map.ts` (`/api/email/favicon` → `/mail/favicon`) |
 | Worker proxy | `server/src/routes/mail/favicon.ts`, mounted in `server/src/app.ts` |
 | Initials fallback | `app/src/lib/email/format-sender.ts` (`senderInitials`) |

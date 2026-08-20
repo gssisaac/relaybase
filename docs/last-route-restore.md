@@ -2,7 +2,7 @@
 
 **Audience:** humans and coding agents changing app entry redirects, sidebar mode switching, or navigation persistence.
 
-**Source of truth:** `app/src/email/sidebar-mode.ts`
+**Source of truth:** `app/src/lib/navigation/sidebar-mode.ts`
 
 ---
 
@@ -66,8 +66,8 @@ app/src/components/layout/UserSidebar.tsx
 
 | Entry point | Behavior |
 |-------------|----------|
-| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` |
-| Empty panel index (`app/src/app/panel.tsx`) | `resolveEntryPath(userId)` |
+| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` (uses `resolveEntryPathAsync`) |
+| `/email` (`app/src/app/(shell)/email/page.tsx`) | redirect → `/email/inbox` |
 
 Client gate:
 

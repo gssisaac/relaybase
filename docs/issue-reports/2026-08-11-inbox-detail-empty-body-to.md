@@ -3,7 +3,7 @@
 **Date:** 2026-08-11  
 **Status:** Fixed (cherry-pick of `main` commit `d8a5f52`)  
 **Severity:** High (every opened email appeared empty; user could not read mail)  
-**Components:** `app/src/email/email-mailbox-store.ts` (`loadMessageDetail`), `server/src/lib/inbound-store.ts` (legacy MIME From backfill)
+**Components:** `app/src/email/lib/mailbox/email-mailbox-store.ts` (`loadMessageDetail`), `server/src/lib/inbound-store.ts` (legacy MIME From backfill)
 
 ## Summary
 
@@ -25,7 +25,7 @@ const data = await readResponseJson<RoutingActivityEvent & { error?: string }>(r
 this.activityDetailByKey[messageId] = data; // ← { message: {...} }, not the message
 ```
 
-So `activityDetail.bodyText`, `.toEmails`, `.fromEmail` were all `undefined`. `InboundEmailDetail` (`app/src/email/components/EmailShared.tsx`) renders `(empty message)` when `bodyText` is falsy and there is no HTML; the thread view's `To` rendering joined an empty recipient list.
+So `activityDetail.bodyText`, `.toEmails`, `.fromEmail` were all `undefined`. `InboundEmailDetail` (`app/src/email/components/mailbox/EmailShared.tsx`) renders `(empty message)` when `bodyText` is falsy and there is no HTML; the thread view's `To` rendering joined an empty recipient list.
 
 A second gap: the disk detail cache was trusted unconditionally, so a stale cache entry with no body fields could block a refetch forever.
 

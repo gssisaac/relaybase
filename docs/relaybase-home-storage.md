@@ -106,7 +106,7 @@ Team-user login (per-account mobile password; separate from admin credentials). 
 | `version` | `1` |
 | `accountColors` | `{ [email]: "#RRGGBB" }` |
 
-TS: `app/src/email/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`.
+TS: `app/src/email/lib/prefs/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`.
 
 ### `mail/desktop/ui/accounts.json`
 
@@ -115,7 +115,7 @@ TS: `app/src/email/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`.
 | `version` | `1` |
 | `expandedDomains` | Domain names whose Accounts cards are expanded (default all collapsed) |
 
-TS: `app/src/dashboard/accounts-ui-state.ts` → `readUiJson` / `writeUiJson`.
+TS: `app/src/console/pages/accounts/accounts-ui-state.ts` → `readUiJson` / `writeUiJson`.
 
 ### `api-keys.json`
 
@@ -142,7 +142,7 @@ Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelop
 | `domains.{domain}.ok` | `true` = proxy returned a data URL; `false` = confirmed no favicon |
 | `domains.{domain}.at` | Unix ms when status was recorded |
 
-Failed domains are not re-probed for 24h. Transient fetch errors are not written here. TS: `app/src/email/sender-icon-store.ts`.
+Failed domains are not re-probed for 24h. Transient fetch errors are not written here. TS: `app/src/email/lib/sender/sender-icon-store.ts`.
 
 ---
 

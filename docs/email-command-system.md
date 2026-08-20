@@ -43,19 +43,19 @@ Related (outside the module, thin consumers):
 
 | File | Role |
 |------|------|
-| `app/src/email/compose-open.ts` | Compose open/resume/force-new policy + adapter hooks |
-| `app/src/email/components/useThreadComposeState.ts` | Inline thread compose panel state |
-| `app/src/app/(dashboard)/DesktopDashboardGate.tsx` | Mounts `EmailCommandRuntimeProvider` + `GlobalCommandPalette` |
-| `app/src/email/components/MailListView.tsx` | **Orchestrator** only: list/detail hooks + pane assembly. No direct store logic. |
-| `app/src/email/components/mail-list-helpers.ts` | Pure mail list helpers (formatting, href, preview, account matching) |
-| `app/src/email/components/useMailListItems.ts` | Derives `items`, `selected`, thread maps, detail loading from store |
-| `app/src/email/components/useMailListKeyboard.ts` | Bubble-phase mail shortcuts (`j`/`k`/`Esc`/`c`/`r`/`a`/`f`) |
-| `app/src/email/components/MailListPane.tsx` | List pane UI (toolbar + rows + empty state) |
-| `app/src/email/components/MailDetailPane.tsx` | Detail pane UI (draft / thread / single message) |
-| `app/src/email/components/ComposeView.tsx` | Renders compose from URL only (no open policy) |
+| `app/src/email/lib/compose/compose-open.ts` | Compose open/resume/force-new policy + adapter hooks |
+| `app/src/email/components/reply/useThreadComposeState.ts` | Inline thread compose panel state |
+| `app/src/app/_shell/DesktopDashboardGate.tsx` | Mounts `EmailCommandRuntimeProvider` + `GlobalCommandPalette` |
+| `app/src/email/components/mailbox/MailListView.tsx` | **Orchestrator** only: list/detail hooks + pane assembly. No direct store logic. |
+| `app/src/email/components/mailbox/mail-list-helpers.ts` | Pure mail list helpers (formatting, href, preview, account matching) |
+| `app/src/email/components/mailbox/useMailListItems.ts` | Derives `items`, `selected`, thread maps, detail loading from store |
+| `app/src/email/components/mailbox/useMailListKeyboard.ts` | Bubble-phase mail shortcuts (`j`/`k`/`Esc`/`c`/`r`/`a`/`f`) |
+| `app/src/email/components/mailbox/MailListPane.tsx` | List pane UI (toolbar + rows + empty state) |
+| `app/src/email/components/mailbox/MailDetailPane.tsx` | Detail pane UI (draft / thread / single message) |
+| `app/src/email/components/compose/ComposeView.tsx` | Renders compose from URL only (no open policy) |
 | `app/src/components/ui/command.tsx` | Generic cmdk primitives |
 | `app/src/components/ui/context-menu.tsx` | Generic context-menu primitives |
-| `app/src/email/email-mailbox-store.ts` | Data actions (`markRead`, `moveToTrash`, …) |
+| `app/src/email/lib/mailbox/email-mailbox-store.ts` | Data actions (`markRead`, `moveToTrash`, …) |
 
 ```mermaid
 flowchart TB
@@ -103,7 +103,7 @@ Rules:
 
 ## Compose open / Esc / draft resume
 
-**Source of truth:** [`app/src/email/compose-open.ts`](../app/src/email/compose-open.ts)
+**Source of truth:** [`app/src/email/lib/compose/compose-open.ts`](../app/src/email/lib/compose/compose-open.ts)
 
 Callers must **not** call `emailComposeHref`, `forceNew`, or `findResumableComposeDraft` directly. Consume adapter hooks / helpers only:
 
@@ -115,7 +115,7 @@ Callers must **not** call `emailComposeHref`, `forceNew`, or `findResumableCompo
 | `exactDraftComposeHref(id)` | Open a specific standalone draft |
 | `resolveReplyOpenDraftId(...)` | `?reply=` / Unsend panel restore |
 
-Inline thread compose state (mode / draft id / Esc dismiss) lives in [`useThreadComposeState`](../app/src/email/components/useThreadComposeState.ts). `ComposeView` only renders from URL — no resume policy.
+Inline thread compose state (mode / draft id / Esc dismiss) lives in [`useThreadComposeState`](../app/src/email/components/reply/useThreadComposeState.ts). `ComposeView` only renders from URL — no resume policy.
 
 Esc in compose (standalone, inline reply, inline forward) **closes the composer without discarding**. Drafts autosave; recovery is reopen, not Undo. Esc/back must `flushNow()` before navigate so the just-edited draft wins `updatedAt`.
 

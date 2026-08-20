@@ -3,7 +3,7 @@
 **Date:** 2026-08-11  
 **Status:** Fixed  
 **Severity:** Medium (user could not complete external flows like Google Takeout download)  
-**Components:** `app/src/email/components/EmailHtmlFrame.tsx`, `desktop/src-tauri/src/lib.rs` (`on_navigation` / `on_new_window`)
+**Components:** `app/src/email/components/mailbox/EmailHtmlFrame.tsx`, `desktop/src-tauri/src/lib.rs` (`on_navigation` / `on_new_window`)
 
 ## Summary
 

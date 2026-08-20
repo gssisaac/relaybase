@@ -18,10 +18,10 @@ counts, Sent pagination, list virtualization, or D1 `RELAYBASE_INBOX_INDEX`.
 | API v1 routes | `server/src/routes/v1-inbox.ts` (`GET /messages/search`, `/messages/counts`, `/messages`) |
 | Mobile routes (account-scoped) | `server/src/routes/mobile.ts` (`GET /inbox/search`), `server/src/lib/mail/list-inbox.ts` (`searchInboxForDomains`) |
 | Backfill script | `server/scripts/backfill-inbound-search.mjs` |
-| Client store | `app/src/email/email-mailbox-store.ts` (`searchMail`, `loadMoreSearch`, `clearSearch`, `inboxTotal`/`inboxUnreadTotal`/`sentTotal`) |
-| Client search wiring | `app/src/email/components/MailListView.tsx` (debounce), `app/src/email/components/useMailListItems.ts` (flat results vs. threaded) |
-| List header + virtualization | `app/src/email/components/MailListPane.tsx` (`react-window` `List`, header counts) |
-| Disk cache | `app/src/email/email-disk-store.ts` (`PersistedInboxCache`, `PersistedSentCache`) |
+| Client store | `app/src/email/lib/mailbox/email-mailbox-store.ts` (`searchMail`, `loadMoreSearch`, `clearSearch`, `inboxTotal`/`inboxUnreadTotal`/`sentTotal`) |
+| Client search wiring | `app/src/email/components/mailbox/MailListView.tsx` (debounce), `app/src/email/components/mailbox/useMailListItems.ts` (flat results vs. threaded) |
+| List header + virtualization | `app/src/email/components/mailbox/MailListPane.tsx` (`react-window` `List`, header counts) |
+| Disk cache | `app/src/email/lib/disk/email-disk-store.ts` (`PersistedInboxCache`, `PersistedSentCache`) |
 
 Read this before adding a search field, changing the FTS5 schema, changing
 how list totals/unread are computed, or touching the virtualized row
@@ -259,7 +259,7 @@ All three return the same flat shape:
 Results are **flat** — never grouped into conversation threads. The
 desktop client renders them through the same virtualized list as the
 normal inbox/sent views, but bypasses `groupConversations`
-(`app/src/email/conversation-threading.ts`) entirely for search mode
+(`app/src/email/lib/threading/conversation-threading.ts`) entirely for search mode
 (see "Client wiring" below).
 
 Sent search reuses the existing paginated route instead of a dedicated

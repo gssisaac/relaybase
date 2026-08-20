@@ -47,7 +47,7 @@ Worker가 inbound email 수신 시 모바일 기기로 FCM push를 주도적으�
 ## 현재 상태
 
 - Worker email() 핸들러 → dispatchInboundEvent() → KV enqueue + webhook 발송 (server/src/index.ts:29-38)
-- 데스크탑 20초 폴링 (app/src/email/email-mailbox-store.ts:56) → GET /mail/inbox/notifications
+- 데스크탑 20초 폴링 (app/src/email/lib/mailbox/email-mailbox-store.ts:56) → GET /mail/inbox/notifications
 - 모바일 45초 폴링 (mobile/lib/services/sync_service.dart) → GET /mobile/notifications
 - KV srv:event:pending:{domain}:{eventId} 가 공용 이벤트 큐
 - push 인프라 전무, Queues/DOs 미사용
@@ -144,7 +144,7 @@ sequenceDiagram
 
 ### 10. 데스크탑: 최소 UI 반영
 
-- app/src/dashboard/components/AccountOtherDeviceView.tsx: "Push notifications (Pro)" 상태 표시
+- app/src/console/pages/accounts/AccountOtherDeviceView.tsx: "Push notifications (Pro)" 상태 표시
 - 데스크탑 자체 폴링/알림 변경 없음
 
 ### 11. 문서 갱신

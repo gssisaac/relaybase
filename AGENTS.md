@@ -20,7 +20,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Kembo console/admin storage (`kembo-ops`, licenses, accounts, waitlist, operator settings) | [docs/kembo-ops-d1.md](docs/kembo-ops-d1.md) |
 | Mail search, D1 `RELAYBASE_INBOX_INDEX` / FTS5, list header counts, Sent pagination, or list virtualization | [docs/inbound-search-d1-fts5.md](docs/inbound-search-d1-fts5.md) |
 | Inbox/sent sender avatars (favicon), `SenderAvatar`, `SenderIconStore`, or `/mail/favicon` proxy | [docs/sender-favicon-cache.md](docs/sender-favicon-cache.md) |
-| Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/dashboard/page-header-layout.md](app/src/dashboard/page-header-layout.md) |
+| Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
 
 ## Storage (summary)
@@ -47,7 +47,7 @@ Mail actions must stay centralized in `app/src/email/commands/`:
 - Static defs → resolve/run store → adapter → Cmd+K + context menu + command hotkeys
 - Show **available-only** commands (selection-filtered); do not dump dashboard “Open …” nav into mail Cmd+K
 - Keep app-layer ⌘K (capture) separate from mail-layer `j`/`k` shortcuts
-- Compose open/resume/force-new: **`app/src/email/compose-open.ts`** adapters only (`useStandaloneComposeOpener` / `useThreadComposeOpener` / `composeNewHref`). Esc closes without discard; per-message UI Reply/Forward always starts a new draft
+- Compose open/resume/force-new: **`app/src/email/lib/compose/compose-open.ts`** adapters only (`useStandaloneComposeOpener` / `useThreadComposeOpener` / `composeNewHref`). Esc closes without discard; per-message UI Reply/Forward always starts a new draft
 
 Full rules, file map, and add-command checklist: **[docs/email-command-system.md](docs/email-command-system.md)**.
 

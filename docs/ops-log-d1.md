@@ -19,10 +19,10 @@
 | D1 probe helper | `server/src/lib/d1-status.ts` (`probeD1Connection`) |
 | Connect probe (D1 + R2) | `server/src/routes/console/connect.ts` → `/console/connect` |
 | Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/logs` → `/console/ops-logs`) |
-| Connection status UI | `app/src/lib/dashboard/connection-status.ts`, `app/src/dashboard/components/ConnectionStatusCards.tsx`, `app/src/dashboard/components/SettingsView.tsx` |
-| Dashboard nav | `app/src/dashboard/paths.ts` (Log tab after API Keys) |
-| Dashboard route | `app/src/dashboard/panel.tsx` (`case "logs"`) |
-| Log page UI | `app/src/dashboard/components/LogsView.tsx` |
+| Connection status UI | `app/src/lib/dashboard/connection-status.ts`, `app/src/console/pages/dashboard/ConnectionStatusCards.tsx`, `app/src/console/pages/settings/SettingsTabLayout.tsx` |
+| Dashboard nav | `app/src/console/lib/paths.ts` (Log tab after API Keys) |
+| Dashboard route | `app/src/app/(shell)/logs/page.tsx` |
+| Log page UI | `app/src/console/pages/logs/LogsView.tsx` |
 
 Read this before changing send/bounce logging, adding a Log page event kind, or touching `ops_log` schema.
 
@@ -106,7 +106,7 @@ Do **not** overwrite `bodyText` on normal mail — only fill the fallback when t
 
 ## Compose → Sent
 
-`/mail/send` now returns `{ messageId, sent }` on success, where `sent` is a `SentEmail`-shaped object (`app/src/email/components/types.ts`). The Worker also upserts that record into R2 `sent/{domain}/_list.json` (mailbox Sent) and `sent/_sendlog/*` (operational send history). The client (`useComposeDraftController.ts`) upserts `sent` into the local mailbox store and unions it on refresh.
+`/mail/send` now returns `{ messageId, sent }` on success, where `sent` is a `SentEmail`-shaped object (`app/src/email/components/mailbox/types.ts`). The Worker also upserts that record into R2 `sent/{domain}/_list.json` (mailbox Sent) and `sent/_sendlog/*` (operational send history). The client (`useComposeDraftController.ts`) upserts `sent` into the local mailbox store and unions it on refresh.
 
 ---
 
@@ -154,9 +154,9 @@ Probe is read-only and soft-fails (returns `false` on D1 errors). Customer insta
 
 ## Dashboard Log page
 
-Nav order in `app/src/dashboard/paths.ts`: … API Keys → **Log** → Settings (icon: `ScrollText`).
+Nav order in `app/src/console/lib/paths.ts`: … API Keys → **Log** → Settings (icon: `ScrollText`).
 
-Route: `/logs` → `LogsView` (`app/src/dashboard/components/LogsView.tsx`).
+Route: `/logs` → `LogsView` (`app/src/console/pages/logs/LogsView.tsx`).
 
 API: `GET /console/ops-logs?limit&status&domain` (`server/src/routes/console/ops-logs.ts`). Client maps `/api/email/logs` → `/console/ops-logs` in `email-api-map.ts`.
 

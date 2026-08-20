@@ -115,7 +115,7 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 | Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
 | Desktop Rust | `desktop/src-tauri/src/lib.rs`, `secrets.rs`, `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge.ts`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx` |
-| Setup install wizard | `app/src/dashboard/components/WorkerInstallPanel.tsx`, `SetupStepTwo.tsx` |
+| Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupStepTwo.tsx` |
 
 ---
 

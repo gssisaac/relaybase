@@ -10,7 +10,7 @@
 | Worker mobile routes | `server/src/routes/mobile.ts` |
 | Mobile password auth | `server/src/lib/mobile-auth.ts`, `server/src/lib/mobile-config.ts` |
 | Console password APIs | `server/src/routes/console/mailbox.ts` (`/console/addresses/mobile-password`) |
-| Desktop Other device tab | `app/src/dashboard/components/AccountOtherDeviceView.tsx` |
+| Desktop Other device tab | `app/src/console/pages/accounts/AccountOtherDeviceView.tsx` |
 | Desktop API helpers / deep link | `app/src/lib/desktop/mobile-config.ts` |
 | Desktop → Worker map | `app/src/lib/desktop/email-api-map.ts` (`/api/email/mobile-password`) |
 | Address `mobileEnabled` | `server/src/lib/catalog-store.ts`, `app/src/lib/dashboard/accounts-store.ts` |

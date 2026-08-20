@@ -37,6 +37,8 @@ pub struct StoredCredentials {
     pub worker_url: String,
     pub admin_token: String,
     pub worker_script_name: String,
+    /// Deployed Worker bundle version (from WORKER_VERSION var / connect probe).
+    pub worker_version: String,
     pub license_key: String,
     /// Relaybase console account (console.relaybase.xyz) — separate from the
     /// Cloudflare `account_id`/`api_token` above. Populated after the user

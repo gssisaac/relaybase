@@ -15,6 +15,8 @@ export type DesktopCredentials = {
   workerUrl: string;
   adminToken: string;
   workerScriptName: string;
+  /** Deployed Worker bundle version (WORKER_VERSION). */
+  workerVersion: string;
   licenseKey: string;
   /** Relaybase console account (console.relaybase.xyz). */
   relaybaseAccountId: string;
@@ -61,6 +63,7 @@ export type AutoInstallResult = {
   d1DbId: string;
   dbAlreadyInitialized: boolean;
   dbApplied: string[];
+  workerVersion: string;
 };
 
 export type InitDbResult = {
@@ -163,6 +166,26 @@ export const WORKER_INSTALL_ZIP_URL =
   process.env.NEXT_PUBLIC_WORKER_INSTALL_ZIP_URL ??
   "https://relaybase.xyz/downloads/relaybase-worker-install.zip";
 
+/** Hosted install manifest (version, zipUrl, sha256). */
+export const WORKER_INSTALL_MANIFEST_URL =
+  process.env.NEXT_PUBLIC_WORKER_INSTALL_MANIFEST_URL ??
+  "https://relaybase.xyz/downloads/worker-install-manifest.json";
+
+export type WorkerInstallManifest = {
+  version: string;
+  zipUrl: string;
+  zipSha256: string;
+  publishedAt: string;
+};
+
+export type WorkerUpdateCheck = {
+  updateAvailable: boolean;
+  latestVersion: string;
+  currentVersion?: string | null;
+  zipUrl?: string | null;
+  zipSha256?: string | null;
+};
+
 /**
  * Optional Cloudflare API token scopes for Zone / Email assist
  * (Domains import, routing automation). Not required for Worker self-install.
@@ -222,6 +245,7 @@ export function oauthAuthorizationIncompleteHelp(
 export type WorkerConnectResult = {
   ok: boolean;
   product: string;
+  version: string;
   workerScriptName: string;
   workerUrl: string;
   r2Configured: boolean;
@@ -699,6 +723,20 @@ export async function desktopAutoInstallWorker(
   });
 }
 
+/** Compare stored Worker version against relaybase.xyz install manifest. */
+export async function desktopCheckWorkerUpdate(): Promise<WorkerUpdateCheck> {
+  return invoke("check_worker_update_cmd");
+}
+
+/** Download latest install ZIP and re-deploy the Worker (keeps ADMIN_TOKEN + D1). */
+export async function desktopUpdateInstalledWorker(
+  serverToken?: string,
+): Promise<AutoInstallResult> {
+  return invoke("update_installed_worker_cmd", {
+    serverToken: serverToken?.trim() ? serverToken.trim() : null,
+  });
+}
+
 /** Stop an in-flight auto-install. The install promise then rejects. */
 export async function desktopCancelAutoInstall(): Promise<void> {
   await invoke("cancel_auto_install");
@@ -780,6 +818,7 @@ export async function desktopSaveRelaybaseAccount(input: {
     workerUrl: existing?.workerUrl ?? "",
     adminToken: existing?.adminToken ?? "",
     workerScriptName: existing?.workerScriptName ?? "",
+    workerVersion: existing?.workerVersion ?? "",
     licenseKey: existing?.licenseKey ?? "",
     relaybaseAccountId: input.accountId,
     relaybaseEmail: input.email,
@@ -979,6 +1018,7 @@ export async function desktopVerifyWorkerConnection(
     );
   }
   const value = (await connect.json().catch(() => ({}))) as {
+    version?: string;
     workerScriptName?: string;
     inbound?: {
       r2Configured?: boolean;
@@ -1014,6 +1054,7 @@ export async function desktopVerifyWorkerConnection(
   return {
     ok: true,
     product: "relaybase",
+    version: value.version?.trim() || "unknown",
     workerScriptName: value.workerScriptName ?? "relaybase-api",
     workerUrl: base,
     r2Configured: Boolean(value.inbound?.r2Configured),
@@ -1032,12 +1073,14 @@ export async function desktopSaveWorkerConnection(input: {
   workerUrl: string;
   adminToken: string;
   workerScriptName?: string;
+  workerVersion?: string;
 }): Promise<DesktopCredentials> {
   if (isDesktopRuntime()) {
     return invoke("save_worker_connection", {
       workerUrl: input.workerUrl,
       adminToken: input.adminToken,
       workerScriptName: input.workerScriptName ?? null,
+      workerVersion: input.workerVersion?.trim() ? input.workerVersion.trim() : null,
     });
   }
   const existing = await loadLocalCredentialsFile();
@@ -1050,6 +1093,8 @@ export async function desktopSaveWorkerConnection(input: {
     adminToken: input.adminToken.trim(),
     workerScriptName:
       input.workerScriptName?.trim() || existing?.workerScriptName || "",
+    workerVersion:
+      input.workerVersion?.trim() || existing?.workerVersion || "",
     licenseKey: existing?.licenseKey ?? "",
     relaybaseAccountId: existing?.relaybaseAccountId ?? "",
     relaybaseEmail: existing?.relaybaseEmail ?? "",
@@ -1086,6 +1131,7 @@ export async function desktopClearCredentials(): Promise<void> {
       workerUrl: "",
       adminToken: "",
       workerScriptName: "",
+      workerVersion: "",
       licenseKey: "",
       relaybaseAccountId: "",
       relaybaseEmail: "",

@@ -22,6 +22,7 @@ type CredentialsFile = {
   workerUrl?: string;
   adminToken?: string;
   workerScriptName?: string;
+  workerVersion?: string;
   licenseKey?: string;
   relaybaseAccountId?: string;
   relaybaseEmail?: string;
@@ -65,6 +66,7 @@ export async function GET() {
       workerUrl: parsed.workerUrl ?? "",
       adminToken: parsed.adminToken ?? "",
       workerScriptName: parsed.workerScriptName ?? "",
+      workerVersion: parsed.workerVersion ?? "",
       licenseKey: parsed.licenseKey ?? "",
       relaybaseAccountId: parsed.relaybaseAccountId ?? "",
       relaybaseEmail: parsed.relaybaseEmail ?? "",
@@ -97,6 +99,7 @@ export async function PUT(req: Request) {
     workerUrl: body.workerUrl?.trim().replace(/\/$/, "") ?? "",
     adminToken: body.adminToken?.trim() ?? "",
     workerScriptName: body.workerScriptName?.trim() ?? "",
+    workerVersion: body.workerVersion?.trim() ?? "",
     licenseKey: body.licenseKey?.trim() ?? "",
     relaybaseAccountId: body.relaybaseAccountId?.trim() ?? "",
     relaybaseEmail: body.relaybaseEmail?.trim() ?? "",

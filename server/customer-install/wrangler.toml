@@ -1,13 +1,13 @@
-# Customer install template — fill D1 ids after creating the resources
-# (see README). auto_install patches the REPLACE_WITH_* placeholders.
-# Product state lives in D1 + R2. Do not add a KV namespace.
+# Customer install template — filled by pack-customer-install.mjs at release time.
+# auto_install patches REPLACE_WITH_* D1 placeholders after creating databases.
 name = "relaybase-api"
-main = "src/index.ts"
+main = "worker.js"
 compatibility_date = "2025-06-01"
 
 [vars]
 WORKER_SCRIPT_NAME = "relaybase-api"
 INBOUND_BUCKET_NAME = "relaybase-mailbox"
+WORKER_VERSION = "0.0.0"
 
 [triggers]
 crons = ["*/15 * * * *"]
@@ -16,24 +16,17 @@ crons = ["*/15 * * * *"]
 binding = "INBOUND"
 bucket_name = "relaybase-mailbox"
 
-# Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page).
 [[d1_databases]]
 binding = "RELAYBASE_LOGS"
 database_name = "relaybase-logs"
 database_id = "REPLACE_WITH_relaybase-logs_ID"
-migrations_dir = "db/log/migrations"
 
-# FTS5 search index over inbound mail (R2 stays source of truth for bodies).
 [[d1_databases]]
 binding = "RELAYBASE_INBOX_INDEX"
 database_name = "relaybase-inbox-index"
 database_id = "REPLACE_WITH_relaybase-inbox-index_ID"
-migrations_dir = "db/inbox-index/migrations"
 
-# Durable product state (mailbox, audience, broadcasts, keys, tokens,
-# branding, mobile passwords, webhooks, owner config, inbound events).
 [[d1_databases]]
 binding = "RELAYBASE_DB"
 database_name = "relaybase-db"
 database_id = "REPLACE_WITH_relaybase-db_ID"
-migrations_dir = "db/app/migrations"

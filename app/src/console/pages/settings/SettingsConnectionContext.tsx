@@ -284,6 +284,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
         workerUrl: result.workerUrl,
         adminToken,
         workerScriptName: result.workerScriptName,
+        workerVersion: result.version,
       });
       setWorkerMessage(`Connected to ${result.workerUrl}`);
       await refreshCredentials();

@@ -66,6 +66,7 @@ function readDesktopCredentialsFromWindow(): DesktopCredentials | null {
     workerUrl,
     adminToken,
     workerScriptName: "",
+    workerVersion: "",
     licenseKey: "",
     relaybaseAccountId: "",
     relaybaseEmail: "",

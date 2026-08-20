@@ -56,6 +56,7 @@ app.get("/health", async (c) => {
   ]);
   return c.json({
     ok: true,
+    version: c.env.WORKER_VERSION?.trim() || "unknown",
     inbound: {
       r2Configured,
       bucketName: c.env.INBOUND_BUCKET_NAME,

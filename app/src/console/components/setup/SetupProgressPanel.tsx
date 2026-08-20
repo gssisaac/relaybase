@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, ExternalLink, Loader2, Square } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, Download, Loader2, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,8 +9,10 @@ import {
   cloudflareWorkersDashboardUrl,
   desktopAutoInstallWorker,
   desktopCancelAutoInstall,
-  desktopOpenExternal,
   desktopInitWorkerDb,
+  desktopOpenExternal,
+  desktopSaveDownloadFile,
+  isDesktopRuntime,
   desktopProbeInstall,
   desktopRefreshInstallToken,
   desktopRollbackInstall,
@@ -21,11 +23,14 @@ import {
   isInstallCancelledError,
   listenInstallLog,
   stripAnsi,
+  type AutoInstallResult,
   type DesktopErrorHelp,
   type InstallDecision,
   type InstallLogEvent,
   type InstallResourceProbe,
+  type WorkerConnectResult,
 } from "@/lib/desktop/bridge";
+import { downloadBlob } from "@/lib/attachments/download";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
@@ -35,6 +40,28 @@ function resourceKindLabel(kind: string): "Worker" | "R2" | "D1" {
   if (kind === "r2") return "R2";
   if (kind === "d1") return "D1";
   return "Worker";
+}
+
+function fireInstallConfetti() {
+  void import("canvas-confetti").then(({ default: confetti }) => {
+    const defaults = {
+      startVelocity: 28,
+      spread: 360,
+      ticks: 90,
+      zIndex: 9999,
+      particleCount: 80,
+    };
+    const origins = [
+      { x: 0.5, y: 0.45 },
+      { x: 0.2, y: 0.55 },
+      { x: 0.8, y: 0.55 },
+    ];
+    for (const [i, origin] of origins.entries()) {
+      window.setTimeout(() => {
+        confetti({ ...defaults, origin });
+      }, i * 220);
+    }
+  });
 }
 
 export function SetupProgressPanel() {
@@ -57,12 +84,22 @@ export function SetupProgressPanel() {
     workerUrl: string;
     adminToken: string;
   } | null>(null);
+  const [pendingVerify, setPendingVerify] = useState<{
+    workerUrl: string;
+    adminToken: string;
+    workerVersion: string;
+    dbAlreadyInitialized: boolean;
+  } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<DesktopErrorHelp | null>(null);
   const [dbAlreadyInit, setDbAlreadyInit] = useState<{
     workerUrl: string;
     adminToken: string;
   } | null>(null);
   const [clearingDb, setClearingDb] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [tokenDownloaded, setTokenDownloaded] = useState(false);
+  const [installLogExpanded, setInstallLogExpanded] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const installStartedRef = useRef(false);
   const busyRef = useRef(false);
@@ -85,16 +122,25 @@ export function SetupProgressPanel() {
   }
 
   useEffect(() => {
-    if (logEndRef.current) {
+    if (logEndRef.current && (!autoDone || installLogExpanded)) {
       logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
     }
-  }, [logs]);
+  }, [logs, autoDone, installLogExpanded]);
 
   useEffect(() => {
     if (!copiedToken) return;
     const t = window.setTimeout(() => setCopiedToken(false), 2000);
     return () => window.clearTimeout(t);
   }, [copiedToken]);
+
+  useEffect(() => {
+    if (!autoDone) {
+      setTokenDownloaded(false);
+      return;
+    }
+    setInstallLogExpanded(false);
+    fireInstallConfetti();
+  }, [autoDone]);
 
   useEffect(() => {
     if (!credentials) return;
@@ -149,6 +195,8 @@ export function SetupProgressPanel() {
     setStopped(false);
     setRolledBack(false);
     setAutoDone(null);
+    setPendingVerify(null);
+    setVerifyError(null);
     setExisting([]);
     try {
       const token = await resolvedToken();
@@ -188,6 +236,69 @@ export function SetupProgressPanel() {
     );
   }
 
+  async function finishInstall(
+    result: AutoInstallResult,
+    connect: WorkerConnectResult,
+  ) {
+    await desktopSaveWorkerConnection({
+      workerUrl: connect.workerUrl,
+      adminToken: result.adminToken,
+      workerScriptName: connect.workerScriptName,
+      workerVersion: result.workerVersion || connect.version,
+    });
+    void desktopRegisterWorkerWithConsole(connect.workerUrl).catch(() => {
+      /* best-effort */
+    });
+    await refresh();
+    setPendingVerify(null);
+    setVerifyError(null);
+    if (result.dbAlreadyInitialized) {
+      setDbAlreadyInit({
+        workerUrl: connect.workerUrl,
+        adminToken: result.adminToken,
+      });
+    } else {
+      setAutoDone({
+        workerUrl: connect.workerUrl,
+        adminToken: result.adminToken,
+      });
+      setMessage(`Connected to ${connect.workerUrl}`);
+    }
+  }
+
+  async function runManualVerify() {
+    if (!pendingVerify || verifying) return;
+    setVerifying(true);
+    setVerifyError(null);
+    try {
+      const connect = await desktopVerifyWorkerConnection(
+        pendingVerify.workerUrl,
+        pendingVerify.adminToken,
+      );
+      await finishInstall(
+        {
+          workerUrl: pendingVerify.workerUrl,
+          adminToken: pendingVerify.adminToken,
+          workerScriptName: connect.workerScriptName,
+          r2Bucket: "",
+          d1LogsId: "",
+          d1InboxIndexId: "",
+          d1DbId: "",
+          dbAlreadyInitialized: pendingVerify.dbAlreadyInitialized,
+          dbApplied: [],
+          workerVersion: pendingVerify.workerVersion,
+        },
+        connect,
+      );
+    } catch (err) {
+      setVerifyError(
+        explainDesktopError(err, "Worker is not responding yet"),
+      );
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function runAutoInstall(plan?: InstallDecision[]) {
     busyRef.current = true;
     setBusy(true);
@@ -199,6 +310,8 @@ export function SetupProgressPanel() {
     setMessage(null);
     setLogs([]);
     setAutoDone(null);
+    setPendingVerify(null);
+    setVerifyError(null);
     const chosen =
       plan ??
       existing.map((r) => ({
@@ -229,30 +342,20 @@ export function SetupProgressPanel() {
         undefined,
         chosen,
       );
-      const connect = await desktopVerifyWorkerConnection(
-        result.workerUrl,
-        result.adminToken,
-      );
-      await desktopSaveWorkerConnection({
-        workerUrl: connect.workerUrl,
-        adminToken: result.adminToken,
-        workerScriptName: connect.workerScriptName,
-      });
-      void desktopRegisterWorkerWithConsole(connect.workerUrl).catch(() => {
-        /* best-effort */
-      });
-      await refresh();
-      if (result.dbAlreadyInitialized) {
-        setDbAlreadyInit({
-          workerUrl: connect.workerUrl,
+      try {
+        const connect = await desktopVerifyWorkerConnection(
+          result.workerUrl,
+          result.adminToken,
+        );
+        await finishInstall(result, connect);
+      } catch {
+        setPendingVerify({
+          workerUrl: result.workerUrl,
           adminToken: result.adminToken,
+          workerVersion: result.workerVersion,
+          dbAlreadyInitialized: result.dbAlreadyInitialized,
         });
-      } else {
-        setAutoDone({
-          workerUrl: connect.workerUrl,
-          adminToken: result.adminToken,
-        });
-        setMessage(`Connected to ${connect.workerUrl}`);
+        setError(null);
       }
     } catch (err) {
       if (isInstallCancelledError(err)) {
@@ -300,6 +403,8 @@ export function SetupProgressPanel() {
       await desktopRollbackInstall(token, cfOAuthAccountId || undefined);
       setRolledBack(true);
       setAutoDone(null);
+      setPendingVerify(null);
+      setVerifyError(null);
       setStopped(false);
       setMessage(null);
       await refresh();
@@ -315,6 +420,27 @@ export function SetupProgressPanel() {
     if (!autoDone?.adminToken) return;
     await navigator.clipboard.writeText(autoDone.adminToken);
     setCopiedToken(true);
+  }
+
+  async function downloadAutoToken() {
+    if (!autoDone?.adminToken) return;
+    const content = [
+      "# Relaybase admin token — save this file securely",
+      `# Worker URL: ${autoDone.workerUrl}`,
+      `# Generated: ${new Date().toISOString()}`,
+      "",
+      `ADMIN_TOKEN=${autoDone.adminToken}`,
+      "",
+    ].join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const filename = "relaybase-admin-token.txt";
+    if (isDesktopRuntime()) {
+      const buffer = await blob.arrayBuffer();
+      await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
+    } else {
+      downloadBlob(blob, filename);
+    }
+    setTokenDownloaded(true);
   }
 
   async function confirmClearDb(clear: boolean) {
@@ -360,14 +486,22 @@ export function SetupProgressPanel() {
       <div className="mt-3 space-y-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {existing.length > 0 && !busy && !autoDone
+            {autoDone
+              ? "Success"
+              : pendingVerify
+              ? "Verify connection"
+              : existing.length > 0 && !busy && !autoDone
               ? "Existing resources"
               : probing
                 ? "Checking"
                 : "Installing"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {existing.length > 0 && !busy && !autoDone
+            {autoDone
+              ? "Your Worker is live. Save your admin token before opening the mailbox."
+              : pendingVerify
+              ? "Wrangler reported a successful deploy. Confirm the Worker is responding before continuing."
+              : existing.length > 0 && !busy && !autoDone
               ? "Some Relaybase resources already exist in this Cloudflare account. Choose Skip or Reinstall for each, then continue."
               : probing
                 ? "Looking for an existing Worker, R2 bucket, and D1 databases before creating anything."
@@ -383,6 +517,7 @@ export function SetupProgressPanel() {
         ) : existing.length > 0 &&
           !busy &&
           !autoDone &&
+          !pendingVerify &&
           !stopped &&
           !rollingBack &&
           !rolledBack ? (
@@ -550,10 +685,49 @@ export function SetupProgressPanel() {
               </div>
             )}
           </div>
+        ) : pendingVerify ? (
+          <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              Deploy finished — verify connection
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Wrangler deployed the Worker, but Relaybase could not confirm it
+              yet. This is normal right after deploy — Cloudflare can take up
+              to a minute to route traffic. Check the install log for the
+              workers.dev URL, then verify when ready.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Worker URL:{" "}
+              <span className="font-mono">{pendingVerify.workerUrl}</span>
+            </p>
+            {verifyError ? <DesktopErrorBanner error={verifyError} /> : null}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                className="flex-1"
+                disabled={verifying}
+                onClick={() => void runManualVerify()}
+              >
+                {verifying ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : null}
+                Verify now
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                disabled={verifying}
+                onClick={() => void startFlow()}
+              >
+                Try again
+              </Button>
+            </div>
+          </div>
         ) : autoDone ? (
           <div className="space-y-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4">
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-              Installed and connected
+            <p className="text-base font-semibold text-emerald-700 dark:text-emerald-400">
+              🎉 Installed and connected!
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL:{" "}
@@ -561,9 +735,9 @@ export function SetupProgressPanel() {
             </p>
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                Save this admin token — it&apos;s the only way to recover your
-                Worker if you lose this Mac. Relaybase cannot recover it for
-                you.
+                Download and save this admin token — it&apos;s the only way to
+                recover your Worker if you lose this Mac. Relaybase cannot
+                recover it for you.
               </p>
               <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
                 <code className="min-w-0 flex-1 break-all font-mono text-[11px]">
@@ -582,30 +756,37 @@ export function SetupProgressPanel() {
                     <Copy className="size-3.5" />
                   )}
                 </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant={tokenDownloaded ? "default" : "outline"}
+                  aria-label="Download admin token"
+                  onClick={() => void downloadAutoToken()}
+                >
+                  {tokenDownloaded ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
+                </Button>
               </div>
+              {!tokenDownloaded ? (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Download the token file to unlock Go to Mailbox.
+                </p>
+              ) : null}
             </div>
             <Button
               type="button"
-              variant="outline"
               className="w-full"
-              onClick={() => {
-                const url = cloudflareWorkersDashboardUrl(cfOAuthAccountId);
-                void desktopOpenExternal(url);
-              }}
-            >
-              <ExternalLink className="size-3.5" />
-              Open Cloudflare dashboard
-            </Button>
-            <Button
-              type="button"
-              className="w-full"
+              disabled={!tokenDownloaded}
               onClick={() => {
                 if (typeof window !== "undefined") {
                   window.location.assign("/");
                 }
               }}
             >
-              Continue to dashboard
+              Go to Mailbox
             </Button>
           </div>
         ) : stopped ? (
@@ -663,30 +844,56 @@ export function SetupProgressPanel() {
           </>
         )}
 
-        {error && !rollingBack ? <DesktopErrorBanner error={error} /> : null}
+        {error && !rollingBack && !pendingVerify ? (
+          <DesktopErrorBanner error={error} />
+        ) : null}
 
         {logs.length > 0 || rollingBack ? (
-          <div className="space-y-2 rounded-lg border border-border p-3">
-            <p className="text-xs font-medium">Install log</p>
-            <div
-              ref={logEndRef}
-              className="max-h-56 select-text cursor-text overflow-y-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300"
+          autoDone && !installLogExpanded ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-between"
+              onClick={() => setInstallLogExpanded(true)}
             >
-              {logs.map((entry, i) => (
-                <div key={i} className="whitespace-pre-wrap break-all">
-                  <span className="text-muted-foreground">
-                    [{entry.step}:{entry.level}]
-                  </span>{" "}
-                  {stripAnsi(entry.line)}
-                </div>
-              ))}
+              Install log
+              <ChevronDown className="size-3.5" />
+            </Button>
+          ) : (
+            <div className="space-y-2 rounded-lg border border-border p-3">
+              {autoDone ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
+                  onClick={() => setInstallLogExpanded(false)}
+                >
+                  Install log
+                  <ChevronUp className="size-3.5" />
+                </button>
+              ) : (
+                <p className="text-xs font-medium">Install log</p>
+              )}
+              <div
+                ref={logEndRef}
+                className="max-h-56 select-text cursor-text overflow-y-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300"
+              >
+                {logs.map((entry, i) => (
+                  <div key={i} className="whitespace-pre-wrap break-all">
+                    <span className="text-muted-foreground">
+                      [{entry.step}:{entry.level}]
+                    </span>{" "}
+                    {stripAnsi(entry.line)}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )
         ) : null}
 
         {error &&
         !busy &&
         !autoDone &&
+        !pendingVerify &&
         !stopped &&
         !rollingBack &&
         !rolledBack &&
@@ -714,7 +921,7 @@ export function SetupProgressPanel() {
         !stopping &&
         !rollingBack &&
         !rolledBack &&
-        (autoDone || stopped || (error && logs.length > 0)) ? (
+        (autoDone || pendingVerify || stopped || (error && logs.length > 0)) ? (
           <Button
             type="button"
             variant="outline"
@@ -723,6 +930,21 @@ export function SetupProgressPanel() {
           >
             Rollback
           </Button>
+        ) : null}
+
+        {autoDone ? (
+          <p className="text-center">
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              onClick={() => {
+                const url = cloudflareWorkersDashboardUrl(cfOAuthAccountId);
+                void desktopOpenExternal(url);
+              }}
+            >
+              Open Cloudflare
+            </button>
+          </p>
         ) : null}
       </div>
     </SetupScrollPage>

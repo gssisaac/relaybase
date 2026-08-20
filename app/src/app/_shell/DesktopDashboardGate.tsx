@@ -17,6 +17,7 @@ import {
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
+import { WorkerUpdateBanner } from "@/console/components/WorkerUpdateBanner";
 import {
   EmailCommandRuntimeProvider,
   GlobalCommandPalette,
@@ -118,6 +119,7 @@ function DashboardShell({
                       )}
                       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                         {isEmailSettings ? null : <DomainProgressBanner />}
+                        {isEmailSettings ? null : <WorkerUpdateBanner />}
                         {children}
                       </main>
                     </div>

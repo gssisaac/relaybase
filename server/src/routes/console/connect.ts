@@ -39,6 +39,7 @@ consoleConnect.get("/", async (c) => {
   return c.json({
     ok: true,
     product: "relaybase",
+    version: c.env.WORKER_VERSION?.trim() || "unknown",
     workerScriptName: c.env.WORKER_SCRIPT_NAME || "relaybase-api",
     inbound: {
       r2Configured,

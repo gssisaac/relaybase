@@ -15,9 +15,9 @@ fn console_base_url() -> String {
 }
 
 use auto_install::{
-    auto_install_worker, init_worker_db, merge_into_credentials, probe_install_resources,
-    request_install_cancel, rollback_all_install, AutoInstallResult, InitDbResult, InstallDecision,
-    InstallProbeResult,
+    auto_install_worker, check_worker_update, init_worker_db, merge_into_credentials,
+    probe_install_resources, request_install_cancel, rollback_all_install, update_installed_worker,
+    AutoInstallResult, InitDbResult, InstallDecision, InstallProbeResult, WorkerUpdateCheck,
 };
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
@@ -332,6 +332,70 @@ async fn auto_install_routing_worker(
     Ok(result)
 }
 
+/// Compare the deployed Worker version against the hosted install manifest.
+#[tauri::command]
+async fn check_worker_update_cmd() -> Result<WorkerUpdateCheck, String> {
+    let creds = load_credentials_merged()?;
+    let current = creds
+        .worker_version
+        .trim()
+        .to_string();
+    check_worker_update(if current.is_empty() {
+        None
+    } else {
+        Some(current)
+    })
+    .await
+}
+
+/// Download the latest install ZIP and re-deploy the Worker (keeps ADMIN_TOKEN + D1).
+#[tauri::command]
+async fn update_installed_worker_cmd(
+    app: tauri::AppHandle,
+    server_token: Option<String>,
+) -> Result<AutoInstallResult, String> {
+    let creds = load_credentials_merged()?;
+    if creds.worker_url.trim().is_empty() {
+        return Err("No Worker URL saved. Complete install first.".into());
+    }
+    if creds.admin_token.trim().is_empty() {
+        return Err("No admin token saved. Complete install first.".into());
+    }
+    let token = refresh_install_token_if_needed().await?;
+    let account_id = if creds.account_id.trim().is_empty() {
+        None
+    } else {
+        Some(creds.account_id.clone())
+    };
+    let server = server_token
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            if creds.server_token.trim().is_empty() {
+                None
+            } else {
+                Some(creds.server_token.clone())
+            }
+        });
+    let result = update_installed_worker(
+        app,
+        token.clone(),
+        account_id.clone(),
+        server.clone(),
+        creds.admin_token.clone(),
+    )
+    .await?;
+    let existing = load_credentials()?.unwrap_or_default();
+    let mut next = merge_into_credentials(&existing, &result, account_id);
+    next.install_token = token;
+    if let Some(srv) = server {
+        next.server_token = srv;
+        next.server_token_pushed_at = auto_install::now_iso();
+    }
+    save_credentials(&next)?;
+    Ok(result)
+}
+
 /// Stop an in-flight auto-install. Does not delete Cloudflare resources —
 /// the UI offers a separate Rollback action after stop/error/complete.
 #[tauri::command]
@@ -351,6 +415,7 @@ async fn rollback_auto_install(
         creds.worker_url.clear();
         creds.admin_token.clear();
         creds.worker_script_name.clear();
+        creds.worker_version.clear();
         let _ = save_credentials(&creds);
     }
     Ok(())
@@ -1047,6 +1112,7 @@ fn parse_d1_binding(value: &serde_json::Value, kind: &str) -> D1BindingSnapshot 
 struct WorkerConnectResult {
     ok: bool,
     product: String,
+    version: String,
     worker_script_name: String,
     worker_url: String,
     r2_configured: bool,
@@ -1174,6 +1240,60 @@ async fn probe_d1_when_connect_omits(
     (logs_configured, inbox_configured)
 }
 
+/// Backoff delays (seconds) between connect-check retries (~30s total).
+const CONNECT_BACKOFF_SECS: &[u64] = &[2, 4, 8, 16];
+
+async fn fetch_connect_with_retry(
+    http: &reqwest::Client,
+    url: &str,
+    token: &str,
+) -> Result<String, String> {
+    for attempt in 0..=CONNECT_BACKOFF_SECS.len() {
+        if attempt > 0 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                CONNECT_BACKOFF_SECS[attempt - 1],
+            ))
+            .await;
+        }
+
+        let res = match http
+            .get(url)
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                if attempt < CONNECT_BACKOFF_SECS.len() {
+                    continue;
+                }
+                return Err(format!(
+                    "Could not reach Worker ({e}). Check the URL and your network."
+                ));
+            }
+        };
+
+        let status = res.status();
+        if status.as_u16() == 401 || status.as_u16() == 403 {
+            return Err(
+                "Admin token was rejected by the Worker. Use the same value you set with `wrangler secret put ADMIN_TOKEN`."
+                    .into(),
+            );
+        }
+        if status.is_success() {
+            return Ok(res.text().await.unwrap_or_default());
+        }
+        if attempt < CONNECT_BACKOFF_SECS.len() {
+            continue;
+        }
+        return Err(format!(
+            "Worker connect check failed (HTTP {}). Is this a Relaybase Worker URL?",
+            status.as_u16()
+        ));
+    }
+    Err("Worker connect check failed. Is this a Relaybase Worker URL?".into())
+}
+
 /// Verify user-deployed Worker via GET /console/connect (admin Bearer).
 #[tauri::command]
 async fn verify_worker_connection(
@@ -1188,27 +1308,7 @@ async fn verify_worker_connection(
 
     let url = format!("{base}/console/connect");
     let http = reqwest::Client::new();
-    let res = http
-        .get(&url)
-        .header("Authorization", format!("Bearer {token}"))
-        .send()
-        .await
-        .map_err(|e| format!("Could not reach Worker ({e}). Check the URL and your network."))?;
-
-    let status = res.status();
-    let body = res.text().await.unwrap_or_default();
-    if status.as_u16() == 401 || status.as_u16() == 403 {
-        return Err(
-            "Admin token was rejected by the Worker. Use the same value you set with `wrangler secret put ADMIN_TOKEN`."
-                .into(),
-        );
-    }
-    if !status.is_success() {
-        return Err(format!(
-            "Worker connect check failed (HTTP {}). Is this a Relaybase Worker URL?",
-            status.as_u16()
-        ));
-    }
+    let body = fetch_connect_with_retry(&http, &url, token).await?;
 
     let value: serde_json::Value =
         serde_json::from_str(&body).map_err(|_| {
@@ -1241,6 +1341,11 @@ async fn verify_worker_connection(
     Ok(WorkerConnectResult {
         ok: true,
         product: "relaybase".into(),
+        version: value
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .into(),
         worker_script_name: value
             .get("workerScriptName")
             .and_then(|v| v.as_str())
@@ -1280,6 +1385,7 @@ async fn save_worker_connection(
     worker_url: String,
     admin_token: String,
     worker_script_name: Option<String>,
+    worker_version: Option<String>,
 ) -> Result<StoredCredentials, String> {
     let base = normalize_worker_url(&worker_url)?;
     let token = admin_token.trim();
@@ -1303,6 +1409,12 @@ async fn save_worker_connection(
         .to_string();
     if creds.worker_script_name.is_empty() {
         creds.worker_script_name = "relaybase-api".into();
+    }
+    if let Some(version) = worker_version {
+        let v = version.trim();
+        if !v.is_empty() {
+            creds.worker_version = v.to_string();
+        }
     }
     save_credentials(&creds)?;
     load_credentials_merged()
@@ -1644,6 +1756,8 @@ pub fn run() {
             refresh_install_token,
             verify_worker_connection,
             save_worker_connection,
+            check_worker_update_cmd,
+            update_installed_worker_cmd,
             get_desktop_info,
             open_external_url,
             open_local_file_with_default_app,

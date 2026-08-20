@@ -1,11 +1,12 @@
 {
   "name": "relaybase-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "build:bundle": "wrangler deploy --dry-run --outdir dist/worker-build --config wrangler.bundle.toml",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/lib/mobile-config.test.ts",
     "pack:customer-install": "node scripts/pack-customer-install.mjs",

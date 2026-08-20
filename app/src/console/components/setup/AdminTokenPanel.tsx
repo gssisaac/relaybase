@@ -9,7 +9,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { WORKER_INSTALL_ZIP_URL } from "@/lib/desktop/bridge";
+import {
+  WORKER_INSTALL_MANIFEST_URL,
+  WORKER_INSTALL_ZIP_URL,
+  type WorkerInstallManifest,
+} from "@/lib/desktop/bridge";
 
 function generateAdminToken(): string {
   const bytes = new Uint8Array(24);
@@ -26,11 +30,8 @@ function maskToken(token: string): string {
 }
 
 /**
- * Build the full one-shot manual install script: download + unzip + npm install
- * + wrangler R2/D1/secret/deploy. The admin token is embedded so the user
- * copies one block and runs it in a terminal. When Cloudflare credentials are
- * supplied (from ~/.relaybase), they are also pushed as Worker secrets so the
- * Worker can send mail.
+ * Build the full one-shot manual install script: download pre-built bundle +
+ * wrangler R2/D1/secret/deploy. No npm install — the ZIP contains worker.js.
  */
 function fullInstallCommand(
   token: string,
@@ -41,8 +42,7 @@ function fullInstallCommand(
   const lines = [
     `curl -L -o relaybase-worker-install.zip '${zipUrl}'`,
     `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
-    `cd relaybase-worker-install`,
-    `npm install`,
+    `cd relaybase-worker-install/relaybase-worker-install || cd relaybase-worker-install`,
     `npx wrangler r2 bucket create relaybase-mailbox`,
     `npx wrangler d1 create relaybase-logs`,
     `npx wrangler d1 create relaybase-inbox-index`,
@@ -54,8 +54,6 @@ function fullInstallCommand(
     const acct = cf.accountId.replace(/'/g, `'\\''`);
     const tok = cf.serverToken.replace(/'/g, `'\\''`);
     lines.push(`printf '%s' '${acct}' | npx wrangler secret put CF_ACCOUNT_ID`);
-    // The server token (Email Sending Edit) is what authorizes the Worker to
-    // send mail — never embed the install token here.
     lines.push(`printf '%s' '${tok}' | npx wrangler secret put CF_API_TOKEN`);
   } else {
     lines.push(
@@ -91,9 +89,24 @@ export function AdminTokenPanel({
   cfServerToken?: string;
 }) {
   const [copied, setCopied] = useState<"cmd" | "token" | null>(null);
+  const [zipUrl, setZipUrl] = useState(WORKER_INSTALL_ZIP_URL);
 
-  // Do NOT auto-generate on mount — that silently replaces a token the user
-  // already deployed, causing Verify to send the wrong secret.
+  useEffect(() => {
+    let active = true;
+    void fetch(WORKER_INSTALL_MANIFEST_URL, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: WorkerInstallManifest | null) => {
+        if (active && data?.zipUrl?.trim()) {
+          setZipUrl(data.zipUrl.trim());
+        }
+      })
+      .catch(() => {
+        /* fallback to stable URL */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!copied) return;
@@ -109,7 +122,7 @@ export function AdminTokenPanel({
   async function copyCommand() {
     if (!value) return;
     await copyText(
-      fullInstallCommand(value, WORKER_INSTALL_ZIP_URL, {
+      fullInstallCommand(value, zipUrl, {
         accountId: cfAccountId ?? "",
         serverToken: cfServerToken ?? "",
       }),
@@ -122,6 +135,13 @@ export function AdminTokenPanel({
     await copyText(value);
     setCopied("token");
   }
+
+  const commandPreview = value
+    ? fullInstallCommand(value, zipUrl, {
+        accountId: cfAccountId ?? "",
+        serverToken: cfServerToken ?? "",
+      })
+    : "Generate a token to reveal the full command.";
 
   return (
     <div className="space-y-3">
@@ -206,18 +226,13 @@ export function AdminTokenPanel({
           </Button>
         </div>
         <pre className="overflow-x-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300">
-          {value
-            ? fullInstallCommand(value, WORKER_INSTALL_ZIP_URL, {
-                accountId: cfAccountId ?? "",
-                serverToken: cfServerToken ?? "",
-              })
-            : "Generate a token to reveal the full command."}
+          {commandPreview}
         </pre>
         <p className="text-[11px] text-muted-foreground">
-          Run this in a terminal. After <span className="font-mono">wrangler deploy</span>{" "}
-          prints your <span className="font-mono">*.workers.dev</span> URL, come
-          back and tap &ldquo;I&apos;m done&rdquo;. Rotating the token means you
-          must run the new command again before verifying.
+          Pre-built bundle — no <span className="font-mono">npm install</span>.
+          After <span className="font-mono">wrangler deploy</span> prints your{" "}
+          <span className="font-mono">*.workers.dev</span> URL, come back and tap
+          &ldquo;I&apos;m done&rdquo;.
         </p>
       </div>
     </div>

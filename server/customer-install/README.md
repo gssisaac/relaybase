@@ -26,10 +26,9 @@ npx wrangler d1 create relaybase-db
 
 Copy each D1 **id** into `wrangler.toml` (replace the `REPLACE_WITH_*` placeholders). Do **not** create a KV namespace — product state is D1 + R2, and the admin token is the `ADMIN_TOKEN` Worker secret.
 
-## 2. Install deps and set admin secret
+## 2. Set admin secret
 
 ```bash
-npm install
 npx wrangler secret put ADMIN_TOKEN
 ```
 

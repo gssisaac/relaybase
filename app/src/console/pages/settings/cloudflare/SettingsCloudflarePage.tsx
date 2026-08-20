@@ -5,6 +5,7 @@ import { ExternalLink, Loader2, Shield, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { WorkerVersionSettingsCard } from "@/console/components/WorkerUpdateBanner";
 import {
   CF_API_TOKENS_URL,
   CF_REQUIRED_TOKEN_PERMISSIONS,
@@ -247,6 +248,8 @@ export function SettingsCloudflarePage() {
           </div>
         )}
       </ConnectionCard>
+
+      <WorkerVersionSettingsCard />
     </SettingsPageBody>
   );
 }

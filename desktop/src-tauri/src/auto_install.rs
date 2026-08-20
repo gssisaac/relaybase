@@ -1,16 +1,14 @@
 //! Background auto-install of the Relaybase routing Worker into the user's
-//! Cloudflare account using the customer-install template + `wrangler`.
+//! Cloudflare account using a pre-built install ZIP + `wrangler`.
 //!
 //! Flow (each step streams `install-log` events to the frontend):
 //!   0. `probe_install_resources` lists Worker / R2 / D1 that already exist.
-//!      The UI asks Skip (reuse) vs Reinstall (delete then create) per item.
-//!   1. Resolve the customer-install template directory (wrangler.toml + src).
+//!   1. Fetch worker-install-manifest.json and download the versioned ZIP.
 //!   2. `wrangler r2 bucket create relaybase-mailbox`.
-//!   3. Create D1 databases, patch ids (no migrations — the Worker owns its
-//!      schema via POST /console/init-db, called after deploy).
+//!   3. Create D1 databases, patch ids (schema via POST /console/init-db after deploy).
 //!   4. Generate an admin token; `wrangler secret put ADMIN_TOKEN` (stdin).
 //!   5. `wrangler deploy` → parse the `*.workers.dev` URL.
-//!   6. Return { workerUrl, adminToken, workerScriptName }.
+//!   6. POST /console/init-db; read version from GET /console/connect.
 //!
 //! The user's Cloudflare API token is passed via the `CLOUDFLARE_API_TOKEN`
 //! env var to each wrangler invocation. It is never sent to the Relaybase
@@ -21,6 +19,8 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
+
+use sha2::{Digest, Sha256};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
@@ -76,6 +76,29 @@ fn check_cancelled() -> Result<(), String> {
 
 const R2_BUCKET: &str = "relaybase-mailbox";
 
+/// Default manifest URL (override via RELAYBASE_INSTALL_MANIFEST_URL).
+const DEFAULT_MANIFEST_URL: &str =
+    "https://relaybase.xyz/downloads/worker-install-manifest.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkerInstallManifest {
+    pub version: String,
+    pub zip_url: String,
+    pub zip_sha256: String,
+    pub published_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkerUpdateCheck {
+    pub update_available: bool,
+    pub latest_version: String,
+    pub current_version: Option<String>,
+    pub zip_url: Option<String>,
+    pub zip_sha256: Option<String>,
+}
+
 /// D1 databases created during install. Each entry is (binding, db_name,
 /// migrations_dir, placeholder in wrangler.toml).
 const D1_DATABASES: &[(&str, &str, &str, &str)] = &[
@@ -97,6 +120,7 @@ pub struct AutoInstallResult {
     pub d1_db_id: String,
     pub db_already_initialized: bool,
     pub db_applied: Vec<String>,
+    pub worker_version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,132 +184,296 @@ struct LogEvent {
     line: String,
 }
 
-/// Resolve the customer-install template directory.
-///
-/// Order:
-///   1. `RELAYBASE_INSTALL_TEMPLATE_DIR` env var (explicit override).
-///   2. `<resource_dir>/customer-install` (bundled in packaged builds).
-///   3. `<repo>/server/customer-install` (dev / `tauri dev` from a checkout).
-fn resolve_template_dir() -> Result<PathBuf, String> {
-    if let Ok(dir) = env::var("RELAYBASE_INSTALL_TEMPLATE_DIR") {
-        let p = PathBuf::from(dir);
-        if p.join("wrangler.toml").is_file() {
-            return Ok(p);
-        }
+fn manifest_url() -> String {
+    env::var("RELAYBASE_INSTALL_MANIFEST_URL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_MANIFEST_URL.to_string())
+}
+
+/// Fetch the hosted worker-install manifest (version + zip URL + sha256).
+pub async fn fetch_install_manifest() -> Result<WorkerInstallManifest, String> {
+    let url = manifest_url();
+    let client = reqwest::Client::new();
+    let res = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not fetch install manifest ({url}): {e}"))?;
+    if !res.status().is_success() {
         return Err(format!(
-            "RELAYBASE_INSTALL_TEMPLATE_DIR points to {p:?} but no wrangler.toml found there"
+            "Install manifest request failed (HTTP {}): {url}",
+            res.status().as_u16()
         ));
     }
-    // Packaged builds: resources/customer-install (set by tauri.conf.json).
-    if let Some(p) = resource_dir().map(|d| d.join("customer-install")) {
-        if p.join("wrangler.toml").is_file() {
-            return Ok(p);
-        }
-    }
-    // Dev fallback: walk up from CWD to find server/customer-install.
-    if let Some(p) = find_repo_template() {
-        return Ok(p);
-    }
-    Err(
-        "Could not locate the Relaybase install template (wrangler.toml). \
-         Set RELAYBASE_INSTALL_TEMPLATE_DIR or bundle customer-install under resources."
-            .into(),
-    )
+    res.json::<WorkerInstallManifest>()
+        .await
+        .map_err(|e| format!("Install manifest JSON invalid: {e}"))
 }
 
-fn resource_dir() -> Option<PathBuf> {
-    // tauri::path::resource_dir() is only available with an AppHandle at runtime;
-    // for discovery here we approximate via the current executable's dir.
-    let exe = env::current_exe().ok()?;
-    let dir = exe.parent()?;
-    // Typical layout: <install>/Relaybase + resources/ sibling.
-    let candidates = [
-        dir.join("resources").join("customer-install"),
-        dir.parent()?.join("resources").join("customer-install"),
-    ];
-    for c in candidates {
-        if c.join("wrangler.toml").is_file() {
-            return Some(c.parent()?.join("customer-install"));
-        }
+fn versions_differ(current: Option<&str>, latest: &str) -> bool {
+    let cur = current.unwrap_or("").trim();
+    let lat = latest.trim();
+    if lat.is_empty() {
+        return false;
     }
-    None
+    cur.is_empty() || cur != lat
 }
 
-fn find_repo_template() -> Option<PathBuf> {
-    let mut cur = env::current_dir().ok()?;
-    for _ in 0..8 {
-        let candidate = cur.join("server").join("customer-install");
-        if candidate.join("wrangler.toml").is_file() {
-            return Some(candidate);
-        }
-        if !cur.pop() {
-            break;
-        }
-    }
-    None
+/// Compare stored worker_version against the hosted manifest.
+pub async fn check_worker_update(
+    current_version: Option<String>,
+) -> Result<WorkerUpdateCheck, String> {
+    let manifest = fetch_install_manifest().await?;
+    let update_available = versions_differ(current_version.as_deref(), &manifest.version);
+    Ok(WorkerUpdateCheck {
+        update_available,
+        latest_version: manifest.version.clone(),
+        current_version: current_version.filter(|v| !v.trim().is_empty()),
+        zip_url: if update_available {
+            Some(manifest.zip_url.clone())
+        } else {
+            None
+        },
+        zip_sha256: if update_available {
+            Some(manifest.zip_sha256.clone())
+        } else {
+            None
+        },
+    })
 }
 
-/// Copy the template into a fresh temp working directory and return its path.
-///
-/// `server/customer-install` is wrangler.toml-only. When `src/index.ts` is
-/// missing, pull Worker source, D1 migrations, and deps from `server/`.
-fn stage_template(template: &Path) -> Result<PathBuf, String> {
+fn sha256_hex(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    format!("{:x}", hasher.finalize())
+}
+
+async fn download_bytes(url: &str) -> Result<Vec<u8>, String> {
+    check_cancelled()?;
+    let client = reqwest::Client::new();
+    let res = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not download install package ({url}): {e}"))?;
+    if !res.status().is_success() {
+        return Err(format!(
+            "Install package download failed (HTTP {}): {url}",
+            res.status().as_u16()
+        ));
+    }
+    res.bytes()
+        .await
+        .map(|b| b.to_vec())
+        .map_err(|e| format!("Could not read install package bytes: {e}"))
+}
+
+fn unzip_bytes(zip_bytes: &[u8], dest: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dest).map_err(|e| format!("mkdir {dest:?}: {e}"))?;
+    let zip_path = dest
+        .parent()
+        .ok_or("Invalid unzip destination")?
+        .join(format!("relaybase-install-{}.zip", uuid::Uuid::new_v4()));
+    std::fs::write(&zip_path, zip_bytes).map_err(|e| format!("write temp zip: {e}"))?;
+    let status = std::process::Command::new("unzip")
+        .args(["-o", "-q"])
+        .arg(&zip_path)
+        .arg("-d")
+        .arg(dest)
+        .status()
+        .map_err(|e| format!("Could not run unzip (is it installed?): {e}"))?;
+    let _ = std::fs::remove_file(&zip_path);
+    if !status.success() {
+        return Err(format!("unzip exited with status {status}"));
+    }
+    Ok(())
+}
+
+/// Download the versioned install ZIP, verify SHA-256, and stage wrangler.toml + worker.js.
+async fn stage_install_package(
+    app: &AppHandle,
+    manifest: &WorkerInstallManifest,
+) -> Result<PathBuf, String> {
+    emit_log(
+        app,
+        "prepare",
+        "info",
+        format!(
+            "Downloading Worker install v{}…",
+            manifest.version.trim()
+        ),
+    );
+    let bytes = download_bytes(&manifest.zip_url).await?;
+    let hash = sha256_hex(&bytes);
+    if !manifest.zip_sha256.is_empty()
+        && hash.to_lowercase() != manifest.zip_sha256.trim().to_lowercase()
+    {
+        return Err(format!(
+            "Install package SHA-256 mismatch (expected {}, got {hash})",
+            manifest.zip_sha256.trim()
+        ));
+    }
     let tmp = std::env::temp_dir().join(format!("relaybase-install-{}", uuid::Uuid::new_v4()));
-    copy_dir(template, &tmp)?;
-    enrich_template(&tmp, template)?;
-    Ok(tmp)
-}
-
-fn enrich_template(work_dir: &Path, template: &Path) -> Result<(), String> {
-    if work_dir.join("src").join("index.ts").is_file() {
-        return Ok(());
-    }
-    let server_root = template.parent().filter(|p| p.join("src").join("index.ts").is_file());
-    let Some(server_root) = server_root else {
+    unzip_bytes(&bytes, &tmp)?;
+    let nested = tmp.join("relaybase-worker-install");
+    let work_dir = if nested.join("wrangler.toml").is_file() {
+        nested
+    } else if tmp.join("wrangler.toml").is_file() {
+        tmp.clone()
+    } else {
         return Err(
-            "Install template is missing src/index.ts. Re-pack customer-install or run from a full checkout."
-                .into(),
+            "Install ZIP is missing wrangler.toml. Re-pack with pnpm pack:worker-install.".into(),
         );
     };
-    copy_dir(&server_root.join("src"), &work_dir.join("src"))?;
-    if server_root.join("db").is_dir() {
-        copy_dir(&server_root.join("db"), &work_dir.join("db"))?;
+    if !work_dir.join("worker.js").is_file() {
+        return Err(
+            "Install ZIP is missing worker.js. Re-pack with pnpm pack:worker-install.".into(),
+        );
     }
-    for file in ["package.json", "tsconfig.json"] {
-        let src = server_root.join(file);
-        if src.is_file() {
-            std::fs::copy(&src, work_dir.join(file))
-                .map_err(|e| format!("copy {file}: {e}"))?;
+    emit_log(
+        app,
+        "prepare",
+        "info",
+        format!(
+            "Staged Worker install v{} at {}",
+            manifest.version.trim(),
+            work_dir.display()
+        ),
+    );
+    Ok(work_dir)
+}
+
+/// Read version from staged VERSION file or wrangler.toml WORKER_VERSION var.
+fn read_staged_version(work_dir: &Path) -> Option<String> {
+    let version_file = work_dir.join("VERSION");
+    if version_file.is_file() {
+        if let Ok(raw) = std::fs::read_to_string(&version_file) {
+            let v = raw.trim();
+            if !v.is_empty() {
+                return Some(v.to_string());
+            }
         }
     }
-    let nm = server_root.join("node_modules");
-    if nm.is_dir() && !work_dir.join("node_modules").exists() {
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(&nm, work_dir.join("node_modules"))
-                .map_err(|e| format!("symlink node_modules: {e}"))?;
-        }
-        #[cfg(not(unix))]
-        {
-            copy_dir(&nm, &work_dir.join("node_modules"))?;
+    let wrangler = work_dir.join("wrangler.toml");
+    if wrangler.is_file() {
+        if let Ok(raw) = std::fs::read_to_string(&wrangler) {
+            for line in raw.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("WORKER_VERSION") {
+                    if let Some(rest) = trimmed.split('=').nth(1) {
+                        let v = rest.trim().trim_matches('"');
+                        if !v.is_empty() {
+                            return Some(v.to_string());
+                        }
+                    }
+                }
+            }
         }
     }
+    None
+}
+
+/// Backoff delays (seconds) between health-check retries after deploy (~30s total).
+const WARMUP_BACKOFF_SECS: &[u64] = &[2, 4, 8, 16];
+
+async fn probe_worker_health(worker_url: &str) -> Result<bool, String> {
+    let base = worker_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err("Worker URL is empty".into());
+    }
+    let client = reqwest::Client::new();
+    let res = client
+        .get(format!("{base}/health"))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !res.status().is_success() {
+        return Ok(false);
+    }
+    let body = res.text().await.unwrap_or_default();
+    let value: serde_json::Value =
+        serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
+    Ok(value.get("ok") == Some(&serde_json::Value::Bool(true)))
+}
+
+/// Poll GET /health until the Worker responds or ~30s elapses (post-deploy warm-up).
+async fn wait_for_worker_ready(app: &AppHandle, worker_url: &str) -> Result<(), String> {
+    emit_log(
+        app,
+        "warmup",
+        "info",
+        format!("Waiting for {worker_url} to become reachable…"),
+    );
+    for attempt in 0..=WARMUP_BACKOFF_SECS.len() {
+        if attempt > 0 {
+            check_cancelled()?;
+            let delay = WARMUP_BACKOFF_SECS[attempt - 1];
+            emit_log(
+                app,
+                "warmup",
+                "info",
+                format!(
+                    "Worker not ready yet — retrying in {delay}s (attempt {}/{})…",
+                    attempt + 1,
+                    WARMUP_BACKOFF_SECS.len() + 1
+                ),
+            );
+            tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+            check_cancelled()?;
+        }
+        match probe_worker_health(worker_url).await {
+            Ok(true) => {
+                emit_log(
+                    app,
+                    "warmup",
+                    "info",
+                    format!("Worker is reachable (attempt {})", attempt + 1),
+                );
+                return Ok(());
+            }
+            Ok(false) => {}
+            Err(e) => {
+                emit_log(
+                    app,
+                    "warmup",
+                    "info",
+                    format!("Health check failed (attempt {}): {e}", attempt + 1),
+                );
+            }
+        }
+    }
+    emit_log(
+        app,
+        "warmup",
+        "stderr",
+        "Worker did not respond to /health within ~30s — continuing anyway. You can verify manually.",
+    );
     Ok(())
 }
 
-fn copy_dir(src: &Path, dst: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|e| format!("mkdir {dst:?}: {e}"))?;
-    for entry in std::fs::read_dir(src).map_err(|e| format!("read {src:?}: {e}"))? {
-        let entry = entry.map_err(|e| format!("dir entry {src:?}: {e}"))?;
-        let from = entry.path();
-        let to = dst.join(entry.file_name());
-        if from.is_dir() {
-            copy_dir(&from, &to)?;
-        } else {
-            std::fs::copy(&from, &to).map_err(|e| format!("copy {from:?}: {e}"))?;
-        }
+async fn fetch_worker_version(worker_url: &str, admin_token: &str) -> Option<String> {
+    let base = worker_url.trim().trim_end_matches('/');
+    if base.is_empty() || admin_token.trim().is_empty() {
+        return None;
     }
-    Ok(())
+    let client = reqwest::Client::new();
+    let res = client
+        .get(format!("{base}/console/connect"))
+        .header("Authorization", format!("Bearer {}", admin_token.trim()))
+        .send()
+        .await
+        .ok()?;
+    if !res.status().is_success() {
+        return None;
+    }
+    let body = res.text().await.ok()?;
+    let value: serde_json::Value = serde_json::from_str(&body).ok()?;
+    value
+        .get("version")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && s != "unknown")
 }
 
 fn generate_admin_token() -> String {
@@ -500,44 +688,6 @@ fn is_already_exists_error(err: &str) -> bool {
     lower.contains("already exists")
         || lower.contains("you own it")
         || lower.contains("code: 10004")
-}
-
-async fn ensure_node_modules(app: &AppHandle, work_dir: &Path) -> Result<(), String> {
-    check_cancelled()?;
-    let _ = app.emit(
-        "install-log",
-        LogEvent {
-            step: "deps".into(),
-            level: "info".into(),
-            line: "Installing Worker dependencies…".into(),
-        },
-    );
-    let mut cmd = Command::new("npm");
-    cmd.args(["install", "--omit=dev", "--no-fund", "--no-audit"]);
-    cmd.current_dir(work_dir);
-    cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::null());
-    cmd.kill_on_drop(true);
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Could not run npm install: {e}"))?;
-    tokio::select! {
-        _ = cancel_notify().notified() => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            return Err(cancelled_error());
-        }
-        status = child.wait() => {
-            let status = status.map_err(|e| format!("wait: {e}"))?;
-            if install_is_cancelled() {
-                return Err(cancelled_error());
-            }
-            if !status.success() {
-                return Err(format!("npm install exited with status {status}"));
-            }
-        }
-    }
-    Ok(())
 }
 
 fn emit_log(app: &AppHandle, step: &str, level: &str, line: impl Into<String>) {
@@ -925,6 +1075,14 @@ pub async fn probe_install_resources(
     })
 }
 
+#[derive(Default)]
+struct InstallRunOptions {
+    /// When set, reuse this admin token instead of generating a new one (Worker update).
+    existing_admin_token: Option<String>,
+    /// When true, skip wrangler secret put for ADMIN_TOKEN (update keeps existing secret).
+    skip_admin_secret: bool,
+}
+
 pub async fn auto_install_worker(
     app: AppHandle,
     api_token: String,
@@ -961,29 +1119,24 @@ pub async fn auto_install_worker(
         }
     };
 
-    let template = resolve_template_dir()?;
+    let manifest = fetch_install_manifest().await?;
     let _ = app.emit(
         "install-log",
         LogEvent {
             step: "prepare".into(),
             level: "info".into(),
-            line: format!("Using install template at {}", template.display()),
+            line: format!(
+                "Using Worker install manifest v{}",
+                manifest.version.trim()
+            ),
         },
     );
 
-    let work_dir = stage_template(&template)?;
+    let work_dir = stage_install_package(&app, &manifest).await?;
     if install_is_cancelled() {
         let _ = std::fs::remove_dir_all(&work_dir);
         return Err(cancelled_error());
     }
-    let _ = app.emit(
-        "install-log",
-        LogEvent {
-            step: "prepare".into(),
-            level: "info".into(),
-            line: format!("Staged working copy at {}", work_dir.display()),
-        },
-    );
 
     let result = auto_install_steps(
         &app,
@@ -992,6 +1145,63 @@ pub async fn auto_install_worker(
         &account_id,
         server_token.as_deref(),
         &InstallPlan::from_decisions(&decisions),
+        &InstallRunOptions::default(),
+        read_staged_version(&work_dir),
+    )
+    .await;
+    let _ = std::fs::remove_dir_all(&work_dir);
+    result
+}
+
+/// Re-deploy the Worker from the latest hosted install ZIP (keeps ADMIN_TOKEN + D1).
+pub async fn update_installed_worker(
+    app: AppHandle,
+    api_token: String,
+    account_id: Option<String>,
+    server_token: Option<String>,
+    existing_admin_token: String,
+) -> Result<AutoInstallResult, String> {
+    reset_install_cancel();
+    let api_token = api_token.trim().to_string();
+    if api_token.is_empty() {
+        return Err("A Cloudflare API token is required.".into());
+    }
+    let admin = existing_admin_token.trim().to_string();
+    if admin.is_empty() {
+        return Err("Admin token is required to update the Worker.".into());
+    }
+    let server_token = server_token
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    let account_id = match account_id
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+    {
+        Some(id) => id,
+        None => resolve_account_id(&api_token).await?,
+    };
+
+    let manifest = fetch_install_manifest().await?;
+    let work_dir = stage_install_package(&app, &manifest).await?;
+    if install_is_cancelled() {
+        let _ = std::fs::remove_dir_all(&work_dir);
+        return Err(cancelled_error());
+    }
+
+    let mut run_opts = InstallRunOptions::default();
+    run_opts.existing_admin_token = Some(admin.clone());
+    run_opts.skip_admin_secret = true;
+
+    let result = auto_install_steps(
+        &app,
+        &work_dir,
+        &api_token,
+        &account_id,
+        server_token.as_deref(),
+        &InstallPlan::default(),
+        &run_opts,
+        read_staged_version(&work_dir),
     )
     .await;
     let _ = std::fs::remove_dir_all(&work_dir);
@@ -1005,6 +1215,8 @@ async fn auto_install_steps(
     account_id: &str,
     server_token: Option<&str>,
     plan: &InstallPlan,
+    run_opts: &InstallRunOptions,
+    staged_version: Option<String>,
 ) -> Result<AutoInstallResult, String> {
     check_cancelled()?;
     let _ = app.emit(
@@ -1114,24 +1326,37 @@ async fn auto_install_steps(
 
     // 3) Admin token + secret
     check_cancelled()?;
-    let admin_token = generate_admin_token();
-    run_wrangler(
-        app,
-        "secret",
-        work_dir,
-        &["secret", "put", "ADMIN_TOKEN"],
-        api_token,
-        Some(admin_token.as_bytes()),
-    )
-    .await?;
-    let _ = app.emit(
-        "install-log",
-        LogEvent {
-            step: "secret".into(),
-            level: "info".into(),
-            line: "ADMIN_TOKEN secret set".to_string(),
-        },
-    );
+    let admin_token = if let Some(existing) = run_opts.existing_admin_token.as_ref() {
+        existing.clone()
+    } else {
+        generate_admin_token()
+    };
+    if !run_opts.skip_admin_secret {
+        run_wrangler(
+            app,
+            "secret",
+            work_dir,
+            &["secret", "put", "ADMIN_TOKEN"],
+            api_token,
+            Some(admin_token.as_bytes()),
+        )
+        .await?;
+        let _ = app.emit(
+            "install-log",
+            LogEvent {
+                step: "secret".into(),
+                level: "info".into(),
+                line: "ADMIN_TOKEN secret set".to_string(),
+            },
+        );
+    } else {
+        emit_log(
+            app,
+            "secret",
+            "info",
+            "ADMIN_TOKEN unchanged — reusing existing secret",
+        );
+    }
 
     // 3b) Cloudflare runtime secrets so the Worker can send mail. CF_ACCOUNT_ID
     //     is always pushed. CF_API_TOKEN is only pushed when the user supplied
@@ -1184,11 +1409,7 @@ async fn auto_install_steps(
         );
     }
 
-    if !work_dir.join("node_modules").exists() {
-        ensure_node_modules(app, work_dir).await?;
-    }
-
-    // 4) Deploy
+    // 4) Deploy (pre-built worker.js — no npm install)
     check_cancelled()?;
     let deploy_out = run_wrangler(
         app,
@@ -1210,6 +1431,8 @@ async fn auto_install_steps(
             line: format!("Deployed at {worker_url}"),
         },
     );
+
+    wait_for_worker_ready(app, &worker_url).await?;
 
     // 5) Initialize D1 schema via the Worker's own endpoint.
     //    The desktop never applies SQL — the Worker owns its schema.
@@ -1239,6 +1462,11 @@ async fn auto_install_steps(
         }
     };
 
+    let worker_version = fetch_worker_version(&worker_url, &admin_token)
+        .await
+        .or(staged_version)
+        .unwrap_or_else(|| "unknown".to_string());
+
     Ok(AutoInstallResult {
         worker_url,
         worker_script_name: DEFAULT_SCRIPT.to_string(),
@@ -1250,6 +1478,7 @@ async fn auto_install_steps(
         d1_db_id: d1_ids.get(2).cloned().unwrap_or_default(),
         db_already_initialized,
         db_applied,
+        worker_version,
     })
 }
 
@@ -1318,6 +1547,11 @@ pub fn merge_into_credentials(
         worker_url: result.worker_url.clone(),
         admin_token: result.admin_token.clone(),
         worker_script_name: result.worker_script_name.clone(),
+        worker_version: if result.worker_version.trim().is_empty() {
+            existing.worker_version.clone()
+        } else {
+            result.worker_version.clone()
+        },
         license_key: existing.license_key.clone(),
         relaybase_account_id: existing.relaybase_account_id.clone(),
         relaybase_email: existing.relaybase_email.clone(),

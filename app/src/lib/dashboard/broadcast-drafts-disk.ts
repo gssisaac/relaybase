@@ -5,7 +5,7 @@ import {
   desktopSaveMailJson,
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
-import type { EmailBroadcast } from "@/email/components/types";
+import type { EmailBroadcast } from "@/email/components/mailbox/types";
 
 /** Local broadcast drafts → ~/.relaybase/mail/{userId}/broadcast-drafts.json */
 

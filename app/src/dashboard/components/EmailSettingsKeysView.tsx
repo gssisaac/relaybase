@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { SparklineChart } from "@/components/dashboard/SparklineChart";
-import { EmailAlerts } from "@/email/components/EmailShared";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { useDashboardPaths } from "@/dashboard/paths";
 import {
   dashboardCacheNeedsRefresh,

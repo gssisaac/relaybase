@@ -11,7 +11,7 @@ import {
   type AccountDetailTab,
   useDashboardPaths,
 } from "@/dashboard/paths";
-import { fetchEmailCached } from "@/email/components/email-cached-fetch";
+import { fetchEmailCached } from "@/email/components/mailbox/email-cached-fetch";
 import {
   Globe,
   Loader2,
@@ -46,10 +46,10 @@ import {
 import {
   CloudflareConfigAlert,
   EmailAlerts,
-} from "@/email/components/EmailShared";
-import { clearEmailCache } from "@/email/components/email-cached-fetch";
-import { readEmailStale } from "@/email/components/useEmailViewLoading";
-import type { Address, EmailConfig } from "@/email/components/types";
+} from "@/email/components/mailbox/EmailShared";
+import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
+import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
+import type { Address, EmailConfig } from "@/email/components/mailbox/types";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

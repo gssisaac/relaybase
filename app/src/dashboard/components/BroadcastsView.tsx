@@ -15,13 +15,13 @@ import {
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { broadcastDetailHref, useDashboardPaths } from "@/dashboard/paths";
-import { useEmailPaths } from "@/email/paths";
+import { useEmailPaths } from "@/email/lib/paths";
 import {
   fetchEmailCached,
   fetchEmailCachedOptional,
-} from "@/email/components/email-cached-fetch";
-import { readEmailStale } from "@/email/components/useEmailViewLoading";
-import { EmailAlerts } from "@/email/components/EmailShared";
+} from "@/email/components/mailbox/email-cached-fetch";
+import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
@@ -34,11 +34,11 @@ import {
   EmailTableRow,
   EmptyListState,
   ListToolbar,
-} from "@/email/components/EmailListShell";
+} from "@/email/components/mailbox/EmailListShell";
 import type {
   AudienceGroupSummary,
   EmailBroadcast,
-} from "@/email/components/types";
+} from "@/email/components/mailbox/types";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

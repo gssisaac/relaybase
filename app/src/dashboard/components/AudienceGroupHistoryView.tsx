@@ -5,18 +5,18 @@ import { useEffect, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { broadcastDetailHref } from "@/dashboard/paths";
-import { useEmailPaths } from "@/email/paths";
-import { fetchEmailCached } from "@/email/components/email-cached-fetch";
-import { readEmailStale } from "@/email/components/useEmailViewLoading";
+import { useEmailPaths } from "@/email/lib/paths";
+import { fetchEmailCached } from "@/email/components/mailbox/email-cached-fetch";
+import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
 import { useAudienceGroupDetail } from "@/dashboard/components/AudienceGroupDetailContext";
-import { EmailAlerts } from "@/email/components/EmailShared";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import {
   EmailListContainer,
   EmailTableHeader,
   EmailTableRow,
   EmptyListState,
-} from "@/email/components/EmailListShell";
-import type { EmailBroadcast } from "@/email/components/types";
+} from "@/email/components/mailbox/EmailListShell";
+import type { EmailBroadcast } from "@/email/components/mailbox/types";
 
 import { Badge } from "@/components/ui/badge";
 

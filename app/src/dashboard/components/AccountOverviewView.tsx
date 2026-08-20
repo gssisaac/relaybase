@@ -13,9 +13,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { EmailAlerts } from "@/email/components/EmailShared";
-import { accountMailboxNav } from "@/email/components/MailboxNavContext";
-import { useEmailPaths } from "@/email/paths";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
+import { accountMailboxNav } from "@/email/components/mailbox/MailboxNavContext";
+import { useEmailPaths } from "@/email/lib/paths";
 import {
   dashboardCacheNeedsRefresh,
   loadAccountStatsCache,

@@ -4,12 +4,12 @@ import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useEmailPaths } from "@/email/paths";
+import { useEmailPaths } from "@/email/lib/paths";
 import {
   clearAudienceGroupDetailCache,
   useAudienceGroupDetail,
 } from "@/dashboard/components/AudienceGroupDetailContext";
-import { EmailAlerts } from "@/email/components/EmailShared";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
@@ -22,7 +22,7 @@ import {
   EmailTableRow,
   EmptyListState,
   ListToolbar,
-} from "@/email/components/EmailListShell";
+} from "@/email/components/mailbox/EmailListShell";
 import { audienceContactDisplayName } from "@/lib/audience-display";
 
 import { Badge } from "@/components/ui/badge";

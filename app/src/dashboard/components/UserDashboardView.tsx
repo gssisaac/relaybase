@@ -20,7 +20,7 @@ import {
   readResponseJson,
 } from "@/lib/desktop/api-base";
 import { useDashboardPaths } from "@/dashboard/paths";
-import { EmailAlerts } from "@/email/components/EmailShared";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

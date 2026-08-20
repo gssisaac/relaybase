@@ -1,4 +1,4 @@
-import { readUiJson, UI_FILES, writeUiJson } from "@/email/user-ui-disk";
+import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
 import {
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,

@@ -2,12 +2,12 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { clearEmailCache } from "@/email/components/email-cached-fetch";
+import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
 import type {
   AudienceGroupSummary,
   BroadcastDetail,
   EmailBroadcast,
-} from "@/email/components/types";
+} from "@/email/components/mailbox/types";
 import {
   loadPersistedBroadcastDrafts,
   savePersistedBroadcastDrafts,

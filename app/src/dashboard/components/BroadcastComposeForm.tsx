@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Address, AudienceGroupSummary } from "@/email/components/types";
+import type { Address, AudienceGroupSummary } from "@/email/components/mailbox/types";
 
 /**
  * Compose-shaped editor for broadcast drafts — same chrome as mail ComposeForm

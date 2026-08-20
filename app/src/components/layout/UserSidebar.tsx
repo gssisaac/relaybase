@@ -23,10 +23,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
 import { useDashboardPaths } from "@/dashboard/paths";
-import { AddEmailAccountDialog } from "@/email/components/AddEmailAccountDialog";
-import { AddTeamAccountDialog } from "@/email/components/AddTeamAccountDialog";
-import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
-import { useMailAccounts } from "@/email/components/MailAccountsContext";
+import { AddEmailAccountDialog } from "@/email/components/accounts/AddEmailAccountDialog";
+import { AddTeamAccountDialog } from "@/email/components/accounts/AddTeamAccountDialog";
+import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
+import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import {
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,
@@ -39,8 +39,8 @@ import {
   writeSidebarMode,
   type SidebarMode,
 } from "@/email/sidebar-mode";
-import { composeNewHref } from "@/email/compose-open";
-import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/paths";
+import { composeNewHref } from "@/email/lib/compose/compose-open";
+import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/lib/paths";
 import {
   AlertDialog,
   AlertDialogAction,

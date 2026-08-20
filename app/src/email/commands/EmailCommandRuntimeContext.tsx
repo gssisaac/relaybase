@@ -13,7 +13,7 @@ import {
 } from "react";
 
 import type { ResolvedEmailCommand } from "@/email/commands/email-command-store";
-import type { MailListItem } from "@/email/components/types";
+import type { MailListItem } from "@/email/components/mailbox/types";
 
 export type EmailCommandRuntimeScope = {
   title: string;

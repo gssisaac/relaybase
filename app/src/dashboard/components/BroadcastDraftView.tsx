@@ -14,11 +14,11 @@ import {
   useBroadcastDetail,
 } from "@/dashboard/components/BroadcastDetailContext";
 import { broadcastDetailHref, useDashboardPaths } from "@/dashboard/paths";
-import { useEmailPaths } from "@/email/paths";
-import { fetchEmailCachedOptional } from "@/email/components/email-cached-fetch";
-import { readEmailStale } from "@/email/components/useEmailViewLoading";
-import { EmailAlerts } from "@/email/components/EmailShared";
-import type { Address, AudienceGroupSummary } from "@/email/components/types";
+import { useEmailPaths } from "@/email/lib/paths";
+import { fetchEmailCachedOptional } from "@/email/components/mailbox/email-cached-fetch";
+import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
+import type { Address, AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,

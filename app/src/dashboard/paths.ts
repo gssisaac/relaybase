@@ -71,9 +71,11 @@ const SETTINGS_TABS: SettingsTab[] = [
   "admin-token",
 ];
 
+export { SETTINGS_TABS };
+
 export function settingsTabHref(tab: SettingsTab = "cloudflare"): string {
   if (tab === "cloudflare") return "/settings";
-  return `/settings?tab=${tab}`;
+  return `/settings/${tab}`;
 }
 
 export function settingsTabFromSearch(searchParams: {

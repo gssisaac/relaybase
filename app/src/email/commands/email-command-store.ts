@@ -2,8 +2,8 @@
 
 import type { LucideIcon } from "lucide-react";
 
-import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
-import type { MailListItem } from "@/email/components/types";
+import type { EmailMailboxSection } from "@/email/components/mailbox/EmailMailboxLayout";
+import type { MailListItem } from "@/email/components/mailbox/types";
 import {
   EMAIL_COMMAND_DEFS,
   type EmailCommandDef,

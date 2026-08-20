@@ -4,11 +4,11 @@ import { Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { audienceContactDisplayName } from "@/lib/audience-display";
-import { useEmailPaths } from "@/email/paths";
+import { useEmailPaths } from "@/email/lib/paths";
 import type {
   AudienceGroupContact,
   AudienceGroupSummary,
-} from "@/email/components/types";
+} from "@/email/components/mailbox/types";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,

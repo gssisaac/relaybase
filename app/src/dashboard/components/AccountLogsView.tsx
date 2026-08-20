@@ -13,8 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { EmailAlerts } from "@/email/components/EmailShared";
-import { useEmailPaths } from "@/email/paths";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
+import { useEmailPaths } from "@/email/lib/paths";
 import {
   dashboardCacheNeedsRefresh,
   loadAccountLogsCache,

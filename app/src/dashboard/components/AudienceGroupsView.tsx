@@ -15,14 +15,14 @@ import {
   useDashboardPaths,
   type AudienceDetailTab,
 } from "@/dashboard/paths";
-import { useEmailPaths } from "@/email/paths";
+import { useEmailPaths } from "@/email/lib/paths";
 import {
   clearEmailCache,
   fetchEmailCached,
-} from "@/email/components/email-cached-fetch";
-import { readEmailStale } from "@/email/components/useEmailViewLoading";
-import { EmailAlerts } from "@/email/components/EmailShared";
-import type { AudienceGroupSummary } from "@/email/components/types";
+} from "@/email/components/mailbox/email-cached-fetch";
+import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
+import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,

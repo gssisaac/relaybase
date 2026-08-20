@@ -11,16 +11,16 @@ import {
   type EmailCommandRuntime,
   type ResolvedEmailCommand,
 } from "@/email/commands/email-command-store";
-import type { EmailAccountFilter } from "@/email/components/EmailAccountSelect";
-import type { EmailMailboxSection } from "@/email/components/EmailMailboxLayout";
-import type { MailListItem } from "@/email/components/types";
+import type { EmailAccountFilter } from "@/email/components/accounts/EmailAccountSelect";
+import type { EmailMailboxSection } from "@/email/components/mailbox/EmailMailboxLayout";
+import type { MailListItem } from "@/email/components/mailbox/types";
 import {
   exactDraftComposeHref,
   useStandaloneComposeOpener,
   useThreadComposeOpener,
-} from "@/email/compose-open";
-import { emailMessageHref } from "@/email/paths";
-import type { TrashKind } from "@/email/trash-store";
+} from "@/email/lib/compose/compose-open";
+import { emailMessageHref } from "@/email/lib/paths";
+import type { TrashKind } from "@/email/lib/trash/trash-store";
 
 type MailFolder = Extract<
   EmailMailboxSection,

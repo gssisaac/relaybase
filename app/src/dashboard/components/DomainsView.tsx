@@ -16,7 +16,7 @@ import {
   type DomainOnboardingSummary,
 } from "@/lib/dashboard/DomainContext";
 import { ImportCloudflareZonesDialog } from "@/dashboard/components/ImportCloudflareZonesDialog";
-import { EmailAlerts } from "@/email/components/EmailShared";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { Badge } from "@/components/ui/badge";

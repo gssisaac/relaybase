@@ -4,17 +4,17 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useEmailPaths } from "@/email/paths";
+import { useEmailPaths } from "@/email/lib/paths";
 import { useDashboardPaths } from "@/dashboard/paths";
 import { AudienceDataSourceGuide } from "@/dashboard/components/AudienceDataSourceGuide";
 import {
   clearAudienceGroupDetailCache,
   useAudienceGroupDetail,
 } from "@/dashboard/components/AudienceGroupDetailContext";
-import { fetchEmailCachedOptional } from "@/email/components/email-cached-fetch";
-import { readEmailStale } from "@/email/components/useEmailViewLoading";
-import { EmailAlerts } from "@/email/components/EmailShared";
-import type { Address } from "@/email/components/types";
+import { fetchEmailCachedOptional } from "@/email/components/mailbox/email-cached-fetch";
+import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
+import type { Address } from "@/email/components/mailbox/types";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,

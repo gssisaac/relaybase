@@ -22,8 +22,8 @@ import {
   isPackagedApiUnavailableError,
   readResponseJson,
 } from "@/lib/desktop/api-base";
-import { clearEmailCache } from "@/email/components/email-cached-fetch";
-import type { Address } from "@/email/components/types";
+import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
+import type { Address } from "@/email/components/mailbox/types";
 
 function withInboundEnabled(address: Address, inboundEnabled: boolean): Address {
   return {

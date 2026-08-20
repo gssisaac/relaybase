@@ -1,4 +1,4 @@
-import { readUiJson, UI_FILES, writeUiJson } from "@/email/user-ui-disk";
+import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
 
 /** Expanded domain cards on Accounts — default is collapsed (compact). */
 export type AccountsUiState = {

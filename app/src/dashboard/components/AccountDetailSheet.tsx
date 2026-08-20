@@ -21,7 +21,7 @@ import { AccountLogsView } from "@/dashboard/components/AccountLogsView";
 import { AccountOtherDeviceView } from "@/dashboard/components/AccountOtherDeviceView";
 import { AccountOverviewView } from "@/dashboard/components/AccountOverviewView";
 import { AccountSettingsView } from "@/dashboard/components/AccountSettingsView";
-import { useEmailMailbox } from "@/email/components/EmailMailboxContext";
+import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { cn } from "@/lib/utils";
 

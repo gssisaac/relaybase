@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useBroadcastDetail } from "@/dashboard/components/BroadcastDetailContext";
 import { useBroadcast } from "@/lib/dashboard/BroadcastContext";
-import { useEmailPaths } from "@/email/paths";
-import { EmailAlerts } from "@/email/components/EmailShared";
-import type { BroadcastProgress, BroadcastSendRun } from "@/email/components/types";
+import { useEmailPaths } from "@/email/lib/paths";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
+import type { BroadcastProgress, BroadcastSendRun } from "@/email/components/mailbox/types";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,

@@ -6,8 +6,8 @@ import { useState } from "react";
 
 import { useBroadcastDetail } from "@/dashboard/components/BroadcastDetailContext";
 import { broadcastDetailHref } from "@/dashboard/paths";
-import { useEmailPaths } from "@/email/paths";
-import { EmailAlerts } from "@/email/components/EmailShared";
+import { useEmailPaths } from "@/email/lib/paths";
+import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,

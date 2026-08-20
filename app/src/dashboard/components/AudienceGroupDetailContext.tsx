@@ -11,16 +11,16 @@ import {
 } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useEmailPaths } from "@/email/paths";
+import { useEmailPaths } from "@/email/lib/paths";
 import {
   clearEmailCache,
   fetchEmailCachedOptional,
-} from "@/email/components/email-cached-fetch";
-import { readEmailStale } from "@/email/components/useEmailViewLoading";
+} from "@/email/components/mailbox/email-cached-fetch";
+import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
 import type {
   AudienceGroupContact,
   AudienceGroupSummary,
-} from "@/email/components/types";
+} from "@/email/components/mailbox/types";
 
 export type AudienceGroupDetail = {
   group: AudienceGroupSummary;

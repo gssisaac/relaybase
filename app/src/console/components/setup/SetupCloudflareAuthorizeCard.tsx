@@ -61,22 +61,17 @@ function OAuthConnectDiagram({ waiting }: { waiting: boolean }) {
 export function SetupCloudflareAuthorizeCard({
   oauthBusy,
   oauthError,
-  cloudflareConnected,
   onAuthorize,
   onCancelWait,
 }: {
   oauthBusy: boolean;
   oauthError: DesktopErrorHelp | null;
-  /** OAuth already completed — button starts install only. */
-  cloudflareConnected: boolean;
   onAuthorize: () => void;
   onCancelWait: () => void;
 }) {
   const buttonLabel = oauthBusy
     ? "Waiting for authorization…"
-    : cloudflareConnected
-      ? "Install on Cloudflare"
-      : "Authorize and install on Cloudflare";
+    : "Authorize and install on Cloudflare";
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
       <div className="flex flex-col items-center gap-2">

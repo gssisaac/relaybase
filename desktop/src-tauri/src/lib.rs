@@ -21,12 +21,13 @@ use auto_install::{
 };
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
-    clear_credentials, clear_team_login, load_api_key_vault, load_cache_json as read_cache_json,
-    load_credentials, load_email_prefs, load_mail_json as read_mail_json, load_team_login,
+    clear_cf_oauth_session, clear_credentials, clear_team_login, get_cf_oauth_session,
+    load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
+    load_credentials_merged, load_email_prefs, load_mail_json as read_mail_json, load_team_login,
     migrate_mail_to_desktop_user, remove_api_key_vault_entry, save_cache_json as write_cache_json,
     save_credentials, save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
-    save_team_login, upsert_api_key_vault_entry, ApiKeyVault, ApiKeyVaultEntry, EmailPrefs,
-    StoredCredentials, TeamLogin,
+    save_team_login, set_cf_oauth_session, upsert_api_key_vault_entry, ApiKeyVault,
+    ApiKeyVaultEntry, CfOAuthSession, EmailPrefs, StoredCredentials, TeamLogin,
 };
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
@@ -81,7 +82,7 @@ async fn save_cf_credentials(
     // persisted during install and reused for wrangler auth). Only overwrite
     // when a non-empty value is passed (install flow / explicit re-enter).
     let install_trimmed = install_token.trim();
-    if !install_trimmed.is_empty() {
+    if !install_trimmed.is_empty() && get_cf_oauth_session().is_none() {
         creds.install_token = install_trimmed.to_string();
     }
     // Clearing the server token also clears the pushed-at timestamp so the
@@ -93,12 +94,16 @@ async fn save_cf_credentials(
         creds.server_token = server_token.trim().to_string();
     }
     save_credentials(&creds)?;
-    Ok(creds)
+    load_credentials_merged()
 }
 
 #[tauri::command]
 async fn get_credentials() -> Result<Option<StoredCredentials>, String> {
-    load_credentials()
+    let disk = load_credentials()?;
+    if disk.is_none() && get_cf_oauth_session().is_none() {
+        return Ok(None);
+    }
+    Ok(Some(load_credentials_merged()?))
 }
 
 #[tauri::command]
@@ -401,14 +406,11 @@ async fn push_server_token() -> Result<serde_json::Value, String> {
 
 // --- Cloudflare OAuth (install token) ---
 //
-// The install token (Workers Scripts / KV / R2 Edit) is now obtained via a
-// Cloudflare OAuth authorization-code + refresh flow. console.relaybase.xyz
-// is the confidential callback (holds the client secret). The desktop stores
-// the short-lived access token + the refresh token in ~/.relaybase and
-// proxies refreshes through the console. `install_token` is kept in sync
-// with the OAuth access token so existing wrangler/CF-API call sites work
-// unchanged. Legacy manual install tokens still work — when no OAuth refresh
-// token is present, refresh is a no-op.
+// The install token (Workers Scripts / R2 / D1 / Secrets Store) is obtained
+// via Cloudflare OAuth. Tokens live in process memory only — never on disk.
+// `install_token` in API responses is overlaid from the in-memory session so
+// existing wrangler/CF-API call sites work unchanged. Legacy manual install
+// tokens may still be stored on disk when no OAuth session is active.
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -490,7 +492,7 @@ async fn start_cf_oauth() -> Result<OAuthStartResult, String> {
 /// link or the localhost loopback. The console relays `code` + `state` to
 /// the desktop (public PKCE client — no secret). We verify `state` matches
 /// the in-flight flow (CSRF), then exchange `code` + our PKCE `code_verifier`
-/// directly with Cloudflare and persist the tokens to ~/.relaybase.
+/// directly with Cloudflare and keeps the tokens in process memory only.
 #[tauri::command]
 async fn complete_cf_oauth(
     state: String,
@@ -587,21 +589,22 @@ async fn complete_cf_oauth_inner(
         .map(|s| s.to_string());
     let expires_at = new_iso_expires(expires_in);
 
+    set_cf_oauth_session(CfOAuthSession {
+        access_token: access_token.clone(),
+        refresh_token: refresh_token.clone(),
+        access_expires_at: expires_at.clone(),
+        account_id: account_id.clone().unwrap_or_default(),
+    });
+
     let mut creds = load_credentials()?.unwrap_or_default();
-    creds.cf_oauth_access_token = access_token.clone();
-    creds.cf_oauth_refresh_token = refresh_token;
-    creds.cf_oauth_access_expires_at = expires_at;
     if let Some(acct) = account_id {
         let acct = acct.trim();
         if !acct.is_empty() {
-            creds.cf_oauth_account_id = acct.to_string();
             creds.account_id = acct.to_string();
         }
     }
-    // Keep install_token in sync so existing wrangler/CF-API call sites work.
-    creds.install_token = access_token;
     save_credentials(&creds)?;
-    Ok(creds)
+    load_credentials_merged()
 }
 
 fn parse_oauth_callback_url(raw: &str) -> Option<(String, String)> {
@@ -757,27 +760,30 @@ fn days_to_ymd(days: i64) -> (i64, i64, i64) {
 pub const CLOUDFLARE_AUTH_EXPIRED: &str = "CLOUDFLARE_AUTH_EXPIRED";
 
 async fn refresh_install_token_if_needed() -> Result<String, String> {
-    let creds = load_credentials()?.unwrap_or_default();
-    // Legacy manual install token path: nothing to refresh.
-    if creds.cf_oauth_refresh_token.trim().is_empty() {
-        if oauth_access_expired(&creds) {
-            return Err(
-                format!(
-                    "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
-                     Go back and Authorize again."
-                ),
-            );
+    let Some(mut session) = get_cf_oauth_session() else {
+        let creds = load_credentials()?.unwrap_or_default();
+        if creds.install_token.trim().is_empty() {
+            return Err(format!(
+                "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
+                 Go back and Authorize again."
+            ));
         }
         return Ok(creds.install_token);
-    }
+    };
+
     let now_secs = now_unix_secs();
-    let expires_at_secs = parse_iso_to_secs(&creds.cf_oauth_access_expires_at);
-    let fresh = creds
-        .cf_oauth_access_expires_at
-        .is_empty()
-        || expires_at_secs.saturating_sub(now_secs) < 60;
-    if !fresh {
-        return Ok(creds.install_token);
+    let expires_at_secs = parse_iso_to_secs(&session.access_expires_at);
+    let fresh = session.access_expires_at.is_empty()
+        || expires_at_secs.saturating_sub(now_secs) >= 60;
+    if fresh {
+        return Ok(session.access_token);
+    }
+
+    if session.refresh_token.trim().is_empty() {
+        return Err(format!(
+            "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
+             Go back and Authorize again."
+        ));
     }
 
     // Public PKCE client: refresh needs only client_id (no secret). Fetch it
@@ -786,7 +792,7 @@ async fn refresh_install_token_if_needed() -> Result<String, String> {
     let http = reqwest::Client::new();
     let refresh_body = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("grant_type", "refresh_token")
-        .append_pair("refresh_token", &creds.cf_oauth_refresh_token)
+        .append_pair("refresh_token", &session.refresh_token)
         .append_pair("client_id", &client_id)
         .finish();
     let res = http
@@ -801,6 +807,7 @@ async fn refresh_install_token_if_needed() -> Result<String, String> {
     if !status.is_success() {
         let lower = body.to_lowercase();
         if status.as_u16() == 400 || lower.contains("invalid_grant") || lower.contains("invalid") {
+            clear_cf_oauth_session();
             return Err(format!(
                 "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
                  Go back and Authorize again."
@@ -820,14 +827,12 @@ async fn refresh_install_token_if_needed() -> Result<String, String> {
         .get("refresh_token")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| creds.cf_oauth_refresh_token.clone());
+        .unwrap_or_else(|| session.refresh_token.clone());
 
-    let mut next = creds;
-    next.cf_oauth_access_token = access_token.clone();
-    next.cf_oauth_refresh_token = next_refresh;
-    next.cf_oauth_access_expires_at = new_iso_expires(expires_in);
-    next.install_token = access_token.clone();
-    save_credentials(&next)?;
+    session.access_token = access_token.clone();
+    session.refresh_token = next_refresh;
+    session.access_expires_at = new_iso_expires(expires_in);
+    set_cf_oauth_session(session);
     Ok(access_token)
 }
 
@@ -863,7 +868,7 @@ async fn fetch_oauth_client_id() -> Result<String, String> {
 #[tauri::command]
 async fn refresh_install_token() -> Result<StoredCredentials, String> {
     refresh_install_token_if_needed().await?;
-    load_credentials()?.ok_or_else(|| "No credentials stored".to_string())
+    load_credentials_merged()
 }
 
 fn now_unix_secs() -> u64 {
@@ -871,13 +876,6 @@ fn now_unix_secs() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
-}
-
-fn oauth_access_expired(creds: &StoredCredentials) -> bool {
-    if creds.cf_oauth_access_expires_at.trim().is_empty() {
-        return false;
-    }
-    parse_iso_to_secs(&creds.cf_oauth_access_expires_at) < now_unix_secs().saturating_add(60)
 }
 
 /// Best-effort ISO-8601 → unix seconds. Returns 0 on parse failure (which
@@ -1307,7 +1305,7 @@ async fn save_worker_connection(
         creds.worker_script_name = "relaybase-api".into();
     }
     save_credentials(&creds)?;
-    Ok(creds)
+    load_credentials_merged()
 }
 
 #[tauri::command]

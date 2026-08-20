@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -51,20 +52,87 @@ pub struct StoredCredentials {
     pub relaybase_tier: String,
 
     // --- Cloudflare OAuth (install token) ---
-    // The install token is now sourced from a Cloudflare OAuth
-    // authorization-code + refresh flow (callback on console.relaybase.xyz).
-    // The access token is short-lived; the refresh token lives here only and
-    // is proxied through the console (which holds the client secret) to mint
-    // fresh access tokens. `install_token` above is kept in sync with
-    // `cf_oauth_access_token` so existing wrangler/CF-API call sites keep
-    // working unchanged. Legacy manual install tokens still work — when
-    // `cf_oauth_refresh_token` is empty, refresh is a no-op.
+    // Install token is sourced from CF OAuth. Tokens live in Tauri process
+    // memory only — never written to credentials.json. `install_token` above
+    // may still hold a legacy manual token on disk when no OAuth session is
+    // active.
     pub cf_oauth_access_token: String,
     pub cf_oauth_refresh_token: String,
     /// ISO timestamp of access-token expiry. Empty when not using OAuth.
     pub cf_oauth_access_expires_at: String,
     /// Cloudflare account id resolved from the OAuth flow.
     pub cf_oauth_account_id: String,
+}
+
+/// CF OAuth install-token session — process memory only, never written to disk.
+#[derive(Debug, Clone)]
+pub struct CfOAuthSession {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub access_expires_at: String,
+    pub account_id: String,
+}
+
+static CF_OAUTH_SESSION: Mutex<Option<CfOAuthSession>> = Mutex::new(None);
+
+pub fn set_cf_oauth_session(session: CfOAuthSession) {
+    if let Ok(mut guard) = CF_OAUTH_SESSION.lock() {
+        *guard = Some(session);
+    }
+}
+
+pub fn get_cf_oauth_session() -> Option<CfOAuthSession> {
+    CF_OAUTH_SESSION
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
+
+pub fn clear_cf_oauth_session() {
+    if let Ok(mut guard) = CF_OAUTH_SESSION.lock() {
+        *guard = None;
+    }
+}
+
+/// Remove OAuth fields from a credentials struct (disk or API payload).
+pub fn strip_oauth_from_credentials(creds: &mut StoredCredentials) {
+    creds.cf_oauth_access_token.clear();
+    creds.cf_oauth_refresh_token.clear();
+    creds.cf_oauth_access_expires_at.clear();
+    creds.cf_oauth_account_id.clear();
+}
+
+/// Overlay the in-memory OAuth session onto credentials for UI / IPC responses.
+pub fn apply_cf_oauth_session(creds: &mut StoredCredentials) {
+    let Some(session) = get_cf_oauth_session() else {
+        return;
+    };
+    creds.cf_oauth_access_token = session.access_token.clone();
+    creds.cf_oauth_refresh_token = session.refresh_token.clone();
+    creds.cf_oauth_access_expires_at = session.access_expires_at.clone();
+    creds.cf_oauth_account_id = session.account_id.clone();
+    creds.install_token = session.access_token.clone();
+    if !session.account_id.is_empty() {
+        creds.account_id = session.account_id.clone();
+    }
+}
+
+/// Load disk credentials and merge the in-memory OAuth session when present.
+pub fn load_credentials_merged() -> Result<StoredCredentials, String> {
+    let mut creds = load_credentials()?.unwrap_or_default();
+    apply_cf_oauth_session(&mut creds);
+    Ok(creds)
+}
+
+fn credentials_for_disk(creds: &StoredCredentials) -> StoredCredentials {
+    let mut disk = creds.clone();
+    strip_oauth_from_credentials(&mut disk);
+    // OAuth access token lives only in memory — do not persist install_token
+    // sourced from an active OAuth session.
+    if get_cf_oauth_session().is_some() {
+        disk.install_token.clear();
+    }
+    disk
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,7 +235,8 @@ fn restrict_file_permissions(_path: &PathBuf) {}
 pub fn save_credentials(creds: &StoredCredentials) -> Result<(), String> {
     let dir = ensure_dir()?;
     let path = dir.join(CREDENTIALS_FILE);
-    let json = serde_json::to_string_pretty(creds).map_err(|e| e.to_string())?;
+    let disk = credentials_for_disk(creds);
+    let json = serde_json::to_string_pretty(&disk).map_err(|e| e.to_string())?;
 
     match fs::write(&path, &json) {
         Ok(()) => {
@@ -207,16 +276,22 @@ pub fn load_credentials() -> Result<Option<StoredCredentials>, String> {
             path.display()
         )
     })?;
-    let creds: StoredCredentials = serde_json::from_str(&json).map_err(|e| {
+    let mut creds: StoredCredentials = serde_json::from_str(&json).map_err(|e| {
         format!(
             "Invalid credentials file {}: {e}. Delete the file and verify again.",
             path.display()
         )
     })?;
+    // Ignore OAuth tokens persisted before the memory-only migration.
+    if !creds.cf_oauth_access_token.is_empty() || !creds.cf_oauth_refresh_token.is_empty() {
+        strip_oauth_from_credentials(&mut creds);
+        creds.install_token.clear();
+    }
     Ok(Some(creds))
 }
 
 pub fn clear_credentials() -> Result<(), String> {
+    clear_cf_oauth_session();
     let path = match credentials_path() {
         Ok(p) => p,
         Err(_) => return Ok(()),

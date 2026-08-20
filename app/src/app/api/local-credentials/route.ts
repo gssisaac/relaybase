@@ -7,6 +7,9 @@ import { NextResponse } from "next/server";
  * Local-only bridge so `pnpm next` (browser, no Tauri) can read/write
  * ~/.relaybase/credentials.json the same way the desktop shell does.
  * Not deployed — app Worker / OpenNext is decommissioned.
+ *
+ * CF OAuth install tokens are never read from or written to disk — they live
+ * in Tauri process memory only. Responses always return empty OAuth fields.
  */
 
 type CredentialsFile = {
@@ -24,7 +27,7 @@ type CredentialsFile = {
   relaybaseEmail?: string;
   relaybaseSession?: string;
   relaybaseTier?: string;
-  // CF OAuth (install token)
+  // Legacy — stripped on read/write; OAuth is memory-only in Tauri.
   cfOauthAccessToken?: string;
   cfOauthRefreshToken?: string;
   cfOauthAccessExpiresAt?: string;
@@ -35,10 +38,24 @@ function credentialsPath(): string {
   return join(homedir(), ".relaybase", "credentials.json");
 }
 
+function stripLegacyOAuthFields(parsed: CredentialsFile): CredentialsFile {
+  const next = { ...parsed };
+  delete next.cfOauthAccessToken;
+  delete next.cfOauthRefreshToken;
+  delete next.cfOauthAccessExpiresAt;
+  delete next.cfOauthAccountId;
+  // OAuth-sourced install tokens must not persist on disk.
+  if (parsed.cfOauthAccessToken || parsed.cfOauthRefreshToken) {
+    next.installToken = "";
+    next.apiToken = "";
+  }
+  return next;
+}
+
 export async function GET() {
   try {
     const raw = await readFile(credentialsPath(), "utf8");
-    const parsed = JSON.parse(raw) as CredentialsFile;
+    const parsed = stripLegacyOAuthFields(JSON.parse(raw) as CredentialsFile);
     return NextResponse.json({
       accountId: parsed.accountId ?? "",
       // Migrate legacy apiToken → installToken on read.
@@ -53,10 +70,10 @@ export async function GET() {
       relaybaseEmail: parsed.relaybaseEmail ?? "",
       relaybaseSession: parsed.relaybaseSession ?? "",
       relaybaseTier: parsed.relaybaseTier ?? "",
-      cfOauthAccessToken: parsed.cfOauthAccessToken ?? "",
-      cfOauthRefreshToken: parsed.cfOauthRefreshToken ?? "",
-      cfOauthAccessExpiresAt: parsed.cfOauthAccessExpiresAt ?? "",
-      cfOauthAccountId: parsed.cfOauthAccountId ?? "",
+      cfOauthAccessToken: "",
+      cfOauthRefreshToken: "",
+      cfOauthAccessExpiresAt: "",
+      cfOauthAccountId: "",
     });
   } catch {
     return NextResponse.json(null);
@@ -72,7 +89,7 @@ export async function PUT(req: Request) {
   }
   const dir = join(homedir(), ".relaybase");
   await mkdir(dir, { recursive: true });
-  const next: CredentialsFile = {
+  const next = stripLegacyOAuthFields({
     accountId: body.accountId?.trim() ?? "",
     installToken: body.installToken?.trim() ?? "",
     serverToken: body.serverToken?.trim() ?? "",
@@ -85,13 +102,15 @@ export async function PUT(req: Request) {
     relaybaseEmail: body.relaybaseEmail?.trim() ?? "",
     relaybaseSession: body.relaybaseSession?.trim() ?? "",
     relaybaseTier: body.relaybaseTier?.trim() ?? "",
-    cfOauthAccessToken: body.cfOauthAccessToken?.trim() ?? "",
-    cfOauthRefreshToken: body.cfOauthRefreshToken?.trim() ?? "",
-    cfOauthAccessExpiresAt: body.cfOauthAccessExpiresAt?.trim() ?? "",
-    cfOauthAccountId: body.cfOauthAccountId?.trim() ?? "",
-  };
+  });
   await writeFile(credentialsPath(), `${JSON.stringify(next, null, 2)}\n`, {
     mode: 0o600,
   });
-  return NextResponse.json(next);
+  return NextResponse.json({
+    ...next,
+    cfOauthAccessToken: "",
+    cfOauthRefreshToken: "",
+    cfOauthAccessExpiresAt: "",
+    cfOauthAccountId: "",
+  });
 }

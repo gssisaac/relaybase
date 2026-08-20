@@ -25,10 +25,10 @@ export type DesktopCredentials = {
   relaybaseTier: string;
   // --- Cloudflare OAuth (install token) ---
   // Short-lived access token; kept in sync with `installToken` so existing
-  // wrangler/CF-API call sites work unchanged.
+  // wrangler/CF-API call sites work unchanged. Populated from Tauri process
+  // memory only — never persisted to ~/.relaybase.
   cfOauthAccessToken: string;
-  // Long-lived refresh token, stored locally only; proxied through the
-  // console (which holds the client secret) to mint fresh access tokens.
+  // Long-lived refresh token; process memory only (Tauri desktop).
   cfOauthRefreshToken: string;
   // ISO timestamp of access-token expiry.
   cfOauthAccessExpiresAt: string;
@@ -524,8 +524,8 @@ export async function desktopPushServerToken(): Promise<{
 // redirects the browser to a `relaybase://oauth/callback` deep link carrying
 // the tokens. The frontend listens for that deep link (see
 // `listenCfOAuthDeepLink`) and hands the tokens to `complete_cf_oauth`,
-// which saves them to ~/.relaybase. Refresh is handled transparently by the
-// Rust side before any wrangler/CF-API call.
+// which stores them in Tauri process memory only. Refresh is handled
+// transparently by the Rust side before any wrangler/CF-API call.
 
 export async function desktopStartCfOAuth(): Promise<{
   authorizeUrl: string;

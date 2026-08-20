@@ -186,10 +186,6 @@ export function WorkerInstallPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const cfOAuthConnected = Boolean(
-    credentials?.cfOauthRefreshToken?.trim() ||
-      credentials?.cfOauthAccessToken?.trim(),
-  );
   const cfOAuthAccountId =
     credentials?.cfOauthAccountId?.trim() ||
     credentials?.accountId?.trim() ||
@@ -212,10 +208,6 @@ export function WorkerInstallPanel() {
   }
 
   async function handleAuthorize() {
-    if (cfOAuthConnected) {
-      router.push("/setup/progress");
-      return;
-    }
     await handleStartCfOAuth();
   }
 
@@ -306,7 +298,6 @@ export function WorkerInstallPanel() {
               <SetupCloudflareAuthorizeCard
                 oauthBusy={oauthBusy}
                 oauthError={oauthError}
-                cloudflareConnected={cfOAuthConnected}
                 onAuthorize={() => void handleAuthorize()}
                 onCancelWait={handleCancelOauthWait}
               />

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireApiKey } from "../lib/auth";
 import { emailMatchesDomain } from "../lib/crypto";
+import { cloudflareSendErrorBody } from "../lib/cloudflare-api-hints";
 import { createCloudflareClient } from "../lib/cloudflare-config";
 import { recordOpsLog } from "../lib/ops-logs";
 import { recordSendLog } from "../lib/send-logs";
@@ -269,7 +270,7 @@ send.post("/", async (c) => {
     return logAndRespond(c, {
       ok: false,
       status: 502,
-      body: { error: message },
+      body: cloudflareSendErrorBody(message),
       record,
       from,
       to: to.join(", "),

@@ -264,7 +264,9 @@ export function WorkerInstallPanel() {
           <p className="mt-2 text-sm text-muted-foreground">
             Relaybase runs entirely in <strong>your</strong> Cloudflare account.
             Your email, API keys, and routing data never touch Relaybase
-            servers. Requires a Cloudflare Workers Paid plan (Pro and up).
+            servers. Install and receive mail on the free plan; sending email
+            requires a Cloudflare Workers Paid plan (~$5/mo, billed by
+            Cloudflare).
           </p>
         </div>
 

@@ -18,8 +18,10 @@ import {
   EMAIL_SEND_FAILED,
   EMAIL_SEND_STARTED,
   EMAIL_SEND_SUCCEEDED,
+  type EmailSendFailedDetail,
   type EmailSendSucceededDetail,
 } from "@/email/components/compose/email-send-events";
+import { notifyIfCloudflarePlanError } from "@/lib/cloudflare/CloudflarePlanDialog";
 import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
 import type {
   Address,
@@ -1740,8 +1742,18 @@ export class EmailMailboxStore {
   };
 
   private onSendFailed = (event: Event) => {
-    const detail = (event as CustomEvent<{ error?: string }>).detail;
+    const detail = (event as CustomEvent<EmailSendFailedDetail>).detail;
     const error = detail?.error || "Send failed";
+    if (
+      notifyIfCloudflarePlanError({
+        error,
+        code: detail?.code,
+      })
+    ) {
+      toast.dismiss(SEND_TOAST_ID);
+      this.error = null;
+      return;
+    }
     toast.error(error, { id: SEND_TOAST_ID });
     this.error = null;
   };

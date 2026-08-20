@@ -404,6 +404,7 @@ export function useComposeDraftController({
       },
       execute: async () => {
         // Unsend toast already covered the waiting UI — skip "Sending…" loading.
+        let sendFailedDispatched = false;
         try {
           const res = await desktopAwareFetch(`${apiBase}/send`, {
             method: "POST",
@@ -412,10 +413,18 @@ export function useComposeDraftController({
           });
           const data = await readResponseJson<{
             error?: string;
+            code?: string;
             messageId?: string;
             sent?: SentEmail & { bodyPreview?: string };
           }>(res);
-          if (!res.ok) throw new Error(data.error ?? "Send failed");
+          if (!res.ok) {
+            dispatchEmailSendFailed({
+              error: data.error ?? "Send failed",
+              code: data.code,
+            });
+            sendFailedDispatched = true;
+            throw new Error(data.error ?? "Send failed");
+          }
           clearEmailCache(productId, `sent:${domainKey}`);
           const sent = data.sent;
           dispatchEmailSendSucceeded(
@@ -431,9 +440,11 @@ export function useComposeDraftController({
         } catch (e) {
           // Keep the message — restore draft so the user can retry.
           store.upsertDraft(restoreDraft);
-          dispatchEmailSendFailed(
-            e instanceof Error ? e.message : "Send failed",
-          );
+          if (!sendFailedDispatched) {
+            dispatchEmailSendFailed({
+              error: e instanceof Error ? e.message : "Send failed",
+            });
+          }
           dispatchEmailSendUndone({
             draftId: restoreDraftId,
             from,

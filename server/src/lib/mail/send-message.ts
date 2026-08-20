@@ -1,14 +1,14 @@
 import type { Env } from "../../env";
+import { cloudflareSendErrorBody } from "../cloudflare-api-hints";
 import { createCloudflareClient } from "../cloudflare-config";
 import { recordOpsLog } from "../ops-logs";
 import { previewText } from "../inbound-store";
 import { recordSendLog } from "../send-logs";
-import { upsertStoredSent } from "../sent-store";
+import { upsertStoredSent, type StoredSentEmail } from "../sent-store";
 import {
   findInvalidRecipients,
   normalizeRecipients,
 } from "../recipients";
-import type { SentEmail } from "../../../../app/src/email/components/types";
 
 export type SendMailBody = {
   from?: string;
@@ -225,7 +225,7 @@ export async function sendMailMessage(
       metaJson: JSON.stringify(meta),
     });
 
-    const sent: SentEmail = {
+    const sent: StoredSentEmail = {
       id: result.messageId || crypto.randomUUID(),
       from,
       to: toJoined ?? "",
@@ -278,7 +278,7 @@ export async function sendMailMessage(
       error: message,
     });
     return {
-      response: new Response(JSON.stringify({ error: message }), {
+      response: new Response(JSON.stringify(cloudflareSendErrorBody(message)), {
         status: 502,
         headers: { "Content-Type": "application/json" },
       }),

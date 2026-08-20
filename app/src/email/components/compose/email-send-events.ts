@@ -11,6 +11,7 @@ export type EmailSendSucceededDetail = {
 
 export type EmailSendFailedDetail = {
   error: string;
+  code?: string;
 };
 
 export type EmailSendUndoneDetail = {
@@ -32,10 +33,10 @@ export function dispatchEmailSendSucceeded(detail?: EmailSendSucceededDetail) {
   );
 }
 
-export function dispatchEmailSendFailed(error: string) {
+export function dispatchEmailSendFailed(detail: EmailSendFailedDetail) {
   window.dispatchEvent(
     new CustomEvent<EmailSendFailedDetail>(EMAIL_SEND_FAILED, {
-      detail: { error },
+      detail,
     }),
   );
 }

@@ -14,6 +14,7 @@ import {
   type LocalBroadcastDraft,
 } from "@/lib/dashboard/broadcast-drafts-disk";
 import { desktopAwareFetch } from "@/lib/desktop/api-base";
+import { notifyIfCloudflarePlanError } from "@/lib/cloudflare/CloudflarePlanDialog";
 
 function clearBroadcastCaches(productId: string, broadcastId: string) {
   clearEmailCache(productId, `broadcast:${broadcastId}`);
@@ -313,8 +314,16 @@ export class BroadcastStore {
           }),
         },
       );
-      const sendData = (await sendRes.json()) as { error?: string };
+      const sendData = (await sendRes.json()) as {
+        error?: string;
+        code?: string;
+      };
       if (!sendRes.ok) {
+        if (notifyIfCloudflarePlanError(sendData)) {
+          throw new Error(
+            "Sending requires a Cloudflare Workers Paid plan (~$5/mo, billed by Cloudflare).",
+          );
+        }
         throw new Error(sendData.error ?? "Broadcast failed");
       }
 

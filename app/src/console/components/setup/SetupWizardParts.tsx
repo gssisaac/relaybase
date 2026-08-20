@@ -94,7 +94,8 @@ export function WhatWeInstall() {
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Requires a Cloudflare Workers Paid plan (Pro and up).
+        Install and receive mail on the free plan. Sending email requires a
+        Cloudflare Workers Paid plan (~$5/mo, billed by Cloudflare).
       </p>
     </div>
   );

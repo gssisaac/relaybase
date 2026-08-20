@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
+import { cloudflareSendErrorBody } from "../../lib/cloudflare-api-hints";
 import { createAppDb } from "../../../db/app";
 import {
   createBroadcastDraft,
@@ -110,7 +111,8 @@ consoleBroadcasts.post("/:broadcastId/send", async (c) => {
     return c.json({ broadcast });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
-    return c.json({ error: message }, 400);
+    const body = cloudflareSendErrorBody(message);
+    return c.json(body, body.code ? 403 : 400);
   }
 });
 

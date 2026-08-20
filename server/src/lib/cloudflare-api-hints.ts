@@ -1,3 +1,46 @@
+/** Relaybase API code when Cloudflare Email Sending requires Workers Paid. */
+export const CF_WORKERS_PAID_REQUIRED_CODE = "cf_workers_paid_required";
+
+function messageLooksLikePlanError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("[10105]") ||
+    lower.includes("not_entitled") ||
+    lower.includes("not entitled") ||
+    lower.includes("workers paid") ||
+    lower.includes("paid plan")
+  );
+}
+
+/** True when Cloudflare rejected send because the account lacks Workers Paid. */
+export function isCloudflarePlanError(
+  input: string | Array<{ code?: number; message?: string }> | undefined,
+): boolean {
+  if (!input) return false;
+  if (Array.isArray(input)) {
+    const code = input[0]?.code;
+    const msg = input[0]?.message ?? "";
+    if (code === 10105) return true;
+    return messageLooksLikePlanError(msg);
+  }
+  return messageLooksLikePlanError(input);
+}
+
+/** JSON body for send failures; adds `code` when the failure is plan-related. */
+export function cloudflareSendErrorBody(message: string): {
+  error: string;
+  code?: string;
+} {
+  if (isCloudflarePlanError(message)) {
+    return {
+      error:
+        "Sending requires a Cloudflare Workers Paid plan (~$5/mo, billed by Cloudflare).",
+      code: CF_WORKERS_PAID_REQUIRED_CODE,
+    };
+  }
+  return { error: message };
+}
+
 /** Human-readable permission hints for Cloudflare API auth failures (code 10000). */
 export function cloudflarePermissionHint(
   path: string,

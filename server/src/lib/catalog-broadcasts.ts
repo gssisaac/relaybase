@@ -31,6 +31,7 @@ import type {
   BroadcastSendRun,
 } from "./catalog-types";
 import { createCloudflareClient } from "./cloudflare-config";
+import { isCloudflarePlanError } from "./cloudflare-api-hints";
 import { readMailbox } from "./catalog-store";
 import { recordOpsLog } from "./ops-logs";
 import { recordSendLog } from "./send-logs";
@@ -392,6 +393,23 @@ export async function sendBroadcast(
           subject,
           error: message,
         });
+        if (isCloudflarePlanError(message)) {
+          const finishedAt = new Date().toISOString();
+          run.phase = "done";
+          run.status = "error";
+          run.finishedAt = finishedAt;
+          run.error = message;
+          run.estimatedRemainingMs = 0;
+          run.processedCount = i + 1;
+          run.failedCount = failedCount + 1;
+          await dbFinishBroadcastSend(db, broadcastId, {
+            status: "failed",
+            run: { ...run },
+            recipientCount: recipients.length,
+            from,
+          });
+          throw error instanceof Error ? error : new Error(message);
+        }
         failedCount++;
       }
       run.processedCount = i + 1;

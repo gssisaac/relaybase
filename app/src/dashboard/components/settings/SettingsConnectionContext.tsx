@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -20,9 +21,13 @@ import {
   desktopRequestAdminRecoveryToken,
   desktopSaveCfCredentials,
   desktopSaveWorkerConnection,
+  desktopStartCfOAuth,
+  listenCfOAuthResult,
   desktopVerifyCfToken,
   desktopVerifyWorkerConnection,
+  desktopOpenExternal,
   explainDesktopError,
+  explainCfOAuthError,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
@@ -66,6 +71,13 @@ type SettingsConnectionContextValue = {
   workerError: DesktopErrorHelp | null;
   cfMessage: string | null;
   workerMessage: string | null;
+  // CF OAuth (install token)
+  cfOAuthConnected: boolean;
+  cfOAuthAccountId: string;
+  cfOAuthExpiresAt: string;
+  oauthBusy: boolean;
+  oauthError: DesktopErrorHelp | null;
+  handleStartCfOAuth: () => Promise<void>;
   recoveryToken: string;
   setRecoveryToken: (value: string) => void;
   newAdminToken: string;
@@ -136,6 +148,14 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     useState<DesktopErrorHelp | null>(null);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
+  // CF OAuth (install token) state.
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
+  // The state minted by the most recent `start_cf_oauth`. The deep-link
+  // handler only accepts a callback whose state matches this (CSRF + guards
+  // against stale cold-start links).
+  const oauthStartStateRef = useRef<string | null>(null);
+
   function resetCfDraft() {
     setAccountId(credentials?.accountId ?? "");
     setServerToken(credentials?.serverToken ?? "");
@@ -163,10 +183,9 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   useEffect(() => {
     if (!credentials) return;
-    // Auto-open editing when the server token isn't configured yet.
-    if (!credentials.accountId?.trim() || !credentials.serverToken?.trim()) {
-      setCfEditing(true);
-    }
+    // The Cloudflare tab no longer auto-opens an edit form. The OAuth
+    // "Connect with Cloudflare" button is the primary CTA when no install
+    // token is present; the server-token form is opened manually.
   }, [credentials]);
 
   async function handleSaveServerToken() {
@@ -175,12 +194,20 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     setCfError(null);
     setCfMessage(null);
     try {
-      const result = await desktopVerifyCfToken(accountId, serverToken, "server");
+      // Account id now comes from the CF OAuth flow (stored in credentials).
+      // Fall back to the draft only for legacy/manual setups.
+      const acctId = credentials?.accountId?.trim() || accountId.trim();
+      if (!acctId) {
+        throw new Error(
+          "Connect your Cloudflare account first (Connect with Cloudflare).",
+        );
+      }
+      const result = await desktopVerifyCfToken(acctId, serverToken, "server");
       if (!result.ok) throw new Error(result.message);
       // Pass empty install token — save_cf_credentials preserves the existing
-      // install token (collected during install). Settings only manages the
-      // server token + account id.
-      await desktopSaveCfCredentials(accountId, "", serverToken);
+      // install token (now sourced from CF OAuth). Settings only manages the
+      // server token.
+      await desktopSaveCfCredentials(acctId, "", serverToken);
       // Push the server token to the Worker as the CF_API_TOKEN wrangler secret.
       const push = await desktopPushServerToken();
       if (!push.ok) throw new Error(push.message);
@@ -197,6 +224,53 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     } finally {
       setCfBusy(false);
       setServerPushBusy(false);
+    }
+  }
+
+  // Rust completes OAuth (localhost:32831 in tauri:dev, or relaybase:// in
+  // a bundled app) and emits cf-oauth-complete / cf-oauth-error.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let active = true;
+    listenCfOAuthResult({
+      onComplete: () => {
+        if (!active) return;
+        oauthStartStateRef.current = null;
+        void (async () => {
+          await refreshCredentials();
+          await refreshConnectionStatus();
+          setOauthBusy(false);
+          setOauthError(null);
+        })();
+      },
+      onError: (message) => {
+        if (!active) return;
+        setOauthError(explainCfOAuthError(message));
+        setOauthBusy(false);
+      },
+    }).then((fn) => {
+      if (active) unlisten = fn;
+      else fn();
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleStartCfOAuth() {
+    setOauthBusy(true);
+    setOauthError(null);
+    try {
+      const start = await desktopStartCfOAuth();
+      oauthStartStateRef.current = start.state;
+      // The deep-link listener (registered above) receives the tokens when
+      // the console redirects back to relaybase://oauth/callback.
+      await desktopOpenExternal(start.authorizeUrl);
+    } catch (err) {
+      setOauthError(explainCfOAuthError(err));
+      setOauthBusy(false);
     }
   }
 
@@ -321,6 +395,18 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const logsOk = workerStatus?.d1Logs?.configured === true;
   const searchOk = workerStatus?.d1InboxIndex?.configured === true;
   const appOk = workerStatus?.d1App?.configured === true;
+
+  // CF OAuth (install token) derived state. "Connected" when we have a
+  // refresh token (can mint fresh access tokens); the access token itself
+  // is short-lived and refreshed transparently by the Rust side.
+  const cfOAuthConnected = Boolean(
+    credentials?.cfOauthRefreshToken?.trim(),
+  );
+  const cfOAuthAccountId =
+    credentials?.cfOauthAccountId?.trim() ||
+    credentials?.accountId?.trim() ||
+    "";
+  const cfOAuthExpiresAt = credentials?.cfOauthAccessExpiresAt?.trim() ?? "";
 
   const workerHealth: HealthBlock = !hasWorker
     ? {
@@ -461,6 +547,12 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       workerError,
       cfMessage,
       workerMessage,
+      cfOAuthConnected,
+      cfOAuthAccountId,
+      cfOAuthExpiresAt,
+      oauthBusy,
+      oauthError,
+      handleStartCfOAuth,
       recoveryToken,
       setRecoveryToken,
       newAdminToken,
@@ -503,6 +595,11 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       workerError,
       cfMessage,
       workerMessage,
+      cfOAuthConnected,
+      cfOAuthAccountId,
+      cfOAuthExpiresAt,
+      oauthBusy,
+      oauthError,
       recoveryToken,
       newAdminToken,
       recoveryBusy,

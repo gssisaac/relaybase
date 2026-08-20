@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Loader2, Shield } from "lucide-react";
+import { ExternalLink, Loader2, Shield, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,6 @@ export function SettingsCloudflarePage() {
   const {
     credentials,
     cfConnected,
-    accountId,
-    setAccountId,
     serverToken,
     setServerToken,
     serverTokenPushed,
@@ -37,15 +35,70 @@ export function SettingsCloudflarePage() {
     cfMessage,
     resetCfDraft,
     handleSaveServerToken,
+    cfOAuthConnected,
+    cfOAuthAccountId,
+    cfOAuthExpiresAt,
+    oauthBusy,
+    oauthError,
+    handleStartCfOAuth,
   } = useSettingsConnection();
 
   return (
     <SettingsPageBody>
+      {/* Cloudflare account via OAuth — replaces the manually-pasted install
+          token (Workers Scripts / KV / R2 Edit). The OAuth callback lives on
+          console.relaybase.xyz (confidential client); the desktop stores the
+          short-lived access token + refresh token in ~/.relaybase and
+          refreshes via the console. This is the token used by wrangler to
+          push the server token (CF_API_TOKEN) to the Worker. */}
+      <ConnectionCard
+        icon={cfOAuthConnected ? ShieldCheck : Shield}
+        title="Cloudflare account (OAuth)"
+        description={
+          <>
+            Connect your Cloudflare account to authorize Relaybase to deploy
+            and push secrets (Workers Scripts / KV / R2 Edit). Done via
+            Cloudflare OAuth — no token to paste. The access token is
+            short-lived and refreshed automatically through the Relaybase
+            console.
+          </>
+        }
+      >
+        <HealthStatus
+          tone={cfOAuthConnected ? "ok" : "bad"}
+          label={
+            cfOAuthConnected
+              ? "Connected via OAuth"
+              : "Not connected"
+          }
+          detail={
+            cfOAuthConnected
+              ? `Account ${cfOAuthAccountId || credentials?.accountId || "—"} is authorized. Relaybase can deploy and push secrets.${
+                  cfOAuthExpiresAt
+                    ? ` Access token expires ${cfOAuthExpiresAt}.`
+                    : ""
+                }`
+              : "Click Connect with Cloudflare to authorize Relaybase. You'll be sent to Cloudflare to approve, then return here."
+          }
+        />
+        <DesktopErrorBanner error={oauthError} />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={oauthBusy}
+            onClick={() => void handleStartCfOAuth()}
+          >
+            {oauthBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {cfOAuthConnected ? "Reconnect with Cloudflare" : "Connect with Cloudflare"}
+          </Button>
+        </div>
+      </ConnectionCard>
+
       {/* Server token — Account → Email Sending → Edit. Pushed to the Worker
           as the CF_API_TOKEN wrangler secret so the Worker can send mail.
           This is the only Cloudflare token managed in Settings; the install
-          token (Workers Scripts/KV/R2 Edit) is collected during install only
-          and reused by Tauri wrangler under the hood. */}
+          token (Workers Scripts/KV/R2 Edit) is obtained via OAuth above. */}
       <ConnectionCard
         icon={Shield}
         title="Cloudflare server token (Email Sending)"
@@ -94,9 +147,9 @@ export function SettingsCloudflarePage() {
                 ))}
               </ul>
               <p className="mt-2 text-muted-foreground">
-                The install token (Workers Scripts / KV / R2 Edit) is not
-                managed here — it is collected during install and reused to
-                push this server token to the Worker.
+                The install token (Workers Scripts / KV / R2 Edit) is obtained
+                via the OAuth connection above — there is no separate install
+                token to paste. Connect with Cloudflare first if you haven&apos;t.
               </p>
               <button
                 type="button"
@@ -109,17 +162,6 @@ export function SettingsCloudflarePage() {
             </div>
 
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="settings-cf-account">Account ID</Label>
-                <Input
-                  id="settings-cf-account"
-                  value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  placeholder="32-char hex from Cloudflare dashboard"
-                  className="font-mono text-xs"
-                  autoComplete="off"
-                />
-              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="settings-cf-server-token">Server token</Label>
                 <Input
@@ -147,7 +189,7 @@ export function SettingsCloudflarePage() {
                 type="button"
                 size="sm"
                 disabled={
-                  !accountId.trim() || !serverToken.trim() || cfBusy
+                  !serverToken.trim() || cfBusy || !cfOAuthConnected
                 }
                 onClick={() => void handleSaveServerToken()}
               >
@@ -169,6 +211,13 @@ export function SettingsCloudflarePage() {
                 Cancel
               </Button>
             </div>
+            {!cfOAuthConnected ? (
+              <p className="text-xs text-muted-foreground">
+                Connect your Cloudflare account (above) first — Relaybase
+                needs the OAuth install token to push the server token to the
+                Worker.
+              </p>
+            ) : null}
           </>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">

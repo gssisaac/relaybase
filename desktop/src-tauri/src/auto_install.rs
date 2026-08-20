@@ -629,6 +629,10 @@ pub fn merge_into_credentials(
         relaybase_email: existing.relaybase_email.clone(),
         relaybase_session: existing.relaybase_session.clone(),
         relaybase_tier: existing.relaybase_tier.clone(),
+        cf_oauth_access_token: existing.cf_oauth_access_token.clone(),
+        cf_oauth_refresh_token: existing.cf_oauth_refresh_token.clone(),
+        cf_oauth_access_expires_at: existing.cf_oauth_access_expires_at.clone(),
+        cf_oauth_account_id: existing.cf_oauth_account_id.clone(),
     }
 }
 

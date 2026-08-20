@@ -183,7 +183,7 @@ Licenses, console accounts, worker registration, recovery tokens, and the public
 
 Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
 
-- CF credentials → Worker wrangler secrets `CF_ACCOUNT_ID` / `CF_API_TOKEN` (set by the desktop install flow).
+- CF credentials → Worker wrangler secrets `CF_ACCOUNT_ID` / `CF_API_TOKEN` (set by the desktop install flow). The install token is obtained via Cloudflare OAuth (PKCE; callback on `console.relaybase.xyz`); access + refresh tokens live only in `~/.relaybase/credentials.json`. See **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 - DMARC branding → Worker D1 `domain_branding` via `/console/branding`.
 - Send logs → Worker R2 `sent/_sendlog/*` via `/console/send-logs`.
 
@@ -199,7 +199,7 @@ Highlights for the consolidated model:
 
 | Path | Purpose |
 |------|---------|
-| `credentials.json` | Worker URL + admin token (+ CF account id + API token, pushed to the Worker as `CF_ACCOUNT_ID` / `CF_API_TOKEN` secrets during install) |
+| `credentials.json` | Worker URL + admin token (+ CF account id + install token, now sourced from CF OAuth; + server token pushed to the Worker as `CF_API_TOKEN` during install/Settings) |
 | `api-keys.json` | Plaintext API secrets (Worker has hashes only) |
 | `email.json` | Account colors |
 | `mail/desktop/**` | Mail + UI cache; fixed userId |

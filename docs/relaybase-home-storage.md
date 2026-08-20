@@ -70,8 +70,10 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 
 | Field | Purpose |
 |-------|---------|
-| `accountId` | Cloudflare account (for optional zone/Email assist) |
-| `apiToken` | Cloudflare API token (used by Tauri auto-install + zone assist; never sent to Relaybase) |
+| `accountId` | Cloudflare account id (resolved from the OAuth flow, or legacy manual entry) |
+| `installToken` | Cloudflare token used by Tauri wrangler (deploy / KV / R2 / `secret put`). Now sourced from the CF OAuth flow (short-lived; refreshed via the console). Legacy manual tokens still work. |
+| `serverToken` | Cloudflare token with Email Sending Edit, pushed to the Worker as the `CF_API_TOKEN` wrangler secret |
+| `serverTokenPushedAt` | ISO timestamp of the last successful `wrangler secret put CF_API_TOKEN` |
 | `workerUrl` | Deployed Worker base URL |
 | `adminToken` | Worker admin token (wrangler secret OR KV `srv:config:admin`; resettable via recovery) |
 | `workerScriptName` | Wrangler script name |
@@ -80,6 +82,12 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `relaybaseEmail` | Relaybase console account email |
 | `relaybaseSession` | Signed console session token (stored locally; sent as `Authorization: Bearer` to console APIs) |
 | `relaybaseTier` | License tier mirrored from the console (`free` / `pro`) |
+| `cfOauthAccessToken` | Short-lived CF OAuth access token (kept in sync with `installToken`) |
+| `cfOauthRefreshToken` | CF OAuth refresh token when issued (empty if only short-lived access token; re-connect when expired) |
+| `cfOauthAccessExpiresAt` | ISO timestamp of access-token expiry |
+| `cfOauthAccountId` | Cloudflare account id resolved from the OAuth flow |
+
+CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**. Summary: public PKCE client on Cloudflare; `console.relaybase.xyz` exposes `/api/v1/oauth/config` and `/oauth/callback` (relays `code` to the desktop only); the desktop exchanges the code with PKCE and stores tokens in this file. No CF user credentials in D1 `kembo-ops`.
 
 ### `team-login.json`
 

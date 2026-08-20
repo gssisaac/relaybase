@@ -24,6 +24,11 @@ type CredentialsFile = {
   relaybaseEmail?: string;
   relaybaseSession?: string;
   relaybaseTier?: string;
+  // CF OAuth (install token)
+  cfOauthAccessToken?: string;
+  cfOauthRefreshToken?: string;
+  cfOauthAccessExpiresAt?: string;
+  cfOauthAccountId?: string;
 };
 
 function credentialsPath(): string {
@@ -48,6 +53,10 @@ export async function GET() {
       relaybaseEmail: parsed.relaybaseEmail ?? "",
       relaybaseSession: parsed.relaybaseSession ?? "",
       relaybaseTier: parsed.relaybaseTier ?? "",
+      cfOauthAccessToken: parsed.cfOauthAccessToken ?? "",
+      cfOauthRefreshToken: parsed.cfOauthRefreshToken ?? "",
+      cfOauthAccessExpiresAt: parsed.cfOauthAccessExpiresAt ?? "",
+      cfOauthAccountId: parsed.cfOauthAccountId ?? "",
     });
   } catch {
     return NextResponse.json(null);
@@ -76,6 +85,10 @@ export async function PUT(req: Request) {
     relaybaseEmail: body.relaybaseEmail?.trim() ?? "",
     relaybaseSession: body.relaybaseSession?.trim() ?? "",
     relaybaseTier: body.relaybaseTier?.trim() ?? "",
+    cfOauthAccessToken: body.cfOauthAccessToken?.trim() ?? "",
+    cfOauthRefreshToken: body.cfOauthRefreshToken?.trim() ?? "",
+    cfOauthAccessExpiresAt: body.cfOauthAccessExpiresAt?.trim() ?? "",
+    cfOauthAccountId: body.cfOauthAccountId?.trim() ?? "",
   };
   await writeFile(credentialsPath(), `${JSON.stringify(next, null, 2)}\n`, {
     mode: 0o600,

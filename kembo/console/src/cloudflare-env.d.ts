@@ -54,4 +54,12 @@ interface CloudflareEnv {
   STRIPE_CUSTOMER_PORTAL_CONFIG?: string;
   RECOVERY_SIGNING_SECRET?: string;
   SMTP_FROM?: string;
+  // CF OAuth client (install-token flow). PUBLIC client — Token
+  // Authentication Method is "None (PKCE)", so there is NO client secret.
+  // The desktop generates the PKCE verifier/challenge, opens the authorize
+  // URL, and exchanges the code itself; /oauth/callback just relays the
+  // code to the desktop via a `relaybase://` deep link. No CF user
+  // credentials are stored on the console.
+  CF_OAUTH_CLIENT_ID?: string;
+  CF_OAUTH_REDIRECT_URI?: string;
 }

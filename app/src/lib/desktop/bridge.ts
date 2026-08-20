@@ -23,6 +23,17 @@ export type DesktopCredentials = {
   relaybaseSession: string;
   /** License tier mirrored from the console ("free" | "pro"). */
   relaybaseTier: string;
+  // --- Cloudflare OAuth (install token) ---
+  // Short-lived access token; kept in sync with `installToken` so existing
+  // wrangler/CF-API call sites work unchanged.
+  cfOauthAccessToken: string;
+  // Long-lived refresh token, stored locally only; proxied through the
+  // console (which holds the client secret) to mint fresh access tokens.
+  cfOauthRefreshToken: string;
+  // ISO timestamp of access-token expiry.
+  cfOauthAccessExpiresAt: string;
+  // Cloudflare account id resolved from the OAuth flow.
+  cfOauthAccountId: string;
 };
 
 export type ZoneSummary = {
@@ -279,6 +290,78 @@ export function explainDesktopError(
   };
 }
 
+/**
+ * Error explainer for the Cloudflare OAuth (install token) flow. Intentionally
+ * does NOT attach the legacy manual-install links ("Download Worker install
+ * ZIP", "Open install setup") or the "Admin token was rejected" messaging —
+ * those belong to the deprecated paste-a-token flow, not OAuth. Produces a
+ * clean, OAuth-specific message.
+ */
+export function explainCfOAuthError(
+  err: unknown,
+  fallbackTitle = "Cloudflare connection failed",
+): DesktopErrorHelp {
+  const raw = formatDesktopError(err);
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes("could not reach relaybase console") ||
+    lower.includes("could not reach the relaybase console") ||
+    lower.includes("error sending request") ||
+    lower.includes("timed out") ||
+    lower.includes("dns")
+  ) {
+    return {
+      title: "Could not reach the Relaybase console",
+      detail:
+        "Relaybase could not contact console.relaybase.xyz to start the Cloudflare connection. Check your internet connection and try again.",
+      fix: "If the problem persists, the console may be briefly unavailable.",
+    };
+  }
+
+  if (
+    lower.includes("oauth config") ||
+    lower.includes("clientid") ||
+    lower.includes("client secret") ||
+    lower.includes("oauth client not configured")
+  ) {
+    return {
+      title: "Cloudflare OAuth isn't configured yet",
+      detail:
+        "The Relaybase console hasn't been set up with a Cloudflare OAuth client. Connecting won't work until that's done.",
+      fix: "This is usually resolved shortly after a Relaybase update. Try again later, or contact Relaybase if it persists.",
+    };
+  }
+
+  if (lower.includes("state does not match") || lower.includes("oauth state")) {
+    return {
+      title: "Cloudflare connection didn't complete",
+      detail:
+        "The Cloudflare callback didn't match the connection you started here. This can happen if you have an old link open.",
+      fix: "Click Connect with Cloudflare again and approve in the browser window that opens.",
+    };
+  }
+
+  if (lower.includes("missing tokens") || lower.includes("token exchange failed")) {
+    return {
+      title: "Cloudflare didn't return a token",
+      detail:
+        "Cloudflare authorized the request but didn't return an access token to Relaybase.",
+      fix: "Try Connect with Cloudflare again. If it keeps happening, the OAuth client may be misconfigured on the Relaybase side.",
+    };
+  }
+
+  const cleaned = stripRawApiNoise(raw);
+  return {
+    title: fallbackTitle,
+    detail:
+      cleaned && cleaned.length < 220
+        ? cleaned
+        : "Something went wrong while connecting to Cloudflare.",
+    fix: "Click Connect with Cloudflare again. If it keeps happening, try reconnecting from a clean state.",
+  };
+}
+
 export async function desktopGetInfo(): Promise<{ isDesktop: boolean; version: string }> {
   return invoke("get_desktop_info");
 }
@@ -310,6 +393,141 @@ export async function desktopPushServerToken(): Promise<{
   pushedAt: string;
 }> {
   return invoke("push_server_token");
+}
+
+// --- Cloudflare OAuth (install token) ---
+// The install token is obtained via a CF OAuth authorization-code + refresh
+// flow whose callback lives on console.relaybase.xyz. The desktop opens the
+// authorize URL in the system browser; the console exchanges the code and
+// redirects the browser to a `relaybase://oauth/callback` deep link carrying
+// the tokens. The frontend listens for that deep link (see
+// `listenCfOAuthDeepLink`) and hands the tokens to `complete_cf_oauth`,
+// which saves them to ~/.relaybase. Refresh is handled transparently by the
+// Rust side before any wrangler/CF-API call.
+
+export async function desktopStartCfOAuth(): Promise<{
+  authorizeUrl: string;
+  state: string;
+}> {
+  return invoke("start_cf_oauth");
+}
+
+export type CfOAuthDeepLinkCallback = {
+  state: string;
+  code: string;
+};
+
+/** Parse a `relaybase://oauth/callback?...` URL into the code + state payload. */
+export function parseCfOAuthDeepLink(url: string): CfOAuthDeepLinkCallback | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "relaybase:" || u.host !== "oauth" || u.pathname !== "/callback") {
+      return null;
+    }
+    const state = u.searchParams.get("state") ?? "";
+    const code = u.searchParams.get("code") ?? "";
+    if (!state || !code) return null;
+    return { state, code };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Subscribe to the CF OAuth deep link. Calls `handler` with the parsed
+ * { state, code } whenever a `relaybase://oauth/callback` URL opens the app
+ * (either on launch via `getCurrent`, or while running via `onOpenUrl`).
+ * Returns an unsubscribe function (no-op outside Tauri).
+ */
+export async function listenCfOAuthDeepLink(
+  handler: (cb: CfOAuthDeepLinkCallback) => void,
+): Promise<() => void> {
+  if (!isDesktopRuntime()) {
+    return () => {
+      /* no-op outside Tauri */
+    };
+  }
+  try {
+    const { getCurrent, onOpenUrl } = await import("@tauri-apps/plugin-deep-link");
+    const dispatch = (urls: string[] | null) => {
+      if (!urls) return;
+      for (const u of urls) {
+        const parsed = parseCfOAuthDeepLink(u);
+        if (parsed) handler(parsed);
+      }
+    };
+    // App may have been launched by the deep link (cold start).
+    dispatch(await getCurrent());
+    // Subsequent links while running.
+    const unlisten = await onOpenUrl(dispatch);
+    return () => {
+      try {
+        unlisten();
+      } catch {
+        /* ignore */
+      }
+    };
+  } catch {
+    return () => {
+      /* plugin not available */
+    };
+  }
+}
+
+/** Complete the CF OAuth flow from a deep-link payload: validate state and
+ * exchange the code (the desktop holds the PKCE verifier). Returns the
+ * updated credentials. */
+export async function desktopCompleteCfOAuth(
+  cb: CfOAuthDeepLinkCallback,
+): Promise<DesktopCredentials> {
+  return invoke("complete_cf_oauth", {
+    state: cb.state,
+    code: cb.code,
+  });
+}
+
+/**
+ * Listen for Rust-completed CF OAuth (loopback http://127.0.0.1:32831 or
+ * `relaybase://` deep link). Prefer this over `listenCfOAuthDeepLink` — the
+ * desktop completes the exchange itself so Settings does not have to.
+ */
+export async function listenCfOAuthResult(handler: {
+  onComplete: () => void;
+  onError: (message: string) => void;
+}): Promise<() => void> {
+  if (!isDesktopRuntime()) {
+    return () => {
+      /* no-op */
+    };
+  }
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    const unOk = await listen<{ ok?: boolean }>("cf-oauth-complete", () => {
+      handler.onComplete();
+    });
+    const unErr = await listen<{ error?: string }>("cf-oauth-error", (e) => {
+      handler.onError(
+        typeof e.payload?.error === "string" && e.payload.error.trim()
+          ? e.payload.error
+          : "Cloudflare connection failed",
+      );
+    });
+    return () => {
+      unOk();
+      unErr();
+    };
+  } catch {
+    return () => {
+      /* plugin not available */
+    };
+  }
+}
+
+/** Force a refresh of the OAuth access token (rarely needed; the Rust side
+ * refreshes automatically before wrangler/CF-API calls). Returns the updated
+ * credentials. */
+export async function desktopRefreshInstallToken(): Promise<DesktopCredentials> {
+  return invoke("refresh_install_token");
 }
 
 export async function desktopListZones(): Promise<ZoneSummary[]> {
@@ -404,6 +622,10 @@ export async function desktopSaveRelaybaseAccount(input: {
     relaybaseEmail: input.email,
     relaybaseSession: input.session,
     relaybaseTier: input.tier ?? "",
+    cfOauthAccessToken: existing?.cfOauthAccessToken ?? "",
+    cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
+    cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
+    cfOauthAccountId: existing?.cfOauthAccountId ?? "",
   };
   const res = await fetch("/api/local-credentials", {
     method: "PUT",
@@ -670,6 +892,10 @@ export async function desktopSaveWorkerConnection(input: {
     relaybaseEmail: existing?.relaybaseEmail ?? "",
     relaybaseSession: existing?.relaybaseSession ?? "",
     relaybaseTier: existing?.relaybaseTier ?? "",
+    cfOauthAccessToken: existing?.cfOauthAccessToken ?? "",
+    cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
+    cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
+    cfOauthAccountId: existing?.cfOauthAccountId ?? "",
   };
   const res = await fetch("/api/local-credentials", {
     method: "PUT",
@@ -702,6 +928,10 @@ export async function desktopClearCredentials(): Promise<void> {
       relaybaseEmail: "",
       relaybaseSession: "",
       relaybaseTier: "",
+      cfOauthAccessToken: "",
+      cfOauthRefreshToken: "",
+      cfOauthAccessExpiresAt: "",
+      cfOauthAccountId: "",
     }),
   });
 }

@@ -49,6 +49,22 @@ pub struct StoredCredentials {
     pub relaybase_session: String,
     /// License tier mirrored from the console for feature gating.
     pub relaybase_tier: String,
+
+    // --- Cloudflare OAuth (install token) ---
+    // The install token is now sourced from a Cloudflare OAuth
+    // authorization-code + refresh flow (callback on console.relaybase.xyz).
+    // The access token is short-lived; the refresh token lives here only and
+    // is proxied through the console (which holds the client secret) to mint
+    // fresh access tokens. `install_token` above is kept in sync with
+    // `cf_oauth_access_token` so existing wrangler/CF-API call sites keep
+    // working unchanged. Legacy manual install tokens still work — when
+    // `cf_oauth_refresh_token` is empty, refresh is a no-op.
+    pub cf_oauth_access_token: String,
+    pub cf_oauth_refresh_token: String,
+    /// ISO timestamp of access-token expiry. Empty when not using OAuth.
+    pub cf_oauth_access_expires_at: String,
+    /// Cloudflare account id resolved from the OAuth flow.
+    pub cf_oauth_account_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

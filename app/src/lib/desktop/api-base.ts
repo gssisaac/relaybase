@@ -71,6 +71,10 @@ function readDesktopCredentialsFromWindow(): DesktopCredentials | null {
     relaybaseEmail: "",
     relaybaseSession: "",
     relaybaseTier: "",
+    cfOauthAccessToken: "",
+    cfOauthRefreshToken: "",
+    cfOauthAccessExpiresAt: "",
+    cfOauthAccountId: "",
   };
 }
 

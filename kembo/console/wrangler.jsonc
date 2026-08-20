@@ -25,5 +25,9 @@
       "database_id": "e759ebf2-f43d-423c-b5e9-163a40432319",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "vars": {
+    "CF_OAUTH_CLIENT_ID": "ce3fb54a8795ba0abb7dd11e611d74d9",
+    "CF_OAUTH_REDIRECT_URI": "https://console.relaybase.xyz/oauth/callback"
+  }
 }

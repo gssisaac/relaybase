@@ -18,7 +18,9 @@ import {
  * Permissions guide for the optional server token (Email Sending Edit).
  * Modeled on CfInstallTokenGuide. The server token is pushed to the Worker as
  * the CF_API_TOKEN wrangler secret so the Worker can send mail. It is optional
- * during install — if skipped, the user sets it later in Settings.
+ * during install — if skipped, the user sets it later in Settings. The
+ * install token (Workers Scripts / KV / R2 Edit) is obtained via Cloudflare
+ * OAuth (Connect with Cloudflare in Settings), not pasted here.
  */
 export function CfServerTokenGuide() {
   return (
@@ -79,8 +81,11 @@ export function CfServerTokenGuide() {
           </ul>
 
           <p>
-            The install token above (Workers Scripts / KV / R2 Edit) cannot send
-            mail — that is why a separate server token is required for sending.
+            The install token (Workers Scripts / KV / R2 Edit) is obtained via
+            Cloudflare OAuth — use{" "}
+            <span className="text-foreground">Connect with Cloudflare</span> in
+            Settings. It cannot send mail, which is why a separate server
+            token is still required for sending.
           </p>
         </AccordionContent>
       </AccordionItem>

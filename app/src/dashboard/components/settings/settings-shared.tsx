@@ -83,8 +83,9 @@ export function ConnectionCard({
   icon: LucideIcon;
   title: string;
   description: ReactNode;
-  editing: boolean;
-  onEdit: () => void;
+  /** When provided, an "Edit" toggle is shown. Omit for always-on cards. */
+  editing?: boolean;
+  onEdit?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -93,7 +94,7 @@ export function ConnectionCard({
         <div className="flex items-center gap-2">
           <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           <CardTitle className="text-sm">{title}</CardTitle>
-          {!editing ? (
+          {!editing && onEdit ? (
             <Button
               type="button"
               size="sm"

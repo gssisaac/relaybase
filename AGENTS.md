@@ -9,6 +9,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | **Where data lives** (KV, R2, `~/.relaybase`, API routing, new durable fields) | [docs/storage-architecture.md](docs/storage-architecture.md) |
 | Mailbox R2 bucket (`relaybase-mailbox`), `inbound/` / `sent/` prefixes, send-log move off KV, or bucket copy scripts | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
+| Settings → Cloudflare OAuth (install token), `kembo/console` OAuth routes, or desktop wrangler OAuth | [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) |
 | Email Cmd+K, row context menus, mail action shortcuts, or anything under `app/src/email/commands/` | [docs/email-command-system.md](docs/email-command-system.md) |
 | App entry redirects, sidebar email↔dashboard persistence, last-route restore | [docs/last-route-restore.md](docs/last-route-restore.md) |
 | Tab / focus navigation, `data-allow-tab-focus`, or `DisableAppTabFocus` | [docs/tab-focus-policy.md](docs/tab-focus-policy.md) |

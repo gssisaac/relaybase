@@ -10,6 +10,11 @@
       "endpoints": [
         "https://relaybase.xyz/release/latest.json"
       ]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["relaybase"]
+      }
     }
   },
   "build": {

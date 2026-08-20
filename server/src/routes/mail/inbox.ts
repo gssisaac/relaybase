@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
+import { createAppDb } from "../../../db/app";
 import {
   ensureInboundRouting,
   removeInboundWorkerRouting,
@@ -43,7 +44,7 @@ mailInbox.get("/notifications", async (c) => {
   }
 
   const limit = Number(c.req.query("limit") ?? "25");
-  const events = await listPendingEvents(c.env.RELAYBASE_APP, domain, limit);
+  const events = await listPendingEvents(createAppDb(c.env.RELAYBASE_DB), domain, limit);
   return c.json({ events });
 });
 
@@ -67,7 +68,7 @@ mailInbox.post("/notifications/ack", async (c) => {
     return c.json({ error: "ids must be a non-empty array" }, 400);
   }
 
-  const acked = await ackPendingEvents(c.env.RELAYBASE_APP, domain, ids);
+  const acked = await ackPendingEvents(createAppDb(c.env.RELAYBASE_DB), domain, ids);
   return c.json({ acked });
 });
 
@@ -243,7 +244,7 @@ mailInbox.post("/routing", async (c) => {
   }
 
   try {
-    const mailbox = await readMailbox(c.env.RELAYBASE_APP);
+    const mailbox = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
     const byEmail = new Map(
       mailbox.addresses.map((a) => [a.email.toLowerCase(), a] as const),
     );

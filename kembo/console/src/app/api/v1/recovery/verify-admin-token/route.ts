@@ -1,7 +1,9 @@
+import { and, eq } from "drizzle-orm";
 import { consumeRecoveryToken, getAccountById } from "@/lib/accounts";
+import { getDb } from "@/db/client";
+import { accountWorkers } from "@/db/schema";
 import { getEnv, json } from "@/lib/env";
 
-export const runtime = "edge";
 
 function fail(message: string, status = 400): Response {
   return json({ ok: false, error: message }, status);
@@ -19,7 +21,7 @@ function fail(message: string, status = 400): Response {
  */
 export async function POST(req: Request) {
   const env = await getEnv();
-  if (!env.KEMBO_ACCOUNTS) return fail("Recovery not configured", 503);
+  if (!env.DB) return fail("Recovery not configured", 503);
 
   let body: { recoveryToken?: string; accountEmail?: string; workerUrl?: string };
   try {
@@ -32,24 +34,21 @@ export async function POST(req: Request) {
   const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") ?? "";
   if (!token || !email || !workerUrl) return fail("recoveryToken, accountEmail, workerUrl required");
 
-  const accountId = await consumeRecoveryToken(
-    env.KEMBO_ACCOUNTS,
-    token,
-    "admin_token",
-  );
+  const db = getDb(env);
+  const accountId = await consumeRecoveryToken(db, token, "admin_token");
   if (!accountId) return fail("Invalid or expired recovery token", 400);
 
-  const account = await getAccountById(env.KEMBO_ACCOUNTS, accountId);
+  const account = await getAccountById(db, accountId);
   if (!account || account.email.toLowerCase() !== email) {
     return fail("Account mismatch", 403);
   }
 
   // Confirm this workerUrl is registered to the account.
-  const registered = await env.KEMBO_ACCOUNTS.prepare(
-    "SELECT 1 FROM account_workers WHERE account_id = ? AND worker_url = ?",
-  )
-    .bind(accountId, workerUrl)
-    .first();
+  const registered = await db
+    .select({ accountId: accountWorkers.accountId })
+    .from(accountWorkers)
+    .where(and(eq(accountWorkers.accountId, accountId), eq(accountWorkers.workerUrl, workerUrl)))
+    .get();
   if (!registered) return fail("Worker not registered to this account", 403);
 
   return json({ ok: true, accountId, email: account.email });

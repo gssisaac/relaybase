@@ -6,7 +6,8 @@
 
 | Area | Paths |
 |------|--------|
-| Store / model | `server/src/lib/catalog-audience.ts`, `catalog-broadcasts.ts`, `catalog-types.ts` (KV `srv:catalog:*`) |
+| D1 schema + helpers | `server/db/app/schema.ts`, `server/db/app/audience.ts`, `server/db/app/broadcasts.ts` (D1 `RELAYBASE_DB` tables `audience_groups`, `audience_contacts`, `broadcasts`) |
+| Store / model | `server/src/lib/catalog-audience.ts`, `catalog-broadcasts.ts`, `catalog-types.ts` (now backed by D1, not KV) |
 | Audience APIs | `server/src/routes/console/audience-groups.ts` → `/console/audience-groups` |
 | Broadcast APIs | `server/src/routes/console/broadcasts.ts` → `/console/broadcasts` |
 | Cron | `server/src/index.ts` `scheduled()` + `server/wrangler.toml` triggers |
@@ -71,7 +72,7 @@ Legacy `/audience/:groupId[/contacts|history|settings]` segments are normalized 
 
 ## Data model (store)
 
-Defined in `server/src/lib/catalog-types.ts` (persisted in Worker KV `srv:catalog:audience-groups` / `srv:catalog:audience`).
+Defined in `server/src/lib/catalog-types.ts` and persisted in D1 `RELAYBASE_DB` tables `audience_groups` / `audience_contacts` / `broadcasts` (Drizzle schema in `server/db/app/schema.ts`; helpers in `server/db/app/audience.ts` and `server/db/app/broadcasts.ts`). The legacy KV keys `srv:catalog:audience`, `srv:catalog:audience-groups`, and `srv:catalog:broadcasts` are deleted after backfill — D1 is the sole source of truth, no dual-write / KV fallback.
 
 ### `DevAudienceDataSource`
 
@@ -289,7 +290,7 @@ When changing this area:
 - [ ] Keep data-source parse: root array first; wrappers secondary
 - [ ] Auth: token in credential field; header name is only the header name
 - [ ] Broadcast create = draft → compose → queue send → Progress tab → sent detail
-- [ ] Audience sync progress updates go through `syncProgress` + optional `onProgress` KV writes
+- [ ] Audience sync progress updates go through `syncProgress` + optional `onProgress` D1 writes
 - [ ] Broadcast send progress updates go through `sendProgress` / `sendHistory`
 - [ ] Update this doc if routes, statuses, or the API contract change
 - [ ] In-product guide text lives in `AudienceDataSourceGuide.tsx` — keep it aligned with the contract section above

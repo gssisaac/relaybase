@@ -43,8 +43,7 @@ interface D1Result<T = unknown> {
 
 interface CloudflareEnv {
   ASSETS?: { fetch: (req: Request | string) => Promise<Response> };
-  KEMBO_LICENSES?: KVNamespace;
-  KEMBO_ACCOUNTS?: D1Database;
+  DB?: D1Database;
   // Secrets (wrangler secret put)
   CONSOLE_SESSION_SECRET?: string;
   RELAYBASE_ADMIN_TOKEN?: string;

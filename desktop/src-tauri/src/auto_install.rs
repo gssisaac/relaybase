@@ -29,6 +29,14 @@ use crate::worker::DEFAULT_SCRIPT;
 const KV_NAMESPACE: &str = "relaybase-app";
 const R2_BUCKET: &str = "relaybase-mailbox";
 
+/// D1 databases created during install. Each entry is (binding, db_name,
+/// migrations_dir, placeholder in wrangler.toml).
+const D1_DATABASES: &[(&str, &str, &str, &str)] = &[
+    ("RELAYBASE_LOGS", "relaybase-logs", "migrations-logs", "REPLACE_WITH_relaybase-logs_ID"),
+    ("RELAYBASE_INBOX_INDEX", "relaybase-inbox-index", "migrations-inbox", "REPLACE_WITH_relaybase-inbox-index_ID"),
+    ("RELAYBASE_DB", "relaybase-db", "migrations-app", "REPLACE_WITH_relaybase-db_ID"),
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutoInstallResult {
@@ -38,6 +46,9 @@ pub struct AutoInstallResult {
     pub kv_namespace_id: String,
     pub r2_bucket: String,
     pub account_id: String,
+    pub d1_logs_id: String,
+    pub d1_inbox_index_id: String,
+    pub d1_db_id: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -151,6 +162,14 @@ fn patch_wrangler_toml(work_dir: &Path, kv_id: &str) -> Result<(), String> {
     std::fs::write(&path, next).map_err(|e| format!("write wrangler.toml: {e}"))
 }
 
+/// Patch a single D1 database id placeholder in the staged wrangler.toml.
+fn patch_d1_id(work_dir: &Path, placeholder: &str, db_id: &str) -> Result<(), String> {
+    let path = work_dir.join("wrangler.toml");
+    let raw = std::fs::read_to_string(&path).map_err(|e| format!("read wrangler.toml: {e}"))?;
+    let next = raw.replace(placeholder, db_id);
+    std::fs::write(&path, next).map_err(|e| format!("write wrangler.toml: {e}"))
+}
+
 /// Run a wrangler command in `work_dir`, streaming stdout+stderr lines as
 /// `install-log` events. Returns the combined stdout (for parsing).
 async fn run_wrangler(
@@ -259,6 +278,43 @@ fn parse_kv_id(output: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Parse the D1 database id from `wrangler d1 create` output.
+/// wrangler prints: `database_id = "<uuid>"` or a JSON payload with `"uuid"`.
+fn parse_d1_id(output: &str) -> Option<String> {
+    for line in output.lines() {
+        let trimmed = line.trim();
+        // wrangler v4: `database_id = "<uuid>"`
+        if let Some(idx) = trimmed.find("database_id =") {
+            let rest = trimmed[idx + 13..].trim().trim_matches('"');
+            if rest.len() >= 16 {
+                return Some(rest.to_string());
+            }
+        }
+        // JSON: `"uuid": "<id>"`
+        if let Some(idx) = trimmed.find("\"uuid\"") {
+            let rest = trimmed[idx + 6..].trim_start_matches([':', ' ', '"']);
+            if let Some(id) = rest.split('"').next() {
+                if id.len() >= 16 {
+                    return Some(id.to_string());
+                }
+            }
+        }
+        // JSON: `"d1_database_id": "<id>"` or `"database_id": "<id>"`
+        for key in ["\"d1_database_id\"", "\"database_id\""] {
+            if let Some(idx) = trimmed.find(key) {
+                let rest = trimmed[idx + key.len()..].trim_start_matches([':', ' ', '"']);
+                if let Some(id) = rest.split('"').next() {
+                    if id.len() >= 16 {
+                        return Some(id.to_string());
+                    }
+                }
+            }
+        }
+    }
+    // Fallback: reuse parse_kv_id (some versions print just `id = ...`)
+    parse_kv_id(output)
 }
 
 /// Parse the deployed workers.dev URL from `wrangler deploy` output.
@@ -377,6 +433,59 @@ pub async fn auto_install_worker(
         );
     }
 
+    // 2b) D1 databases — create each, patch id into wrangler.toml, apply migrations.
+    let mut d1_ids: Vec<String> = Vec::with_capacity(D1_DATABASES.len());
+    for (_binding, db_name, migrations_dir, placeholder) in D1_DATABASES {
+        let create_out = run_wrangler(
+            &app,
+            "d1-create",
+            &work_dir,
+            &["d1", "create", db_name],
+            &api_token,
+            None,
+        )
+        .await?;
+        let db_id = parse_d1_id(&create_out).ok_or_else(|| {
+            format!("Could not parse D1 id for {db_name} from wrangler output:\n{create_out}")
+        })?;
+        patch_d1_id(&work_dir, placeholder, &db_id)?;
+        let _ = app.emit(
+            "install-log",
+            LogEvent {
+                step: "d1".into(),
+                level: "info".into(),
+                line: format!("D1 {db_name} created (id {db_id})"),
+            },
+        );
+
+        // Apply migrations for this database.
+        run_wrangler(
+            &app,
+            "d1-migrate",
+            &work_dir,
+            &[
+                "d1",
+                "migrations",
+                "apply",
+                "--remote",
+                &format!("--migrations-dir={migrations_dir}"),
+                db_name,
+            ],
+            &api_token,
+            None,
+        )
+        .await?;
+        let _ = app.emit(
+            "install-log",
+            LogEvent {
+                step: "d1".into(),
+                level: "info".into(),
+                line: format!("D1 {db_name} migrations applied"),
+            },
+        );
+        d1_ids.push(db_id);
+    }
+
     // 3) Admin token + secret
     let admin_token = generate_admin_token();
     run_wrangler(
@@ -467,6 +576,9 @@ pub async fn auto_install_worker(
         kv_namespace_id: kv_id,
         r2_bucket: R2_BUCKET.to_string(),
         account_id,
+        d1_logs_id: d1_ids.get(0).cloned().unwrap_or_default(),
+        d1_inbox_index_id: d1_ids.get(1).cloned().unwrap_or_default(),
+        d1_db_id: d1_ids.get(2).cloned().unwrap_or_default(),
     })
 }
 

@@ -8,6 +8,7 @@ counts, Sent pagination, list virtualization, or D1 `RELAYBASE_INBOX_INDEX`.
 | Area | Paths |
 |------|------|
 | D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_INBOX_INDEX`), `server/migrations-inbox/0001_create_inbound_search.sql` |
+| Drizzle schema + helper | `server/db/inbox-index/` (`schema.ts`, `search.ts`, `index.ts`) |
 | Env type | `server/src/env.ts` (`RELAYBASE_INBOX_INDEX?: D1Database`) |
 | FTS5 query builder + sync helpers | `server/src/lib/inbound-search.ts` |
 | Sync call sites (ingest / prune / read-state) | `server/src/lib/inbound-store.ts` |

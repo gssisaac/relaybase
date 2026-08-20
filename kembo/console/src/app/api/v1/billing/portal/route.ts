@@ -1,9 +1,9 @@
 import { findLicenseByEmail } from "@/lib/licenses";
 import { getAccountById } from "@/lib/accounts";
+import { getDb } from "@/db/client";
 import { assertEnv, getEnv, verifyRequestSession } from "@/lib/env";
 import { createPortalSession } from "@/lib/stripe";
 
-export const runtime = "edge";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -20,10 +20,10 @@ export async function POST(req: Request) {
     if (!session) return json({ error: "Unauthorized" }, 401);
 
     const stripeSecret = assertEnv(env, "STRIPE_SECRET_KEY");
-    const account = await getAccountById(env.KEMBO_ACCOUNTS!, session.accountId);
+    const account = await getAccountById(getDb(env), session.accountId);
     if (!account) return json({ error: "Account not found" }, 404);
 
-    const stored = await findLicenseByEmail(env.KEMBO_LICENSES!, account.email);
+    const stored = await findLicenseByEmail(getDb(env), account.email);
     const customerId = stored?.stripeCustomerId ?? null;
     if (!customerId) {
       return json({ error: "No billing account found. Upgrade first." }, 404);

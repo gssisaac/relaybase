@@ -1,6 +1,7 @@
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 import { desktopVerifyWorkerConnection } from "@/lib/desktop/bridge";
 import {
+  D1_APP_DEFAULT,
   D1_INBOX_INDEX_DEFAULT,
   D1_LOGS_DEFAULT,
   type D1BindingSnapshot,
@@ -28,6 +29,7 @@ export type ConnectionStatusSnapshot = {
     r2UsageTruncated?: boolean | null;
     d1Logs: D1BindingSnapshot;
     d1InboxIndex: D1BindingSnapshot;
+    d1App: D1BindingSnapshot;
   } | null;
 };
 
@@ -53,6 +55,7 @@ export function workerStatusFromConnect(
     r2UsageTruncated: result.r2UsageTruncated ?? null,
     d1Logs: result.d1Logs,
     d1InboxIndex: result.d1InboxIndex,
+    d1App: result.d1App,
   };
 }
 
@@ -99,6 +102,7 @@ export async function probeConnectionStatus(
         r2UsageTruncated: null,
         d1Logs: { ...D1_LOGS_DEFAULT },
         d1InboxIndex: { ...D1_INBOX_INDEX_DEFAULT },
+        d1App: { ...D1_APP_DEFAULT },
       },
     };
   }
@@ -178,8 +182,9 @@ export function connectionHealthFromSnapshot(
             detail: "Bind INBOUND R2 in wrangler.toml.",
           };
 
-  const logsOk = snapshot?.worker?.d1Logs.configured === true;
-  const searchOk = snapshot?.worker?.d1InboxIndex.configured === true;
+  const logsOk = snapshot?.worker?.d1Logs?.configured === true;
+  const searchOk = snapshot?.worker?.d1InboxIndex?.configured === true;
+  const appOk = snapshot?.worker?.d1App?.configured === true;
   const d1: HealthStatus = !hasWorker
     ? {
         tone: "bad",
@@ -192,29 +197,41 @@ export function connectionHealthFromSnapshot(
           label: "Checking…",
           detail: "Probing D1 bindings.",
         }
-      : logsOk && searchOk
+      : logsOk && searchOk && appOk
         ? {
             tone: "ok",
             label: "Configured",
-            detail: "Ops log and inbox search bindings work.",
+            detail: "Logs, inbox search, and product DB bindings work.",
           }
-        : logsOk
+        : logsOk && searchOk
           ? {
               tone: "ok",
-              label: "Logs configured",
-              detail: "Ops log is ready. Inbox search is not bound.",
+              label: "Logs + search configured",
+              detail: "Product DB (relaybase-db) is not bound.",
             }
-          : searchOk
+          : logsOk
             ? {
                 tone: "ok",
-                label: "Search configured",
-                detail: "Inbox search is ready. Ops log is not bound.",
+                label: "Logs configured",
+                detail: "Ops log is ready. Inbox search / product DB not bound.",
               }
-            : {
-                tone: "bad",
-                label: "Not configured",
-                detail: "Bind RELAYBASE_LOGS in wrangler.toml.",
-              };
+            : searchOk
+              ? {
+                  tone: "ok",
+                  label: "Search configured",
+                  detail: "Inbox search is ready. Ops log / product DB not bound.",
+                }
+              : appOk
+                ? {
+                    tone: "ok",
+                    label: "Product DB configured",
+                    detail: "relaybase-db is ready. Logs / inbox search not bound.",
+                  }
+                : {
+                    tone: "bad",
+                    label: "Not configured",
+                    detail: "Bind RELAYBASE_LOGS / RELAYBASE_DB in wrangler.toml.",
+                  };
 
   return { cf, worker, r2, d1 };
 }

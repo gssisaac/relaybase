@@ -4,7 +4,7 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "account_id": "674a35f00d9800eec7d6bc42fe55726e",
   "routes": [
     { "pattern": "admin.relaybase.xyz", "custom_domain": true }
   ],
@@ -18,18 +18,11 @@
       "service": "kembo-admin"
     }
   ],
-  "kv_namespaces": [
+  "d1_databases": [
     {
-      "binding": "KEMBO_OPS",
-      // Local OpenNext uses preview_id — pin to production so admin/app share
-      // the same live store as the deployed workers.
-      "id": "95baa1c7561b4943ae97c0f3c40f6f30",
-      "preview_id": "95baa1c7561b4943ae97c0f3c40f6f30"
-    },
-    {
-      "binding": "RELAYBASE_APP_DOGFOOD",
-      "id": "dd520e7817004e77aa3f7d01d2ea2fb8",
-      "preview_id": "dd520e7817004e77aa3f7d01d2ea2fb8"
+      "binding": "DB",
+      "database_name": "kembo-ops",
+      "database_id": "e759ebf2-f43d-423c-b5e9-163a40432319"
     }
   ]
 }

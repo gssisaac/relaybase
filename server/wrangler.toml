@@ -44,3 +44,13 @@ binding = "RELAYBASE_INBOX_INDEX"
 database_name = "relaybase-inbox-index"
 database_id = "bef720aa-950f-4a66-928e-155efcc5c64a"
 migrations_dir = "migrations-inbox"
+
+# Durable product state: mailbox, audience, broadcasts, keys, tokens,
+# branding, mobile passwords, webhooks, owner config, inbound events.
+# Create with: wrangler d1 create relaybase-db
+# Apply with: wrangler d1 migrations apply relaybase-db --remote --migrations-dir=migrations-app
+[[d1_databases]]
+binding = "RELAYBASE_DB"
+database_name = "relaybase-db"
+database_id = "9bd36a18-fb6a-4151-b729-b1112a99574b"
+migrations_dir = "migrations-app"

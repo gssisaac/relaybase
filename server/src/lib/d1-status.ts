@@ -2,14 +2,17 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 export const D1_LOGS_DATABASE_NAME = "relaybase-logs";
 export const D1_INBOX_INDEX_DATABASE_NAME = "relaybase-inbox-index";
+export const D1_APP_DATABASE_NAME = "relaybase-db";
 export const D1_LOGS_BINDING = "RELAYBASE_LOGS";
 export const D1_INBOX_INDEX_BINDING = "RELAYBASE_INBOX_INDEX";
+export const D1_APP_BINDING = "RELAYBASE_DB";
 
 /** Cloudflare D1 per-database size cap on Workers Paid (display only). */
 export const D1_DATABASE_SIZE_LIMIT_BYTES = 10 * 1024 ** 3;
 
 const LOGS_TABLE = "ops_log";
 const INBOX_INDEX_TABLE = "inbound_search_fts";
+const APP_TABLE = "domains";
 
 export type D1BindingStatus = {
   configured: boolean;
@@ -21,6 +24,7 @@ export type D1BindingStatus = {
 export type D1ConnectionStatus = {
   logs: D1BindingStatus;
   inboxIndex: D1BindingStatus;
+  app: D1BindingStatus;
 };
 
 async function tableReady(
@@ -119,10 +123,11 @@ async function probeBinding(
 export async function probeD1Connection(
   logs: D1Database | undefined,
   inboxIndex: D1Database | undefined,
+  app: D1Database | undefined,
   cfAccountId?: string,
   cfApiToken?: string,
 ): Promise<D1ConnectionStatus> {
-  const [logsStatus, inboxIndexStatus] = await Promise.all([
+  const [logsStatus, inboxIndexStatus, appStatus] = await Promise.all([
     probeBinding(
       logs,
       LOGS_TABLE,
@@ -139,9 +144,18 @@ export async function probeD1Connection(
       cfAccountId,
       cfApiToken,
     ),
+    probeBinding(
+      app,
+      APP_TABLE,
+      D1_APP_DATABASE_NAME,
+      D1_APP_BINDING,
+      cfAccountId,
+      cfApiToken,
+    ),
   ]);
   return {
     logs: logsStatus,
     inboxIndex: inboxIndexStatus,
+    app: appStatus,
   };
 }

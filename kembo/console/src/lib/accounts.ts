@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { hashPassword, randomToken, sha256Hex, verifyPassword } from "./crypto";
+import { accounts, accountWorkers, accountRecovery } from "@/db/schema";
+import type { Database } from "@/db/client";
 
 export type Account = {
   id: string;
@@ -10,9 +13,9 @@ export type Account = {
 type AccountRow = {
   id: string;
   email: string;
-  password_hash: string;
-  created_at: string;
-  email_verified_at: string | null;
+  passwordHash: string;
+  createdAt: string;
+  emailVerifiedAt: string | null;
 };
 
 const EMAIL_RE =
@@ -27,13 +30,23 @@ function rowToAccount(row: AccountRow): Account {
   return {
     id: row.id,
     email: row.email,
-    createdAt: row.created_at,
-    emailVerifiedAt: row.email_verified_at,
+    createdAt: row.createdAt,
+    emailVerifiedAt: row.emailVerifiedAt,
+  };
+}
+
+function dbRowToAccountRow(row: typeof accounts.$inferSelect): AccountRow {
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.passwordHash,
+    createdAt: row.createdAt,
+    emailVerifiedAt: row.emailVerifiedAt,
   };
 }
 
 export async function createAccount(
-  db: D1Database,
+  db: Database,
   email: string,
   password: string,
 ): Promise<Account> {
@@ -45,12 +58,13 @@ export async function createAccount(
   const passwordHash = await hashPassword(password);
 
   try {
-    await db
-      .prepare(
-        "INSERT INTO accounts (id, email, password_hash) VALUES (?, ?, ?)",
-      )
-      .bind(id, normalized, passwordHash)
-      .run();
+    await db.insert(accounts).values({
+      id,
+      email: normalized,
+      passwordHash,
+      createdAt: new Date().toISOString(),
+      emailVerifiedAt: null,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("UNIQUE") || msg.toLowerCase().includes("constraint")) {
@@ -59,65 +73,51 @@ export async function createAccount(
     throw err;
   }
 
-  const row = await db
-    .prepare("SELECT id, email, created_at, email_verified_at FROM accounts WHERE id = ?")
-    .bind(id)
-    .first<AccountRow>();
+  const row = await db.select().from(accounts).where(eq(accounts.id, id)).get();
   if (!row) throw new Error("Account creation failed");
-  return rowToAccount(row);
+  return rowToAccount(dbRowToAccountRow(row));
 }
 
 export async function getAccountByEmail(
-  db: D1Database,
+  db: Database,
   email: string,
 ): Promise<AccountRow | null> {
   const normalized = email.trim().toLowerCase();
-  return db
-    .prepare(
-      "SELECT id, email, password_hash, created_at, email_verified_at FROM accounts WHERE email = ?",
-    )
-    .bind(normalized)
-    .first<AccountRow>();
+  const row = await db.select().from(accounts).where(eq(accounts.email, normalized)).get();
+  return row ? dbRowToAccountRow(row) : null;
 }
 
 export async function getAccountById(
-  db: D1Database,
+  db: Database,
   id: string,
 ): Promise<AccountRow | null> {
-  return db
-    .prepare(
-      "SELECT id, email, password_hash, created_at, email_verified_at FROM accounts WHERE id = ?",
-    )
-    .bind(id)
-    .first<AccountRow>();
+  const row = await db.select().from(accounts).where(eq(accounts.id, id)).get();
+  return row ? dbRowToAccountRow(row) : null;
 }
 
 export async function verifyAccountCredentials(
-  db: D1Database,
+  db: Database,
   email: string,
   password: string,
 ): Promise<AccountRow | null> {
   const row = await getAccountByEmail(db, email);
   if (!row) return null;
-  const ok = await verifyPassword(password, row.password_hash);
+  const ok = await verifyPassword(password, row.passwordHash);
   return ok ? row : null;
 }
 
 export async function setAccountPassword(
-  db: D1Database,
+  db: Database,
   accountId: string,
   password: string,
 ): Promise<void> {
   if (password.length < 8) throw new Error("Password must be at least 8 characters");
   const passwordHash = await hashPassword(password);
-  await db
-    .prepare("UPDATE accounts SET password_hash = ? WHERE id = ?")
-    .bind(passwordHash, accountId)
-    .run();
+  await db.update(accounts).set({ passwordHash }).where(eq(accounts.id, accountId));
 }
 
 export async function registerWorker(
-  db: D1Database,
+  db: Database,
   accountId: string,
   workerUrl: string,
 ): Promise<void> {
@@ -125,24 +125,24 @@ export async function registerWorker(
   if (!/^https:\/\/[a-z0-9.-]+\.workers\.dev$/i.test(url)) {
     throw new Error("Worker URL must be an https://*.workers.dev URL");
   }
-  await db
-    .prepare(
-      `INSERT INTO account_workers (account_id, worker_url) VALUES (?, ?)
-       ON CONFLICT(account_id, worker_url) DO NOTHING`,
-    )
-    .bind(accountId, url)
-    .run();
+  await db.insert(accountWorkers).values({
+    accountId,
+    workerUrl: url,
+    registeredAt: new Date().toISOString(),
+  }).onConflictDoNothing();
 }
 
 export async function listAccountWorkers(
-  db: D1Database,
+  db: Database,
   accountId: string,
 ): Promise<string[]> {
-  const result = await db
-    .prepare("SELECT worker_url FROM account_workers WHERE account_id = ? ORDER BY registered_at")
-    .bind(accountId)
-    .all<{ worker_url: string }>();
-  return (result.results ?? []).map((r) => r.worker_url);
+  const rows = await db
+    .select({ workerUrl: accountWorkers.workerUrl })
+    .from(accountWorkers)
+    .where(eq(accountWorkers.accountId, accountId))
+    .orderBy(accountWorkers.registeredAt)
+    .all();
+  return rows.map((r) => r.workerUrl);
 }
 
 // --- Recovery tokens (password reset + admin-token recovery) ---
@@ -150,7 +150,7 @@ export async function listAccountWorkers(
 export type RecoveryPurpose = "password" | "admin_token";
 
 export async function createRecoveryToken(
-  db: D1Database,
+  db: Database,
   accountId: string,
   purpose: RecoveryPurpose,
   ttlSeconds: number,
@@ -158,36 +158,36 @@ export async function createRecoveryToken(
   const token = randomToken(32);
   const tokenHash = await sha256Hex(token);
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-  await db
-    .prepare(
-      "INSERT INTO account_recovery (token_hash, account_id, purpose, expires_at) VALUES (?, ?, ?, ?)",
-    )
-    .bind(tokenHash, accountId, purpose, expiresAt)
-    .run();
+  await db.insert(accountRecovery).values({
+    tokenHash,
+    accountId,
+    purpose,
+    expiresAt,
+    consumedAt: null,
+  });
   return token;
 }
 
 export async function consumeRecoveryToken(
-  db: D1Database,
+  db: Database,
   token: string,
   purpose: RecoveryPurpose,
 ): Promise<string | null> {
   const tokenHash = await sha256Hex(token);
   const row = await db
-    .prepare(
-      `SELECT account_id, expires_at, consumed_at FROM account_recovery
-       WHERE token_hash = ? AND purpose = ?`,
-    )
-    .bind(tokenHash, purpose)
-    .first<{ account_id: string; expires_at: string; consumed_at: string | null }>();
+    .select()
+    .from(accountRecovery)
+    .where(eq(accountRecovery.tokenHash, tokenHash))
+    .get();
   if (!row) return null;
-  if (row.consumed_at) return null;
-  if (new Date(row.expires_at).getTime() < Date.now()) return null;
+  if (row.purpose !== purpose) return null;
+  if (row.consumedAt) return null;
+  if (new Date(row.expiresAt).getTime() < Date.now()) return null;
   await db
-    .prepare("UPDATE account_recovery SET consumed_at = ? WHERE token_hash = ?")
-    .bind(new Date().toISOString(), tokenHash)
-    .run();
-  return row.account_id;
+    .update(accountRecovery)
+    .set({ consumedAt: new Date().toISOString() })
+    .where(eq(accountRecovery.tokenHash, tokenHash));
+  return row.accountId;
 }
 
 // --- Sessions (signed stateless tokens) ---

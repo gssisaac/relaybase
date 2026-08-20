@@ -1,8 +1,8 @@
 import { getAccountById } from "@/lib/accounts";
+import { getDb } from "@/db/client";
 import { assertEnv, getEnv, verifyRequestSession } from "@/lib/env";
 import { createCheckoutSession } from "@/lib/stripe";
 
-export const runtime = "edge";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
     const stripeSecret = assertEnv(env, "STRIPE_SECRET_KEY");
     const priceId = assertEnv(env, "STRIPE_PRICE_PRO");
-    const account = await getAccountById(env.KEMBO_ACCOUNTS!, session.accountId);
+    const account = await getAccountById(getDb(env), session.accountId);
     if (!account) return json({ error: "Account not found" }, 404);
 
     const body = (await req.json().catch(() => ({}))) as {

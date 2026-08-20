@@ -19,14 +19,19 @@
     "import:mbox:apply": "node scripts/import-mbox.mjs --apply",
     "backfill:search": "node scripts/backfill-inbound-search.mjs",
     "backfill:search:domain": "node scripts/backfill-inbound-search.mjs --domain",
-    "backfill:search:dry": "node scripts/backfill-inbound-search.mjs --dry-run"
+    "backfill:search:dry": "node scripts/backfill-inbound-search.mjs --dry-run",
+    "db:generate": "drizzle-kit generate --config=drizzle.app.config.ts",
+    "db:backfill": "node scripts/backfill-app-d1.mjs",
+    "db:backfill:apply": "node scripts/backfill-app-d1.mjs --apply"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.7.11",
     "postal-mime": "^2.7.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250613.0",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5.8.3",
     "wrangler": "^4.20.0"
   }

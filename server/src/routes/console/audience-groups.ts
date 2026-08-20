@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
+import { createAppDb } from "../../../db/app";
 import {
   addManualContact,
   createAudienceGroup,
@@ -22,7 +23,7 @@ const consoleAudienceGroups = new Hono<{ Bindings: Env }>();
 consoleAudienceGroups.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
+  const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   return c.json({ groups: listGroupSummaries(catalog) });
 });
 
@@ -42,7 +43,7 @@ consoleAudienceGroups.post("/", async (c) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
   try {
-    const group = await createAudienceGroup(c.env.RELAYBASE_APP, {
+    const group = await createAudienceGroup(createAppDb(c.env.RELAYBASE_DB), {
       name: body.name ?? "",
       domain: body.domain ?? "",
       dataSource: body.dataSource,
@@ -68,7 +69,7 @@ consoleAudienceGroups.post("/test", async (c) => {
   try {
     let previous;
     if (body.groupId) {
-      const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
+      const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
       previous = catalog.groups.find((g) => g.id === body.groupId)?.dataSource;
     }
     const dataSource = mergeDataSource(previous, body);
@@ -88,7 +89,7 @@ consoleAudienceGroups.post("/test", async (c) => {
 consoleAudienceGroups.get("/:groupId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
+  const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const detail = getGroupDetail(catalog, c.req.param("groupId"));
   if (!detail) return c.json({ error: "Audience group not found" }, 404);
   return c.json(detail);
@@ -105,7 +106,7 @@ consoleAudienceGroups.patch("/:groupId", async (c) => {
   }
   try {
     const group = await updateAudienceGroup(
-      c.env.RELAYBASE_APP,
+      createAppDb(c.env.RELAYBASE_DB),
       c.req.param("groupId"),
       body,
     );
@@ -120,7 +121,7 @@ consoleAudienceGroups.delete("/:groupId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   try {
-    await deleteAudienceGroup(c.env.RELAYBASE_APP, c.req.param("groupId"));
+    await deleteAudienceGroup(createAppDb(c.env.RELAYBASE_DB), c.req.param("groupId"));
     return c.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed";
@@ -131,7 +132,7 @@ consoleAudienceGroups.delete("/:groupId", async (c) => {
 consoleAudienceGroups.get("/:groupId/contacts", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
+  const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const detail = getGroupDetail(catalog, c.req.param("groupId"));
   if (!detail) return c.json({ error: "Audience group not found" }, 404);
   return c.json({ contacts: detail.contacts });
@@ -148,7 +149,7 @@ consoleAudienceGroups.post("/:groupId/contacts", async (c) => {
   }
   try {
     const contact = await addManualContact(
-      c.env.RELAYBASE_APP,
+      createAppDb(c.env.RELAYBASE_DB),
       c.req.param("groupId"),
       { email: body.email ?? "", name: body.name },
     );
@@ -166,7 +167,7 @@ consoleAudienceGroups.delete("/:groupId/contacts", async (c) => {
   if (!contactId) return c.json({ error: "id is required" }, 400);
   try {
     await removeContact(
-      c.env.RELAYBASE_APP,
+      createAppDb(c.env.RELAYBASE_DB),
       c.req.param("groupId"),
       contactId,
     );
@@ -182,7 +183,7 @@ consoleAudienceGroups.post("/:groupId/sync", async (c) => {
   if (denied) return denied;
   try {
     const result = await syncAudienceGroup(
-      c.env.RELAYBASE_APP,
+      createAppDb(c.env.RELAYBASE_DB),
       c.req.param("groupId"),
       { trigger: "manual" },
     );
@@ -196,7 +197,7 @@ consoleAudienceGroups.post("/:groupId/sync", async (c) => {
 consoleAudienceGroups.get("/:groupId/progress", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const catalog = await readAudienceCatalog(c.env.RELAYBASE_APP);
+  const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const progress = getGroupProgress(catalog, c.req.param("groupId"));
   if (!progress) return c.json({ error: "Audience group not found" }, 404);
   return c.json(progress);

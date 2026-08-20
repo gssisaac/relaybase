@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { sha256Hex } from "./crypto";
+import { licenses } from "@/db/schema";
+import type { Database } from "@/db/client";
 
 export type LicenseTier = "free" | "pro";
 export type LicenseStatus = "active" | "past_due" | "canceled" | "revoked";
@@ -20,22 +23,6 @@ export type LicenseRecord = {
 
 type StoredLicense = LicenseRecord & { keyHash: string };
 
-function keyKv(hash: string): string {
-  return `srv:license:key:${hash}`;
-}
-
-function idKv(id: string): string {
-  return `srv:license:id:${id}`;
-}
-
-function customerKv(stripeCustomerId: string): string {
-  return `srv:license:customer:${stripeCustomerId}`;
-}
-
-function emailKv(email: string): string {
-  return `srv:license:email:${email.trim().toLowerCase()}`;
-}
-
 export function generateLicenseKey(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
@@ -43,8 +30,31 @@ export function generateLicenseKey(): string {
   return `rb_lic_${body}`;
 }
 
+function rowToStored(row: typeof licenses.$inferSelect): StoredLicense {
+  return {
+    id: row.id,
+    email: row.email,
+    keyHash: row.keyHash,
+    keyPrefix: row.keyPrefix,
+    createdAt: row.createdAt,
+    active: row.active === 1,
+    tier: row.tier as LicenseTier,
+    stripeSessionId: row.stripeSessionId,
+    stripeCustomerId: row.stripeCustomerId,
+    stripeSubscriptionId: row.stripeSubscriptionId,
+    currentPeriodEnd: row.currentPeriodEnd,
+    status: row.status as LicenseStatus,
+    note: row.note,
+  };
+}
+
+function storedToRecord(stored: StoredLicense): LicenseRecord {
+  const { keyHash: _h, ...record } = stored;
+  return record;
+}
+
 export async function createLicense(
-  kv: KVNamespace,
+  db: Database,
   params: {
     email: string;
     tier?: LicenseTier;
@@ -62,12 +72,13 @@ export async function createLicense(
   const createdAt = new Date().toISOString();
   const keyPrefix = licenseKey.slice(0, 14);
 
-  const stored: StoredLicense = {
+  const values = {
     id,
     email: params.email.trim().toLowerCase(),
+    keyHash,
     keyPrefix,
     createdAt,
-    active: true,
+    active: 1,
     tier: params.tier ?? "pro",
     stripeSessionId: params.stripeSessionId ?? null,
     stripeCustomerId: params.stripeCustomerId ?? null,
@@ -75,100 +86,109 @@ export async function createLicense(
     currentPeriodEnd: params.currentPeriodEnd ?? null,
     status: params.status ?? "active",
     note: params.note ?? null,
-    keyHash,
   };
 
-  await kv.put(keyKv(keyHash), JSON.stringify(stored));
-  await kv.put(idKv(id), JSON.stringify(stored));
-  if (stored.stripeCustomerId) {
-    await kv.put(customerKv(stored.stripeCustomerId), JSON.stringify(stored));
-  }
-  await kv.put(emailKv(stored.email), JSON.stringify(stored));
+  await db.insert(licenses).values(values);
 
-  const { keyHash: _h, ...record } = stored;
-  return { record, licenseKey };
+  const stored: StoredLicense = {
+    id: values.id,
+    email: values.email,
+    keyHash: values.keyHash,
+    keyPrefix: values.keyPrefix,
+    createdAt: values.createdAt,
+    active: true,
+    tier: values.tier as LicenseTier,
+    stripeSessionId: values.stripeSessionId,
+    stripeCustomerId: values.stripeCustomerId,
+    stripeSubscriptionId: values.stripeSubscriptionId,
+    currentPeriodEnd: values.currentPeriodEnd,
+    status: values.status as LicenseStatus,
+    note: values.note,
+  };
+  return { record: storedToRecord(stored), licenseKey };
 }
 
 export async function verifyLicense(
-  kv: KVNamespace,
+  db: Database,
   licenseKey: string,
 ): Promise<LicenseRecord | null> {
   const trimmed = licenseKey.trim();
   if (!trimmed.startsWith("rb_lic_")) return null;
   const keyHash = await sha256Hex(trimmed);
-  const raw = await kv.get(keyKv(keyHash));
-  if (!raw) return null;
-  const stored = JSON.parse(raw) as StoredLicense;
+  const row = await db.select().from(licenses).where(eq(licenses.keyHash, keyHash)).get();
+  if (!row) return null;
+  const stored = rowToStored(row);
   if (!stored.active) return null;
-  const { keyHash: _h, ...record } = stored;
-  return record;
+  return storedToRecord(stored);
 }
 
-export async function listLicenses(kv: KVNamespace): Promise<LicenseRecord[]> {
-  const listed = await kv.list({ prefix: "srv:license:id:" });
-  const out: LicenseRecord[] = [];
-  for (const item of listed.keys) {
-    const raw = await kv.get(item.name);
-    if (!raw) continue;
-    const stored = JSON.parse(raw) as StoredLicense;
-    const { keyHash: _h, ...record } = stored;
-    out.push(record);
-  }
+export async function listLicenses(db: Database): Promise<LicenseRecord[]> {
+  const rows = await db.select().from(licenses).all();
+  const out = rows.map(rowToStored).map(storedToRecord);
   out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return out;
 }
 
 export async function revokeLicense(
-  kv: KVNamespace,
+  db: Database,
   id: string,
 ): Promise<boolean> {
-  const raw = await kv.get(idKv(id));
-  if (!raw) return false;
-  const stored = JSON.parse(raw) as StoredLicense;
-  stored.active = false;
-  stored.status = "revoked";
-  await kv.put(keyKv(stored.keyHash), JSON.stringify(stored));
-  await kv.put(idKv(id), JSON.stringify(stored));
-  if (stored.stripeCustomerId) {
-    await kv.put(customerKv(stored.stripeCustomerId), JSON.stringify(stored));
-  }
+  const row = await db.select().from(licenses).where(eq(licenses.id, id)).get();
+  if (!row) return false;
+  await db
+    .update(licenses)
+    .set({ active: 0, status: "revoked" })
+    .where(eq(licenses.id, id));
   return true;
 }
 
 export async function findLicenseByCustomerId(
-  kv: KVNamespace,
+  db: Database,
   stripeCustomerId: string,
 ): Promise<StoredLicense | null> {
-  const raw = await kv.get(customerKv(stripeCustomerId));
-  if (!raw) return null;
-  return JSON.parse(raw) as StoredLicense;
+  const row = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.stripeCustomerId, stripeCustomerId))
+    .get();
+  return row ? rowToStored(row) : null;
 }
 
 export async function findLicenseByEmail(
-  kv: KVNamespace,
+  db: Database,
   email: string,
 ): Promise<StoredLicense | null> {
-  const raw = await kv.get(emailKv(email));
-  if (!raw) return null;
-  return JSON.parse(raw) as StoredLicense;
+  const row = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.email, email.trim().toLowerCase()))
+    .get();
+  return row ? rowToStored(row) : null;
 }
 
 export async function updateLicense(
-  kv: KVNamespace,
+  db: Database,
   id: string,
   patch: Partial<Omit<LicenseRecord, "id" | "keyHash">>,
 ): Promise<LicenseRecord | null> {
-  const raw = await kv.get(idKv(id));
-  if (!raw) return null;
-  const stored = JSON.parse(raw) as StoredLicense;
-  const next: StoredLicense = { ...stored, ...patch };
-  await kv.put(keyKv(stored.keyHash), JSON.stringify(next));
-  await kv.put(idKv(id), JSON.stringify(next));
-  if (next.stripeCustomerId && next.stripeCustomerId !== stored.stripeCustomerId) {
-    await kv.put(customerKv(next.stripeCustomerId), JSON.stringify(next));
-  } else if (next.stripeCustomerId) {
-    await kv.put(customerKv(next.stripeCustomerId), JSON.stringify(next));
+  const row = await db.select().from(licenses).where(eq(licenses.id, id)).get();
+  if (!row) return null;
+  const update: Partial<typeof licenses.$inferInsert> = {};
+  if (patch.email !== undefined) update.email = patch.email.trim().toLowerCase();
+  if (patch.active !== undefined) update.active = patch.active ? 1 : 0;
+  if (patch.tier !== undefined) update.tier = patch.tier;
+  if (patch.stripeSessionId !== undefined) update.stripeSessionId = patch.stripeSessionId;
+  if (patch.stripeCustomerId !== undefined) update.stripeCustomerId = patch.stripeCustomerId;
+  if (patch.stripeSubscriptionId !== undefined) update.stripeSubscriptionId = patch.stripeSubscriptionId;
+  if (patch.currentPeriodEnd !== undefined) update.currentPeriodEnd = patch.currentPeriodEnd;
+  if (patch.status !== undefined) update.status = patch.status;
+  if (patch.note !== undefined) update.note = patch.note;
+
+  if (Object.keys(update).length > 0) {
+    await db.update(licenses).set(update).where(eq(licenses.id, id));
   }
-  const { keyHash: _h, ...record } = next;
-  return record;
+
+  const updated = await db.select().from(licenses).where(eq(licenses.id, id)).get();
+  if (!updated) return null;
+  return storedToRecord(rowToStored(updated));
 }

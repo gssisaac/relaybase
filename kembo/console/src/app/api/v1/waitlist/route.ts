@@ -1,6 +1,8 @@
+import { eq } from "drizzle-orm";
+import { getDb } from "@/db/client";
+import { waitlist } from "@/db/schema";
 import { getEnv } from "@/lib/env";
 
-export const runtime = "edge";
 
 const ALLOWED_ORIGINS = new Set([
   "https://relaybase.xyz",
@@ -40,7 +42,7 @@ export async function OPTIONS(req: Request) {
 export async function POST(req: Request) {
   const cors = corsHeaders(req);
   const env = await getEnv();
-  if (!env.KEMBO_ACCOUNTS) {
+  if (!env.DB) {
     return json({ error: "Waitlist is not configured" }, 503, cors);
   }
 
@@ -64,15 +66,18 @@ export async function POST(req: Request) {
   const userAgent = req.headers.get("user-agent")?.slice(0, 512) ?? null;
 
   try {
-    const result = await env.KEMBO_ACCOUNTS.prepare(
-      `INSERT INTO waitlist (email, source, user_agent)
-       VALUES (?, ?, ?)
-       ON CONFLICT(email) DO NOTHING`,
-    )
-      .bind(email, source, userAgent)
-      .run();
-
-    const alreadyJoined = (result.meta?.changes ?? 0) === 0;
+    const db = getDb(env);
+    const existing = await db.select({ id: waitlist.id }).from(waitlist)
+      .where(eq(waitlist.email, email)).get();
+    const alreadyJoined = Boolean(existing);
+    if (!alreadyJoined) {
+      await db.insert(waitlist).values({
+        email,
+        createdAt: new Date().toISOString(),
+        source,
+        userAgent,
+      });
+    }
     return json({ ok: true, alreadyJoined }, 200, cors);
   } catch (error) {
     console.error("Waitlist insert failed", error);

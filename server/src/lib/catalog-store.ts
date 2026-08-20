@@ -1,6 +1,16 @@
 /** Domains + addresses for the desktop mail client (packaged app). */
-
-const MAILBOX_KV_KEY = "srv:catalog:mailbox";
+import type { AppDb } from "../../db/app";
+import {
+  addDomain as dbAddDomain,
+  getAddress as dbGetAddress,
+  readMailbox as dbReadMailbox,
+  removeAddress as dbRemoveAddress,
+  removeDomain as dbRemoveDomain,
+  replaceMailbox as dbReplaceMailbox,
+  updateAddress as dbUpdateAddress,
+  updateAddressProfile as dbUpdateAddressProfile,
+  upsertAddresses as dbUpsertAddresses,
+} from "../../db/app/mailbox";
 
 export type MailboxAddress = {
   email: string;
@@ -72,71 +82,87 @@ export type MailboxDomainSummary = {
   };
 };
 
-function emptyMailbox(): MailboxData {
-  return { domains: [], addresses: [] };
-}
-
 export function normalizeDomain(input: string): string {
   return input.trim().toLowerCase().replace(/\.$/, "");
 }
 
-export async function readMailbox(kv: KVNamespace): Promise<MailboxData> {
-  const raw = await kv.get(MAILBOX_KV_KEY);
-  if (!raw) return emptyMailbox();
-  try {
-    const parsed = JSON.parse(raw) as Partial<MailboxData>;
-    const domains = Array.isArray(parsed.domains)
-      ? [
-          ...new Set(
-            parsed.domains
-              .filter((d): d is string => typeof d === "string")
-              .map(normalizeDomain)
-              .filter(Boolean),
-          ),
-        ].sort()
-      : [];
-    const addresses = Array.isArray(parsed.addresses)
-      ? parsed.addresses
-          .filter(
-            (a): a is MailboxAddress =>
-              !!a &&
-              typeof a === "object" &&
-              typeof a.email === "string" &&
-              typeof a.domain === "string",
-          )
-          .map((a) =>
-            normalizeMailboxAddress({
-              email: a.email,
-              domain: a.domain,
-              displayName:
-                typeof a.displayName === "string" ? a.displayName : undefined,
-              signature: typeof a.signature === "string" ? a.signature : undefined,
-              inboundEnabled:
-                a.inboundEnabled === false
-                  ? false
-                  : a.inboundEnabled === true
-                    ? true
-                    : undefined,
-              mobileEnabled:
-                a.mobileEnabled === false
-                  ? false
-                  : a.mobileEnabled === true
-                    ? true
-                    : undefined,
-            }),
-          )
-      : [];
-    return { domains, addresses };
-  } catch {
-    return emptyMailbox();
-  }
+export async function readMailbox(db: AppDb): Promise<MailboxData> {
+  return dbReadMailbox(db);
 }
 
+/** Replace the entire mailbox blob (PUT /console/mailbox). */
 export async function writeMailbox(
-  kv: KVNamespace,
+  db: AppDb,
   data: MailboxData,
 ): Promise<void> {
-  await kv.put(MAILBOX_KV_KEY, JSON.stringify(data));
+  await dbReplaceMailbox(db, data);
+}
+
+export async function addDomain(
+  db: AppDb,
+  domainInput: string,
+): Promise<MailboxData> {
+  await dbAddDomain(db, domainInput);
+  return readMailbox(db);
+}
+
+export async function removeDomain(
+  db: AppDb,
+  domainInput: string,
+): Promise<MailboxData> {
+  await dbRemoveDomain(db, domainInput);
+  return readMailbox(db);
+}
+
+export async function upsertAddresses(
+  db: AppDb,
+  domainInput: string,
+  entries: Array<{
+    email: string;
+    displayName?: string;
+    inboundEnabled?: boolean;
+    mobileEnabled?: boolean;
+  }>,
+): Promise<{ data: MailboxData; added: MailboxAddress[] }> {
+  const { added } = await dbUpsertAddresses(db, domainInput, entries);
+  const data = await readMailbox(db);
+  return { data, added };
+}
+
+export async function removeAddress(
+  db: AppDb,
+  emailInput: string,
+): Promise<{ data: MailboxData; removed: MailboxAddress | null }> {
+  const removed = await dbRemoveAddress(db, emailInput);
+  const data = await readMailbox(db);
+  return { data, removed };
+}
+
+/** Addresses the mobile app is allowed to see (mobileEnabled !== false). */
+export function mobileEnabledAddresses(data: MailboxData): MailboxAddress[] {
+  return data.addresses.filter((a) => a.mobileEnabled !== false);
+}
+
+/**
+ * Merge profile fields (displayName, signature) into a single address record.
+ * Used by the team `/mobile/profile` endpoint so a teammate can edit their own
+ * identity without an admin token.
+ */
+export async function updateAddressProfile(
+  db: AppDb,
+  emailInput: string,
+  patch: { displayName?: string; signature?: string },
+): Promise<MailboxAddress | null> {
+  return dbUpdateAddressProfile(db, emailInput, patch);
+}
+
+/** Unique domains that have at least one mobile-enabled address. */
+export function mobileEnabledDomains(data: MailboxData): string[] {
+  const set = new Set<string>();
+  for (const address of mobileEnabledAddresses(data)) {
+    set.add(address.domain);
+  }
+  return [...set].sort();
 }
 
 export function listDomainSummaries(data: MailboxData): MailboxDomainSummary[] {
@@ -166,145 +192,24 @@ export function listDomainSummaries(data: MailboxData): MailboxDomainSummary[] {
   }));
 }
 
-export async function addDomain(
-  kv: KVNamespace,
-  domainInput: string,
-): Promise<MailboxData> {
-  const domain = normalizeDomain(domainInput);
-  if (!domain || domain === "example.com") {
-    throw new Error("A valid domain is required");
-  }
-  const data = await readMailbox(kv);
-  if (!data.domains.includes(domain)) {
-    data.domains.push(domain);
-    data.domains.sort();
-    await writeMailbox(kv, data);
-  }
-  return data;
+/** Re-export for routes that need a single address lookup. */
+export async function getAddress(
+  db: AppDb,
+  email: string,
+): Promise<MailboxAddress | null> {
+  return dbGetAddress(db, email);
 }
 
-export async function removeDomain(
-  kv: KVNamespace,
-  domainInput: string,
-): Promise<MailboxData> {
-  const domain = normalizeDomain(domainInput);
-  const data = await readMailbox(kv);
-  data.domains = data.domains.filter((d) => d !== domain);
-  data.addresses = data.addresses.filter((a) => a.domain !== domain);
-  await writeMailbox(kv, data);
-  return data;
-}
-
-export async function upsertAddresses(
-  kv: KVNamespace,
-  domainInput: string,
-  entries: Array<{
-    email: string;
-    displayName?: string;
+/** Full-field update for a single address (PATCH /console/addresses). */
+export async function updateAddress(
+  db: AppDb,
+  emailInput: string,
+  patch: {
+    displayName?: string | null;
+    signature?: string | null;
     inboundEnabled?: boolean;
     mobileEnabled?: boolean;
-  }>,
-): Promise<{ data: MailboxData; added: MailboxAddress[] }> {
-  const domain = normalizeDomain(domainInput);
-  const data = await readMailbox(kv);
-  if (!data.domains.includes(domain)) {
-    data.domains.push(domain);
-    data.domains.sort();
-  }
-  const added: MailboxAddress[] = [];
-  for (const entry of entries) {
-    const email = entry.email.trim().toLowerCase();
-    if (!email.endsWith(`@${domain}`)) continue;
-    const idx = data.addresses.findIndex((a) => a.email === email);
-    const prev = idx >= 0 ? data.addresses[idx]! : undefined;
-    const displayName =
-      entry.displayName !== undefined
-        ? entry.displayName.trim()
-        : (prev?.displayName ?? "");
-    const inboundEnabled =
-      typeof entry.inboundEnabled === "boolean"
-        ? entry.inboundEnabled
-        : prev?.inboundEnabled !== false;
-    const mobileEnabled =
-      typeof entry.mobileEnabled === "boolean"
-        ? entry.mobileEnabled
-        : prev?.mobileEnabled !== false;
-    const next = normalizeMailboxAddress({
-      email,
-      domain,
-      displayName: displayName || undefined,
-      inboundEnabled,
-      mobileEnabled,
-    });
-    if (idx >= 0) {
-      data.addresses[idx] = next;
-    } else {
-      data.addresses.push(next);
-    }
-    added.push(next);
-  }
-  await writeMailbox(kv, data);
-  return { data, added };
-}
-
-export async function removeAddress(
-  kv: KVNamespace,
-  emailInput: string,
-): Promise<{ data: MailboxData; removed: MailboxAddress | null }> {
-  const email = emailInput.trim().toLowerCase();
-  const data = await readMailbox(kv);
-  const removed = data.addresses.find((a) => a.email === email) ?? null;
-  data.addresses = data.addresses.filter((a) => a.email !== email);
-  await writeMailbox(kv, data);
-  return { data, removed };
-}
-
-/** Addresses the mobile app is allowed to see (mobileEnabled !== false). */
-export function mobileEnabledAddresses(data: MailboxData): MailboxAddress[] {
-  return data.addresses.filter((a) => a.mobileEnabled !== false);
-}
-
-/**
- * Merge profile fields (displayName, signature) into a single address record.
- * Used by the team `/mobile/profile` endpoint so a teammate can edit their own
- * identity without an admin token. Writes the same `srv:catalog:mailbox` KV
- * record as the admin `PATCH /console/addresses` — no conflict since both go
- * through this function.
- */
-export async function updateAddressProfile(
-  kv: KVNamespace,
-  emailInput: string,
-  patch: { displayName?: string; signature?: string },
+  },
 ): Promise<MailboxAddress | null> {
-  const email = emailInput.trim().toLowerCase();
-  const data = await readMailbox(kv);
-  const idx = data.addresses.findIndex((a) => a.email === email);
-  if (idx < 0) return null;
-  const prev = data.addresses[idx]!;
-  const displayName =
-    patch.displayName !== undefined
-      ? patch.displayName.trim()
-      : (prev.displayName ?? "");
-  const signature =
-    patch.signature !== undefined ? patch.signature : (prev.signature ?? "");
-  const next = normalizeMailboxAddress({
-    email: prev.email,
-    domain: prev.domain,
-    displayName: displayName || undefined,
-    signature: signature || undefined,
-    inboundEnabled: prev.inboundEnabled,
-    mobileEnabled: prev.mobileEnabled,
-  });
-  data.addresses[idx] = next;
-  await writeMailbox(kv, data);
-  return next;
-}
-
-/** Unique domains that have at least one mobile-enabled address. */
-export function mobileEnabledDomains(data: MailboxData): string[] {
-  const set = new Set<string>();
-  for (const address of mobileEnabledAddresses(data)) {
-    set.add(address.domain);
-  }
-  return [...set].sort();
+  return dbUpdateAddress(db, emailInput, patch);
 }

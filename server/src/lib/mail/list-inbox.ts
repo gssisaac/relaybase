@@ -1,4 +1,5 @@
 import type { Env } from "../../env";
+import { createAppDb } from "../../../db/app";
 import {
   ackPendingEvents,
   listPendingEvents,
@@ -218,7 +219,7 @@ export async function listInboxNotificationsForDomains(
   for (const domain of domains) {
     const normalized = domain.trim().toLowerCase();
     if (!normalized) continue;
-    const events = await listPendingEvents(env.RELAYBASE_APP, normalized, 100);
+    const events = await listPendingEvents(createAppDb(env.RELAYBASE_DB), normalized, 100);
     collected.push(...events);
   }
   collected.sort((a, b) => b.data.receivedAt.localeCompare(a.data.receivedAt));
@@ -231,5 +232,5 @@ export async function ackInboxNotifications(
   domain: string,
   ids: string[],
 ): Promise<number> {
-  return ackPendingEvents(env.RELAYBASE_APP, domain, ids);
+  return ackPendingEvents(createAppDb(env.RELAYBASE_DB), domain, ids);
 }

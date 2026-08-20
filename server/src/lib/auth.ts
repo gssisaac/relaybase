@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import type { Env } from "../env";
+import { createAppDb } from "../../db/app";
 import { resolveKey } from "./keys";
 
 const ADMIN_KV_KEY = "srv:config:admin";
@@ -53,7 +54,7 @@ export async function requireApiKey(
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const record = await resolveKey(c.env.RELAYBASE_APP, token);
+  const record = await resolveKey(createAppDb(c.env.RELAYBASE_DB), token);
   if (!record) {
     return c.json({ error: "Invalid or inactive API key" }, 401);
   }

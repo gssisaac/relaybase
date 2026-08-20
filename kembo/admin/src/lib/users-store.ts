@@ -1,8 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-import { getRelaybaseAppDogfoodKv } from "@/lib/cloudflare/kv";
-
 export type UserRecord = {
   id: string;
   createdAt: string;
@@ -10,11 +8,6 @@ export type UserRecord = {
 };
 
 const USERS_FILE = path.join(process.cwd(), "..", "..", "data", "users.json");
-const USERS_INDEX_KEY = "users:_index";
-
-function userKvKey(id: string): string {
-  return `user:${id}`;
-}
 
 function readAllFromFs(): UserRecord[] {
   if (!fs.existsSync(USERS_FILE)) return [];
@@ -30,35 +23,8 @@ function writeAllToFs(users: UserRecord[]): void {
   fs.writeFileSync(USERS_FILE, `${JSON.stringify(users, null, 2)}\n`, "utf8");
 }
 
-async function readAllFromKv(): Promise<UserRecord[]> {
-  const kv = await getRelaybaseAppDogfoodKv();
-  if (!kv) return readAllFromFs();
-
-  const indexRaw = await kv.get(USERS_INDEX_KEY);
-  if (!indexRaw) return [];
-
-  let ids: string[];
-  try {
-    ids = JSON.parse(indexRaw) as string[];
-  } catch {
-    return [];
-  }
-
-  const users: UserRecord[] = [];
-  for (const id of ids) {
-    const raw = await kv.get(userKvKey(id));
-    if (!raw) continue;
-    try {
-      users.push(JSON.parse(raw) as UserRecord);
-    } catch {
-      continue;
-    }
-  }
-  return users;
-}
-
 export async function listUsers(): Promise<UserRecord[]> {
-  const users = await readAllFromKv();
+  const users = readAllFromFs();
   return users.sort(
     (a, b) =>
       new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime(),
@@ -68,18 +34,6 @@ export async function listUsers(): Promise<UserRecord[]> {
 export async function getUser(id: string): Promise<UserRecord | null> {
   const trimmed = id.trim();
   if (!trimmed) return null;
-
-  const kv = await getRelaybaseAppDogfoodKv();
-  if (kv) {
-    const raw = await kv.get(userKvKey(trimmed));
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as UserRecord;
-    } catch {
-      return null;
-    }
-  }
-
   return readAllFromFs().find((user) => user.id === trimmed) ?? null;
 }
 

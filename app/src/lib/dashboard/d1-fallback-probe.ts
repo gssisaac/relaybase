@@ -2,6 +2,7 @@
 
 import {
   d1BindingFromPayload,
+  D1_APP_DEFAULT,
   D1_INBOX_INDEX_DEFAULT,
   D1_LOGS_DEFAULT,
   type D1BindingSnapshot,
@@ -10,6 +11,7 @@ import {
 export type D1ProbeResult = {
   d1Logs: D1BindingSnapshot;
   d1InboxIndex: D1BindingSnapshot;
+  d1App: D1BindingSnapshot;
 };
 
 /** Probe D1 via /health or legacy product routes (pre-connect-probe Workers). */
@@ -20,6 +22,7 @@ export async function probeD1WhenConnectOmits(
   const headers = { Authorization: `Bearer ${adminToken}` };
   let d1Logs = { ...D1_LOGS_DEFAULT };
   let d1InboxIndex = { ...D1_INBOX_INDEX_DEFAULT };
+  let d1App = { ...D1_APP_DEFAULT };
 
   try {
     const health = await fetch(`${base}/health`, { cache: "no-store" });
@@ -31,6 +34,7 @@ export async function probeD1WhenConnectOmits(
         return {
           d1Logs: d1BindingFromPayload(json.d1, "logs"),
           d1InboxIndex: d1BindingFromPayload(json.d1, "inboxIndex"),
+          d1App: d1BindingFromPayload(json.d1, "app"),
         };
       }
     }
@@ -80,10 +84,13 @@ export async function probeD1WhenConnectOmits(
           configured: search.status !== 503,
         };
       }
+      // A reachable domains list implies the product DB is configured (legacy
+      // Workers read domains from KV, so this is a soft signal at best).
+      d1App = { ...d1App, configured: true };
     }
   } catch {
     // continue
   }
 
-  return { d1Logs, d1InboxIndex };
+  return { d1Logs, d1InboxIndex, d1App };
 }

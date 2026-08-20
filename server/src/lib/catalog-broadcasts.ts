@@ -1,14 +1,26 @@
 /**
- * Broadcast drafts + send progress (Worker KV).
- * Key: srv:catalog:broadcasts
+ * Broadcast drafts + send progress (D1 `relaybase-db`).
+ * Table: broadcasts
  *
  *   Send history for each message is recorded in R2 sent/_sendlog/* via recordSendLog
-  and also in D1 RELAYBASE_LOGS via recordOpsLog.
+ * and also in D1 RELAYBASE_LOGS via recordOpsLog.
  */
 
 import type { Env } from "../env";
+import type { AppDb } from "../../db/app";
+import { createAppDb } from "../../db/app";
 import {
-  listContactsForGroups,
+  createBroadcastRow as dbCreateBroadcastRow,
+  deleteBroadcastRow as dbDeleteBroadcastRow,
+  finishBroadcastSend as dbFinishBroadcastSend,
+  getBroadcast as dbGetBroadcast,
+  listBroadcasts as dbListBroadcasts,
+  updateBroadcastDraft as dbUpdateBroadcastDraft,
+  updateBroadcastSendProgress as dbUpdateBroadcastSendProgress,
+  updateBroadcastGroupIds as dbUpdateBroadcastGroupIds,
+} from "../../db/app/broadcasts";
+import {
+  listContactsForGroupsFromDb,
   readAudienceCatalog,
   type AudienceCatalog,
 } from "./catalog-audience";
@@ -23,9 +35,6 @@ import { readMailbox } from "./catalog-store";
 import { recordOpsLog } from "./ops-logs";
 import { recordSendLog } from "./send-logs";
 
-const BROADCASTS_KV_KEY = "srv:catalog:broadcasts";
-const BROADCAST_HISTORY_LIMIT = 20;
-
 function plainTextToEmailHtml(text: string): string {
   const escaped = text
     .replace(/&/g, "&amp;")
@@ -35,22 +44,15 @@ function plainTextToEmailHtml(text: string): string {
   return `<div style="font-family:sans-serif;white-space:pre-wrap">${withBreaks}</div>`;
 }
 
-export async function readBroadcasts(kv: KVNamespace): Promise<Broadcast[]> {
-  const raw = await kv.get(BROADCASTS_KV_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as Broadcast[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+export async function readBroadcasts(db: AppDb): Promise<Broadcast[]> {
+  return dbListBroadcasts(db);
 }
 
 export async function writeBroadcasts(
-  kv: KVNamespace,
-  broadcasts: Broadcast[],
+  _db: AppDb,
+  _broadcasts: Broadcast[],
 ): Promise<void> {
-  await kv.put(BROADCASTS_KV_KEY, JSON.stringify(broadcasts));
+  // No-op: broadcasts are now managed per-row. Kept for API compatibility.
 }
 
 function normalizeFromAddress(from: string | null | undefined): string | null {
@@ -103,27 +105,23 @@ export type BroadcastDetail = {
 };
 
 export async function getBroadcastDetail(
-  kv: KVNamespace,
+  db: AppDb,
   broadcastId: string,
 ): Promise<BroadcastDetail | null> {
-  const [broadcasts, catalog] = await Promise.all([
-    readBroadcasts(kv),
-    readAudienceCatalog(kv),
+  const [broadcast, catalog] = await Promise.all([
+    dbGetBroadcast(db, broadcastId),
+    readAudienceCatalog(db),
   ]);
-  const broadcast = broadcasts.find((b) => b.id === broadcastId);
   if (!broadcast) return null;
   const groups = resolveBroadcastGroups(catalog, broadcast.groupIds).map((g) =>
     summarizeGroup(catalog, g),
   );
-  const recipientCount = listContactsForGroups(
-    catalog,
-    broadcast.groupIds,
-  ).length;
+  const recipientCount = (await listContactsForGroupsFromDb(db, broadcast.groupIds)).length;
   return { broadcast, groups, recipientCount };
 }
 
 export async function createBroadcastDraft(
-  kv: KVNamespace,
+  db: AppDb,
   input: {
     id?: string;
     groupIds: string[];
@@ -137,10 +135,9 @@ export async function createBroadcastDraft(
     throw new Error("Select at least one audience group");
   }
 
-  const [broadcasts, catalog, mailbox] = await Promise.all([
-    readBroadcasts(kv),
-    readAudienceCatalog(kv),
-    readMailbox(kv),
+  const [catalog, mailbox] = await Promise.all([
+    readAudienceCatalog(db),
+    readMailbox(db),
   ]);
   const groups = resolveBroadcastGroups(catalog, groupIds);
   if (groups.length === 0) {
@@ -153,51 +150,41 @@ export async function createBroadcastDraft(
   const domain = from?.split("@")[1]?.toLowerCase() || groups[0]!.domain;
   const subject = input.subject?.trim() || "";
   const body = input.body != null ? input.body : "";
-  const recipientCount = listContactsForGroups(catalog, groupIds).length;
+  const recipientCount = (await listContactsForGroupsFromDb(db, groupIds)).length;
   const clientId = input.id?.trim();
 
   if (clientId) {
-    const index = broadcasts.findIndex((b) => b.id === clientId);
-    if (index >= 0) {
-      const current = broadcasts[index]!;
-      if (current.status === "sending" || current.status === "sent") {
+    const existing = await dbGetBroadcast(db, clientId);
+    if (existing) {
+      if (existing.status === "sending" || existing.status === "sent") {
         throw new Error("Broadcast was already sent");
       }
-      const updated: Broadcast = {
-        ...current,
+      await dbUpdateBroadcastDraft(db, clientId, {
         subject,
-        status: "draft",
-        domain,
-        groupIds,
         body,
-        recipientCount,
-        ...(from ? { from } : {}),
-      };
-      if (!from) delete updated.from;
-      broadcasts[index] = updated;
-      await writeBroadcasts(kv, broadcasts);
-      return updated;
+        groupIds,
+        from: from ?? null,
+      });
+      // Re-read to get the updated row
+      const updated = await dbGetBroadcast(db, clientId);
+      return updated!;
     }
   }
 
-  const broadcast: Broadcast = {
-    id: clientId || crypto.randomUUID(),
-    subject,
-    status: "draft",
-    createdAt: new Date().toISOString(),
-    domain,
-    groupIds,
-    ...(from ? { from } : {}),
-    body,
-    recipientCount,
-  };
-  broadcasts.unshift(broadcast);
-  await writeBroadcasts(kv, broadcasts);
-  return broadcast;
+  const id = clientId || crypto.randomUUID();
+  await dbCreateBroadcastRow(db, { id, subject, domain, groupIds });
+  if (from || body) {
+    await dbUpdateBroadcastDraft(db, id, {
+      ...(from ? { from } : {}),
+      ...(body ? { body } : {}),
+    });
+  }
+  const broadcast = await dbGetBroadcast(db, id);
+  return broadcast!;
 }
 
 export async function updateBroadcastDraft(
-  kv: KVNamespace,
+  db: AppDb,
   broadcastId: string,
   patch: {
     groupIds?: string[];
@@ -206,13 +193,11 @@ export async function updateBroadcastDraft(
     body?: string;
   },
 ): Promise<Broadcast> {
-  const [broadcasts, catalog] = await Promise.all([
-    readBroadcasts(kv),
-    readAudienceCatalog(kv),
+  const [current, catalog] = await Promise.all([
+    dbGetBroadcast(db, broadcastId),
+    readAudienceCatalog(db),
   ]);
-  const index = broadcasts.findIndex((b) => b.id === broadcastId);
-  if (index < 0) throw new Error("Broadcast not found");
-  const current = broadcasts[index]!;
+  if (!current) throw new Error("Broadcast not found");
   if (current.status === "sending") {
     throw new Error("Broadcast is sending and cannot be edited");
   }
@@ -238,34 +223,27 @@ export async function updateBroadcastDraft(
     patch.from === undefined
       ? current.from
       : normalizeFromAddress(patch.from) ?? undefined;
-  const subject =
-    patch.subject === undefined ? current.subject : patch.subject;
-  const body = patch.body === undefined ? current.body : patch.body;
+  const subject = patch.subject !== undefined ? patch.subject : current.subject;
+  const body = patch.body !== undefined ? patch.body : current.body;
   const domain =
     from?.split("@")[1]?.toLowerCase() ||
     resolveBroadcastGroups(catalog, groupIds)[0]?.domain ||
     current.domain;
+  const recipientCount = (await listContactsForGroupsFromDb(db, groupIds)).length;
 
-  const updated: Broadcast = {
-    ...current,
-    status: "draft",
-    groupIds,
+  await dbUpdateBroadcastDraft(db, broadcastId, {
     subject,
-    domain,
     body,
-    recipientCount: listContactsForGroups(catalog, groupIds).length,
-    ...(from ? { from } : {}),
+    groupIds,
+    from: from ?? null,
+  });
+
+  const updated = await dbGetBroadcast(db, broadcastId);
+  return {
+    ...updated!,
+    domain,
+    recipientCount,
   };
-  if (!from) delete updated.from;
-
-  broadcasts[index] = updated;
-  await writeBroadcasts(kv, broadcasts);
-  return updated;
-}
-
-function pushSendHistory(broadcast: Broadcast, run: BroadcastSendRun) {
-  const history = broadcast.sendHistory ?? [];
-  broadcast.sendHistory = [run, ...history].slice(0, BROADCAST_HISTORY_LIMIT);
 }
 
 export async function sendBroadcast(
@@ -273,15 +251,13 @@ export async function sendBroadcast(
   broadcastId: string,
   options: { from?: string } = {},
 ): Promise<Broadcast> {
-  const kv = env.RELAYBASE_APP;
-  const [broadcasts, catalog, mailbox] = await Promise.all([
-    readBroadcasts(kv),
-    readAudienceCatalog(kv),
-    readMailbox(kv),
+  const db = createAppDbFromEnv(env);
+  const [current, catalog, mailbox] = await Promise.all([
+    dbGetBroadcast(db, broadcastId),
+    readAudienceCatalog(db),
+    readMailbox(db),
   ]);
-  const index = broadcasts.findIndex((b) => b.id === broadcastId);
-  if (index < 0) throw new Error("Broadcast not found");
-  const current = broadcasts[index]!;
+  if (!current) throw new Error("Broadcast not found");
   if (current.status === "sending") {
     throw new Error("Broadcast is already sending");
   }
@@ -323,7 +299,7 @@ export async function sendBroadcast(
   const subject = current.subject.trim();
   const text = current.body?.trim() ?? "";
   const html = plainTextToEmailHtml(text);
-  const recipients = listContactsForGroups(catalog, current.groupIds);
+  const recipients = await listContactsForGroupsFromDb(db, current.groupIds);
   const startedAt = new Date().toISOString();
   const run: BroadcastSendRun = {
     id: crypto.randomUUID(),
@@ -336,13 +312,12 @@ export async function sendBroadcast(
     failedCount: 0,
   };
 
-  current.from = from;
-  current.domain = domain;
-  current.status = "sending";
-  current.recipientCount = recipients.length;
-  current.sendProgress = run;
-  broadcasts[index] = current;
-  await writeBroadcasts(kv, broadcasts);
+  await dbUpdateBroadcastDraft(db, broadcastId, {
+    from,
+    subject,
+    body: text,
+  });
+  await dbUpdateBroadcastSendProgress(db, broadcastId, run);
 
   try {
     if (recipients.length === 0) {
@@ -350,7 +325,7 @@ export async function sendBroadcast(
     }
 
     run.phase = "sending";
-    await writeBroadcasts(kv, broadcasts);
+    await dbUpdateBroadcastSendProgress(db, broadcastId, run);
 
     const cf = await createCloudflareClient(env);
     let successCount = 0;
@@ -423,7 +398,7 @@ export async function sendBroadcast(
       run.successCount = successCount;
       run.failedCount = failedCount;
       if ((i + 1) % 5 === 0 || i === recipients.length - 1) {
-        await writeBroadcasts(kv, broadcasts);
+        await dbUpdateBroadcastSendProgress(db, broadcastId, run);
       }
     }
 
@@ -431,23 +406,25 @@ export async function sendBroadcast(
     run.phase = "done";
     run.finishedAt = finishedAt;
     run.estimatedRemainingMs = 0;
+    let finalStatus: string;
     if (successCount === 0) {
       run.status = "error";
       run.error = "All recipients failed";
-      current.status = "failed";
+      finalStatus = "failed";
     } else {
       run.status = "success";
-      current.status = "sent";
-      current.sentAt = finishedAt;
+      finalStatus = "sent";
       if (failedCount > 0) {
         run.error = `${failedCount} of ${recipients.length} failed`;
       }
     }
-    current.sendProgress = run;
-    pushSendHistory(current, { ...run });
-    broadcasts[index] = current;
-    await writeBroadcasts(kv, broadcasts);
-    return current;
+    await dbFinishBroadcastSend(db, broadcastId, {
+      status: finalStatus,
+      run: { ...run },
+      recipientCount: recipients.length,
+      from,
+    });
+    return (await dbGetBroadcast(db, broadcastId))!;
   } catch (e) {
     const message = e instanceof Error ? e.message : "Broadcast failed";
     const finishedAt = new Date().toISOString();
@@ -456,11 +433,12 @@ export async function sendBroadcast(
     run.finishedAt = finishedAt;
     run.error = message;
     run.estimatedRemainingMs = 0;
-    current.status = "failed";
-    current.sendProgress = run;
-    pushSendHistory(current, { ...run });
-    broadcasts[index] = current;
-    await writeBroadcasts(kv, broadcasts);
+    await dbFinishBroadcastSend(db, broadcastId, {
+      status: "failed",
+      run: { ...run },
+      recipientCount: recipients.length,
+      from,
+    });
     throw e;
   }
 }
@@ -472,4 +450,14 @@ export function getBroadcastProgress(broadcast: Broadcast) {
     progress: broadcast.sendProgress ?? null,
     history: broadcast.sendHistory ?? [],
   };
+}
+
+export async function deleteBroadcast(db: AppDb, id: string): Promise<boolean> {
+  return dbDeleteBroadcastRow(db, id);
+}
+
+export { updateBroadcastGroupIds } from "../../db/app/broadcasts";
+
+function createAppDbFromEnv(env: Env): AppDb {
+  return createAppDb(env.RELAYBASE_DB);
 }

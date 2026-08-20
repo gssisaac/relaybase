@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { createAppDb } from "../../db/app";
 import { extractBearerToken } from "./auth";
 import {
   constantTimeEqual,
@@ -48,7 +49,7 @@ export async function requireMobilePassword(
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const config = await getAccountMobileConfig(c.env.RELAYBASE_APP, email);
+  const config = await getAccountMobileConfig(createAppDb(c.env.RELAYBASE_DB), email);
   if (!config) {
     // Mobile access has not been configured for this account.
     return c.json({ error: "Mobile access is not configured for this account" }, 401);

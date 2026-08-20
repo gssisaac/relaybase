@@ -5,6 +5,15 @@ import {
   keyPrefixFromApiKey,
   sha256Hex,
 } from "./crypto";
+import type { AppDb } from "../../db/app";
+import {
+  createKeyRow as dbCreateKeyRow,
+  deleteKeyRow as dbDeleteKeyRow,
+  listKeys as dbListKeys,
+  resolveKeyByHash as dbResolveKeyByHash,
+  setKeyActive as dbSetKeyActive,
+  updateKeyHash as dbUpdateKeyHash,
+} from "../../db/app/keys";
 
 export type KeyRecord = {
   id: string;
@@ -15,20 +24,8 @@ export type KeyRecord = {
   active: boolean;
 };
 
-type StoredKeyRecord = KeyRecord & {
-  keyHash: string;
-};
-
-function keyKvKey(keyHash: string): string {
-  return `srv:key:${keyHash}`;
-}
-
-function idKvKey(id: string): string {
-  return `srv:id:${id}`;
-}
-
 export async function createKey(
-  kv: KVNamespace,
+  db: AppDb,
   params: { domain: string; label?: string | null },
 ): Promise<{ record: KeyRecord; apiKey: string }> {
   const domain = params.domain.trim().toLowerCase();
@@ -42,104 +39,60 @@ export async function createKey(
   const createdAt = new Date().toISOString();
   const keyPrefix = keyPrefixFromApiKey(apiKey);
 
-  const record: StoredKeyRecord = {
+  await dbCreateKeyRow(db, {
     id,
+    keyHash,
     domain,
     label: params.label?.trim() || null,
     keyPrefix,
-    createdAt,
-    active: true,
-    keyHash,
+  });
+
+  return {
+    record: { id, domain, label: params.label?.trim() || null, keyPrefix, createdAt, active: true },
+    apiKey,
   };
-
-  await kv.put(keyKvKey(keyHash), JSON.stringify(record));
-  await kv.put(idKvKey(id), JSON.stringify(record));
-
-  const { keyHash: _keyHash, ...publicRecord } = record;
-  return { record: publicRecord, apiKey };
 }
 
-export async function listKeys(kv: KVNamespace): Promise<KeyRecord[]> {
-  const listed = await kv.list({ prefix: "srv:id:" });
-  const keys: KeyRecord[] = [];
-
-  for (const item of listed.keys) {
-    const raw = await kv.get(item.name);
-    if (!raw) continue;
-    const stored = JSON.parse(raw) as StoredKeyRecord;
-    const { keyHash: _keyHash, ...record } = stored;
-    keys.push(record);
-  }
-
-  keys.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return keys;
+export async function listKeys(db: AppDb): Promise<KeyRecord[]> {
+  return dbListKeys(db);
 }
 
 export async function resolveKey(
-  kv: KVNamespace,
+  db: AppDb,
   apiKey: string,
 ): Promise<KeyRecord | null> {
   if (!isValidApiKeyFormat(apiKey)) return null;
-
   const keyHash = await sha256Hex(apiKey);
-  const raw = await kv.get(keyKvKey(keyHash));
-  if (!raw) return null;
-
-  const stored = JSON.parse(raw) as StoredKeyRecord;
-  if (!stored.active) return null;
-
-  const { keyHash: _keyHash, ...record } = stored;
-  return record;
+  return dbResolveKeyByHash(db, keyHash);
 }
 
-export async function revokeKey(kv: KVNamespace, id: string): Promise<boolean> {
-  const raw = await kv.get(idKvKey(id));
-  if (!raw) return false;
-
-  const stored = JSON.parse(raw) as StoredKeyRecord;
-  await kv.delete(keyKvKey(stored.keyHash));
-  await kv.delete(idKvKey(id));
-  return true;
+export async function revokeKey(db: AppDb, id: string): Promise<boolean> {
+  return dbDeleteKeyRow(db, id);
 }
 
 export async function setKeyActive(
-  kv: KVNamespace,
+  db: AppDb,
   id: string,
   active: boolean,
 ): Promise<KeyRecord | null> {
-  const raw = await kv.get(idKvKey(id));
-  if (!raw) return null;
-
-  const stored = JSON.parse(raw) as StoredKeyRecord;
-  stored.active = active;
-  await kv.put(keyKvKey(stored.keyHash), JSON.stringify(stored));
-  await kv.put(idKvKey(id), JSON.stringify(stored));
-  const { keyHash: _keyHash, ...record } = stored;
-  return record;
+  return dbSetKeyActive(db, id, active);
 }
 
 export async function rotateKey(
-  kv: KVNamespace,
+  db: AppDb,
   id: string,
 ): Promise<{ record: KeyRecord; apiKey: string } | null> {
-  const raw = await kv.get(idKvKey(id));
-  if (!raw) return null;
-
-  const previous = JSON.parse(raw) as StoredKeyRecord;
-  await kv.delete(keyKvKey(previous.keyHash));
-  await kv.delete(idKvKey(id));
+  if (!db) return null;
+  const existing = (await dbListKeys(db)).find((k) => k.id === id);
+  if (!existing) return null;
 
   const apiKey = generateApiKey();
   const keyHash = await sha256Hex(apiKey);
   const keyPrefix = keyPrefixFromApiKey(apiKey);
-  const stored: StoredKeyRecord = {
-    ...previous,
-    keyPrefix,
-    keyHash,
-    active: true,
+  await dbUpdateKeyHash(db, id, keyHash, keyPrefix);
+
+  return {
+    record: { ...existing, keyPrefix, active: true },
+    apiKey,
   };
-  await kv.put(keyKvKey(keyHash), JSON.stringify(stored));
-  await kv.put(idKvKey(id), JSON.stringify(stored));
-  const { keyHash: _keyHash, ...record } = stored;
-  return { record, apiKey };
 }

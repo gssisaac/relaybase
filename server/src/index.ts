@@ -4,13 +4,14 @@ import { handleInboundEmail } from "./inbound";
 import { runAudienceCron } from "./lib/catalog-audience";
 import { enqueueInboundEvent } from "./lib/inbound-events";
 import { deliverWebhooks } from "./lib/webhooks";
+import { createAppDb, type AppDb } from "../db/app";
 
 async function dispatchInboundEvent(
-  kv: KVNamespace,
+  db: AppDb,
   record: Awaited<ReturnType<typeof handleInboundEmail>>["record"],
 ): Promise<void> {
-  const event = await enqueueInboundEvent(kv, record);
-  await deliverWebhooks(kv, record.domain, event);
+  const event = await enqueueInboundEvent(db, record);
+  await deliverWebhooks(db, record.domain, event);
 }
 
 export default {
@@ -21,7 +22,7 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     ctx.waitUntil(
-      runAudienceCron(env.RELAYBASE_APP).catch((error) => {
+      runAudienceCron(createAppDb(env.RELAYBASE_DB)).catch((error) => {
         console.error("Audience cron failed", error);
       }),
     );
@@ -34,7 +35,7 @@ export default {
     try {
       const { record, created } = await handleInboundEmail(message, env);
       if (created) {
-        ctx.waitUntil(dispatchInboundEvent(env.RELAYBASE_APP, record));
+        ctx.waitUntil(dispatchInboundEvent(createAppDb(env.RELAYBASE_DB), record));
       }
     } catch (error) {
       console.error("Failed to store inbound email", error);

@@ -1,13 +1,11 @@
 import fs from "fs";
 import path from "path";
 
-import { getKemboOpsKv } from "@/lib/cloudflare/kv";
+import { eq, and } from "drizzle-orm";
+import { productSettings } from "@/db/schema";
+import { getDb } from "@/lib/cloudflare/kv";
 
 const DATA_ROOT = path.join(process.cwd(), "..", "..", "data", "products");
-
-function productKvKey(serviceId: string, filename: string): string {
-  return `product:${serviceId}:${filename}`;
-}
 
 export function getProductDataDir(serviceId: string): string {
   return path.join(DATA_ROOT, serviceId);
@@ -51,11 +49,20 @@ export async function readProductJson<T>(
   serviceId: string,
   filename: string,
 ): Promise<T | null> {
-  const kv = await getKemboOpsKv();
-  if (kv) {
-    const raw = await kv.get(productKvKey(serviceId, filename));
-    if (raw) return JSON.parse(raw) as T;
-    return null;
+  const db = await getDb();
+  if (db) {
+    const row = await db
+      .select()
+      .from(productSettings)
+      .where(
+        and(
+          eq(productSettings.serviceId, serviceId),
+          eq(productSettings.filename, filename),
+        ),
+      )
+      .get();
+    if (!row) return null;
+    return JSON.parse(row.data) as T;
   }
   return readProductJsonFromFs<T>(serviceId, filename);
 }
@@ -65,13 +72,39 @@ export async function writeProductJson<T>(
   filename: string,
   data: T,
 ): Promise<string> {
-  const kv = await getKemboOpsKv();
-  if (kv) {
-    await kv.put(
-      productKvKey(serviceId, filename),
-      `${JSON.stringify(data, null, 2)}\n`,
-    );
-    return productKvKey(serviceId, filename);
+  const db = await getDb();
+  if (db) {
+    const now = new Date().toISOString();
+    const jsonStr = `${JSON.stringify(data, null, 2)}\n`;
+    const existing = await db
+      .select()
+      .from(productSettings)
+      .where(
+        and(
+          eq(productSettings.serviceId, serviceId),
+          eq(productSettings.filename, filename),
+        ),
+      )
+      .get();
+    if (existing) {
+      await db
+        .update(productSettings)
+        .set({ data: jsonStr, updatedAt: now })
+        .where(
+          and(
+            eq(productSettings.serviceId, serviceId),
+            eq(productSettings.filename, filename),
+          ),
+        );
+    } else {
+      await db.insert(productSettings).values({
+        serviceId,
+        filename,
+        data: jsonStr,
+        updatedAt: now,
+      });
+    }
+    return `product_settings:${serviceId}:${filename}`;
   }
   return writeProductJsonToFs(serviceId, filename, data);
 }

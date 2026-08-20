@@ -43,6 +43,14 @@ cpSync(
   join(staging, ".dev.vars.example"),
 );
 
+// Copy D1 migration directories so auto_install can `wrangler d1 migrations apply`.
+for (const dir of ["migrations-logs", "migrations-inbox", "migrations-app"]) {
+  const src = join(serverRoot, dir);
+  if (existsSync(src)) {
+    cpSync(src, join(staging, dir), { recursive: true });
+  }
+}
+
 // Mark package as the install template (avoid colliding with hosted server name in lockfiles).
 const pkg = JSON.parse(readFileSync(join(staging, "package.json"), "utf8"));
 pkg.name = "relaybase-worker-install";

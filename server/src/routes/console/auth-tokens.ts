@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
+import { createAppDb } from "../../../db/app";
 import {
   createAuthToken,
   findAuthToken,
@@ -22,7 +23,7 @@ consoleAuthTokens.post("/", async (c) => {
   }
 
   try {
-    const { record, token } = await createAuthToken(c.env.RELAYBASE_APP, {
+    const { record, token } = await createAuthToken(createAppDb(c.env.RELAYBASE_DB), {
       label: body.label,
       productId: body.productId,
     });
@@ -48,7 +49,7 @@ consoleAuthTokens.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
-  const tokens = await listAuthTokens(c.env.RELAYBASE_APP);
+  const tokens = await listAuthTokens(createAppDb(c.env.RELAYBASE_DB));
   return c.json({ tokens });
 });
 
@@ -66,7 +67,7 @@ consoleAuthTokens.post("/verify", async (c) => {
   const token = body.token?.trim();
   if (!token) return c.json({ error: "token is required" }, 400);
 
-  const record = await findAuthToken(c.env.RELAYBASE_APP, token);
+  const record = await findAuthToken(createAppDb(c.env.RELAYBASE_DB), token);
   if (!record) return c.json({ valid: false }, 200);
   return c.json({
     valid: true,
@@ -85,7 +86,7 @@ consoleAuthTokens.delete("/:id", async (c) => {
   if (denied) return denied;
 
   const id = c.req.param("id");
-  const revoked = await revokeAuthToken(c.env.RELAYBASE_APP, id);
+  const revoked = await revokeAuthToken(createAppDb(c.env.RELAYBASE_DB), id);
   if (!revoked) return c.json({ error: "Auth token not found" }, 404);
   return c.json({ ok: true });
 });

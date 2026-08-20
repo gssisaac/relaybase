@@ -51,6 +51,7 @@ export function SettingsD1Page() {
 
   const logs = workerStatus?.d1Logs;
   const inboxIndex = workerStatus?.d1InboxIndex;
+  const app = workerStatus?.d1App;
   const pending = statusBusy && workerStatus == null;
 
   const logsBinding =
@@ -66,6 +67,14 @@ export function SettingsD1Page() {
       configured: false,
       databaseName: "relaybase-inbox-index",
       binding: "RELAYBASE_INBOX_INDEX",
+      sizeBytes: null,
+    };
+
+  const appBinding =
+    app ?? {
+      configured: false,
+      databaseName: "relaybase-db",
+      binding: "RELAYBASE_DB",
       sizeBytes: null,
     };
 
@@ -115,6 +124,25 @@ export function SettingsD1Page() {
         pending={
           pending && inboxBinding.configured && inboxBinding.sizeBytes == null
         }
+      />
+      <StorageBindingCard
+        icon={Database}
+        title="Product DB"
+        description="Durable product state: mailbox, audience, broadcasts, keys, tokens, branding, webhooks."
+        status={d1Status(
+          hasWorker,
+          pending,
+          app,
+          "Probing RELAYBASE_DB binding.",
+          "Product DB tables are reachable.",
+          "Bind RELAYBASE_DB and apply migrations-app.",
+        )}
+        resourceLabel="Database"
+        resourceName={appBinding.databaseName}
+        binding={appBinding.binding}
+        usedBytes={appBinding.configured ? appBinding.sizeBytes : null}
+        limitBytes={D1_DATABASE_SIZE_LIMIT_BYTES}
+        pending={pending && appBinding.configured && appBinding.sizeBytes == null}
       />
     </SettingsPageBody>
   );

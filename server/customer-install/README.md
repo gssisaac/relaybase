@@ -20,9 +20,20 @@ This package deploys the Relaybase routing Worker into **your** Cloudflare accou
 ```bash
 npx wrangler kv namespace create relaybase-app
 npx wrangler r2 bucket create relaybase-mailbox
+npx wrangler d1 create relaybase-logs
+npx wrangler d1 create relaybase-inbox-index
+npx wrangler d1 create relaybase-db
 ```
 
-Copy the KV **id** into `wrangler.toml` (replace the `REPLACE_WITH_relaybase-app_ID` placeholder).
+Copy each **id** into `wrangler.toml` (replace the `REPLACE_WITH_*` placeholders).
+
+Apply D1 migrations:
+
+```bash
+npx wrangler d1 migrations apply relaybase-logs --remote --migrations-dir=migrations-logs
+npx wrangler d1 migrations apply relaybase-inbox-index --remote --migrations-dir=migrations-inbox
+npx wrangler d1 migrations apply relaybase-db --remote --migrations-dir=migrations-app
+```
 
 Why these names: the desktop app and docs refer to them; keeping the names makes support and upgrades predictable. Other Workers in your account are untouched.
 

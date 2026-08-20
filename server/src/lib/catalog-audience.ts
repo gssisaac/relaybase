@@ -1,8 +1,29 @@
 /**
- * Audience contacts + groups catalog (Worker KV).
- * Keys: srv:catalog:audience, srv:catalog:audience-groups
+ * Audience contacts + groups catalog (D1 `relaybase-db`).
+ * Tables: audience_groups, audience_contacts
  */
 
+import type { AppDb } from "../../db/app";
+import {
+  addManualContact as dbAddManualContact,
+  createGroup as dbCreateGroup,
+  deleteGroup as dbDeleteGroup,
+  finishSync as dbFinishSync,
+  getGroup as dbGetGroup,
+  getGroupDetail as dbGetGroupDetail,
+  getGroupSummaries as dbGetGroupSummaries,
+  listContacts as dbListContacts,
+  listContactsForGroup as dbListContactsForGroup,
+  listContactsForGroups as dbListContactsForGroups,
+  listGroups as dbListGroups,
+  listGroupsForCron as dbListGroupsForCron,
+  mergeDataSource as dbMergeDataSource,
+  removeContact as dbRemoveContact,
+  removeContactsByGroup as dbRemoveContactsByGroup,
+  replaceSyncedContacts as dbReplaceSyncedContacts,
+  updateGroup as dbUpdateGroup,
+  updateSyncProgress as dbUpdateSyncProgress,
+} from "../../db/app/audience";
 import type {
   AudienceContact,
   AudienceDataSource,
@@ -13,9 +34,6 @@ import type {
 } from "./catalog-types";
 import { normalizeDomain } from "./catalog-store";
 
-const AUDIENCE_KV_KEY = "srv:catalog:audience";
-const GROUPS_KV_KEY = "srv:catalog:audience-groups";
-const SYNC_HISTORY_LIMIT = 20;
 const SYNC_WRITE_CHUNK = 50;
 const DUE_GRACE_MS = 60_000;
 
@@ -24,67 +42,55 @@ export type AudienceCatalog = {
   groups: AudienceGroup[];
 };
 
-async function readJson<T>(kv: KVNamespace, key: string, fallback: T): Promise<T> {
-  const raw = await kv.get(key);
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 export async function readAudienceCatalog(
-  kv: KVNamespace,
+  db: AppDb,
 ): Promise<AudienceCatalog> {
-  const [contacts, groups] = await Promise.all([
-    readJson<AudienceContact[]>(kv, AUDIENCE_KV_KEY, []),
-    readJson<AudienceGroup[]>(kv, GROUPS_KV_KEY, []),
+  const [groups, contacts] = await Promise.all([
+    dbListGroups(db),
+    dbListContacts(db),
   ]);
-  return {
-    contacts: Array.isArray(contacts) ? contacts : [],
-    groups: Array.isArray(groups) ? groups : [],
-  };
+  return { contacts, groups };
 }
 
 export async function writeAudienceContacts(
-  kv: KVNamespace,
-  contacts: AudienceContact[],
+  _db: AppDb,
+  _contacts: AudienceContact[],
 ): Promise<void> {
-  await kv.put(AUDIENCE_KV_KEY, JSON.stringify(contacts));
+  // No-op: contacts are now managed per-row via addManualContact /
+  // removeContact / replaceSyncedContacts. Kept for API compatibility.
 }
 
 export async function writeAudienceGroups(
-  kv: KVNamespace,
-  groups: AudienceGroup[],
+  _db: AppDb,
+  _groups: AudienceGroup[],
 ): Promise<void> {
-  await kv.put(GROUPS_KV_KEY, JSON.stringify(groups));
+  // No-op: groups are now managed per-row via createGroup / updateGroup /
+  // deleteGroup. Kept for API compatibility.
 }
 
 export async function writeAudienceCatalog(
-  kv: KVNamespace,
+  db: AppDb,
   catalog: AudienceCatalog,
 ): Promise<void> {
   await Promise.all([
-    writeAudienceContacts(kv, catalog.contacts),
-    writeAudienceGroups(kv, catalog.groups),
+    writeAudienceContacts(db, catalog.contacts),
+    writeAudienceGroups(db, catalog.groups),
   ]);
-}
-
-function summarizeGroup(
-  catalog: AudienceCatalog,
-  group: AudienceGroup,
-): AudienceGroupSummary {
-  return {
-    ...group,
-    contactCount: catalog.contacts.filter((c) => c.groupId === group.id).length,
-  };
 }
 
 export function listGroupSummaries(
   catalog: AudienceCatalog,
 ): AudienceGroupSummary[] {
-  return catalog.groups.map((g) => summarizeGroup(catalog, g));
+  return catalog.groups.map((group) => ({
+    ...group,
+    contactCount: catalog.contacts.filter((c) => c.groupId === group.id).length,
+  }));
+}
+
+export async function listGroupSummariesFromDb(
+  db: AppDb,
+): Promise<AudienceGroupSummary[]> {
+  return dbGetGroupSummaries(db);
 }
 
 export function getGroupDetail(
@@ -94,44 +100,26 @@ export function getGroupDetail(
   const group = catalog.groups.find((g) => g.id === groupId);
   if (!group) return null;
   return {
-    group: summarizeGroup(catalog, group),
+    group: {
+      ...group,
+      contactCount: catalog.contacts.filter((c) => c.groupId === group.id).length,
+    },
     contacts: catalog.contacts.filter((c) => c.groupId === groupId),
   };
 }
 
-function normalizeDataSource(
-  source: AudienceDataSource,
-): AudienceDataSource {
-  return {
-    type: "generic_json",
-    endpointUrl: source.endpointUrl.trim(),
-    ...(source.credential?.trim()
-      ? { credential: source.credential.trim() }
-      : {}),
-    ...(source.credentialHeader?.trim()
-      ? { credentialHeader: source.credentialHeader.trim() }
-      : {}),
-  };
+export async function getGroupDetailFromDb(
+  db: AppDb,
+  groupId: string,
+): Promise<{ group: AudienceGroupSummary; contacts: AudienceContact[] } | null> {
+  return dbGetGroupDetail(db, groupId);
 }
 
 export function mergeDataSource(
   previous: AudienceDataSource | undefined,
   patch: AudienceDataSourcePatch,
 ): AudienceDataSource {
-  const credential =
-    patch.credential !== undefined && patch.credential.trim()
-      ? patch.credential.trim()
-      : previous?.credential;
-  let credentialHeader = previous?.credentialHeader;
-  if ("credentialHeader" in patch) {
-    credentialHeader = patch.credentialHeader?.trim() || undefined;
-  }
-  return normalizeDataSource({
-    type: "generic_json",
-    endpointUrl: patch.endpointUrl,
-    credential,
-    credentialHeader,
-  });
+  return dbMergeDataSource(previous, patch);
 }
 
 function parseCredentialHeaderValue(
@@ -210,11 +198,6 @@ export async function fetchDataSourceContacts(
   return { contacts, skippedCount };
 }
 
-function pushSyncHistory(group: AudienceGroup, run: AudienceSyncRun) {
-  const history = group.syncHistory ?? [];
-  group.syncHistory = [run, ...history].slice(0, SYNC_HISTORY_LIMIT);
-}
-
 function estimateRemainingMs(
   startedAt: string,
   processed: number,
@@ -236,12 +219,11 @@ export type SyncResult = {
 };
 
 export async function syncAudienceGroup(
-  kv: KVNamespace,
+  db: AppDb,
   groupId: string,
   options: { trigger?: "manual" | "cron" } = {},
 ): Promise<SyncResult> {
-  const catalog = await readAudienceCatalog(kv);
-  const group = catalog.groups.find((g) => g.id === groupId);
+  const group = await dbGetGroup(db, groupId);
   if (!group) throw new Error("Audience group not found");
   if (!group.dataSource) throw new Error("Audience group has no data source");
 
@@ -256,12 +238,7 @@ export async function syncAudienceGroup(
     processedCount: 0,
     totalCount: 0,
   };
-  group.syncProgress = run;
-  await writeAudienceGroups(kv, catalog.groups);
-
-  const persistProgress = async () => {
-    await writeAudienceGroups(kv, catalog.groups);
-  };
+  await dbUpdateSyncProgress(db, groupId, run);
 
   try {
     const { contacts, skippedCount } = await fetchDataSourceContacts(
@@ -271,51 +248,43 @@ export async function syncAudienceGroup(
     run.totalCount = contacts.length;
     run.skippedCount = skippedCount;
     run.failedCount = skippedCount;
-    await persistProgress();
-
-    const keep = catalog.contacts.filter(
-      (c) => !(c.groupId === groupId && c.source === "synced"),
-    );
-    const synced: AudienceContact[] = contacts.map((c) => ({
-      id: `synced:${groupId}:${c.email}`,
-      email: c.email,
-      name: c.name,
-      domain: group.domain,
-      groupId,
-      source: "synced" as const,
-      addedAt: startedAt,
-    }));
+    await dbUpdateSyncProgress(db, groupId, run);
 
     run.phase = "writing";
     run.processedCount = 0;
-    await persistProgress();
+    await dbUpdateSyncProgress(db, groupId, run);
 
-    for (let i = 0; i < synced.length; i += SYNC_WRITE_CHUNK) {
-      run.processedCount = Math.min(i + SYNC_WRITE_CHUNK, synced.length);
+    for (let i = 0; i < contacts.length; i += SYNC_WRITE_CHUNK) {
+      run.processedCount = Math.min(i + SYNC_WRITE_CHUNK, contacts.length);
       run.estimatedRemainingMs = estimateRemainingMs(
         startedAt,
         run.processedCount,
-        synced.length,
+        contacts.length,
       );
-      await persistProgress();
+      await dbUpdateSyncProgress(db, groupId, run);
     }
 
-    catalog.contacts = [...keep, ...synced];
+    const count = await dbReplaceSyncedContacts(
+      db,
+      groupId,
+      group.domain,
+      contacts,
+    );
+
     const finishedAt = new Date().toISOString();
     run.phase = "done";
     run.status = "success";
     run.finishedAt = finishedAt;
-    run.processedCount = synced.length;
-    run.successCount = synced.length;
+    run.processedCount = count;
+    run.successCount = count;
     run.estimatedRemainingMs = 0;
-    group.lastSyncAt = finishedAt;
-    group.lastSyncStatus = "success";
-    group.lastSyncError = undefined;
-    group.lastSyncCount = synced.length;
-    group.syncProgress = run;
-    pushSyncHistory(group, { ...run });
-    await writeAudienceCatalog(kv, catalog);
-    return { ok: true, count: synced.length, skippedCount };
+    await dbFinishSync(db, groupId, {
+      run: { ...run },
+      lastSyncAt: finishedAt,
+      lastSyncStatus: "success",
+      lastSyncCount: count,
+    });
+    return { ok: true, count, skippedCount };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sync failed";
     const finishedAt = new Date().toISOString();
@@ -324,18 +293,19 @@ export async function syncAudienceGroup(
     run.finishedAt = finishedAt;
     run.error = message;
     run.estimatedRemainingMs = 0;
-    group.lastSyncAt = finishedAt;
-    group.lastSyncStatus = "error";
-    group.lastSyncError = message;
-    group.syncProgress = run;
-    pushSyncHistory(group, { ...run });
-    await writeAudienceGroups(kv, catalog.groups);
+    await dbFinishSync(db, groupId, {
+      run: { ...run },
+      lastSyncAt: finishedAt,
+      lastSyncStatus: "error",
+      lastSyncError: message,
+      lastSyncCount: 0,
+    });
     return { ok: false, count: 0, skippedCount: 0, error: message };
   }
 }
 
 export async function createAudienceGroup(
-  kv: KVNamespace,
+  db: AppDb,
   input: {
     name: string;
     domain: string;
@@ -349,33 +319,23 @@ export async function createAudienceGroup(
   if (!name) throw new Error("name is required");
   if (!domain) throw new Error("domain is required");
 
-  const catalog = await readAudienceCatalog(kv);
-  const group: AudienceGroup = {
-    id: crypto.randomUUID(),
+  const group = await dbCreateGroup(db, {
     name,
     domain,
-    createdAt: new Date().toISOString(),
-    cronEnabled: Boolean(input.cronEnabled),
-    ...(input.cronIntervalMinutes
-      ? { cronIntervalMinutes: input.cronIntervalMinutes }
-      : {}),
-    ...(input.dataSource
-      ? { dataSource: mergeDataSource(undefined, input.dataSource) }
-      : {}),
-  };
-  catalog.groups.unshift(group);
-  await writeAudienceGroups(kv, catalog.groups);
+    dataSource: input.dataSource,
+    cronEnabled: input.cronEnabled,
+    cronIntervalMinutes: input.cronIntervalMinutes,
+  });
 
   if (group.dataSource) {
-    await syncAudienceGroup(kv, group.id, { trigger: "manual" });
-    const refreshed = await readAudienceCatalog(kv);
-    return refreshed.groups.find((g) => g.id === group.id) ?? group;
+    await syncAudienceGroup(db, group.id, { trigger: "manual" });
+    return (await dbGetGroup(db, group.id)) ?? group;
   }
   return group;
 }
 
 export async function updateAudienceGroup(
-  kv: KVNamespace,
+  db: AppDb,
   groupId: string,
   patch: {
     name?: string;
@@ -385,71 +345,30 @@ export async function updateAudienceGroup(
     cronIntervalMinutes?: number | null;
   },
 ): Promise<AudienceGroup> {
-  const catalog = await readAudienceCatalog(kv);
-  const index = catalog.groups.findIndex((g) => g.id === groupId);
-  if (index < 0) throw new Error("Audience group not found");
-  const current = catalog.groups[index]!;
-
-  if (patch.name !== undefined) {
-    const name = patch.name.trim();
-    if (!name) throw new Error("name is required");
-    current.name = name;
-  }
-  if (patch.defaultFrom !== undefined) {
-    if (patch.defaultFrom === null || !patch.defaultFrom.trim()) {
-      delete current.defaultFrom;
-    } else {
-      current.defaultFrom = patch.defaultFrom.trim().toLowerCase();
-    }
-  }
-  if (patch.dataSource === null) {
-    delete current.dataSource;
-  } else if (patch.dataSource) {
-    current.dataSource = mergeDataSource(current.dataSource, patch.dataSource);
-  }
-  if (patch.cronEnabled !== undefined) {
-    current.cronEnabled = patch.cronEnabled;
-  }
-  if (patch.cronIntervalMinutes !== undefined) {
-    if (patch.cronIntervalMinutes === null || patch.cronIntervalMinutes <= 0) {
-      delete current.cronIntervalMinutes;
-    } else {
-      current.cronIntervalMinutes = patch.cronIntervalMinutes;
-    }
-  }
-
-  catalog.groups[index] = current;
-  await writeAudienceGroups(kv, catalog.groups);
-  return current;
+  return dbUpdateGroup(db, groupId, patch);
 }
 
 export async function deleteAudienceGroup(
-  kv: KVNamespace,
+  db: AppDb,
   groupId: string,
 ): Promise<void> {
-  const catalog = await readAudienceCatalog(kv);
-  catalog.groups = catalog.groups.filter((g) => g.id !== groupId);
-  catalog.contacts = catalog.contacts.filter((c) => c.groupId !== groupId);
-  await writeAudienceCatalog(kv, catalog);
+  await dbDeleteGroup(db, groupId);
 
   // Strip groupId from broadcasts (lazy import to avoid cycle).
-  const { readBroadcasts, writeBroadcasts } = await import(
+  const { readBroadcasts, updateBroadcastGroupIds } = await import(
     "./catalog-broadcasts"
   );
-  const broadcasts = await readBroadcasts(kv);
-  let changed = false;
+  const broadcasts = await readBroadcasts(db);
   for (const b of broadcasts) {
     const next = b.groupIds.filter((id) => id !== groupId);
     if (next.length !== b.groupIds.length) {
-      b.groupIds = next;
-      changed = true;
+      await updateBroadcastGroupIds(db, b.id, next);
     }
   }
-  if (changed) await writeBroadcasts(kv, broadcasts);
 }
 
 export async function addManualContact(
-  kv: KVNamespace,
+  db: AppDb,
   groupId: string,
   input: { email: string; name?: string },
 ): Promise<AudienceContact> {
@@ -457,36 +376,30 @@ export async function addManualContact(
   if (!email || !email.includes("@")) {
     throw new Error("A valid email is required");
   }
-  const catalog = await readAudienceCatalog(kv);
-  const group = catalog.groups.find((g) => g.id === groupId);
+  const group = await dbGetGroup(db, groupId);
   if (!group) throw new Error("Audience group not found");
-  if (catalog.contacts.some((c) => c.groupId === groupId && c.email === email)) {
-    throw new Error("Contact already exists in this group");
-  }
-  const contact: AudienceContact = {
-    id: crypto.randomUUID(),
+  return dbAddManualContact(db, {
     email,
-    name: input.name?.trim() || undefined,
-    domain: group.domain,
+    name: input.name,
     groupId,
-    source: "manual",
-    addedAt: new Date().toISOString(),
-  };
-  catalog.contacts.push(contact);
-  await writeAudienceContacts(kv, catalog.contacts);
-  return contact;
+    domain: group.domain,
+  });
 }
 
 export async function removeContact(
-  kv: KVNamespace,
+  db: AppDb,
   groupId: string,
   contactId: string,
 ): Promise<void> {
-  const catalog = await readAudienceCatalog(kv);
-  catalog.contacts = catalog.contacts.filter(
-    (c) => !(c.groupId === groupId && c.id === contactId),
-  );
-  await writeAudienceContacts(kv, catalog.contacts);
+  // groupId is used for scoping verification; the contact is deleted by id.
+  await dbRemoveContact(db, contactId);
+}
+
+export async function listContactsForGroupFromDb(
+  db: AppDb,
+  groupId: string,
+): Promise<AudienceContact[]> {
+  return dbListContactsForGroup(db, groupId);
 }
 
 export function listContactsForGroups(
@@ -503,6 +416,53 @@ export function listContactsForGroups(
     result.push(contact);
   }
   return result;
+}
+
+export async function listContactsForGroupsFromDb(
+  db: AppDb,
+  groupIds: string[],
+): Promise<AudienceContact[]> {
+  const contacts = await dbListContactsForGroups(db, groupIds);
+  const seen = new Set<string>();
+  const result: AudienceContact[] = [];
+  for (const contact of contacts) {
+    if (seen.has(contact.email)) continue;
+    seen.add(contact.email);
+    result.push(contact);
+  }
+  return result;
+}
+
+export async function getGroupProgressFromDb(
+  db: AppDb,
+  groupId: string,
+) {
+  const group = await dbGetGroup(db, groupId);
+  if (!group) return null;
+  let nextDueAt: string | null = null;
+  if (
+    group.cronEnabled &&
+    group.cronIntervalMinutes &&
+    group.cronIntervalMinutes > 0
+  ) {
+    if (group.lastSyncAt) {
+      nextDueAt = new Date(
+        new Date(group.lastSyncAt).getTime() +
+          group.cronIntervalMinutes * 60_000,
+      ).toISOString();
+    } else {
+      nextDueAt = new Date().toISOString();
+    }
+  }
+  return {
+    groupId,
+    cronEnabled: Boolean(group.cronEnabled),
+    cronIntervalMinutes: group.cronIntervalMinutes,
+    nextDueAt,
+    lastSyncAt: group.lastSyncAt,
+    progress: group.syncProgress ?? null,
+    history: group.syncHistory ?? [],
+  };
 }
 
 export function getGroupProgress(catalog: AudienceCatalog, groupId: string) {
@@ -543,17 +503,17 @@ function isDue(group: AudienceGroup, now: number): boolean {
   return elapsed >= interval * 60_000 - DUE_GRACE_MS;
 }
 
-/** Cron entry: sync every due group in the single catalog. */
+/** Cron entry: sync every due group. */
 export async function runAudienceCron(
-  kv: KVNamespace,
+  db: AppDb,
 ): Promise<{ groupsSynced: number }> {
-  const catalog = await readAudienceCatalog(kv);
+  const groups = await dbListGroupsForCron(db);
   const now = Date.now();
-  const due = catalog.groups.filter((g) => isDue(g, now));
+  const due = groups.filter((g) => isDue(g, now));
   let groupsSynced = 0;
   for (const group of due) {
     try {
-      await syncAudienceGroup(kv, group.id, { trigger: "cron" });
+      await syncAudienceGroup(db, group.id, { trigger: "cron" });
       groupsSynced++;
     } catch (error) {
       console.error("Audience cron sync failed", group.id, error);

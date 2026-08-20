@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
+import { createAppDb } from "../../../db/app";
 import {
   createKey,
   listKeys,
@@ -28,7 +29,7 @@ consoleKeys.post("/", async (c) => {
   }
 
   try {
-    const { record, apiKey } = await createKey(c.env.RELAYBASE_APP, {
+    const { record, apiKey } = await createKey(createAppDb(c.env.RELAYBASE_DB), {
       domain,
       label: body.label,
     });
@@ -52,7 +53,7 @@ consoleKeys.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
 
-  const keys = await listKeys(c.env.RELAYBASE_APP);
+  const keys = await listKeys(createAppDb(c.env.RELAYBASE_DB));
   return c.json({ keys });
 });
 
@@ -76,7 +77,7 @@ consoleKeys.patch("/:id", async (c) => {
     return c.json({ error: "active boolean is required" }, 400);
   }
 
-  const record = await setKeyActive(c.env.RELAYBASE_APP, id, body.active);
+  const record = await setKeyActive(createAppDb(c.env.RELAYBASE_DB), id, body.active);
   if (!record) {
     return c.json({ error: "Key not found" }, 404);
   }
@@ -92,7 +93,7 @@ consoleKeys.post("/:id/rotate", async (c) => {
     return c.json({ error: "id is required" }, 400);
   }
 
-  const rotated = await rotateKey(c.env.RELAYBASE_APP, id);
+  const rotated = await rotateKey(createAppDb(c.env.RELAYBASE_DB), id);
   if (!rotated) {
     return c.json({ error: "Key not found" }, 404);
   }
@@ -114,7 +115,7 @@ consoleKeys.delete("/:id", async (c) => {
     return c.json({ error: "id is required" }, 400);
   }
 
-  const deleted = await revokeKey(c.env.RELAYBASE_APP, id);
+  const deleted = await revokeKey(createAppDb(c.env.RELAYBASE_DB), id);
   if (!deleted) {
     return c.json({ error: "Key not found" }, 404);
   }

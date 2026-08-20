@@ -1,8 +1,8 @@
 import { createLicense, findLicenseByCustomerId, updateLicense } from "@/lib/licenses";
+import { getDb } from "@/db/client";
 import { getEnv } from "@/lib/env";
 import { verifyStripeSignature, type StripeEvent } from "@/lib/stripe";
 
-export const runtime = "edge";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  const kv = env.KEMBO_LICENSES!;
+  const db = getDb(env);
   const obj = event.data.object;
 
   try {
@@ -46,10 +46,10 @@ export async function POST(req: Request) {
 
         // If this customer already has a license, skip re-issuing.
         const existing = stripeCustomerId
-          ? await findLicenseByCustomerId(kv, stripeCustomerId).catch(() => null)
+          ? await findLicenseByCustomerId(db, stripeCustomerId).catch(() => null)
           : null;
         if (existing) {
-          await updateLicense(kv, existing.id, {
+          await updateLicense(db, existing.id, {
             active: true,
             status: "active",
             stripeCustomerId: stripeCustomerId ?? existing.stripeCustomerId,
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
           return json({ received: true, licenseId: existing.id, reused: true });
         }
 
-        const { record } = await createLicense(kv, {
+        const { record } = await createLicense(db, {
           email,
           tier: "pro",
           stripeSessionId,
@@ -73,13 +73,13 @@ export async function POST(req: Request) {
         const stripeCustomerId =
           typeof obj.customer === "string" ? obj.customer : null;
         if (!stripeCustomerId) return json({ received: true, ignored: true });
-        const stored = await findLicenseByCustomerId(kv, stripeCustomerId);
+        const stored = await findLicenseByCustomerId(db, stripeCustomerId);
         if (!stored) return json({ received: true, ignored: true });
         const currentPeriodEnd = obj.current_period_end
           ? new Date(obj.current_period_end * 1000).toISOString()
           : null;
         const status = mapSubStatus(obj.status);
-        await updateLicense(kv, stored.id, {
+        await updateLicense(db, stored.id, {
           active: status !== "canceled" && status !== "revoked",
           status,
           stripeSubscriptionId:
@@ -96,9 +96,9 @@ export async function POST(req: Request) {
         const stripeCustomerId =
           typeof obj.customer === "string" ? obj.customer : null;
         if (!stripeCustomerId) return json({ received: true, ignored: true });
-        const stored = await findLicenseByCustomerId(kv, stripeCustomerId);
+        const stored = await findLicenseByCustomerId(db, stripeCustomerId);
         if (!stored) return json({ received: true, ignored: true });
-        await updateLicense(kv, stored.id, {
+        await updateLicense(db, stored.id, {
           active: false,
           status: "canceled",
           currentPeriodEnd: obj.current_period_end

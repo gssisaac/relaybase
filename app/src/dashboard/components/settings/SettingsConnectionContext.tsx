@@ -43,6 +43,7 @@ type SettingsConnectionContextValue = {
   d1Health: HealthBlock;
   logsOk: boolean;
   searchOk: boolean;
+  appOk: boolean;
   accountId: string;
   setAccountId: (value: string) => void;
   apiToken: string;
@@ -296,8 +297,9 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   }
 
   const hasWorker = Boolean(credentials?.workerUrl?.trim());
-  const logsOk = workerStatus?.d1Logs.configured === true;
-  const searchOk = workerStatus?.d1InboxIndex.configured === true;
+  const logsOk = workerStatus?.d1Logs?.configured === true;
+  const searchOk = workerStatus?.d1InboxIndex?.configured === true;
+  const appOk = workerStatus?.d1App?.configured === true;
 
   const workerHealth: HealthBlock = !hasWorker
     ? {
@@ -361,34 +363,48 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       ? {
           tone: "pending",
           label: "Checking D1…",
-          detail: "Probing ops log and inbox search bindings.",
+          detail: "Probing ops log, inbox search, and product DB bindings.",
         }
-      : logsOk && searchOk
+      : logsOk && searchOk && appOk
         ? {
             tone: "ok",
             label: "Configured — healthy",
-            detail: "Ops log and inbox search tables are reachable.",
+            detail: "Ops log, inbox search, and product DB tables are reachable.",
           }
-        : logsOk
+        : logsOk && searchOk
           ? {
               tone: "ok",
-              label: "Logs configured",
+              label: "Logs + search configured",
               detail:
-                "RELAYBASE_LOGS works. Bind RELAYBASE_INBOX_INDEX for server search.",
+                "RELAYBASE_LOGS + RELAYBASE_INBOX_INDEX work. Bind RELAYBASE_DB for product state.",
             }
+          : logsOk
+            ? {
+                tone: "ok",
+                label: "Logs configured",
+                detail:
+                  "RELAYBASE_LOGS works. Bind RELAYBASE_INBOX_INDEX and RELAYBASE_DB.",
+              }
           : searchOk
             ? {
                 tone: "ok",
                 label: "Search configured",
                 detail:
-                  "RELAYBASE_INBOX_INDEX works. Bind RELAYBASE_LOGS for the Log page.",
+                  "RELAYBASE_INBOX_INDEX works. Bind RELAYBASE_LOGS and RELAYBASE_DB.",
               }
-            : {
-                tone: "bad",
-                label: "Not configured",
-                detail:
-                  "Create the D1 databases, bind them in wrangler.toml, apply migrations, redeploy, then refresh.",
-              };
+            : appOk
+              ? {
+                  tone: "ok",
+                  label: "Product DB configured",
+                  detail:
+                    "RELAYBASE_DB works. Bind RELAYBASE_LOGS and RELAYBASE_INBOX_INDEX.",
+                }
+              : {
+                  tone: "bad",
+                  label: "Not configured",
+                  detail:
+                    "Create the D1 databases, bind them in wrangler.toml, apply migrations, redeploy, then refresh.",
+                };
 
   const value = useMemo<SettingsConnectionContextValue>(
     () => ({
@@ -403,6 +419,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       d1Health,
       logsOk,
       searchOk,
+      appOk,
       accountId,
       setAccountId,
       apiToken,
@@ -448,6 +465,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       d1Health,
       logsOk,
       searchOk,
+      appOk,
       accountId,
       apiToken,
       workerUrl,

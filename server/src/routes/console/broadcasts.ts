@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
+import { createAppDb } from "../../../db/app";
 import {
   createBroadcastDraft,
   getBroadcastDetail,
@@ -15,7 +16,7 @@ const consoleBroadcasts = new Hono<{ Bindings: Env }>();
 consoleBroadcasts.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const broadcasts = await readBroadcasts(c.env.RELAYBASE_APP);
+  const broadcasts = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
   const domain = c.req.query("domain")?.trim().toLowerCase();
   const filtered = domain
     ? broadcasts.filter((b) => b.domain === domain)
@@ -39,7 +40,7 @@ consoleBroadcasts.post("/", async (c) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
   try {
-    const broadcast = await createBroadcastDraft(c.env.RELAYBASE_APP, {
+    const broadcast = await createBroadcastDraft(createAppDb(c.env.RELAYBASE_DB), {
       id: body.id,
       groupIds: body.groupIds ?? [],
       from: body.from,
@@ -57,7 +58,7 @@ consoleBroadcasts.get("/:broadcastId", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
   const detail = await getBroadcastDetail(
-    c.env.RELAYBASE_APP,
+    createAppDb(c.env.RELAYBASE_DB),
     c.req.param("broadcastId"),
   );
   if (!detail) return c.json({ error: "Broadcast not found" }, 404);
@@ -80,7 +81,7 @@ consoleBroadcasts.patch("/:broadcastId", async (c) => {
   }
   try {
     const broadcast = await updateBroadcastDraft(
-      c.env.RELAYBASE_APP,
+      createAppDb(c.env.RELAYBASE_DB),
       c.req.param("broadcastId"),
       body,
     );
@@ -116,7 +117,7 @@ consoleBroadcasts.post("/:broadcastId/send", async (c) => {
 consoleBroadcasts.get("/:broadcastId/progress", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const broadcasts = await readBroadcasts(c.env.RELAYBASE_APP);
+  const broadcasts = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
   const broadcast = broadcasts.find(
     (b) => b.id === c.req.param("broadcastId"),
   );

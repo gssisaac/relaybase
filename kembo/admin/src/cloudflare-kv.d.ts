@@ -21,7 +21,26 @@ interface KVNamespace {
   }>;
 }
 
+interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+  batch(statements: D1PreparedStatement[]): Promise<D1Result>;
+  exec(query: string): Promise<D1Result>;
+}
+
+interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement;
+  first<T = unknown>(): Promise<T | null>;
+  run<T = unknown>(): Promise<D1Result<T>>;
+  all<T = unknown>(): Promise<D1Result<T>>;
+  raw<T = unknown>(): Promise<T[]>;
+}
+
+interface D1Result<T = unknown> {
+  results?: T[];
+  success: boolean;
+  meta?: { changes?: number; [k: string]: unknown };
+}
+
 interface CloudflareEnv {
-  KEMBO_OPS?: KVNamespace;
-  RELAYBASE_APP_DOGFOOD?: KVNamespace;
+  DB?: D1Database;
 }

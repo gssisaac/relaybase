@@ -1,8 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-import { getRelaybaseAppDogfoodKv } from "@/lib/cloudflare/kv";
-
 export type DevEmailConfig = {
   domain: string;
   cloudflareConfigured: boolean;
@@ -30,10 +28,6 @@ export type DevUserEmailData = {
 
 function safeUserId(userId: string): string {
   return userId.replace(/[^a-zA-Z0-9@._-]/g, "_");
-}
-
-function userdataKvKey(userId: string): string {
-  return `userdata:${safeUserId(userId)}`;
 }
 
 function dataFile(userId: string): string {
@@ -74,16 +68,6 @@ function readUserEmailDataFromFs(userId: string): DevUserEmailData {
 export async function readUserEmailData(
   userId: string,
 ): Promise<DevUserEmailData> {
-  const kv = await getRelaybaseAppDogfoodKv();
-  if (kv) {
-    const raw = await kv.get(userdataKvKey(userId));
-    if (!raw) return emptyData();
-    try {
-      return { ...emptyData(), ...JSON.parse(raw) };
-    } catch {
-      return emptyData();
-    }
-  }
   return readUserEmailDataFromFs(userId);
 }
 

@@ -8,6 +8,15 @@ import { workerFetch } from "@/lib/desktop/worker-api";
 
 export { mapEmailApiToWorker, mapPackagedEmailApiToWorker } from "@/lib/desktop/email-api-map";
 
+/** Global 401 guard — fires once to clear credentials + redirect to /setup. */
+let unauthorizedRedirecting = false;
+function handleWorkerUnauthorized(): void {
+  if (typeof window === "undefined") return;
+  if (unauthorizedRedirecting) return;
+  unauthorizedRedirecting = true;
+  window.dispatchEvent(new CustomEvent("relaybase:unauthorized"));
+}
+
 /**
  * Resolve the customer Worker origin when credentials are loaded.
  */
@@ -222,7 +231,11 @@ export async function desktopAwareFetch(
       }
     }
     try {
-      return await workerFetch(creds, workerPath, init);
+      const res = await workerFetch(creds, workerPath, init);
+      if (res.status === 401) {
+        handleWorkerUnauthorized();
+      }
+      return res;
     } catch (err) {
       throw new Error(friendlyDesktopFetchError(err, "Worker request failed"));
     }

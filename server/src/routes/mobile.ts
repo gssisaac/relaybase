@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireMobilePassword, type MobileAuthResult } from "../lib/mobile-auth";
+import { createAppDb } from "../../db/app";
 import {
   mobileEnabledAddresses,
   readMailbox,
@@ -43,7 +44,7 @@ mobile.use("*", async (c, next) => {
   if (auth instanceof Response) return auth;
   c.set("mobileAuth", auth);
   c.set("authEmail", auth.email);
-  const data = await readMailbox(c.env.RELAYBASE_APP);
+  const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   const allEnabled = mobileEnabledAddresses(data);
   // Restrict to the single authenticated account only.
   const addresses = allEnabled.filter(
@@ -104,7 +105,7 @@ mobile.patch("/profile", async (c) => {
     patch.signature = body.signature;
   }
   const updated = await updateAddressProfile(
-    c.env.RELAYBASE_APP,
+    createAppDb(c.env.RELAYBASE_DB),
     email,
     patch,
   );

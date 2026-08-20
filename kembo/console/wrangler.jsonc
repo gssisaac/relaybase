@@ -4,7 +4,7 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "account_id": "674a35f00d9800eec7d6bc42fe55726e",
   "routes": [
     { "pattern": "console.relaybase.xyz", "custom_domain": true }
   ],
@@ -18,18 +18,11 @@
       "service": "kembo-console"
     }
   ],
-  "kv_namespaces": [
-    {
-      "binding": "KEMBO_LICENSES",
-      "id": "e56178afc7c945ab9cb73b87c851fec4",
-      "preview_id": "e56178afc7c945ab9cb73b87c851fec4"
-    }
-  ],
   "d1_databases": [
     {
-      "binding": "KEMBO_ACCOUNTS",
-      "database_name": "kembo-accounts",
-      "database_id": "a82c9e04-07f1-4f4a-9a7f-9c09f5338764",
+      "binding": "DB",
+      "database_name": "kembo-ops",
+      "database_id": "e759ebf2-f43d-423c-b5e9-163a40432319",
       "migrations_dir": "migrations"
     }
   ]

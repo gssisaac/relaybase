@@ -1,4 +1,9 @@
 import type { CloudflareClient, CfDnsRecord } from "./cloudflare-client";
+import type { AppDb } from "../../db/app";
+import {
+  getDomainBranding as dbGetDomainBranding,
+  mergeDomainBranding as dbMergeDomainBranding,
+} from "../../db/app/branding";
 
 export type DmarcPolicy = "none" | "quarantine" | "reject";
 
@@ -29,15 +34,6 @@ export type DomainBrandingStatus = {
   dmarcEnforced: boolean;
   notes: string[];
 };
-
-const BRANDING_KV_KEY = "srv:catalog:branding";
-
-function defaultBrandingForDomain(domain: string): DomainBrandingConfig {
-  return {
-    dmarcPolicy: "quarantine",
-    dmarcRua: `dmarc@${domain}`,
-  };
-}
 
 function dmarcRecordName(domain: string): string {
   return `_dmarc.${domain}`;
@@ -73,58 +69,28 @@ function parseDmarcPolicy(content: string): DmarcPolicy | null {
   return match[1].toLowerCase() as DmarcPolicy;
 }
 
-export async function readDomainBrandingMap(
-  kv: KVNamespace,
-): Promise<DomainBrandingMap> {
-  const raw = await kv.get(BRANDING_KV_KEY);
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as DomainBrandingMap;
-  } catch {
-    return {};
-  }
-}
-
-export async function writeDomainBrandingMap(
-  kv: KVNamespace,
-  map: DomainBrandingMap,
-): Promise<void> {
-  await kv.put(BRANDING_KV_KEY, JSON.stringify(map));
-}
-
 export async function getDomainBrandingConfig(
-  kv: KVNamespace,
+  db: AppDb,
   domain: string,
 ): Promise<DomainBrandingConfig> {
-  const map = await readDomainBrandingMap(kv);
-  const stored = map[domain.toLowerCase()];
-  return stored ?? defaultBrandingForDomain(domain);
+  return dbGetDomainBranding(db, domain);
 }
 
 export async function mergeDomainBranding(
-  kv: KVNamespace,
+  db: AppDb,
   domain: string,
   patch: Partial<DomainBrandingConfig>,
 ): Promise<DomainBrandingConfig> {
-  const map = await readDomainBrandingMap(kv);
-  const key = domain.toLowerCase();
-  const existing = map[key] ?? defaultBrandingForDomain(key);
-  const next: DomainBrandingConfig = {
-    dmarcPolicy: patch.dmarcPolicy ?? existing.dmarcPolicy,
-    dmarcRua: patch.dmarcRua?.trim() || existing.dmarcRua,
-  };
-  map[key] = next;
-  await writeDomainBrandingMap(kv, map);
-  return next;
+  return dbMergeDomainBranding(db, domain, patch);
 }
 
 export async function fetchDomainBrandingStatus(
-  kv: KVNamespace,
+  db: AppDb,
   cf: CloudflareClient,
   domain: string,
 ): Promise<DomainBrandingStatus> {
   const normalizedDomain = domain.trim().toLowerCase();
-  const config = await getDomainBrandingConfig(kv, normalizedDomain);
+  const config = await getDomainBrandingConfig(db, normalizedDomain);
   const dmarcExpected = buildDmarcContent(config);
   const notes: string[] = [
     "DMARC authenticates this domain's mail (SPF/DKIM alignment) — it does not control any inbox logo.",
@@ -208,12 +174,12 @@ async function removeLegacyBimiRecord(
 }
 
 export async function applyDomainBrandingDns(
-  kv: KVNamespace,
+  db: AppDb,
   cf: CloudflareClient,
   domain: string,
 ): Promise<DomainBrandingStatus> {
   const normalizedDomain = domain.trim().toLowerCase();
-  const config = await getDomainBrandingConfig(kv, normalizedDomain);
+  const config = await getDomainBrandingConfig(db, normalizedDomain);
   const zoneId = await cf.resolveZoneId(normalizedDomain);
   if (!zoneId) {
     throw new Error(
@@ -230,5 +196,5 @@ export async function applyDomainBrandingDns(
 
   await removeLegacyBimiRecord(cf, zoneId, normalizedDomain);
 
-  return fetchDomainBrandingStatus(kv, cf, normalizedDomain);
+  return fetchDomainBrandingStatus(db, cf, normalizedDomain);
 }

@@ -7,6 +7,7 @@ import { readMailbox } from "../../lib/catalog-store";
 import { listInboundEmails, MAX_MESSAGES } from "../../lib/inbound-store";
 import { listKeys } from "../../lib/keys";
 import { listSendLogs, type SendLogEntry } from "../../lib/send-logs";
+import { createAppDb } from "../../../db/app";
 import {
   bucketIndex,
   createBuckets,
@@ -62,11 +63,11 @@ consoleStats.get("/", async (c) => {
   const since = now - RANGE_MS[range];
 
   const [mailbox, audience, broadcasts, sendLogs, keys] = await Promise.all([
-    readMailbox(c.env.RELAYBASE_APP),
-    readAudienceCatalog(c.env.RELAYBASE_APP),
-    readBroadcasts(c.env.RELAYBASE_APP),
+    readMailbox(createAppDb(c.env.RELAYBASE_DB)),
+    readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB)),
+    readBroadcasts(createAppDb(c.env.RELAYBASE_DB)),
     listSendLogs(c.env.INBOUND, { limit: 500, domain: domain ?? undefined }),
-    listKeys(c.env.RELAYBASE_APP),
+    listKeys(createAppDb(c.env.RELAYBASE_DB)),
   ]);
 
   const addresses = domain
@@ -156,7 +157,7 @@ consoleStats.get("/account-stats", async (c) => {
   const domain = domainFromEmail(email);
 
   const [mailbox, sendLogs, inbound] = await Promise.all([
-    readMailbox(c.env.RELAYBASE_APP),
+    readMailbox(createAppDb(c.env.RELAYBASE_DB)),
     listSendLogs(c.env.INBOUND, { limit: 500 }),
     domain
       ? listInboundEmails(c.env.INBOUND, { domain, limit: MAX_MESSAGES })

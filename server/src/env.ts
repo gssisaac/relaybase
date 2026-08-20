@@ -6,6 +6,8 @@ export type Env = {
   RELAYBASE_LOGS?: D1Database;
   /** FTS5 search index over inbound mail (R2 stays source of truth). */
   RELAYBASE_INBOX_INDEX?: D1Database;
+  /** Durable product state (mailbox, audience, broadcasts, keys, tokens, …). */
+  RELAYBASE_DB?: D1Database;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   ADMIN_TOKEN?: string;

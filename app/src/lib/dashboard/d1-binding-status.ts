@@ -22,6 +22,13 @@ export const D1_INBOX_INDEX_DEFAULT: D1BindingSnapshot = {
   sizeBytes: null,
 };
 
+export const D1_APP_DEFAULT: D1BindingSnapshot = {
+  configured: false,
+  databaseName: "relaybase-db",
+  binding: "RELAYBASE_DB",
+  sizeBytes: null,
+};
+
 type D1Payload = {
   logs?: {
     configured?: boolean;
@@ -30,6 +37,12 @@ type D1Payload = {
     sizeBytes?: number | null;
   };
   inboxIndex?: {
+    configured?: boolean;
+    databaseName?: string;
+    binding?: string;
+    sizeBytes?: number | null;
+  };
+  app?: {
     configured?: boolean;
     databaseName?: string;
     binding?: string;
@@ -49,12 +62,17 @@ function parseSize(value: unknown): number | null {
 
 export function d1BindingFromPayload(
   d1: D1Payload | undefined,
-  kind: "logs" | "inboxIndex",
+  kind: "logs" | "inboxIndex" | "app",
 ): D1BindingSnapshot {
-  const defaults = kind === "logs" ? D1_LOGS_DEFAULT : D1_INBOX_INDEX_DEFAULT;
+  const defaults =
+    kind === "logs"
+      ? D1_LOGS_DEFAULT
+      : kind === "inboxIndex"
+        ? D1_INBOX_INDEX_DEFAULT
+        : D1_APP_DEFAULT;
   if (!d1) return defaults;
 
-  const nested = kind === "logs" ? d1.logs : d1.inboxIndex;
+  const nested = kind === "logs" ? d1.logs : kind === "inboxIndex" ? d1.inboxIndex : d1.app;
   if (nested) {
     return {
       configured: Boolean(nested.configured),
@@ -73,10 +91,14 @@ export function d1BindingFromPayload(
     };
   }
 
-  return {
-    configured: Boolean(d1.inboxIndexConfigured),
-    databaseName: d1.inboxIndexDatabaseName ?? defaults.databaseName,
-    binding: defaults.binding,
-    sizeBytes: null,
-  };
+  if (kind === "inboxIndex") {
+    return {
+      configured: Boolean(d1.inboxIndexConfigured),
+      databaseName: d1.inboxIndexDatabaseName ?? defaults.databaseName,
+      binding: defaults.binding,
+      sizeBytes: null,
+    };
+  }
+
+  return defaults;
 }

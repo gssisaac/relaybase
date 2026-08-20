@@ -1,18 +1,15 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { drizzle } from "drizzle-orm/d1";
+import { productSettings } from "@/db/schema";
 
-export async function getKemboOpsKv(): Promise<KVNamespace | null> {
+export type Database = ReturnType<typeof getDb>;
+
+export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    return (env as CloudflareEnv).KEMBO_OPS ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export async function getRelaybaseAppDogfoodKv(): Promise<KVNamespace | null> {
-  try {
-    const { env } = await getCloudflareContext({ async: true });
-    return (env as CloudflareEnv).RELAYBASE_APP_DOGFOOD ?? null;
+    const db = (env as CloudflareEnv).DB;
+    if (!db) return null;
+    return drizzle(db, { schema: { productSettings } });
   } catch {
     return null;
   }

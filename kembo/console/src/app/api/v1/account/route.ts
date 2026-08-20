@@ -9,6 +9,9 @@ import {
   setAccountPassword,
   verifyAccountCredentials,
 } from "@/lib/accounts";
+import { getDb } from "@/db/client";
+import { accounts } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import {
   assertEnv,
   clearSessionCookieHeader,
@@ -17,7 +20,6 @@ import {
   verifyRequestSession,
 } from "@/lib/env";
 
-export const runtime = "edge";
 
 function json(data: unknown, status = 200, headers?: Record<string, string>): Response {
   return new Response(JSON.stringify(data), {
@@ -73,15 +75,15 @@ export async function GET(req: Request) {
     const secret = assertEnv(env, "CONSOLE_SESSION_SECRET");
     const session = await sessionFromReq(req, secret);
     if (!session) return json({ ok: false }, 401);
-    const row = await getAccountById(env.KEMBO_ACCOUNTS!, session.accountId);
+    const row = await getAccountById(getDb(env), session.accountId);
     if (!row) return json({ ok: false }, 401);
     return json({
       ok: true,
       account: {
         id: row.id,
         email: row.email,
-        createdAt: row.created_at,
-        emailVerifiedAt: row.email_verified_at,
+        createdAt: row.createdAt,
+        emailVerifiedAt: row.emailVerifiedAt,
       },
     });
   } catch (err) {
@@ -98,7 +100,7 @@ async function handleSignup(req: Request, env: CloudflareEnv): Promise<Response>
   if (password.length < 8) {
     return json({ error: "Password must be at least 8 characters" }, 400);
   }
-  const account = await createAccount(env.KEMBO_ACCOUNTS!, email, password);
+  const account = await createAccount(getDb(env), email, password);
   const secret = assertEnv(env, "CONSOLE_SESSION_SECRET");
   const token = await createSession(secret, account);
   return json(
@@ -111,7 +113,7 @@ async function handleSignup(req: Request, env: CloudflareEnv): Promise<Response>
 async function handleLogin(req: Request, env: CloudflareEnv): Promise<Response> {
   const body = await readJson<{ email?: string; password?: string }>(req);
   const row = await verifyAccountCredentials(
-    env.KEMBO_ACCOUNTS!,
+    getDb(env),
     body.email ?? "",
     body.password ?? "",
   );
@@ -121,7 +123,7 @@ async function handleLogin(req: Request, env: CloudflareEnv): Promise<Response> 
   return json(
     {
       ok: true,
-      account: { id: row.id, email: row.email, createdAt: row.created_at },
+      account: { id: row.id, email: row.email, createdAt: row.createdAt },
       sessionToken: token,
     },
     200,
@@ -137,14 +139,12 @@ async function handleRecover(req: Request, env: CloudflareEnv): Promise<Response
   const body = await readJson<{ email?: string }>(req);
   const email = body.email?.trim().toLowerCase() ?? "";
   if (!isValidEmail(email)) return json({ error: "Invalid email" }, 400);
-  const row = await env.KEMBO_ACCOUNTS!
-    .prepare("SELECT id FROM accounts WHERE email = ?")
-    .bind(email)
-    .first<{ id: string }>();
-  if (row) {
+  const db = getDb(env);
+  const existing = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.email, email)).get();
+  if (existing) {
     const token = await createRecoveryToken(
-      env.KEMBO_ACCOUNTS!,
-      row.id,
+      db,
+      existing.id,
       "password",
       60 * 60,
     );
@@ -163,12 +163,12 @@ async function handleResetPassword(
 ): Promise<Response> {
   const body = await readJson<{ token?: string; password?: string }>(req);
   const accountId = await consumeRecoveryToken(
-    env.KEMBO_ACCOUNTS!,
+    getDb(env),
     body.token ?? "",
     "password",
   );
   if (!accountId) return json({ error: "Invalid or expired token" }, 400);
-  await setAccountPassword(env.KEMBO_ACCOUNTS!, accountId, body.password ?? "");
+  await setAccountPassword(getDb(env), accountId, body.password ?? "");
   return json({ ok: true });
 }
 
@@ -180,7 +180,7 @@ async function handleWorkerRegister(
   const session = await sessionFromReq(req, secret);
   if (!session) return json({ error: "Unauthorized" }, 401);
   const body = await readJson<{ workerUrl?: string }>(req);
-  await registerWorker(env.KEMBO_ACCOUNTS!, session.accountId, body.workerUrl ?? "");
+  await registerWorker(getDb(env), session.accountId, body.workerUrl ?? "");
   return json({ ok: true });
 }
 
@@ -198,7 +198,7 @@ async function handleRecoveryToken(
   const session = await sessionFromReq(req, secret);
   if (!session) return json({ error: "Unauthorized" }, 401);
   const token = await createRecoveryToken(
-    env.KEMBO_ACCOUNTS!,
+    getDb(env),
     session.accountId,
     "admin_token",
     15 * 60,

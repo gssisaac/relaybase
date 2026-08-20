@@ -1,6 +1,11 @@
+import { sha256Hex } from "./crypto";
+import type { AppDb } from "../../db/app";
 import {
-  sha256Hex,
-} from "./crypto";
+  createAuthTokenRow as dbCreateAuthTokenRow,
+  findAuthTokenByHash as dbFindAuthTokenByHash,
+  listAuthTokens as dbListAuthTokens,
+  revokeAuthTokenRow as dbRevokeAuthTokenRow,
+} from "../../db/app/auth-tokens";
 
 const AUTH_TOKEN_PREFIX = "rb-auth-";
 const LEGACY_AUTH_TOKEN_PREFIX = "rb-admin-";
@@ -12,10 +17,6 @@ export type AuthTokenRecord = {
   productId: string | null;
   tokenPrefix: string;
   createdAt: string;
-};
-
-type StoredAuthTokenRecord = AuthTokenRecord & {
-  tokenHash: string;
 };
 
 function stripAuthTokenPrefix(token: string): string {
@@ -47,41 +48,8 @@ function generateAuthToken(): string {
   return `${AUTH_TOKEN_PREFIX}${hex}`;
 }
 
-function hashKvKey(tokenHash: string): string {
-  return `srv:authtoken:hash:${tokenHash}`;
-}
-
-function idKvKey(id: string): string {
-  return `srv:authtoken:${id}`;
-}
-
-const INDEX_KEY = "srv:authtoken:_index";
-
-type IndexEntry = {
-  id: string;
-  label: string | null;
-  productId: string | null;
-  tokenPrefix: string;
-  createdAt: string;
-};
-
-async function readIndex(kv: KVNamespace): Promise<IndexEntry[]> {
-  const raw = await kv.get(INDEX_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as IndexEntry[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeIndex(kv: KVNamespace, entries: IndexEntry[]): Promise<void> {
-  await kv.put(INDEX_KEY, JSON.stringify(entries));
-}
-
 export async function createAuthToken(
-  kv: KVNamespace,
+  db: AppDb,
   params: { label?: string | null; productId?: string | null },
 ): Promise<{ record: AuthTokenRecord; token: string }> {
   const token = generateAuthToken();
@@ -90,63 +58,42 @@ export async function createAuthToken(
   const createdAt = new Date().toISOString();
   const tokenPrefix = authTokenPrefix(token);
 
-  const record: StoredAuthTokenRecord = {
+  await dbCreateAuthTokenRow(db, {
     id,
+    tokenHash,
     label: params.label?.trim() || null,
     productId: params.productId?.trim() || null,
     tokenPrefix,
-    createdAt,
-    tokenHash,
+  });
+
+  return {
+    record: {
+      id,
+      label: params.label?.trim() || null,
+      productId: params.productId?.trim() || null,
+      tokenPrefix,
+      createdAt,
+    },
+    token,
   };
-
-  await kv.put(hashKvKey(tokenHash), JSON.stringify(record));
-  await kv.put(idKvKey(id), JSON.stringify(record));
-
-  const index = await readIndex(kv);
-  const entry: IndexEntry = {
-    id,
-    label: record.label,
-    productId: record.productId,
-    tokenPrefix,
-    createdAt,
-  };
-  await writeIndex(kv, [entry, ...index]);
-
-  const { tokenHash: _tokenHash, ...publicRecord } = record;
-  return { record: publicRecord, token };
 }
 
-export async function listAuthTokens(kv: KVNamespace): Promise<AuthTokenRecord[]> {
-  return readIndex(kv);
+export async function listAuthTokens(db: AppDb): Promise<AuthTokenRecord[]> {
+  return dbListAuthTokens(db);
 }
 
 export async function findAuthToken(
-  kv: KVNamespace,
+  db: AppDb,
   token: string,
 ): Promise<AuthTokenRecord | null> {
   if (!isValidAuthTokenFormat(token)) return null;
   const tokenHash = await sha256Hex(token.trim());
-  const raw = await kv.get(hashKvKey(tokenHash));
-  if (!raw) return null;
-  const stored = JSON.parse(raw) as StoredAuthTokenRecord;
-  const { tokenHash: _tokenHash, ...record } = stored;
-  return record;
+  return dbFindAuthTokenByHash(db, tokenHash);
 }
 
 export async function revokeAuthToken(
-  kv: KVNamespace,
+  db: AppDb,
   id: string,
 ): Promise<boolean> {
-  const raw = await kv.get(idKvKey(id));
-  if (!raw) return false;
-  const stored = JSON.parse(raw) as StoredAuthTokenRecord;
-  await kv.delete(hashKvKey(stored.tokenHash));
-  await kv.delete(idKvKey(id));
-
-  const index = await readIndex(kv);
-  const next = index.filter((entry) => entry.id !== id);
-  if (next.length !== index.length) {
-    await writeIndex(kv, next);
-  }
-  return true;
+  return dbRevokeAuthTokenRow(db, id);
 }

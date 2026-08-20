@@ -254,11 +254,20 @@ fn default_d1_inbox_index() -> D1BindingSnapshot {
     }
 }
 
+fn default_d1_app() -> D1BindingSnapshot {
+    D1BindingSnapshot {
+        configured: false,
+        database_name: "relaybase-db".into(),
+        binding: "RELAYBASE_DB".into(),
+        size_bytes: None,
+    }
+}
+
 fn parse_d1_binding(value: &serde_json::Value, kind: &str) -> D1BindingSnapshot {
-    let defaults = if kind == "logs" {
-        default_d1_logs()
-    } else {
-        default_d1_inbox_index()
+    let defaults = match kind {
+        "logs" => default_d1_logs(),
+        "inboxIndex" => default_d1_inbox_index(),
+        _ => default_d1_app(),
     };
     let Some(d1) = value.get("d1") else {
         return defaults;
@@ -331,6 +340,7 @@ struct WorkerConnectResult {
     r2_usage_truncated: Option<bool>,
     d1_logs: D1BindingSnapshot,
     d1_inbox_index: D1BindingSnapshot,
+    d1_app: D1BindingSnapshot,
 }
 
 fn normalize_worker_url(raw: &str) -> Result<String, String> {
@@ -497,6 +507,7 @@ async fn verify_worker_connection(
     let usage = value.pointer("/inbound/usage");
     let mut d1_logs = parse_d1_binding(&value, "logs");
     let mut d1_inbox_index = parse_d1_binding(&value, "inboxIndex");
+    let d1_app = parse_d1_binding(&value, "app");
 
     if value.get("d1").is_none()
         && !d1_logs.configured
@@ -536,6 +547,7 @@ async fn verify_worker_connection(
             .and_then(|v| v.as_bool()),
         d1_logs,
         d1_inbox_index,
+        d1_app,
     })
 }
 

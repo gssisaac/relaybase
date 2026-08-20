@@ -7,6 +7,7 @@
 | Area | Paths |
 |------|------|
 | D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_LOGS`), `server/migrations-logs/0001_ops_logs.sql` |
+| Drizzle schema + helper | `server/db/log/` (`schema.ts`, `ops-log.ts`, `index.ts`) |
 | Env type | `server/src/env.ts` (`RELAYBASE_LOGS?: D1Database`) |
 | Log helper | `server/src/lib/ops-logs.ts` (`recordOpsLog`, `listOpsLogs`) |
 | Bounce detection | `server/src/lib/bounce-detect.ts` |

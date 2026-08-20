@@ -46,6 +46,12 @@ export default {
             binding: "RELAYBASE_INBOX_INDEX",
             sizeBytes: null,
           },
+          app: {
+            configured: !!env.RELAYBASE_DB,
+            databaseName: "relaybase-db",
+            binding: "RELAYBASE_DB",
+            sizeBytes: null,
+          },
         },
       });
     }

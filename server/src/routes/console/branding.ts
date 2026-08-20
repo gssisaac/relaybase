@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
+import { createAppDb } from "../../../db/app";
 import {
   applyDomainBrandingDns,
   fetchDomainBrandingStatus,
@@ -35,7 +36,7 @@ consoleBranding.get("/", async (c) => {
     );
   }
 
-  const status = await fetchDomainBrandingStatus(c.env.RELAYBASE_APP, cf, domain);
+  const status = await fetchDomainBrandingStatus(createAppDb(c.env.RELAYBASE_DB), cf, domain);
   return c.json(status);
 });
 
@@ -53,7 +54,7 @@ consoleBranding.put("/", async (c) => {
     return c.json({ error: "domain is required" }, 400);
   }
 
-  await mergeDomainBranding(c.env.RELAYBASE_APP, domain, {
+  await mergeDomainBranding(createAppDb(c.env.RELAYBASE_DB), domain, {
     dmarcPolicy: body.dmarcPolicy,
     dmarcRua: body.dmarcRua,
   });
@@ -73,7 +74,7 @@ consoleBranding.put("/", async (c) => {
     );
   }
 
-  const status = await fetchDomainBrandingStatus(c.env.RELAYBASE_APP, cf, domain);
+  const status = await fetchDomainBrandingStatus(createAppDb(c.env.RELAYBASE_DB), cf, domain);
   return c.json(status);
 });
 
@@ -102,7 +103,7 @@ consoleBranding.post("/", async (c) => {
     );
   }
 
-  const status = await applyDomainBrandingDns(c.env.RELAYBASE_APP, cf, domain);
+  const status = await applyDomainBrandingDns(createAppDb(c.env.RELAYBASE_DB), cf, domain);
   return c.json(status);
 });
 

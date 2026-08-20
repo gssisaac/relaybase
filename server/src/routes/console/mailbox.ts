@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
+import { createAppDb } from "../../../db/app";
 import {
   ensureInboundRouting,
   MxConflictError,
@@ -15,6 +16,7 @@ import {
   readMailbox,
   removeAddress,
   removeDomain,
+  updateAddress,
   upsertAddresses,
   writeMailbox,
   type MailboxAddress,
@@ -32,7 +34,7 @@ const consoleMailbox = new Hono<{ Bindings: Env }>();
 consoleMailbox.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const data = await readMailbox(c.env.RELAYBASE_APP);
+  const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   return c.json(data);
 });
 
@@ -80,7 +82,7 @@ consoleMailbox.put("/", async (c) => {
         )
     : [];
   const data = { domains, addresses };
-  await writeMailbox(c.env.RELAYBASE_APP, data);
+  await writeMailbox(createAppDb(c.env.RELAYBASE_DB), data);
   return c.json(data);
 });
 
@@ -88,7 +90,7 @@ consoleMailbox.put("/", async (c) => {
 consoleMailbox.get("/config", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const data = await readMailbox(c.env.RELAYBASE_APP);
+  const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   const domains = data.domains;
   const emailDomain = domains[0] ?? "";
   return c.json({
@@ -125,7 +127,7 @@ const consoleDomains = new Hono<{ Bindings: Env }>();
 consoleDomains.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const data = await readMailbox(c.env.RELAYBASE_APP);
+  const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   return c.json({ domains: listDomainSummaries(data) });
 });
 
@@ -139,7 +141,7 @@ consoleDomains.post("/", async (c) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
   try {
-    const data = await addDomain(c.env.RELAYBASE_APP, body.domain ?? "");
+    const data = await addDomain(createAppDb(c.env.RELAYBASE_DB), body.domain ?? "");
     const domain = normalizeDomain(body.domain ?? "");
     const summaries = listDomainSummaries(data);
     return c.json({
@@ -160,7 +162,7 @@ consoleDomains.delete("/", async (c) => {
   if (!domain) {
     return c.json({ error: "domain is required" }, 400);
   }
-  const data = await removeDomain(c.env.RELAYBASE_APP, domain);
+  const data = await removeDomain(createAppDb(c.env.RELAYBASE_DB), domain);
   return c.json({
     domains: listDomainSummaries(data),
     message: "Domain removed",
@@ -174,7 +176,7 @@ const consoleAddresses = new Hono<{ Bindings: Env }>();
 consoleAddresses.get("/", async (c) => {
   const denied = await requireAdmin(c);
   if (denied) return denied;
-  const data = await readMailbox(c.env.RELAYBASE_APP);
+  const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   if (c.req.query("all") === "1") {
     return c.json({ addresses: data.addresses });
   }
@@ -316,7 +318,7 @@ consoleAddresses.post("/", async (c) => {
     );
   }
 
-  const { data, added } = await upsertAddresses(c.env.RELAYBASE_APP, domain, entries);
+  const { data, added } = await upsertAddresses(createAppDb(c.env.RELAYBASE_DB), domain, entries);
   if (added.length === 1) {
     return c.json({ address: added[0], addresses: added });
   }
@@ -348,7 +350,7 @@ consoleAddresses.patch("/", async (c) => {
     return c.json({ error: "email is required" }, 400);
   }
 
-  const data = await readMailbox(c.env.RELAYBASE_APP);
+  const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   const index = data.addresses.findIndex((a) => a.email === email);
   if (index < 0) {
     return c.json({ error: "Address not found" }, 404);
@@ -385,17 +387,6 @@ consoleAddresses.patch("/", async (c) => {
     return c.json({ address: current });
   }
 
-  const next = normalizeMailboxAddress({
-    email: current.email,
-    domain: current.domain,
-    displayName:
-      displayName !== undefined ? displayName || undefined : current.displayName,
-    signature:
-      signature !== undefined ? signature || undefined : current.signature,
-    inboundEnabled,
-    mobileEnabled,
-  });
-
   if (typeof body.inboundEnabled === "boolean") {
     try {
       const cf = await createCloudflareClient(c.env);
@@ -414,10 +405,17 @@ consoleAddresses.patch("/", async (c) => {
     }
   }
 
-  data.addresses[index] = next;
-  await writeMailbox(c.env.RELAYBASE_APP, data);
+  const updated = await updateAddress(createAppDb(c.env.RELAYBASE_DB), email, {
+    displayName,
+    signature,
+    inboundEnabled,
+    mobileEnabled,
+  });
+  if (!updated) {
+    return c.json({ error: "Address not found" }, 404);
+  }
 
-  return c.json({ address: data.addresses[index] });
+  return c.json({ address: updated });
 });
 
 consoleAddresses.delete("/", async (c) => {
@@ -428,7 +426,7 @@ consoleAddresses.delete("/", async (c) => {
     return c.json({ error: "email is required" }, 400);
   }
 
-  const { data, removed } = await removeAddress(c.env.RELAYBASE_APP, email);
+  const { data, removed } = await removeAddress(createAppDb(c.env.RELAYBASE_DB), email);
   if (removed) {
     try {
       const cf = await createCloudflareClient(c.env);
@@ -458,7 +456,7 @@ consoleAddresses.get("/mobile-password", async (c) => {
   if (!email) {
     return c.json({ error: "email is required" }, 400);
   }
-  const config = await getAccountMobileConfig(c.env.RELAYBASE_APP, email);
+  const config = await getAccountMobileConfig(createAppDb(c.env.RELAYBASE_DB), email);
   return c.json(toAccountMobileConfigPublicView(config));
 });
 
@@ -477,7 +475,7 @@ consoleAddresses.post("/mobile-password", async (c) => {
     return c.json({ error: "email is required" }, 400);
   }
   const { password, config } = await rotateAccountMobileConfig(
-    c.env.RELAYBASE_APP,
+    createAppDb(c.env.RELAYBASE_DB),
     email,
   );
   return c.json({
@@ -495,7 +493,7 @@ consoleAddresses.delete("/mobile-password", async (c) => {
   if (!email) {
     return c.json({ error: "email is required" }, 400);
   }
-  await clearAccountMobileConfig(c.env.RELAYBASE_APP, email);
+  await clearAccountMobileConfig(createAppDb(c.env.RELAYBASE_DB), email);
   return c.json({ hasPassword: false, updatedAt: null });
 });
 

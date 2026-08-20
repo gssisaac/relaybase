@@ -43,6 +43,9 @@ export type AutoInstallResult = {
   adminToken: string;
   kvNamespaceId: string;
   r2Bucket: string;
+  d1LogsId: string;
+  d1InboxIndexId: string;
+  d1DbId: string;
 };
 
 export type InstallLogEvent = {
@@ -150,6 +153,7 @@ export type WorkerConnectResult = {
   r2UsageTruncated?: boolean | null;
   d1Logs: D1BindingSnapshot;
   d1InboxIndex: D1BindingSnapshot;
+  d1App: D1BindingSnapshot;
 };
 
 export type DesktopErrorLink = {
@@ -583,6 +587,7 @@ export async function desktopVerifyWorkerConnection(
   const usage = value.inbound?.usage;
   let d1Logs = d1BindingFromPayload(value.d1, "logs");
   let d1InboxIndex = d1BindingFromPayload(value.d1, "inboxIndex");
+  let d1App = d1BindingFromPayload(value.d1, "app");
 
   if (
     !value.d1 ||
@@ -610,6 +615,7 @@ export async function desktopVerifyWorkerConnection(
     r2UsageTruncated: usage?.truncated ?? null,
     d1Logs,
     d1InboxIndex,
+    d1App,
   };
 }
 

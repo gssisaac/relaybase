@@ -1,9 +1,21 @@
 import type { InboundEmailEvent } from "./inbound-events";
 import { sha256Hex } from "./crypto";
+import type { AppDb } from "../../db/app";
+import {
+  createWebhookRow as dbCreateWebhookRow,
+  deleteWebhookRow as dbDeleteWebhookRow,
+  deleteExpiredWebhookFails as dbDeleteExpiredWebhookFails,
+  getWebhookSecret as dbGetWebhookSecret,
+  listStoredWebhooks as dbListStoredWebhooks,
+  listWebhooks as dbListWebhooks,
+  recordWebhookFail as dbRecordWebhookFail,
+  removeWebhookSecret as dbRemoveWebhookSecret,
+  storeWebhookSecret as dbStoreWebhookSecret,
+} from "../../db/app/webhooks";
 
-const WEBHOOK_PREFIX = "srv:webhook:";
 const MAX_WEBHOOKS_PER_DOMAIN = 3;
 const WEBHOOK_SECRET_PREFIX = "whsec_";
+const FAIL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export type StoredWebhook = {
   id: string;
@@ -15,14 +27,6 @@ export type StoredWebhook = {
 };
 
 export type WebhookRecord = Omit<StoredWebhook, "secretHash">;
-
-function webhookKey(domain: string, id: string): string {
-  return `${WEBHOOK_PREFIX}${domain.trim().toLowerCase()}:${id}`;
-}
-
-function webhookListPrefix(domain: string): string {
-  return `${WEBHOOK_PREFIX}${domain.trim().toLowerCase()}:`;
-}
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -63,32 +67,15 @@ async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
   return bytesToHex(new Uint8Array(signature));
 }
 
-function toPublicRecord(stored: StoredWebhook): WebhookRecord {
-  const { secretHash: _secretHash, ...record } = stored;
-  return record;
-}
-
 export async function listWebhooks(
-  kv: KVNamespace,
+  db: AppDb,
   domain: string,
 ): Promise<WebhookRecord[]> {
-  const listed = await kv.list({ prefix: webhookListPrefix(domain), limit: 20 });
-  const records: WebhookRecord[] = [];
-
-  for (const key of listed.keys) {
-    const raw = await kv.get(key.name);
-    if (!raw) continue;
-    const stored = JSON.parse(raw) as StoredWebhook;
-    if (!stored.active) continue;
-    records.push(toPublicRecord(stored));
-  }
-
-  records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return records;
+  return dbListWebhooks(db, domain);
 }
 
 export async function createWebhook(
-  kv: KVNamespace,
+  db: AppDb,
   params: { domain: string; url: string; secret?: string | null },
 ): Promise<{ webhook: WebhookRecord; secret: string }> {
   const domain = params.domain.trim().toLowerCase();
@@ -97,38 +84,36 @@ export async function createWebhook(
     throw new Error("url must be a valid http(s) URL");
   }
 
-  const existing = await listWebhooks(kv, domain);
+  const existing = await listWebhooks(db, domain);
   if (existing.length >= MAX_WEBHOOKS_PER_DOMAIN) {
     throw new Error(`maximum ${MAX_WEBHOOKS_PER_DOMAIN} webhooks per domain`);
   }
 
   const secret = params.secret?.trim() || generateWebhookSecret();
   const id = crypto.randomUUID();
-  const stored: StoredWebhook = {
+  const createdAt = new Date().toISOString();
+
+  await dbCreateWebhookRow(db, {
     id,
     domain,
     url,
     secretHash: await sha256Hex(secret),
-    createdAt: new Date().toISOString(),
-    active: true,
+  });
+  await storeWebhookSecret(db, id, secret);
+  return {
+    webhook: { id, domain, url, createdAt, active: true },
+    secret,
   };
-
-  await kv.put(webhookKey(domain, id), JSON.stringify(stored));
-  await storeWebhookSecret(kv, domain, id, secret);
-  return { webhook: toPublicRecord(stored), secret };
 }
 
 export async function deleteWebhook(
-  kv: KVNamespace,
+  db: AppDb,
   domain: string,
   id: string,
 ): Promise<boolean> {
-  const key = webhookKey(domain, id);
-  const raw = await kv.get(key);
-  if (!raw) return false;
-  await kv.delete(key);
-  await removeWebhookSecret(kv, domain, id);
-  return true;
+  // domain is used for scoping verification in the route layer; the FK
+  // cascade handles secret + fail cleanup on delete.
+  return dbDeleteWebhookRow(db, id);
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -160,29 +145,24 @@ async function postWebhook(
 }
 
 export async function deliverWebhooks(
-  kv: KVNamespace,
+  db: AppDb,
   domain: string,
   event: InboundEmailEvent,
 ): Promise<void> {
-  const listed = await kv.list({ prefix: webhookListPrefix(domain), limit: 20 });
+  const webhooks = await dbListStoredWebhooks(db, domain);
   const delays = [0, 1_000, 4_000, 16_000];
 
-  for (const key of listed.keys) {
-    const raw = await kv.get(key.name);
-    if (!raw) continue;
-    const webhook = JSON.parse(raw) as StoredWebhook;
+  for (const webhook of webhooks) {
     if (!webhook.active) continue;
 
-    // Secret is only known at creation; for delivery we store plaintext secret
-    // alongside hash in a separate KV key set at create time.
-    const secretRaw = await kv.get(`srv:webhook:secret:${domain}:${webhook.id}`);
-    if (!secretRaw) continue;
+    const secret = await dbGetWebhookSecret(db, webhook.id);
+    if (!secret) continue;
 
     let delivered = false;
     for (const delay of delays) {
       if (delay > 0) await sleep(delay);
       try {
-        if (await postWebhook(webhook, secretRaw, event)) {
+        if (await postWebhook(webhook, secret, event)) {
           delivered = true;
           break;
         }
@@ -192,38 +172,35 @@ export async function deliverWebhooks(
     }
 
     if (!delivered) {
-      await kv.put(
-        `srv:webhook:fail:${domain}:${webhook.id}:${event.id}`,
-        JSON.stringify({
-          webhookId: webhook.id,
-          url: webhook.url,
-          eventId: event.id,
-          failedAt: new Date().toISOString(),
-        }),
-        { expirationTtl: 7 * 24 * 60 * 60 },
-      );
+      const failedAt = new Date().toISOString();
+      await dbRecordWebhookFail(db, {
+        id: `${webhook.id}:${event.id}`,
+        webhookId: webhook.id,
+        eventId: event.id,
+        url: webhook.url,
+        failedAt,
+        expiresAt: new Date(
+          new Date(failedAt).getTime() + FAIL_TTL_SECONDS * 1000,
+        ).toISOString(),
+      });
     }
   }
+
+  // Lazy cleanup of expired fail rows.
+  await dbDeleteExpiredWebhookFails(db, new Date().toISOString());
 }
 
 export async function storeWebhookSecret(
-  kv: KVNamespace,
-  domain: string,
+  db: AppDb,
   webhookId: string,
   secret: string,
 ): Promise<void> {
-  await kv.put(
-    `srv:webhook:secret:${domain.trim().toLowerCase()}:${webhookId}`,
-    secret,
-  );
+  await dbStoreWebhookSecret(db, webhookId, secret);
 }
 
 export async function removeWebhookSecret(
-  kv: KVNamespace,
-  domain: string,
+  db: AppDb,
   webhookId: string,
 ): Promise<void> {
-  await kv.delete(
-    `srv:webhook:secret:${domain.trim().toLowerCase()}:${webhookId}`,
-  );
+  await dbRemoveWebhookSecret(db, webhookId);
 }

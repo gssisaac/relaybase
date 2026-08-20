@@ -24,7 +24,7 @@ bucket_name = "relaybase-mailbox"
 binding = "RELAYBASE_LOGS"
 database_name = "relaybase-logs"
 database_id = "ceea55c5-04cd-4501-846e-0ea62971f8e9"
-migrations_dir = "migrations-logs"
+migrations_dir = "db/log/migrations"
 
 # Inbound mail full-text search (FTS5). Before deploying, create the DB with:
 #   wrangler d1 create relaybase-inbox-index
@@ -37,14 +37,15 @@ migrations_dir = "migrations-logs"
 binding = "RELAYBASE_INBOX_INDEX"
 database_name = "relaybase-inbox-index"
 database_id = "bef720aa-950f-4a66-928e-155efcc5c64a"
-migrations_dir = "migrations-inbox"
+migrations_dir = "db/inbox-index/migrations"
 
 # Durable product state: mailbox, audience, broadcasts, keys, tokens,
 # branding, mobile passwords, webhooks, owner config, inbound events.
 # Create with: wrangler d1 create relaybase-db
-# Apply with: wrangler d1 migrations apply relaybase-db --remote --migrations-dir=migrations-app
+# Apply with: wrangler d1 migrations apply relaybase-db --remote
+# (or POST /console/init-db after deploy — preferred)
 [[d1_databases]]
 binding = "RELAYBASE_DB"
 database_name = "relaybase-db"
 database_id = "9bd36a18-fb6a-4151-b729-b1112a99574b"
-migrations_dir = "migrations-app"
+migrations_dir = "db/app/migrations"

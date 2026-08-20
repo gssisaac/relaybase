@@ -48,9 +48,6 @@ function fullInstallCommand(
     `npx wrangler d1 create relaybase-inbox-index`,
     `npx wrangler d1 create relaybase-db`,
     `# paste each database_id into wrangler.toml (REPLACE_WITH_* placeholders)`,
-    `npx wrangler d1 migrations apply relaybase-logs --remote --yes --migrations-dir=migrations-logs`,
-    `npx wrangler d1 migrations apply relaybase-inbox-index --remote --yes --migrations-dir=migrations-inbox`,
-    `npx wrangler d1 migrations apply relaybase-db --remote --yes --migrations-dir=migrations-app`,
     `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,
   ];
   if (cf?.accountId.trim() && cf?.serverToken.trim()) {
@@ -72,6 +69,9 @@ function fullInstallCommand(
     );
   }
   lines.push(`npx wrangler deploy`);
+  lines.push(
+    `curl -X POST https://relaybase-api.<subdomain>.workers.dev/console/init-db -H 'Authorization: Bearer ${escaped}' -H 'Content-Type: application/json' -d '{}'`,
+  );
   return lines.join("\n");
 }
 

@@ -59,6 +59,34 @@ export type AutoInstallResult = {
   d1LogsId: string;
   d1InboxIndexId: string;
   d1DbId: string;
+  dbAlreadyInitialized: boolean;
+  dbApplied: string[];
+};
+
+export type InitDbResult = {
+  ok: boolean;
+  alreadyInitialized: boolean;
+  applied: string[];
+  skipped: string[];
+  cleared: boolean;
+};
+
+export type InstallResourceProbe = {
+  kind: "worker" | "r2" | "d1" | string;
+  name: string;
+  present: boolean;
+  id: string;
+};
+
+export type InstallProbeResult = {
+  accountId: string;
+  resources: InstallResourceProbe[];
+};
+
+export type InstallDecision = {
+  kind: string;
+  name: string;
+  action: "skip" | "reinstall";
 };
 
 export type InstallLogEvent = {
@@ -162,6 +190,21 @@ export const CF_OAUTH_INSTALL_SCOPES = [
 
 /** Max wait after opening the Cloudflare authorize URL before treating as cancelled. */
 export const CF_OAUTH_AUTHORIZE_WAIT_MS = 3 * 60 * 1000;
+
+/** Remove ANSI color/style escapes from wrangler CLI output. */
+export function stripAnsi(text: string): string {
+  return text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "");
+}
+
+/** Cloudflare dashboard → this account's relaybase-api Worker. */
+export function cloudflareWorkersDashboardUrl(
+  accountId: string,
+  scriptName = "relaybase-api",
+): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/workers/services/view/${encodeURIComponent(scriptName)}/production`;
+}
 
 export function oauthAuthorizationIncompleteHelp(
   reason: "timeout" | "cancelled" = "timeout",
@@ -299,6 +342,19 @@ export function explainDesktopError(
     };
   }
 
+  if (
+    lower.includes("cloudflare_auth_expired") ||
+    lower.includes("code: 9109") ||
+    lower.includes("invalid access token")
+  ) {
+    return {
+      title: "Cloudflare authorization expired",
+      detail:
+        "The install token expired and Relaybase has no refresh token to renew it.",
+      fix: "Go back and Authorize Cloudflare again. After connecting, install will re-check existing resources.",
+    };
+  }
+
   if (lower.includes("install_cancelled")) {
     return {
       title: "Installation stopped",
@@ -309,6 +365,33 @@ export function explainDesktopError(
   }
 
   const cleaned = stripRawApiNoise(raw);
+
+  if (
+    fallbackTitle.toLowerCase().includes("existing resources") ||
+    lower.includes("403") ||
+    lower.includes("forbidden")
+  ) {
+    return {
+      title: fallbackTitle,
+      detail:
+        cleaned && cleaned.length < 280
+          ? cleaned
+          : "Cloudflare refused the resource check with this install token.",
+      fix: "Tap Try again. If it keeps failing, go back and Authorize Cloudflare again so Relaybase can list Workers, R2, and D1.",
+    };
+  }
+
+  if (lower.includes("wrangler")) {
+    return {
+      title: fallbackTitle,
+      detail:
+        cleaned && cleaned.length < 280
+          ? cleaned
+          : "Wrangler failed while creating Cloudflare resources.",
+      fix: "Read the install log. Tap Try again to re-check existing resources, or Rollback to delete them first.",
+    };
+  }
+
   return {
     title: fallbackTitle,
     detail:
@@ -592,15 +675,27 @@ export async function desktopInstallWorker(
  * account via wrangler. Subscribe to `install-log` events via the returned
  * unsubscribe handle (or use `listenInstallLog`).
  */
+export async function desktopProbeInstall(
+  apiToken: string,
+  accountId?: string,
+): Promise<InstallProbeResult> {
+  return invoke("probe_auto_install", {
+    apiToken,
+    accountId: accountId ?? null,
+  });
+}
+
 export async function desktopAutoInstallWorker(
   apiToken: string,
   accountId?: string,
   serverToken?: string,
+  decisions?: InstallDecision[],
 ): Promise<AutoInstallResult> {
   return invoke("auto_install_routing_worker", {
     apiToken,
     accountId: accountId ?? null,
     serverToken: serverToken?.trim() ? serverToken.trim() : null,
+    decisions: decisions ?? [],
   });
 }
 
@@ -618,6 +713,15 @@ export async function desktopRollbackInstall(
     apiToken,
     accountId: accountId ?? null,
   });
+}
+
+/** Call the deployed Worker's POST /console/init-db to initialize or clear D1. */
+export async function desktopInitWorkerDb(
+  workerUrl: string,
+  adminToken: string,
+  clear: boolean,
+): Promise<InitDbResult> {
+  return invoke("init_worker_db_cmd", { workerUrl, adminToken, clear });
 }
 
 export function isInstallCancelledError(err: unknown): boolean {

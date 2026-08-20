@@ -1,7 +1,7 @@
 /**
  * `relaybase-logs` schema.
  *
- * Matches `server/migrations-logs/0001_ops_logs.sql` exactly — this file only
+ * Matches `server/db/log/migrations/0001_ops_logs.sql` exactly — this file only
  * re-declares the existing table for Drizzle so query helpers are typed. Do
  * NOT generate a fresh CREATE from this schema; the table already exists on
  * every install that bound `RELAYBASE_LOGS`.

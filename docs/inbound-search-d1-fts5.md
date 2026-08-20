@@ -7,7 +7,7 @@ counts, Sent pagination, list virtualization, or D1 `RELAYBASE_INBOX_INDEX`.
 
 | Area | Paths |
 |------|------|
-| D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_INBOX_INDEX`), `server/migrations-inbox/0001_create_inbound_search.sql` |
+| D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_INBOX_INDEX`), `server/db/inbox-index/migrations/0001_create_inbound_search.sql` |
 | Drizzle schema + helper | `server/db/inbox-index/` (`schema.ts`, `search.ts`, `index.ts`) |
 | Env type | `server/src/env.ts` (`RELAYBASE_INBOX_INDEX?: D1Database`) |
 | FTS5 query builder + sync helpers | `server/src/lib/inbound-search.ts` |
@@ -22,6 +22,8 @@ counts, Sent pagination, list virtualization, or D1 `RELAYBASE_INBOX_INDEX`.
 | Client search wiring | `app/src/email/components/mailbox/MailListView/MailListView.tsx` (debounce), `app/src/email/components/mailbox/MailListView/useMailListItems.ts` (flat results vs. threaded) |
 | List header + virtualization | `app/src/email/components/mailbox/MailListView/MailListPane.tsx` (`react-window` `List`, header counts) |
 | Disk cache | `app/src/email/lib/disk/email-disk-store.ts` (`PersistedInboxCache`, `PersistedSentCache`) |
+
+Migration layout and `POST /console/init-db`: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 
 Read this before adding a search field, changing the FTS5 schema, changing
 how list totals/unread are computed, or touching the virtualized row
@@ -76,7 +78,7 @@ flowchart LR
 
 ## Schema
 
-`server/migrations-inbox/0001_create_inbound_search.sql`:
+`server/db/inbox-index/migrations/0001_create_inbound_search.sql`:
 
 ```sql
 CREATE VIRTUAL TABLE IF NOT EXISTS inbound_search_fts USING fts5(
@@ -120,10 +122,10 @@ FTS5 has no primary key / unique constraint, so every "update" is a
 delete-by-`id` + insert in the same `db.batch()` call (see
 `upsertSearchRows` in `inbound-search.ts`).
 
-Migrations for this database live in `server/migrations-inbox/`, separate
-from `server/migrations-logs/` (`RELAYBASE_LOGS`) and `server/migrations/`
-(legacy — the old `relaybase-waitlist` D1 it targeted has been deleted) — never
-mix migration directories across D1 databases.
+Migrations for this database live in `server/db/inbox-index/migrations/`, separate
+from `server/db/log/migrations/` (`RELAYBASE_LOGS`) and
+`server/db/app/migrations/` (`RELAYBASE_DB`) — never mix migration
+directories across D1 databases.
 
 ---
 
@@ -144,7 +146,7 @@ pnpm run backfill:search   # one-time backfill of existing mail (database_id rea
 binding = "RELAYBASE_INBOX_INDEX"
 database_name = "relaybase-inbox-index"
 database_id = "<paste after wrangler d1 create>"
-migrations_dir = "migrations-inbox"
+migrations_dir = "db/inbox-index/migrations"
 ```
 
 The binding is **optional** in code (`Env.RELAYBASE_INBOX_INDEX?: D1Database`
@@ -283,7 +285,7 @@ through the Worker, so it can run standalone with just an API token.
 | Situation | Why |
 |-----------|-----|
 | First time enabling search on an install with existing R2 mail | New inbound mail auto-indexes on ingest, but **messages already in R2 are not retroactively indexed** — search will miss them until backfill runs. |
-| After an FTS5 schema migration (`server/migrations-inbox/000X_*.sql`) | New/changed columns need to be re-populated from R2. |
+| After an FTS5 schema migration (`server/db/inbox-index/migrations/000X_*.sql`) | New/changed columns need to be re-populated from R2. |
 | After deleting and recreating the D1 database | The index is empty again. |
 | After a D1 outage that dropped rows | Re-run is safe (idempotent). |
 
@@ -430,10 +432,8 @@ fetch path.
   store, a prune sweep, or a mark-read request.
 - **Never interpolate raw user input into a `MATCH` expression.** Always
   go through `buildFtsMatchQuery`.
-- **Migrations for this database live in `server/migrations-inbox/`
-  only.** Do not add rows to `server/migrations/` (legacy — the old
-  `relaybase-waitlist` D1 has been deleted) or `server/migrations-logs/`
-  (`RELAYBASE_LOGS`).
+- **Migrations for this database live in `server/db/inbox-index/migrations/`
+  only.** Do not add rows to `db/app/migrations/` or `db/log/migrations/`.
 - **Search results are flat, not threaded.** Do not attempt to run
   `groupConversations` over search results — indexed rows don't carry
   enough Sent-side data to reconstruct a thread reliably. If a hit needs
@@ -460,7 +460,7 @@ Takeout import writes the same `_list.json` via `server/scripts/import-mbox.mjs`
 ## Checklist when changing this area
 
 - [ ] New FTS5-indexed column? Add it to
-      `server/migrations-inbox/000X_*.sql` (new migration file, don't
+      `server/db/inbox-index/migrations/000X_*.sql` (new migration file, don't
       edit `0001` in place after it has shipped), `SearchRow` +
       `rowToMeta` in `inbound-search.ts`, `upsertSearchRows`'s
       `INSERT`, and `backfill-inbound-search.mjs`'s insert statement —

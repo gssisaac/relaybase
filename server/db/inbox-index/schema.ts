@@ -2,7 +2,7 @@
  * `relaybase-inbox-index` schema.
  *
  * `inbound_search_fts` is an FTS5 virtual table created by
- * `server/migrations-inbox/0001_create_inbound_search.sql`. Drizzle cannot
+ * `server/db/inbox-index/migrations/0001_create_inbound_search.sql`. Drizzle cannot
  * model FTS5 columns as a regular `sqliteTable`, so this module only exposes
  * a typed row shape + a `sql` fragment for the table name used in raw
  * queries. Do NOT generate a fresh CREATE from this schema.

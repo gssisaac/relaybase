@@ -2,9 +2,12 @@
 //! Cloudflare account using the customer-install template + `wrangler`.
 //!
 //! Flow (each step streams `install-log` events to the frontend):
+//!   0. `probe_install_resources` lists Worker / R2 / D1 that already exist.
+//!      The UI asks Skip (reuse) vs Reinstall (delete then create) per item.
 //!   1. Resolve the customer-install template directory (wrangler.toml + src).
 //!   2. `wrangler r2 bucket create relaybase-mailbox`.
-//!   3. Create D1 databases, patch ids, apply migrations.
+//!   3. Create D1 databases, patch ids (no migrations — the Worker owns its
+//!      schema via POST /console/init-db, called after deploy).
 //!   4. Generate an admin token; `wrangler secret put ADMIN_TOKEN` (stdin).
 //!   5. `wrangler deploy` → parse the `*.workers.dev` URL.
 //!   6. Return { workerUrl, adminToken, workerScriptName }.
@@ -26,8 +29,8 @@ use tokio::process::Command;
 use tokio::sync::Notify;
 
 use crate::cloudflare::{
-    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket, list_d1_databases,
-    resolve_account_id, CfClient,
+    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket, find_r2_bucket,
+    is_cf_forbidden, list_d1_databases, resolve_account_id, worker_script_exists, CfClient,
 };
 use crate::secrets::StoredCredentials;
 use crate::worker::DEFAULT_SCRIPT;
@@ -76,9 +79,9 @@ const R2_BUCKET: &str = "relaybase-mailbox";
 /// D1 databases created during install. Each entry is (binding, db_name,
 /// migrations_dir, placeholder in wrangler.toml).
 const D1_DATABASES: &[(&str, &str, &str, &str)] = &[
-    ("RELAYBASE_LOGS", "relaybase-logs", "migrations-logs", "REPLACE_WITH_relaybase-logs_ID"),
-    ("RELAYBASE_INBOX_INDEX", "relaybase-inbox-index", "migrations-inbox", "REPLACE_WITH_relaybase-inbox-index_ID"),
-    ("RELAYBASE_DB", "relaybase-db", "migrations-app", "REPLACE_WITH_relaybase-db_ID"),
+    ("RELAYBASE_LOGS", "relaybase-logs", "db/log/migrations", "REPLACE_WITH_relaybase-logs_ID"),
+    ("RELAYBASE_INBOX_INDEX", "relaybase-inbox-index", "db/inbox-index/migrations", "REPLACE_WITH_relaybase-inbox-index_ID"),
+    ("RELAYBASE_DB", "relaybase-db", "db/app/migrations", "REPLACE_WITH_relaybase-db_ID"),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +95,61 @@ pub struct AutoInstallResult {
     pub d1_logs_id: String,
     pub d1_inbox_index_id: String,
     pub d1_db_id: String,
+    pub db_already_initialized: bool,
+    pub db_applied: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallResourceProbe {
+    pub kind: String,
+    pub name: String,
+    pub present: bool,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallProbeResult {
+    pub account_id: String,
+    pub resources: Vec<InstallResourceProbe>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallDecision {
+    pub kind: String,
+    pub name: String,
+    pub action: String,
+}
+
+#[derive(Default)]
+struct InstallPlan {
+    reinstall_worker: bool,
+    reinstall_r2: bool,
+    reinstall_d1: Vec<String>,
+}
+
+impl InstallPlan {
+    fn from_decisions(decisions: &[InstallDecision]) -> Self {
+        let mut plan = Self::default();
+        for d in decisions {
+            if d.action != "reinstall" {
+                continue;
+            }
+            match d.kind.as_str() {
+                "worker" => plan.reinstall_worker = true,
+                "r2" => plan.reinstall_r2 = true,
+                "d1" => plan.reinstall_d1.push(d.name.clone()),
+                _ => {}
+            }
+        }
+        plan
+    }
+
+    fn should_reinstall_d1(&self, name: &str) -> bool {
+        self.reinstall_d1.iter().any(|n| n == name)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -193,12 +251,6 @@ fn enrich_template(work_dir: &Path, template: &Path) -> Result<(), String> {
     if server_root.join("db").is_dir() {
         copy_dir(&server_root.join("db"), &work_dir.join("db"))?;
     }
-    for dir in ["migrations-app", "migrations-logs", "migrations-inbox"] {
-        let src = server_root.join(dir);
-        if src.is_dir() {
-            copy_dir(&src, &work_dir.join(dir))?;
-        }
-    }
     for file in ["package.json", "tsconfig.json"] {
         let src = server_root.join(file);
         if src.is_file() {
@@ -243,12 +295,76 @@ fn generate_admin_token() -> String {
     format!("{a}{b}")
 }
 
+/// Create a D1 database via wrangler, or reuse an existing one by listing.
+async fn create_d1_database(
+    app: &AppHandle,
+    work_dir: &Path,
+    api_token: &str,
+    db_name: &str,
+) -> Result<String, String> {
+    match run_wrangler(
+        app,
+        "d1-create",
+        work_dir,
+        &["d1", "create", db_name],
+        api_token,
+        None,
+    )
+    .await
+    {
+        Ok(create_out) => parse_d1_id(&create_out).ok_or_else(|| {
+            format!("Could not parse D1 id for {db_name} from wrangler output:\n{create_out}")
+        }),
+        Err(e) if is_cancelled_error(&e) => Err(e),
+        Err(e) => {
+            let list_out = run_wrangler(
+                app,
+                "d1-list",
+                work_dir,
+                &["d1", "list", "--json"],
+                api_token,
+                None,
+            )
+            .await
+            .map_err(|list_err| {
+                if is_cancelled_error(&list_err) {
+                    list_err
+                } else {
+                    e.clone()
+                }
+            })?;
+            parse_d1_id_from_list(&list_out, db_name).ok_or(e)
+        }
+    }
+}
+
 /// Patch a single D1 database id placeholder in the staged wrangler.toml.
 fn patch_d1_id(work_dir: &Path, placeholder: &str, db_id: &str) -> Result<(), String> {
     let path = work_dir.join("wrangler.toml");
     let raw = std::fs::read_to_string(&path).map_err(|e| format!("read wrangler.toml: {e}"))?;
     let next = raw.replace(placeholder, db_id);
     std::fs::write(&path, next).map_err(|e| format!("write wrangler.toml: {e}"))
+}
+
+/// Strip ANSI color/style escapes from wrangler output so the install log stays plain text.
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for ch in chars.by_ref() {
+                    if ch.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// Run a wrangler command in `work_dir`, streaming stdout+stderr lines as
@@ -266,6 +382,10 @@ async fn run_wrangler(
     cmd.args(args);
     cmd.current_dir(work_dir);
     cmd.env("CLOUDFLARE_API_TOKEN", api_token);
+    // Skip wrangler confirmation prompts (d1 migrations apply, etc.).
+    cmd.env("CI", "true");
+    cmd.env("NO_COLOR", "1");
+    cmd.env("FORCE_COLOR", "0");
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     cmd.stdin(Stdio::piped());
@@ -294,6 +414,7 @@ async fn run_wrangler(
     let mut stderr = BufReader::new(stderr);
 
     let mut stdout_buf = String::new();
+    let mut stderr_buf = String::new();
     let mut stdout_line = String::new();
     let mut stderr_line = String::new();
     let mut stdout_done = false;
@@ -325,7 +446,7 @@ async fn run_wrangler(
                             LogEvent {
                                 step: step.into(),
                                 level: "stdout".into(),
-                                line: stdout_line.trim_end().to_string(),
+                                line: strip_ansi(stdout_line.trim_end()),
                             },
                         );
                         stdout_line.clear();
@@ -337,12 +458,13 @@ async fn run_wrangler(
                 match n {
                     Ok(0) => stderr_done = true,
                     Ok(_) => {
+                        stderr_buf.push_str(&stderr_line);
                         let _ = app.emit(
                             "install-log",
                             LogEvent {
                                 step: step.into(),
                                 level: "stderr".into(),
-                                line: stderr_line.trim_end().to_string(),
+                                line: strip_ansi(stderr_line.trim_end()),
                             },
                         );
                         stderr_line.clear();
@@ -358,9 +480,26 @@ async fn run_wrangler(
         return Err(cancelled_error());
     }
     if !status.success() {
-        return Err(format!("wrangler {step} exited with status {status}"));
+        let mut msg = format!("wrangler {step} exited with status {status}");
+        let detail = if !stderr_buf.trim().is_empty() {
+            stderr_buf
+        } else {
+            stdout_buf
+        };
+        if !detail.trim().is_empty() {
+            msg.push('\n');
+            msg.push_str(strip_ansi(detail.trim()).trim());
+        }
+        return Err(msg);
     }
     Ok(stdout_buf)
+}
+
+fn is_already_exists_error(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("already exists")
+        || lower.contains("you own it")
+        || lower.contains("code: 10004")
 }
 
 async fn ensure_node_modules(app: &AppHandle, work_dir: &Path) -> Result<(), String> {
@@ -402,6 +541,7 @@ async fn ensure_node_modules(app: &AppHandle, work_dir: &Path) -> Result<(), Str
 }
 
 fn emit_log(app: &AppHandle, step: &str, level: &str, line: impl Into<String>) {
+    let line = strip_ansi(&line.into());
     let _ = app.emit(
         "install-log",
         LogEvent {
@@ -633,11 +773,164 @@ fn parse_worker_url(output: &str) -> Option<String> {
     None
 }
 
+async fn wrangler_stdout(api_token: &str, args: &[&str]) -> Result<String, String> {
+    let output = Command::new("npx")
+        .arg("--yes")
+        .arg("wrangler")
+        .args(args)
+        .env("CLOUDFLARE_API_TOKEN", api_token)
+        .env("CI", "true")
+        .env("NO_COLOR", "1")
+        .output()
+        .await
+        .map_err(|e| format!("Could not start wrangler: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if !output.status.success() {
+        return Err(format!(
+            "wrangler {} failed: {}",
+            args.join(" "),
+            if stderr.trim().is_empty() {
+                stdout
+            } else {
+                stderr
+            }
+        ));
+    }
+    Ok(stdout)
+}
+
+async fn wrangler_resource_exists(
+    api_token: &str,
+    kind: &str,
+    name: &str,
+) -> Result<bool, String> {
+    match kind {
+        "r2" => {
+            let out = wrangler_stdout(api_token, &["r2", "bucket", "list"]).await?;
+            Ok(out.lines().any(|line| line.split_whitespace().any(|tok| tok == name)))
+        }
+        "worker" => {
+            let out = wrangler_stdout(api_token, &["deployments", "list", "--name", name]).await;
+            match out {
+                Ok(text) => Ok(!text.to_lowercase().contains("couldn't find")
+                    && !text.to_lowercase().contains("not found")),
+                Err(e) => {
+                    let lower = e.to_lowercase();
+                    if lower.contains("not found") || lower.contains("couldn't find") {
+                        Ok(false)
+                    } else {
+                        Err(e)
+                    }
+                }
+            }
+        }
+        _ => Ok(false),
+    }
+}
+
+async fn wrangler_list_d1(api_token: &str) -> Result<Vec<(String, String)>, String> {
+    let out = wrangler_stdout(api_token, &["d1", "list", "--json"]).await?;
+    let json_start = out.find(['[', '{']).unwrap_or(0);
+    let parsed: serde_json::Value = serde_json::from_str(&out[json_start..])
+        .map_err(|e| format!("parse d1 list: {e}"))?;
+    let rows = parsed
+        .as_array()
+        .or_else(|| parsed.get("result").and_then(|v| v.as_array()))
+        .cloned()
+        .unwrap_or_default();
+    let mut out_rows = Vec::new();
+    for row in rows {
+        let name = row.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let id = row
+            .get("uuid")
+            .or_else(|| row.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if !name.is_empty() && !id.is_empty() {
+            out_rows.push((name.to_string(), id.to_string()));
+        }
+    }
+    Ok(out_rows)
+}
+
+pub async fn probe_install_resources(
+    api_token: String,
+    account_id: Option<String>,
+) -> Result<InstallProbeResult, String> {
+    let api_token = api_token.trim().to_string();
+    if api_token.is_empty() {
+        return Err("A Cloudflare API token is required.".into());
+    }
+    let account_id = match account_id
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+    {
+        Some(id) => id,
+        None => resolve_account_id(&api_token).await?,
+    };
+    let client = CfClient {
+        account_id: account_id.clone(),
+        api_token: api_token.clone(),
+    };
+
+    let mut resources = Vec::new();
+    let worker_present = match worker_script_exists(&client, DEFAULT_SCRIPT).await {
+        Ok(v) => v,
+        Err(e) if is_cf_forbidden(&e) => {
+            wrangler_resource_exists(&api_token, "worker", DEFAULT_SCRIPT).await?
+        }
+        Err(e) => return Err(e),
+    };
+    resources.push(InstallResourceProbe {
+        kind: "worker".into(),
+        name: DEFAULT_SCRIPT.into(),
+        present: worker_present,
+        id: String::new(),
+    });
+    let r2_present = match find_r2_bucket(&client, R2_BUCKET).await {
+        Ok(v) => v,
+        Err(e) if is_cf_forbidden(&e) => {
+            wrangler_resource_exists(&api_token, "r2", R2_BUCKET).await?
+        }
+        Err(e) => return Err(e),
+    };
+    resources.push(InstallResourceProbe {
+        kind: "r2".into(),
+        name: R2_BUCKET.into(),
+        present: r2_present,
+        id: String::new(),
+    });
+    let d1_list = match list_d1_databases(&client).await {
+        Ok(v) => v,
+        Err(e) if is_cf_forbidden(&e) => wrangler_list_d1(&api_token).await.unwrap_or_default(),
+        Err(_) => Vec::new(),
+    };
+    for (_binding, name, _migrations, _placeholder) in D1_DATABASES {
+        let id = d1_list
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, id)| id.clone())
+            .unwrap_or_default();
+        resources.push(InstallResourceProbe {
+            kind: "d1".into(),
+            name: (*name).into(),
+            present: !id.is_empty(),
+            id,
+        });
+    }
+    Ok(InstallProbeResult {
+        account_id,
+        resources,
+    })
+}
+
 pub async fn auto_install_worker(
     app: AppHandle,
     api_token: String,
     account_id: Option<String>,
     server_token: Option<String>,
+    decisions: Vec<InstallDecision>,
 ) -> Result<AutoInstallResult, String> {
     reset_install_cancel();
     let api_token = api_token.trim().to_string();
@@ -698,6 +991,7 @@ pub async fn auto_install_worker(
         &api_token,
         &account_id,
         server_token.as_deref(),
+        &InstallPlan::from_decisions(&decisions),
     )
     .await;
     let _ = std::fs::remove_dir_all(&work_dir);
@@ -710,6 +1004,7 @@ async fn auto_install_steps(
     api_token: &str,
     account_id: &str,
     server_token: Option<&str>,
+    plan: &InstallPlan,
 ) -> Result<AutoInstallResult, String> {
     check_cancelled()?;
     let _ = app.emit(
@@ -722,8 +1017,33 @@ async fn auto_install_steps(
         },
     );
 
-    // 1) R2 bucket (ignore "already exists" errors). KV is not created —
-    //    product state lives in D1 + R2; ADMIN_TOKEN is a wrangler secret.
+    let client = CfClient {
+        account_id: account_id.to_string(),
+        api_token: api_token.to_string(),
+    };
+
+    if plan.reinstall_worker {
+        emit_log(
+            app,
+            "prepare",
+            "info",
+            format!("Reinstall — deleting Worker `{DEFAULT_SCRIPT}`…"),
+        );
+        delete_worker_script(&client, DEFAULT_SCRIPT).await?;
+    }
+
+    if plan.reinstall_r2 {
+        emit_log(
+            app,
+            "r2",
+            "info",
+            format!("Reinstall — emptying and deleting R2 {R2_BUCKET}…"),
+        );
+        let _ = empty_r2_bucket(&client, R2_BUCKET).await;
+        delete_r2_bucket(&client, R2_BUCKET).await?;
+    }
+
+    // 1) R2 bucket (reuse if it already exists unless we just deleted it).
     let r2_result = run_wrangler(
         app,
         "r2",
@@ -739,10 +1059,8 @@ async fn auto_install_steps(
         }
         Err(e) if is_cancelled_error(&e) => return Err(e),
         Err(e) => {
-            let msg = e.to_string();
-            if !msg.to_lowercase().contains("already exists") && !msg.to_lowercase().contains("exists")
-            {
-                return Err(msg);
+            if !is_already_exists_error(&e) {
+                return Err(e);
             }
             let _ = app.emit(
                 "install-log",
@@ -755,79 +1073,41 @@ async fn auto_install_steps(
         }
     }
 
-    // 2) D1 databases — create (or reuse), patch id into wrangler.toml, apply migrations.
+    // 2) D1 databases — create (or reuse), patch id into wrangler.toml.
+    //    Migrations are NOT applied here — the Worker owns its own schema via
+    //    POST /console/init-db, which the desktop calls after deploy.
+    let existing_d1 = list_d1_databases(&client).await.unwrap_or_default();
     let mut d1_ids: Vec<String> = Vec::with_capacity(D1_DATABASES.len());
-    for (_binding, db_name, migrations_dir, placeholder) in D1_DATABASES {
-        let db_id = match run_wrangler(
-            app,
-            "d1-create",
-            work_dir,
-            &["d1", "create", db_name],
-            api_token,
-            None,
-        )
-        .await
-        {
-            Ok(create_out) => parse_d1_id(&create_out).ok_or_else(|| {
-                format!("Could not parse D1 id for {db_name} from wrangler output:\n{create_out}")
-            })?,
-            Err(e) if is_cancelled_error(&e) => return Err(e),
-            Err(e) => {
-                let list_out = run_wrangler(
+    for (_binding, db_name, _migrations_dir, placeholder) in D1_DATABASES {
+        let db_id = if plan.should_reinstall_d1(db_name) {
+            if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
+                emit_log(
                     app,
-                    "d1-list",
-                    work_dir,
-                    &["d1", "list", "--json"],
-                    api_token,
-                    None,
-                )
-                .await
-                .map_err(|list_err| {
-                    if is_cancelled_error(&list_err) {
-                        list_err
-                    } else {
-                        e.clone()
-                    }
-                })?;
-                parse_d1_id_from_list(&list_out, db_name).ok_or(e)?
+                    "d1",
+                    "info",
+                    format!("Reinstall — deleting D1 {db_name}…"),
+                );
+                delete_d1_database(&client, id).await?;
             }
+            create_d1_database(app, work_dir, api_token, db_name).await?
+        } else if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
+            emit_log(
+                app,
+                "d1",
+                "info",
+                format!("D1 {db_name} already exists — skipping create (id {id})"),
+            );
+            id.clone()
+        } else {
+            create_d1_database(app, work_dir, api_token, db_name).await?
         };
         patch_d1_id(work_dir, placeholder, &db_id)?;
         check_cancelled()?;
-        let _ = app.emit(
-            "install-log",
-            LogEvent {
-                step: "d1".into(),
-                level: "info".into(),
-                line: format!("D1 {db_name} ready (id {db_id})"),
-            },
-        );
-
-        // Apply migrations for this database.
-        run_wrangler(
+        emit_log(
             app,
-            "d1-migrate",
-            work_dir,
-            &[
-                "d1",
-                "migrations",
-                "apply",
-                "--remote",
-                "--yes",
-                &format!("--migrations-dir={migrations_dir}"),
-                db_name,
-            ],
-            api_token,
-            None,
-        )
-        .await?;
-        let _ = app.emit(
-            "install-log",
-            LogEvent {
-                step: "d1".into(),
-                level: "info".into(),
-                line: format!("D1 {db_name} migrations applied"),
-            },
+            "d1",
+            "info",
+            format!("D1 {db_name} ready (id {db_id}) — schema will be initialized by the Worker"),
         );
         d1_ids.push(db_id);
     }
@@ -931,6 +1211,34 @@ async fn auto_install_steps(
         },
     );
 
+    // 5) Initialize D1 schema via the Worker's own endpoint.
+    //    The desktop never applies SQL — the Worker owns its schema.
+    let init = init_worker_db(&worker_url, &admin_token, false).await;
+    let (db_already_initialized, db_applied) = match &init {
+        Ok(r) => {
+            emit_log(
+                app,
+                "init-db",
+                "info",
+                if r.already_initialized {
+                    "D1 already initialized — existing data kept".to_string()
+                } else {
+                    format!("D1 schema initialized ({} migrations applied)", r.applied.len())
+                },
+            );
+            (r.already_initialized, r.applied.clone())
+        }
+        Err(e) => {
+            emit_log(
+                app,
+                "init-db",
+                "stderr",
+                format!("Worker init-db call failed: {e}"),
+            );
+            (false, Vec::new())
+        }
+    };
+
     Ok(AutoInstallResult {
         worker_url,
         worker_script_name: DEFAULT_SCRIPT.to_string(),
@@ -940,7 +1248,52 @@ async fn auto_install_steps(
         d1_logs_id: d1_ids.get(0).cloned().unwrap_or_default(),
         d1_inbox_index_id: d1_ids.get(1).cloned().unwrap_or_default(),
         d1_db_id: d1_ids.get(2).cloned().unwrap_or_default(),
+        db_already_initialized,
+        db_applied,
     })
+}
+
+/// Result from the Worker's POST /console/init-db endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitDbResult {
+    pub ok: bool,
+    pub already_initialized: bool,
+    pub applied: Vec<String>,
+    pub skipped: Vec<String>,
+    pub cleared: bool,
+}
+
+/// Call the Worker's POST /console/init-db endpoint to initialize D1 schema.
+/// The Worker owns its own migrations — the desktop never runs SQL.
+pub async fn init_worker_db(
+    worker_url: &str,
+    admin_token: &str,
+    clear: bool,
+) -> Result<InitDbResult, String> {
+    let base = worker_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err("Worker URL is empty".into());
+    }
+    let url = format!("{base}/console/init-db");
+    let body = serde_json::json!({ "clear": clear });
+    let client = reqwest::Client::new();
+    let res = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {admin_token}"))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("init-db request failed: {e}"))?;
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(format!("init-db returned {status}: {text}"));
+    }
+    res.json::<InitDbResult>()
+        .await
+        .map_err(|e| format!("init-db response parse failed: {e}"))
 }
 
 /// Merge an auto-install result into stored credentials (preserves

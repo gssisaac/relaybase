@@ -8,7 +8,7 @@ import type { InboundEmailMeta } from "./inbound-store";
  * (insert on store, delete on prune, read-state updates) and backfilled by
  * `server/scripts/backfill-inbound-search.mjs`.
  *
- * Table (see server/migrations-inbox/0001_create_inbound_search.sql):
+ * Table (see server/db/inbox-index/migrations/0001_create_inbound_search.sql):
  * FTS5-indexed columns: subject, from_email, from_name, to_emails,
  * cc_emails, body_text. Everything else is UNINDEXED metadata so a search
  * hit can be serialized as a list item without touching R2.

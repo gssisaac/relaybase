@@ -6,7 +6,9 @@
 
 | Area | Paths |
 |------|------|
-| D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_LOGS`), `server/migrations-logs/0001_ops_logs.sql` |
+| D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_LOGS`), `server/db/log/migrations/0001_ops_logs.sql` |
+
+See also: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 | Drizzle schema + helper | `server/db/log/` (`schema.ts`, `ops-log.ts`, `index.ts`) |
 | Env type | `server/src/env.ts` (`RELAYBASE_LOGS?: D1Database`) |
 | Log helper | `server/src/lib/ops-logs.ts` (`recordOpsLog`, `listOpsLogs`) |
@@ -43,7 +45,7 @@ D1 `ops_log` is an **additional** event log that covers compose, API, broadcast,
 
 ## Schema
 
-`server/migrations-logs/0001_ops_logs.sql`:
+`server/db/log/migrations/0001_ops_logs.sql`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS ops_log (
@@ -69,7 +71,7 @@ CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
 CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);
 ```
 
-Migrations live in `server/migrations-logs/` (separate from `server/migrations/`, which is legacy and no longer bound — the old `relaybase-waitlist` D1 it targeted was deleted) so D1 migration directories never collide.
+Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations/` and `db/inbox-index/migrations/`) so D1 migration directories never collide. Applied by `POST /console/init-db`.
 
 ---
 
@@ -173,7 +175,7 @@ Dashboard home (`ConnectionStatusCards`) and Settings show a **D1** status card 
 - **Customer install ZIP keeps D1 optional.** `server/customer-install/wrangler.toml` has the binding commented out; `recordOpsLog` no-ops when the binding is missing.
 - **Soft-fail only.** A D1 write error must never break a send or an inbound store. Helpers catch + `console.error`; routes continue.
 - **Bounce detection is best-effort.** Missed bounces are acceptable; false bounce classification of normal mail is not. Only fill fallback `bodyText` when the parsed body is empty.
-- **Migrations dir is `migrations-logs/`.** Do not add product-log migrations under `server/migrations/` (that dir is legacy — the old `relaybase-waitlist` D1 it targeted has been deleted).
+- **Migrations dir is `server/db/log/migrations/`.** Do not add product-log migrations under `db/app/migrations/` or `db/inbox-index/migrations/`.
 
 ---
 

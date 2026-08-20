@@ -1,3 +1,11 @@
+CREATE TABLE `domains` (
+	`id` text PRIMARY KEY NOT NULL,
+	`domain` text NOT NULL,
+	`created_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `domains_domain_unique` ON `domains` (`domain`);
+--> statement-breakpoint
 CREATE TABLE `addresses` (
 	`id` text PRIMARY KEY NOT NULL,
 	`email` text NOT NULL,
@@ -10,8 +18,10 @@ CREATE TABLE `addresses` (
 	FOREIGN KEY (`domain`) REFERENCES `domains`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `addresses_email_unique` ON `addresses` (`email`);--> statement-breakpoint
-CREATE INDEX `addresses_domain_idx` ON `addresses` (`domain`);--> statement-breakpoint
+CREATE UNIQUE INDEX `addresses_email_unique` ON `addresses` (`email`);
+--> statement-breakpoint
+CREATE INDEX `addresses_domain_idx` ON `addresses` (`domain`);
+--> statement-breakpoint
 CREATE TABLE `api_keys` (
 	`id` text PRIMARY KEY NOT NULL,
 	`key_hash` text NOT NULL,
@@ -22,23 +32,12 @@ CREATE TABLE `api_keys` (
 	`active` integer DEFAULT 1 NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `api_keys_key_hash_unique` ON `api_keys` (`key_hash`);--> statement-breakpoint
-CREATE INDEX `api_keys_domain_idx` ON `api_keys` (`domain`);--> statement-breakpoint
-CREATE INDEX `api_keys_active_idx` ON `api_keys` (`active`);--> statement-breakpoint
-CREATE TABLE `audience_contacts` (
-	`id` text PRIMARY KEY NOT NULL,
-	`email` text NOT NULL,
-	`name` text,
-	`domain` text NOT NULL,
-	`group_id` text NOT NULL,
-	`source` text NOT NULL,
-	`added_at` text NOT NULL,
-	FOREIGN KEY (`group_id`) REFERENCES `audience_groups`(`id`) ON UPDATE no action ON DELETE cascade
-);
+CREATE UNIQUE INDEX `api_keys_key_hash_unique` ON `api_keys` (`key_hash`);
 --> statement-breakpoint
-CREATE UNIQUE INDEX `audience_contacts_group_email_idx` ON `audience_contacts` (`group_id`,`email`);--> statement-breakpoint
-CREATE INDEX `audience_contacts_group_idx` ON `audience_contacts` (`group_id`);--> statement-breakpoint
-CREATE INDEX `audience_contacts_domain_idx` ON `audience_contacts` (`domain`);--> statement-breakpoint
+CREATE INDEX `api_keys_domain_idx` ON `api_keys` (`domain`);
+--> statement-breakpoint
+CREATE INDEX `api_keys_active_idx` ON `api_keys` (`active`);
+--> statement-breakpoint
 CREATE TABLE `audience_groups` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -56,7 +55,25 @@ CREATE TABLE `audience_groups` (
 	`sync_history_json` text
 );
 --> statement-breakpoint
-CREATE INDEX `audience_groups_domain_idx` ON `audience_groups` (`domain`);--> statement-breakpoint
+CREATE INDEX `audience_groups_domain_idx` ON `audience_groups` (`domain`);
+--> statement-breakpoint
+CREATE TABLE `audience_contacts` (
+	`id` text PRIMARY KEY NOT NULL,
+	`email` text NOT NULL,
+	`name` text,
+	`domain` text NOT NULL,
+	`group_id` text NOT NULL,
+	`source` text NOT NULL,
+	`added_at` text NOT NULL,
+	FOREIGN KEY (`group_id`) REFERENCES `audience_groups`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `audience_contacts_group_email_idx` ON `audience_contacts` (`group_id`,`email`);
+--> statement-breakpoint
+CREATE INDEX `audience_contacts_group_idx` ON `audience_contacts` (`group_id`);
+--> statement-breakpoint
+CREATE INDEX `audience_contacts_domain_idx` ON `audience_contacts` (`domain`);
+--> statement-breakpoint
 CREATE TABLE `auth_tokens` (
 	`id` text PRIMARY KEY NOT NULL,
 	`token_hash` text NOT NULL,
@@ -66,7 +83,8 @@ CREATE TABLE `auth_tokens` (
 	`created_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `auth_tokens_token_hash_unique` ON `auth_tokens` (`token_hash`);--> statement-breakpoint
+CREATE UNIQUE INDEX `auth_tokens_token_hash_unique` ON `auth_tokens` (`token_hash`);
+--> statement-breakpoint
 CREATE TABLE `broadcasts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`subject` text NOT NULL,
@@ -82,22 +100,18 @@ CREATE TABLE `broadcasts` (
 	`send_history_json` text
 );
 --> statement-breakpoint
-CREATE INDEX `broadcasts_domain_idx` ON `broadcasts` (`domain`);--> statement-breakpoint
-CREATE INDEX `broadcasts_status_idx` ON `broadcasts` (`status`);--> statement-breakpoint
-CREATE INDEX `broadcasts_created_at_idx` ON `broadcasts` (`created_at`);--> statement-breakpoint
+CREATE INDEX `broadcasts_domain_idx` ON `broadcasts` (`domain`);
+--> statement-breakpoint
+CREATE INDEX `broadcasts_status_idx` ON `broadcasts` (`status`);
+--> statement-breakpoint
+CREATE INDEX `broadcasts_created_at_idx` ON `broadcasts` (`created_at`);
+--> statement-breakpoint
 CREATE TABLE `domain_branding` (
 	`domain` text PRIMARY KEY NOT NULL,
 	`dmarc_policy` text DEFAULT 'quarantine' NOT NULL,
 	`dmarc_rua` text NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `domains` (
-	`id` text PRIMARY KEY NOT NULL,
-	`domain` text NOT NULL,
-	`created_at` text NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `domains_domain_unique` ON `domains` (`domain`);--> statement-breakpoint
 CREATE TABLE `inbound_events` (
 	`id` text PRIMARY KEY NOT NULL,
 	`domain` text NOT NULL,
@@ -107,8 +121,10 @@ CREATE TABLE `inbound_events` (
 	`expires_at` text NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `inbound_events_domain_idx` ON `inbound_events` (`domain`);--> statement-breakpoint
-CREATE INDEX `inbound_events_expires_idx` ON `inbound_events` (`expires_at`);--> statement-breakpoint
+CREATE INDEX `inbound_events_domain_idx` ON `inbound_events` (`domain`);
+--> statement-breakpoint
+CREATE INDEX `inbound_events_expires_idx` ON `inbound_events` (`expires_at`);
+--> statement-breakpoint
 CREATE TABLE `mobile_passwords` (
 	`email` text PRIMARY KEY NOT NULL,
 	`password_hash` text NOT NULL,
@@ -122,6 +138,19 @@ CREATE TABLE `owner_config` (
 	`worker_url` text
 );
 --> statement-breakpoint
+CREATE TABLE `webhooks` (
+	`id` text PRIMARY KEY NOT NULL,
+	`domain` text NOT NULL,
+	`url` text NOT NULL,
+	`secret_hash` text NOT NULL,
+	`created_at` text NOT NULL,
+	`active` integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `webhooks_domain_idx` ON `webhooks` (`domain`);
+--> statement-breakpoint
+CREATE INDEX `webhooks_active_idx` ON `webhooks` (`active`);
+--> statement-breakpoint
 CREATE TABLE `webhook_fails` (
 	`id` text PRIMARY KEY NOT NULL,
 	`webhook_id` text NOT NULL,
@@ -132,22 +161,12 @@ CREATE TABLE `webhook_fails` (
 	FOREIGN KEY (`webhook_id`) REFERENCES `webhooks`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `webhook_fails_webhook_idx` ON `webhook_fails` (`webhook_id`);--> statement-breakpoint
-CREATE INDEX `webhook_fails_expires_idx` ON `webhook_fails` (`expires_at`);--> statement-breakpoint
+CREATE INDEX `webhook_fails_webhook_idx` ON `webhook_fails` (`webhook_id`);
+--> statement-breakpoint
+CREATE INDEX `webhook_fails_expires_idx` ON `webhook_fails` (`expires_at`);
+--> statement-breakpoint
 CREATE TABLE `webhook_secrets` (
 	`webhook_id` text PRIMARY KEY NOT NULL,
 	`secret` text NOT NULL,
 	FOREIGN KEY (`webhook_id`) REFERENCES `webhooks`(`id`) ON UPDATE no action ON DELETE cascade
 );
---> statement-breakpoint
-CREATE TABLE `webhooks` (
-	`id` text PRIMARY KEY NOT NULL,
-	`domain` text NOT NULL,
-	`url` text NOT NULL,
-	`secret_hash` text NOT NULL,
-	`created_at` text NOT NULL,
-	`active` integer DEFAULT 1 NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX `webhooks_domain_idx` ON `webhooks` (`domain`);--> statement-breakpoint
-CREATE INDEX `webhooks_active_idx` ON `webhooks` (`active`);

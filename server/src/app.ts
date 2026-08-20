@@ -6,6 +6,7 @@ import { consoleAudienceGroups } from "./routes/console/audience-groups";
 import { consoleAuthTokens } from "./routes/console/auth-tokens";
 import { consoleBroadcasts } from "./routes/console/broadcasts";
 import { consoleConnect } from "./routes/console/connect";
+import { consoleInitDb } from "./routes/console/init-db";
 import {
   consoleAddresses,
   consoleDomains,
@@ -70,6 +71,7 @@ app.route("/console/ops-logs", consoleOpsLogs);
 app.route("/console/send-logs", consoleSendLogs);
 app.route("/console/branding", consoleBranding);
 app.route("/console/connect", consoleConnect);
+app.route("/console/init-db", consoleInitDb);
 app.route("/console/register-owner", consoleRegisterOwner);
 app.route("/console/recover-admin", consoleRecoverAdmin);
 app.route("/console/mailbox", consoleMailbox);

@@ -7,6 +7,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | When you are changing… | Read first |
 |------------------------|------------|
 | **Where data lives** (KV, R2, `~/.relaybase`, API routing, new durable fields) | [docs/storage-architecture.md](docs/storage-architecture.md) |
+| **D1 migrations**, `POST /console/init-db`, install probe, or `migrations_dir` paths | [docs/d1-migrations-and-init-db.md](docs/d1-migrations-and-init-db.md) |
 | Mailbox R2 bucket (`relaybase-mailbox`), `inbound/` / `sent/` prefixes, send-log move off KV, or bucket copy scripts | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Settings → Cloudflare OAuth (install token), `kembo/console` OAuth routes, or desktop wrangler OAuth | [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) |

@@ -26,16 +26,6 @@ npx wrangler d1 create relaybase-db
 
 Copy each D1 **id** into `wrangler.toml` (replace the `REPLACE_WITH_*` placeholders). Do **not** create a KV namespace — product state is D1 + R2, and the admin token is the `ADMIN_TOKEN` Worker secret.
 
-Apply D1 migrations:
-
-```bash
-npx wrangler d1 migrations apply relaybase-logs --remote --yes --migrations-dir=migrations-logs
-npx wrangler d1 migrations apply relaybase-inbox-index --remote --yes --migrations-dir=migrations-inbox
-npx wrangler d1 migrations apply relaybase-db --remote --yes --migrations-dir=migrations-app
-```
-
-Why these names: the desktop app and docs refer to them; keeping the names makes support and upgrades predictable. Other Workers in your account are untouched.
-
 ## 2. Install deps and set admin secret
 
 ```bash
@@ -60,7 +50,33 @@ npx wrangler deploy
 
 Wrangler prints a URL like `https://relaybase-api.<your-subdomain>.workers.dev`.
 
-## 4. Connect the desktop app
+## 4. Initialize D1 schema
+
+The Worker owns its own schema. After deploy, call the init endpoint with
+your admin token to create tables:
+
+```bash
+curl -X POST https://relaybase-api.<your-subdomain>.workers.dev/console/init-db \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+If the databases already have tables from a previous install, the response
+includes `alreadyInitialized: true`. To clear all data and reinitialize:
+
+```bash
+curl -X POST https://relaybase-api.<your-subdomain>.workers.dev/console/init-db \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"clear": true}'
+```
+
+For manual installs you can also use `wrangler d1 migrations apply` directly,
+but the init endpoint is the recommended path — it is what the desktop
+auto-installer uses.
+
+## 5. Connect the desktop app
 
 1. Open Relaybase → **Install routing Worker**
 2. Paste the Worker URL and the same `ADMIN_TOKEN`
@@ -72,6 +88,7 @@ The app calls `GET /console/connect` on your Worker with that token. No Cloudfla
 
 - `GET /health` — liveness + R2 binding check (public)
 - `GET /console/connect` — desktop self-install probe (admin Bearer)
+- `POST /console/init-db` — initialize D1 schema (admin Bearer); `{ clear: true }` to drop and reapply
 - `/console/*` — management (admin Bearer): mailbox, domains, addresses, keys, audience, broadcasts, stats, ops-logs, `register-owner`, `recover-admin`
 - `/mail/*` — desktop mail operations (admin Bearer)
 - `/mobile/*` — Flutter companion + desktop team-user login (per-account mobile password)

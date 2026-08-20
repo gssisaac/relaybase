@@ -306,6 +306,7 @@ export function WorkerInstallPanel() {
               <SetupCloudflareAuthorizeCard
                 oauthBusy={oauthBusy}
                 oauthError={oauthError}
+                cloudflareConnected={cfOAuthConnected}
                 onAuthorize={() => void handleAuthorize()}
                 onCancelWait={handleCancelOauthWait}
               />

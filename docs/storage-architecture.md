@@ -62,7 +62,7 @@ Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 Binding: `server/wrangler.toml` → `RELAYBASE_DB` (database `relaybase-db`).  
 Env type: `server/src/env.ts`.  
 Drizzle schema + helpers: `server/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `inbound-events.ts`).  
-Migrations: `server/migrations-app/` (applied by `auto_install.rs` on new installs).
+Migrations: `server/db/app/migrations/` — applied by the Worker via **`POST /console/init-db`** after deploy (not by the desktop). Full layout and checklist: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 
 This is the **sole source of truth** for product catalog state. No KV binding on the product Worker.
 
@@ -123,7 +123,7 @@ Inbound message body + `readAt` live under `inbound/`. `_list.json` is the compa
 
 ### D1 `RELAYBASE_INBOX_INDEX` (search index)
 
-Optional binding (`server/wrangler.toml`, `migrations-inbox/`). One FTS5 table `inbound_search_fts`; indexed columns: subject, from, to, cc, body text. Synced best-effort by `server/src/lib/inbound-store.ts` (insert on ingest, delete on prune, `read_at` on mark-read) — R2 stays the source of truth, so the index can always be rebuilt with `server/scripts/backfill-inbound-search.mjs`. Queried by `GET /mail/inbox/search`, `/v1/inbox/messages/search`, and `/mobile/inbox/search` (account-scoped) via `server/src/lib/inbound-search.ts`. Without the binding those endpoints return 503 and the desktop falls back to local filtering.
+Optional binding (`server/wrangler.toml`, `db/inbox-index/migrations/`). One FTS5 table `inbound_search_fts`; indexed columns: subject, from, to, cc, body text. Synced best-effort by `server/src/lib/inbound-store.ts` (insert on ingest, delete on prune, `read_at` on mark-read) — R2 stays the source of truth, so the index can always be rebuilt with `server/scripts/backfill-inbound-search.mjs`. Queried by `GET /mail/inbox/search`, `/v1/inbox/messages/search`, and `/mobile/inbox/search` (account-scoped) via `server/src/lib/inbound-search.ts`. Without the binding those endpoints return 503 and the desktop falls back to local filtering.
 
 Full design (schema, query safety, sync call sites, backfill, client wiring, list-header counts, Sent pagination): **[inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md)**.
 

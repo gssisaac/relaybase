@@ -53,6 +53,23 @@ async fn cf_request(
     Ok(value)
 }
 
+async fn cf_get_status(client: &CfClient, path: &str) -> Result<reqwest::StatusCode, String> {
+    let url = format!("{CF_API}{path}");
+    let http = reqwest::Client::new();
+    let res = http
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", client.api_token))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(res.status())
+}
+
+pub fn is_cf_forbidden(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("403") || lower.contains("forbidden")
+}
+
 pub async fn verify_token(
     account_id: &str,
     api_token: &str,
@@ -197,8 +214,20 @@ pub async fn list_zones(client: &CfClient) -> Result<Vec<ZoneSummary>, String> {
 }
 
 pub async fn find_r2_bucket(client: &CfClient, name: &str) -> Result<bool, String> {
-    let path = format!("/accounts/{}/r2/buckets", client.account_id);
-    let list = cf_request(client, reqwest::Method::GET, &path, None).await?;
+    // GET the named bucket — listing every bucket often 403s on OAuth install tokens.
+    let path = format!("/accounts/{}/r2/buckets/{name}", client.account_id);
+    match cf_get_status(client, &path).await {
+        Ok(status) if status.as_u16() == 404 => return Ok(false),
+        Ok(status) if status.is_success() => return Ok(true),
+        Ok(_) | Err(_) => {}
+    }
+    let list = cf_request(
+        client,
+        reqwest::Method::GET,
+        &format!("/accounts/{}/r2/buckets", client.account_id),
+        None,
+    )
+    .await?;
     if let Some(arr) = list.pointer("/result/buckets").and_then(|v| v.as_array()) {
         for b in arr {
             if b.get("name").and_then(|v| v.as_str()) == Some(name) {
@@ -225,36 +254,26 @@ pub async fn ensure_r2_bucket(client: &CfClient, name: &str) -> Result<(), Strin
 }
 
 /// Returns true when a Worker script with this exact name already exists.
+///
+/// Lists scripts instead of GET-by-name. GET
+/// `/workers/scripts/{name}` downloads the worker source and Cloudflare OAuth
+/// install tokens (`workers-scripts.write`) return 403 on that endpoint.
 pub async fn worker_script_exists(client: &CfClient, script_name: &str) -> Result<bool, String> {
-    let path = format!(
-        "/accounts/{}/workers/scripts/{script_name}",
-        client.account_id
-    );
-    let url = format!("{CF_API}{path}");
-    let http = reqwest::Client::new();
-    let res = http
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", client.api_token))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    if res.status().as_u16() == 404 {
-        return Ok(false);
-    }
-    let status = res.status();
-    let value: Value = res.json().await.map_err(|e| e.to_string())?;
-    if !status.is_success() || value.get("success") == Some(&Value::Bool(false)) {
-        // Some accounts return 400-style errors for missing scripts — treat as missing.
-        if status.as_u16() == 400 || status.as_u16() == 404 {
-            return Ok(false);
+    let path = format!("/accounts/{}/workers/scripts", client.account_id);
+    let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
+    if let Some(arr) = value.get("result").and_then(|v| v.as_array()) {
+        for row in arr {
+            let id = row
+                .get("id")
+                .or_else(|| row.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if id == script_name {
+                return Ok(true);
+            }
         }
-        let errors = value
-            .get("errors")
-            .cloned()
-            .unwrap_or_else(|| json!([]));
-        return Err(format!("Cloudflare API error ({status}): {errors}"));
     }
-    Ok(true)
+    Ok(false)
 }
 
 pub async fn worker_health_ok(worker_url: &str) -> bool {

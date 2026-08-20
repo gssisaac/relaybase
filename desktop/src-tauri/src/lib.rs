@@ -15,8 +15,9 @@ fn console_base_url() -> String {
 }
 
 use auto_install::{
-    auto_install_worker, merge_into_credentials, request_install_cancel, rollback_all_install,
-    AutoInstallResult,
+    auto_install_worker, init_worker_db, merge_into_credentials, probe_install_resources,
+    request_install_cancel, rollback_all_install, AutoInstallResult, InitDbResult, InstallDecision,
+    InstallProbeResult,
 };
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
@@ -282,24 +283,41 @@ async fn clear_team_login_cmd() -> Result<(), String> {
     clear_team_login()
 }
 
-/// Background auto-install of the routing Worker into the user's Cloudflare
-/// account via wrangler. Streams `install-log` events to the frontend.
+/// List Relaybase Worker / R2 / D1 resources already in the Cloudflare account.
+#[tauri::command]
+async fn probe_auto_install(
+    _api_token: String,
+    account_id: Option<String>,
+) -> Result<InstallProbeResult, String> {
+    let token = refresh_install_token_if_needed().await?;
+    probe_install_resources(token, account_id).await
+}
+
 #[tauri::command]
 async fn auto_install_routing_worker(
     app: tauri::AppHandle,
-    api_token: String,
+    _api_token: String,
     account_id: Option<String>,
     server_token: Option<String>,
+    decisions: Option<Vec<InstallDecision>>,
 ) -> Result<AutoInstallResult, String> {
     let server = server_token
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let result = auto_install_worker(app, api_token.clone(), account_id.clone(), server.clone()).await?;
+    let token = refresh_install_token_if_needed().await?;
+    let result = auto_install_worker(
+        app,
+        token.clone(),
+        account_id.clone(),
+        server.clone(),
+        decisions.unwrap_or_default(),
+    )
+    .await?;
     let existing = load_credentials()?.unwrap_or_default();
     let mut next = merge_into_credentials(&existing, &result, account_id);
     // Persist the install token used so later update_worker / push_server_token
     // can re-auth wrangler without re-entering it.
-    next.install_token = api_token.trim().to_string();
+    next.install_token = token;
     // If a server token was supplied and pushed, record the pushed-at time.
     if let Some(srv) = server {
         next.server_token = srv;
@@ -331,6 +349,19 @@ async fn rollback_auto_install(
         let _ = save_credentials(&creds);
     }
     Ok(())
+}
+
+/// Call the deployed Worker's POST /console/init-db to initialize or clear D1.
+/// Used by the UI after install when the DB was already initialized — the user
+/// decides whether to clear existing data, and that decision goes through the
+/// Worker endpoint, not direct D1 access.
+#[tauri::command]
+async fn init_worker_db_cmd(
+    worker_url: String,
+    admin_token: String,
+    clear: bool,
+) -> Result<InitDbResult, String> {
+    init_worker_db(&worker_url, &admin_token, clear).await
 }
 
 /// Push the saved server token (Email Sending Edit) to the deployed Worker as
@@ -723,16 +754,23 @@ fn days_to_ymd(days: i64) -> (i64, i64, i64) {
 /// access token is missing or expiring within 60s. Persists the refreshed
 /// tokens and keeps `install_token` in sync. Returns the current install
 /// token (fresh if refreshed).
+pub const CLOUDFLARE_AUTH_EXPIRED: &str = "CLOUDFLARE_AUTH_EXPIRED";
+
 async fn refresh_install_token_if_needed() -> Result<String, String> {
     let creds = load_credentials()?.unwrap_or_default();
     // Legacy manual install token path: nothing to refresh.
     if creds.cf_oauth_refresh_token.trim().is_empty() {
+        if oauth_access_expired(&creds) {
+            return Err(
+                format!(
+                    "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
+                     Go back and Authorize again."
+                ),
+            );
+        }
         return Ok(creds.install_token);
     }
-    let now_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let now_secs = now_unix_secs();
     let expires_at_secs = parse_iso_to_secs(&creds.cf_oauth_access_expires_at);
     let fresh = creds
         .cf_oauth_access_expires_at
@@ -761,6 +799,13 @@ async fn refresh_install_token_if_needed() -> Result<String, String> {
     let status = res.status();
     let body = res.text().await.unwrap_or_default();
     if !status.is_success() {
+        let lower = body.to_lowercase();
+        if status.as_u16() == 400 || lower.contains("invalid_grant") || lower.contains("invalid") {
+            return Err(format!(
+                "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
+                 Go back and Authorize again."
+            ));
+        }
         return Err(format!("Token refresh failed (HTTP {status}): {body}"));
     }
     let tokens: serde_json::Value = serde_json::from_str(&body)
@@ -819,6 +864,20 @@ async fn fetch_oauth_client_id() -> Result<String, String> {
 async fn refresh_install_token() -> Result<StoredCredentials, String> {
     refresh_install_token_if_needed().await?;
     load_credentials()?.ok_or_else(|| "No credentials stored".to_string())
+}
+
+fn now_unix_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn oauth_access_expired(creds: &StoredCredentials) -> bool {
+    if creds.cf_oauth_access_expires_at.trim().is_empty() {
+        return false;
+    }
+    parse_iso_to_secs(&creds.cf_oauth_access_expires_at) < now_unix_secs().saturating_add(60)
 }
 
 /// Best-effort ISO-8601 → unix seconds. Returns 0 on parse failure (which
@@ -1576,9 +1635,11 @@ pub fn run() {
             get_team_login,
             save_team_login_cmd,
             clear_team_login_cmd,
+            probe_auto_install,
             auto_install_routing_worker,
             cancel_auto_install,
             rollback_auto_install,
+            init_worker_db_cmd,
             push_server_token,
             start_cf_oauth,
             complete_cf_oauth,

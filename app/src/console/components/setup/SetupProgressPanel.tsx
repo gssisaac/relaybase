@@ -1,13 +1,17 @@
 "use client";
 
-import { Check, Copy, Loader2, Square } from "lucide-react";
+import { Check, Copy, ExternalLink, Loader2, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
+  cloudflareWorkersDashboardUrl,
   desktopAutoInstallWorker,
   desktopCancelAutoInstall,
+  desktopOpenExternal,
+  desktopInitWorkerDb,
+  desktopProbeInstall,
   desktopRefreshInstallToken,
   desktopRollbackInstall,
   desktopRegisterWorkerWithConsole,
@@ -16,16 +20,31 @@ import {
   explainDesktopError,
   isInstallCancelledError,
   listenInstallLog,
+  stripAnsi,
   type DesktopErrorHelp,
+  type InstallDecision,
   type InstallLogEvent,
+  type InstallResourceProbe,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
+
+function resourceKindLabel(kind: string): "Worker" | "R2" | "D1" {
+  if (kind === "r2") return "R2";
+  if (kind === "d1") return "D1";
+  return "Worker";
+}
 
 export function SetupProgressPanel() {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
+  const [probing, setProbing] = useState(false);
+  const [existing, setExisting] = useState<InstallResourceProbe[]>([]);
+  const [decisions, setDecisions] = useState<Record<string, "skip" | "reinstall">>(
+    {},
+  );
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [stopped, setStopped] = useState(false);
@@ -38,6 +57,11 @@ export function SetupProgressPanel() {
     workerUrl: string;
     adminToken: string;
   } | null>(null);
+  const [dbAlreadyInit, setDbAlreadyInit] = useState<{
+    workerUrl: string;
+    adminToken: string;
+  } | null>(null);
+  const [clearingDb, setClearingDb] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const installStartedRef = useRef(false);
@@ -80,7 +104,7 @@ export function SetupProgressPanel() {
     }
     if (installStartedRef.current) return;
     installStartedRef.current = true;
-    void runAutoInstall();
+    void startFlow();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [credentials, cfOAuthConnected]);
 
@@ -94,7 +118,77 @@ export function SetupProgressPanel() {
     }
   }
 
-  async function runAutoInstall() {
+  function decisionKey(r: Pick<InstallResourceProbe, "kind" | "name">) {
+    return `${r.kind}:${r.name}`;
+  }
+
+  async function resolvedToken() {
+    let token = installTokenFromCredentials();
+    try {
+      const refreshed = await desktopRefreshInstallToken();
+      token =
+        refreshed.cfOauthAccessToken?.trim() ||
+        refreshed.installToken?.trim() ||
+        token;
+    } catch (err) {
+      const raw = String(err ?? "");
+      if (
+        raw.toLowerCase().includes("cloudflare_auth_expired") ||
+        raw.toLowerCase().includes("invalid access token")
+      ) {
+        throw err;
+      }
+      /* use the current access token if refresh is unavailable */
+    }
+    return token;
+  }
+
+  async function startFlow() {
+    setProbing(true);
+    setError(null);
+    setStopped(false);
+    setRolledBack(false);
+    setAutoDone(null);
+    setExisting([]);
+    try {
+      const token = await resolvedToken();
+      if (!token) {
+        setError({
+          title: "Connect Cloudflare first",
+          detail:
+            "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
+          fix: "Go back and click Authorize and install on Cloudflare.",
+        });
+        return;
+      }
+      const probe = await desktopProbeInstall(
+        token,
+        cfOAuthAccountId || undefined,
+      );
+      const found = probe.resources.filter((r) => r.present);
+      if (found.length === 0) {
+        setProbing(false);
+        await runAutoInstall([]);
+        return;
+      }
+      setExisting(found);
+      setDecisions(
+        Object.fromEntries(found.map((r) => [decisionKey(r), "skip" as const])),
+      );
+    } catch (err) {
+      setError(explainDesktopError(err, "Could not check existing resources"));
+    } finally {
+      setProbing(false);
+    }
+  }
+
+  function setAllDecisions(action: "skip" | "reinstall") {
+    setDecisions(
+      Object.fromEntries(existing.map((r) => [decisionKey(r), action])),
+    );
+  }
+
+  async function runAutoInstall(plan?: InstallDecision[]) {
     busyRef.current = true;
     setBusy(true);
     setStopping(false);
@@ -105,13 +199,20 @@ export function SetupProgressPanel() {
     setMessage(null);
     setLogs([]);
     setAutoDone(null);
-    let token = installTokenFromCredentials();
+    const chosen =
+      plan ??
+      existing.map((r) => ({
+        kind: r.kind,
+        name: r.name,
+        action: decisions[decisionKey(r)] ?? "skip",
+      }));
+    let token = await resolvedToken();
     if (!token) {
       setError({
         title: "Connect Cloudflare first",
         detail:
           "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
-        fix: "Go back and click Authorize with Cloudflare.",
+        fix: "Go back and click Authorize and install on Cloudflare.",
       });
       busyRef.current = false;
       setBusy(false);
@@ -119,21 +220,14 @@ export function SetupProgressPanel() {
     }
     let unlisten: (() => void) | null = null;
     try {
-      try {
-        const refreshed = await desktopRefreshInstallToken();
-        token =
-          refreshed.cfOauthAccessToken?.trim() ||
-          refreshed.installToken?.trim() ||
-          token;
-      } catch {
-        /* use the current access token if refresh is unavailable */
-      }
       unlisten = await listenInstallLog((event) => {
         setLogs((prev) => [...prev, event]);
       });
       const result = await desktopAutoInstallWorker(
         token,
         cfOAuthAccountId || undefined,
+        undefined,
+        chosen,
       );
       const connect = await desktopVerifyWorkerConnection(
         result.workerUrl,
@@ -148,11 +242,18 @@ export function SetupProgressPanel() {
         /* best-effort */
       });
       await refresh();
-      setAutoDone({
-        workerUrl: connect.workerUrl,
-        adminToken: result.adminToken,
-      });
-      setMessage(`Connected to ${connect.workerUrl}`);
+      if (result.dbAlreadyInitialized) {
+        setDbAlreadyInit({
+          workerUrl: connect.workerUrl,
+          adminToken: result.adminToken,
+        });
+      } else {
+        setAutoDone({
+          workerUrl: connect.workerUrl,
+          adminToken: result.adminToken,
+        });
+        setMessage(`Connected to ${connect.workerUrl}`);
+      }
     } catch (err) {
       if (isInstallCancelledError(err)) {
         setStopped(true);
@@ -177,7 +278,7 @@ export function SetupProgressPanel() {
       setError({
         title: "Connect Cloudflare first",
         detail: "Authorize Relaybase with Cloudflare before rolling back.",
-        fix: "Go back and click Authorize with Cloudflare.",
+        fix: "Go back and click Authorize and install on Cloudflare.",
       });
       setRollingBack(false);
       return;
@@ -216,6 +317,35 @@ export function SetupProgressPanel() {
     setCopiedToken(true);
   }
 
+  async function confirmClearDb(clear: boolean) {
+    if (!dbAlreadyInit || clearingDb) return;
+    if (clear) {
+      setClearingDb(true);
+      try {
+        await desktopInitWorkerDb(
+          dbAlreadyInit.workerUrl,
+          dbAlreadyInit.adminToken,
+          true,
+        );
+      } catch (err) {
+        setError(explainDesktopError(err, "Could not clear database"));
+        setClearingDb(false);
+        return;
+      }
+      setClearingDb(false);
+    }
+    setAutoDone({
+      workerUrl: dbAlreadyInit.workerUrl,
+      adminToken: dbAlreadyInit.adminToken,
+    });
+    setMessage(
+      clear
+        ? "Database cleared and reinitialized"
+        : `Connected to ${dbAlreadyInit.workerUrl}`,
+    );
+    setDbAlreadyInit(null);
+  }
+
   return (
     <SetupScrollPage>
       <div className="flex justify-end">
@@ -229,14 +359,132 @@ export function SetupProgressPanel() {
       </div>
       <div className="mt-3 space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Installing</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {existing.length > 0 && !busy && !autoDone
+              ? "Existing resources"
+              : probing
+                ? "Checking"
+                : "Installing"}
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Creating resources and deploying the Worker in your Cloudflare
-            account.
+            {existing.length > 0 && !busy && !autoDone
+              ? "Some Relaybase resources already exist in this Cloudflare account. Choose Skip or Reinstall for each, then continue."
+              : probing
+                ? "Looking for an existing Worker, R2 bucket, and D1 databases before creating anything."
+                : "Creating resources and deploying the Worker in your Cloudflare account."}
           </p>
         </div>
 
-        {rollingBack ? (
+        {probing ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Checking for existing Cloudflare resources…
+          </div>
+        ) : existing.length > 0 &&
+          !busy &&
+          !autoDone &&
+          !stopped &&
+          !rollingBack &&
+          !rolledBack ? (
+          <div className="space-y-4 rounded-lg border border-border p-4">
+            <div>
+              <p className="text-sm font-medium">
+                Existing resources found
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                These already exist in your Cloudflare account. Skip keeps
+                them. Reinstall deletes them and creates new ones.
+              </p>
+            </div>
+            <ul className="space-y-3">
+              {existing.map((r) => {
+                const key = decisionKey(r);
+                const action = decisions[key] ?? "skip";
+                return (
+                  <li
+                    key={key}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <CloudflareModuleIcon
+                        kind={resourceKindLabel(r.kind)}
+                        className="size-5 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-mono text-xs">
+                          <span className="text-muted-foreground">
+                            {resourceKindLabel(r.kind)}
+                          </span>{" "}
+                          <span className="font-medium">{r.name}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={action === "skip" ? "default" : "outline"}
+                        onClick={() =>
+                          setDecisions((prev) => ({ ...prev, [key]: "skip" }))
+                        }
+                      >
+                        Skip
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          action === "reinstall" ? "default" : "outline"
+                        }
+                        onClick={() =>
+                          setDecisions((prev) => ({
+                            ...prev,
+                            [key]: "reinstall",
+                          }))
+                        }
+                      >
+                        Reinstall
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAllDecisions("skip")}
+              >
+                Skip all
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAllDecisions("reinstall")}
+              >
+                Reinstall all
+              </Button>
+            </div>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => {
+                const plan = existing.map((r) => ({
+                  kind: r.kind,
+                  name: r.name,
+                  action: decisions[decisionKey(r)] ?? "skip",
+                }));
+                setExisting([]);
+                void runAutoInstall(plan);
+              }}
+            >
+              Continue install
+            </Button>
+          </div>
+        ) : rollingBack ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
             Rolling back — deleting Worker, D1, and R2…
@@ -252,7 +500,7 @@ export function SetupProgressPanel() {
               <Button
                 type="button"
                 className="flex-1"
-                onClick={() => void runAutoInstall()}
+                onClick={() => void startFlow()}
               >
                 Try again
               </Button>
@@ -265,6 +513,42 @@ export function SetupProgressPanel() {
                 Back to start
               </Button>
             </div>
+          </div>
+        ) : dbAlreadyInit ? (
+          <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              Database already initialized
+            </p>
+            <p className="text-xs text-muted-foreground">
+              The D1 databases already have tables and data from a previous
+              install. Migrations were applied (if any were pending). Do you
+              want to keep the existing data, or clear everything and start
+              fresh?
+            </p>
+            {clearingDb ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Clearing database…
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  className="flex-1"
+                  onClick={() => void confirmClearDb(true)}
+                >
+                  Clear and reinitialize
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => void confirmClearDb(false)}
+                >
+                  Keep existing data
+                </Button>
+              </div>
+            )}
           </div>
         ) : autoDone ? (
           <div className="space-y-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4">
@@ -302,6 +586,18 @@ export function SetupProgressPanel() {
             </div>
             <Button
               type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                const url = cloudflareWorkersDashboardUrl(cfOAuthAccountId);
+                void desktopOpenExternal(url);
+              }}
+            >
+              <ExternalLink className="size-3.5" />
+              Open Cloudflare dashboard
+            </Button>
+            <Button
+              type="button"
               className="w-full"
               onClick={() => {
                 if (typeof window !== "undefined") {
@@ -323,7 +619,7 @@ export function SetupProgressPanel() {
               <Button
                 type="button"
                 className="flex-1"
-                onClick={() => void runAutoInstall()}
+                onClick={() => void startFlow()}
               >
                 Try again
               </Button>
@@ -374,25 +670,51 @@ export function SetupProgressPanel() {
             <p className="text-xs font-medium">Install log</p>
             <div
               ref={logEndRef}
-              className="max-h-56 overflow-y-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300"
+              className="max-h-56 select-text cursor-text overflow-y-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300"
             >
               {logs.map((entry, i) => (
-                <div key={i} className="whitespace-pre-wrap">
+                <div key={i} className="whitespace-pre-wrap break-all">
                   <span className="text-muted-foreground">
                     [{entry.step}:{entry.level}]
                   </span>{" "}
-                  {entry.line}
+                  {stripAnsi(entry.line)}
                 </div>
               ))}
             </div>
           </div>
         ) : null}
 
+        {error &&
+        !busy &&
+        !autoDone &&
+        !stopped &&
+        !rollingBack &&
+        !rolledBack &&
+        existing.length === 0 ? (
+          error.title.toLowerCase().includes("authorization expired") ? (
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => router.push("/setup/install")}
+            >
+              Authorize again
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => void startFlow()}
+            >
+              Try again
+            </Button>
+          )
+        ) : null}
+
         {!busy &&
         !stopping &&
         !rollingBack &&
         !rolledBack &&
-        (autoDone || stopped || error) ? (
+        (autoDone || stopped || (error && logs.length > 0)) ? (
           <Button
             type="button"
             variant="outline"

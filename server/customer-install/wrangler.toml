@@ -21,14 +21,14 @@ bucket_name = "relaybase-mailbox"
 binding = "RELAYBASE_LOGS"
 database_name = "relaybase-logs"
 database_id = "REPLACE_WITH_relaybase-logs_ID"
-migrations_dir = "migrations-logs"
+migrations_dir = "db/log/migrations"
 
 # FTS5 search index over inbound mail (R2 stays source of truth for bodies).
 [[d1_databases]]
 binding = "RELAYBASE_INBOX_INDEX"
 database_name = "relaybase-inbox-index"
 database_id = "REPLACE_WITH_relaybase-inbox-index_ID"
-migrations_dir = "migrations-inbox"
+migrations_dir = "db/inbox-index/migrations"
 
 # Durable product state (mailbox, audience, broadcasts, keys, tokens,
 # branding, mobile passwords, webhooks, owner config, inbound events).
@@ -36,4 +36,4 @@ migrations_dir = "migrations-inbox"
 binding = "RELAYBASE_DB"
 database_name = "relaybase-db"
 database_id = "REPLACE_WITH_relaybase-db_ID"
-migrations_dir = "migrations-app"
+migrations_dir = "db/app/migrations"

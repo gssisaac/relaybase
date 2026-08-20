@@ -1,6 +1,6 @@
 /**
  * `relaybase-db` schema — durable product state (D1 `RELAYBASE_DB`).
- * Generated into `migrations-app/` by drizzle-kit.
+ * Generated into `db/app/migrations/` by drizzle-kit.
  */
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 

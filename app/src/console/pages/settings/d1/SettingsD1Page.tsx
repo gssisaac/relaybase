@@ -95,7 +95,7 @@ export function SettingsD1Page() {
           logs,
           "Probing RELAYBASE_LOGS binding.",
           "Ops log table is reachable.",
-          "Bind RELAYBASE_LOGS and apply migrations-logs.",
+          "Bind RELAYBASE_LOGS and run POST /console/init-db.",
         )}
         resourceLabel="Database"
         resourceName={logsBinding.databaseName}
@@ -114,7 +114,7 @@ export function SettingsD1Page() {
           inboxIndex,
           "Probing RELAYBASE_INBOX_INDEX binding.",
           "Inbox search index is reachable.",
-          "Bind RELAYBASE_INBOX_INDEX and apply migrations-inbox.",
+          "Bind RELAYBASE_INBOX_INDEX and run POST /console/init-db.",
         )}
         resourceLabel="Database"
         resourceName={inboxBinding.databaseName}
@@ -135,7 +135,7 @@ export function SettingsD1Page() {
           app,
           "Probing RELAYBASE_DB binding.",
           "Product DB tables are reachable.",
-          "Bind RELAYBASE_DB and apply migrations-app.",
+          "Bind RELAYBASE_DB and run POST /console/init-db.",
         )}
         resourceLabel="Database"
         resourceName={appBinding.databaseName}

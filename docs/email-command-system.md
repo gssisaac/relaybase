@@ -46,16 +46,16 @@ Related (outside the module, thin consumers):
 | `app/src/email/lib/compose/compose-open.ts` | Compose open/resume/force-new policy + adapter hooks |
 | `app/src/email/components/reply/useThreadComposeState.ts` | Inline thread compose panel state |
 | `app/src/app/_shell/DesktopDashboardGate.tsx` | Mounts `EmailCommandRuntimeProvider` + `GlobalCommandPalette` |
-| `app/src/email/components/mailbox/MailListView.tsx` | **Orchestrator** only: list/detail hooks + pane assembly. No direct store logic. |
-| `app/src/email/components/mailbox/mail-list-helpers.ts` | Pure mail list helpers (formatting, href, preview, account matching) |
-| `app/src/email/components/mailbox/useMailListItems.ts` | Derives `items`, `selected`, thread maps, detail loading from store |
-| `app/src/email/components/mailbox/useMailListKeyboard.ts` | Bubble-phase mail shortcuts (`j`/`k`/`Esc`/`c`/`r`/`a`/`f`) |
-| `app/src/email/components/mailbox/MailListPane.tsx` | List pane UI (toolbar + rows + empty state) |
-| `app/src/email/components/mailbox/MailDetailPane.tsx` | Detail pane UI (draft / thread / single message) |
+| `app/src/email/components/mailbox/MailListView/MailListView.tsx` | **Orchestrator** only: list/detail hooks + pane assembly. No direct store logic. |
+| `app/src/email/components/mailbox/MailListView/mail-list-helpers.ts` | Pure mail list helpers (formatting, href, preview, account matching) |
+| `app/src/email/components/mailbox/MailListView/useMailListItems.ts` | Derives `items`, `selected`, thread maps, detail loading from store |
+| `app/src/email/components/mailbox/MailListView/useMailListKeyboard.ts` | Bubble-phase mail shortcuts (`j`/`k`/`Esc`/`c`/`r`/`a`/`f`) |
+| `app/src/email/components/mailbox/MailListView/MailListPane.tsx` | List pane UI (toolbar + rows + empty state) |
+| `app/src/email/components/mailbox/MailListView/MailDetailPane.tsx` | Detail pane UI (draft / thread / single message) |
 | `app/src/email/components/compose/ComposeView.tsx` | Renders compose from URL only (no open policy) |
 | `app/src/components/ui/command.tsx` | Generic cmdk primitives |
 | `app/src/components/ui/context-menu.tsx` | Generic context-menu primitives |
-| `app/src/email/lib/mailbox/email-mailbox-store.ts` | Data actions (`markRead`, `moveToTrash`, …) |
+| `app/src/email/stores/email-mailbox-store.ts` | Data actions (`markRead`, `moveToTrash`, …) |
 
 ```mermaid
 flowchart TB

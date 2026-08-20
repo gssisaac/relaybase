@@ -13,7 +13,7 @@ import {
   domainOf,
   formatDetailDate,
   threadingFromParent,
-} from "@/email/components/mailbox/mail-list-helpers";
+} from "./mail-list-helpers";
 import type { MailListItem } from "@/email/components/mailbox/types";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { formatSenderDisplay, splitRecipients } from "@/lib/email/format-sender";
@@ -21,7 +21,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { emailMessageHref } from "@/email/lib/paths";
 import type { ThreadComposeMode } from "@/email/components/thread/ConversationThreadView";
 import type { ConversationThread } from "@/email/lib/threading/conversation-threading";
-import type { EmailMailboxStore } from "@/email/lib/mailbox/email-mailbox-store";
+import type { EmailMailboxStore } from "@/email/stores/email-mailbox-store";
 import type {
   Address,
   RoutingActivityEvent,

@@ -4,7 +4,7 @@ import { memo, useEffect } from "react";
 import { observer } from "mobx-react-lite";
 
 import { useSenderIconStore } from "@/email/components/sender/SenderIconContext";
-import { senderIconDomain } from "@/email/lib/sender/sender-icon-store";
+import { senderIconDomain } from "@/email/stores/sender-icon-store";
 import { senderInitials } from "@/lib/email/format-sender";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * - Otherwise fall back to two-letter initials (matching the thread detail).
  * - Favicons are loaded once per domain through the Worker favicon proxy and
  *   kept resident in `SenderIconStore` as data URLs, so virtualized rows
- *   re-mounting never re-fetch (see `app/src/email/sender-icon-store.ts`).
+ *   re-mounting never re-fetch (see `app/src/email/stores/sender-icon-store.ts`).
  * - Unread mail shows a small primary dot at the bottom-right corner.
  */
 export const SenderAvatar = memo(

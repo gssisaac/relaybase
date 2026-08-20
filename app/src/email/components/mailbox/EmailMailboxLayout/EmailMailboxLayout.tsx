@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
-import { EmailMailboxAlerts } from "@/email/components/mailbox/EmailMailboxAlerts";
+import { EmailMailboxAlerts } from "./EmailMailboxAlerts";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 
 export type EmailMailboxSection =

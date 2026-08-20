@@ -8,7 +8,7 @@ import {
   useEmailMailbox,
   useEmailMailboxStore,
 } from "@/email/components/mailbox/EmailMailboxContext";
-import type { EmailMailboxStore } from "@/email/lib/mailbox/email-mailbox-store";
+import type { EmailMailboxStore } from "@/email/stores/email-mailbox-store";
 import {
   emailComposeHref,
   emailMessageHref,

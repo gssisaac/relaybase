@@ -8,7 +8,7 @@ import {
 } from "react";
 
 import { useEmailPaths } from "@/email/lib/paths";
-import { SenderIconStore } from "@/email/lib/sender/sender-icon-store";
+import { SenderIconStore } from "@/email/stores/sender-icon-store";
 
 const SenderIconStoreContext = createContext<SenderIconStore | null>(null);
 

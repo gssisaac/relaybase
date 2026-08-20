@@ -15,7 +15,7 @@ import { useSenderIconStore } from "@/email/components/sender/SenderIconContext"
 import type { EmailAccountFilter } from "@/email/components/accounts/EmailAccountSelect";
 import { EmailSendUndoneNavigator } from "@/email/components/compose/EmailSendUndoneNavigator";
 import { useEmailPaths } from "@/email/lib/paths";
-import { EmailMailboxStore } from "@/email/lib/mailbox/email-mailbox-store";
+import { EmailMailboxStore } from "@/email/stores/email-mailbox-store";
 import type { TrashEntry, TrashKind } from "@/email/lib/trash/trash-store";
 import type {
   Address,

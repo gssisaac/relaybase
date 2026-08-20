@@ -1,6 +1,6 @@
 # MailListView
 
-Inbox / Drafts / Sent / Trash list + detail UI. **Public entry point:** `@/email/components/MailListView` (single file export — do not import panes/hooks from routes).
+Inbox / Drafts / Sent / Trash list + detail UI. **Public entry point:** `@/email/components/mailbox/MailListView` (folder barrel — do not import panes/hooks from routes).
 
 ## Role
 
@@ -11,6 +11,7 @@ Inbox / Drafts / Sent / Trash list + detail UI. **Public entry point:** `@/email
 | Pure formatting / href helpers | `mail-list-helpers.ts` |
 | Store → list model (`items`, `selected`, threads) | `useMailListItems.ts` |
 | Mail keyboard layer (implementation) | `useMailListKeyboard.ts` |
+| Keyboard focus anchor (virtualized list) | `@/email/stores/list-item-state-store.ts` |
 | Inline thread reply/forward panel state | `useThreadComposeState.ts` |
 | Standalone compose open/resume/new | `compose-open.ts` |
 | Cmd+K + row context menu runtime | `useEmailCommandRuntimeAdapter.ts` |
@@ -27,6 +28,7 @@ flowchart TB
   Helpers[mail-list-helpers.ts]
   Items[useMailListItems]
   Kb[useMailListKeyboard]
+  Focus[list-item-state-store]
   Compose[useThreadComposeState]
   Open[compose-open]
   Commands[useEmailCommandRuntimeAdapter]
@@ -34,6 +36,7 @@ flowchart TB
   DetailPane[MailDetailPane]
   MLV --> Items
   MLV --> Kb
+  MLV --> Focus
   MLV --> Compose
   MLV --> Open
   MLV --> Commands
@@ -48,16 +51,21 @@ flowchart TB
 ## File map
 
 ```text
-app/src/email/components/
-  MailListView.tsx              # orchestrator (this folder's parent file)
-  MailListView/README.md        # this document
+app/src/email/components/mailbox/MailListView/
+  index.ts                      # public export { MailListView }
+  MailListView.tsx              # orchestrator
+  README.md                     # this document
   mail-list-helpers.ts          # formatDate, messageHref, previewText, …
   useMailListItems.ts           # threads, items, selected, detail loading
   useMailListKeyboard.ts        # mail keyboard layer (see email-command-system.md)
   MailListPane.tsx              # list column UI
   MailDetailPane.tsx            # detail column UI
-  useThreadComposeState.ts      # inline compose on open thread (related)
 ```
+
+Related (outside this folder):
+
+- `app/src/email/stores/list-item-state-store.ts` — keyboard focus for virtualized rows
+- `app/src/email/components/reply/useThreadComposeState.ts` — inline compose on open thread
 
 ## Data flow
 

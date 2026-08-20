@@ -9,8 +9,8 @@ import { useEmailMailboxStore } from "@/email/components/mailbox/EmailMailboxCon
 import {
   itemKey,
   messageHref,
-} from "@/email/components/mailbox/mail-list-helpers";
-import type { ListItemStateStore } from "@/email/components/mailbox/list-item-state-store";
+} from "./mail-list-helpers";
+import type { ListItemStateStore } from "@/email/stores/list-item-state-store";
 import type { MailListItem } from "@/email/components/mailbox/types";
 import type { ThreadComposeMode } from "@/email/components/thread/ConversationThreadView";
 import type { ConversationThread } from "@/email/lib/threading/conversation-threading";

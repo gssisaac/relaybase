@@ -2,13 +2,13 @@
 
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
-import type { EmailMailboxSection } from "@/email/components/mailbox/EmailMailboxLayout";
+import type { EmailMailboxSection } from "./EmailMailboxLayout";
 import {
   EmailAlerts,
   InboundR2ConfigAlert,
   NoDomainsAlert,
   RelaybaseConfigAlert,
-} from "@/email/components/mailbox/EmailShared";
+} from "../EmailShared";
 
 export function EmailMailboxAlerts({
   section,

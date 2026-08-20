@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
 
-import { EmailHtmlFrame } from "@/email/components/mailbox/EmailHtmlFrame";
+import { EmailHtmlFrame } from "./EmailHtmlFrame";
 import { QuotedReplyBlock } from "@/email/components/reply/QuotedReplyBlock";
 import type { InboundAttachment } from "@/email/components/mailbox/types";
 import {

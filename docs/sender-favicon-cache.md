@@ -7,7 +7,7 @@
 | Area | Path |
 |------|------|
 | Avatar UI | `app/src/email/components/sender/SenderAvatar.tsx` |
-| MobX cache store | `app/src/email/lib/sender/sender-icon-store.ts` |
+| MobX cache store | `app/src/email/stores/sender-icon-store.ts` |
 | React context | `app/src/email/components/sender/SenderIconContext.tsx` |
 | Provider wiring | `app/src/app/_shell/DesktopDashboardGate.tsx` |
 | Account switch clear | `app/src/email/components/mailbox/EmailMailboxContext.tsx` |

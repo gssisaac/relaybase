@@ -14,7 +14,7 @@ import {
   itemSortAt,
   matchesAccount,
   messageHref,
-} from "@/email/components/mailbox/mail-list-helpers";
+} from "./mail-list-helpers";
 import {
   filterSentForAccount,
   findThreadByInboundKey,

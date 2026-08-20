@@ -142,7 +142,7 @@ Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelop
 | `domains.{domain}.ok` | `true` = proxy returned a data URL; `false` = confirmed no favicon |
 | `domains.{domain}.at` | Unix ms when status was recorded |
 
-Failed domains are not re-probed for 24h. Transient fetch errors are not written here. TS: `app/src/email/lib/sender/sender-icon-store.ts`.
+Failed domains are not re-probed for 24h. Transient fetch errors are not written here. TS: `app/src/email/stores/sender-icon-store.ts`.
 
 ---
 

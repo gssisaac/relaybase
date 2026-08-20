@@ -28,7 +28,7 @@ import {
   itemKey,
   messageHref,
   previewText,
-} from "@/email/components/mailbox/mail-list-helpers";
+} from "./mail-list-helpers";
 import type { MailListItem } from "@/email/components/mailbox/types";
 import {
   threadUnreadKeys,
@@ -38,7 +38,7 @@ import { trimQuotedHistoryForThread } from "@/email/lib/reply/reply-quote-body";
 import { formatSenderDisplay, splitRecipients } from "@/lib/email/format-sender";
 import { extractFirstEmail, SenderAvatar } from "@/email/components/sender/SenderAvatar";
 import { SenderHoverCard, SenderHoverLabel } from "@/email/components/sender/SenderHoverCard";
-import type { ListItemStateStore } from "@/email/components/mailbox/list-item-state-store";
+import type { ListItemStateStore } from "@/email/stores/list-item-state-store";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 

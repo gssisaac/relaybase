@@ -12,7 +12,7 @@ import { reaction } from "mobx";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { useEmailPaths } from "@/email/lib/paths";
-import { MailAccountsStore } from "@/email/lib/accounts/mail-accounts-store";
+import { MailAccountsStore } from "@/email/stores/mail-accounts-store";
 import type { AccountColorMap } from "@/email/lib/accounts/account-colors";
 import type { Address } from "@/email/components/mailbox/types";
 

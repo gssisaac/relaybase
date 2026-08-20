@@ -4,22 +4,22 @@ import { observer } from "mobx-react-lite";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { MIN_SERVER_SEARCH_LENGTH } from "@/email/lib/mailbox/email-mailbox-store";
+import { MIN_SERVER_SEARCH_LENGTH } from "@/email/stores/email-mailbox-store";
 
 import { useEmailCommandRuntimeAdapter } from "@/email/commands";
 import type { EmailMailboxSection } from "@/email/components/mailbox/EmailMailboxLayout";
 import { useEmailMailboxStore } from "@/email/components/mailbox/EmailMailboxContext";
-import { MailDetailPane } from "@/email/components/mailbox/MailDetailPane";
-import { MailListPane } from "@/email/components/mailbox/MailListPane";
+import { MailDetailPane } from "./MailDetailPane";
+import { MailListPane } from "./MailListPane";
 import { useMailboxNav } from "@/email/components/mailbox/MailboxNavContext";
-import { useMailListItems } from "@/email/components/mailbox/useMailListItems";
-import { useMailListKeyboard } from "@/email/components/mailbox/useMailListKeyboard";
+import { useMailListItems } from "./useMailListItems";
+import { useMailListKeyboard } from "./useMailListKeyboard";
 import { useThreadComposeState } from "@/email/components/reply/useThreadComposeState";
 import { useStandaloneComposeOpener } from "@/email/lib/compose/compose-open";
 import { EmailListContainer } from "@/email/components/mailbox/EmailListShell";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { cn } from "@/lib/utils";
-import { ListItemStateStore } from "@/email/components/mailbox/list-item-state-store";
+import { ListItemStateStore } from "@/email/stores/list-item-state-store";
 
 type MailListViewProps = {
   folder: Extract<EmailMailboxSection, "inbox" | "drafts" | "sent" | "trash">;

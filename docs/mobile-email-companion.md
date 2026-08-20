@@ -44,12 +44,12 @@ These override older plan drafts (global mobile password, Worker URL login, “a
 | **Worker URL** | Baked into the Flutter build as `AppConfig.defaultWorkerUrl` (`https://relaybase-api.gssisaac.worker.dev` for the dogfood build; customer builds bake in the customer's own Worker URL). Change the constant + rebuild to retarget. |
 | **Account scope** | Every `/mobile/*` request is scoped to the authenticated email only. No full mailbox catalog, no “All inboxes”, no account switcher across other addresses. |
 | **Desktop provisioning** | Owner enables the address + generates the password in Accounts → account detail → **Other device**. |
-| **Secrets** | Plain password shown once on desktop after generate/regenerate; stored on Worker as salted SHA-256 under `srv:config:mobile:{email}`. Mobile stores email + password in `flutter_secure_storage`. |
+| **Secrets** | Plain password shown once on desktop after generate/regenerate; stored on Worker in D1 `mobile_passwords`. Mobile stores email + password in `flutter_secure_storage`. |
 | **Dashboard on mobile** | Out of scope. Do not add management UIs to `mobile/`. |
 
 ### Forbidden (do not reintroduce)
 
-- Global `srv:config:mobile` / Settings “Mobile access” card that gates all devices with one password.
+- Global mobile password / Settings “Mobile access” card that gates all devices with one password.
 - Asking the end user for Worker URL on the Connect screen.
 - Returning all `mobileEnabled` addresses from `/mobile/mailbox` to a logged-in teammate.
 - Putting the admin Bearer token on the phone.
@@ -62,9 +62,9 @@ These override older plan drafts (global mobile password, Worker URL login, “a
 
 ```mermaid
 flowchart LR
-  Desktop["Desktop Other device tab"] -->|"POST /console/addresses/mobile-password\nadmin Bearer"| KV["KV srv:config:mobile:{email}"]
+  Desktop["Desktop Other device tab"] -->|"POST /console/addresses/mobile-password\nadmin Bearer"| D1["D1 mobile_passwords"]
   Mobile["Flutter app"] -->|"X-Account-Email + Bearer password\n/mobile/*"| Auth["requireMobilePassword"]
-  Auth --> KV
+  Auth --> D1
   Auth --> Scope["Scope = that email only"]
   Scope --> Mail["Inbox / send / notifications"]
 ```
@@ -73,7 +73,7 @@ flowchart LR
 2. Mobile sends:
    - `Authorization: Bearer {plainPassword}`
    - `X-Account-Email: {email}`
-3. Worker loads `srv:config:mobile:{email}`, re-hashes with stored salt, constant-time compares.
+3. Worker loads the row from D1 `mobile_passwords`, re-hashes with stored salt, constant-time compares.
 4. Middleware sets `mobileAddresses` / `mobileDomains` to **that account only** (still respecting `mobileEnabled !== false` on the catalog row).
 
 Catalog flag `mobileEnabled` (omit/true = allowed, `false` = hidden) is separate from “password set”. Toggle lives on the Other device tab; password generate/clear is the credential.
@@ -154,14 +154,14 @@ Ops log source may include `"mobile"` for mobile-originated sends.
 
 ---
 
-## KV keys
+## D1 storage
 
-| Key | Contents |
-|-----|----------|
-| `srv:config:mobile:{email}` | `{ passwordHash, salt, updatedAt }` — per-account mobile password |
-| `srv:catalog:mailbox` | Addresses may include `mobileEnabled: false` |
+| Table | Contents |
+|-------|----------|
+| `mobile_passwords` | `{ passwordHash, salt, updatedAt }` per account email |
+| `addresses` | May include `mobileEnabled: false` |
 
-Legacy global `srv:config:mobile` (no email suffix) is **obsolete**; do not restore it.
+Global mobile password (no per-account row) is **obsolete**; do not restore it.
 
 ---
 
@@ -176,7 +176,7 @@ Legacy global `srv:config:mobile` (no email suffix) is **obsolete**; do not rest
 
 A teammate may store more than one mailbox address on the same device and switch between them from the drawer. Rules:
 
-- Each account keeps its **own** per-account mobile password (`srv:config:mobile:{email}`); nothing is shared across accounts.
+- Each account keeps its **own** per-account mobile password in D1 `mobile_passwords`; nothing is shared across accounts.
 - Credentials for every stored account live in `flutter_secure_storage` under `relaybase.managedAccounts` (a JSON list). The active account is also mirrored into the legacy `relaybase.workerUrl` / `relaybase.accountEmail` / `relaybase.mobilePassword` keys so `MobileApiService` can keep reading the active config directly.
 - `/mobile/*` is still scoped to the **active** account only. Switching accounts re-applies that account's config and re-scopes all requests — there is never an "All inboxes" view and a teammate never sees another address's mail.
 - Offline Hive cache is namespaced per account (`relaybase_threads::<email>`, `…_messages::`, `…_sent::`, `…_drafts::`) so switching accounts never leaks another address's cached mail into the inbox.
@@ -188,7 +188,7 @@ A teammate may store more than one mailbox address on the same device and switch
 
 1. Does this leak another address to a teammate? If yes, reject.
 2. Does login still work with **email + password only** (no Worker URL field)?
-3. Is the password still per-account (`srv:config:mobile:{email}`)?
+3. Is the password still per-account in D1 `mobile_passwords`?
 4. Did you update `email-api-map` / Other device UI if console paths changed?
 5. After auth success, does the UI leave Connect and enter the mail shell?
 6. Read this doc + [storage-architecture.md](./storage-architecture.md) before adding durable fields.

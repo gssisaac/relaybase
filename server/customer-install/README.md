@@ -18,21 +18,20 @@ This package deploys the Relaybase routing Worker into **your** Cloudflare accou
 ## 1. Create storage (exact names)
 
 ```bash
-npx wrangler kv namespace create relaybase-app
 npx wrangler r2 bucket create relaybase-mailbox
 npx wrangler d1 create relaybase-logs
 npx wrangler d1 create relaybase-inbox-index
 npx wrangler d1 create relaybase-db
 ```
 
-Copy each **id** into `wrangler.toml` (replace the `REPLACE_WITH_*` placeholders).
+Copy each D1 **id** into `wrangler.toml` (replace the `REPLACE_WITH_*` placeholders). Do **not** create a KV namespace — product state is D1 + R2, and the admin token is the `ADMIN_TOKEN` Worker secret.
 
 Apply D1 migrations:
 
 ```bash
-npx wrangler d1 migrations apply relaybase-logs --remote --migrations-dir=migrations-logs
-npx wrangler d1 migrations apply relaybase-inbox-index --remote --migrations-dir=migrations-inbox
-npx wrangler d1 migrations apply relaybase-db --remote --migrations-dir=migrations-app
+npx wrangler d1 migrations apply relaybase-logs --remote --yes --migrations-dir=migrations-logs
+npx wrangler d1 migrations apply relaybase-inbox-index --remote --yes --migrations-dir=migrations-inbox
+npx wrangler d1 migrations apply relaybase-db --remote --yes --migrations-dir=migrations-app
 ```
 
 Why these names: the desktop app and docs refer to them; keeping the names makes support and upgrades predictable. Other Workers in your account are untouched.
@@ -84,8 +83,8 @@ Account, license, billing, and recovery-token issuance are **not** on this Worke
 
 | Symptom | Fix |
 |---------|-----|
-| Verify → unauthorized | Admin token in the app must match `ADMIN_TOKEN` secret (or the KV `srv:config:admin` value set by recovery) |
+| Verify → unauthorized | Admin token in the app must match `ADMIN_TOKEN` secret (or the D1 recovery override) |
 | Verify → not Relaybase | Wrong URL, or deploy failed — open `/health` in a browser |
-| Deploy fails on KV id | Paste real namespace ids into `wrangler.toml` |
+| Deploy fails on D1 id | Paste real database ids into `wrangler.toml` |
 | R2 not configured in `/health` | Ensure bucket `relaybase-mailbox` exists and is bound as `INBOUND` |
 | Lost ADMIN_TOKEN | Desktop app → Settings → Reset admin token (uses a `console.relaybase.xyz` recovery token; no Wrangler) |

@@ -1,5 +1,6 @@
-# Customer install template — fill KV + D1 ids after creating the resources
+# Customer install template — fill D1 ids after creating the resources
 # (see README). auto_install patches the REPLACE_WITH_* placeholders.
+# Product state lives in D1 + R2. Do not add a KV namespace.
 name = "relaybase-api"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
@@ -10,10 +11,6 @@ INBOUND_BUCKET_NAME = "relaybase-mailbox"
 
 [triggers]
 crons = ["*/15 * * * *"]
-
-[[kv_namespaces]]
-binding = "RELAYBASE_APP"
-id = "REPLACE_WITH_relaybase-app_ID"
 
 [[r2_buckets]]
 binding = "INBOUND"

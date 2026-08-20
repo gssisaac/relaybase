@@ -79,15 +79,11 @@ Account `3adf03d991843094a7343eebc0a98007`, Worker `relaybase-api`:
 Re-run (another install) from `server/`:
 
 ```bash
-# 1) Prefix rename + KV send-log export on the *source* bucket
-pnpm run migrate:mailbox-r2          # dry-run
-pnpm run migrate:mailbox-r2:apply
-
-# 2) Server-side copy source → relaybase-mailbox
+# Server-side copy source → relaybase-mailbox (if needed)
 pnpm run copy:mailbox-r2             # dry-run
 pnpm run copy:mailbox-r2:apply
 
-# 3) Point wrangler.toml at relaybase-mailbox, then:
+# Point wrangler.toml at relaybase-mailbox, then:
 pnpm run deploy
 ```
 
@@ -113,7 +109,7 @@ List both buckets via the R2 REST API and compare key counts / `inbound/` vs `se
 
 - [ ] New mail objects stay under `inbound/` or `sent/` — do not invent a third top-level prefix without updating this doc and the copy Worker.
 - [ ] Binding name remains `INBOUND` unless desktop upload metadata (`cloudflare.rs`) and health JSON are updated together.
-- [ ] `recordSendLog` / `listSendLogs` take the R2 bucket, not `RELAYBASE_APP` KV.
+- [x] `recordSendLog` / `listSendLogs` take the R2 bucket.
 - [ ] Successful compose and `/v1/send` upsert `sent/{domain}/_list.json`.
 - [ ] Customer-install + desktop `R2_BUCKET` stay `relaybase-mailbox`.
 - [ ] Treat dashboard object-count cards as stale; use list API for migration checks.

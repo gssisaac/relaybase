@@ -31,6 +31,9 @@ rmSync(staging, { recursive: true, force: true });
 mkdirSync(staging, { recursive: true });
 
 cpSync(join(serverRoot, "src"), join(staging, "src"), { recursive: true });
+if (existsSync(join(serverRoot, "db"))) {
+  cpSync(join(serverRoot, "db"), join(staging, "db"), { recursive: true });
+}
 cpSync(join(serverRoot, "package.json"), join(staging, "package.json"));
 cpSync(join(serverRoot, "tsconfig.json"), join(staging, "tsconfig.json"));
 cpSync(

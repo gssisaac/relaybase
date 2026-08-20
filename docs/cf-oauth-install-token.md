@@ -2,7 +2,7 @@
 
 **Audience:** humans and coding agents changing Settings → Cloudflare, desktop wrangler auth, or `kembo/console` OAuth routes.
 
-The **install token** (Workers Scripts / KV / R2 / D1 / Secrets Store — used by Tauri `wrangler` for deploy and `secret put`) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit → Worker `CF_API_TOKEN`) is a manual paste in Settings after install.
+The **install token** (Workers Scripts / R2 / D1 / Secrets Store — used by Tauri `wrangler` for deploy and `secret put`) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit → Worker `CF_API_TOKEN`) is a manual paste in Settings after install.
 
 ---
 
@@ -104,7 +104,7 @@ Added to `credentials.json` (camelCase in JSON):
 - **Connect with Cloudflare** — same OAuth flow on **Settings → Cloudflare** (button label unchanged).
 - **Manual install** — admin token + terminal command inline on the install page; no Progress page.
 - **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. **Verify, save & push** requires OAuth connected first.
-- Do **not** ask the user to paste a Workers Scripts / KV / R2 API token. That legacy field is replaced by OAuth.
+- Do **not** ask the user to paste a Workers Scripts / R2 API token. That legacy field is replaced by OAuth. Install does not create KV.
 
 Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected” / install ZIP messaging.
 

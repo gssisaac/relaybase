@@ -1,9 +1,8 @@
 import type { Context } from "hono";
 import type { Env } from "../env";
 import { createAppDb } from "../../db/app";
+import { getOwnerConfig } from "../../db/app/owner";
 import { resolveKey } from "./keys";
-
-const ADMIN_KV_KEY = "srv:config:admin";
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
   if (!authHeader) return null;
@@ -11,20 +10,14 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
   return match?.[1]?.trim() ?? null;
 }
 
-async function kvAdminToken(env: Env): Promise<string | null> {
-  const raw = await env.RELAYBASE_APP.get(ADMIN_KV_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as { token?: string };
-    return parsed.token?.trim() || null;
-  } catch {
-    return null;
-  }
+async function d1AdminToken(env: Env): Promise<string | null> {
+  const config = await getOwnerConfig(createAppDb(env.RELAYBASE_DB));
+  return config.adminToken;
 }
 
-/** Prefer wrangler secret; fall back to KV (legacy bootstrap). */
+/** Prefer wrangler secret; then D1 recovery override from `/console/recover-admin`. */
 export async function resolveAdminToken(env: Env): Promise<string | null> {
-  return env.ADMIN_TOKEN?.trim() || (await kvAdminToken(env));
+  return env.ADMIN_TOKEN?.trim() || (await d1AdminToken(env)) || null;
 }
 
 export async function requireAdmin(
@@ -34,12 +27,9 @@ export async function requireAdmin(
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  // Accept either the Wrangler secret OR KV srv:config:admin.
-  // Previously KV won exclusively, so a fresh `wrangler secret put ADMIN_TOKEN`
-  // was ignored when an old bootstrap token remained in RELAYBASE_APP.
   const secret = c.env.ADMIN_TOKEN?.trim() || null;
-  const fromKv = await kvAdminToken(c.env);
-  const allowed = [secret, fromKv].filter(Boolean) as string[];
+  const fromD1 = await d1AdminToken(c.env);
+  const allowed = [secret, fromD1].filter(Boolean) as string[];
   if (allowed.length === 0 || !allowed.includes(token)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
@@ -61,4 +51,3 @@ export async function requireApiKey(
 
   return { record };
 }
-

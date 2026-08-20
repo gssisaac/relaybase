@@ -16,12 +16,6 @@ INBOUND_BUCKET_NAME = "relaybase-mailbox"
 [triggers]
 crons = ["*/15 * * * *"]
 
-[[kv_namespaces]]
-binding = "RELAYBASE_APP"
-# Was previously bound as KEYS (same namespace id — rename only).
-id = "341bf6e6f3c943a8a4f73128a98eb795"
-preview_id = "fe42e6d5f04741f7a09516f25504581a"
-
 [[r2_buckets]]
 binding = "INBOUND"
 bucket_name = "relaybase-mailbox"

@@ -30,7 +30,7 @@ export type MobileAuthResult = {
  * Authenticate `/mobile/*` requests with a per-account mobile password.
  *
  * The desktop Other device tab writes a salted SHA-256 hash of the password
- * to `srv:config:mobile:{email}`. The Flutter app sends the account email
+ * to D1 `mobile_passwords`. The Flutter app sends the account email
  * via the `X-Account-Email` header and the plain password as
  * `Authorization: Bearer {password}`; we re-hash with the stored salt and
  * compare in constant time. Returns the resolved email + config on success

@@ -1,6 +1,6 @@
 /**
- * `relaybase-db` schema — durable product state migrated from KV
- * `RELAYBASE_APP` (`srv:*`). Generated into `migrations-app/` by drizzle-kit.
+ * `relaybase-db` schema — durable product state (D1 `RELAYBASE_DB`).
+ * Generated into `migrations-app/` by drizzle-kit.
  */
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -193,6 +193,8 @@ export const ownerConfig = sqliteTable("owner_config", {
   id: integer("id").primaryKey(),
   ownerEmail: text("owner_email"),
   workerUrl: text("worker_url"),
+  /** Recovered ADMIN_TOKEN override (wrangler secret still accepted). */
+  adminToken: text("admin_token"),
 });
 
 // ─── inbound events (KV TTL queue replacement) ───────────────────────────

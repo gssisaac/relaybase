@@ -5,7 +5,7 @@ Monorepo for **Relaybase** — domain-scoped transactional email (send + receive
 The repo is split into two service sets:
 
 - **End-user product** (shipped to customers): `app/`, `desktop/`, `mobile/`, `server/`.
-- **Kembo operations** (internal, ours): `kembo/admin/`, `kembo/console/`, `kembo/website/`. All Cloudflare resources for this set use the `kembo-*` worker name and the `KEMBO_OPS` KV binding (operator config only — `workerUrl` + `adminToken`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in `KEMBO_OPS` — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's `RELAYBASE_APP` KV (`srv:authtoken:*`, `srv:key:*`), and plaintext keys locally in `~/.relaybase`.
+- **Kembo operations** (internal, ours): `kembo/admin/`, `kembo/console/`, `kembo/website/`. All Cloudflare resources for this set use the `kembo-*` worker name and the `KEMBO_OPS` KV binding (operator config only — `workerUrl` + `adminToken`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in `KEMBO_OPS` — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `auth_tokens`, and plaintext keys locally in `~/.relaybase`.
 
 | Set | Package | Path | Port | Role |
 |-----|---------|------|------|------|
@@ -146,8 +146,8 @@ relaybase/
 │   │   ├── index.ts        # fetch + email() handlers
 │   │   ├── inbound.ts      # R2 storage for received mail
 │   │   ├── routes/         # send, console/*, mail/*, mobile/*, v1/*
-│   │   └── lib/            # auth, mime, webhooks, KV helpers, auth-tokens, keys
-│   ├── wrangler.toml       # Worker bindings (KV RELAYBASE_APP, R2, D1)
+│   │   └── lib/            # auth, mime, webhooks, auth-tokens, keys
+│   ├── wrangler.toml       # Worker bindings (R2, D1)
 │   └── .dev.vars           # Worker secrets (local only, not committed)
 ├── app/                    # End-user Next.js email UI (relaybase-email)
 ├── desktop/                # End-user Tauri Mac shell
@@ -160,14 +160,14 @@ relaybase/
 │   ├── users.json          # User registry (shared with admin Users)
 │   ├── users/<id>.json     # Per-user domain/email data (dev)
 │   └── products/relaybase/ # Admin operator settings (KEMBO_OPS local fallback; dev)
-└── scripts/                # provision-domain-key, diagnose-relaybase, migrate-tokens-to-worker
+└── scripts/                # diagnose-relaybase
 ```
 
 ---
 
 ## Worker — deploy
 
-The product Worker (`server/`) deploys into the **customer's** Cloudflare account (end-user side). It binds a single KV namespace as `RELAYBASE_APP` (catalog, keys, auth tokens) plus the `INBOUND` R2 mailbox bucket and D1 databases.
+The product Worker (`server/`) deploys into the **customer's** Cloudflare account (end-user side). It binds the `INBOUND` R2 mailbox bucket and D1 databases (`RELAYBASE_DB`, `RELAYBASE_LOGS`, `RELAYBASE_INBOX_INDEX`). No KV namespace.
 
 ```bash
 cd server
@@ -191,7 +191,7 @@ Bindings in `server/wrangler.toml`:
 
 | Binding | Resource | Purpose |
 |---------|----------|---------|
-| `RELAYBASE_APP` | Workers KV | Catalog, API key hashes (`srv:key:*`), dashboard auth token hashes (`srv:authtoken:*`), inbound events, webhook registry |
+| `RELAYBASE_DB` | D1 `relaybase-db` | Catalog, API keys, auth tokens, mobile passwords, webhooks, owner config, inbound events |
 | `INBOUND` | R2 `relaybase-mailbox` | Mailbox objects: inbound mail (`inbound/{domain}/…`) and sent mail (`sent/{domain}/…`, `sent/_sendlog/…`) |
 | `RELAYBASE_LOGS` | D1 `relaybase-logs` | Ops-event log (compose/API/broadcast sends + inbound bounces) |
 | `RELAYBASE_INBOX_INDEX` | D1 `relaybase-inbox-index` | FTS5 inbound search index (optional) |
@@ -404,8 +404,6 @@ Cloudflare project settings:
 | Script | Purpose |
 |--------|---------|
 | `scripts/diagnose-relaybase.mjs` | Operator connectivity checks |
-| `scripts/provision-domain-key.mjs` | Issue a domain key via admin API |
-| `scripts/migrate-tokens-to-worker.mjs` | One-time: re-issue dashboard auth tokens on the product Worker and discard the legacy plaintext vault |
 
 ---
 
@@ -415,7 +413,7 @@ Cloudflare project settings:
 - Issue one API key per service/domain pair; rotate by re-issuing and updating env.
 - `ADMIN_TOKEN` is operator-only — not for customer apps.
 - Webhook secrets are shown once at registration; verify signatures in production.
-- **Kembo operations KV (`KEMBO_OPS`) holds operator config only** — product Worker URL + service admin token (`workerUrl`, `adminToken`). Cloudflare credentials, end-user dashboard auth tokens (`rb-auth-…`), and plaintext API keys are **never** stored in `KEMBO_OPS`: CF credentials come from the product Worker's wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), tokens live in the product Worker's `RELAYBASE_APP` KV (`srv:authtoken:*`, hash-indexed), DMARC branding at `srv:catalog:branding`, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault. The Worker stores key hashes at `srv:key:*`.
+- **Kembo operations KV (`KEMBO_OPS`) holds operator config only** — product Worker URL + service admin token (`workerUrl`, `adminToken`). Cloudflare credentials, end-user dashboard auth tokens (`rb-auth-…`), and plaintext API keys are **never** stored in `KEMBO_OPS`: CF credentials come from the product Worker's wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), tokens and catalog state live in the product Worker's D1 `RELAYBASE_DB`, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault.
 
 ---
 

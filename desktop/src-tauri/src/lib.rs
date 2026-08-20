@@ -14,7 +14,10 @@ fn console_base_url() -> String {
         .unwrap_or_else(|| "https://console.relaybase.xyz".to_string())
 }
 
-use auto_install::{auto_install_worker, merge_into_credentials, AutoInstallResult};
+use auto_install::{
+    auto_install_worker, merge_into_credentials, request_install_cancel, rollback_all_install,
+    AutoInstallResult,
+};
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
     clear_credentials, clear_team_login, load_api_key_vault, load_cache_json as read_cache_json,
@@ -304,6 +307,30 @@ async fn auto_install_routing_worker(
     }
     save_credentials(&next)?;
     Ok(result)
+}
+
+/// Stop an in-flight auto-install. Does not delete Cloudflare resources —
+/// the UI offers a separate Rollback action after stop/error/complete.
+#[tauri::command]
+fn cancel_auto_install() {
+    request_install_cancel();
+}
+
+/// Delete every Relaybase Worker / D1 / R2 resource in the connected account.
+#[tauri::command]
+async fn rollback_auto_install(
+    app: tauri::AppHandle,
+    api_token: String,
+    account_id: Option<String>,
+) -> Result<(), String> {
+    rollback_all_install(app, api_token, account_id).await?;
+    if let Ok(Some(mut creds)) = load_credentials() {
+        creds.worker_url.clear();
+        creds.admin_token.clear();
+        creds.worker_script_name.clear();
+        let _ = save_credentials(&creds);
+    }
+    Ok(())
 }
 
 /// Push the saved server token (Email Sending Edit) to the deployed Worker as
@@ -1550,6 +1577,8 @@ pub fn run() {
             save_team_login_cmd,
             clear_team_login_cmd,
             auto_install_routing_worker,
+            cancel_auto_install,
+            rollback_auto_install,
             push_server_token,
             start_cf_oauth,
             complete_cf_oauth,

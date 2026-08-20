@@ -3,8 +3,8 @@
 //!
 //! Flow (each step streams `install-log` events to the frontend):
 //!   1. Resolve the customer-install template directory (wrangler.toml + src).
-//!   2. `wrangler kv namespace create relaybase-app` → parse id, patch wrangler.toml.
-//!   3. `wrangler r2 bucket create relaybase-mailbox`.
+//!   2. `wrangler r2 bucket create relaybase-mailbox`.
+//!   3. Create D1 databases, patch ids, apply migrations.
 //!   4. Generate an admin token; `wrangler secret put ADMIN_TOKEN` (stdin).
 //!   5. `wrangler deploy` → parse the `*.workers.dev` URL.
 //!   6. Return { workerUrl, adminToken, workerScriptName }.
@@ -16,17 +16,61 @@
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::Notify;
 
-use crate::cloudflare::resolve_account_id;
+use crate::cloudflare::{
+    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket, list_d1_databases,
+    resolve_account_id, CfClient,
+};
 use crate::secrets::StoredCredentials;
 use crate::worker::DEFAULT_SCRIPT;
 
-const KV_NAMESPACE: &str = "relaybase-app";
+/// Returned to the UI when the user stops install. Keep this token stable.
+pub const INSTALL_CANCELLED: &str = "INSTALL_CANCELLED";
+
+static INSTALL_CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
+static INSTALL_CANCEL_NOTIFY: OnceLock<Notify> = OnceLock::new();
+
+fn cancel_notify() -> &'static Notify {
+    INSTALL_CANCEL_NOTIFY.get_or_init(Notify::new)
+}
+
+pub fn request_install_cancel() {
+    INSTALL_CANCEL_FLAG.store(true, Ordering::SeqCst);
+    cancel_notify().notify_waiters();
+}
+
+fn reset_install_cancel() {
+    INSTALL_CANCEL_FLAG.store(false, Ordering::SeqCst);
+}
+
+fn install_is_cancelled() -> bool {
+    INSTALL_CANCEL_FLAG.load(Ordering::SeqCst)
+}
+
+fn cancelled_error() -> String {
+    INSTALL_CANCELLED.to_string()
+}
+
+pub fn is_cancelled_error(err: &str) -> bool {
+    err == INSTALL_CANCELLED || err.starts_with(INSTALL_CANCELLED)
+}
+
+fn check_cancelled() -> Result<(), String> {
+    if install_is_cancelled() {
+        Err(cancelled_error())
+    } else {
+        Ok(())
+    }
+}
+
 const R2_BUCKET: &str = "relaybase-mailbox";
 
 /// D1 databases created during install. Each entry is (binding, db_name,
@@ -43,7 +87,6 @@ pub struct AutoInstallResult {
     pub worker_url: String,
     pub worker_script_name: String,
     pub admin_token: String,
-    pub kv_namespace_id: String,
     pub r2_bucket: String,
     pub account_id: String,
     pub d1_logs_id: String,
@@ -125,10 +168,57 @@ fn find_repo_template() -> Option<PathBuf> {
 }
 
 /// Copy the template into a fresh temp working directory and return its path.
+///
+/// `server/customer-install` is wrangler.toml-only. When `src/index.ts` is
+/// missing, pull Worker source, D1 migrations, and deps from `server/`.
 fn stage_template(template: &Path) -> Result<PathBuf, String> {
     let tmp = std::env::temp_dir().join(format!("relaybase-install-{}", uuid::Uuid::new_v4()));
     copy_dir(template, &tmp)?;
+    enrich_template(&tmp, template)?;
     Ok(tmp)
+}
+
+fn enrich_template(work_dir: &Path, template: &Path) -> Result<(), String> {
+    if work_dir.join("src").join("index.ts").is_file() {
+        return Ok(());
+    }
+    let server_root = template.parent().filter(|p| p.join("src").join("index.ts").is_file());
+    let Some(server_root) = server_root else {
+        return Err(
+            "Install template is missing src/index.ts. Re-pack customer-install or run from a full checkout."
+                .into(),
+        );
+    };
+    copy_dir(&server_root.join("src"), &work_dir.join("src"))?;
+    if server_root.join("db").is_dir() {
+        copy_dir(&server_root.join("db"), &work_dir.join("db"))?;
+    }
+    for dir in ["migrations-app", "migrations-logs", "migrations-inbox"] {
+        let src = server_root.join(dir);
+        if src.is_dir() {
+            copy_dir(&src, &work_dir.join(dir))?;
+        }
+    }
+    for file in ["package.json", "tsconfig.json"] {
+        let src = server_root.join(file);
+        if src.is_file() {
+            std::fs::copy(&src, work_dir.join(file))
+                .map_err(|e| format!("copy {file}: {e}"))?;
+        }
+    }
+    let nm = server_root.join("node_modules");
+    if nm.is_dir() && !work_dir.join("node_modules").exists() {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&nm, work_dir.join("node_modules"))
+                .map_err(|e| format!("symlink node_modules: {e}"))?;
+        }
+        #[cfg(not(unix))]
+        {
+            copy_dir(&nm, &work_dir.join("node_modules"))?;
+        }
+    }
+    Ok(())
 }
 
 fn copy_dir(src: &Path, dst: &Path) -> Result<(), String> {
@@ -151,15 +241,6 @@ fn generate_admin_token() -> String {
     let a = uuid::Uuid::new_v4().simple().to_string();
     let b = uuid::Uuid::new_v4().simple().to_string();
     format!("{a}{b}")
-}
-
-/// Patch the staged wrangler.toml: replace the KV id placeholder with the
-/// real namespace id returned by `wrangler kv namespace create`.
-fn patch_wrangler_toml(work_dir: &Path, kv_id: &str) -> Result<(), String> {
-    let path = work_dir.join("wrangler.toml");
-    let raw = std::fs::read_to_string(&path).map_err(|e| format!("read wrangler.toml: {e}"))?;
-    let next = raw.replace("REPLACE_WITH_relaybase-app_ID", kv_id);
-    std::fs::write(&path, next).map_err(|e| format!("write wrangler.toml: {e}"))
 }
 
 /// Patch a single D1 database id placeholder in the staged wrangler.toml.
@@ -215,48 +296,242 @@ async fn run_wrangler(
     let mut stdout_buf = String::new();
     let mut stdout_line = String::new();
     let mut stderr_line = String::new();
+    let mut stdout_done = false;
+    let mut stderr_done = false;
+
+    if install_is_cancelled() {
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+        return Err(cancelled_error());
+    }
 
     loop {
-        stdout_line.clear();
-        stderr_line.clear();
-        let s_out = stdout.read_line(&mut stdout_line).await.map_err(|e| format!("read stdout: {e}"))?;
-        let s_err = stderr.read_line(&mut stderr_line).await.map_err(|e| format!("read stderr: {e}"))?;
-
-        if s_out == 0 && s_err == 0 {
+        if stdout_done && stderr_done {
             break;
         }
-        if !stdout_line.is_empty() {
-            stdout_buf.push_str(&stdout_line);
-            let _ = app.emit(
-                "install-log",
-                LogEvent {
-                    step: step.into(),
-                    level: "stdout".into(),
-                    line: stdout_line.trim_end().to_string(),
-                },
-            );
-        }
-        if !stderr_line.is_empty() {
-            let _ = app.emit(
-                "install-log",
-                LogEvent {
-                    step: step.into(),
-                    level: "stderr".into(),
-                    line: stderr_line.trim_end().to_string(),
-                },
-            );
+        tokio::select! {
+            _ = cancel_notify().notified() => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                return Err(cancelled_error());
+            }
+            n = stdout.read_line(&mut stdout_line), if !stdout_done => {
+                match n {
+                    Ok(0) => stdout_done = true,
+                    Ok(_) => {
+                        stdout_buf.push_str(&stdout_line);
+                        let _ = app.emit(
+                            "install-log",
+                            LogEvent {
+                                step: step.into(),
+                                level: "stdout".into(),
+                                line: stdout_line.trim_end().to_string(),
+                            },
+                        );
+                        stdout_line.clear();
+                    }
+                    Err(e) => return Err(format!("read stdout: {e}")),
+                }
+            }
+            n = stderr.read_line(&mut stderr_line), if !stderr_done => {
+                match n {
+                    Ok(0) => stderr_done = true,
+                    Ok(_) => {
+                        let _ = app.emit(
+                            "install-log",
+                            LogEvent {
+                                step: step.into(),
+                                level: "stderr".into(),
+                                line: stderr_line.trim_end().to_string(),
+                            },
+                        );
+                        stderr_line.clear();
+                    }
+                    Err(e) => return Err(format!("read stderr: {e}")),
+                }
+            }
         }
     }
 
     let status = child.wait().await.map_err(|e| format!("wait: {e}"))?;
+    if install_is_cancelled() {
+        return Err(cancelled_error());
+    }
     if !status.success() {
         return Err(format!("wrangler {step} exited with status {status}"));
     }
     Ok(stdout_buf)
 }
 
-/// Parse the KV namespace id from `wrangler kv namespace create` output.
-fn parse_kv_id(output: &str) -> Option<String> {
+async fn ensure_node_modules(app: &AppHandle, work_dir: &Path) -> Result<(), String> {
+    check_cancelled()?;
+    let _ = app.emit(
+        "install-log",
+        LogEvent {
+            step: "deps".into(),
+            level: "info".into(),
+            line: "Installing Worker dependencies…".into(),
+        },
+    );
+    let mut cmd = Command::new("npm");
+    cmd.args(["install", "--omit=dev", "--no-fund", "--no-audit"]);
+    cmd.current_dir(work_dir);
+    cmd.stdout(Stdio::null());
+    cmd.stderr(Stdio::null());
+    cmd.kill_on_drop(true);
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Could not run npm install: {e}"))?;
+    tokio::select! {
+        _ = cancel_notify().notified() => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            return Err(cancelled_error());
+        }
+        status = child.wait() => {
+            let status = status.map_err(|e| format!("wait: {e}"))?;
+            if install_is_cancelled() {
+                return Err(cancelled_error());
+            }
+            if !status.success() {
+                return Err(format!("npm install exited with status {status}"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn emit_log(app: &AppHandle, step: &str, level: &str, line: impl Into<String>) {
+    let _ = app.emit(
+        "install-log",
+        LogEvent {
+            step: step.into(),
+            level: level.into(),
+            line: line.into(),
+        },
+    );
+}
+
+/// Delete every Relaybase install resource in the account (Worker, D1, R2).
+/// Streams the same `install-log` events as auto-install.
+pub async fn rollback_all_install(
+    app: AppHandle,
+    api_token: String,
+    account_id: Option<String>,
+) -> Result<(), String> {
+    let api_token = api_token.trim().to_string();
+    if api_token.is_empty() {
+        return Err("A Cloudflare API token is required.".into());
+    }
+    emit_log(
+        &app,
+        "rollback",
+        "info",
+        "Starting rollback — removing Worker, D1, and R2…",
+    );
+    let account_id = match account_id
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+    {
+        Some(id) => id,
+        None => {
+            emit_log(
+                &app,
+                "rollback",
+                "info",
+                "Resolving Cloudflare account id from API token…",
+            );
+            resolve_account_id(&api_token).await?
+        }
+    };
+    let client = CfClient {
+        account_id: account_id.clone(),
+        api_token: api_token.clone(),
+    };
+
+    emit_log(
+        &app,
+        "rollback",
+        "info",
+        format!("Deleting Worker `{DEFAULT_SCRIPT}`…"),
+    );
+    match delete_worker_script(&client, DEFAULT_SCRIPT).await {
+        Ok(()) => emit_log(
+            &app,
+            "rollback",
+            "info",
+            format!("Deleted Worker `{DEFAULT_SCRIPT}`"),
+        ),
+        Err(e) => emit_log(&app, "rollback", "stderr", format!("Worker delete: {e}")),
+    }
+
+    emit_log(&app, "rollback", "info", "Looking up D1 databases…");
+    let d1_wanted: Vec<&str> = D1_DATABASES.iter().map(|(_, name, _, _)| *name).collect();
+    match list_d1_databases(&client).await {
+        Ok(all) => {
+            let mut found = 0u32;
+            for (name, id) in all {
+                if !d1_wanted.contains(&name.as_str()) {
+                    continue;
+                }
+                found += 1;
+                emit_log(
+                    &app,
+                    "rollback",
+                    "info",
+                    format!("Deleting D1 {name} ({id})…"),
+                );
+                match delete_d1_database(&client, &id).await {
+                    Ok(()) => emit_log(&app, "rollback", "info", format!("Deleted D1 {name}")),
+                    Err(e) => {
+                        emit_log(&app, "rollback", "stderr", format!("D1 {name} delete: {e}"))
+                    }
+                }
+            }
+            if found == 0 {
+                emit_log(&app, "rollback", "info", "No Relaybase D1 databases found");
+            }
+        }
+        Err(e) => emit_log(&app, "rollback", "stderr", format!("D1 list failed: {e}")),
+    }
+
+    emit_log(
+        &app,
+        "rollback",
+        "info",
+        format!("Emptying R2 bucket {R2_BUCKET}…"),
+    );
+    match empty_r2_bucket(&client, R2_BUCKET).await {
+        Ok(n) => emit_log(
+            &app,
+            "rollback",
+            "info",
+            format!("Removed {n} object(s) from {R2_BUCKET}"),
+        ),
+        Err(e) => emit_log(&app, "rollback", "stderr", format!("R2 empty: {e}")),
+    }
+    emit_log(
+        &app,
+        "rollback",
+        "info",
+        format!("Deleting R2 bucket {R2_BUCKET}…"),
+    );
+    match delete_r2_bucket(&client, R2_BUCKET).await {
+        Ok(()) => emit_log(
+            &app,
+            "rollback",
+            "info",
+            format!("Deleted R2 bucket {R2_BUCKET}"),
+        ),
+        Err(e) => emit_log(&app, "rollback", "stderr", format!("R2 delete: {e}")),
+    }
+
+    emit_log(&app, "rollback", "info", "Rollback finished.");
+    Ok(())
+}
+
+/// Parse a wrangler resource id from CLI output (`id = ...` or JSON `"id"`).
+fn parse_wrangler_id(output: &str) -> Option<String> {
     // wrangler prints: "id = <32 hex>" or a JSON-ish payload depending on version.
     for line in output.lines() {
         let trimmed = line.trim();
@@ -313,8 +588,31 @@ fn parse_d1_id(output: &str) -> Option<String> {
             }
         }
     }
-    // Fallback: reuse parse_kv_id (some versions print just `id = ...`)
-    parse_kv_id(output)
+    // Fallback: some wrangler versions print just `id = ...`
+    parse_wrangler_id(output)
+}
+
+/// Find a D1 id by name in `wrangler d1 list --json` output.
+fn parse_d1_id_from_list(output: &str, db_name: &str) -> Option<String> {
+    let json_start = output.find(['[', '{'])?;
+    let parsed: serde_json::Value = serde_json::from_str(&output[json_start..]).ok()?;
+    let rows = parsed
+        .as_array()
+        .or_else(|| parsed.get("result").and_then(|v| v.as_array()))?;
+    for row in rows {
+        let name = row.get("name").and_then(|v| v.as_str());
+        if name != Some(db_name) {
+            continue;
+        }
+        for key in ["uuid", "id", "database_id"] {
+            if let Some(id) = row.get(key).and_then(|v| v.as_str()) {
+                if id.len() >= 16 {
+                    return Some(id.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Parse the deployed workers.dev URL from `wrangler deploy` output.
@@ -341,6 +639,7 @@ pub async fn auto_install_worker(
     account_id: Option<String>,
     server_token: Option<String>,
 ) -> Result<AutoInstallResult, String> {
+    reset_install_cancel();
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
         return Err("A Cloudflare API token is required.".into());
@@ -380,6 +679,10 @@ pub async fn auto_install_worker(
     );
 
     let work_dir = stage_template(&template)?;
+    if install_is_cancelled() {
+        let _ = std::fs::remove_dir_all(&work_dir);
+        return Err(cancelled_error());
+    }
     let _ = app.emit(
         "install-log",
         LogEvent {
@@ -389,93 +692,132 @@ pub async fn auto_install_worker(
         },
     );
 
-    // 1) KV namespace
-    let kv_out = run_wrangler(
+    let result = auto_install_steps(
         &app,
-        "kv",
         &work_dir,
-        &["kv", "namespace", "create", KV_NAMESPACE],
         &api_token,
-        None,
+        &account_id,
+        server_token.as_deref(),
     )
-    .await?;
-    let kv_id = parse_kv_id(&kv_out).ok_or_else(|| {
-        format!("Could not parse KV namespace id from wrangler output:\n{kv_out}")
-    })?;
-    patch_wrangler_toml(&work_dir, &kv_id)?;
+    .await;
+    let _ = std::fs::remove_dir_all(&work_dir);
+    result
+}
+
+async fn auto_install_steps(
+    app: &AppHandle,
+    work_dir: &Path,
+    api_token: &str,
+    account_id: &str,
+    server_token: Option<&str>,
+) -> Result<AutoInstallResult, String> {
+    check_cancelled()?;
     let _ = app.emit(
         "install-log",
         LogEvent {
-            step: "kv".into(),
+            step: "prepare".into(),
             level: "info".into(),
-            line: format!("KV namespace {KV_NAMESPACE} ready (id {kv_id})"),
+            line: "Skipping KV — product state is D1 + R2; ADMIN_TOKEN is a Worker secret."
+                .into(),
         },
     );
 
-    // 2) R2 bucket (ignore "already exists" errors)
+    // 1) R2 bucket (ignore "already exists" errors). KV is not created —
+    //    product state lives in D1 + R2; ADMIN_TOKEN is a wrangler secret.
     let r2_result = run_wrangler(
-        &app,
+        app,
         "r2",
-        &work_dir,
+        work_dir,
         &["r2", "bucket", "create", R2_BUCKET],
-        &api_token,
+        api_token,
         None,
     )
     .await;
-    if let Err(e) = r2_result {
-        let msg = e.to_string();
-        if !msg.to_lowercase().contains("already exists") && !msg.to_lowercase().contains("exists") {
-            return Err(msg);
+    match r2_result {
+        Ok(_) => {
+            check_cancelled()?;
         }
-        let _ = app.emit(
-            "install-log",
-            LogEvent {
-                step: "r2".into(),
-                level: "info".into(),
-                line: format!("R2 bucket {R2_BUCKET} already exists — reusing"),
-            },
-        );
+        Err(e) if is_cancelled_error(&e) => return Err(e),
+        Err(e) => {
+            let msg = e.to_string();
+            if !msg.to_lowercase().contains("already exists") && !msg.to_lowercase().contains("exists")
+            {
+                return Err(msg);
+            }
+            let _ = app.emit(
+                "install-log",
+                LogEvent {
+                    step: "r2".into(),
+                    level: "info".into(),
+                    line: format!("R2 bucket {R2_BUCKET} already exists — reusing"),
+                },
+            );
+        }
     }
 
-    // 2b) D1 databases — create each, patch id into wrangler.toml, apply migrations.
+    // 2) D1 databases — create (or reuse), patch id into wrangler.toml, apply migrations.
     let mut d1_ids: Vec<String> = Vec::with_capacity(D1_DATABASES.len());
     for (_binding, db_name, migrations_dir, placeholder) in D1_DATABASES {
-        let create_out = run_wrangler(
-            &app,
+        let db_id = match run_wrangler(
+            app,
             "d1-create",
-            &work_dir,
+            work_dir,
             &["d1", "create", db_name],
-            &api_token,
+            api_token,
             None,
         )
-        .await?;
-        let db_id = parse_d1_id(&create_out).ok_or_else(|| {
-            format!("Could not parse D1 id for {db_name} from wrangler output:\n{create_out}")
-        })?;
-        patch_d1_id(&work_dir, placeholder, &db_id)?;
+        .await
+        {
+            Ok(create_out) => parse_d1_id(&create_out).ok_or_else(|| {
+                format!("Could not parse D1 id for {db_name} from wrangler output:\n{create_out}")
+            })?,
+            Err(e) if is_cancelled_error(&e) => return Err(e),
+            Err(e) => {
+                let list_out = run_wrangler(
+                    app,
+                    "d1-list",
+                    work_dir,
+                    &["d1", "list", "--json"],
+                    api_token,
+                    None,
+                )
+                .await
+                .map_err(|list_err| {
+                    if is_cancelled_error(&list_err) {
+                        list_err
+                    } else {
+                        e.clone()
+                    }
+                })?;
+                parse_d1_id_from_list(&list_out, db_name).ok_or(e)?
+            }
+        };
+        patch_d1_id(work_dir, placeholder, &db_id)?;
+        check_cancelled()?;
         let _ = app.emit(
             "install-log",
             LogEvent {
                 step: "d1".into(),
                 level: "info".into(),
-                line: format!("D1 {db_name} created (id {db_id})"),
+                line: format!("D1 {db_name} ready (id {db_id})"),
             },
         );
 
         // Apply migrations for this database.
         run_wrangler(
-            &app,
+            app,
             "d1-migrate",
-            &work_dir,
+            work_dir,
             &[
                 "d1",
                 "migrations",
                 "apply",
                 "--remote",
+                "--yes",
                 &format!("--migrations-dir={migrations_dir}"),
                 db_name,
             ],
-            &api_token,
+            api_token,
             None,
         )
         .await?;
@@ -491,13 +833,14 @@ pub async fn auto_install_worker(
     }
 
     // 3) Admin token + secret
+    check_cancelled()?;
     let admin_token = generate_admin_token();
     run_wrangler(
-        &app,
+        app,
         "secret",
-        &work_dir,
+        work_dir,
         &["secret", "put", "ADMIN_TOKEN"],
-        &api_token,
+        api_token,
         Some(admin_token.as_bytes()),
     )
     .await?;
@@ -510,19 +853,16 @@ pub async fn auto_install_worker(
         },
     );
 
-    // 3b) Cloudflare runtime secrets so the Worker can send mail without the
-    //     ops dashboard syncing them into KV. CF_ACCOUNT_ID is always pushed
-    //     (it is not a secret). CF_API_TOKEN is only pushed when the user
-    //     supplied a server token with Email Sending Edit — pushing the
-    //     install token here is what caused the [10000] Authentication error
-    //     on send_raw, so we skip it entirely when no server token is given
-    //     and let the user set it later in Settings.
+    // 3b) Cloudflare runtime secrets so the Worker can send mail. CF_ACCOUNT_ID
+    //     is always pushed. CF_API_TOKEN is only pushed when the user supplied
+    //     a server token with Email Sending Edit — pushing the install token
+    //     here caused [10000] Authentication errors on send_raw.
     run_wrangler(
-        &app,
+        app,
         "secret",
-        &work_dir,
+        work_dir,
         &["secret", "put", "CF_ACCOUNT_ID"],
-        &api_token,
+        api_token,
         Some(account_id.as_bytes()),
     )
     .await?;
@@ -535,13 +875,13 @@ pub async fn auto_install_worker(
         },
     );
 
-    if let Some(server) = server_token.as_ref() {
+    if let Some(server) = server_token {
         run_wrangler(
-            &app,
+            app,
             "secret",
-            &work_dir,
+            work_dir,
             &["secret", "put", "CF_API_TOKEN"],
-            &api_token,
+            api_token,
             Some(server.as_bytes()),
         )
         .await?;
@@ -564,13 +904,18 @@ pub async fn auto_install_worker(
         );
     }
 
+    if !work_dir.join("node_modules").exists() {
+        ensure_node_modules(app, work_dir).await?;
+    }
+
     // 4) Deploy
+    check_cancelled()?;
     let deploy_out = run_wrangler(
-        &app,
+        app,
         "deploy",
-        &work_dir,
+        work_dir,
         &["deploy"],
-        &api_token,
+        api_token,
         None,
     )
     .await?;
@@ -586,16 +931,12 @@ pub async fn auto_install_worker(
         },
     );
 
-    // Best-effort: clean up the staged copy.
-    let _ = std::fs::remove_dir_all(&work_dir);
-
     Ok(AutoInstallResult {
         worker_url,
         worker_script_name: DEFAULT_SCRIPT.to_string(),
         admin_token,
-        kv_namespace_id: kv_id,
         r2_bucket: R2_BUCKET.to_string(),
-        account_id,
+        account_id: account_id.to_string(),
         d1_logs_id: d1_ids.get(0).cloned().unwrap_or_default(),
         d1_inbox_index_id: d1_ids.get(1).cloned().unwrap_or_default(),
         d1_db_id: d1_ids.get(2).cloned().unwrap_or_default(),

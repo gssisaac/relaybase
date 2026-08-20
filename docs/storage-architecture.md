@@ -2,13 +2,12 @@
 
 **Audience:** humans and coding agents changing where product data lives, API routing, D1/KV/R2 bindings, or desktop persistence.
 
-**Rule:** Relaybase has **two** durable layers. Do not reintroduce Next userdata, cookie multi-tenant stores, or a second Worker KV namespace for app data. The product Worker's durable product state lives in D1 `relaybase-db` (binding `RELAYBASE_DB`); the legacy `RELAYBASE_APP` KV is no longer the catalog source of truth (kept emptied for now).
+**Rule:** Relaybase has **two** durable layers. Do not reintroduce Next userdata, cookie multi-tenant stores, or a Cloudflare KV binding on the product Worker. The product Worker's durable product state lives in D1 `relaybase-db` (binding `RELAYBASE_DB`).
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | D1 `RELAYBASE_DB` (binding in `server/wrangler.toml`; Drizzle in `server/db/app/`) | All durable product state migrated from KV: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `auth_tokens`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config`, `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)** and the migration map below. |
+| **Remote** | D1 `RELAYBASE_DB` (binding in `server/wrangler.toml`; Drizzle in `server/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `auth_tokens`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (including recovered `admin_token`), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail bodies (`inbound/{domain}/…`) and send logs (`sent/_sendlog/*`). Unchanged. See **[mailbox-r2.md](./mailbox-r2.md)**. |
-| **Remote** | Product Worker KV `RELAYBASE_APP` (namespace `relaybase-app`) | **No longer the catalog source of truth.** Kept (emptied, binding not removed yet) for backfill/cutover. Only `srv:config:admin` (admin token hash, read by `lib/auth.ts`) still uses KV — not migrated to D1. All migrated `srv:catalog:*`, `srv:key:*`, `srv:id:*`, `srv:authtoken:*`, `srv:config:mobile:{email}`, `srv:config:owner:*`, `srv:webhook:*`, `srv:event:pending:*` keys are deleted after backfill + verify. Dead keys (`srv:config:cloudflare`, `srv:sendlog:*`, legacy `srv:config:mobile`) are also deleted. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
 | **Remote** | D1 `RELAYBASE_INBOX_INDEX` (optional) | FTS5 full-text search index over inbound mail (`inbound_search_fts`). Derived from R2 — R2 `meta.json` stays authoritative; the index is rebuildable via `server/scripts/backfill-inbound-search.mjs`. Drizzle schema/helper: `server/db/inbox-index/`. See **[inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md)**. |
 | **Remote** | D1 `kembo-ops` (binding `DB` on `kembo-admin` + `kembo-console`) | Shared Kembo store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`. See **[kembo-ops-d1.md](./kembo-ops-d1.md)**. |
@@ -33,7 +32,6 @@ flowchart TB
     Fetch["desktopAwareFetch → email-api-map"]
   end
   subgraph worker [customer *.workers.dev / isaac dogfood relaybase-api.gssisaac.worker.dev]
-    KV["KV RELAYBASE_APP\n(legacy, emptied)\nonly srv:config:admin still read"]
     R2["R2 relaybase-mailbox"]
     D1App["D1 RELAYBASE_DB\ndomains, addresses, audience,\nbroadcasts, keys, auth-tokens,\nmobile, webhooks, owner, events"]
     D1["D1 RELAYBASE_LOGS\nops events"]
@@ -46,7 +44,6 @@ flowchart TB
   Fetch -->|"admin Bearer"| worker
   Fetch -->|"account session / recovery"| console
   UI --> Home
-  worker --> KV
   worker --> R2
   worker --> D1App
   worker --> D1
@@ -67,33 +64,11 @@ Env type: `server/src/env.ts`.
 Drizzle schema + helpers: `server/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `inbound-events.ts`).  
 Migrations: `server/migrations-app/` (applied by `auto_install.rs` on new installs).
 
-This is the **sole source of truth** for product catalog state after the KV → D1 migration. No dual-write / KV fallback.
+This is the **sole source of truth** for product catalog state. No KV binding on the product Worker.
 
-### KV → D1 migration map
+### Admin auth
 
-| Legacy KV key | D1 table(s) | Helper module |
-|---------------|-------------|---------------|
-| `srv:catalog:mailbox` | `domains`, `addresses` | `server/db/app/mailbox.ts` |
-| `srv:catalog:audience` / `srv:catalog:audience-groups` | `audience_groups`, `audience_contacts` | `server/db/app/audience.ts` |
-| `srv:catalog:broadcasts` | `broadcasts` | `server/db/app/broadcasts.ts` |
-| `srv:catalog:branding` | `domain_branding` | `server/db/app/branding.ts` |
-| `srv:key:{sha256}` / `srv:id:{uuid}` | `api_keys` | `server/db/app/keys.ts` |
-| `srv:authtoken:{id}` / `srv:authtoken:hash:{sha256}` / `srv:authtoken:_index` | `auth_tokens` | `server/db/app/auth-tokens.ts` |
-| `srv:config:mobile:{email}` | `mobile_passwords` | `server/db/app/mobile.ts` |
-| `srv:webhook:*` (regs / `secret:` / `fail:`) | `webhooks`, `webhook_secrets`, `webhook_fails` | `server/db/app/webhooks.ts` |
-| `srv:config:owner:email` / `srv:config:owner:worker_url` | `owner_config` (singleton) | `server/db/app/owner.ts` |
-| `srv:event:pending:{domain}:{id}` | `inbound_events` (TTL → `expires_at` column) | `server/db/app/inbound-events.ts` |
-
-### Backfill + cutover
-
-- `server/scripts/backfill-app-d1.mjs` — reads KV, writes to D1. Dry-run by default; `--apply` to write; `--delete-kv` to clean up migrated + dead KV keys after verification.
-- After cutover, D1 is the sole source of truth. The KV namespace `relaybase-app` is kept (emptied, binding not removed yet).
-- Installation (`desktop/src-tauri/src/auto_install.rs`) creates all three D1 databases (`relaybase-db`, `relaybase-logs`, `relaybase-inbox-index`) and applies migrations.
-
-### What stays in KV (NOT migrated)
-
-- `srv:config:admin` — admin token hash, still read from KV by `lib/auth.ts` as a legacy fallback (the `ADMIN_TOKEN` wrangler secret takes precedence). Not migrated to D1. (The "dead key" deletion in the backfill script only targets stale/unused copies, not this active read path.)
-- Dead keys deleted by backfill: `srv:config:cloudflare`, `srv:sendlog:*`, legacy `srv:config:mobile` (no email suffix). `srv:config:cloudflare` is also no longer written by `bootstrap_worker` — the Worker reads `CF_ACCOUNT_ID` / `CF_API_TOKEN` wrangler secrets only (see [docs/relaybase-home-storage.md] for the install/server token split).
+Admin auth is the `ADMIN_TOKEN` wrangler secret, plus an optional D1 `owner_config.admin_token` override written by `/console/recover-admin` when the owner resets a lost token without Wrangler.
 
 ### What stays in R2 (unchanged)
 
@@ -102,7 +77,7 @@ This is the **sole source of truth** for product catalog state after the KV → 
 
 ### HTTP surface (Bearer admin token)
 
-The product Worker resolves Cloudflare credentials and the admin token from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`, `ADMIN_TOKEN`), set via the desktop install flow. The legacy `srv:config:cloudflare` KV key is no longer written or read (storing the server token in KV was risky); `srv:config:admin` is still written by `bootstrap_worker` as a fallback but the wrangler secret takes precedence. Both stale keys are cleared by `scripts/clear-worker-bootstrap-kv.mjs`. The admin Next.js server no longer writes the Worker's KV directly — it proxies to the Worker's `/console/*` routes. The Worker exposes:
+The product Worker resolves Cloudflare credentials and the admin token from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`, `ADMIN_TOKEN`), set via the desktop install flow. The admin Next.js server proxies to the Worker's `/console/*` routes. The Worker exposes:
 
 | Route | Purpose |
 |-------|---------|
@@ -154,17 +129,15 @@ Full design (schema, query safety, sync call sites, backfill, client wiring, lis
 
 ### Forbidden (do not reintroduce)
 
-- Second KV binding for app data (`KEYS`, `RELAYBASE_API` on the mail Worker)
+- Cloudflare KV binding on the product Worker for app data
 - Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in Kembo ops — the Worker reads them from wrangler secrets; D1 `kembo-ops` `product_settings` holds only `workerUrl` + `adminToken` (operator config)
 - End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `kembo-ops` — tokens live in the product Worker's D1 `auth_tokens` (hash-only); plaintext API keys live only in `~/.relaybase/api-keys.json`
-- Reintroducing product catalog state in `RELAYBASE_APP` KV — D1 `RELAYBASE_DB` is now the source of truth. New durable product fields go in `server/db/app/` (Drizzle schema + helper), not as `srv:*` KV keys.
-- Unprefixed legacy keys (`config:mailbox`, bare `id:`, `key:`) — historical only; the prefix migration script `server/scripts/migrate-kv-prefix.mjs` is no longer relevant post-cutover
-- Global mobile password at `srv:config:mobile` (no email suffix) — use the per-account row in D1 `mobile_passwords` only
+- Global mobile password (no per-account row) — use the per-account row in D1 `mobile_passwords` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
 - Hosted OpenNext `app.relaybase.xyz` as a product API (removed)
 - Cookie multi-tenant sessions for the Mac product
 
-Customer install template: three D1 databases (`relaybase-db`, `relaybase-logs`, `relaybase-inbox-index`) bound as `RELAYBASE_DB` / `RELAYBASE_LOGS` / `RELAYBASE_INBOX_INDEX`, plus one KV `relaybase-app` bound as `RELAYBASE_APP` (admin token hash only) — see `server/customer-install/`.
+Customer install template: three D1 databases (`relaybase-db`, `relaybase-logs`, `relaybase-inbox-index`) bound as `RELAYBASE_DB` / `RELAYBASE_LOGS` / `RELAYBASE_INBOX_INDEX` — no KV. See `server/customer-install/`.
 
 ---
 
@@ -215,7 +188,7 @@ Browser `pnpm next` (no Tauri): credentials via `/api/local-credentials` reading
 
 When adding a dashboard/email feature that needs durable remote data:
 
-1. Persist in D1 `RELAYBASE_DB` under `server/db/app/` (new Drizzle table + helper module) — **not** under `app/` FS/KV and **not** as a new `srv:*` KV key.
+1. Persist in D1 `RELAYBASE_DB` under `server/db/app/` (new Drizzle table + helper module) — **not** under `app/` FS and **not** in Cloudflare KV.
 2. Expose `/console/…` (management) or `/mail/…` (mail ops) with `requireAdmin` + CORS (`server/src/lib/cors.ts`). Operator-only endpoints belong in the admin Next.js server, not the worker.
 3. Map `/api/email/…` → that route in `email-api-map.ts`.
 4. Call through `desktopAwareFetch` / `readResponseJson` — never raw `fetch` to Next `/api/email` in the UI.
@@ -241,9 +214,8 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Dashboard auth tokens | D1 `RELAYBASE_DB` (`auth_tokens`, hash-only) | — |
 | Webhooks | D1 `RELAYBASE_DB` (`webhooks`, `webhook_secrets`, `webhook_fails`) | — |
 | Mobile passwords | D1 `RELAYBASE_DB` (`mobile_passwords`) | — |
-| Owner config | D1 `RELAYBASE_DB` (`owner_config`) | — |
+| Owner config / recovered admin token | D1 `RELAYBASE_DB` (`owner_config`) | — |
 | Pending inbound events | D1 `RELAYBASE_DB` (`inbound_events`, `expires_at`) | — |
-| Admin token hash | KV `RELAYBASE_APP` `srv:config:admin` (not migrated) | — |
 | Waitlist | D1 `kembo-ops` (`waitlist`) | — |
 | Console accounts / licenses | D1 `kembo-ops` (`accounts`, `licenses`, …) | — |
 
@@ -252,7 +224,7 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 ## Agent checklist
 
 1. Do **not** add `DevUser*` / `userdata:` / repo `data/users` for product state.
-2. Do **not** add a new Cloudflare KV binding beside `RELAYBASE_APP` for the mail Worker.
-3. New durable product fields go in D1 `RELAYBASE_DB` (`server/db/app/` Drizzle schema + helper) — **not** as new `srv:*` KV keys.
+2. Do **not** add a Cloudflare KV binding on the product Worker for app data.
+3. New durable product fields go in D1 `RELAYBASE_DB` (`server/db/app/` Drizzle schema + helper).
 4. Packaged and `next`/Tauri must share one fetch path — no `isPackagedDesktopShell`-only product API.
 5. Plaintext secrets that the Worker cannot store → `~/.relaybase` only (`credentials.json`, `api-keys.json`).

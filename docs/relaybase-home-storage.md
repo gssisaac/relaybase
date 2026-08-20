@@ -5,7 +5,7 @@
 **Source of truth (desktop):** `$HOME/.relaybase` only.  
 Implemented in `desktop/src-tauri/src/secrets.rs`, `desktop/src-tauri/src/notify.rs`, and the TS facades under `app/src/email/*-disk*` / `email-prefs.ts` / `api-key-vault.ts`.
 
-For the full two-layer model (Worker KV `RELAYBASE_APP` + this directory), see **[storage-architecture.md](./storage-architecture.md)**.
+For the full two-layer model (Worker D1 + R2 + this directory), see **[storage-architecture.md](./storage-architecture.md)**.
 
 ---
 
@@ -22,7 +22,7 @@ On the **Mac / Tauri desktop app**, durable user data **must** live under `~/.re
 
 `localStorage` may mirror disk for sync reads **after** hydrate. It is **not** the source of truth. Binary renames (`relaybase_desktop` → `Relaybase`) reset WebKit profiles and will look like “data wiped” if anything still depends on localhost storage alone.
 
-Server/worker data (Cloudflare KV `RELAYBASE_APP`, R2, D1 waitlist) is separate — that is the remote product store, not local desktop UX state.
+Server/worker data (Cloudflare D1 + R2) is separate — that is the remote product store, not local desktop UX state.
 
 ---
 
@@ -75,7 +75,7 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `serverToken` | Cloudflare token with Email Sending Edit, pushed to the Worker as the `CF_API_TOKEN` wrangler secret |
 | `serverTokenPushedAt` | ISO timestamp of the last successful `wrangler secret put CF_API_TOKEN` |
 | `workerUrl` | Deployed Worker base URL |
-| `adminToken` | Worker admin token (wrangler secret OR KV `srv:config:admin`; resettable via recovery) |
+| `adminToken` | Worker admin token (`ADMIN_TOKEN` wrangler secret or D1 recovery override; resettable via recovery) |
 | `workerScriptName` | Wrangler script name |
 | `licenseKey` | License key (legacy; verify now via `console.relaybase.xyz`) |
 | `relaybaseAccountId` | Relaybase console account id (`console.relaybase.xyz`) |

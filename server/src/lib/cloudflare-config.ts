@@ -7,12 +7,10 @@ export type CloudflareRuntimeConfig = {
 };
 
 /**
- * Read the Worker's Cloudflare runtime credentials. The sole source is the
- * wrangler secrets `CF_ACCOUNT_ID` + `CF_API_TOKEN` (pushed by the desktop
- * install / Settings "push server token" flow). The legacy KV
- * `srv:config:cloudflare` fallback was removed — storing the server token in
- * KV is risky and duplicated the secret. If the secrets are absent (e.g. the
- * user skipped the server token during install), this returns null and
+ * Read the Worker's Cloudflare runtime credentials from wrangler secrets
+ * `CF_ACCOUNT_ID` + `CF_API_TOKEN` (pushed by the desktop install / Settings
+ * "push server token" flow). If the secrets are absent (e.g. the user skipped
+ * the server token during install), this returns null and
  * `createCloudflareClient` throws a clear "not configured" error.
  */
 export async function readCloudflareRuntimeConfig(

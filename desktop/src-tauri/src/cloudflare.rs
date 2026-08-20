@@ -196,41 +196,6 @@ pub async fn list_zones(client: &CfClient) -> Result<Vec<ZoneSummary>, String> {
     Ok(zones)
 }
 
-pub async fn find_kv_namespace(client: &CfClient, title: &str) -> Result<Option<String>, String> {
-    let path = format!("/accounts/{}/storage/kv/namespaces", client.account_id);
-    let list = cf_request(client, reqwest::Method::GET, &format!("{path}?per_page=100"), None).await?;
-    if let Some(arr) = list.get("result").and_then(|v| v.as_array()) {
-        for ns in arr {
-            if ns.get("title").and_then(|v| v.as_str()) == Some(title) {
-                let id = ns.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                if !id.is_empty() {
-                    return Ok(Some(id));
-                }
-            }
-        }
-    }
-    Ok(None)
-}
-
-pub async fn ensure_kv_namespace(client: &CfClient, title: &str) -> Result<String, String> {
-    if let Some(id) = find_kv_namespace(client, title).await? {
-        return Ok(id);
-    }
-    let path = format!("/accounts/{}/storage/kv/namespaces", client.account_id);
-    let created = cf_request(
-        client,
-        reqwest::Method::POST,
-        &path,
-        Some(json!({ "title": title })),
-    )
-    .await?;
-    created
-        .pointer("/result/id")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .ok_or_else(|| "Failed to create KV namespace".into())
-}
-
 pub async fn find_r2_bucket(client: &CfClient, name: &str) -> Result<bool, String> {
     let path = format!("/accounts/{}/r2/buckets", client.account_id);
     let list = cf_request(client, reqwest::Method::GET, &path, None).await?;
@@ -318,12 +283,11 @@ pub async fn admin_auth_ok(worker_url: &str, admin_token: &str) -> bool {
     }
 }
 
-/// Upload a Worker script (module format) with KV + R2 bindings metadata.
+/// Upload a Worker script (module format) with R2 bindings metadata.
 pub async fn upload_worker_script(
     client: &CfClient,
     script_name: &str,
     js_source: &str,
-    app_kv_id: &str,
     r2_bucket: &str,
 ) -> Result<(), String> {
     let url = format!(
@@ -333,7 +297,6 @@ pub async fn upload_worker_script(
     let metadata = json!({
         "main_module": "index.js",
         "bindings": [
-            { "type": "kv_namespace", "name": "RELAYBASE_APP", "namespace_id": app_kv_id },
             { "type": "r2_bucket", "name": "INBOUND", "bucket_name": r2_bucket },
             { "type": "plain_text", "name": "WORKER_SCRIPT_NAME", "text": script_name },
             { "type": "plain_text", "name": "INBOUND_BUCKET_NAME", "text": r2_bucket }
@@ -417,116 +380,135 @@ pub async fn put_worker_secret(
     Ok(())
 }
 
-pub async fn bootstrap_worker(
-    client: &CfClient,
-    script_name: &str,
-    _account_id: &str,
-    _api_token: &str,
-    admin_token: &str,
-) -> Result<(), String> {
-    // The worker no longer exposes /admin/bootstrap or /admin/cloudflare.
-    // CF runtime credentials (CF_ACCOUNT_ID / CF_API_TOKEN) are delivered as
-    // wrangler secrets by the install / Settings push flow — never written to
-    // KV (srv:config:cloudflare was removed: storing the server token in KV
-    // is risky and the Worker now reads env secrets only). Only the admin
-    // token bootstrap remains in KV as a legacy fallback for requireAdmin.
-    let namespace_id = resolve_worker_kv_namespace_id(client, script_name).await?;
-    put_kv_value(
-        client,
-        &namespace_id,
-        "srv:config:admin",
-        &json!({ "token": admin_token }).to_string(),
-    )
-    .await?;
-    Ok(())
+/// Best-effort deletes used by install rollback. 404 / already-gone is success.
+pub async fn delete_worker_script(client: &CfClient, script_name: &str) -> Result<(), String> {
+    let path = format!(
+        "/accounts/{}/workers/scripts/{script_name}",
+        client.account_id
+    );
+    match cf_request(client, reqwest::Method::DELETE, &path, None).await {
+        Ok(_) => Ok(()),
+        Err(e) if is_not_found(&e) => Ok(()),
+        Err(e) => Err(e),
+    }
 }
 
-/// Resolve the KV namespace ID bound as RELAYBASE_APP on a Worker script.
-pub async fn resolve_worker_kv_namespace_id(
-    client: &CfClient,
-    script_name: &str,
-) -> Result<String, String> {
-    // Try the script settings/bindings endpoint first.
-    let settings_path = format!(
-        "/accounts/{}/workers/scripts/{}/settings",
-        client.account_id, script_name
+pub async fn delete_r2_bucket(client: &CfClient, name: &str) -> Result<(), String> {
+    let path = format!("/accounts/{}/r2/buckets/{name}", client.account_id);
+    match cf_request(client, reqwest::Method::DELETE, &path, None).await {
+        Ok(_) => Ok(()),
+        Err(e) if is_not_found(&e) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+pub async fn delete_d1_database(client: &CfClient, database_id: &str) -> Result<(), String> {
+    let path = format!(
+        "/accounts/{}/d1/database/{database_id}",
+        client.account_id
     );
-    let settings_url = format!("{CF_API}{settings_path}");
-    let http = reqwest::Client::new();
-    if let Ok(res) = http
-        .get(&settings_url)
-        .header("Authorization", format!("Bearer {}", client.api_token))
-        .send()
-        .await
-    {
-        if res.status().is_success() {
-            if let Ok(value) = res.json::<Value>().await {
-                if let Some(bindings) = value.pointer("/result/bindings").and_then(|v| v.as_array())
-                {
-                    for b in bindings {
-                        if b.get("type").and_then(|v| v.as_str()) == Some("kv_namespace")
-                            && b.get("name").and_then(|v| v.as_str()) == Some("RELAYBASE_APP")
-                        {
-                            if let Some(id) = b.get("namespace_id").and_then(|v| v.as_str()) {
-                                if !id.is_empty() {
-                                    return Ok(id.to_string());
-                                }
-                            }
-                        }
-                    }
-                }
+    match cf_request(client, reqwest::Method::DELETE, &path, None).await {
+        Ok(_) => Ok(()),
+        Err(e) if is_not_found(&e) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+/// Returns `(name, uuid)` for every D1 database in the account.
+pub async fn list_d1_databases(client: &CfClient) -> Result<Vec<(String, String)>, String> {
+    let path = format!("/accounts/{}/d1/database", client.account_id);
+    let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
+    let mut out = Vec::new();
+    if let Some(rows) = value.get("result").and_then(|v| v.as_array()) {
+        for row in rows {
+            let name = row.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let id = row
+                .get("uuid")
+                .or_else(|| row.get("id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !name.is_empty() && !id.is_empty() {
+                out.push((name.to_string(), id.to_string()));
             }
         }
     }
-
-    // Fall back to looking up the namespace by title (relaybase-app).
-    if let Some(id) = find_kv_namespace(client, "relaybase-app").await? {
-        return Ok(id);
-    }
-    Err(format!(
-        "Could not resolve RELAYBASE_APP KV namespace for worker `{script_name}`"
-    ))
+    Ok(out)
 }
 
-/// Write a string value into a KV namespace key.
-pub async fn put_kv_value(
-    client: &CfClient,
-    namespace_id: &str,
-    key: &str,
-    value: &str,
-) -> Result<(), String> {
-    let path = format!(
-        "/accounts/{}/storage/kv/namespaces/{}/values/{}",
-        client.account_id,
-        namespace_id,
-        urlencode(key)
-    );
-    let url = format!("{CF_API}{path}");
-    let http = reqwest::Client::new();
-    let res = http
-        .put(&url)
-        .header("Authorization", format!("Bearer {}", client.api_token))
-        .header("Content-Type", "text/plain")
-        .body(value.to_string())
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    let status = res.status();
-    let value: Value = res.json().await.map_err(|e| e.to_string())?;
-    if !status.is_success() || value.get("success") == Some(&Value::Bool(false)) {
-        return Err(format!("KV write failed ({status}): {value}"));
-    }
-    Ok(())
-}
-
-fn urlencode(s: &str) -> String {
-    s.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' {
-                c.to_string()
-            } else {
-                format!("%{:02X}", c as u32)
+/// Delete every object in an R2 bucket so the bucket itself can be removed.
+pub async fn empty_r2_bucket(client: &CfClient, name: &str) -> Result<u32, String> {
+    let mut deleted = 0u32;
+    let mut cursor: Option<String> = None;
+    loop {
+        let mut path = format!(
+            "/accounts/{}/r2/buckets/{name}/objects?per_page=1000",
+            client.account_id
+        );
+        if let Some(c) = cursor.as_ref() {
+            path.push_str("&cursor=");
+            path.push_str(c);
+        }
+        let value = match cf_request(client, reqwest::Method::GET, &path, None).await {
+            Ok(v) => v,
+            Err(e) if is_not_found(&e) => return Ok(deleted),
+            Err(e) => return Err(e),
+        };
+        let objects = value
+            .pointer("/result/objects")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .or_else(|| value.get("result").and_then(|v| v.as_array()).cloned())
+            .unwrap_or_default();
+        if objects.is_empty() {
+            break;
+        }
+        for obj in &objects {
+            let key = obj
+                .get("key")
+                .or_else(|| obj.get("name"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if key.is_empty() {
+                continue;
             }
-        })
-        .collect()
+            let encoded: String = key
+                .bytes()
+                .map(|b| {
+                    if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' || b == b'/' {
+                        (b as char).to_string()
+                    } else {
+                        format!("%{:02X}", b)
+                    }
+                })
+                .collect();
+            let del_path = format!(
+                "/accounts/{}/r2/buckets/{name}/objects/{encoded}",
+                client.account_id
+            );
+            match cf_request(client, reqwest::Method::DELETE, &del_path, None).await {
+                Ok(_) => deleted += 1,
+                Err(e) if is_not_found(&e) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        let next = value
+            .pointer("/result/cursor")
+            .and_then(|v| v.as_str())
+            .or_else(|| value.pointer("/result_info/cursor").and_then(|v| v.as_str()))
+            .map(|s| s.to_string());
+        let truncated = value
+            .pointer("/result/truncated")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if !truncated || next.is_none() || next == cursor {
+            break;
+        }
+        cursor = next;
+    }
+    Ok(deleted)
+}
+
+fn is_not_found(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("404") || lower.contains("not found") || lower.contains("does not exist")
 }

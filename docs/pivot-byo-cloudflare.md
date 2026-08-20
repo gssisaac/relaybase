@@ -45,7 +45,7 @@ Credentials: `~/.relaybase/credentials.json` (admin) and `~/.relaybase/team-logi
 ## Recovery
 
 - **Console admin password lost** → `console.relaybase.xyz/recover` (email link).
-- **ADMIN_TOKEN lost** → desktop Settings → Reset admin token: the console issues a one-time recovery token (emailed), the desktop posts it + a new admin token to the customer Worker `/console/recover-admin`, which verifies with the console and writes the new token to KV `srv:config:admin` (no Wrangler).
+- **ADMIN_TOKEN lost** → desktop Settings → Reset admin token: the console issues a one-time recovery token (emailed), the desktop posts it + a new admin token to the customer Worker `/console/recover-admin`, which verifies with the console and writes the new token to D1 `owner_config` (no Wrangler).
 
 ## Relationship to `business-plan-risk-and-market.md`
 

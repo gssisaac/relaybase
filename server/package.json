@@ -9,10 +9,6 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/lib/mobile-config.test.ts",
     "pack:customer-install": "node scripts/pack-customer-install.mjs",
-    "migrate:kv-prefix": "node scripts/migrate-kv-prefix.mjs",
-    "migrate:kv-prefix:apply": "node scripts/migrate-kv-prefix.mjs --apply",
-    "migrate:mailbox-r2": "node scripts/migrate-mailbox-r2.mjs",
-    "migrate:mailbox-r2:apply": "node scripts/migrate-mailbox-r2.mjs --apply",
     "copy:mailbox-r2": "node scripts/copy-mailbox-r2.mjs",
     "copy:mailbox-r2:apply": "node scripts/copy-mailbox-r2.mjs --apply",
     "import:mbox": "node scripts/import-mbox.mjs",
@@ -20,9 +16,7 @@
     "backfill:search": "node scripts/backfill-inbound-search.mjs",
     "backfill:search:domain": "node scripts/backfill-inbound-search.mjs --domain",
     "backfill:search:dry": "node scripts/backfill-inbound-search.mjs --dry-run",
-    "db:generate": "drizzle-kit generate --config=drizzle.app.config.ts",
-    "db:backfill": "node scripts/backfill-app-d1.mjs",
-    "db:backfill:apply": "node scripts/backfill-app-d1.mjs --apply"
+    "db:generate": "drizzle-kit generate --config=drizzle.app.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

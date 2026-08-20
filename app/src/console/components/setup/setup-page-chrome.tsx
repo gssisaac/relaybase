@@ -10,7 +10,13 @@ import { cn } from "@/lib/utils";
 export const SETUP_PAGE_SHELL =
   "mx-auto flex h-full w-full flex-col justify-center px-6 pb-24";
 
-export function SetupBackLink({ className }: { className?: string }) {
+export function SetupBackLink({
+  className,
+  onClick,
+}: {
+  className?: string;
+  onClick?: () => void | Promise<void>;
+}) {
   const router = useRouter();
   return (
     <button
@@ -19,7 +25,11 @@ export function SetupBackLink({ className }: { className?: string }) {
         "inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline",
         className,
       )}
-      onClick={() => router.push("/setup")}
+      onClick={() => {
+        void Promise.resolve(onClick?.()).finally(() => {
+          router.push("/setup");
+        });
+      }}
     >
       <ArrowLeft className="size-3" />
       Back to start

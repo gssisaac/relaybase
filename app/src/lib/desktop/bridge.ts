@@ -6,7 +6,7 @@ import { probeD1WhenConnectOmits } from "@/lib/dashboard/d1-fallback-probe";
 
 export type DesktopCredentials = {
   accountId: string;
-  /** Cloudflare token for Tauri wrangler (deploy / KV / R2 / `secret put`). */
+  /** Cloudflare token for Tauri wrangler (deploy / R2 / D1 / `secret put`). */
   installToken: string;
   /** Cloudflare token with Email Sending Edit, pushed to Worker as CF_API_TOKEN. */
   serverToken: string;
@@ -46,8 +46,6 @@ export type InstallResult = {
   workerUrl: string;
   workerScriptName: string;
   adminToken: string;
-  keysKvId: string;
-  apiKvId: string;
   r2Bucket: string;
   skipped: boolean;
   adminRelinked: boolean;
@@ -57,7 +55,6 @@ export type AutoInstallResult = {
   workerUrl: string;
   workerScriptName: string;
   adminToken: string;
-  kvNamespaceId: string;
   r2Bucket: string;
   d1LogsId: string;
   d1InboxIndexId: string;
@@ -148,11 +145,11 @@ export const CF_REQUIRED_TOKEN_PERMISSIONS = [
   "Zone — Zone — Read",
 ] as const;
 
-/** Scopes needed for desktop auto-install (Wrangler deploy + KV + R2). */
+/** Scopes needed for desktop auto-install (Wrangler deploy + R2 + D1). */
 export const CF_INSTALL_TOKEN_PERMISSIONS = [
   "Account — Workers Scripts — Edit",
-  "Account — Workers KV Storage — Edit",
   "Account — Workers R2 Storage — Edit",
+  "Account — D1 — Edit",
 ] as const;
 
 /** Human-readable OAuth scopes shown during Setup → Authorize with Cloudflare. */
@@ -299,6 +296,15 @@ export function explainDesktopError(
       detail: stripRawApiNoise(raw) || "Enter your workers.dev HTTPS URL.",
       fix: "Example: https://relaybase-api.<your-subdomain>.workers.dev",
       links: installLinks,
+    };
+  }
+
+  if (lower.includes("install_cancelled")) {
+    return {
+      title: "Installation stopped",
+      detail:
+        "Install was stopped. Resources created in this run were removed from your Cloudflare account.",
+      fix: "Click Try again to start a new install, or go back to setup.",
     };
   }
 
@@ -598,6 +604,26 @@ export async function desktopAutoInstallWorker(
   });
 }
 
+/** Stop an in-flight auto-install. The install promise then rejects. */
+export async function desktopCancelAutoInstall(): Promise<void> {
+  await invoke("cancel_auto_install");
+}
+
+/** Delete Worker + D1 + R2. Subscribe to `install-log` for the same live log as install. */
+export async function desktopRollbackInstall(
+  apiToken: string,
+  accountId?: string,
+): Promise<void> {
+  await invoke("rollback_auto_install", {
+    apiToken,
+    accountId: accountId ?? null,
+  });
+}
+
+export function isInstallCancelledError(err: unknown): boolean {
+  return formatDesktopError(err).includes("INSTALL_CANCELLED");
+}
+
 /** Subscribe to `install-log` events emitted during auto-install. */
 export async function listenInstallLog(
   handler: (event: InstallLogEvent) => void,
@@ -802,7 +828,7 @@ export async function desktopRequestAdminRecoveryToken(): Promise<{
 /**
  * Reset the customer Worker's ADMIN_TOKEN using a recovery token issued by
  * the Relaybase console. The Worker verifies the token with the console and
- * then stores the new admin token in KV (no wrangler needed).
+ * then stores the new admin token in D1 (no wrangler needed).
  */
 export async function desktopRecoverAdminToken(input: {
   workerUrl: string;

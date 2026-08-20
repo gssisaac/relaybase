@@ -9,7 +9,7 @@ import { apiError } from "@/lib/api/api-error";
 
 /**
  * DMARC branding now lives on the product worker (`/console/branding`,
- * `srv:catalog:branding`). These admin routes are a thin proxy so the
+ * D1 `domain_branding`). These admin routes are a thin proxy so the
  * existing admin UI keeps its shape.
  */
 export async function GET(request: Request) {

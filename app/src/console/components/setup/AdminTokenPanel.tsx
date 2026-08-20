@@ -27,10 +27,10 @@ function maskToken(token: string): string {
 
 /**
  * Build the full one-shot manual install script: download + unzip + npm install
- * + wrangler KV/R2/secret/deploy. The admin token is embedded so the user
+ * + wrangler R2/D1/secret/deploy. The admin token is embedded so the user
  * copies one block and runs it in a terminal. When Cloudflare credentials are
  * supplied (from ~/.relaybase), they are also pushed as Worker secrets so the
- * Worker can send mail without admin syncing them into KV.
+ * Worker can send mail.
  */
 function fullInstallCommand(
   token: string,
@@ -43,8 +43,14 @@ function fullInstallCommand(
     `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
     `cd relaybase-worker-install`,
     `npm install`,
-    `npx wrangler kv namespace create relaybase-app`,
     `npx wrangler r2 bucket create relaybase-mailbox`,
+    `npx wrangler d1 create relaybase-logs`,
+    `npx wrangler d1 create relaybase-inbox-index`,
+    `npx wrangler d1 create relaybase-db`,
+    `# paste each database_id into wrangler.toml (REPLACE_WITH_* placeholders)`,
+    `npx wrangler d1 migrations apply relaybase-logs --remote --yes --migrations-dir=migrations-logs`,
+    `npx wrangler d1 migrations apply relaybase-inbox-index --remote --yes --migrations-dir=migrations-inbox`,
+    `npx wrangler d1 migrations apply relaybase-db --remote --yes --migrations-dir=migrations-app`,
     `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,
   ];
   if (cf?.accountId.trim() && cf?.serverToken.trim()) {

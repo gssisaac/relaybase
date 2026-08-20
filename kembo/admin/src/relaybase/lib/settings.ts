@@ -20,7 +20,7 @@ const SETTINGS_FILE = "settings.json";
  * Operator config for the Relaybase product worker. Only the bits the
  * operator dashboard needs to reach the worker and authorize calls live
  * here — Cloudflare credentials, DMARC branding, and send logs now live on
- * the product worker (wrangler secrets + `srv:catalog:branding` +
+ * the product worker (wrangler secrets + D1 `domain_branding` +
  * R2 `sent/_sendlog/*`).
  */
 export type EmailSenderSettings = {

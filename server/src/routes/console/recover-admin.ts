@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
+import { createAppDb } from "../../../db/app";
+import { setOwnerAdminToken } from "../../../db/app/owner";
 
 const consoleRecoverAdmin = new Hono<{ Bindings: Env }>();
 
-const ADMIN_KV_KEY = "srv:config:admin";
 const CONSOLE_RECOVERY_VERIFY_URL =
   "https://console.relaybase.xyz/v1/recovery/verify-admin-token";
 
@@ -22,8 +23,8 @@ const CONSOLE_RECOVERY_VERIFY_URL =
  *   4. This Worker verifies the token with the console, which checks the
  *      token is valid, belongs to accountEmail, and that workerUrl is
  *      registered to that account.
- *   5. On success, this Worker writes newAdminToken to KV srv:config:admin,
- *      which auth.ts already accepts alongside the wrangler secret.
+ *   5. On success, this Worker writes newAdminToken to D1 owner_config.
+ *      auth.ts accepts the wrangler secret or the D1 override.
  *
  * This endpoint is intentionally UNAUTHENTICATED (the whole point is the
  * admin token is lost). Security comes from the single-use recovery token +
@@ -57,7 +58,6 @@ consoleRecoverAdmin.post("/", async (c) => {
     return c.json({ error: "newAdminToken must be at least 16 characters" }, 400);
   }
 
-  // Verify the recovery token with the console.
   let verifyOk = false;
   try {
     const res = await fetch(CONSOLE_RECOVERY_VERIFY_URL, {
@@ -75,12 +75,14 @@ consoleRecoverAdmin.post("/", async (c) => {
     return c.json({ error: "Invalid or expired recovery token" }, 403);
   }
 
-  // Write the new admin token to KV. auth.ts accepts wrangler secret OR this
-  // KV value, so the new token takes effect immediately.
-  await c.env.RELAYBASE_APP.put(
-    ADMIN_KV_KEY,
-    JSON.stringify({ token: newAdminToken }),
-  );
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  if (!db) {
+    return c.json(
+      { error: "Cannot store recovered token — D1 RELAYBASE_DB is not bound" },
+      500,
+    );
+  }
+  await setOwnerAdminToken(db, newAdminToken);
 
   return c.json({ ok: true });
 });

@@ -72,7 +72,7 @@ Legacy `/audience/:groupId[/contacts|history|settings]` segments are normalized 
 
 ## Data model (store)
 
-Defined in `server/src/lib/catalog-types.ts` and persisted in D1 `RELAYBASE_DB` tables `audience_groups` / `audience_contacts` / `broadcasts` (Drizzle schema in `server/db/app/schema.ts`; helpers in `server/db/app/audience.ts` and `server/db/app/broadcasts.ts`). The legacy KV keys `srv:catalog:audience`, `srv:catalog:audience-groups`, and `srv:catalog:broadcasts` are deleted after backfill — D1 is the sole source of truth, no dual-write / KV fallback.
+Defined in `server/src/lib/catalog-types.ts` and persisted in D1 `RELAYBASE_DB` tables `audience_groups` / `audience_contacts` / `broadcasts` (Drizzle schema in `server/db/app/schema.ts`; helpers in `server/db/app/audience.ts` and `server/db/app/broadcasts.ts`). D1 is the sole source of truth.
 
 ### `DevAudienceDataSource`
 

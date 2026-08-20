@@ -11,6 +11,7 @@ import {
   desktopOpenExternal,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
+import { formatRelativeDate } from "@/lib/utils";
 import { useSettingsConnection } from "@/dashboard/components/settings/SettingsConnectionContext";
 import {
   ConnectionCard,
@@ -19,6 +20,16 @@ import {
   SummaryRow,
   maskSecret,
 } from "@/dashboard/components/settings/settings-shared";
+
+function accessTokenExpiryDetail(iso: string): string {
+  const expiresAt = new Date(iso);
+  if (Number.isNaN(expiresAt.getTime())) return "";
+  const relative = formatRelativeDate(iso);
+  if (expiresAt.getTime() <= Date.now()) {
+    return ` Access token expired ${relative}.`;
+  }
+  return ` Access token expires ${relative}.`;
+}
 
 export function SettingsCloudflarePage() {
   const {
@@ -75,7 +86,7 @@ export function SettingsCloudflarePage() {
             cfOAuthConnected
               ? `Account ${cfOAuthAccountId || credentials?.accountId || "—"} is authorized. Relaybase can deploy and push secrets.${
                   cfOAuthExpiresAt
-                    ? ` Access token expires ${cfOAuthExpiresAt}.`
+                    ? accessTokenExpiryDetail(cfOAuthExpiresAt)
                     : ""
                 }`
               : "Click Connect with Cloudflare to authorize Relaybase. You'll be sent to Cloudflare to approve, then return here."

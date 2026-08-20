@@ -35,6 +35,7 @@ import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { AdminTokenPanel } from "@/dashboard/components/AdminTokenPanel";
 import { CfInstallTokenGuide } from "@/dashboard/components/CfInstallTokenGuide";
+import { CfServerTokenGuide } from "@/dashboard/components/CfServerTokenGuide";
 import { SetupStepper, WhatWeInstall } from "@/dashboard/components/SetupWizardParts";
 import { StepTwoBody } from "@/dashboard/components/SetupStepTwo";
 
@@ -42,28 +43,35 @@ const DRAFT_KEY = "relaybase.setup.install.draft";
 
 type Draft = {
   cfApiToken: string;
+  cfServerToken: string;
   adminToken: string;
   workerUrl: string;
 };
 
+function emptyDraft(): Draft {
+  return { cfApiToken: "", cfServerToken: "", adminToken: "", workerUrl: "" };
+}
+
 function loadDraft(): Draft {
   if (typeof window === "undefined") {
-    return { cfApiToken: "", adminToken: "", workerUrl: "" };
+    return emptyDraft();
   }
   try {
     const raw = sessionStorage.getItem(DRAFT_KEY);
-    if (!raw) return { cfApiToken: "", adminToken: "", workerUrl: "" };
+    if (!raw) return emptyDraft();
     const parsed = JSON.parse(raw) as Partial<Draft>;
     return {
       cfApiToken:
         typeof parsed.cfApiToken === "string" ? parsed.cfApiToken : "",
+      cfServerToken:
+        typeof parsed.cfServerToken === "string" ? parsed.cfServerToken : "",
       adminToken:
         typeof parsed.adminToken === "string" ? parsed.adminToken : "",
       workerUrl:
         typeof parsed.workerUrl === "string" ? parsed.workerUrl : "",
     };
   } catch {
-    return { cfApiToken: "", adminToken: "", workerUrl: "" };
+    return emptyDraft();
   }
 }
 
@@ -90,6 +98,7 @@ export function WorkerInstallPanel() {
   const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [cfApiToken, setCfApiToken] = useState("");
+  const [cfServerToken, setCfServerToken] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
   const [adminToken, setAdminToken] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -109,6 +118,7 @@ export function WorkerInstallPanel() {
   useEffect(() => {
     const draft = loadDraft();
     setCfApiToken(draft.cfApiToken);
+    setCfServerToken(draft.cfServerToken);
     setWorkerUrl(draft.workerUrl || credentials?.workerUrl || "");
     setAdminToken(draft.adminToken || credentials?.adminToken || "");
     setHydrated(true);
@@ -117,8 +127,8 @@ export function WorkerInstallPanel() {
 
   useEffect(() => {
     if (!hydrated) return;
-    saveDraft({ cfApiToken, adminToken, workerUrl });
-  }, [hydrated, cfApiToken, adminToken, workerUrl]);
+    saveDraft({ cfApiToken, cfServerToken, adminToken, workerUrl });
+  }, [hydrated, cfApiToken, cfServerToken, adminToken, workerUrl]);
 
   useEffect(() => {
     if (logEndRef.current) {
@@ -184,7 +194,11 @@ export function WorkerInstallPanel() {
       unlisten = await listenInstallLog((event) => {
         setLogs((prev) => [...prev, event]);
       });
-      const result = await desktopAutoInstallWorker(token);
+      const result = await desktopAutoInstallWorker(
+        token,
+        credentials?.accountId ?? undefined,
+        cfServerToken,
+      );
       const connect = await desktopVerifyWorkerConnection(
         result.workerUrl,
         result.adminToken,
@@ -301,18 +315,37 @@ export function WorkerInstallPanel() {
               {mode === "auto" ? (
                 <div className="space-y-3 rounded-lg border border-border p-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="cf-api-token">Cloudflare API token</Label>
+                    <Label htmlFor="cf-api-token">
+                      Cloudflare install token
+                    </Label>
                     <Input
                       id="cf-api-token"
                       type="password"
                       value={cfApiToken}
                       onChange={(e) => setCfApiToken(e.target.value)}
-                      placeholder="cfut_…"
+                      placeholder="cfut_… (Workers Scripts / KV / R2 Edit)"
                       className="font-mono text-xs"
                       autoComplete="off"
                       spellCheck={false}
                     />
                     <CfInstallTokenGuide />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cf-server-token">
+                      Cloudflare server token{" "}
+                      <span className="text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="cf-server-token"
+                      type="password"
+                      value={cfServerToken}
+                      onChange={(e) => setCfServerToken(e.target.value)}
+                      placeholder="Email Sending Edit — pushed as CF_API_TOKEN"
+                      className="font-mono text-xs"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <CfServerTokenGuide />
                   </div>
                 </div>
               ) : (
@@ -352,6 +385,7 @@ export function WorkerInstallPanel() {
               logEndRef={logEndRef}
               cfApiToken={cfApiToken}
               cfAccountId={credentials?.accountId ?? ""}
+              cfServerToken={cfServerToken}
               adminToken={adminToken}
               setAdminToken={setAdminToken}
               copiedToken={copiedToken}

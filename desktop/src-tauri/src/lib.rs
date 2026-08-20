@@ -19,11 +19,27 @@ use worker::{adopt_worker, install_worker, probe_install, update_worker, Install
 #[tauri::command]
 async fn save_cf_credentials(
     account_id: String,
-    api_token: String,
+    install_token: String,
+    server_token: String,
 ) -> Result<StoredCredentials, String> {
     let mut creds = load_credentials()?.unwrap_or_default();
     creds.account_id = account_id.trim().to_string();
-    creds.api_token = api_token.trim().to_string();
+    // Merge semantics: an empty install_token means "leave the existing one
+    // alone" (Settings only manages the server token; the install token is
+    // persisted during install and reused for wrangler auth). Only overwrite
+    // when a non-empty value is passed (install flow / explicit re-enter).
+    let install_trimmed = install_token.trim();
+    if !install_trimmed.is_empty() {
+        creds.install_token = install_trimmed.to_string();
+    }
+    // Clearing the server token also clears the pushed-at timestamp so the
+    // dashboard stops claiming "Pushed to Worker" after a wipe.
+    if server_token.trim().is_empty() {
+        creds.server_token.clear();
+        creds.server_token_pushed_at.clear();
+    } else {
+        creds.server_token = server_token.trim().to_string();
+    }
     save_credentials(&creds)?;
     Ok(creds)
 }
@@ -95,8 +111,13 @@ async fn save_cache_json(
 }
 
 #[tauri::command]
-async fn verify_cf_token(account_id: String, api_token: String) -> Result<cloudflare::TokenVerifyResult, String> {
-    verify_token(account_id.trim(), api_token.trim()).await
+async fn verify_cf_token(
+    account_id: String,
+    api_token: String,
+    scope: Option<String>,
+) -> Result<cloudflare::TokenVerifyResult, String> {
+    let s = scope.as_deref().unwrap_or("install");
+    verify_token(account_id.trim(), api_token.trim(), s).await
 }
 
 #[tauri::command]
@@ -104,7 +125,7 @@ async fn list_cf_zones() -> Result<Vec<ZoneSummary>, String> {
     let creds = load_credentials()?.ok_or("No credentials stored")?;
     let client = cloudflare::CfClient {
         account_id: creds.account_id,
-        api_token: creds.api_token,
+        api_token: creds.install_token,
     };
     list_zones(&client).await
 }
@@ -112,16 +133,16 @@ async fn list_cf_zones() -> Result<Vec<ZoneSummary>, String> {
 #[tauri::command]
 async fn probe_routing_worker() -> Result<ProbeResult, String> {
     let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    if creds.account_id.is_empty() || creds.api_token.is_empty() {
+    if creds.account_id.is_empty() || creds.install_token.is_empty() {
         return Err("Connect Cloudflare first".into());
     }
-    probe_install(&creds.account_id, &creds.api_token).await
+    probe_install(&creds.account_id, &creds.install_token).await
 }
 
 #[tauri::command]
 async fn adopt_routing_worker() -> Result<InstallResult, String> {
     let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    let (result, next) = adopt_worker(&creds.account_id, &creds.api_token, &creds).await?;
+    let (result, next) = adopt_worker(&creds.account_id, &creds.install_token, &creds).await?;
     save_credentials(&next)?;
     Ok(result)
 }
@@ -130,7 +151,7 @@ async fn adopt_routing_worker() -> Result<InstallResult, String> {
 async fn install_routing_worker(worker_js: Option<String>) -> Result<InstallResult, String> {
     let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
     let (result, next) =
-        install_worker(&creds.account_id, &creds.api_token, worker_js, &creds).await?;
+        install_worker(&creds.account_id, &creds.install_token, worker_js, &creds).await?;
     save_credentials(&next)?;
     Ok(result)
 }
@@ -208,12 +229,55 @@ async fn auto_install_routing_worker(
     app: tauri::AppHandle,
     api_token: String,
     account_id: Option<String>,
+    server_token: Option<String>,
 ) -> Result<AutoInstallResult, String> {
-    let result = auto_install_worker(app, api_token, account_id.clone()).await?;
+    let server = server_token
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let result = auto_install_worker(app, api_token.clone(), account_id.clone(), server.clone()).await?;
     let existing = load_credentials()?.unwrap_or_default();
-    let next = merge_into_credentials(&existing, &result, account_id);
+    let mut next = merge_into_credentials(&existing, &result, account_id);
+    // Persist the install token used so later update_worker / push_server_token
+    // can re-auth wrangler without re-entering it.
+    next.install_token = api_token.trim().to_string();
+    // If a server token was supplied and pushed, record the pushed-at time.
+    if let Some(srv) = server {
+        next.server_token = srv;
+        next.server_token_pushed_at = auto_install::now_iso();
+    }
     save_credentials(&next)?;
     Ok(result)
+}
+
+/// Push the saved server token (Email Sending Edit) to the deployed Worker as
+/// the `CF_API_TOKEN` wrangler secret, using the install token for wrangler
+/// auth. Requires wrangler available locally (same as auto-install).
+#[tauri::command]
+async fn push_server_token() -> Result<serde_json::Value, String> {
+    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
+    if creds.account_id.is_empty() || creds.install_token.is_empty() {
+        return Err("Install token (Workers Scripts Edit) is required to push the server token".into());
+    }
+    if creds.server_token.is_empty() {
+        return Err("No server token saved. Add an Email Sending Edit token in Settings first.".into());
+    }
+    if creds.worker_script_name.is_empty() {
+        return Err("No deployed Worker found. Install the routing Worker first.".into());
+    }
+
+    let pushed_at = auto_install::push_cf_api_token_secret(
+        &creds.worker_script_name,
+        &creds.install_token,
+        &creds.server_token,
+    )
+    .await?;
+
+    // Persist the pushed-at timestamp so the dashboard can show "Pushed".
+    let mut next = creds;
+    next.server_token_pushed_at = pushed_at.clone();
+    save_credentials(&next)?;
+
+    Ok(serde_json::json!({ "ok": true, "message": "Server token pushed to Worker as CF_API_TOKEN.", "pushedAt": pushed_at }))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -338,6 +402,8 @@ struct WorkerConnectResult {
     r2_object_count: Option<u64>,
     /// True when the Worker stopped scanning early (large bucket).
     r2_usage_truncated: Option<bool>,
+    /// True when the Worker has a CF_API_TOKEN wrangler secret set.
+    cf_api_token_set: bool,
     d1_logs: D1BindingSnapshot,
     d1_inbox_index: D1BindingSnapshot,
     d1_app: D1BindingSnapshot,
@@ -545,6 +611,10 @@ async fn verify_worker_connection(
         r2_usage_truncated: usage
             .and_then(|u| u.get("truncated"))
             .and_then(|v| v.as_bool()),
+        cf_api_token_set: value
+            .get("cfApiTokenSet")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
         d1_logs,
         d1_inbox_index,
         d1_app,
@@ -879,6 +949,7 @@ pub fn run() {
             save_team_login_cmd,
             clear_team_login_cmd,
             auto_install_routing_worker,
+            push_server_token,
             verify_worker_connection,
             save_worker_connection,
             get_desktop_info,

@@ -11,7 +11,11 @@ import { NextResponse } from "next/server";
 
 type CredentialsFile = {
   accountId?: string;
+  /** Legacy single-token field; migrated to installToken on read. */
   apiToken?: string;
+  installToken?: string;
+  serverToken?: string;
+  serverTokenPushedAt?: string;
   workerUrl?: string;
   adminToken?: string;
   workerScriptName?: string;
@@ -32,7 +36,10 @@ export async function GET() {
     const parsed = JSON.parse(raw) as CredentialsFile;
     return NextResponse.json({
       accountId: parsed.accountId ?? "",
-      apiToken: parsed.apiToken ?? "",
+      // Migrate legacy apiToken → installToken on read.
+      installToken: parsed.installToken ?? parsed.apiToken ?? "",
+      serverToken: parsed.serverToken ?? "",
+      serverTokenPushedAt: parsed.serverTokenPushedAt ?? "",
       workerUrl: parsed.workerUrl ?? "",
       adminToken: parsed.adminToken ?? "",
       workerScriptName: parsed.workerScriptName ?? "",
@@ -58,7 +65,9 @@ export async function PUT(req: Request) {
   await mkdir(dir, { recursive: true });
   const next: CredentialsFile = {
     accountId: body.accountId?.trim() ?? "",
-    apiToken: body.apiToken?.trim() ?? "",
+    installToken: body.installToken?.trim() ?? "",
+    serverToken: body.serverToken?.trim() ?? "",
+    serverTokenPushedAt: body.serverTokenPushedAt?.trim() ?? "",
     workerUrl: body.workerUrl?.trim().replace(/\/$/, "") ?? "",
     adminToken: body.adminToken?.trim() ?? "",
     workerScriptName: body.workerScriptName?.trim() ?? "",

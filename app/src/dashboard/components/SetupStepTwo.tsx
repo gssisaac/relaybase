@@ -20,6 +20,7 @@ export function StepTwoBody({
   logEndRef,
   cfApiToken,
   cfAccountId,
+  cfServerToken,
   adminToken,
   setAdminToken,
   copiedToken,
@@ -37,6 +38,7 @@ export function StepTwoBody({
   logEndRef: RefObject<HTMLDivElement | null>;
   cfApiToken: string;
   cfAccountId?: string;
+  cfServerToken?: string;
   adminToken: string;
   setAdminToken: (t: string) => void;
   copiedToken: boolean;
@@ -151,7 +153,7 @@ export function StepTwoBody({
             value={adminToken}
             onChange={setAdminToken}
             cfAccountId={cfAccountId}
-            cfApiToken={cfApiToken}
+            cfServerToken={cfServerToken}
           />
           <DesktopErrorBanner error={error} />
           <Button

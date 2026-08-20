@@ -46,6 +46,10 @@ consoleConnect.get("/", async (c) => {
       usage,
     },
     d1,
+    // Whether the Worker has a CF_API_TOKEN wrangler secret set (i.e. the
+    // server token has been pushed). The dashboard uses this — together with
+    // the local serverToken + pushedAt — to show "Server token configured".
+    cfApiTokenSet: Boolean(c.env.CF_API_TOKEN?.trim()),
   });
 });
 

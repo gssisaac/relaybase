@@ -60,7 +60,9 @@ function readDesktopCredentialsFromWindow(): DesktopCredentials | null {
   if (!workerUrl || !adminToken) return null;
   return {
     accountId: "",
-    apiToken: "",
+    installToken: "",
+    serverToken: "",
+    serverTokenPushedAt: "",
     workerUrl,
     adminToken,
     workerScriptName: "",

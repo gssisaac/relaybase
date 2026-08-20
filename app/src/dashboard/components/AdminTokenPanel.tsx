@@ -35,7 +35,7 @@ function maskToken(token: string): string {
 function fullInstallCommand(
   token: string,
   zipUrl: string,
-  cf?: { accountId: string; apiToken: string },
+  cf?: { accountId: string; serverToken: string },
 ): string {
   const escaped = token.replace(/'/g, `'\\''`);
   const lines = [
@@ -47,20 +47,22 @@ function fullInstallCommand(
     `npx wrangler r2 bucket create relaybase-mailbox`,
     `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,
   ];
-  if (cf?.accountId.trim() && cf?.apiToken.trim()) {
+  if (cf?.accountId.trim() && cf?.serverToken.trim()) {
     const acct = cf.accountId.replace(/'/g, `'\\''`);
-    const tok = cf.apiToken.replace(/'/g, `'\\''`);
+    const tok = cf.serverToken.replace(/'/g, `'\\''`);
     lines.push(`printf '%s' '${acct}' | npx wrangler secret put CF_ACCOUNT_ID`);
+    // The server token (Email Sending Edit) is what authorizes the Worker to
+    // send mail — never embed the install token here.
     lines.push(`printf '%s' '${tok}' | npx wrangler secret put CF_API_TOKEN`);
   } else {
     lines.push(
-      `# Optional: set CF_ACCOUNT_ID and CF_API_TOKEN secrets so the Worker can send mail`,
+      `# Optional: set CF_ACCOUNT_ID and a server token (Email Sending Edit) so the Worker can send mail`,
     );
     lines.push(
       `# printf '%s' '<account-id>' | npx wrangler secret put CF_ACCOUNT_ID`,
     );
     lines.push(
-      `# printf '%s' '<api-token>' | npx wrangler secret put CF_API_TOKEN`,
+      `# printf '%s' '<server-token>' | npx wrangler secret put CF_API_TOKEN`,
     );
   }
   lines.push(`npx wrangler deploy`);
@@ -75,12 +77,12 @@ export function AdminTokenPanel({
   value,
   onChange,
   cfAccountId,
-  cfApiToken,
+  cfServerToken,
 }: {
   value: string;
   onChange: (token: string) => void;
   cfAccountId?: string;
-  cfApiToken?: string;
+  cfServerToken?: string;
 }) {
   const [copied, setCopied] = useState<"cmd" | "token" | null>(null);
 
@@ -103,7 +105,7 @@ export function AdminTokenPanel({
     await copyText(
       fullInstallCommand(value, WORKER_INSTALL_ZIP_URL, {
         accountId: cfAccountId ?? "",
-        apiToken: cfApiToken ?? "",
+        serverToken: cfServerToken ?? "",
       }),
     );
     setCopied("cmd");
@@ -201,7 +203,7 @@ export function AdminTokenPanel({
           {value
             ? fullInstallCommand(value, WORKER_INSTALL_ZIP_URL, {
                 accountId: cfAccountId ?? "",
-                apiToken: cfApiToken ?? "",
+                serverToken: cfServerToken ?? "",
               })
             : "Generate a token to reveal the full command."}
         </pre>

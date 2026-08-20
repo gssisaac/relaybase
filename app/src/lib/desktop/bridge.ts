@@ -6,7 +6,12 @@ import { probeD1WhenConnectOmits } from "@/lib/dashboard/d1-fallback-probe";
 
 export type DesktopCredentials = {
   accountId: string;
-  apiToken: string;
+  /** Cloudflare token for Tauri wrangler (deploy / KV / R2 / `secret put`). */
+  installToken: string;
+  /** Cloudflare token with Email Sending Edit, pushed to Worker as CF_API_TOKEN. */
+  serverToken: string;
+  /** ISO timestamp of last successful `wrangler secret put CF_API_TOKEN`. */
+  serverTokenPushedAt: string;
   workerUrl: string;
   adminToken: string;
   workerScriptName: string;
@@ -151,6 +156,8 @@ export type WorkerConnectResult = {
   r2ObjectCount?: number | null;
   /** True when the Worker stopped scanning early (large bucket). */
   r2UsageTruncated?: boolean | null;
+  /** True when the Worker has a CF_API_TOKEN wrangler secret set. */
+  cfApiTokenSet?: boolean;
   d1Logs: D1BindingSnapshot;
   d1InboxIndex: D1BindingSnapshot;
   d1App: D1BindingSnapshot;
@@ -282,16 +289,27 @@ export async function desktopGetCredentials(): Promise<DesktopCredentials | null
 
 export async function desktopSaveCfCredentials(
   accountId: string,
-  apiToken: string,
+  installToken: string,
+  serverToken: string,
 ): Promise<DesktopCredentials> {
-  return invoke("save_cf_credentials", { accountId, apiToken });
+  return invoke("save_cf_credentials", { accountId, installToken, serverToken });
 }
 
 export async function desktopVerifyCfToken(
   accountId: string,
   apiToken: string,
+  scope: "install" | "server",
 ): Promise<{ ok: boolean; accountId: string; message: string }> {
-  return invoke("verify_cf_token", { accountId, apiToken });
+  return invoke("verify_cf_token", { accountId, apiToken, scope });
+}
+
+/** Push the saved server token to the Worker as `CF_API_TOKEN` via wrangler. */
+export async function desktopPushServerToken(): Promise<{
+  ok: boolean;
+  message: string;
+  pushedAt: string;
+}> {
+  return invoke("push_server_token");
 }
 
 export async function desktopListZones(): Promise<ZoneSummary[]> {
@@ -320,10 +338,12 @@ export async function desktopInstallWorker(
 export async function desktopAutoInstallWorker(
   apiToken: string,
   accountId?: string,
+  serverToken?: string,
 ): Promise<AutoInstallResult> {
   return invoke("auto_install_routing_worker", {
     apiToken,
     accountId: accountId ?? null,
+    serverToken: serverToken?.trim() ? serverToken.trim() : null,
   });
 }
 
@@ -373,7 +393,9 @@ export async function desktopSaveRelaybaseAccount(input: {
   const existing = await loadLocalCredentialsFile();
   const next: DesktopCredentials = {
     accountId: existing?.accountId ?? "",
-    apiToken: existing?.apiToken ?? "",
+    installToken: existing?.installToken ?? "",
+    serverToken: existing?.serverToken ?? "",
+    serverTokenPushedAt: existing?.serverTokenPushedAt ?? "",
     workerUrl: existing?.workerUrl ?? "",
     adminToken: existing?.adminToken ?? "",
     workerScriptName: existing?.workerScriptName ?? "",
@@ -583,6 +605,7 @@ export async function desktopVerifyWorkerConnection(
       };
     };
     d1?: Parameters<typeof d1BindingFromPayload>[0];
+    cfApiTokenSet?: boolean;
   };
   const usage = value.inbound?.usage;
   let d1Logs = d1BindingFromPayload(value.d1, "logs");
@@ -613,6 +636,7 @@ export async function desktopVerifyWorkerConnection(
     r2TotalBytes: usage?.totalBytes ?? null,
     r2ObjectCount: usage?.objectCount ?? null,
     r2UsageTruncated: usage?.truncated ?? null,
+    cfApiTokenSet: Boolean(value.cfApiTokenSet),
     d1Logs,
     d1InboxIndex,
     d1App,
@@ -634,7 +658,9 @@ export async function desktopSaveWorkerConnection(input: {
   const existing = await loadLocalCredentialsFile();
   const next: DesktopCredentials = {
     accountId: existing?.accountId ?? "",
-    apiToken: existing?.apiToken ?? "",
+    installToken: existing?.installToken ?? "",
+    serverToken: existing?.serverToken ?? "",
+    serverTokenPushedAt: existing?.serverTokenPushedAt ?? "",
     workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
     adminToken: input.adminToken.trim(),
     workerScriptName:
@@ -665,7 +691,9 @@ export async function desktopClearCredentials(): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       accountId: "",
-      apiToken: "",
+      installToken: "",
+      serverToken: "",
+      serverTokenPushedAt: "",
       workerUrl: "",
       adminToken: "",
       workerScriptName: "",

@@ -10,11 +10,12 @@ import {
 } from "react";
 
 import {
-  cfConnectedFromCredentials,
+  cfServerTokenConfigured,
   type HealthTone,
 } from "@/lib/dashboard/connection-status";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
+  desktopPushServerToken,
   desktopRecoverAdminToken,
   desktopRequestAdminRecoveryToken,
   desktopSaveCfCredentials,
@@ -46,8 +47,10 @@ type SettingsConnectionContextValue = {
   appOk: boolean;
   accountId: string;
   setAccountId: (value: string) => void;
-  apiToken: string;
-  setApiToken: (value: string) => void;
+  serverToken: string;
+  setServerToken: (value: string) => void;
+  /** True when the server token has been pushed to the Worker (pushedAt set). */
+  serverTokenPushed: boolean;
   workerUrl: string;
   setWorkerUrl: (value: string) => void;
   adminToken: string;
@@ -57,6 +60,7 @@ type SettingsConnectionContextValue = {
   workerEditing: boolean;
   setWorkerEditing: (value: boolean) => void;
   cfBusy: boolean;
+  serverPushBusy: boolean;
   workerBusy: boolean;
   cfError: DesktopErrorHelp | null;
   workerError: DesktopErrorHelp | null;
@@ -71,7 +75,7 @@ type SettingsConnectionContextValue = {
   recoveryMessage: string | null;
   resetCfDraft: () => void;
   resetWorkerDraft: () => void;
-  handleSaveCf: () => Promise<void>;
+  handleSaveServerToken: () => Promise<void>;
   handleSaveWorker: () => Promise<void>;
   handleRefreshStatus: () => Promise<void>;
   handleRequestRecoveryToken: () => Promise<void>;
@@ -102,11 +106,14 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   const workerStatus = snapshot?.worker ?? null;
   const cfConnected =
-    snapshot?.cfConnected ?? cfConnectedFromCredentials(credentials);
+    snapshot?.cfConnected ?? cfServerTokenConfigured(credentials);
+  const serverTokenPushed = Boolean(
+    credentials?.serverToken?.trim() && credentials?.serverTokenPushedAt?.trim(),
+  );
   const statusBusy = statusLoading || statusRefreshing;
 
   const [accountId, setAccountId] = useState("");
-  const [apiToken, setApiToken] = useState("");
+  const [serverToken, setServerToken] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
   const [adminToken, setAdminToken] = useState("");
 
@@ -114,6 +121,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const [workerEditing, setWorkerEditing] = useState(false);
 
   const [cfBusy, setCfBusy] = useState(false);
+  const [serverPushBusy, setServerPushBusy] = useState(false);
   const [workerBusy, setWorkerBusy] = useState(false);
 
   const [cfError, setCfError] = useState<DesktopErrorHelp | null>(null);
@@ -130,7 +138,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   function resetCfDraft() {
     setAccountId(credentials?.accountId ?? "");
-    setApiToken(credentials?.apiToken ?? "");
+    setServerToken(credentials?.serverToken ?? "");
     setCfError(null);
     setCfMessage(null);
   }
@@ -145,7 +153,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   useEffect(() => {
     if (!cfEditing) {
       setAccountId(credentials?.accountId ?? "");
-      setApiToken(credentials?.apiToken ?? "");
+      setServerToken(credentials?.serverToken ?? "");
     }
     if (!workerEditing) {
       setWorkerUrl(credentials?.workerUrl ?? "");
@@ -155,27 +163,40 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   useEffect(() => {
     if (!credentials) return;
-    if (!credentials.accountId?.trim() || !credentials.apiToken?.trim()) {
+    // Auto-open editing when the server token isn't configured yet.
+    if (!credentials.accountId?.trim() || !credentials.serverToken?.trim()) {
       setCfEditing(true);
     }
   }, [credentials]);
 
-  async function handleSaveCf() {
+  async function handleSaveServerToken() {
     setCfBusy(true);
+    setServerPushBusy(true);
     setCfError(null);
     setCfMessage(null);
     try {
-      const result = await desktopVerifyCfToken(accountId, apiToken);
+      const result = await desktopVerifyCfToken(accountId, serverToken, "server");
       if (!result.ok) throw new Error(result.message);
-      await desktopSaveCfCredentials(accountId, apiToken);
-      setCfMessage("Cloudflare token verified and saved locally.");
+      // Pass empty install token — save_cf_credentials preserves the existing
+      // install token (collected during install). Settings only manages the
+      // server token + account id.
+      await desktopSaveCfCredentials(accountId, "", serverToken);
+      // Push the server token to the Worker as the CF_API_TOKEN wrangler secret.
+      const push = await desktopPushServerToken();
+      if (!push.ok) throw new Error(push.message);
+      setCfMessage(
+        push.pushedAt
+          ? "Server token verified, saved, and pushed to the Worker."
+          : "Server token verified and saved locally.",
+      );
       await refreshCredentials();
       await refreshConnectionStatus();
       setCfEditing(false);
     } catch (err) {
-      setCfError(explainDesktopError(err, "Cloudflare verification failed"));
+      setCfError(explainDesktopError(err, "Server token verification failed"));
     } finally {
       setCfBusy(false);
+      setServerPushBusy(false);
     }
   }
 
@@ -422,8 +443,9 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       appOk,
       accountId,
       setAccountId,
-      apiToken,
-      setApiToken,
+      serverToken,
+      setServerToken,
+      serverTokenPushed,
       workerUrl,
       setWorkerUrl,
       adminToken,
@@ -433,6 +455,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       workerEditing,
       setWorkerEditing,
       cfBusy,
+      serverPushBusy,
       workerBusy,
       cfError,
       workerError,
@@ -447,7 +470,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       recoveryMessage,
       resetCfDraft,
       resetWorkerDraft,
-      handleSaveCf,
+      handleSaveServerToken,
       handleSaveWorker,
       handleRefreshStatus,
       handleRequestRecoveryToken,
@@ -458,6 +481,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       refreshCredentials,
       workerStatus,
       cfConnected,
+      serverTokenPushed,
       statusBusy,
       hasWorker,
       workerHealth,
@@ -467,12 +491,13 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       searchOk,
       appOk,
       accountId,
-      apiToken,
+      serverToken,
       workerUrl,
       adminToken,
       cfEditing,
       workerEditing,
       cfBusy,
+      serverPushBusy,
       workerBusy,
       cfError,
       workerError,

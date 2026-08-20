@@ -109,7 +109,7 @@ export function ConnectionStatusCards() {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <CompactConnectionCard
         icon={Cloud}
-        title="Cloudflare"
+        title="Server token"
         health={health.cf}
         href={settingsTabHref("cloudflare")}
       />

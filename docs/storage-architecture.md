@@ -92,8 +92,8 @@ This is the **sole source of truth** for product catalog state after the KV → 
 
 ### What stays in KV (NOT migrated)
 
-- `srv:config:admin` — admin token hash, still read from KV by `lib/auth.ts`. Not migrated to D1. (The "dead key" deletion in the backfill script only targets stale/unused copies, not this active read path.)
-- Dead keys deleted by backfill: `srv:config:cloudflare`, `srv:sendlog:*`, legacy `srv:config:mobile` (no email suffix).
+- `srv:config:admin` — admin token hash, still read from KV by `lib/auth.ts` as a legacy fallback (the `ADMIN_TOKEN` wrangler secret takes precedence). Not migrated to D1. (The "dead key" deletion in the backfill script only targets stale/unused copies, not this active read path.)
+- Dead keys deleted by backfill: `srv:config:cloudflare`, `srv:sendlog:*`, legacy `srv:config:mobile` (no email suffix). `srv:config:cloudflare` is also no longer written by `bootstrap_worker` — the Worker reads `CF_ACCOUNT_ID` / `CF_API_TOKEN` wrangler secrets only (see [docs/relaybase-home-storage.md] for the install/server token split).
 
 ### What stays in R2 (unchanged)
 
@@ -102,7 +102,7 @@ This is the **sole source of truth** for product catalog state after the KV → 
 
 ### HTTP surface (Bearer admin token)
 
-The product Worker resolves Cloudflare credentials and the admin token from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`, `ADMIN_TOKEN`), set via the desktop install flow. The legacy `srv:config:cloudflare` / `srv:config:admin` KV bootstrap keys are cleared by `scripts/clear-worker-bootstrap-kv.mjs`. The admin Next.js server no longer writes the Worker's KV directly — it proxies to the Worker's `/console/*` routes. The Worker exposes:
+The product Worker resolves Cloudflare credentials and the admin token from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`, `ADMIN_TOKEN`), set via the desktop install flow. The legacy `srv:config:cloudflare` KV key is no longer written or read (storing the server token in KV was risky); `srv:config:admin` is still written by `bootstrap_worker` as a fallback but the wrangler secret takes precedence. Both stale keys are cleared by `scripts/clear-worker-bootstrap-kv.mjs`. The admin Next.js server no longer writes the Worker's KV directly — it proxies to the Worker's `/console/*` routes. The Worker exposes:
 
 | Route | Purpose |
 |-------|---------|

@@ -19,7 +19,20 @@ const API_KEYS_FILE: &str = "api-keys.json";
 #[serde(rename_all = "camelCase", default)]
 pub struct StoredCredentials {
     pub account_id: String,
-    pub api_token: String,
+    /// Cloudflare API token used by Tauri wrangler (deploy / KV / R2 / D1 /
+    /// `wrangler secret put`). Needs Workers Scripts/KV/R2 Edit. Not pushed
+    /// to the Worker as a runtime secret. Migrated from the legacy `apiToken`
+    /// field via the serde alias below.
+    #[serde(alias = "apiToken", alias = "api_token")]
+    pub install_token: String,
+    /// Cloudflare API token with Account → Email Sending → Edit, pushed to
+    /// the Worker as the `CF_API_TOKEN` wrangler secret so the Worker can send
+    /// mail. Separate from `install_token` so a deploy-only token never ends
+    /// up authorizing (and failing) Email Sending.
+    pub server_token: String,
+    /// ISO timestamp of the last successful `wrangler secret put CF_API_TOKEN`
+    /// run from Settings. Empty until the server token has been pushed.
+    pub server_token_pushed_at: String,
     pub worker_url: String,
     pub admin_token: String,
     pub worker_script_name: String,

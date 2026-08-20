@@ -339,11 +339,15 @@ pub async fn auto_install_worker(
     app: AppHandle,
     api_token: String,
     account_id: Option<String>,
+    server_token: Option<String>,
 ) -> Result<AutoInstallResult, String> {
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
         return Err("A Cloudflare API token is required.".into());
     }
+    let server_token = server_token
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     // Resolve the Cloudflare account id (use the provided one, else look it up)
     // so we can push CF_ACCOUNT_ID as a Worker secret alongside CF_API_TOKEN.
@@ -507,7 +511,12 @@ pub async fn auto_install_worker(
     );
 
     // 3b) Cloudflare runtime secrets so the Worker can send mail without the
-    //     ops dashboard syncing them into KV.
+    //     ops dashboard syncing them into KV. CF_ACCOUNT_ID is always pushed
+    //     (it is not a secret). CF_API_TOKEN is only pushed when the user
+    //     supplied a server token with Email Sending Edit — pushing the
+    //     install token here is what caused the [10000] Authentication error
+    //     on send_raw, so we skip it entirely when no server token is given
+    //     and let the user set it later in Settings.
     run_wrangler(
         &app,
         "secret",
@@ -526,23 +535,34 @@ pub async fn auto_install_worker(
         },
     );
 
-    run_wrangler(
-        &app,
-        "secret",
-        &work_dir,
-        &["secret", "put", "CF_API_TOKEN"],
-        &api_token,
-        Some(api_token.as_bytes()),
-    )
-    .await?;
-    let _ = app.emit(
-        "install-log",
-        LogEvent {
-            step: "secret".into(),
-            level: "info".into(),
-            line: "CF_API_TOKEN secret set".to_string(),
-        },
-    );
+    if let Some(server) = server_token.as_ref() {
+        run_wrangler(
+            &app,
+            "secret",
+            &work_dir,
+            &["secret", "put", "CF_API_TOKEN"],
+            &api_token,
+            Some(server.as_bytes()),
+        )
+        .await?;
+        let _ = app.emit(
+            "install-log",
+            LogEvent {
+                step: "secret".into(),
+                level: "info".into(),
+                line: "CF_API_TOKEN secret set (server token)".to_string(),
+            },
+        );
+    } else {
+        let _ = app.emit(
+            "install-log",
+            LogEvent {
+                step: "secret".into(),
+                level: "info".into(),
+                line: "CF_API_TOKEN skipped — set the server token (Email Sending Edit) in Settings to enable sending.".to_string(),
+            },
+        );
+    }
 
     // 4) Deploy
     let deploy_out = run_wrangler(
@@ -583,7 +603,9 @@ pub async fn auto_install_worker(
 }
 
 /// Merge an auto-install result into stored credentials (preserves
-/// Relaybase account + CF account id if already present).
+/// Relaybase account + CF account id if already present). Also persists the
+/// install token used (so later update/relink work without re-entering) and
+/// the server token + pushed-at timestamp when one was supplied.
 pub fn merge_into_credentials(
     existing: &StoredCredentials,
     result: &AutoInstallResult,
@@ -594,7 +616,11 @@ pub fn merge_into_credentials(
             .filter(|a| !a.trim().is_empty())
             .or_else(|| (!result.account_id.is_empty()).then(|| result.account_id.clone()))
             .unwrap_or_else(|| existing.account_id.clone()),
-        api_token: existing.api_token.clone(),
+        // install_token is filled by the caller via save_cf_credentials or the
+        // auto_install_routing_worker command before merge; preserve existing.
+        install_token: existing.install_token.clone(),
+        server_token: existing.server_token.clone(),
+        server_token_pushed_at: existing.server_token_pushed_at.clone(),
         worker_url: result.worker_url.clone(),
         admin_token: result.admin_token.clone(),
         worker_script_name: result.worker_script_name.clone(),
@@ -604,4 +630,102 @@ pub fn merge_into_credentials(
         relaybase_session: existing.relaybase_session.clone(),
         relaybase_tier: existing.relaybase_tier.clone(),
     }
+}
+
+/// Run `wrangler secret put CF_API_TOKEN` against an already-deployed Worker
+/// using the install token for wrangler auth and the server token as the
+/// secret value. Returns the ISO timestamp of the push. Used by the Settings
+/// "push server token" action after install.
+pub async fn push_cf_api_token_secret(
+    script_name: &str,
+    install_token: &str,
+    server_token: &str,
+) -> Result<String, String> {
+    if script_name.is_empty() {
+        return Err("No deployed Worker script name found.".into());
+    }
+    if install_token.is_empty() {
+        return Err("Install token (Workers Scripts Edit) is required to push secrets.".into());
+    }
+    if server_token.is_empty() {
+        return Err("Server token is empty.".into());
+    }
+
+    // Stage a minimal work dir so wrangler can resolve the script by name.
+    // wrangler secret put operates on the script in the current account,
+    // so we only need a wrangler.toml pointing at the existing script.
+    let work_dir = std::env::temp_dir().join(format!("relaybase-secret-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&work_dir)
+        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
+    let wrangler_toml = format!(
+        "name = \"{script_name}\"\ncompatibility_date = \"2024-09-23\"\n"
+    );
+    std::fs::write(work_dir.join("wrangler.toml"), wrangler_toml)
+        .map_err(|e| format!("Failed to write wrangler.toml: {e}"))?;
+
+    // Reuse run_wrangler without an AppHandle by inlining a minimal version.
+    let mut cmd = Command::new("npx");
+    cmd.arg("--yes").arg("wrangler");
+    cmd.args(["secret", "put", "CF_API_TOKEN"]);
+    cmd.current_dir(&work_dir);
+    cmd.env("CLOUDFLARE_API_TOKEN", install_token);
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped());
+    cmd.kill_on_drop(true);
+
+    let mut child = cmd.spawn().map_err(|e| {
+        format!(
+            "Could not start wrangler (is Node/npx installed?): {e}. \
+             Install Node.js 20+ and retry."
+        )
+    })?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        // Write the server token as the secret value, then close stdin.
+        let _ = stdin.write_all(server_token.as_bytes()).await;
+        drop(stdin);
+    } else {
+        drop(child.stdin.take());
+    }
+
+    let status = child.wait().await.map_err(|e| format!("wait: {e}"))?;
+    let _ = std::fs::remove_dir_all(&work_dir);
+    if !status.success() {
+        return Err(format!("wrangler secret put CF_API_TOKEN exited with status {status}"));
+    }
+
+    Ok(now_iso())
+}
+
+pub fn now_iso() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Simple fixed-offset ISO-ish timestamp; precision is not important for
+    // display, only "was it pushed after the last save".
+    let days = secs / 86_400;
+    let secs_of_day = secs % 86_400;
+    let h = secs_of_day / 3600;
+    let m = (secs_of_day % 3600) / 60;
+    let s = secs_of_day % 60;
+    // 1970-01-01 + days — approximate date math (good enough for a label).
+    let (y, mo, dd) = days_to_ymd(days as i64);
+    format!("{y:04}-{mo:02}-{dd:02}T{h:02}:{m:02}:{s:02}Z")
+}
+
+fn days_to_ymd(days: i64) -> (i64, i64, i64) {
+    // Civil-from-days algorithm (Howard Hinnant). days since 1970-01-01.
+    let z = days + 719_468;
+    let era = (if z >= 0 { z } else { z - 146_096 }) / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + (if m <= 2 { 1 } else { 0 });
+    (y, m, d)
 }

@@ -8,13 +8,13 @@ import {
   saveDashboardCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
 import {
-  cfConnectedFromCredentials,
+  cfServerTokenConfigured,
   probeConnectionStatus,
   type ConnectionStatusSnapshot,
 } from "@/lib/dashboard/connection-status";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 
-export const CONNECTION_STATUS_CACHE_KEY = "connection-status-v2";
+export const CONNECTION_STATUS_CACHE_KEY = "connection-status-v3";
 
 export function useConnectionStatus() {
   const desktop = useOptionalDesktop();
@@ -38,7 +38,8 @@ export function useConnectionStatus() {
         setLoading(false);
       } else {
         setSnapshot({
-          cfConnected: cfConnectedFromCredentials(credentials),
+          cfConnected: cfServerTokenConfigured(credentials),
+          cfInstallTokenPresent: Boolean(credentials?.installToken?.trim()),
           worker: null,
         });
       }
@@ -59,7 +60,8 @@ export function useConnectionStatus() {
         await saveDashboardCache(CONNECTION_STATUS_CACHE_KEY, next);
       } catch {
         const fallback: ConnectionStatusSnapshot = {
-          cfConnected: cfConnectedFromCredentials(credentials),
+          cfConnected: cfServerTokenConfigured(credentials),
+          cfInstallTokenPresent: Boolean(credentials?.installToken?.trim()),
           worker: null,
         };
         setSnapshot((prev) => prev ?? fallback);

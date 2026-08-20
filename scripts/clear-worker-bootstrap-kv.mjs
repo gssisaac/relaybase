@@ -11,6 +11,16 @@
  * the desktop install flow. The KV keys took precedence over the secrets, so
  * they must be deleted for the secrets to take effect.
  *
+ * `srv:config:cloudflare` is now permanently gone: bootstrap_worker no longer
+ * writes it (storing the server token in KV was risky), and
+ * server/src/lib/cloudflare-config.ts no longer reads it — the Worker only
+ * reads the `CF_ACCOUNT_ID` / `CF_API_TOKEN` wrangler secrets. This script
+ * deletes any stale `srv:config:cloudflare` left on already-deployed Workers
+ * so they stop reading a stale server token from KV. `srv:config:admin` is
+ * still written by bootstrap as a legacy fallback for requireAdmin, but
+ * deleting it here forces the `ADMIN_TOKEN` wrangler secret to be authoritative
+ * (preferred).
+ *
  * Prerequisites:
  *   - The product Worker is deployed with the secret-based fallback
  *     (server/src/lib/cloudflare-config.ts, server/src/lib/auth.ts).

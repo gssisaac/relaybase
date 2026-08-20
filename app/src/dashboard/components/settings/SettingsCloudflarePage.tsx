@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, ExternalLink, Loader2, Shield } from "lucide-react";
+import { ExternalLink, Loader2, Shield } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,30 +26,36 @@ export function SettingsCloudflarePage() {
     cfConnected,
     accountId,
     setAccountId,
-    apiToken,
-    setApiToken,
+    serverToken,
+    setServerToken,
+    serverTokenPushed,
     cfEditing,
     setCfEditing,
     cfBusy,
+    serverPushBusy,
     cfError,
     cfMessage,
     resetCfDraft,
-    handleSaveCf,
+    handleSaveServerToken,
   } = useSettingsConnection();
 
   return (
     <SettingsPageBody>
+      {/* Server token — Account → Email Sending → Edit. Pushed to the Worker
+          as the CF_API_TOKEN wrangler secret so the Worker can send mail.
+          This is the only Cloudflare token managed in Settings; the install
+          token (Workers Scripts/KV/R2 Edit) is collected during install only
+          and reused by Tauri wrangler under the hood. */}
       <ConnectionCard
-        icon={Cloud}
-        title="Cloudflare connection"
+        icon={Shield}
+        title="Cloudflare server token (Email Sending)"
         description={
           <>
-            Cloudflare API token used to import zones and — once the Worker is
-            deployed — authorize it to send mail. Stored only in{" "}
-            <span className="font-mono">~/.relaybase</span> and pushed to the
-            Worker as <span className="font-mono">CF_ACCOUNT_ID</span> /{" "}
-            <span className="font-mono">CF_API_TOKEN</span> secrets during
-            install.
+            Token with Account → Email Sending → Edit. Pushed to the Worker as
+            the <span className="font-mono">CF_API_TOKEN</span> wrangler secret
+            so the Worker can send mail. Stored locally and pushed via{" "}
+            <span className="font-mono">wrangler secret put</span>; never
+            written to KV.
           </>
         }
         editing={cfEditing}
@@ -60,11 +66,19 @@ export function SettingsCloudflarePage() {
       >
         <HealthStatus
           tone={cfConnected ? "ok" : "bad"}
-          label={cfConnected ? "Connected" : "Not connected"}
+          label={
+            cfConnected
+              ? "Pushed to Worker"
+              : serverToken.trim()
+                ? "Saved locally — not pushed"
+                : "Not set"
+          }
           detail={
             cfConnected
-              ? "API token saved locally and ready for zone assist."
-              : "Add an Account ID and API token to import zones from Cloudflare."
+              ? "Server token saved and pushed to the Worker. Sending is enabled."
+              : serverToken.trim()
+                ? "Saved locally but not pushed. Click Verify, save & push to enable sending."
+                : "Add an Email Sending Edit token and push it to enable sending."
           }
         />
         {cfEditing ? (
@@ -72,13 +86,18 @@ export function SettingsCloudflarePage() {
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs">
               <div className="mb-2 flex items-center gap-2 font-medium text-foreground">
                 <Shield className="size-3.5" />
-                Required token permissions
+                Required server token permissions
               </div>
               <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
                 {CF_REQUIRED_TOKEN_PERMISSIONS.map((p) => (
                   <li key={p}>{p}</li>
                 ))}
               </ul>
+              <p className="mt-2 text-muted-foreground">
+                The install token (Workers Scripts / KV / R2 Edit) is not
+                managed here — it is collected during install and reused to
+                push this server token to the Worker.
+              </p>
               <button
                 type="button"
                 className="mt-3 inline-flex items-center gap-1 text-brand hover:underline"
@@ -102,13 +121,13 @@ export function SettingsCloudflarePage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="settings-cf-token">API token</Label>
+                <Label htmlFor="settings-cf-server-token">Server token</Label>
                 <Input
-                  id="settings-cf-token"
+                  id="settings-cf-server-token"
                   type="password"
-                  value={apiToken}
-                  onChange={(e) => setApiToken(e.target.value)}
-                  placeholder="Paste token — stored locally"
+                  value={serverToken}
+                  onChange={(e) => setServerToken(e.target.value)}
+                  placeholder="Email Sending Edit — pushed to Worker as CF_API_TOKEN"
                   className="font-mono text-xs"
                   autoComplete="off"
                   spellCheck={false}
@@ -127,11 +146,15 @@ export function SettingsCloudflarePage() {
               <Button
                 type="button"
                 size="sm"
-                disabled={!accountId.trim() || !apiToken.trim() || cfBusy}
-                onClick={() => void handleSaveCf()}
+                disabled={
+                  !accountId.trim() || !serverToken.trim() || cfBusy
+                }
+                onClick={() => void handleSaveServerToken()}
               >
-                {cfBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                Verify &amp; save
+                {serverPushBusy ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : null}
+                Verify, save &amp; push
               </Button>
               <Button
                 type="button"
@@ -154,8 +177,12 @@ export function SettingsCloudflarePage() {
               value={credentials?.accountId?.trim() || "—"}
             />
             <SummaryRow
-              label="API token"
-              value={maskSecret(credentials?.apiToken ?? "")}
+              label="Server token"
+              value={maskSecret(credentials?.serverToken ?? "")}
+            />
+            <SummaryRow
+              label="Push status"
+              value={serverTokenPushed ? "Pushed to Worker" : "Not pushed"}
             />
           </div>
         )}

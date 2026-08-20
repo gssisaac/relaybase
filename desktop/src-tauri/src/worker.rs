@@ -206,6 +206,7 @@ async fn relink_admin(
     worker_url: &str,
     account_id: &str,
     api_token: &str,
+    server_token: Option<&str>,
     existing_admin: &str,
 ) -> Result<(String, bool), String> {
     if admin_auth_ok(worker_url, existing_admin).await {
@@ -215,7 +216,12 @@ async fn relink_admin(
     let admin_token = format!("rb_admin_{}", Uuid::new_v4());
     put_worker_secret(client, script_name, "ADMIN_TOKEN", &admin_token).await?;
     put_worker_secret(client, script_name, "CF_ACCOUNT_ID", account_id).await?;
-    put_worker_secret(client, script_name, "CF_API_TOKEN", api_token).await?;
+    // Only push CF_API_TOKEN when a server token (Email Sending Edit) is
+    // available — pushing the install token here is what caused the
+    // [10000] Authentication error on send_raw.
+    if let Some(server) = server_token {
+        put_worker_secret(client, script_name, "CF_API_TOKEN", server).await?;
+    }
     // Bootstrap now writes the worker's KV directly via the Cloudflare API
     // (the worker no longer exposes /admin/bootstrap or /admin/cloudflare).
     bootstrap_worker(client, script_name, account_id, api_token, &admin_token)
@@ -249,12 +255,18 @@ pub async fn adopt_worker(
             .ok_or_else(|| "Missing KV namespace".to_string())?,
     };
 
+    let server_token_opt = if existing.server_token.is_empty() {
+        None
+    } else {
+        Some(existing.server_token.as_str())
+    };
     let (admin_token, admin_relinked) = relink_admin(
         &client,
         &script_name,
         &worker_url,
         account_id,
         api_token,
+        server_token_opt,
         &existing.admin_token,
     )
     .await?;
@@ -272,7 +284,9 @@ pub async fn adopt_worker(
 
     let creds = StoredCredentials {
         account_id: account_id.to_string(),
-        api_token: api_token.to_string(),
+        install_token: api_token.to_string(),
+        server_token: existing.server_token.clone(),
+        server_token_pushed_at: existing.server_token_pushed_at.clone(),
         worker_url,
         admin_token,
         worker_script_name: script_name,
@@ -315,7 +329,17 @@ pub async fn install_worker(
     let admin_token = format!("rb_admin_{}", Uuid::new_v4());
     put_worker_secret(&client, &script_name, "ADMIN_TOKEN", &admin_token).await?;
     put_worker_secret(&client, &script_name, "CF_ACCOUNT_ID", account_id).await?;
-    put_worker_secret(&client, &script_name, "CF_API_TOKEN", api_token).await?;
+    // Only push CF_API_TOKEN when a server token (Email Sending Edit) is
+    // available — pushing the install token here caused [10000] auth errors
+    // on send_raw. If none, the user sets it later in Settings.
+    let server_token_opt = if existing.server_token.is_empty() {
+        None
+    } else {
+        Some(existing.server_token.as_str())
+    };
+    if let Some(server) = server_token_opt {
+        put_worker_secret(&client, &script_name, "CF_API_TOKEN", server).await?;
+    }
 
     let worker_url = enable_workers_dev(&client, &script_name).await?;
 
@@ -334,7 +358,9 @@ pub async fn install_worker(
 
     let creds = StoredCredentials {
         account_id: account_id.to_string(),
-        api_token: api_token.to_string(),
+        install_token: api_token.to_string(),
+        server_token: existing.server_token.clone(),
+        server_token_pushed_at: existing.server_token_pushed_at.clone(),
         worker_url,
         admin_token,
         worker_script_name: script_name,
@@ -354,7 +380,7 @@ pub async fn update_worker(
 ) -> Result<InstallResult, String> {
     let client = CfClient {
         account_id: creds.account_id.clone(),
-        api_token: creds.api_token.clone(),
+        api_token: creds.install_token.clone(),
     };
     let script_name = if creds.worker_script_name.is_empty() {
         DEFAULT_SCRIPT.to_string()

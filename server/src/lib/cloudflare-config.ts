@@ -6,22 +6,18 @@ export type CloudflareRuntimeConfig = {
   apiToken: string;
 };
 
-const KV_KEY = "srv:config:cloudflare";
-
+/**
+ * Read the Worker's Cloudflare runtime credentials. The sole source is the
+ * wrangler secrets `CF_ACCOUNT_ID` + `CF_API_TOKEN` (pushed by the desktop
+ * install / Settings "push server token" flow). The legacy KV
+ * `srv:config:cloudflare` fallback was removed — storing the server token in
+ * KV is risky and duplicated the secret. If the secrets are absent (e.g. the
+ * user skipped the server token during install), this returns null and
+ * `createCloudflareClient` throws a clear "not configured" error.
+ */
 export async function readCloudflareRuntimeConfig(
   env: Env,
 ): Promise<CloudflareRuntimeConfig | null> {
-  const raw = await env.RELAYBASE_APP.get(KV_KEY);
-  if (raw) {
-    const parsed = JSON.parse(raw) as CloudflareRuntimeConfig;
-    if (parsed.accountId?.trim() && parsed.apiToken?.trim()) {
-      return {
-        accountId: parsed.accountId.trim(),
-        apiToken: parsed.apiToken.trim(),
-      };
-    }
-  }
-
   const accountId = env.CF_ACCOUNT_ID?.trim() ?? "";
   const apiToken = env.CF_API_TOKEN?.trim() ?? "";
   if (!accountId || !apiToken) return null;

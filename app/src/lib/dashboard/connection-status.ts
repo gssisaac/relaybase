@@ -17,7 +17,13 @@ export type HealthStatus = {
 };
 
 export type ConnectionStatusSnapshot = {
+  /** True when a server token (Email Sending Edit) is saved locally AND has
+   * been pushed to the Worker (pushedAt set). This is what the dashboard
+   * "Cloudflare" card reflects — not the install token. */
   cfConnected: boolean;
+  /** True when an install token (Workers Scripts Edit) is saved locally.
+   * Used only inside Settings; not shown on the dashboard card. */
+  cfInstallTokenPresent: boolean;
   worker: {
     ok: boolean;
     workerUrl: string;
@@ -27,18 +33,45 @@ export type ConnectionStatusSnapshot = {
     r2TotalBytes?: number | null;
     r2ObjectCount?: number | null;
     r2UsageTruncated?: boolean | null;
+    /** True when the Worker reports a CF_API_TOKEN wrangler secret is set. */
+    cfApiTokenSet: boolean;
     d1Logs: D1BindingSnapshot;
     d1InboxIndex: D1BindingSnapshot;
     d1App: D1BindingSnapshot;
   } | null;
 };
 
-export function cfConnectedFromCredentials(
+/**
+ * Server token is "configured" for dashboard purposes when it is saved
+ * locally AND has been pushed to the Worker at least once (pushedAt set).
+ * The install token alone must not make this true — that was the bug where
+ * the dashboard showed "Connected" but sending failed with [10000].
+ */
+export function cfServerTokenConfigured(
   credentials: DesktopCredentials | null | undefined,
 ): boolean {
   return Boolean(
-    credentials?.accountId?.trim() && credentials?.apiToken?.trim(),
+    credentials?.serverToken?.trim() &&
+      credentials?.serverTokenPushedAt?.trim(),
   );
+}
+
+/** Install token present (Workers Scripts Edit). Settings-only signal. */
+export function cfInstallTokenPresent(
+  credentials: DesktopCredentials | null | undefined,
+): boolean {
+  return Boolean(credentials?.installToken?.trim());
+}
+
+/**
+ * @deprecated Use {@link cfServerTokenConfigured}. Kept temporarily for
+ * callers being migrated; returns the server-token-configured state so old
+ * "cfConnected" semantics now mean "ready to send".
+ */
+export function cfConnectedFromCredentials(
+  credentials: DesktopCredentials | null | undefined,
+): boolean {
+  return cfServerTokenConfigured(credentials);
 }
 
 export function workerStatusFromConnect(
@@ -53,6 +86,7 @@ export function workerStatusFromConnect(
     r2TotalBytes: result.r2TotalBytes ?? null,
     r2ObjectCount: result.r2ObjectCount ?? null,
     r2UsageTruncated: result.r2UsageTruncated ?? null,
+    cfApiTokenSet: Boolean(result.cfApiTokenSet),
     d1Logs: result.d1Logs,
     d1InboxIndex: result.d1InboxIndex,
     d1App: result.d1App,
@@ -62,12 +96,13 @@ export function workerStatusFromConnect(
 export async function probeConnectionStatus(
   credentials: DesktopCredentials | null | undefined,
 ): Promise<ConnectionStatusSnapshot> {
-  const cfConnected = cfConnectedFromCredentials(credentials);
+  const cfConnected = cfServerTokenConfigured(credentials);
+  const cfInstallTokenPresentVal = cfInstallTokenPresent(credentials);
   const url = credentials?.workerUrl?.trim();
   const token = credentials?.adminToken?.trim();
 
   if (!url || !token) {
-    return { cfConnected, worker: null };
+    return { cfConnected, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
   }
 
   try {
@@ -86,11 +121,13 @@ export async function probeConnectionStatus(
     }
     return {
       cfConnected,
+      cfInstallTokenPresent: cfInstallTokenPresentVal,
       worker,
     };
   } catch {
     return {
       cfConnected,
+      cfInstallTokenPresent: cfInstallTokenPresentVal,
       worker: {
         ok: false,
         workerUrl: url,
@@ -100,6 +137,7 @@ export async function probeConnectionStatus(
         r2TotalBytes: null,
         r2ObjectCount: null,
         r2UsageTruncated: null,
+        cfApiTokenSet: false,
         d1Logs: { ...D1_LOGS_DEFAULT },
         d1InboxIndex: { ...D1_INBOX_INDEX_DEFAULT },
         d1App: { ...D1_APP_DEFAULT },
@@ -125,14 +163,25 @@ export function connectionHealthFromSnapshot(
   const cf: HealthStatus = snapshot?.cfConnected
     ? {
         tone: "ok",
-        label: "Connected",
-        detail: "API token saved locally.",
+        label: "Server token configured",
+        detail: "Email Sending Edit token saved and pushed to the Worker.",
       }
-    : {
-        tone: "bad",
-        label: "Not connected",
-        detail: "Add Account ID and API token in Settings.",
-      };
+    : snapshot?.worker?.cfApiTokenSet
+      ? {
+          // A CF_API_TOKEN secret exists on the Worker (often a stale install
+          // token from pre-fix auto-install) but no server token is saved or
+          // pushed locally — sending will fail with [10000]. Do NOT show green.
+          tone: "bad",
+          label: "Wrong token on Worker",
+          detail:
+            "Worker has a CF_API_TOKEN secret (likely the old install token without Email Sending Edit). Add a server token in Settings and push it.",
+        }
+      : {
+          tone: "bad",
+          label: "Not configured",
+          detail:
+            "Add an Email Sending Edit token in Settings and push it to enable sending.",
+        };
 
   const worker: HealthStatus = !hasWorker
     ? {

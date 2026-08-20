@@ -53,7 +53,11 @@ async fn cf_request(
     Ok(value)
 }
 
-pub async fn verify_token(account_id: &str, api_token: &str) -> Result<TokenVerifyResult, String> {
+pub async fn verify_token(
+    account_id: &str,
+    api_token: &str,
+    scope: &str,
+) -> Result<TokenVerifyResult, String> {
     let client = CfClient {
         account_id: account_id.to_string(),
         api_token: api_token.to_string(),
@@ -71,7 +75,67 @@ pub async fn verify_token(account_id: &str, api_token: &str) -> Result<TokenVeri
         });
     }
     // Confirm account access by listing zones (limit 1)
-    let _ = list_zones(&client).await?;
+    let zones = list_zones(&client).await?;
+
+    // For the server token, additionally probe Email Sending access so the
+    // user gets a clear error in Settings before they try to send and hit
+    // [10000] Authentication error. There is no clean account-level Email
+    // Sending endpoint, so we probe a zone-scoped subdomains list (needs
+    // Email Sending Read). If no zones exist, fall back to active-only.
+    if scope == "server" {
+        let mut checked: Vec<&str> = Vec::new();
+        checked.push("active");
+        if !zones.is_empty() {
+            checked.push("Zone Read");
+        }
+        if let Some(zone) = zones.first() {
+            let path = format!("/zones/{}/email/sending/subdomains", zone.id);
+            match cf_request(&client, reqwest::Method::GET, &path, None).await {
+                Ok(_) => {
+                    checked.push("Email Sending");
+                }
+                Err(e) => {
+                    let lower = e.to_string().to_lowercase();
+                    if lower.contains("10000")
+                        || lower.contains("10102")
+                        || lower.contains("forbidden")
+                        || lower.contains("unauthorized")
+                        || lower.contains("authentication")
+                    {
+                        return Ok(TokenVerifyResult {
+                            ok: false,
+                            account_id: account_id.to_string(),
+                            message:
+                                "Token is active but lacks Email Sending permission. \
+                                 Grant Account → Email Sending → Edit and retry."
+                                    .into(),
+                        });
+                    }
+                    // Non-auth error (e.g. sending not enabled for the zone) —
+                    // don't block the save; sending will surface the real error.
+                }
+            }
+        }
+        // Email Routing Rules Edit has no clean read-only probe; we can't
+        // confirm it from the API. Be honest about that in the message.
+        let msg = if !zones.is_empty() {
+            format!(
+                "Token verified ({}). Email Routing Rules Edit could not be \
+                 probed — grant it in Cloudflare if you use zone routing assist.",
+                checked.join(", ")
+            )
+        } else {
+            "Token is active. No zones in this account, so Email Sending and \
+             Zone Read could not be probed — grant Account → Email Sending → \
+             Edit, Zone → Email Routing Rules → Edit, and Zone → Zone → Read."
+                .into()
+        };
+        return Ok(TokenVerifyResult {
+            ok: true,
+            account_id: account_id.to_string(),
+            message: msg,
+        });
+    }
     Ok(TokenVerifyResult {
         ok: true,
         account_id: account_id.to_string(),
@@ -356,21 +420,17 @@ pub async fn put_worker_secret(
 pub async fn bootstrap_worker(
     client: &CfClient,
     script_name: &str,
-    account_id: &str,
-    api_token: &str,
+    _account_id: &str,
+    _api_token: &str,
     admin_token: &str,
 ) -> Result<(), String> {
     // The worker no longer exposes /admin/bootstrap or /admin/cloudflare.
-    // Write the runtime config + admin token directly to the worker's
-    // RELAYBASE_APP KV namespace via the Cloudflare API.
+    // CF runtime credentials (CF_ACCOUNT_ID / CF_API_TOKEN) are delivered as
+    // wrangler secrets by the install / Settings push flow — never written to
+    // KV (srv:config:cloudflare was removed: storing the server token in KV
+    // is risky and the Worker now reads env secrets only). Only the admin
+    // token bootstrap remains in KV as a legacy fallback for requireAdmin.
     let namespace_id = resolve_worker_kv_namespace_id(client, script_name).await?;
-    put_kv_value(
-        client,
-        &namespace_id,
-        "srv:config:cloudflare",
-        &json!({ "accountId": account_id, "apiToken": api_token }).to_string(),
-    )
-    .await?;
     put_kv_value(
         client,
         &namespace_id,

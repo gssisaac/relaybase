@@ -3,7 +3,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
 
-import { modeFromPathname } from "@/email/sidebar-mode";
+import { modeFromPathname } from "@/lib/navigation/sidebar-mode";
 import { useEmailPaths } from "@/email/lib/paths";
 import { settingsTabHref } from "@/console/lib/paths";
 

@@ -6,7 +6,7 @@ import {
   modeFromPathname,
   normalizeEntryPath,
   type SidebarMode,
-} from "@/email/sidebar-paths";
+} from "@/lib/navigation/sidebar-paths";
 
 export type { SidebarMode };
 export {

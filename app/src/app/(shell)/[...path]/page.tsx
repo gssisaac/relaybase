@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { normalizeEntryPath } from "@/email/sidebar-mode";
+import { normalizeEntryPath } from "@/lib/navigation/sidebar-mode";
 
 type Props = { params: Promise<{ path: string[] }> };
 

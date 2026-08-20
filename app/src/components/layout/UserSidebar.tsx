@@ -38,7 +38,7 @@ import {
   writeSidebarCollapsed,
   writeSidebarMode,
   type SidebarMode,
-} from "@/email/sidebar-mode";
+} from "@/lib/navigation/sidebar-mode";
 import { composeNewHref } from "@/email/lib/compose/compose-open";
 import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/lib/paths";
 import {

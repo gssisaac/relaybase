@@ -7,7 +7,7 @@ import {
   DEFAULT_DASHBOARD_PATH,
   normalizeEntryPath,
   resolveEntryPathAsync,
-} from "@/email/sidebar-mode";
+} from "@/lib/navigation/sidebar-mode";
 
 /**
  * Client entry gate: restore the last email/dashboard route from ~/.relaybase

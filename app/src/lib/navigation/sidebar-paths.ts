@@ -118,7 +118,24 @@ export function normalizeEntryPath(path: string): string {
     return `/broadcasts?${next.toString()}`;
   }
 
+  // Settings: /settings/{tab} are real nested routes now. Collapse
+  // cloudflare → /settings and rewrite legacy /settings?tab={tab} into
+  // the nested path form so stored last-routes still restore.
   if (pathname === "/settings" || pathname === "/settings/") {
+    const tab = params.get("tab");
+    if (tab) {
+      const allowed = [
+        "worker",
+        "admin-token",
+        "inbound-r2",
+        "d1",
+      ] as const;
+      if ((allowed as readonly string[]).includes(tab)) {
+        params.delete("tab");
+        const qs = params.toString();
+        return qs ? `/settings/${tab}?${qs}` : `/settings/${tab}`;
+      }
+    }
     return "/settings";
   }
 
@@ -138,7 +155,7 @@ export function normalizeEntryPath(path: string): string {
       "d1",
     ] as const;
     if ((allowed as readonly string[]).includes(tab)) {
-      return tab === "cloudflare" ? "/settings" : `/settings?tab=${tab}`;
+      return tab === "cloudflare" ? "/settings" : `/settings/${tab}`;
     }
   }
 

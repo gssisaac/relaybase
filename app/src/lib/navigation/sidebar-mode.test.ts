@@ -85,15 +85,26 @@ describe("normalizeEntryPath", () => {
     assert.equal(normalizeEntryPath("/broadcasts/new"), "/broadcasts?new=1");
   });
 
-  it("defaults bare /settings to the settings root", () => {
+  it("keeps /settings/{tab} as nested routes", () => {
     assert.equal(normalizeEntryPath("/settings"), "/settings");
     assert.equal(normalizeEntryPath("/settings/"), "/settings");
     assert.equal(
       normalizeEntryPath("/settings/worker"),
-      "/settings?tab=worker",
+      "/settings/worker",
     );
     assert.equal(
       normalizeEntryPath("/settings/cloudflare"),
+      "/settings",
+    );
+  });
+
+  it("rewrites legacy /settings?tab= into nested routes", () => {
+    assert.equal(
+      normalizeEntryPath("/settings?tab=d1"),
+      "/settings/d1",
+    );
+    assert.equal(
+      normalizeEntryPath("/settings?tab=cloudflare"),
       "/settings",
     );
   });

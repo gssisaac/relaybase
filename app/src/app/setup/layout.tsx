@@ -28,14 +28,14 @@ function SetupShell({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-svh flex-col bg-background">
+    <div className="flex h-svh flex-col overflow-hidden bg-background">
       {isDesktop && isMacOS ? (
         <div aria-hidden className="w-full shrink-0" style={{ height: 28 }} />
       ) : null}
@@ -47,7 +47,9 @@ function SetupShell({ children }: { children: ReactNode }) {
           </p>
         </div>
       </DesktopTitleBar>
-      <main className="flex-1 overflow-y-auto select-none">{children}</main>
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain select-none">
+        {children}
+      </main>
     </div>
   );
 }

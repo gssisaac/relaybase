@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -18,6 +17,7 @@ import {
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
 const CONSOLE_URL =
   process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
@@ -57,7 +57,7 @@ export default function SetupConnectPage() {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col justify-center px-6 pb-24">
+    <SetupCenteredPage>
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">
@@ -74,6 +74,7 @@ export default function SetupConnectPage() {
             <Label htmlFor="worker-url">Worker URL</Label>
             <Input
               id="worker-url"
+              autoFocus
               value={workerUrl}
               onChange={(e) => setWorkerUrl(e.target.value)}
               placeholder="https://relaybase-api.<subdomain>.workers.dev"
@@ -115,17 +116,7 @@ export default function SetupConnectPage() {
             Verify &amp; continue
           </Button>
         </form>
-
-        <div className="border-t border-border pt-4">
-          <Link
-            href="/setup"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
-          >
-            <ArrowLeft className="size-3" />
-            Back to start
-          </Link>
-        </div>
       </div>
-    </div>
+    </SetupCenteredPage>
   );
 }

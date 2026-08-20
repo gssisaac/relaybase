@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
@@ -13,6 +13,7 @@ import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 
 function SetupShell({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { ready, credentials } = useDesktop();
   const { isDesktop, isMacOS } = useDesktopChrome();
 
@@ -21,10 +22,12 @@ function SetupShell({ children }: { children: ReactNode }) {
     // Leave setup once a Worker is connected. A Relaybase console account is
     // optional (added later from Settings for license + ADMIN_TOKEN recovery),
     // so we do not gate the dashboard on relaybaseSession here.
+    // Stay on /setup/progress so the user can copy the admin token after install.
+    if (pathname === "/setup/progress") return;
     if (credentials?.workerUrl && credentials.adminToken) {
       router.replace("/");
     }
-  }, [ready, credentials, router]);
+  }, [ready, credentials, router, pathname]);
 
   if (!ready) {
     return (

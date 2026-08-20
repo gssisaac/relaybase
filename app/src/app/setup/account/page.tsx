@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -16,6 +15,7 @@ import {
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
 const CONSOLE_URL =
   process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
@@ -72,7 +72,7 @@ export default function SetupAccountPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-svh max-w-md flex-col justify-center px-6 py-10">
+    <SetupCenteredPage>
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">
@@ -91,6 +91,7 @@ export default function SetupAccountPage() {
             <Input
               id="email"
               type="email"
+              autoFocus
               autoComplete="email"
               required
               value={email}
@@ -116,7 +117,7 @@ export default function SetupAccountPage() {
           </Button>
         </form>
 
-        <div className="flex flex-col gap-1 border-t border-border pt-4 text-xs text-muted-foreground">
+        <div className="border-t border-border pt-4 text-xs text-muted-foreground">
           <button
             type="button"
             className="text-left hover:underline"
@@ -124,15 +125,8 @@ export default function SetupAccountPage() {
           >
             Forgot your password?
           </button>
-          <Link
-            href="/setup"
-            className="inline-flex items-center gap-1 hover:underline"
-          >
-            <ArrowLeft className="size-3" />
-            Back to start
-          </Link>
         </div>
       </div>
-    </div>
+    </SetupCenteredPage>
   );
 }

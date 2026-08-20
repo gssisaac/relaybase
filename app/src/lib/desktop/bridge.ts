@@ -155,6 +155,30 @@ export const CF_INSTALL_TOKEN_PERMISSIONS = [
   "Account — Workers R2 Storage — Edit",
 ] as const;
 
+/** Human-readable OAuth scopes shown during Setup → Authorize with Cloudflare. */
+export const CF_OAUTH_INSTALL_SCOPES = [
+  "D1 Write",
+  "Secrets Store Write",
+  "Workers R2 Storage Write",
+  "Workers Scripts Write",
+] as const;
+
+/** Max wait after opening the Cloudflare authorize URL before treating as cancelled. */
+export const CF_OAUTH_AUTHORIZE_WAIT_MS = 3 * 60 * 1000;
+
+export function oauthAuthorizationIncompleteHelp(
+  reason: "timeout" | "cancelled" = "timeout",
+): DesktopErrorHelp {
+  return {
+    title: "Authorization didn't complete",
+    detail:
+      reason === "cancelled"
+        ? "Cloudflare authorization was cancelled before Relaybase could connect."
+        : "Cloudflare authorization timed out. The browser window may still be open — close it and try again.",
+    fix: "Click Authorize with Cloudflare to start again.",
+  };
+}
+
 export type WorkerConnectResult = {
   ok: boolean;
   product: string;
@@ -340,6 +364,15 @@ export function explainCfOAuthError(
         "The Cloudflare callback didn't match the connection you started here. This can happen if you have an old link open.",
       fix: "Click Connect with Cloudflare again and approve in the browser window that opens.",
     };
+  }
+
+  if (
+    lower.includes("access_denied") ||
+    lower.includes("access denied") ||
+    lower.includes("user denied") ||
+    lower.includes("authorization denied")
+  ) {
+    return oauthAuthorizationIncompleteHelp("cancelled");
   }
 
   if (lower.includes("missing tokens") || lower.includes("token exchange failed")) {

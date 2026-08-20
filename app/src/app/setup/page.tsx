@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import {
   desktopOpenExternal,
 } from "@/lib/desktop/bridge";
+import { SETUP_PAGE_SHELL } from "@/console/components/setup/setup-page-chrome";
+import { cn } from "@/lib/utils";
 
 const CONSOLE_URL =
   process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
@@ -38,7 +40,7 @@ export default function SetupChoicePage() {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col justify-center px-6 pb-24">
+    <div className={cn(SETUP_PAGE_SHELL, "max-w-3xl")}>
       <div className="space-y-8">
         <div className="space-y-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">

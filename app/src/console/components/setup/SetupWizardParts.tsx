@@ -47,41 +47,8 @@ export const RESOURCE_NAMES = [
   },
 ] as const;
 
-export function SetupStepper({ step }: { step: 1 | 2 }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <StepDot active={step >= 1} n={1} label="Get ready" />
-      <div className="h-px w-6 bg-border" />
-      <StepDot active={step >= 2} n={2} label="Install" />
-    </div>
-  );
-}
-
-function StepDot({ active, n, label }: { active: boolean; n: number; label: string }) {
-  return (
-    <div
-      className={
-        "flex items-center gap-1.5 " +
-        (active ? "font-medium text-foreground" : "text-muted-foreground")
-      }
-    >
-      <span
-        className={
-          "flex size-5 items-center justify-center rounded-full border " +
-          (active
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-border text-muted-foreground")
-        }
-      >
-        {n}
-      </span>
-      {label}
-    </div>
-  );
-}
-
 /**
- * Always-visible "What we install" panel shown on Step 1 (Get ready).
+ * Always-visible "What we install" panel on the install setup page.
  * Lists every Cloudflare resource Relaybase creates in the user's account,
  * each with a Cloudflare-style product icon for instant recognition.
  */

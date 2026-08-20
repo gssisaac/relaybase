@@ -100,7 +100,9 @@ Added to `credentials.json` (camelCase in JSON):
 
 ## Settings + setup UX
 
-- **Connect with Cloudflare** — OAuth install token only; no Relaybase account login required. Used on **Setup → Install** (recommended path) and **Settings → Cloudflare**.
+- **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + admin token copy). No separate install button.
+- **Connect with Cloudflare** — same OAuth flow on **Settings → Cloudflare** (button label unchanged).
+- **Manual install** — admin token + terminal command inline on the install page; no Progress page.
 - **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. **Verify, save & push** requires OAuth connected first.
 - Do **not** ask the user to paste a Workers Scripts / KV / R2 API token. That legacy field is replaced by OAuth.
 
@@ -115,7 +117,7 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 | Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
 | Desktop Rust | `desktop/src-tauri/src/lib.rs`, `secrets.rs`, `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge.ts`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx` |
-| Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupStepTwo.tsx` |
+| Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
 
 ---
 

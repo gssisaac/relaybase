@@ -1,14 +1,5 @@
 export type EmailConfig = {
   emailDomain: string;
-  emailZoneId: string;
-  relaybaseApiKey: string;
-  relaybaseAuthToken: string;
-  relaybaseKeyId: string;
-  cloudflareAccountId: string;
-  cloudflareApiToken: string;
-  cloudflareDnsApiToken: string;
-  cloudflareApiEmail: string;
-  cloudflareGlobalApiKey: string;
   registeredAddresses: string[];
   audienceContacts: Array<{ email: string; name?: string }>;
   broadcasts: Array<{

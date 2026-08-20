@@ -215,11 +215,9 @@ Bindings in `server/wrangler.toml`:
 | Variable | Description |
 |----------|-------------|
 | `RELAYBASE_URL` | Worker base URL |
-| `RELAYBASE_CF_ACCOUNT_ID` | Cloudflare account |
-| `RELAYBASE_CF_API_TOKEN` | Email Sending / account API |
-| `RELAYBASE_CF_ZONE_ID` | Zone for Email Routing |
-| `RELAYBASE_CF_DNS_API_TOKEN` | DNS / routing rules token |
-| `RELAYBASE_INBOUND_R2_BUCKET` | Mailbox bucket name (`relaybase-mailbox`) |
+| `RELAYBASE_CONSOLE_URL` | Console base URL (account/license/billing) |
+
+Cloudflare credentials live on the product Worker as wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), not in admin env.
 
 ### Consuming services (your apps)
 

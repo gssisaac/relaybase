@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
  * Relaybase operator diagnostics — reads admin/.env.local + settings.json,
- * tests Cloudflare token, R2 access, and worker sync without printing secrets.
+ * tests Worker health and admin token without printing secrets.
+ *
+ * Cloudflare credentials live on the product Worker as wrangler secrets
+ * (CF_ACCOUNT_ID / CF_API_TOKEN); the admin app no longer holds them, so
+ * this script no longer probes the Cloudflare API or R2 list.
  *
  * Usage: node scripts/diagnose-relaybase.mjs
  */
@@ -33,27 +37,6 @@ function firstNonEmpty(...values) {
   return "";
 }
 
-const envFile = loadDotEnv(path.join(root, "kembo", "admin", ".env.local"));
-const settingsPath = path.join(root, "data", "products", "relaybase", "settings.json");
-const settings = fs.existsSync(settingsPath)
-  ? JSON.parse(fs.readFileSync(settingsPath, "utf8"))
-  : {};
-
-const workerUrl = firstNonEmpty(
-  envFile.RELAYBASE_URL,
-  envFile.FLARE_EMAIL_SENDER_URL,
-  settings.workerUrl,
-).replace(/\/$/, "");
-const accountId = firstNonEmpty(
-  envFile.RELAYBASE_CF_ACCOUNT_ID,
-  envFile.FLARE_EMAIL_SENDER_CF_ACCOUNT_ID,
-  settings.cloudflareAccountId,
-);
-const apiToken = firstNonEmpty(
-  envFile.RELAYBASE_CF_API_TOKEN,
-  envFile.FLARE_EMAIL_SENDER_CF_API_TOKEN,
-  settings.cloudflareApiToken,
-);
 function resolveInboundR2BucketName(stored) {
   const trimmed = String(stored ?? "").trim().toLowerCase();
   if (
@@ -75,13 +58,17 @@ function workerInboundR2BucketMismatch(expected, workerReported) {
   return worker.toLowerCase() !== resolvedExpected.toLowerCase();
 }
 
-const bucketName = resolveInboundR2BucketName(
-  firstNonEmpty(
-    envFile.RELAYBASE_INBOUND_R2_BUCKET,
-    envFile.FLARE_EMAIL_SENDER_INBOUND_R2_BUCKET,
-    settings.inboundR2BucketName,
-  ),
-);
+const envFile = loadDotEnv(path.join(root, "kembo", "admin", ".env.local"));
+const settingsPath = path.join(root, "data", "products", "relaybase", "settings.json");
+const settings = fs.existsSync(settingsPath)
+  ? JSON.parse(fs.readFileSync(settingsPath, "utf8"))
+  : {};
+
+const workerUrl = firstNonEmpty(
+  envFile.RELAYBASE_URL,
+  envFile.FLARE_EMAIL_SENDER_URL,
+  settings.workerUrl,
+).replace(/\/$/, "");
 const adminToken = firstNonEmpty(settings.adminToken);
 
 function printCheck(id, ok, summary, detail) {
@@ -93,104 +80,62 @@ function printCheck(id, ok, summary, detail) {
 console.log("Relaybase diagnostics");
 console.log(`Root: ${root}`);
 console.log(`Worker: ${workerUrl || "(missing)"}`);
-console.log(`Account: ${accountId ? `${accountId.slice(0, 8)}…` : "(missing)"}`);
-console.log(`R2 bucket target: ${bucketName}`);
 console.log(`Admin token: ${adminToken ? `${adminToken.slice(0, 12)}…` : "(missing)"}`);
 console.log("---");
 
-if (!accountId || !apiToken) {
-  printCheck(
-    "cloudflare-configured",
-    false,
-    "Cloudflare credentials missing",
-    "Set RELAYBASE_CF_ACCOUNT_ID and RELAYBASE_CF_API_TOKEN in admin/.env.local",
-  );
+if (!workerUrl) {
+  printCheck("worker-url", false, "Worker URL missing", "Set RELAYBASE_URL in admin/.env.local");
   process.exit(1);
 }
 
-const verifyRes = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
-  headers: { Authorization: `Bearer ${apiToken}` },
-});
-const verifyData = await verifyRes.json();
+const healthRes = await fetch(`${workerUrl}/health`);
+const health = healthRes.ok ? await healthRes.json() : null;
 printCheck(
-  "cloudflare-token-valid",
-  verifyRes.ok && verifyData.success,
-  verifyRes.ok && verifyData.success
-    ? `Cloudflare token valid (${verifyData.result?.status ?? "active"})`
-    : "Cloudflare token verification failed",
-  verifyData.errors?.[0]?.message,
+  "worker-health",
+  health?.ok === true,
+  health?.ok ? "Worker /health OK" : `Worker /health failed (HTTP ${healthRes.status})`,
 );
 
-const r2Res = await fetch(
-  `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets?per_page=10`,
-  { headers: { Authorization: `Bearer ${apiToken}` } },
-);
-const r2Data = await r2Res.json();
-const r2Ok = r2Res.ok && r2Data.success;
-printCheck(
-  "r2-access",
-  r2Ok,
-  r2Ok ? `R2 API accessible (${(r2Data.result?.buckets ?? []).length} buckets listed)` : "R2 API access failed",
-  r2Ok
-    ? undefined
-    : `${r2Data.errors?.[0]?.message ?? `HTTP ${r2Res.status}`} — create a token with Account → R2 → Edit`,
-);
-
-if (workerUrl) {
-  const healthRes = await fetch(`${workerUrl}/health`);
-  const health = healthRes.ok ? await healthRes.json() : null;
-  printCheck(
-    "worker-health",
-    health?.ok === true,
-    health?.ok ? "Worker /health OK" : `Worker /health failed (HTTP ${healthRes.status})`,
+if (health?.inbound?.bucketName) {
+  const mismatch = workerInboundR2BucketMismatch(
+    "relaybase-mailbox",
+    health.inbound.bucketName,
   );
+  printCheck(
+    "r2-bucket-match",
+    !mismatch,
+    mismatch
+      ? health.inbound.bucketName.toLowerCase().startsWith("flare-email-inbound")
+        ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-mailbox`
+        : `Bucket mismatch — worker: ${health.inbound.bucketName}, expected: relaybase-mailbox`
+      : "Worker bucket matches (relaybase-mailbox)",
+    mismatch
+      ? "Redeploy worker: server/wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-mailbox, then npm run deploy --prefix server"
+      : undefined,
+  );
+}
 
-  if (health?.inbound?.bucketName) {
-    const mismatch = workerInboundR2BucketMismatch(
-      bucketName,
-      health.inbound.bucketName,
-    );
-    printCheck(
-      "r2-bucket-match",
-      !mismatch,
-      mismatch
-        ? health.inbound.bucketName.toLowerCase().startsWith("flare-email-inbound")
-          ? `Worker still bound to legacy bucket "${health.inbound.bucketName}" — redeploy with relaybase-mailbox`
-          : `Bucket mismatch — worker: ${health.inbound.bucketName}, config: ${bucketName}`
-        : `Worker bucket matches (${bucketName})`,
-      mismatch
-        ? "Redeploy worker: server/wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-mailbox, then npm run deploy --prefix server"
-        : undefined,
-    );
-  }
-
-  if (adminToken) {
-    const adminRes = await fetch(`${workerUrl}/console/keys`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    });
-    printCheck(
-      "worker-admin-token",
-      adminRes.ok,
-      adminRes.ok
-        ? "Worker accepts stored admin service token"
-        : `Worker rejected admin token (HTTP ${adminRes.status})`,
-      adminRes.ok
-        ? undefined
-        : "Click Sync to worker in admin (writes srv:config:admin + srv:config:cloudflare to the worker KV via the Cloudflare API)",
-    );
-
-    // Operator runtime config is now written directly to the worker's KV by
-    // the admin server (no /admin/bootstrap or /admin/cloudflare on the worker).
-    // Confirm the KV entries exist via the Cloudflare API instead.
-    printCheck(
-      "worker-runtime-config",
-      true,
-      "Runtime config sync is handled by the admin server writing the worker KV directly (no worker /admin/bootstrap or /admin/cloudflare)",
-      "Run the admin app and click Sync to worker; this writes srv:config:cloudflare and srv:config:admin into the worker's RELAYBASE_APP KV namespace",
-    );
-  }
+if (adminToken) {
+  const adminRes = await fetch(`${workerUrl}/console/keys`, {
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  printCheck(
+    "worker-admin-token",
+    adminRes.ok,
+    adminRes.ok
+      ? "Worker accepts stored admin service token"
+      : `Worker rejected admin token (HTTP ${adminRes.status})`,
+    adminRes.ok
+      ? undefined
+      : "Set ADMIN_TOKEN on the worker (wrangler secret put ADMIN_TOKEN) and update admin Settings → admin token to match",
+  );
 } else {
-  printCheck("worker-url", false, "Worker URL missing", "Set RELAYBASE_URL in admin/.env.local");
+  printCheck(
+    "worker-admin-token",
+    false,
+    "Admin token missing",
+    "Set the admin token in admin Settings (must match the worker's ADMIN_TOKEN wrangler secret)",
+  );
 }
 
 console.log("--- done");

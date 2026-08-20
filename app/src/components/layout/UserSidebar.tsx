@@ -9,6 +9,7 @@ import {
   Inbox,
   LayoutGrid,
   Loader2,
+  LogOut,
   Mails,
   PanelLeftClose,
   PanelLeftOpen,
@@ -40,6 +41,16 @@ import {
 } from "@/email/sidebar-mode";
 import { composeNewHref } from "@/email/compose-open";
 import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/paths";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -56,6 +67,10 @@ import {
 import { useDashboardDomain } from "@/dashboard/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import {
+  signOutRedirectPath,
+  signOutRelaybase,
+} from "@/lib/desktop/sign-out";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
@@ -91,12 +106,14 @@ function TitleMenuItems({
   onAddAccount,
   onOpenSettings,
   onSwitchMode,
+  onSignOut,
 }: {
   mode: SidebarMode;
   teamMode: boolean;
   onAddAccount: () => void;
   onOpenSettings: () => void;
   onSwitchMode: () => void;
+  onSignOut: () => void;
 }) {
   return (
     <>
@@ -122,6 +139,10 @@ function TitleMenuItems({
           {mode === "email" ? "Open dashboard" : "Open mailbox"}
         </DropdownMenuItem>
       )}
+      <DropdownMenuItem variant="destructive" onClick={onSignOut}>
+        <LogOut className="size-3.5" />
+        Sign out
+      </DropdownMenuItem>
     </>
   );
 }
@@ -485,10 +506,12 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const searchParams = useSearchParams();
   const userId = useProductId();
   const router = useRouter();
-  const { teamLogin } = useDesktop();
+  const { teamLogin, refresh: refreshDesktop } = useDesktop();
   const { settings: settingsHref } = useEmailPaths();
   const isTeam = teamMode || Boolean(teamLogin);
   const [addOpen, setAddOpen] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() =>
     readSidebarCollapsed(userId),
   );
@@ -536,6 +559,21 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
       writeSidebarCollapsed(userId, next);
       return next;
     });
+  }
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await signOutRelaybase(isTeam);
+      await refreshDesktop();
+      router.replace(signOutRedirectPath(isTeam));
+    } catch {
+      /* redirect anyway on partial clear */
+      router.replace(signOutRedirectPath(isTeam));
+    } finally {
+      setSigningOut(false);
+      setSignOutOpen(false);
+    }
   }
 
   function openSettings() {
@@ -625,6 +663,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                   onAddAccount={() => setAddOpen(true)}
                   onOpenSettings={openSettings}
                   onSwitchMode={switchModeTarget}
+                  onSignOut={() => setSignOutOpen(true)}
                 />
               </DropdownMenuContent>
             </DropdownMenu>
@@ -677,6 +716,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                       onAddAccount={() => setAddOpen(true)}
                       onOpenSettings={openSettings}
                       onSwitchMode={switchModeTarget}
+                      onSignOut={() => setSignOutOpen(true)}
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -725,6 +765,28 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
       ) : (
         <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} />
       )}
+
+      <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out of Relaybase?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {isTeam
+                ? "Clears your team login from this device and returns you to the sign-in page."
+                : "Clears your credentials from this device and returns you to the welcome screen."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={signingOut}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={signingOut}
+              onClick={() => void handleSignOut()}
+            >
+              {signingOut ? "Signing out…" : "Sign out"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

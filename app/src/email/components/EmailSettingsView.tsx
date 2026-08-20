@@ -45,10 +45,9 @@ import { clearEmailCache } from "@/email/components/email-cached-fetch";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import {
-  desktopClearCredentials,
-  desktopClearRelaybaseAccount,
-  desktopClearTeamLogin,
-} from "@/lib/desktop/bridge";
+  signOutRedirectPath,
+  signOutRelaybase,
+} from "@/lib/desktop/sign-out";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import {
@@ -282,16 +281,9 @@ export function EmailSettingsView() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      if (isTeam) {
-        await desktopClearTeamLogin();
-        await refreshDesktop();
-        router.replace("/login");
-      } else {
-        await desktopClearCredentials();
-        await desktopClearRelaybaseAccount();
-        await refreshDesktop();
-        router.replace("/setup/account");
-      }
+      await signOutRelaybase(isTeam);
+      await refreshDesktop();
+      router.replace(signOutRedirectPath(isTeam));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign out failed");
     } finally {

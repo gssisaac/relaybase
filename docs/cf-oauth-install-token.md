@@ -2,7 +2,7 @@
 
 **Audience:** humans and coding agents changing Settings → Cloudflare, desktop wrangler auth, or `kembo/console` OAuth routes.
 
-The **install token** (Workers Scripts / KV / R2 / D1 / Secrets Store — used by Tauri `wrangler` for deploy and `secret put`) is obtained via **Cloudflare OAuth**, not pasted in Settings. The **server token** (Email Sending Edit → Worker `CF_API_TOKEN`) remains a manual paste in Settings.
+The **install token** (Workers Scripts / KV / R2 / D1 / Secrets Store — used by Tauri `wrangler` for deploy and `secret put`) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit → Worker `CF_API_TOKEN`) is a manual paste in Settings after install.
 
 ---
 
@@ -36,12 +36,11 @@ Create **Manage account → OAuth clients → Create client**:
 | Scope ID | Purpose |
 |----------|---------|
 | `workers-scripts.write` | Wrangler deploy / script edit |
-| `workers-kv-storage.write` | KV namespaces |
 | `workers-r2.write` | R2 buckets |
 | `secrets-store.write` | `wrangler secret put` (e.g. `CF_API_TOKEN`) |
 | `d1.write` | D1 bindings on deploy |
 
-Authorize requests also include **`offline_access`** (protocol scope; not listed in the scope picker — Cloudflare allows it when `refresh_token` grant is enabled). Without it, the token endpoint may return only an access token; the desktop still connects, but the user must re-authorize when the access token expires.
+Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query. Cloudflare adds `offline_access` itself when the client has the `refresh_token` grant; requesting unregistered scopes makes dash.cloudflare.com show “Relaybase authorization failed”.
 
 **Do not** use API-token permission names in OAuth scope strings (e.g. `workers.scripts.edit` → `invalid_scope`).
 
@@ -99,10 +98,11 @@ Added to `credentials.json` (camelCase in JSON):
 
 ---
 
-## Settings UX
+## Settings + setup UX
 
-- **Connect with Cloudflare** — OAuth install token only; no Relaybase account login required.
-- **Server token** — still manual (Email Sending Edit); **Verify, save & push** requires OAuth connected first.
+- **Connect with Cloudflare** — OAuth install token only; no Relaybase account login required. Used on **Setup → Install** (recommended path) and **Settings → Cloudflare**.
+- **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. **Verify, save & push** requires OAuth connected first.
+- Do **not** ask the user to paste a Workers Scripts / KV / R2 API token. That legacy field is replaced by OAuth.
 
 Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected” / install ZIP messaging.
 
@@ -115,6 +115,7 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 | Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
 | Desktop Rust | `desktop/src-tauri/src/lib.rs`, `secrets.rs`, `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge.ts`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx` |
+| Setup install wizard | `app/src/dashboard/components/WorkerInstallPanel.tsx`, `SetupStepTwo.tsx` |
 
 ---
 
@@ -122,7 +123,7 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 
 | Symptom | Likely cause |
 |---------|----------------|
-| `invalid_scope` | Scope strings in `/config` don’t match OAuth client registration (use hyphenated `.write` IDs). |
+| `invalid_scope` or Cloudflare “authorization failed” | Scope strings in `/config` don’t match the OAuth client (use hyphenated `.write` IDs; do not request `offline_access` or KV). |
 | Browser “Finishing connection…” but app stays **Not connected** | `tauri dev` without loopback listener — restart desktop after pulling; ensure port **32831** is free. |
 | `Token endpoint did not return a refresh_token` | Missing `refresh_token` grant or `offline_access` on authorize — fixed in code (connection succeeds with access token only); enable **Refresh Token** grant on the client for auto-refresh. |
 | `relaybase://` does nothing | Expected in dev; loopback should succeed. In production, install the bundled `.app` so the URL scheme is registered. |

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ArrowLeft,
-  Check,
-  Copy,
-  Loader2,
-  Terminal,
-} from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -23,33 +17,45 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   desktopAutoInstallWorker,
+  desktopOpenExternal,
+  desktopRefreshInstallToken,
   desktopRegisterWorkerWithConsole,
   desktopSaveWorkerConnection,
+  desktopStartCfOAuth,
   desktopVerifyWorkerConnection,
+  explainCfOAuthError,
   explainDesktopError,
+  listenCfOAuthResult,
   listenInstallLog,
   type DesktopErrorHelp,
   type InstallLogEvent,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
-import { AdminTokenPanel } from "@/dashboard/components/AdminTokenPanel";
-import { CfInstallTokenGuide } from "@/dashboard/components/CfInstallTokenGuide";
-import { CfServerTokenGuide } from "@/dashboard/components/CfServerTokenGuide";
+import { formatRelativeDate } from "@/lib/utils";
 import { SetupStepper, WhatWeInstall } from "@/dashboard/components/SetupWizardParts";
 import { StepTwoBody } from "@/dashboard/components/SetupStepTwo";
+import { HealthStatus } from "@/dashboard/components/settings/settings-shared";
 
 const DRAFT_KEY = "relaybase.setup.install.draft";
 
 type Draft = {
-  cfApiToken: string;
-  cfServerToken: string;
   adminToken: string;
   workerUrl: string;
 };
 
 function emptyDraft(): Draft {
-  return { cfApiToken: "", cfServerToken: "", adminToken: "", workerUrl: "" };
+  return { adminToken: "", workerUrl: "" };
+}
+
+function accessTokenExpiryDetail(iso: string): string {
+  const expiresAt = new Date(iso);
+  if (Number.isNaN(expiresAt.getTime())) return "";
+  const relative = formatRelativeDate(iso);
+  if (expiresAt.getTime() <= Date.now()) {
+    return ` Access token expired ${relative}.`;
+  }
+  return ` Access token expires ${relative}.`;
 }
 
 function loadDraft(): Draft {
@@ -61,10 +67,6 @@ function loadDraft(): Draft {
     if (!raw) return emptyDraft();
     const parsed = JSON.parse(raw) as Partial<Draft>;
     return {
-      cfApiToken:
-        typeof parsed.cfApiToken === "string" ? parsed.cfApiToken : "",
-      cfServerToken:
-        typeof parsed.cfServerToken === "string" ? parsed.cfServerToken : "",
       adminToken:
         typeof parsed.adminToken === "string" ? parsed.adminToken : "",
       workerUrl:
@@ -97,12 +99,12 @@ export function WorkerInstallPanel() {
   const { refresh, credentials } = useDesktop();
   const [step, setStep] = useState<1 | 2>(1);
   const [mode, setMode] = useState<"auto" | "manual">("auto");
-  const [cfApiToken, setCfApiToken] = useState("");
-  const [cfServerToken, setCfServerToken] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
   const [adminToken, setAdminToken] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState<"auto" | "verify" | null>(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [logs, setLogs] = useState<InstallLogEvent[]>([]);
@@ -117,8 +119,6 @@ export function WorkerInstallPanel() {
 
   useEffect(() => {
     const draft = loadDraft();
-    setCfApiToken(draft.cfApiToken);
-    setCfServerToken(draft.cfServerToken);
     setWorkerUrl(draft.workerUrl || credentials?.workerUrl || "");
     setAdminToken(draft.adminToken || credentials?.adminToken || "");
     setHydrated(true);
@@ -127,8 +127,8 @@ export function WorkerInstallPanel() {
 
   useEffect(() => {
     if (!hydrated) return;
-    saveDraft({ cfApiToken, cfServerToken, adminToken, workerUrl });
-  }, [hydrated, cfApiToken, cfServerToken, adminToken, workerUrl]);
+    saveDraft({ adminToken, workerUrl });
+  }, [hydrated, adminToken, workerUrl]);
 
   useEffect(() => {
     if (logEndRef.current) {
@@ -148,6 +148,66 @@ export function WorkerInstallPanel() {
     const t = window.setTimeout(() => setCopiedToken(false), 2000);
     return () => window.clearTimeout(t);
   }, [copiedToken]);
+
+  // Same CF OAuth listener as Settings → Cloudflare. Rust completes the
+  // exchange (loopback or relaybase://) and emits cf-oauth-complete.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let active = true;
+    listenCfOAuthResult({
+      onComplete: () => {
+        if (!active) return;
+        void (async () => {
+          await refresh();
+          setOauthBusy(false);
+          setOauthError(null);
+        })();
+      },
+      onError: (message) => {
+        if (!active) return;
+        setOauthError(explainCfOAuthError(message));
+        setOauthBusy(false);
+      },
+    }).then((fn) => {
+      if (active) unlisten = fn;
+      else fn();
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const cfOAuthConnected = Boolean(
+    credentials?.cfOauthRefreshToken?.trim() ||
+      credentials?.cfOauthAccessToken?.trim(),
+  );
+  const cfOAuthAccountId =
+    credentials?.cfOauthAccountId?.trim() ||
+    credentials?.accountId?.trim() ||
+    "";
+  const cfOAuthExpiresAt = credentials?.cfOauthAccessExpiresAt?.trim() ?? "";
+
+  function installTokenFromCredentials() {
+    return (
+      credentials?.cfOauthAccessToken?.trim() ||
+      credentials?.installToken?.trim() ||
+      ""
+    );
+  }
+
+  async function handleStartCfOAuth() {
+    setOauthBusy(true);
+    setOauthError(null);
+    try {
+      const start = await desktopStartCfOAuth();
+      await desktopOpenExternal(start.authorizeUrl);
+    } catch (err) {
+      setOauthError(explainCfOAuthError(err));
+      setOauthBusy(false);
+    }
+  }
 
   async function persistAndContinue(opts: {
     url: string;
@@ -172,32 +232,34 @@ export function WorkerInstallPanel() {
     setMessage(null);
     setLogs([]);
     setAutoDone(null);
-    const token = cfApiToken.trim();
+    let token = installTokenFromCredentials();
     if (!token) {
       setError({
-        title: "Cloudflare API token required",
+        title: "Connect Cloudflare first",
         detail:
-          "Paste a Cloudflare API token with Workers Scripts / KV / R2 edit permissions.",
-        fix: "Create one at dash.cloudflare.com → My Profile → API Tokens.",
-        links: [
-          {
-            label: "Create a Cloudflare API token",
-            href: "https://dash.cloudflare.com/profile/api-tokens",
-          },
-        ],
+          "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
+        fix: "Go back to step 1 and click Connect with Cloudflare.",
       });
       setBusy(null);
       return;
     }
     let unlisten: (() => void) | null = null;
     try {
+      try {
+        const refreshed = await desktopRefreshInstallToken();
+        token =
+          refreshed.cfOauthAccessToken?.trim() ||
+          refreshed.installToken?.trim() ||
+          token;
+      } catch {
+        /* use the current access token if refresh is unavailable */
+      }
       unlisten = await listenInstallLog((event) => {
         setLogs((prev) => [...prev, event]);
       });
       const result = await desktopAutoInstallWorker(
         token,
-        credentials?.accountId ?? undefined,
-        cfServerToken,
+        cfOAuthAccountId || undefined,
       );
       const connect = await desktopVerifyWorkerConnection(
         result.workerUrl,
@@ -251,8 +313,7 @@ export function WorkerInstallPanel() {
     setCopiedToken(true);
   }
 
-  const canContinueFromStep1 =
-    mode === "manual" || cfApiToken.trim().length > 0;
+  const canContinueFromStep1 = mode === "manual" || cfOAuthConnected;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
@@ -307,46 +368,52 @@ export function WorkerInstallPanel() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {mode === "auto"
-                    ? "The desktop installs the Worker for you in the background — you watch each step in the log. Your Cloudflare API token stays on this Mac."
+                    ? "The desktop installs the Worker for you in the background — you watch each step in the log. Your Cloudflare connection stays on this Mac."
                     : "You run the install commands yourself in a terminal, then come back and verify. Use this if you prefer full control."}
                 </p>
               </div>
 
               {mode === "auto" ? (
                 <div className="space-y-3 rounded-lg border border-border p-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="cf-api-token">
-                      Cloudflare install token
-                    </Label>
-                    <Input
-                      id="cf-api-token"
-                      type="password"
-                      value={cfApiToken}
-                      onChange={(e) => setCfApiToken(e.target.value)}
-                      placeholder="cfut_… (Workers Scripts / KV / R2 Edit)"
-                      className="font-mono text-xs"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <CfInstallTokenGuide />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Cloudflare account</p>
+                    <p className="text-xs text-muted-foreground">
+                      Connect your Cloudflare account to authorize Relaybase to
+                      deploy and create resources (Workers / R2 / D1). Same
+                      OAuth connection as Settings — no token to paste.
+                    </p>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="cf-server-token">
-                      Cloudflare server token{" "}
-                      <span className="text-muted-foreground">(optional)</span>
-                    </Label>
-                    <Input
-                      id="cf-server-token"
-                      type="password"
-                      value={cfServerToken}
-                      onChange={(e) => setCfServerToken(e.target.value)}
-                      placeholder="Email Sending Edit — pushed as CF_API_TOKEN"
-                      className="font-mono text-xs"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <CfServerTokenGuide />
-                  </div>
+                  <HealthStatus
+                    tone={cfOAuthConnected ? "ok" : "bad"}
+                    label={
+                      cfOAuthConnected
+                        ? "Connected via OAuth"
+                        : "Not connected"
+                    }
+                    detail={
+                      cfOAuthConnected
+                        ? `Account ${cfOAuthAccountId || "—"} is authorized. Relaybase can deploy and create resources.${
+                            cfOAuthExpiresAt
+                              ? accessTokenExpiryDetail(cfOAuthExpiresAt)
+                              : ""
+                          }`
+                        : "Click Connect with Cloudflare to authorize Relaybase. You'll be sent to Cloudflare to approve, then return here."
+                    }
+                  />
+                  <DesktopErrorBanner error={oauthError} />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={oauthBusy}
+                    onClick={() => void handleStartCfOAuth()}
+                  >
+                    {oauthBusy ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : null}
+                    {cfOAuthConnected
+                      ? "Reconnect with Cloudflare"
+                      : "Connect with Cloudflare"}
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-2 rounded-lg border border-border p-4 text-xs text-muted-foreground">
@@ -383,9 +450,8 @@ export function WorkerInstallPanel() {
               message={message}
               logs={logs}
               logEndRef={logEndRef}
-              cfApiToken={cfApiToken}
-              cfAccountId={credentials?.accountId ?? ""}
-              cfServerToken={cfServerToken}
+              canAutoInstall={cfOAuthConnected}
+              cfAccountId={cfOAuthAccountId}
               adminToken={adminToken}
               setAdminToken={setAdminToken}
               copiedToken={copiedToken}

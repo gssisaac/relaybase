@@ -18,13 +18,6 @@ export const RESOURCE_NAMES = [
       "This is the small program Relaybase runs inside your Cloudflare account. It's the brain that handles sending and receiving email, manages your addresses, and talks to the Mac app. The Mac app only ever contacts this one address (your Worker URL) using your admin token — Relaybase's own servers never see your mail.",
   },
   {
-    name: "relaybase-app",
-    kind: "KV",
-    why: "Stores Relaybase runtime data, admin config, and API keys inside your account.",
-    detail:
-      "Think of this as Relaybase's filing cabinet inside your Cloudflare account. It holds everything the app needs to run: your domains, addresses, audience lists, broadcasts, API keys, and settings. It lives entirely in your account — Relaybase can't read it.",
-  },
-  {
     name: "relaybase-mailbox",
     kind: "R2",
     why: "Stores inbound and sent mail. Created automatically during install.",
@@ -32,11 +25,25 @@ export const RESOURCE_NAMES = [
       "This is where incoming and sent email is stored in your Cloudflare account. Incoming mail lands under inbound/, sent mail under sent/. Only you and your Worker can see what's inside.",
   },
   {
+    name: "relaybase-db",
+    kind: "D1",
+    why: "Product database — domains, addresses, audience, broadcasts, API keys, and settings.",
+    detail:
+      "This is Relaybase's source of truth inside your Cloudflare account. It holds domains, addresses, audience lists, broadcasts, branding, API keys, auth tokens, and settings. It lives entirely in your account — Relaybase can't read it.",
+  },
+  {
+    name: "relaybase-inbox-index",
+    kind: "D1",
+    why: "Full-text search index for inbound mail.",
+    detail:
+      "A searchable index of inbound mail so the inbox can find messages by subject or body without opening every stored email. Mail bodies stay in R2; this database is a rebuildable index.",
+  },
+  {
     name: "relaybase-logs",
     kind: "D1",
-    why: "Optional ops-event log (compose/API/broadcast sends + inbound bounces) for the Dashboard Log page.",
+    why: "Ops-event log (compose/API/broadcast sends + inbound bounces) for the Dashboard Log page.",
     detail:
-      "This is a small database that keeps a history of what was sent and any bounced emails, so you can review it later on the Dashboard Log page. It's optional for a self-install — you can skip it if you don't need the Log page, and your main send history is still kept safely elsewhere.",
+      "A small database that records what was sent and any bounced emails, so you can review it later on the Dashboard Log page. Your main send history is also kept in R2.",
   },
 ] as const;
 

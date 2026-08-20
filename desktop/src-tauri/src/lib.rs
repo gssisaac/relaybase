@@ -395,7 +395,7 @@ async fn start_cf_oauth() -> Result<OAuthStartResult, String> {
     let scopes = value
         .get("scopes")
         .and_then(|v| v.as_str())
-        .unwrap_or("d1.write secrets-store.write workers-kv-storage.write workers-r2.write workers-scripts.write offline_access")
+        .unwrap_or("d1.write secrets-store.write workers-r2.write workers-scripts.write")
         .to_string();
 
     let state = Uuid::new_v4().to_string();

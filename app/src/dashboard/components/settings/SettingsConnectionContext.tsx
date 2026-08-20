@@ -396,11 +396,12 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const searchOk = workerStatus?.d1InboxIndex?.configured === true;
   const appOk = workerStatus?.d1App?.configured === true;
 
-  // CF OAuth (install token) derived state. "Connected" when we have a
-  // refresh token (can mint fresh access tokens); the access token itself
-  // is short-lived and refreshed transparently by the Rust side.
+  // CF OAuth (install token) derived state. Connected when the access or
+  // refresh token is present (refresh may be missing if the OAuth client
+  // did not issue one). The access token is short-lived and refreshed by Rust.
   const cfOAuthConnected = Boolean(
-    credentials?.cfOauthRefreshToken?.trim(),
+    credentials?.cfOauthRefreshToken?.trim() ||
+      credentials?.cfOauthAccessToken?.trim(),
   );
   const cfOAuthAccountId =
     credentials?.cfOauthAccountId?.trim() ||

@@ -18,9 +18,8 @@ export function StepTwoBody({
   message,
   logs,
   logEndRef,
-  cfApiToken,
+  canAutoInstall,
   cfAccountId,
-  cfServerToken,
   adminToken,
   setAdminToken,
   copiedToken,
@@ -36,9 +35,8 @@ export function StepTwoBody({
   message: string | null;
   logs: InstallLogEvent[];
   logEndRef: RefObject<HTMLDivElement | null>;
-  cfApiToken: string;
+  canAutoInstall: boolean;
   cfAccountId?: string;
-  cfServerToken?: string;
   adminToken: string;
   setAdminToken: (t: string) => void;
   copiedToken: boolean;
@@ -103,7 +101,7 @@ export function StepTwoBody({
               <Button
                 type="button"
                 className="w-full"
-                disabled={!cfApiToken.trim() || busy !== null}
+                disabled={!canAutoInstall || busy !== null}
                 onClick={onAutoInstall}
               >
                 {busy === "auto" ? (
@@ -153,7 +151,6 @@ export function StepTwoBody({
             value={adminToken}
             onChange={setAdminToken}
             cfAccountId={cfAccountId}
-            cfServerToken={cfServerToken}
           />
           <DesktopErrorBanner error={error} />
           <Button

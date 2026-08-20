@@ -202,6 +202,14 @@ export function clearDashboardCache(
   }
 }
 
+/** Clear the entire in-memory dashboard client cache (all serviceIds).
+ * Used on account-scope switch so stale TTL entries from the previous
+ * account do not bleed into the new scope. localStorage is cleared separately
+ * by `clearScopeDependentLocalStorage`. */
+export function clearAllDashboardClientCache(): void {
+  memory.clear();
+}
+
 export function dashboardCacheAgeMinutes(
   serviceId: string,
   namespace: string,

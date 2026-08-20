@@ -1331,6 +1331,18 @@ export async function desktopMigrateMailUserFolder(): Promise<string | null> {
   return invoke("migrate_mail_user_folder");
 }
 
+/** Opaque account-scope id (`s-{16hex}`) for the current session. */
+export async function desktopGetAccountScopeId(): Promise<string> {
+  if (!isDesktopRuntime()) return "s-legacy";
+  return invoke("get_account_scope_id");
+}
+
+/** One-shot flat→scoped layout migration. Idempotent. */
+export async function desktopMigrateStorageLayout(): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  await invoke("migrate_storage_layout");
+}
+
 const BROWSER_API_KEY_VAULT = "relaybase:api-keys-vault:v1";
 
 function loadBrowserApiKeyVault(): DesktopApiKeyVault {

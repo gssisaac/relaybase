@@ -129,6 +129,11 @@ export class EmailMailboxStore {
 
   productId = "";
   apiBase = "";
+  /** Account scope id — when this changes (CF/Relaybase account switch),
+   * the store resets all in-memory mail state and re-bootstraps from the
+   * new scope's disk cache. Disk paths are scoped by Rust; this field is for
+   * in-memory change detection only. */
+  scopeId = "";
   enabledAccounts: string[] = [];
   enabledAddresses: Address[] = [];
   domainsKey = "";
@@ -515,6 +520,7 @@ export class EmailMailboxStore {
   configure(input: {
     productId: string;
     apiBase: string;
+    scopeId?: string;
     enabledAccounts: string[];
     enabledAddresses: Address[];
     /** From MailAccountsStore — mailbox does not fetch addresses:all itself. */
@@ -525,11 +531,15 @@ export class EmailMailboxStore {
     );
     const nextDomainsKey = [...domains].sort().join("\0");
     const productChanged = this.productId !== input.productId;
+    const nextScopeId = input.scopeId ?? "";
+    const scopeChanged = this.scopeId !== nextScopeId && nextScopeId !== "";
+    const resetNeeded = productChanged || scopeChanged;
     const domainsChanged = this.domainsKey !== nextDomainsKey;
     const apiChanged = this.apiBase !== input.apiBase;
 
     this.productId = input.productId;
     this.apiBase = input.apiBase;
+    if (nextScopeId) this.scopeId = nextScopeId;
     this.enabledAccounts = input.enabledAccounts;
     this.enabledAddresses = input.enabledAddresses;
     if (input.availableAddresses) {
@@ -546,7 +556,7 @@ export class EmailMailboxStore {
       this.accountFilter = "all";
     }
 
-    if (productChanged) {
+    if (resetNeeded) {
       this.activity = [];
       this.sent = [];
       this.drafts = [];
@@ -573,7 +583,7 @@ export class EmailMailboxStore {
       this.hydrateInboxSentFromStale();
     }
 
-    if (productChanged || domainsChanged || apiChanged) {
+    if (resetNeeded || domainsChanged || apiChanged) {
       void this.bootstrap();
     }
   }

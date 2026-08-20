@@ -4,23 +4,31 @@ import * as React from "react";
 
 import {
   desktopClearCredentials,
+  desktopGetAccountScopeId,
   desktopGetCredentials,
   desktopGetTeamLogin,
   desktopMigrateMailUserFolder,
+  desktopMigrateStorageLayout,
   isDesktopRuntime,
   type DesktopCredentials,
   type DesktopTeamLogin,
 } from "@/lib/desktop/bridge";
 import {
+  clearDesktopSessionCache,
+  clearScopeDependentLocalStorage,
   readDesktopSessionCache,
   writeDesktopSessionCache,
 } from "@/lib/desktop/desktop-session-cache";
+import { clearAllDashboardClientCache } from "@/lib/dashboard/shared/dashboard-client-cache";
 
 type DesktopContextValue = {
   isDesktop: boolean;
   ready: boolean;
   credentials: DesktopCredentials | null;
   teamLogin: DesktopTeamLogin | null;
+  /** Opaque account-scope id (`s-{16hex}`) for the current session. Changes
+   * when the CF / Relaybase console account or Worker URL changes. */
+  accountScopeId: string;
   refresh: () => Promise<void>;
   setCredentials: (c: DesktopCredentials | null) => void;
 };
@@ -63,6 +71,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const [teamLogin, setTeamLogin] = React.useState<DesktopTeamLogin | null>(
     () => cached?.teamLogin ?? null,
   );
+  const [accountScopeId, setAccountScopeId] = React.useState<string>("");
 
   React.useLayoutEffect(() => {
     const snap = readDesktopSessionCache();
@@ -73,12 +82,34 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     const desktop = isDesktopRuntime();
     setIsDesktop(desktop);
     try {
+      // Run the flat→scoped layout migration BEFORE loading credentials so
+      // the scope id is stable when mail/cache stores hydrate. Best-effort.
+      if (desktop) {
+        try {
+          await desktopMigrateMailUserFolder();
+          await desktopMigrateStorageLayout();
+        } catch {
+          /* best-effort one-shot */
+        }
+      }
       const [creds, team] = desktop
         ? await Promise.all([desktopGetCredentials(), desktopGetTeamLogin()])
         : [await loadLocalCredentials(), null];
       setCredentials(creds);
       setTeamLogin(team);
       applyCredentialGlobals(creds);
+      // Resolve the opaque scope id so downstream stores can detect account
+      // switches. Clear the in-memory session cache on scope change so stale
+      // MobX state does not bleed across accounts.
+      const scopeId = desktop ? await desktopGetAccountScopeId() : "s-legacy";
+      setAccountScopeId((prev) => {
+        if (prev && prev !== scopeId) {
+          clearDesktopSessionCache();
+          clearScopeDependentLocalStorage();
+          clearAllDashboardClientCache();
+        }
+        return scopeId;
+      });
       writeDesktopSessionCache({
         isDesktop: desktop,
         ready: true,
@@ -102,9 +133,6 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     void refresh();
-    void desktopMigrateMailUserFolder().catch(() => {
-      /* best-effort one-shot */
-    });
   }, [refresh]);
 
   // Global 401 handler: when the Worker rejects the admin token, clear
@@ -154,10 +182,11 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
       ready,
       credentials,
       teamLogin,
+      accountScopeId,
       refresh,
       setCredentials: setCredentialsAndGlobals,
     }),
-    [isDesktop, ready, credentials, teamLogin, refresh, setCredentialsAndGlobals],
+    [isDesktop, ready, credentials, teamLogin, accountScopeId, refresh, setCredentialsAndGlobals],
   );
 
   return (

@@ -757,7 +757,9 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
         )}
       </nav>
 
-      {!isTeam ? <WorkerUpdateBanner /> : null}
+      {!isTeam && mode === "dashboard" && !collapsed ? (
+        <WorkerUpdateBanner />
+      ) : null}
 
       {isTeam && teamLogin ? (
         <AddTeamAccountDialog

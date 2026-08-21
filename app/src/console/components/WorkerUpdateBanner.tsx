@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   desktopCheckWorkerUpdate,
   desktopUpdateInstalledWorker,
@@ -56,36 +57,40 @@ export function WorkerUpdateBanner() {
   const current = check.currentVersion?.trim() || "unknown";
 
   return (
-    <div className="shrink-0 border-t border-amber-500/30 bg-amber-500/10 px-2 py-2">
-      <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-[11px] leading-tight text-foreground">
-          Worker update available{" "}
-          <span className="font-mono">
-            v{current} → v{check.latestVersion}
-          </span>
-        </p>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Dismiss Worker update banner"
-          onClick={() => {
-            sessionStorage.setItem(DISMISS_KEY, check.latestVersion);
-            setDismissedVersion(check.latestVersion);
-          }}
-        >
-          <X className="size-3" />
-        </Button>
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        nativeButton={false}
-        render={<Link href="/settings/worker" />}
-        className="mt-1.5 h-7 w-full text-[11px]"
-      >
-        Update now
-      </Button>
+    <div className="shrink-0 px-2 pb-2">
+      <Card size="sm" className="gap-2 py-2.5 shadow-none">
+        <CardContent className="space-y-2 px-2.5">
+          <div className="flex items-start gap-2">
+            <p className="min-w-0 flex-1 text-[11px] leading-tight text-foreground">
+              Worker update available{" "}
+              <span className="font-mono">
+                v{current} → v{check.latestVersion}
+              </span>
+            </p>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Dismiss Worker update banner"
+              onClick={() => {
+                sessionStorage.setItem(DISMISS_KEY, check.latestVersion);
+                setDismissedVersion(check.latestVersion);
+              }}
+            >
+              <X className="size-3" />
+            </Button>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/settings/worker" />}
+            className="h-7 w-full text-[11px]"
+          >
+            Update now
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

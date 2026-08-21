@@ -60,11 +60,15 @@ v1Inbox.get("/messages", async (c) => {
 
   const limit = Number(c.req.query("limit") ?? "50");
   const before = c.req.query("before")?.trim() || undefined;
-  const page = await listInboundEmailsPage(c.env.INBOUND, {
-    domain: auth.record.domain,
-    limit: Number.isFinite(limit) ? limit : 50,
-    before,
-  });
+  const page = await listInboundEmailsPage(
+    c.env.INBOUND,
+    {
+      domain: auth.record.domain,
+      limit: Number.isFinite(limit) ? limit : 50,
+      before,
+    },
+    c.env.RELAYBASE_INBOX_INDEX,
+  );
 
   return c.json({
     messages: page.messages.map(serializeInboundListItem),
@@ -82,6 +86,7 @@ v1Inbox.get("/messages/counts", async (c) => {
   const entries = await listInboundIndexEntries(
     c.env.INBOUND,
     auth.record.domain,
+    c.env.RELAYBASE_INBOX_INDEX,
   );
   return c.json(aggregateInboundCounts(entries));
 });

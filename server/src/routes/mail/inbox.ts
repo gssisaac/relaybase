@@ -14,6 +14,7 @@ import {
   getInboundEmail,
   listInboundEmailsPage,
   listInboundIndexEntries,
+  reconcileInboundIndexIfDrifted,
   setInboundReadState,
 } from "../../lib/inbound-store";
 import {
@@ -90,7 +91,20 @@ mailInbox.get("/counts", async (c) => {
 
   // Counts only need To/Cc + readAt, all present on the compact `_list.json`
   // index — no per-message meta.json loads.
-  const entries = await listInboundIndexEntries(c.env.INBOUND, domain);
+  const entries = await listInboundIndexEntries(
+    c.env.INBOUND,
+    domain,
+    c.env.RELAYBASE_INBOX_INDEX,
+  );
+  c.executionCtx?.waitUntil(
+    reconcileInboundIndexIfDrifted(
+      c.env.INBOUND,
+      domain,
+      c.env.RELAYBASE_INBOX_INDEX,
+    ).catch((error) => {
+      console.error("Inbound index reconcile failed", error);
+    }),
+  );
   return c.json(aggregateInboundCounts(entries));
 });
 
@@ -178,11 +192,26 @@ mailInbox.get("/", async (c) => {
 
   const limit = Number(c.req.query("limit") ?? "50");
   const before = c.req.query("before")?.trim() || undefined;
-  const page = await listInboundEmailsPage(c.env.INBOUND, {
-    domain,
-    limit: Number.isFinite(limit) ? limit : 50,
-    before,
-  });
+  const page = await listInboundEmailsPage(
+    c.env.INBOUND,
+    {
+      domain,
+      limit: Number.isFinite(limit) ? limit : 50,
+      before,
+    },
+    c.env.RELAYBASE_INBOX_INDEX,
+  );
+  if (!before) {
+    c.executionCtx?.waitUntil(
+      reconcileInboundIndexIfDrifted(
+        c.env.INBOUND,
+        domain,
+        c.env.RELAYBASE_INBOX_INDEX,
+      ).catch((error) => {
+        console.error("Inbound index reconcile failed", error);
+      }),
+    );
+  }
 
   return c.json({
     messages: page.messages.map(serializeInboundListItem),

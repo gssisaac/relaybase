@@ -160,7 +160,11 @@ consoleStats.get("/account-stats", async (c) => {
     readMailbox(createAppDb(c.env.RELAYBASE_DB)),
     listSendLogs(c.env.INBOUND, { limit: 500 }),
     domain
-      ? listInboundEmails(c.env.INBOUND, { domain, limit: MAX_MESSAGES })
+      ? listInboundEmails(
+          c.env.INBOUND,
+          { domain, limit: MAX_MESSAGES },
+          c.env.RELAYBASE_INBOX_INDEX,
+        )
       : Promise.resolve([]),
   ]);
 
@@ -235,7 +239,11 @@ consoleStats.get("/account-logs", async (c) => {
   const [sendLogs, inbound] = await Promise.all([
     listSendLogs(c.env.INBOUND, { limit: 500 }),
     domain
-      ? listInboundEmails(c.env.INBOUND, { domain, limit: MAX_MESSAGES })
+      ? listInboundEmails(
+          c.env.INBOUND,
+          { domain, limit: MAX_MESSAGES },
+          c.env.RELAYBASE_INBOX_INDEX,
+        )
       : Promise.resolve([]),
   ]);
 

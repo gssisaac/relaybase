@@ -2,6 +2,7 @@ import type { Env } from "./env";
 import app from "./app";
 import { handleInboundEmail } from "./inbound";
 import { runAudienceCron } from "./lib/catalog-audience";
+import { runInboundIndexCron } from "./lib/inbound-index-cron";
 import { enqueueInboundEvent } from "./lib/inbound-events";
 import { deliverWebhooks } from "./lib/webhooks";
 import { createAppDb, type AppDb } from "../db/app";
@@ -24,6 +25,11 @@ export default {
     ctx.waitUntil(
       runAudienceCron(createAppDb(env.RELAYBASE_DB)).catch((error) => {
         console.error("Audience cron failed", error);
+      }),
+    );
+    ctx.waitUntil(
+      runInboundIndexCron(env).catch((error) => {
+        console.error("Inbound index cron failed", error);
       }),
     );
   },

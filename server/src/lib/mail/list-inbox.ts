@@ -74,10 +74,14 @@ export async function listInboxForDomains(
   for (const domain of domains) {
     const normalized = domain.trim().toLowerCase();
     if (!normalized) continue;
-    const messages = await listInboundEmails(env.INBOUND, {
-      domain: normalized,
-      limit: MAX_MESSAGES,
-    });
+    const messages = await listInboundEmails(
+      env.INBOUND,
+      {
+        domain: normalized,
+        limit: MAX_MESSAGES,
+      },
+      env.RELAYBASE_INBOX_INDEX,
+    );
     for (const message of messages) {
       if (account) {
         if (!messageAddresses(message).has(account)) continue;
@@ -126,7 +130,13 @@ export async function inboxCountsForDomains(
   for (const domain of domains) {
     const normalized = domain.trim().toLowerCase();
     if (!normalized) continue;
-    merged.push(...(await listInboundIndexEntries(env.INBOUND, normalized)));
+    merged.push(
+      ...(await listInboundIndexEntries(
+        env.INBOUND,
+        normalized,
+        env.RELAYBASE_INBOX_INDEX,
+      )),
+    );
   }
   return aggregateInboundCounts(merged);
 }
@@ -188,7 +198,11 @@ export async function setInboxReadStateMultiDomain(
     if (!normalized) continue;
     if (idSet.size === 0) break;
     // Resolve ids against the compact index (no meta.json loads).
-    const entries = await listInboundIndexEntries(env.INBOUND, normalized);
+    const entries = await listInboundIndexEntries(
+      env.INBOUND,
+      normalized,
+      env.RELAYBASE_INBOX_INDEX,
+    );
     const idsInDomain: string[] = [];
     for (const entry of entries) {
       if (idSet.has(entry.id)) idsInDomain.push(entry.id);

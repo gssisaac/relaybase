@@ -6,6 +6,7 @@ import {
 import { decodeMimeHeader, parseInboundMime } from "./mime-parse";
 import { buildStrippedInboundMime } from "./mime";
 import {
+  deleteOrphanSearchRows,
   deleteSearchRows,
   updateSearchReadState,
   upsertSearchRows,
@@ -216,8 +217,8 @@ async function saveListIndex(
 async function scanMetaEntries(
   bucket: R2Bucket,
   domain: string,
-): Promise<InboundListEntry[]> {
-  const messages: InboundListEntry[] = [];
+): Promise<InboundEmailMeta[]> {
+  const messages: InboundEmailMeta[] = [];
   let cursor: string | undefined;
   do {
     const listed = await bucket.list({
@@ -231,30 +232,210 @@ async function scanMetaEntries(
       if (!metaObject) continue;
       const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
       messages.push(
-        toListEntry(
-          normalizeReadState(
-            normalizeRecipientLists({
-              ...meta,
-              attachments: meta.attachments ?? [],
-            }),
-          ),
+        normalizeReadState(
+          normalizeRecipientLists({
+            ...meta,
+            attachments: meta.attachments ?? [],
+          }),
         ),
       );
     }
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
-  return sortListEntries(dedupeListEntries(messages)).slice(0, MAX_MESSAGES);
+  return messages;
+}
+
+/**
+ * Per-message `{id}/` folder ids under a domain. Skips `by-message-id/`
+ * (lookup index, not a message). Used to detect `_list.json` drift without
+ * reading every `meta.json`.
+ */
+async function listMessageFolderIds(
+  bucket: R2Bucket,
+  domain: string,
+): Promise<string[]> {
+  const prefix = listPrefix(domain);
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const listed = await bucket.list({ prefix, delimiter: "/", cursor });
+    for (const folder of listed.delimitedPrefixes ?? []) {
+      if (!folder.startsWith(prefix)) continue;
+      const id = folder.slice(prefix.length).replace(/\/$/, "");
+      if (!id || id.includes("/") || id === "by-message-id") continue;
+      ids.push(id);
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return ids;
+}
+
+async function loadMetaForId(
+  bucket: R2Bucket,
+  domain: string,
+  id: string,
+): Promise<InboundEmailMeta | null> {
+  const metaObject = await bucket.get(metaObjectKey(domain, id));
+  if (!metaObject) return null;
+  const meta = JSON.parse(await metaObject.text()) as InboundEmailMeta;
+  return normalizeReadState(
+    normalizeRecipientLists({
+      ...meta,
+      attachments: meta.attachments ?? [],
+    }),
+  );
+}
+
+const SEARCH_UPSERT_CHUNK = 25;
+
+async function syncSearchRows(
+  searchIndex: D1Database,
+  metas: InboundEmailMeta[],
+): Promise<void> {
+  for (let i = 0; i < metas.length; i += SEARCH_UPSERT_CHUNK) {
+    await upsertSearchRows(searchIndex, metas.slice(i, i + SEARCH_UPSERT_CHUNK));
+  }
+}
+
+/**
+ * Rebuild `_list.json` from a full `meta.json` scan. Only used when the
+ * compact index is missing. Do not call this for drift repair — that path
+ * must merge missing ids only (a full scan of thousands of bodies exceeds
+ * Worker memory / waitUntil wall time).
+ */
+async function rebuildListIndex(
+  bucket: R2Bucket,
+  domain: string,
+  searchIndex?: D1Database,
+): Promise<InboundListEntry[]> {
+  const scanned = await scanMetaEntries(bucket, domain);
+  const entries = sortListEntries(
+    dedupeListEntries(scanned.map(toListEntry)),
+  ).slice(0, MAX_MESSAGES);
+  await saveListIndex(bucket, domain, entries);
+
+  if (searchIndex && scanned.length > 0) {
+    try {
+      await syncSearchRows(searchIndex, scanned);
+      await deleteOrphanSearchRows(
+        searchIndex,
+        domain,
+        scanned.map((m) => m.id),
+      );
+    } catch (error) {
+      console.error("Failed to sync rebuilt inbound index to D1", error);
+    }
+  }
+  return entries;
+}
+
+/**
+ * Merge objects that exist in R2 but not in `_list.json` (and drop list
+ * rows whose objects are gone). Reads only the missing `meta.json` files
+ * so waitUntil stays within memory and the 30s wall clock.
+ */
+async function mergeMissingListEntries(
+  bucket: R2Bucket,
+  domain: string,
+  existing: InboundListEntry[],
+  searchIndex?: D1Database,
+): Promise<InboundListEntry[]> {
+  const folderIds = await listMessageFolderIds(bucket, domain);
+  const folderSet = new Set(folderIds);
+  const existingIds = new Set(existing.map((entry) => entry.id));
+  const missingIds = folderIds.filter((id) => !existingIds.has(id));
+  const stale = existing.filter((entry) => !folderSet.has(entry.id));
+
+  if (missingIds.length === 0 && stale.length === 0) {
+    return sortListEntries(dedupeListEntries(existing));
+  }
+
+  console.log(
+    `Inbound index drift ${domain}: list=${existing.length} folders=${folderIds.length} missing=${missingIds.length} stale=${stale.length}`,
+  );
+
+  const addedMetas: InboundEmailMeta[] = [];
+  const META_CONCURRENCY = 4;
+  for (let i = 0; i < missingIds.length; i += META_CONCURRENCY) {
+    const chunk = missingIds.slice(i, i + META_CONCURRENCY);
+    const loaded = await Promise.all(
+      chunk.map((id) => loadMetaForId(bucket, domain, id)),
+    );
+    for (const meta of loaded) {
+      if (meta) addedMetas.push(meta);
+    }
+  }
+
+  const staleIds = new Set(stale.map((entry) => entry.id));
+  const next = sortListEntries(
+    dedupeListEntries([
+      ...addedMetas.map(toListEntry),
+      ...existing.filter((entry) => !staleIds.has(entry.id)),
+    ]),
+  ).slice(0, MAX_MESSAGES);
+  await saveListIndex(bucket, domain, next);
+
+  if (searchIndex) {
+    try {
+      if (addedMetas.length > 0) await syncSearchRows(searchIndex, addedMetas);
+      if (stale.length > 0) {
+        await deleteSearchRows(
+          searchIndex,
+          stale.map((entry) => entry.id),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to sync merged inbound index to D1", error);
+    }
+  }
+
+  console.log(
+    `Inbound index repaired ${domain}: list=${next.length} added=${addedMetas.length}`,
+  );
+  return next;
 }
 
 async function ensureListIndex(
   bucket: R2Bucket,
   domain: string,
+  opts: { verify?: boolean; searchIndex?: D1Database } = {},
 ): Promise<InboundListEntry[]> {
   const existing = await loadListIndex(bucket, domain);
-  if (existing) return sortListEntries(dedupeListEntries(existing));
-  const rebuilt = await scanMetaEntries(bucket, domain);
-  await saveListIndex(bucket, domain, rebuilt);
-  return rebuilt;
+  if (!existing) {
+    return rebuildListIndex(bucket, domain, opts.searchIndex);
+  }
+  const entries = sortListEntries(dedupeListEntries(existing));
+  if (opts.verify !== true) return entries;
+
+  try {
+    return await mergeMissingListEntries(
+      bucket,
+      domain,
+      entries,
+      opts.searchIndex,
+    );
+  } catch (error) {
+    console.error("Inbound index verify failed", error);
+    return entries;
+  }
+}
+
+/**
+ * If `_list.json` is missing ids that still have R2 objects, merge them
+ * in and sync D1. Safe for cron / `waitUntil` — do not await on an
+ * interactive mail request.
+ */
+export async function reconcileInboundIndexIfDrifted(
+  bucket: R2Bucket,
+  domain: string,
+  searchIndex?: D1Database,
+): Promise<void> {
+  const normalized = domain.trim().toLowerCase();
+  if (!normalized) return;
+  await ensureListIndex(bucket, normalized, {
+    verify: true,
+    searchIndex,
+  });
 }
 
 async function upsertListEntry(
@@ -262,7 +443,7 @@ async function upsertListEntry(
   domain: string,
   meta: InboundEmailMeta,
 ): Promise<void> {
-  const index = await ensureListIndex(bucket, domain);
+  const index = await ensureListIndex(bucket, domain, { verify: false });
   const next = [
     toListEntry(meta),
     ...index.filter((entry) => entry.id !== meta.id),
@@ -372,7 +553,7 @@ async function pruneOldMessages(
   domain: string,
   searchIndex?: D1Database,
 ): Promise<void> {
-  const index = await ensureListIndex(bucket, domain);
+  const index = await ensureListIndex(bucket, domain, { verify: false });
   const sorted = sortListEntries(index);
   const stale = sorted.slice(MAX_MESSAGES);
   if (stale.length === 0) return;
@@ -597,15 +778,20 @@ function isUnreadEntry(entry: InboundListEntry): boolean {
 
 /**
  * Whole-domain compact index (read-state normalized), for cheap count
- * aggregation without loading any per-message `meta.json`.
+ * aggregation without loading any per-message `meta.json`. Passes the D1
+ * search index through so a detected drift also re-syncs D1.
  */
 export async function listInboundIndexEntries(
   bucket: R2Bucket,
   domain: string,
+  searchIndex?: D1Database,
 ): Promise<InboundListEntry[]> {
   const normalized = domain.trim().toLowerCase();
   if (!normalized) return [];
-  const index = await ensureListIndex(bucket, normalized);
+  const index = await ensureListIndex(bucket, normalized, {
+    verify: false,
+    searchIndex,
+  });
   return index.map((entry) =>
     "readAt" in entry ? entry : { ...entry, readAt: entry.receivedAt },
   );
@@ -614,6 +800,7 @@ export async function listInboundIndexEntries(
 export async function listInboundEmailsPage(
   bucket: R2Bucket,
   filters: { domain?: string; limit?: number; before?: string } = {},
+  searchIndex?: D1Database,
 ): Promise<ListInboundEmailsPage> {
   const domain = filters.domain?.trim().toLowerCase();
   if (!domain) {
@@ -621,7 +808,10 @@ export async function listInboundEmailsPage(
   }
 
   const limit = Math.min(Math.max(filters.limit ?? 50, 1), MAX_MESSAGES);
-  const index = await ensureListIndex(bucket, domain);
+  const index = await ensureListIndex(bucket, domain, {
+    verify: false,
+    searchIndex,
+  });
   const cursor = parseListCursor(filters.before);
   const filtered = cursor
     ? index.filter((entry) => isBeforeCursor(entry, cursor))
@@ -657,8 +847,9 @@ export async function listInboundEmailsPage(
 export async function listInboundEmails(
   bucket: R2Bucket,
   filters: { domain?: string; limit?: number; before?: string } = {},
+  searchIndex?: D1Database,
 ): Promise<InboundEmailMeta[]> {
-  const page = await listInboundEmailsPage(bucket, filters);
+  const page = await listInboundEmailsPage(bucket, filters, searchIndex);
   return page.messages;
 }
 
@@ -818,7 +1009,9 @@ export async function setInboundReadState(
   );
 
   if (updated.length > 0) {
-    const index = await ensureListIndex(bucket, normalizedDomain);
+    const index = await ensureListIndex(bucket, normalizedDomain, {
+      verify: false,
+    });
     const updatedSet = new Set(updated);
     const nextIndex = index.map((entry) =>
       updatedSet.has(entry.id) ? { ...entry, readAt } : entry,

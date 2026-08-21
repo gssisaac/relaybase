@@ -114,6 +114,19 @@ export const MailListView = observer(function MailListView({
     search,
   });
 
+  const onRefresh = useCallback(() => {
+    void (async () => {
+      await store.refresh(true);
+      const q = search.trim();
+      if (
+        (folder === "inbox" || folder === "sent") &&
+        q.length >= MIN_SERVER_SEARCH_LENGTH
+      ) {
+        void store.searchMail(folder, q);
+      }
+    })();
+  }, [folder, search, store]);
+
   // Whole-mailbox counts for the list header. Account-filtered inbox counts
   // come from the per-address `/inbox/counts` aggregate; drafts/trash are
   // fully local so their loaded length is exact.
@@ -238,6 +251,8 @@ export const MailListView = observer(function MailListView({
             hasMore={hasMore}
             loadingMore={loadingMore}
             onLoadMore={loadMore}
+            onRefresh={onRefresh}
+            refreshing={store.refreshing}
             totalCount={totalCount}
             unreadCount={unreadCount}
             searchTotal={serverSearch ? searchTotal : null}

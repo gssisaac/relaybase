@@ -3,6 +3,29 @@
  * Import a Gmail Takeout mbox into relaybase-mailbox as inbound/{domain}/{id}/
  * (and sent/{domain}/_list.json for Sent-labeled messages).
  *
+ * ⚠️  DOGFOODING / REFERENCE ONLY — NOT A PRODUCTION CODE PATH.
+ *
+ * This script is kept only as a reference for the future production Gmail
+ * Takeout import feature. It is NOT used by the hosted Worker, the desktop
+ * app, or any customer install. Do not run it against a live mailbox you
+ * care about:
+ *
+ *   - It reads `inbound/{domain}/_list.json` once into memory and overwrites
+ *     it whole-file at the end (`flushListIndex`). Messages received via the
+ *     live Worker ingest path while the script runs are in R2 but get
+ *     dropped from the in-memory snapshot, so the final overwrite silently
+ *     evicts them from `_list.json`. This is exactly how the 2026-08-18
+ *     wedesk.so inbox gap happened.
+ *   - It writes R2 objects directly and never touches the D1 FTS search
+ *     index, so imported mail is invisible to server-side search until a
+ *     backfill/reconcile runs.
+ *
+ * The Worker's `ensureListIndex` (server/src/lib/inbound-store.ts) owns the
+ * compact index and now self-heals drift on read and via the inbound index
+ * cron. Any future production import must go through the Worker's store
+ * helpers (or at minimum merge into the existing `_list.json` and sync D1),
+ * never overwrite it from a stale snapshot.
+ *
  * Usage (from server/):
  *   node scripts/import-mbox.mjs
  *   node scripts/import-mbox.mjs --apply

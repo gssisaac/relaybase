@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FilePen, Inbox, Send, Trash2 } from "lucide-react";
+import { FilePen, Inbox, Loader2, Send, Trash2 } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import Link from "next/link";
 import {
@@ -41,6 +41,10 @@ import { SenderHoverCard, SenderHoverLabel } from "@/email/components/sender/Sen
 import type { ListItemStateStore } from "@/email/stores/list-item-state-store";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
+import {
+  PULL_REFRESH_THRESHOLD,
+  usePullToRefresh,
+} from "./usePullToRefresh";
 
 type MailListFolder = "inbox" | "drafts" | "sent" | "trash";
 
@@ -77,6 +81,28 @@ const FOLDER_TITLES: Record<MailListFolder, string> = {
   trash: "Trash",
 };
 
+function PullRefreshIndicator({
+  height,
+  refreshing,
+}: {
+  height: number;
+  refreshing: boolean;
+}) {
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center overflow-hidden text-muted-foreground"
+      style={{ height }}
+      aria-live="polite"
+      aria-busy={refreshing}
+    >
+      <Loader2 className={cn("size-4", refreshing && "animate-spin")} aria-hidden />
+      <span className="sr-only">
+        {refreshing ? "Refreshing mail" : "Pull to refresh"}
+      </span>
+    </div>
+  );
+}
+
 export type MailListPaneProps = {
   folder: MailListFolder;
   items: MailListItem[];
@@ -94,6 +120,9 @@ export type MailListPaneProps = {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Force-reload inbox/sent from the Worker (pull-to-refresh). */
+  onRefresh?: () => void;
+  refreshing?: boolean;
   /** Whole-mailbox total for the header (null hides the count). */
   totalCount?: number | null;
   /** Whole-mailbox unread for the header (shown when > 0). */
@@ -379,6 +408,8 @@ export function MailListPane({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  onRefresh,
+  refreshing = false,
   totalCount = null,
   unreadCount = null,
   searchTotal = null,
@@ -387,6 +418,24 @@ export function MailListPane({
 }: MailListPaneProps) {
   const listRef = useListRef(null);
   const { dragRegionClassName, dragRegionProps } = useDesktopChrome();
+  const { pull, onScroll, onWheel } = usePullToRefresh({
+    enabled: Boolean(onRefresh),
+    refreshing,
+    onRefresh,
+  });
+  const [refreshTimedOut, setRefreshTimedOut] = useState(false);
+  useEffect(() => {
+    if (!refreshing) {
+      setRefreshTimedOut(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setRefreshTimedOut(true), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [refreshing]);
+  const showPullIndicator = (refreshing && !refreshTimedOut) || pull > 0;
+  const pullHeight = refreshing
+    ? 28
+    : Math.round((pull / PULL_REFRESH_THRESHOLD) * 28);
 
   // Track the list container height so overscan can be sized as a multiple
   // of the viewport (see OVERSCAN_VIEWPORTS). Falls back to a sensible
@@ -600,6 +649,9 @@ export function MailListPane({
               <span>Subject</span>
               <span>Date</span>
             </EmailTableHeader>
+            {showPullIndicator ? (
+              <PullRefreshIndicator height={pullHeight} refreshing={refreshing} />
+            ) : null}
             <List
               listRef={listRef}
               className="min-h-0 flex-1"
@@ -612,6 +664,8 @@ export function MailListPane({
               overscanCount={overscanCount}
               onResize={onResize}
               onRowsRendered={onRowsRendered}
+              onScroll={onScroll}
+              onWheel={onWheel}
               rowProps={rowPropsMemo}
             />
           </>
@@ -622,6 +676,14 @@ export function MailListPane({
             description="Looking for matching mail on the server."
           />
         ) : (
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-auto"
+            onScroll={onScroll}
+            onWheel={onWheel}
+          >
+            {showPullIndicator ? (
+              <PullRefreshIndicator height={pullHeight} refreshing={refreshing} />
+            ) : null}
           <EmptyListState
             icon={
               folder === "sent"
@@ -670,6 +732,7 @@ export function MailListPane({
               ) : undefined
             }
           />
+          </div>
         )}
       </div>
     </EmailListContainer>

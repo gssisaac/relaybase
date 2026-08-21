@@ -178,6 +178,33 @@ messages touched via that path).
 
 ---
 
+## Self-heal (lazy + cron)
+
+Because the on-write sync is best-effort, both `_list.json` and the D1 FTS
+index can drift from R2 (a transient D1 failure, a stale overwrite from an
+offline tool, or a prune race). Two layers reconcile them back to R2
+without any manual script:
+
+| Layer | Trigger | What it does |
+|-------|---------|--------------|
+| **Background (read path)** | `GET /mail/inbox` (first page) and `GET /mail/inbox/counts` | The response is served from the current `_list.json` immediately. `waitUntil` lists `{id}/` folders, GETs only **missing** `meta.json` files, merges them into `_list.json`, and upserts those rows to D1. A full-body scan is never used for drift repair (it exceeded Worker memory). Folder listing skips `by-message-id/`. |
+| **Cron (backstop)** | `scheduled()` — same `*/15 * * * *` trigger as the audience cron | `runInboundIndexCron` calls `reconcileInboundIndexIfDrifted` for every mailbox domain. |
+
+R2 `meta.json` stays the source of truth — a rebuild only rewrites the
+derived `_list.json` and D1 rows; it never deletes `meta.json`. The first
+run after deploy fixes any historical gap (e.g. mail received before the D1
+ingest sync existed); subsequent runs are cheap no-ops when counts match.
+
+Code: `ensureListIndex` / `listMessageFolderIds` / `mergeMissingListEntries` in
+`server/src/lib/inbound-store.ts`, `deleteSearchRows` in
+`server/src/lib/inbound-search.ts`, `runInboundIndexCron` in
+`server/src/lib/inbound-index-cron.ts`, wired in `server/src/index.ts`.
+
+Incident write-up (wedesk.so Aug 2026 stale overwrite + failed full-scan
+heal): [issue-reports/2026-08-21-wedesk-inbox-index-stale-overwrite.md](./issue-reports/2026-08-21-wedesk-inbox-index-stale-overwrite.md).
+
+---
+
 ## Query safety (`buildFtsMatchQuery`)
 
 Never pass raw user input into FTS5 `MATCH` — unescaped quotes or bare

@@ -190,6 +190,33 @@ export async function deleteSearchRows(
   );
 }
 
+/**
+ * Remove D1 search rows for a domain that no longer have a matching R2
+ * `meta.json` (e.g. messages pruned while a D1 delete failed silently).
+ * `keepIds` is the set of live message ids for the domain; anything in D1
+ * for this domain but not in that set is deleted. Best-effort — a failure
+ * must not break the rebuild path.
+ */
+export async function deleteOrphanSearchRows(
+  db: D1Database,
+  domain: string,
+  keepIds: string[],
+): Promise<void> {
+  const keep = new Set(keepIds);
+  if (keep.size === 0) {
+    await db.prepare(`DELETE FROM ${TABLE} WHERE domain = ?`).bind(domain);
+    return;
+  }
+  const result = await db
+    .prepare(`SELECT id FROM ${TABLE} WHERE domain = ?`)
+    .bind(domain)
+    .all();
+  const rows = (result.results ?? []) as { id: string }[];
+  const orphanIds = rows.map((r) => r.id).filter((id) => !keep.has(id));
+  if (orphanIds.length === 0) return;
+  await deleteSearchRows(db, orphanIds);
+}
+
 export async function updateSearchReadState(
   db: D1Database,
   ids: string[],

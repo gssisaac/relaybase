@@ -1126,6 +1126,7 @@ export class EmailMailboxStore {
     try {
       const res = await desktopAwareFetch(
         `${this.apiBase}/inbox${domainQuery(domain, extra)}`,
+        { signal: AbortSignal.timeout(15_000) },
       );
       const data = await readResponseJson<{
         messages?: RoutingActivityEvent[];

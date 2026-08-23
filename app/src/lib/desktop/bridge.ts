@@ -79,6 +79,10 @@ export type InstallResourceProbe = {
   name: string;
   present: boolean;
   id: string;
+  objectCount?: number | null;
+  rowCount?: number | null;
+  truncated?: boolean;
+  occupied?: boolean;
 };
 
 export type InstallProbeResult = {
@@ -793,11 +797,13 @@ export async function desktopAutoInstallWorker(
   accountId?: string,
   serverToken?: string,
   decisions?: InstallDecision[],
+  wipeConfirmation?: string | null,
 ): Promise<AutoInstallResult> {
   return invoke("auto_install_routing_worker", {
     accountId: accountId ?? null,
     serverToken: serverToken?.trim() ? serverToken.trim() : null,
     decisions: decisions ?? [],
+    wipeConfirmation: wipeConfirmation?.trim() ? wipeConfirmation.trim() : null,
   });
 }
 
@@ -823,9 +829,11 @@ export async function desktopCancelAutoInstall(): Promise<void> {
 /** Delete Worker + D1 + R2. Subscribe to `install-log` for the same live log as install. */
 export async function desktopRollbackInstall(
   accountId?: string,
+  wipeConfirmation?: string | null,
 ): Promise<void> {
   await invoke("rollback_auto_install", {
     accountId: accountId ?? null,
+    wipeConfirmation: wipeConfirmation?.trim() ? wipeConfirmation.trim() : null,
   });
 }
 
@@ -834,8 +842,16 @@ export async function desktopInitWorkerDb(
   workerUrl: string,
   adminToken: string,
   clear: boolean,
+  wipeConfirmation?: string | null,
+  accountId?: string,
 ): Promise<InitDbResult> {
-  return invoke("init_worker_db_cmd", { workerUrl, adminToken, clear });
+  return invoke("init_worker_db_cmd", {
+    workerUrl,
+    adminToken,
+    clear,
+    wipeConfirmation: wipeConfirmation?.trim() ? wipeConfirmation.trim() : null,
+    accountId: accountId?.trim() ? accountId.trim() : null,
+  });
 }
 
 export function isInstallCancelledError(err: unknown): boolean {

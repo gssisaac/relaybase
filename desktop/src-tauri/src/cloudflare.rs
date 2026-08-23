@@ -640,6 +640,191 @@ pub async fn list_d1_databases(client: &CfClient) -> Result<Vec<(String, String)
     Ok(out)
 }
 
+/// How many objects / rows a resource holds. Used to refuse accidental wipes.
+#[derive(Debug, Clone, Copy)]
+pub struct ResourceOccupancy {
+    pub count: u64,
+    pub truncated: bool,
+    pub occupied: bool,
+    /// Listing/query failed — treat as occupied (fail closed).
+    pub unknown: bool,
+}
+
+impl ResourceOccupancy {
+    pub fn empty() -> Self {
+        Self {
+            count: 0,
+            truncated: false,
+            occupied: false,
+            unknown: false,
+        }
+    }
+
+    pub fn unknown_occupied() -> Self {
+        Self {
+            count: 0,
+            truncated: false,
+            occupied: true,
+            unknown: true,
+        }
+    }
+}
+
+/// Stop counting after this many R2 objects so install probe stays fast.
+const R2_COUNT_CAP: u64 = 5_000;
+
+fn r2_list_objects(value: &Value) -> Vec<Value> {
+    value
+        .pointer("/result/objects")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .or_else(|| value.get("result").and_then(|v| v.as_array()).cloned())
+        .unwrap_or_default()
+}
+
+fn r2_list_cursor(value: &Value) -> Option<String> {
+    value
+        .pointer("/result/cursor")
+        .and_then(|v| v.as_str())
+        .or_else(|| value.pointer("/result_info/cursor").and_then(|v| v.as_str()))
+        .map(|s| s.to_string())
+}
+
+fn r2_list_truncated(value: &Value) -> bool {
+    value
+        .pointer("/result/truncated")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+/// Count objects in an R2 bucket (capped). Fail closed when the list API errors.
+pub async fn count_r2_objects(client: &CfClient, name: &str) -> ResourceOccupancy {
+    let mut count = 0u64;
+    let mut cursor: Option<String> = None;
+    loop {
+        let mut path = format!(
+            "/accounts/{}/r2/buckets/{name}/objects?per_page=1000",
+            client.account_id
+        );
+        if let Some(c) = cursor.as_ref() {
+            path.push_str("&cursor=");
+            path.push_str(c);
+        }
+        let value = match cf_request(client, reqwest::Method::GET, &path, None).await {
+            Ok(v) => v,
+            Err(e) if is_not_found(&e) => return ResourceOccupancy::empty(),
+            Err(_) => return ResourceOccupancy::unknown_occupied(),
+        };
+        let objects = r2_list_objects(&value);
+        count += objects.len() as u64;
+        if count >= R2_COUNT_CAP {
+            return ResourceOccupancy {
+                count: R2_COUNT_CAP,
+                truncated: true,
+                occupied: true,
+                unknown: false,
+            };
+        }
+        let next = r2_list_cursor(&value);
+        let truncated = r2_list_truncated(&value);
+        if objects.is_empty() || !truncated || next.is_none() || next == cursor {
+            break;
+        }
+        cursor = next;
+    }
+    ResourceOccupancy {
+        count,
+        truncated: false,
+        occupied: count > 0,
+        unknown: false,
+    }
+}
+
+/// Run a single SQL statement against a D1 database.
+pub async fn query_d1(
+    client: &CfClient,
+    database_id: &str,
+    sql: &str,
+) -> Result<Vec<Value>, String> {
+    let path = format!(
+        "/accounts/{}/d1/database/{database_id}/query",
+        client.account_id
+    );
+    let value = cf_request(
+        client,
+        reqwest::Method::POST,
+        &path,
+        Some(json!({ "sql": sql })),
+    )
+    .await?;
+    let rows = value
+        .get("result")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .and_then(|stmt| stmt.get("results"))
+        .and_then(|r| r.as_array())
+        .cloned()
+        .unwrap_or_default();
+    Ok(rows)
+}
+
+fn json_count(row: &Value) -> u64 {
+    row.get("n")
+        .or_else(|| row.get("COUNT(*)"))
+        .or_else(|| row.get("count(*)"))
+        .and_then(|v| {
+            v.as_u64()
+                .or_else(|| v.as_i64().and_then(|i| u64::try_from(i).ok()))
+                .or_else(|| v.as_f64().and_then(|f| u64::try_from(f as i64).ok()))
+                .or_else(|| v.as_str()?.parse::<u64>().ok())
+        })
+        .unwrap_or(0)
+}
+
+fn d1_table_ident_ok(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Count rows in user tables. `d1_migrations` / sqlite internals are ignored.
+/// Query failure is occupied (fail closed).
+pub async fn count_d1_user_rows(client: &CfClient, database_id: &str) -> ResourceOccupancy {
+    let tables = match query_d1(
+        client,
+        database_id,
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
+    )
+    .await
+    {
+        Ok(rows) => rows,
+        Err(_) => return ResourceOccupancy::unknown_occupied(),
+    };
+    let mut total = 0u64;
+    for row in tables {
+        let name = row.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        if name.is_empty() || name == "d1_migrations" || !d1_table_ident_ok(name) {
+            continue;
+        }
+        match query_d1(client, database_id, &format!("SELECT COUNT(*) AS n FROM \"{name}\"")).await
+        {
+            Ok(rows) => {
+                if let Some(first) = rows.first() {
+                    total += json_count(first);
+                }
+            }
+            Err(_) => return ResourceOccupancy::unknown_occupied(),
+        }
+    }
+    ResourceOccupancy {
+        count: total,
+        truncated: false,
+        occupied: total > 0,
+        unknown: false,
+    }
+}
+
 /// Delete every object in an R2 bucket so the bucket itself can be removed.
 pub async fn empty_r2_bucket(client: &CfClient, name: &str) -> Result<u32, String> {
     let mut deleted = 0u32;
@@ -658,12 +843,7 @@ pub async fn empty_r2_bucket(client: &CfClient, name: &str) -> Result<u32, Strin
             Err(e) if is_not_found(&e) => return Ok(deleted),
             Err(e) => return Err(e),
         };
-        let objects = value
-            .pointer("/result/objects")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .or_else(|| value.get("result").and_then(|v| v.as_array()).cloned())
-            .unwrap_or_default();
+        let objects = r2_list_objects(&value);
         if objects.is_empty() {
             break;
         }
@@ -696,15 +876,8 @@ pub async fn empty_r2_bucket(client: &CfClient, name: &str) -> Result<u32, Strin
                 Err(e) => return Err(e),
             }
         }
-        let next = value
-            .pointer("/result/cursor")
-            .and_then(|v| v.as_str())
-            .or_else(|| value.pointer("/result_info/cursor").and_then(|v| v.as_str()))
-            .map(|s| s.to_string());
-        let truncated = value
-            .pointer("/result/truncated")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let next = r2_list_cursor(&value);
+        let truncated = r2_list_truncated(&value);
         if !truncated || next.is_none() || next == cursor {
             break;
         }

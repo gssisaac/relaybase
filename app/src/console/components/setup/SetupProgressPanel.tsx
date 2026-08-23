@@ -35,7 +35,50 @@ import { downloadBlob } from "@/lib/attachments/download";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
+import {
+  InstallWipeConfirmDialog,
+  occupancySummary,
+  resourceIsOccupied,
+  wipePhraseIsValid,
+} from "@/console/components/setup/InstallWipeConfirmDialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
+
+type WipeIntent =
+  | { kind: "rollback" }
+  | { kind: "reinstall-one"; key: string }
+  | { kind: "reinstall-all" }
+  | { kind: "clear-db" }
+  | { kind: "continue"; plan: InstallDecision[] };
+
+function unknownOccupiedTargets(): InstallResourceProbe[] {
+  return [
+    {
+      kind: "r2",
+      name: "relaybase-mailbox",
+      present: true,
+      id: "",
+      occupied: true,
+      objectCount: null,
+    },
+    {
+      kind: "d1",
+      name: "relaybase-db",
+      present: true,
+      id: "",
+      occupied: true,
+      rowCount: null,
+    },
+  ];
+}
+
+function wipePhraseCovers(
+  phrase: string | null,
+  names: string[],
+): boolean {
+  if (names.length === 0) return true;
+  if (!phrase) return false;
+  return wipePhraseIsValid(phrase, names);
+}
 
 function resourceKindLabel(kind: string): "Worker" | "R2" | "D1" {
   if (kind === "r2") return "R2";
@@ -102,6 +145,14 @@ export function SetupProgressPanel() {
     adminToken: string;
   } | null>(null);
   const [clearingDb, setClearingDb] = useState(false);
+  const [wipeOpen, setWipeOpen] = useState(false);
+  const [wipeIntent, setWipeIntent] = useState<WipeIntent | null>(null);
+  const [wipeTargets, setWipeTargets] = useState<InstallResourceProbe[]>([]);
+  const [wipeProbing, setWipeProbing] = useState(false);
+  const [lastWipePhrase, setLastWipePhrase] = useState<string | null>(null);
+  const [confirmedReinstallKeys, setConfirmedReinstallKeys] = useState<
+    Set<string>
+  >(() => new Set());
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
@@ -200,6 +251,8 @@ export function SetupProgressPanel() {
     setPendingVerify(null);
     setVerifyError(null);
     setExisting([]);
+    setLastWipePhrase(null);
+    setConfirmedReinstallKeys(new Set());
     try {
       if (!(await ensureOauthSession())) {
         return;
@@ -313,7 +366,16 @@ export function SetupProgressPanel() {
     }
   }
 
-  async function runAutoInstall(plan?: InstallDecision[]) {
+  function openWipe(intent: WipeIntent, targets: InstallResourceProbe[]) {
+    setWipeIntent(intent);
+    setWipeTargets(targets);
+    setWipeOpen(true);
+  }
+
+  async function runAutoInstall(
+    plan?: InstallDecision[],
+    wipeConfirmation?: string | null,
+  ) {
     busyRef.current = true;
     setBusy(true);
     setStopping(false);
@@ -347,6 +409,7 @@ export function SetupProgressPanel() {
         cfOAuthAccountId || undefined,
         undefined,
         chosen,
+        wipeConfirmation,
       );
       try {
         const connect = await desktopVerifyWorkerConnection(
@@ -382,7 +445,30 @@ export function SetupProgressPanel() {
     }
   }
 
-  async function runRollback() {
+  async function requestRollback() {
+    if (rollingBack || busyRef.current || wipeProbing) return;
+    setWipeProbing(true);
+    setError(null);
+    try {
+      if (!(await ensureOauthSession())) {
+        return;
+      }
+      const probe = await desktopProbeInstall(cfOAuthAccountId || undefined);
+      openWipe(
+        { kind: "rollback" },
+        probe.resources.filter((r) => r.present),
+      );
+    } catch (err) {
+      openWipe({ kind: "rollback" }, unknownOccupiedTargets());
+      setError(
+        explainDesktopError(err, "Could not check existing data before rollback"),
+      );
+    } finally {
+      setWipeProbing(false);
+    }
+  }
+
+  async function runRollback(wipeConfirmation?: string | null) {
     if (rollingBack || busyRef.current) return;
     setRollingBack(true);
     setError(null);
@@ -395,7 +481,10 @@ export function SetupProgressPanel() {
       unlisten = await listenInstallLog((event) => {
         setLogs((prev) => [...prev, event]);
       });
-      await desktopRollbackInstall(cfOAuthAccountId || undefined);
+      await desktopRollbackInstall(
+        cfOAuthAccountId || undefined,
+        wipeConfirmation,
+      );
       setRolledBack(true);
       setAutoDone(null);
       setPendingVerify(null);
@@ -438,7 +527,149 @@ export function SetupProgressPanel() {
     setTokenDownloaded(true);
   }
 
-  async function confirmClearDb(clear: boolean) {
+  async function requestClearDb() {
+    if (!dbAlreadyInit || clearingDb || wipeProbing) return;
+    setWipeProbing(true);
+    setError(null);
+    try {
+      if (!(await ensureOauthSession())) {
+        return;
+      }
+      const probe = await desktopProbeInstall(cfOAuthAccountId || undefined);
+      const d1 = probe.resources.filter((r) => r.kind === "d1" && r.present);
+      openWipe(
+        { kind: "clear-db" },
+        d1.length > 0 ? d1 : unknownOccupiedTargets().filter((r) => r.kind === "d1"),
+      );
+    } catch (err) {
+      openWipe(
+        { kind: "clear-db" },
+        unknownOccupiedTargets().filter((r) => r.kind === "d1"),
+      );
+      setError(
+        explainDesktopError(err, "Could not check existing database data"),
+      );
+    } finally {
+      setWipeProbing(false);
+    }
+  }
+
+  function requestContinueInstall() {
+    const plan = existing.map((r) => ({
+      kind: r.kind,
+      name: r.name,
+      action: decisions[decisionKey(r)] ?? "skip",
+    }));
+    const occupiedReinstall = existing.filter(
+      (r) =>
+        resourceIsOccupied(r) &&
+        (decisions[decisionKey(r)] ?? "skip") === "reinstall",
+    );
+    const names = occupiedReinstall.map((r) => r.name);
+    const allConfirmed = occupiedReinstall.every((r) =>
+      confirmedReinstallKeys.has(decisionKey(r)),
+    );
+    if (
+      occupiedReinstall.length > 0 &&
+      (!allConfirmed || !wipePhraseCovers(lastWipePhrase, names))
+    ) {
+      openWipe({ kind: "continue", plan }, occupiedReinstall);
+      return;
+    }
+    setExisting([]);
+    void runAutoInstall(plan, lastWipePhrase);
+  }
+
+  function requestReinstallOne(r: InstallResourceProbe) {
+    const key = decisionKey(r);
+    if (resourceIsOccupied(r)) {
+      openWipe({ kind: "reinstall-one", key }, [r]);
+      return;
+    }
+    setDecisions((prev) => ({ ...prev, [key]: "reinstall" }));
+  }
+
+  function requestReinstallAll() {
+    const occupied = existing.filter(resourceIsOccupied);
+    if (occupied.length > 0) {
+      openWipe({ kind: "reinstall-all" }, occupied);
+      return;
+    }
+    setAllDecisions("reinstall");
+  }
+
+  function onWipeConfirm(phrase: string | null) {
+    setLastWipePhrase(phrase);
+    const intent = wipeIntent;
+    setWipeOpen(false);
+    if (!intent) return;
+    if (intent.kind === "rollback") {
+      void runRollback(phrase);
+      return;
+    }
+    if (intent.kind === "reinstall-one") {
+      setDecisions((prev) => ({ ...prev, [intent.key]: "reinstall" }));
+      setConfirmedReinstallKeys((prev) => {
+        const next = new Set(prev);
+        next.add(intent.key);
+        return next;
+      });
+      return;
+    }
+    if (intent.kind === "reinstall-all") {
+      setAllDecisions("reinstall");
+      setConfirmedReinstallKeys(new Set(existing.map((r) => decisionKey(r))));
+      return;
+    }
+    if (intent.kind === "continue") {
+      setExisting([]);
+      void runAutoInstall(intent.plan, phrase);
+      return;
+    }
+    void confirmClearDb(true, phrase);
+  }
+
+  function wipeDialogCopy(): {
+    title: string;
+    description: string;
+    confirmLabel: string;
+  } {
+    switch (wipeIntent?.kind) {
+      case "rollback":
+        return {
+          title: "Rollback this install?",
+          description:
+            "This deletes the Relaybase Worker, D1 databases, and R2 mailbox bucket in this Cloudflare account. If this is a live mailbox, mail and product data are gone permanently.",
+          confirmLabel: "Rollback",
+        };
+      case "clear-db":
+        return {
+          title: "Clear the database?",
+          description:
+            "This drops every D1 table and starts empty. Domains, addresses, audience lists, API keys, and settings will be deleted.",
+          confirmLabel: "Clear database",
+        };
+      case "continue":
+        return {
+          title: "Delete existing data and continue?",
+          description:
+            "Continue install will delete the resources marked Reinstall. Mail in R2 and rows in D1 cannot be recovered.",
+          confirmLabel: "Delete and continue",
+        };
+      default:
+        return {
+          title: "Reinstall will delete existing data",
+          description:
+            "Reinstall deletes this resource and creates a new empty one. If this account is already running Relaybase, that data is gone permanently.",
+          confirmLabel: "Reinstall",
+        };
+    }
+  }
+
+  async function confirmClearDb(
+    clear: boolean,
+    wipeConfirmation?: string | null,
+  ) {
     if (!dbAlreadyInit || clearingDb) return;
     if (clear) {
       setClearingDb(true);
@@ -447,6 +678,8 @@ export function SetupProgressPanel() {
           dbAlreadyInit.workerUrl,
           dbAlreadyInit.adminToken,
           true,
+          wipeConfirmation,
+          cfOAuthAccountId || undefined,
         );
       } catch (err) {
         setError(explainDesktopError(err, "Could not clear database"));
@@ -523,7 +756,8 @@ export function SetupProgressPanel() {
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 These already exist in your Cloudflare account. Skip keeps
-                them. Reinstall deletes them and creates new ones.
+                them. Reinstall on a resource with mail or database rows
+                requires typing DELETE ME.
               </p>
             </div>
             <ul className="space-y-3">
@@ -547,6 +781,17 @@ export function SetupProgressPanel() {
                           </span>{" "}
                           <span className="font-medium">{r.name}</span>
                         </p>
+                        {occupancySummary(r) ? (
+                          <p
+                            className={
+                              resourceIsOccupied(r)
+                                ? "text-[11px] text-amber-700 dark:text-amber-400"
+                                : "text-[11px] text-muted-foreground"
+                            }
+                          >
+                            {occupancySummary(r)}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex shrink-0 gap-1">
@@ -554,9 +799,14 @@ export function SetupProgressPanel() {
                         type="button"
                         size="sm"
                         variant={action === "skip" ? "default" : "outline"}
-                        onClick={() =>
-                          setDecisions((prev) => ({ ...prev, [key]: "skip" }))
-                        }
+                        onClick={() => {
+                          setDecisions((prev) => ({ ...prev, [key]: "skip" }));
+                          setConfirmedReinstallKeys((prev) => {
+                            const next = new Set(prev);
+                            next.delete(key);
+                            return next;
+                          });
+                        }}
                       >
                         Skip
                       </Button>
@@ -566,12 +816,7 @@ export function SetupProgressPanel() {
                         variant={
                           action === "reinstall" ? "default" : "outline"
                         }
-                        onClick={() =>
-                          setDecisions((prev) => ({
-                            ...prev,
-                            [key]: "reinstall",
-                          }))
-                        }
+                        onClick={() => requestReinstallOne(r)}
                       >
                         Reinstall
                       </Button>
@@ -585,7 +830,10 @@ export function SetupProgressPanel() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setAllDecisions("skip")}
+                onClick={() => {
+                  setAllDecisions("skip");
+                  setConfirmedReinstallKeys(new Set());
+                }}
               >
                 Skip all
               </Button>
@@ -593,7 +841,7 @@ export function SetupProgressPanel() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setAllDecisions("reinstall")}
+                onClick={() => requestReinstallAll()}
               >
                 Reinstall all
               </Button>
@@ -601,15 +849,7 @@ export function SetupProgressPanel() {
             <Button
               type="button"
               className="w-full"
-              onClick={() => {
-                const plan = existing.map((r) => ({
-                  kind: r.kind,
-                  name: r.name,
-                  action: decisions[decisionKey(r)] ?? "skip",
-                }));
-                setExisting([]);
-                void runAutoInstall(plan);
-              }}
+              onClick={() => requestContinueInstall()}
             >
               Continue install
             </Button>
@@ -665,7 +905,8 @@ export function SetupProgressPanel() {
                 <Button
                   type="button"
                   className="flex-1"
-                  onClick={() => void confirmClearDb(true)}
+                  onClick={() => void requestClearDb()}
+                  disabled={wipeProbing}
                 >
                   Clear and reinitialize
                 </Button>
@@ -980,11 +1221,26 @@ export function SetupProgressPanel() {
             type="button"
             variant="outline"
             className="w-full"
-            onClick={() => void runRollback()}
+            disabled={wipeProbing}
+            onClick={() => void requestRollback()}
           >
+            {wipeProbing ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : null}
             Rollback
           </Button>
         ) : null}
+
+        <InstallWipeConfirmDialog
+          open={wipeOpen}
+          onOpenChange={setWipeOpen}
+          title={wipeDialogCopy().title}
+          description={wipeDialogCopy().description}
+          targets={wipeTargets}
+          confirmLabel={wipeDialogCopy().confirmLabel}
+          onConfirm={onWipeConfirm}
+          confirming={rollingBack || clearingDb}
+        />
 
       </div>
     </SetupScrollPage>

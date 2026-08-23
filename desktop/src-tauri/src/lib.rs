@@ -15,9 +15,10 @@ fn console_base_url() -> String {
 }
 
 use auto_install::{
-    auto_install_worker, check_worker_update, init_worker_db, merge_into_credentials,
-    probe_install_resources, request_install_cancel, rollback_all_install, update_installed_worker,
-    AutoInstallResult, InitDbResult, InstallDecision, InstallProbeResult, WorkerUpdateCheck,
+    assert_clear_db_allowed, auto_install_worker, check_worker_update, init_worker_db,
+    merge_into_credentials, probe_install_resources, request_install_cancel, rollback_all_install,
+    update_installed_worker, AutoInstallResult, InitDbResult, InstallDecision, InstallProbeResult,
+    WorkerUpdateCheck,
 };
 use cloudflare::{list_zones, verify_token, ZoneSummary};
 use secrets::{
@@ -318,6 +319,7 @@ async fn auto_install_routing_worker(
     account_id: Option<String>,
     server_token: Option<String>,
     decisions: Option<Vec<InstallDecision>>,
+    wipe_confirmation: Option<String>,
 ) -> Result<AutoInstallResult, String> {
     let server = server_token
         .map(|s| s.trim().to_string())
@@ -329,6 +331,7 @@ async fn auto_install_routing_worker(
         account_id.clone(),
         server.clone(),
         decisions.unwrap_or_default(),
+        wipe_confirmation,
     )
     .await?;
     let existing = load_credentials()?.unwrap_or_default();
@@ -418,9 +421,10 @@ fn cancel_auto_install() {
 async fn rollback_auto_install(
     app: tauri::AppHandle,
     account_id: Option<String>,
+    wipe_confirmation: Option<String>,
 ) -> Result<(), String> {
     let token = refresh_install_token_if_needed().await?;
-    rollback_all_install(app, token, account_id).await?;
+    rollback_all_install(app, token, account_id, wipe_confirmation).await?;
     if let Ok(Some(mut creds)) = load_credentials() {
         creds.worker_url.clear();
         creds.admin_token.clear();
@@ -440,7 +444,13 @@ async fn init_worker_db_cmd(
     worker_url: String,
     admin_token: String,
     clear: bool,
+    wipe_confirmation: Option<String>,
+    account_id: Option<String>,
 ) -> Result<InitDbResult, String> {
+    if clear {
+        let token = refresh_install_token_if_needed().await?;
+        assert_clear_db_allowed(token, account_id, wipe_confirmation.as_deref()).await?;
+    }
     init_worker_db(&worker_url, &admin_token, clear).await
 }
 

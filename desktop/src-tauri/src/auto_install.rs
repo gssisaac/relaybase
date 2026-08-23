@@ -2,7 +2,7 @@
 //! Cloudflare account using a pre-built install ZIP + the Cloudflare HTTP API.
 //!
 //! Flow (each step streams `install-log` events to the frontend):
-//!   0. `probe_install_resources` lists Worker / R2 / D1 that already exist.
+//!   0. `probe_install_resources` lists Worker / R2 / D1 and their occupancy.
 //!   1. Fetch worker-install-manifest.json and download the versioned ZIP.
 //!   2. Ensure R2 bucket `relaybase-mailbox`.
 //!   3. Create D1 databases (schema via POST /console/init-db after deploy).
@@ -25,11 +25,11 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Notify;
 
 use crate::cloudflare::{
-    assert_r2_subscription, create_d1_database, delete_d1_database, delete_r2_bucket,
-    delete_worker_script, empty_r2_bucket, enable_workers_dev, ensure_r2_bucket, find_r2_bucket,
-    list_d1_databases, list_worker_bindings, put_worker_schedules, put_worker_secret,
-    resolve_account_id, upload_worker_script, worker_script_exists, CfClient,
-    DEFAULT_WORKER_CRON,
+    assert_r2_subscription, count_d1_user_rows, count_r2_objects, create_d1_database,
+    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket,
+    enable_workers_dev, ensure_r2_bucket, find_r2_bucket, list_d1_databases, list_worker_bindings,
+    put_worker_schedules, put_worker_secret, resolve_account_id, upload_worker_script,
+    worker_script_exists, CfClient, DEFAULT_WORKER_CRON,
 };
 use crate::secrets::StoredCredentials;
 use crate::worker::DEFAULT_SCRIPT;
@@ -121,6 +121,9 @@ pub struct AutoInstallResult {
     pub worker_version: String,
 }
 
+/// Typed confirmation required before wiping occupied R2 / D1.
+pub const WIPE_PHRASE_DELETE_ME: &str = "DELETE ME";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallResourceProbe {
@@ -128,6 +131,86 @@ pub struct InstallResourceProbe {
     pub name: String,
     pub present: bool,
     pub id: String,
+    #[serde(default)]
+    pub object_count: Option<u64>,
+    #[serde(default)]
+    pub row_count: Option<u64>,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(default)]
+    pub occupied: bool,
+}
+
+impl InstallResourceProbe {
+    fn base(kind: &str, name: impl Into<String>, present: bool, id: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            name: name.into(),
+            present,
+            id: id.into(),
+            object_count: None,
+            row_count: None,
+            truncated: false,
+            occupied: false,
+        }
+    }
+}
+
+/// `DELETE ME`, the Worker script name, or any of `resource_names`.
+pub fn wipe_confirmation_allows(phrase: Option<&str>, resource_names: &[&str]) -> bool {
+    let Some(p) = phrase.map(str::trim).filter(|s| !s.is_empty()) else {
+        return false;
+    };
+    p == WIPE_PHRASE_DELETE_ME
+        || p == DEFAULT_SCRIPT
+        || resource_names.iter().any(|n| *n == p)
+}
+
+fn assert_wipe_phrase(phrase: Option<&str>, resource_names: &[&str]) -> Result<(), String> {
+    if wipe_confirmation_allows(phrase, resource_names) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} already has data. Type DELETE ME or the resource name to permanently delete it.",
+            resource_names.join(", ")
+        ))
+    }
+}
+
+fn occupied_wipe_refused(occupied: &[&InstallResourceProbe]) -> String {
+    let summary = occupied
+        .iter()
+        .map(|r| {
+            if r.kind == "r2" {
+                let n = r.object_count.unwrap_or(0);
+                let plus = if r.truncated { "+" } else { "" };
+                format!("{} ({n}{plus} objects)", r.name)
+            } else {
+                let n = r.row_count.unwrap_or(0);
+                let plus = if r.truncated { "+" } else { "" };
+                format!("{} ({n}{plus} rows)", r.name)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "These resources already have data ({summary}). Type DELETE ME or the resource name to permanently delete them."
+    )
+}
+
+fn assert_occupied_wipe_allowed(
+    occupied: &[&InstallResourceProbe],
+    wipe_confirmation: Option<&str>,
+) -> Result<(), String> {
+    if occupied.is_empty() {
+        return Ok(());
+    }
+    let names: Vec<&str> = occupied.iter().map(|r| r.name.as_str()).collect();
+    if wipe_confirmation_allows(wipe_confirmation, &names) {
+        Ok(())
+    } else {
+        Err(occupied_wipe_refused(occupied))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -598,10 +681,12 @@ fn emit_log(app: &AppHandle, step: &str, level: &str, line: impl Into<String>) {
 
 /// Delete every Relaybase install resource in the account (Worker, D1, R2).
 /// Streams the same `install-log` events as auto-install.
+/// Occupied R2 / D1 require `wipe_confirmation` (`DELETE ME` or a resource name).
 pub async fn rollback_all_install(
     app: AppHandle,
     api_token: String,
     account_id: Option<String>,
+    wipe_confirmation: Option<String>,
 ) -> Result<(), String> {
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
@@ -632,6 +717,47 @@ pub async fn rollback_all_install(
         account_id: account_id.clone(),
         api_token: api_token.clone(),
     };
+
+    emit_log(
+        &app,
+        "rollback",
+        "info",
+        "Checking for existing mail and database data before deleting…",
+    );
+    match probe_install_resources(api_token.clone(), Some(account_id.clone())).await {
+        Ok(probe) => {
+            let occupied: Vec<&InstallResourceProbe> =
+                probe.resources.iter().filter(|r| r.occupied).collect();
+            assert_occupied_wipe_allowed(&occupied, wipe_confirmation.as_deref())?;
+            for r in &occupied {
+                emit_log(
+                    &app,
+                    "rollback",
+                    "info",
+                    format!(
+                        "Occupied {} `{}` — wipe confirmation accepted",
+                        r.kind, r.name
+                    ),
+                );
+            }
+        }
+        Err(e) => {
+            if !wipe_confirmation_allows(
+                wipe_confirmation.as_deref(),
+                &[DEFAULT_SCRIPT, R2_BUCKET],
+            ) {
+                return Err(format!(
+                    "Could not check existing data before rollback: {e}. Type DELETE ME or {DEFAULT_SCRIPT} to force wipe."
+                ));
+            }
+            emit_log(
+                &app,
+                "rollback",
+                "stderr",
+                format!("Occupancy probe failed ({e}); proceeding after typed confirmation"),
+            );
+        }
+    }
 
     emit_log(
         &app,
@@ -739,19 +865,21 @@ pub async fn probe_install_resources(
     // OAuth write tokens often 403 on account-wide lists. Existence helpers
     // already treat that as "not present" so first-time install can proceed.
     let worker_present = worker_script_exists(&client, DEFAULT_SCRIPT).await?;
-    resources.push(InstallResourceProbe {
-        kind: "worker".into(),
-        name: DEFAULT_SCRIPT.into(),
-        present: worker_present,
-        id: String::new(),
-    });
+    resources.push(InstallResourceProbe::base(
+        "worker",
+        DEFAULT_SCRIPT,
+        worker_present,
+        "",
+    ));
     let r2_present = find_r2_bucket(&client, R2_BUCKET).await?;
-    resources.push(InstallResourceProbe {
-        kind: "r2".into(),
-        name: R2_BUCKET.into(),
-        present: r2_present,
-        id: String::new(),
-    });
+    let mut r2 = InstallResourceProbe::base("r2", R2_BUCKET, r2_present, "");
+    if r2_present {
+        let occ = count_r2_objects(&client, R2_BUCKET).await;
+        r2.object_count = if occ.unknown { None } else { Some(occ.count) };
+        r2.truncated = occ.truncated;
+        r2.occupied = occ.occupied;
+    }
+    resources.push(r2);
     let d1_list = match list_d1_databases(&client).await {
         Ok(v) => v,
         Err(_) => Vec::new(),
@@ -762,12 +890,14 @@ pub async fn probe_install_resources(
             .find(|(n, _)| n == name)
             .map(|(_, id)| id.clone())
             .unwrap_or_default();
-        resources.push(InstallResourceProbe {
-            kind: "d1".into(),
-            name: (*name).into(),
-            present: !id.is_empty(),
-            id,
-        });
+        let mut d1 = InstallResourceProbe::base("d1", *name, !id.is_empty(), id.clone());
+        if !id.is_empty() {
+            let occ = count_d1_user_rows(&client, &id).await;
+            d1.row_count = if occ.unknown { None } else { Some(occ.count) };
+            d1.truncated = occ.truncated;
+            d1.occupied = occ.occupied;
+        }
+        resources.push(d1);
     }
     Ok(InstallProbeResult {
         account_id,
@@ -789,6 +919,7 @@ pub async fn auto_install_worker(
     account_id: Option<String>,
     server_token: Option<String>,
     decisions: Vec<InstallDecision>,
+    wipe_confirmation: Option<String>,
 ) -> Result<AutoInstallResult, String> {
     reset_install_cancel();
     let api_token = api_token.trim().to_string();
@@ -847,6 +978,7 @@ pub async fn auto_install_worker(
         &InstallPlan::from_decisions(&decisions),
         &InstallRunOptions::default(),
         read_staged_version(&work_dir),
+        wipe_confirmation.as_deref(),
     )
     .await;
     let _ = std::fs::remove_dir_all(&work_dir);
@@ -902,6 +1034,7 @@ pub async fn update_installed_worker(
         &InstallPlan::default(),
         &run_opts,
         read_staged_version(&work_dir),
+        None,
     )
     .await;
     let _ = std::fs::remove_dir_all(&work_dir);
@@ -917,6 +1050,7 @@ async fn auto_install_steps(
     plan: &InstallPlan,
     run_opts: &InstallRunOptions,
     staged_version: Option<String>,
+    wipe_confirmation: Option<&str>,
 ) -> Result<AutoInstallResult, String> {
     check_cancelled()?;
     let _ = app.emit(
@@ -955,6 +1089,10 @@ async fn auto_install_steps(
     }
 
     if plan.reinstall_r2 {
+        let occ = count_r2_objects(&client, R2_BUCKET).await;
+        if occ.occupied {
+            assert_wipe_phrase(wipe_confirmation, &[R2_BUCKET])?;
+        }
         emit_log(
             app,
             "r2",
@@ -988,6 +1126,10 @@ async fn auto_install_steps(
     for (_binding, db_name) in D1_DATABASES {
         let db_id = if plan.should_reinstall_d1(db_name) {
             if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
+                let occ = count_d1_user_rows(&client, id).await;
+                if occ.occupied {
+                    assert_wipe_phrase(wipe_confirmation, &[db_name])?;
+                }
                 emit_log(
                     app,
                     "d1",
@@ -1236,6 +1378,22 @@ async fn init_worker_db_with_retry(
     Err(last)
 }
 
+/// Refuse `clear=true` when any Relaybase D1 already has user rows, unless
+/// the typed wipe phrase is present.
+pub async fn assert_clear_db_allowed(
+    api_token: String,
+    account_id: Option<String>,
+    wipe_confirmation: Option<&str>,
+) -> Result<(), String> {
+    let probe = probe_install_resources(api_token, account_id).await?;
+    let occupied: Vec<&InstallResourceProbe> = probe
+        .resources
+        .iter()
+        .filter(|r| r.kind == "d1" && r.occupied)
+        .collect();
+    assert_occupied_wipe_allowed(&occupied, wipe_confirmation)
+}
+
 /// Call the Worker's POST /console/init-db endpoint to initialize D1 schema.
 /// The Worker owns its own migrations — the desktop never runs SQL.
 pub async fn init_worker_db(
@@ -1368,4 +1526,47 @@ fn days_to_ymd(days: i64) -> (i64, i64, i64) {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = yoe + era * 400 + (if m <= 2 { 1 } else { 0 });
     (y, m, d)
+}
+
+#[cfg(test)]
+mod wipe_phrase_tests {
+    use super::{wipe_confirmation_allows, WIPE_PHRASE_DELETE_ME, DEFAULT_SCRIPT};
+
+    #[test]
+    fn delete_me_allows_any_resource() {
+        assert!(wipe_confirmation_allows(
+            Some(WIPE_PHRASE_DELETE_ME),
+            &["relaybase-mailbox"]
+        ));
+    }
+
+    #[test]
+    fn project_name_allows() {
+        assert!(wipe_confirmation_allows(
+            Some(DEFAULT_SCRIPT),
+            &["relaybase-mailbox"]
+        ));
+    }
+
+    #[test]
+    fn matching_resource_name_allows() {
+        assert!(wipe_confirmation_allows(
+            Some("relaybase-mailbox"),
+            &["relaybase-mailbox"]
+        ));
+    }
+
+    #[test]
+    fn empty_or_wrong_phrase_refuses() {
+        assert!(!wipe_confirmation_allows(None, &["relaybase-mailbox"]));
+        assert!(!wipe_confirmation_allows(Some(""), &["relaybase-mailbox"]));
+        assert!(!wipe_confirmation_allows(
+            Some("delete me"),
+            &["relaybase-mailbox"]
+        ));
+        assert!(!wipe_confirmation_allows(
+            Some("relaybase-db"),
+            &["relaybase-mailbox"]
+        ));
+    }
 }

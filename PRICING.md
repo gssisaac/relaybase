@@ -1,12 +1,37 @@
 # Relaybase — Pricing
 
-**Status: pre-launch (Early Access open).** This is the source of truth for pricing numbers and tier scope. Full rationale and the model comparison behind these numbers live in `STRATEGY.md` §7 (superseding §§1–6, which were written under a "$39, no subscription ever" draft that predated this decision) and `STRATEGY.md` §8 (why prelaunch doesn't wait for Cloudflare Email Sending's GA). The Early Access policy itself — audience, copy, and SKU rationale — is spelled out in `PRE-LAUNCH.md` §4. This doc is the spec other docs and the website should match.
+**Status: DRAFT — internal only until official paid launch.**  
+Updated: 2026-08-23 (private-beta publication policy).
 
-**Public scope right now: Free and Pro (as "Pro — Early Access") only.** Team and Studio exist in the model and are worth building toward, but they depend on engineering that hasn't shipped yet (mailbox-scoped seats, multi-Worker license tracking — see `STRATEGY.md` §2–3). Do not publish them on the marketing site until they're real. This doc tracks all four so engineering and marketing stay in sync as they ship.
+This file is a **working draft**, not a public price list and not a customer promise. Dollar amounts, renewal rules, Free caps, and which features sit in which tier **can change** after private-beta feedback. Do not treat any number below as locked.
+
+Full rationale for this draft lives in `STRATEGY.md` §7 (model comparison) and `STRATEGY.md` §9 (what to say during private beta). `PRE-LAUNCH.md` §4 is the older Early Access SKU sketch — same draft status; do not ship it to the site until paid launch.
 
 ---
 
-## 1. Public tiers (live on relaybase.xyz today)
+## 0. Private beta — do not publish this policy
+
+Private beta is email-apply → personal download link. Until official paid launch:
+
+| Do publish (invite email / site) | Do **not** publish |
+|----------------------------------|-------------------|
+| Beta is free. We will email a download link. | Free $0 / Pro $69 / Early Access $35 tables |
+| Mail runs in **your** Cloudflare account. We do not host it. | “First 300 seats”, ~50% off, founding-price lock |
+| Cloudflare may bill you separately (e.g. Workers Paid). | Optional $25/year update renewal |
+| We will not turn off or delete mail, domains, or data you already set up if we later charge. | 1-domain / 1-address Free caps as a live offer |
+| | Team seats, Studio, “3 seats included in Pro” |
+
+**Beta testers get the full current product** (multi-domain, Audience, Broadcasts, and whatever else is shipped). Do not gate draft-Pro features during beta. Do not claw them back later — if a tester does not buy at launch, **stop adds**, do not delete what already works.
+
+**Grandfathering and exact prices are named only on the first checkout**, after we have reaction data — not on the marketing site during beta.
+
+When this draft is promoted to public (paid launch), flip this status line and then keep site copy in sync. Until then, `kembo/website` must not present these SKUs as live.
+
+---
+
+## 1. Draft tiers (internal working model — not live)
+
+The table is the **current internal hypothesis**. It is not on relaybase.xyz as a customer offer until official paid launch. Team seats in the Pro column assume engineering that has not shipped — treat that row as aspirational, not as something to tell testers.
 
 | | Free | Pro — Early Access | Pro (regular, post-launch) |
 |---|---|---|---|
@@ -23,7 +48,7 @@
 
 Free is not a trial — it does not expire and does not require a credit card. It runs the same Worker in the same way as Pro; the only difference is the domain/address cap and feature gating in the desktop app. Because the Worker executes entirely inside the customer's own Cloudflare account, Free costs Relaybase effectively nothing to serve — there is no hosting bill that scales with free users. Treat Free as a zero-cost top-of-funnel channel, not a loss leader.
 
-**Pro — Early Access** is identical to regular Pro in every feature — only the price and seat cap differ. It closes when the first 300 seats are claimed or Relaybase exits pre-launch (whichever comes first — `STRATEGY.md` §8.5's launch gate). Early Access buyers keep the $35 price for life; it never reverts to $69 for them. `siteConfig.pricing.earlyAccess.active` (`website/src/lib/site-config.ts`) is the single flag that turns this tier on/off across the site — flip it to `false` and every page falls back to the regular `$69` Pro price automatically.
+**Pro — Early Access** (draft) is identical to regular Pro in every feature — only the price and seat cap differ. If we still want this SKU at paid launch, it would close when the first 300 seats are claimed or Relaybase exits pre-launch (whichever comes first — `STRATEGY.md` §8.5). Draft rule: Early Access buyers keep that price for life. `siteConfig.pricing.earlyAccess.active` exists in `website/src/lib/site-config.ts` for when we *do* publish; **do not treat a live site card as a beta-era promise.** Until paid launch, keep Early Access copy off the public path (or behind “pricing at launch”).
 
 ## 2. Pro update renewal (optional, not required to keep using Relaybase)
 
@@ -46,15 +71,17 @@ Free is not a trial — it does not expire and does not require a credit card. I
 
 Publish these on the site only once the underlying feature exists in the app. Until then, the public pricing page should not imply team sharing or multi-business bundles are available.
 
-## 4. Numbers that must stay consistent across docs and site copy
+## 4. Internal draft numbers (not site copy yet)
 
-- Free: $0, 1 domain, 1 address.
-- Pro: $69 one-time, includes 1 year of updates.
-- Pro renewal: $25/year, optional, perpetual fallback (§2).
-- Do not reintroduce "$39" or an absolute "no subscription, ever" claim anywhere — both are superseded. The accurate claim is **"no subscription required — and skipping the optional renewal never breaks your mail."**
+These are the figures other **internal** docs should use *while this draft lasts*. They are allowed to change before launch. Do not paste them onto the marketing site, invite emails, or TERMS as if they were final.
+
+- Free (draft): $0, 1 domain, 1 address.
+- Pro (draft): $69 one-time, includes 1 year of updates.
+- Pro renewal (draft): $25/year, optional, perpetual fallback (§2).
+- Do not reintroduce "$39" or an absolute "no subscription, ever" claim. The draft public claim *at paid launch* would be **"no subscription required — and skipping the optional renewal never breaks your mail."** During private beta, say only: beta is free; mail stays on your Cloudflare account; we will not revoke what you already set up.
 
 ## 5. Where this is implemented
 
-- Marketing copy and the `siteConfig.pricing` object: `website/src/lib/site-config.ts` and the components that read from it (`hero.tsx`, `pricing-comparison.tsx`, `site-header.tsx`, `footer.tsx`, `get-started/page.tsx`, `use-cases.tsx`, `resources/[slug]/page.tsx`, JSON-LD in `app/page.tsx`).
-- License records currently have no free/pro/renewal fields (`server/src/lib/licenses.ts` — `LicenseRecord` is just email + key + active/revoked). Adding a `tier: "free" | "pro"` and `renewalExpiresAt` field there is required before Pro/renewal billing can be enforced server-side; not done yet.
-- Stripe checkout for Pro + renewal is not implemented yet — the current `/get-started` page only collects waitlist emails (`WaitlistForm`).
+- Draft numbers still exist in `kembo/website` `siteConfig.pricing` and the components that read it. That is leftover scaffolding, **not** authorization to keep a public price table during private beta. Until paid launch, site/invite copy follows §0, not the $35/$69 cards.
+- License records currently have no free/pro/renewal fields (`server/src/lib/licenses.ts` — `LicenseRecord` is just email + key + active/revoked). Adding a `tier: "free" | "pro"` and `renewalExpiresAt` field is required before Pro/renewal billing can be enforced; not done yet — and not needed to run private beta.
+- Stripe checkout for Pro + renewal is not implemented yet — `/get-started` only collects waitlist / beta-apply emails.

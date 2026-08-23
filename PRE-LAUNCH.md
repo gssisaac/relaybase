@@ -1,8 +1,9 @@
 # Relaybase — Pre-launch 콘텐츠 & 가격 정책
 
 - 작성일: 2026-08-09 (v1)
-- 목적: 정식 유료 launch 전, **웹사이트 메시징 재포지셔닝**과 **Prelaunch(Early Access) 가격 SKU**를 확정한다. 이 문서는 실제 코드 변경(website/) 전에 합의할 "무엇을, 왜, 어떻게 바꿀지"의 정책 문서다 — 코드 변경 자체는 이 문서 승인 후 별도 실행.
-- 전제: `STRATEGY.md` §7(가격체계 v2: Free $0 / Pro $69 일회성 / 연 $25 선택 갱신), `STRATEGY.md` §8(Cloudflare Email Sending 공개 베타 상태에서 prelaunch/유료 launch 분리 전략)의 결론을 그대로 따른다. 여기서는 그 결론을 **실제 웹페이지 카피와 가격표**로 번역한다.
+- **2026-08-23:** §4의 Early Access 가격표($35 / $69 / 300석)와 사이트 반영 체크리스트는 **Draft**다. 프라이빗 베타 동안 웹사이트에 올리지 않는다. 우선순위: `STRATEGY.md` §9, `PRICING.md` §0.
+- 목적: 정식 유료 launch 전, **웹사이트 메시징 재포지셔닝**과 **Prelaunch(Early Access) 가격 SKU**를 내부에서 스케치한다. 숫자·포함 범위는 베타 반응 후 달라질 수 있다. 공개 확정은 유료 launch 때.
+- 전제: `STRATEGY.md` §7은 내부 모델 초안, §8은 CF Email Sending 타이밍, §9는 베타 동안 가격 비공개. 이 문서 §1–3의 타깃/카피 규칙은 유효하다. §4 SKU를 사이트에 번역하는 실행은 **유료 launch 전까지 보류**한다.
 
 ---
 

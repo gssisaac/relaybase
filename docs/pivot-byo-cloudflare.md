@@ -6,7 +6,7 @@
 
 ## Summary
 
-Relaybase is a **one-time** Mac/Windows desktop app (see `PRICING.md` for current prices — Early Access $35, regular $69, optional $25/yr update renewal; the old "$39" figure is superseded) that:
+Relaybase is a **one-time** Mac/Windows desktop app (price numbers in `PRICING.md` are an **internal draft** until official paid launch — see that file §0 and `STRATEGY.md` §9; the old "$39" figure is superseded even as a draft) that:
 
 1. Installs a **routing Worker** into **the customer's own** Cloudflare account — by default the desktop runs Wrangler in the background (paste a CF API token, watch the install log), with manual Wrangler as a fallback.
 2. Talks only to that Worker (`/mail/*`, `/console/*`, `/mobile/*`, `/v1/*`) for product operations.

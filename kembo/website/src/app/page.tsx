@@ -1,6 +1,7 @@
 import { CloudflareTrust } from "@/components/cloudflare-trust";
 import { CodeEmbed } from "@/components/code-embed";
 import { EmailAddresses } from "@/components/email-addresses";
+import { FeatureWalkthrough } from "@/components/feature-walkthrough";
 import { Features } from "@/components/features";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
@@ -50,6 +51,7 @@ export default function Home() {
         <Hero />
         <IntroVideo />
         <EmailAddresses />
+        <FeatureWalkthrough />
         <UseCases />
         <CodeEmbed />
         <Features />

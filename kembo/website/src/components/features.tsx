@@ -63,7 +63,7 @@ const features = [
 
 export function Features() {
   return (
-    <section id="features" className="py-20">
+    <section className="py-20">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
           <Badge variant="outline" className="mb-4">

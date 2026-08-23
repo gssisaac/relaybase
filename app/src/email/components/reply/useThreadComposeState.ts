@@ -96,16 +96,25 @@ export function useThreadComposeState({
   const wantsReplyParam = searchParams.get("reply");
   const wantsReplyAllParam = searchParams.get("replyAll");
   const wantsDraftIdParam = searchParams.get("draftId");
+  const threadKey = threadId ?? messageId ?? null;
+  const prevThreadKeyRef = useRef<string | null>(null);
 
-  // When opening a message: restore reply panel from ?reply= / ?draftId= query
+  // Cmd+K / context menu / Unsend navigate with ?reply=1, then we strip the
+  // param. Do not treat that strip as "leave this thread" — that used to
+  // immediately clear the composer that just opened. Keyboard `r` bypasses
+  // the URL and was unaffected.
   useEffect(() => {
     if (folder !== "inbox" || !messageId) {
       setComposeSourceId(null);
       setComposeDraftId(null);
       setComposeMode(null);
+      prevThreadKeyRef.current = threadKey;
       return;
     }
-    const dismissKey = threadId ?? messageId;
+
+    const threadChanged = prevThreadKeyRef.current !== threadKey;
+    prevThreadKeyRef.current = threadKey;
+
     const wantsReply = wantsReplyParam === "1";
     const wantsReplyAll = wantsReplyAllParam === "1";
     if (wantsReply || wantsReplyAll) {
@@ -128,26 +137,26 @@ export function useThreadComposeState({
       router.replace(`${inbox}?${params.toString()}`);
       return;
     }
+
+    // Same thread (e.g. ?reply= just consumed) — keep keyboard / URL compose.
+    if (!threadChanged) return;
+
     // Draft reply/forward rows render in ConversationThreadView — do not
     // auto-open the composer when a thread merely has saved drafts.
-    if (composeDismissedThreadRef.current === dismissKey) {
-      setComposeSourceId(null);
-      setComposeDraftId(null);
-      setComposeMode(null);
-      return;
-    }
     setComposeSourceId(null);
     setComposeDraftId(null);
     setComposeMode(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     folder,
+    inbox,
     messageId,
-    threadId,
-    wantsReplyParam,
-    wantsReplyAllParam,
-    wantsDraftIdParam,
+    router,
+    searchParams,
     store,
+    threadKey,
+    wantsDraftIdParam,
+    wantsReplyAllParam,
+    wantsReplyParam,
   ]);
 
   const onComposeModeChange = useCallback(

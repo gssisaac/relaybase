@@ -65,6 +65,16 @@ export type UseEmailCommandRuntimeAdapterInput = {
   moveToTrash: (kind: TrashKind, id: string) => void;
   moveInboxToTrashMany: (ids: string[]) => void;
   restoreFromTrash: (kind: TrashKind, id: string) => void;
+  /** Currently open message (`?m=`). Used to prefer inline reply over URL. */
+  messageId?: string;
+  /**
+   * Same opener as keyboard `r`/`a`/`f` on an open inbox thread.
+   * Cmd+K / context menu must use this when the target thread is already open.
+   */
+  openThreadCompose?: (
+    mode: "reply" | "replyAll" | "forward",
+    inboundKey: string,
+  ) => void;
 };
 
 export type UseEmailCommandRuntimeAdapterResult = {
@@ -94,6 +104,8 @@ export function useEmailCommandRuntimeAdapter(
     moveToTrash,
     moveInboxToTrashMany,
     restoreFromTrash,
+    messageId,
+    openThreadCompose,
   } = input;
   const { setScope, paletteOpen } = useEmailCommandRuntime();
   const {
@@ -159,11 +171,18 @@ export function useEmailCommandRuntimeAdapter(
         onComposeNew: openComposeNew,
         onReply: (mode) => {
           if (!target || target.kind !== "inbox") return;
-          const latest =
+          const threadKeys =
             folder === "inbox"
-              ? (threadInboundKeysFor(target.message.key).at(-1) ??
-                target.message.key)
-              : target.message.key;
+              ? threadInboundKeysFor(target.message.key)
+              : [target.message.key];
+          const latest = threadKeys.at(-1) ?? target.message.key;
+          const threadIsOpen = Boolean(
+            messageId && threadKeys.includes(messageId),
+          );
+          if (threadIsOpen && openThreadCompose) {
+            openThreadCompose(mode, latest);
+            return;
+          }
           openReply(latest, mode);
         },
         onForward: () => {
@@ -171,7 +190,19 @@ export function useEmailCommandRuntimeAdapter(
             return;
           }
           if (target.kind === "inbox") {
-            openForward(target.message.key);
+            const threadKeys =
+              folder === "inbox"
+                ? threadInboundKeysFor(target.message.key)
+                : [target.message.key];
+            const latest = threadKeys.at(-1) ?? target.message.key;
+            const threadIsOpen = Boolean(
+              messageId && threadKeys.includes(messageId),
+            );
+            if (threadIsOpen && openThreadCompose) {
+              openThreadCompose("forward", latest);
+              return;
+            }
+            openForward(latest);
             return;
           }
           openForwardSent(target.message.id);
@@ -228,6 +259,7 @@ export function useEmailCommandRuntimeAdapter(
       markReadMany,
       markUnread,
       markUnreadMany,
+      messageId,
       moveInboxToTrashMany,
       moveToTrash,
       openCompose,
@@ -235,6 +267,7 @@ export function useEmailCommandRuntimeAdapter(
       openForward,
       openForwardSent,
       openReply,
+      openThreadCompose,
       restoreFromTrash,
       router,
       threadInboundKeysFor,

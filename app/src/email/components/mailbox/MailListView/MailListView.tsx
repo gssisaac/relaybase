@@ -185,6 +185,8 @@ export const MailListView = observer(function MailListView({
       moveToTrash: store.moveToTrash,
       moveInboxToTrashMany: store.moveInboxToTrashMany,
       restoreFromTrash: store.restoreFromTrash,
+      messageId,
+      openThreadCompose: openComposeFromKeyboard,
     });
 
   useMailListKeyboard({

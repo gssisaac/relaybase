@@ -96,7 +96,7 @@ Rules:
 - Never handle bare `k` without checking modifiers.
 - Never let mail shortcuts run while the palette is open.
 - List navigation (`j`/`k`/arrows/`u`/`esc`) stays in the mail view.
-- Standalone `c` / `⇧C` go through `useStandaloneComposeOpener`. Inbox-thread `r`/`a`/`f` use `useThreadComposeState` + `resumeOrNewDraftId`. Other command keys go through `runSelectedCommand`.
+- Standalone `c` / `⇧C` go through `useStandaloneComposeOpener`. Inbox-thread `r`/`a`/`f` use `useThreadComposeState` + `resumeOrNewDraftId`. Cmd+K / context-menu reply and forward use that same inline opener when the target thread is already open; otherwise they navigate with `?reply=` / compose URL. Other command keys go through `runSelectedCommand`.
 - Trash `e` / Delete may keep next-item navigation in `MailListView` (view concern, not command metadata).
 
 ---
@@ -126,7 +126,7 @@ Esc in compose (standalone, inline reply, inline forward) **closes the composer 
 | Keyboard `r` / `a` / `f` (inbox thread) | Continue at **default target** (latest inbound) | **Resume** via `resumeOrNewDraftId` (inline) |
 | Keyboard `c` / Cmd+K **Continue draft** / **Compose email** | Continue standalone compose | **Resume** via `openCompose()` |
 | Keyboard `⇧C` / Cmd+K **Compose new** | Leave existing draft; start blank | **Always new** via `openComposeNew()`; Cmd+K lists only when a resumable draft exists |
-| Cmd+K reply / `?reply=` / `?replyAll=` | Same as keyboard for that target key | **Resume** matching draft if any, else new |
+| Cmd+K / context-menu reply (`?reply=` / `?replyAll=`) | Same as keyboard when that thread is already open; else navigate with `?reply=` | **Resume** matching draft if any, else new |
 | Thread draft row click / Unsend with `draftId` | Exact draft | Open that id |
 | Esc / `u` while compose open | Hide composer | Keep draft; do not discard |
 

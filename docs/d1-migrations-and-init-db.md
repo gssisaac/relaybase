@@ -91,8 +91,8 @@ curl -X POST "https://<worker-url>/console/init-db" \
 
 1. **Probe** (`probe_auto_install`) — list existing Worker / R2 / D1 via Cloudflare API (OAuth install token). Uses script **list**, not GET-by-name (OAuth tokens return 403 on script download).
 2. **Confirm** — if resources exist, user picks **Skip** (reuse) or **Reinstall** (delete + recreate) per item. Default: Skip.
-3. **Create** — R2 + D1 (wrangler create only; no migrations).
-4. **Deploy** — `wrangler deploy`, set `ADMIN_TOKEN` / `CF_ACCOUNT_ID` secrets.
+3. **Create** — R2 + D1 via Cloudflare HTTP API (no migrations).
+4. **Deploy** — PUT `worker.js` with bindings, set `ADMIN_TOKEN` / `CF_ACCOUNT_ID` secrets, enable workers.dev.
 5. **Init DB** — `POST /console/init-db` with `clear: false`.
 6. **Connect** — `GET /console/connect`, save credentials.
 

@@ -6,11 +6,11 @@ import { probeD1WhenConnectOmits } from "@/lib/dashboard/d1-fallback-probe";
 
 export type DesktopCredentials = {
   accountId: string;
-  /** Cloudflare token for Tauri wrangler (deploy / R2 / D1 / `secret put`). */
+  /** Cloudflare OAuth access token (memory overlay) or legacy disk install token. */
   installToken: string;
   /** Cloudflare token with Email Sending Edit, pushed to Worker as CF_API_TOKEN. */
   serverToken: string;
-  /** ISO timestamp of last successful `wrangler secret put CF_API_TOKEN`. */
+  /** ISO timestamp of last successful Worker `CF_API_TOKEN` secret push. */
   serverTokenPushedAt: string;
   workerUrl: string;
   adminToken: string;
@@ -229,6 +229,55 @@ export function cloudflareWorkersDashboardUrl(
   return `https://dash.cloudflare.com/${id}/workers/services/view/${encodeURIComponent(scriptName)}/production`;
 }
 
+/** Cloudflare dashboard → this account's R2 home (not checkout). */
+export function cloudflareR2DashboardUrl(accountId: string): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/r2`;
+}
+
+/** Cloudflare dashboard → this account's R2 bucket list. */
+export function cloudflareR2OverviewUrl(accountId: string): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/r2/overview`;
+}
+
+/** Cloudflare dashboard → this account's D1 databases. */
+export function cloudflareD1DashboardUrl(accountId: string): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/workers/d1`;
+}
+
+/** Cloudflare dashboard → Worker service page (no /production suffix). */
+export function cloudflareWorkerServiceUrl(
+  accountId: string,
+  scriptName = "relaybase-api",
+): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/workers/services/view/${encodeURIComponent(scriptName)}`;
+}
+
+export function cloudflareInstallDashboardLinks(accountId: string): {
+  label: string;
+  href: string;
+}[] {
+  return [
+    { label: "Worker", href: cloudflareWorkerServiceUrl(accountId) },
+    { label: "D1", href: cloudflareD1DashboardUrl(accountId) },
+    { label: "R2", href: cloudflareR2OverviewUrl(accountId) },
+  ];
+}
+
+function accountIdFromCfError(raw: string): string {
+  const dash = raw.match(/dash\.cloudflare\.com\/([a-f0-9]{32})(?:\/r2)?/i);
+  if (dash?.[1]) return dash[1];
+  const accounts = raw.match(/\/accounts\/([a-f0-9]{32})\//i);
+  return accounts?.[1] ?? "";
+}
+
 export function oauthAuthorizationIncompleteHelp(
   reason: "timeout" | "cancelled" = "timeout",
 ): DesktopErrorHelp {
@@ -292,6 +341,7 @@ function stripRawApiNoise(raw: string): string {
 export function explainDesktopError(
   err: unknown,
   fallbackTitle = "Something went wrong",
+  opts?: { accountId?: string },
 ): DesktopErrorHelp {
   const raw = formatDesktopError(err);
   const lower = raw.toLowerCase();
@@ -346,6 +396,18 @@ export function explainDesktopError(
   }
 
   if (
+    lower.includes("internal server error") &&
+    (lower.includes("init-db") || lower.includes("owner_config") || lower.includes("hosted"))
+  ) {
+    return {
+      title: "Worker is an older build",
+      detail:
+        "D1 is bound on this Worker. The hosted 0.2.0 build crashes while reading owner_config before migrations run — that is not a Cloudflare permission error.",
+      fix: "Click Try again so Relaybase re-uploads the local worker.js. Verify now cannot replace the Worker.",
+    };
+  }
+
+  if (
     lower.includes("does not look like a relaybase") ||
     lower.includes("not with a relaybase connect") ||
     lower.includes("connect check failed")
@@ -353,9 +415,8 @@ export function explainDesktopError(
     return {
       title: "Not a Relaybase Worker",
       detail:
-        "The URL is reachable but did not return a Relaybase connect response.",
-      fix: "Deploy the official install ZIP (`relaybase-api`), then paste the workers.dev URL from Wrangler.",
-      links: installLinks,
+        "The URL is reachable but did not return a Relaybase connect response. The hosted Worker crashes on empty D1 while checking admin auth.",
+      fix: "Click Try again to re-upload the Worker. Verify now only retries connect — it does not replace worker.js.",
     };
   }
 
@@ -378,6 +439,24 @@ export function explainDesktopError(
       detail:
         "The install token expired and Relaybase has no refresh token to renew it.",
       fix: "Go back and Authorize Cloudflare again. After connecting, install will re-check existing resources.",
+    };
+  }
+
+  if (
+    lower.includes("r2_subscription_required") ||
+    lower.includes("10042") ||
+    lower.includes("enable r2") ||
+    (lower.includes("r2") && lower.includes("subscription"))
+  ) {
+    const href = cloudflareR2DashboardUrl(
+      accountIdFromCfError(raw) || opts?.accountId?.trim() || "",
+    );
+    return {
+      title: "Cloudflare R2 is not active",
+      detail:
+        "This Cloudflare account has no R2 product. Cloudflare sometimes removes the unused $0 subscription a few days after first use. Mail cannot be stored until R2 is added back.",
+      fix: "Open R2 in the Cloudflare dashboard, add R2 to the account if prompted, then return here and Try again.",
+      links: [{ label: "Open R2 in Cloudflare", href }],
     };
   }
 
@@ -404,17 +483,6 @@ export function explainDesktopError(
           ? cleaned
           : "Cloudflare refused the resource check with this install token.",
       fix: "Tap Try again. If it keeps failing, go back and Authorize Cloudflare again so Relaybase can list Workers, R2, and D1.",
-    };
-  }
-
-  if (lower.includes("wrangler")) {
-    return {
-      title: fallbackTitle,
-      detail:
-        cleaned && cleaned.length < 280
-          ? cleaned
-          : "Wrangler failed while creating Cloudflare resources.",
-      fix: "Read the install log. Tap Try again to re-check existing resources, or Rollback to delete them first.",
     };
   }
 
@@ -469,6 +537,19 @@ export function explainCfOAuthError(
       detail:
         "The Relaybase console hasn't been set up with a Cloudflare OAuth client. Connecting won't work until that's done.",
       fix: "This is usually resolved shortly after a Relaybase update. Try again later, or contact Relaybase if it persists.",
+    };
+  }
+
+  if (
+    lower.includes("32831") ||
+    lower.includes("already in use") ||
+    lower.includes("callback port")
+  ) {
+    return {
+      title: "Another Relaybase is using the callback port",
+      detail:
+        "Cloudflare returns to 127.0.0.1:32831. The installed Relaybase.app (or another window) is already listening there, so this window never sees the authorization.",
+      fix: "Quit Relaybase.app in Applications, then click Authorize again in this window.",
     };
   }
 
@@ -534,7 +615,7 @@ export async function desktopVerifyCfToken(
   return invoke("verify_cf_token", { accountId, apiToken, scope });
 }
 
-/** Push the saved server token to the Worker as `CF_API_TOKEN` via wrangler. */
+/** Push the saved server token to the Worker as `CF_API_TOKEN` via the Cloudflare API. */
 export async function desktopPushServerToken(): Promise<{
   ok: boolean;
   message: string;
@@ -698,27 +779,22 @@ export async function desktopInstallWorker(
 
 /**
  * Background auto-install of the routing Worker into the user's Cloudflare
- * account via wrangler. Subscribe to `install-log` events via the returned
- * unsubscribe handle (or use `listenInstallLog`).
+ * account via the Cloudflare HTTP API. Auth is the in-memory OAuth session.
  */
 export async function desktopProbeInstall(
-  apiToken: string,
   accountId?: string,
 ): Promise<InstallProbeResult> {
   return invoke("probe_auto_install", {
-    apiToken,
     accountId: accountId ?? null,
   });
 }
 
 export async function desktopAutoInstallWorker(
-  apiToken: string,
   accountId?: string,
   serverToken?: string,
   decisions?: InstallDecision[],
 ): Promise<AutoInstallResult> {
   return invoke("auto_install_routing_worker", {
-    apiToken,
     accountId: accountId ?? null,
     serverToken: serverToken?.trim() ? serverToken.trim() : null,
     decisions: decisions ?? [],
@@ -746,11 +822,9 @@ export async function desktopCancelAutoInstall(): Promise<void> {
 
 /** Delete Worker + D1 + R2. Subscribe to `install-log` for the same live log as install. */
 export async function desktopRollbackInstall(
-  apiToken: string,
   accountId?: string,
 ): Promise<void> {
   await invoke("rollback_auto_install", {
-    apiToken,
     accountId: accountId ?? null,
   });
 }

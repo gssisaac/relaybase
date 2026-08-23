@@ -40,8 +40,10 @@ function ActionLink({
 
 export function DesktopErrorBanner({
   error,
+  hideLinks = false,
 }: {
   error: DesktopErrorHelp | string | null;
+  hideLinks?: boolean;
 }) {
   if (!error) return null;
 
@@ -78,7 +80,7 @@ export function DesktopErrorBanner({
         <span className="font-medium text-foreground">What to do: </span>
         {help.fix}
       </p>
-      {help.links && help.links.length > 0 ? (
+      {!hideLinks && help.links && help.links.length > 0 ? (
         <div className="flex flex-col gap-1.5 pt-0.5 sm:flex-row sm:flex-wrap sm:gap-x-4">
           {help.links.map((link) => (
             <ActionLink

@@ -62,6 +62,12 @@ app.get("/health", async (c) => {
       bucketName: c.env.INBOUND_BUCKET_NAME,
     },
     d1,
+    // Binding present ≠ schema ready. `configured` is table-ready.
+    d1Bound: {
+      logs: Boolean(c.env.RELAYBASE_LOGS),
+      inboxIndex: Boolean(c.env.RELAYBASE_INBOX_INDEX),
+      app: Boolean(c.env.RELAYBASE_DB),
+    },
   });
 });
 
@@ -99,7 +105,8 @@ app.notFound((c) => c.json({ error: "Not found" }, 404));
 
 app.onError((err, c) => {
   console.error(err);
-  return c.json({ error: "Internal server error" }, 500);
+  const detail = err instanceof Error ? err.message : String(err);
+  return c.json({ error: "Internal server error", detail }, 500);
 });
 
 export default app;

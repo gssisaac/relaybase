@@ -33,6 +33,7 @@ use secrets::{
 };
 use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use uuid::Uuid;
 
@@ -55,6 +56,7 @@ static CF_OAUTH_INFLIGHT: Mutex<Option<InFlightOauth>> = Mutex::new(None);
 /// dev` (where `relaybase://` is often not registered with Launch Services)
 /// and in production as a reliable fallback next to the custom-scheme link.
 const OAUTH_LOOPBACK_PORT: u16 = 32831;
+static OAUTH_LOOPBACK_BOUND: AtomicBool = AtomicBool::new(false);
 
 /// Random PKCE code_verifier (64 hex chars — valid: 43-128 unreserved chars).
 fn new_pkce_verifier() -> String {
@@ -301,9 +303,9 @@ async fn clear_team_login_cmd() -> Result<(), String> {
 }
 
 /// List Relaybase Worker / R2 / D1 resources already in the Cloudflare account.
+/// Auth is the in-memory OAuth session (refreshed if needed).
 #[tauri::command]
 async fn probe_auto_install(
-    _api_token: String,
     account_id: Option<String>,
 ) -> Result<InstallProbeResult, String> {
     let token = refresh_install_token_if_needed().await?;
@@ -313,7 +315,6 @@ async fn probe_auto_install(
 #[tauri::command]
 async fn auto_install_routing_worker(
     app: tauri::AppHandle,
-    _api_token: String,
     account_id: Option<String>,
     server_token: Option<String>,
     decisions: Option<Vec<InstallDecision>>,
@@ -324,7 +325,7 @@ async fn auto_install_routing_worker(
     let token = refresh_install_token_if_needed().await?;
     let result = auto_install_worker(
         app,
-        token.clone(),
+        token,
         account_id.clone(),
         server.clone(),
         decisions.unwrap_or_default(),
@@ -332,10 +333,8 @@ async fn auto_install_routing_worker(
     .await?;
     let existing = load_credentials()?.unwrap_or_default();
     let mut next = merge_into_credentials(&existing, &result, account_id);
-    // Persist the install token used so later update_worker / push_server_token
-    // can re-auth wrangler without re-entering it.
-    next.install_token = token;
-    // If a server token was supplied and pushed, record the pushed-at time.
+    // OAuth access token stays in CF_OAUTH_SESSION only. Legacy disk
+    // install_token is left as-is (empty when a session is active).
     if let Some(srv) = server {
         next.server_token = srv;
         next.server_token_pushed_at = auto_install::now_iso();
@@ -391,7 +390,7 @@ async fn update_installed_worker_cmd(
         });
     let result = update_installed_worker(
         app,
-        token.clone(),
+        token,
         account_id.clone(),
         server.clone(),
         creds.admin_token.clone(),
@@ -399,7 +398,6 @@ async fn update_installed_worker_cmd(
     .await?;
     let existing = load_credentials()?.unwrap_or_default();
     let mut next = merge_into_credentials(&existing, &result, account_id);
-    next.install_token = token;
     if let Some(srv) = server {
         next.server_token = srv;
         next.server_token_pushed_at = auto_install::now_iso();
@@ -419,10 +417,10 @@ fn cancel_auto_install() {
 #[tauri::command]
 async fn rollback_auto_install(
     app: tauri::AppHandle,
-    api_token: String,
     account_id: Option<String>,
 ) -> Result<(), String> {
-    rollback_all_install(app, api_token, account_id).await?;
+    let token = refresh_install_token_if_needed().await?;
+    rollback_all_install(app, token, account_id).await?;
     if let Ok(Some(mut creds)) = load_credentials() {
         creds.worker_url.clear();
         creds.admin_token.clear();
@@ -447,15 +445,12 @@ async fn init_worker_db_cmd(
 }
 
 /// Push the saved server token (Email Sending Edit) to the deployed Worker as
-/// the `CF_API_TOKEN` wrangler secret, using the install token for wrangler
-/// auth. Requires wrangler available locally (same as auto-install). The
-/// install token is transparently refreshed via CF OAuth (through the
-/// console) if it is short-lived and expiring.
+/// the `CF_API_TOKEN` secret via the Cloudflare API. Auth is the in-memory
+/// OAuth access token (refreshed if needed).
 #[tauri::command]
 async fn push_server_token() -> Result<serde_json::Value, String> {
-    // Refresh first so a fresh OAuth access token is used for wrangler auth.
     let install_token = refresh_install_token_if_needed().await?;
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
+    let creds = load_credentials_merged()?;
     if creds.account_id.is_empty() || install_token.is_empty() {
         return Err("Install token (Workers Scripts Edit) is required to push the server token".into());
     }
@@ -467,6 +462,7 @@ async fn push_server_token() -> Result<serde_json::Value, String> {
     }
 
     let pushed_at = auto_install::push_cf_api_token_secret(
+        &creds.account_id,
         &creds.worker_script_name,
         &install_token,
         &creds.server_token,
@@ -486,8 +482,8 @@ async fn push_server_token() -> Result<serde_json::Value, String> {
 // The install token (Workers Scripts / R2 / D1 / Secrets Store) is obtained
 // via Cloudflare OAuth. Tokens live in process memory only — never on disk.
 // `install_token` in API responses is overlaid from the in-memory session so
-// existing wrangler/CF-API call sites work unchanged. Legacy manual install
-// tokens may still be stored on disk when no OAuth session is active.
+// existing CF-API call sites work unchanged. Legacy manual install tokens
+// may still be stored on disk when no OAuth session is active.
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -501,7 +497,8 @@ struct OAuthStartResult {
 /// required — mints a `state`, builds the Cloudflare authorize URL, and
 /// remembers the state for CSRF verification in `complete_cf_oauth`.
 #[tauri::command]
-async fn start_cf_oauth() -> Result<OAuthStartResult, String> {
+async fn start_cf_oauth(app: tauri::AppHandle) -> Result<OAuthStartResult, String> {
+    ensure_oauth_loopback(app).await?;
     let url = format!(
         "{}/api/v1/oauth/config",
         console_base_url().trim_end_matches('/')
@@ -721,19 +718,57 @@ fn emit_oauth_result<R: tauri::Runtime>(
     }
 }
 
+fn oauth_loopback_in_use_error() -> String {
+    format!(
+        "Cloudflare callback port 127.0.0.1:{OAUTH_LOOPBACK_PORT} is already in use. \
+         Quit the installed Relaybase.app (or any other Relaybase window) and try Authorize again."
+    )
+}
+
+async fn bind_oauth_loopback() -> Result<tokio::net::TcpListener, String> {
+    let addr = format!("127.0.0.1:{OAUTH_LOOPBACK_PORT}");
+    match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => {
+            OAUTH_LOOPBACK_BOUND.store(true, Ordering::SeqCst);
+            log::info!("OAuth loopback listening on http://{addr}/oauth/callback");
+            Ok(listener)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => Err(oauth_loopback_in_use_error()),
+        Err(e) => Err(format!(
+            "Could not start Cloudflare callback listener on {addr}: {e}"
+        )),
+    }
+}
+
+async fn ensure_oauth_loopback<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+    if OAUTH_LOOPBACK_BOUND.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    let listener = bind_oauth_loopback().await?;
+    tauri::async_runtime::spawn(async move {
+        accept_oauth_loopback(app, listener).await;
+    });
+    Ok(())
+}
+
 /// Accept `GET /oauth/callback?code=&state=` from the console callback page
 /// (browser on this machine). CORS-open so https://console.relaybase.xyz can
 /// fetch it. Bound to 127.0.0.1 only.
 async fn run_oauth_loopback_server<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
-    let addr = format!("127.0.0.1:{OAUTH_LOOPBACK_PORT}");
-    let listener = match tokio::net::TcpListener::bind(&addr).await {
+    let listener = match bind_oauth_loopback().await {
         Ok(l) => l,
         Err(e) => {
-            log::warn!("OAuth loopback listen failed on {addr}: {e}");
+            log::warn!("{e}");
             return;
         }
     };
-    log::info!("OAuth loopback listening on http://{addr}/oauth/callback");
+    accept_oauth_loopback(app, listener).await;
+}
+
+async fn accept_oauth_loopback<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    listener: tokio::net::TcpListener,
+) {
     loop {
         let (mut socket, _) = match listener.accept().await {
             Ok(s) => s,
@@ -827,7 +862,7 @@ fn days_to_ymd(days: i64) -> (i64, i64, i64) {
     (y, m, d)
 }
 
-/// Ensure a fresh CF OAuth access token before any wrangler/CF-API call.
+/// Ensure a fresh CF OAuth access token before any Cloudflare API call.
 /// No-op when there is no OAuth refresh token (legacy manual install token
 /// still in use). Refreshes directly with Cloudflare (public PKCE client —
 /// no client secret; only `client_id` + `refresh_token` are needed) when the
@@ -940,7 +975,7 @@ async fn fetch_oauth_client_id() -> Result<String, String> {
 
 /// Force a refresh of the CF OAuth access token (or no-op for legacy manual
 /// install tokens). Returns the updated credentials. The Rust side also
-/// refreshes automatically before wrangler/CF-API calls, so this is mainly
+/// refreshes automatically before Cloudflare API calls, so this is mainly
 /// for the UI to update the "expires in" display on demand.
 #[tauri::command]
 async fn refresh_install_token() -> Result<StoredCredentials, String> {
@@ -1290,7 +1325,7 @@ async fn fetch_connect_with_retry(
         let status = res.status();
         if status.as_u16() == 401 || status.as_u16() == 403 {
             return Err(
-                "Admin token was rejected by the Worker. Use the same value you set with `wrangler secret put ADMIN_TOKEN`."
+                "Admin token was rejected by the Worker. Use the same ADMIN_TOKEN that was set during install."
                     .into(),
             );
         }
@@ -1317,7 +1352,7 @@ async fn verify_worker_connection(
     let base = normalize_worker_url(&worker_url)?;
     let token = admin_token.trim();
     if token.is_empty() {
-        return Err("Admin token is required (same value as wrangler secret ADMIN_TOKEN)".into());
+        return Err("Admin token is required (the ADMIN_TOKEN Worker secret).".into());
     }
 
     let url = format!("{base}/console/connect");

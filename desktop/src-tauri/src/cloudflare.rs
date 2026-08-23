@@ -32,6 +32,7 @@ async fn cf_request(
     body: Option<Value>,
 ) -> Result<Value, String> {
     let url = format!("{CF_API}{path}");
+    let method_label = method.as_str().to_string();
     let http = reqwest::Client::new();
     let mut req = http
         .request(method, &url)
@@ -48,7 +49,9 @@ async fn cf_request(
             .get("errors")
             .cloned()
             .unwrap_or_else(|| json!([]));
-        return Err(format!("Cloudflare API error ({status}): {errors}"));
+        return Err(format!(
+            "Cloudflare API error ({status}) {method_label} {path}: {errors}"
+        ));
     }
     Ok(value)
 }
@@ -63,11 +66,6 @@ async fn cf_get_status(client: &CfClient, path: &str) -> Result<reqwest::StatusC
         .await
         .map_err(|e| e.to_string())?;
     Ok(res.status())
-}
-
-pub fn is_cf_forbidden(err: &str) -> bool {
-    let lower = err.to_lowercase();
-    lower.contains("403") || lower.contains("forbidden")
 }
 
 pub async fn verify_token(
@@ -213,29 +211,80 @@ pub async fn list_zones(client: &CfClient) -> Result<Vec<ZoneSummary>, String> {
     Ok(zones)
 }
 
+/// Cloudflare dashboard R2 overview for this account — not checkout.
+/// From there the user can re-add the $0 R2 subscription if CF dropped it.
+pub fn r2_dashboard_url(account_id: &str) -> String {
+    format!("https://dash.cloudflare.com/{account_id}/r2")
+}
+
+pub fn r2_subscription_required_error(account_id: &str) -> String {
+    format!(
+        "R2_SUBSCRIPTION_REQUIRED: Cloudflare R2 is not active on this account \
+         (never enabled, or the $0 subscription was removed after a few days). \
+         Open {} and add R2 back, then return here and Try again.",
+        r2_dashboard_url(account_id)
+    )
+}
+
+pub fn is_r2_subscription_required(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("r2_subscription_required")
+        || lower.contains("10042")
+        || lower.contains("enable r2")
+        || lower.contains("r2 through the cloudflare dashboard")
+        || (lower.contains("r2") && lower.contains("subscription") && lower.contains("removed"))
+}
+
+/// Fail before create/delete when this account has no R2 product.
+///
+/// GET `/r2/buckets` returns code **10042** when R2 was never enabled or
+/// Cloudflare dropped the unused $0 subscription. A generic OAuth 403
+/// (cannot list buckets) is not this — those tokens can still bind by name.
+pub async fn assert_r2_subscription(client: &CfClient) -> Result<(), String> {
+    let path = format!("/accounts/{}/r2/buckets", client.account_id);
+    match cf_request(client, reqwest::Method::GET, &path, None).await {
+        Ok(_) => Ok(()),
+        Err(e) if is_r2_subscription_required(&e) => {
+            Err(r2_subscription_required_error(&client.account_id))
+        }
+        Err(_) => Ok(()),
+    }
+}
+
 pub async fn find_r2_bucket(client: &CfClient, name: &str) -> Result<bool, String> {
     // GET the named bucket — listing every bucket often 403s on OAuth install tokens.
     let path = format!("/accounts/{}/r2/buckets/{name}", client.account_id);
-    match cf_get_status(client, &path).await {
-        Ok(status) if status.as_u16() == 404 => return Ok(false),
-        Ok(status) if status.is_success() => return Ok(true),
-        Ok(_) | Err(_) => {}
+    match named_resource_status(client, &path).await? {
+        Some(present) => return Ok(present),
+        None => {}
     }
-    let list = cf_request(
+    // Last resort list. Generic 403 means the token cannot enumerate buckets;
+    // treat as absent so install can still create/reuse by name. 10042 means
+    // R2 itself is off — do not swallow that.
+    match cf_request(
         client,
         reqwest::Method::GET,
         &format!("/accounts/{}/r2/buckets", client.account_id),
         None,
     )
-    .await?;
-    if let Some(arr) = list.pointer("/result/buckets").and_then(|v| v.as_array()) {
-        for b in arr {
-            if b.get("name").and_then(|v| v.as_str()) == Some(name) {
-                return Ok(true);
+    .await
+    {
+        Ok(list) => {
+            if let Some(arr) = list.pointer("/result/buckets").and_then(|v| v.as_array()) {
+                for b in arr {
+                    if b.get("name").and_then(|v| v.as_str()) == Some(name) {
+                        return Ok(true);
+                    }
+                }
             }
+            Ok(false)
         }
+        Err(e) if is_r2_subscription_required(&e) => {
+            Err(r2_subscription_required_error(&client.account_id))
+        }
+        Err(e) if is_forbidden_status(&e) => Ok(false),
+        Err(e) => Err(e),
     }
-    Ok(false)
 }
 
 pub async fn ensure_r2_bucket(client: &CfClient, name: &str) -> Result<(), String> {
@@ -243,37 +292,60 @@ pub async fn ensure_r2_bucket(client: &CfClient, name: &str) -> Result<(), Strin
         return Ok(());
     }
     let path = format!("/accounts/{}/r2/buckets", client.account_id);
-    let _ = cf_request(
+    match cf_request(
         client,
         reqwest::Method::POST,
         &path,
         Some(json!({ "name": name })),
     )
-    .await?;
-    Ok(())
+    .await
+    {
+        Ok(_) => Ok(()),
+        Err(e) if is_already_exists(&e) => Ok(()),
+        Err(e) if is_r2_subscription_required(&e) => {
+            Err(r2_subscription_required_error(&client.account_id))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Returns true when a Worker script with this exact name already exists.
 ///
-/// Lists scripts instead of GET-by-name. GET
-/// `/workers/scripts/{name}` downloads the worker source and Cloudflare OAuth
-/// install tokens (`workers-scripts.write`) return 403 on that endpoint.
+/// Do not GET `/workers/scripts` (account-wide list) or GET
+/// `/workers/scripts/{name}` (downloads source). Cloudflare OAuth install
+/// tokens (`workers-scripts.write`) return 403 on both. Settings / deployments
+/// are metadata-only and 404 when the script is missing.
 pub async fn worker_script_exists(client: &CfClient, script_name: &str) -> Result<bool, String> {
-    let path = format!("/accounts/{}/workers/scripts", client.account_id);
-    let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
-    if let Some(arr) = value.get("result").and_then(|v| v.as_array()) {
-        for row in arr {
-            let id = row
-                .get("id")
-                .or_else(|| row.get("name"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            if id == script_name {
-                return Ok(true);
-            }
+    for suffix in ["settings", "deployments"] {
+        let path = format!(
+            "/accounts/{}/workers/scripts/{script_name}/{suffix}",
+            client.account_id
+        );
+        match named_resource_status(client, &path).await? {
+            Some(present) => return Ok(present),
+            None => continue,
         }
     }
     Ok(false)
+}
+
+/// 200 → Some(true), 404 → Some(false), 403/other → None (caller decides).
+async fn named_resource_status(
+    client: &CfClient,
+    path: &str,
+) -> Result<Option<bool>, String> {
+    match cf_get_status(client, path).await {
+        Ok(status) if status.as_u16() == 404 => Ok(Some(false)),
+        Ok(status) if status.is_success() => Ok(Some(true)),
+        Ok(status) if status.as_u16() == 403 => Ok(None),
+        Ok(_) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+fn is_forbidden_status(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("403") || lower.contains("forbidden")
 }
 
 pub async fn worker_health_ok(worker_url: &str) -> bool {
@@ -302,33 +374,59 @@ pub async fn admin_auth_ok(worker_url: &str, admin_token: &str) -> bool {
     }
 }
 
-/// Upload a Worker script (module format) with R2 bindings metadata.
+/// Upload a Worker module with R2, optional D1, and plain-text vars.
+/// `d1_bindings` is `(binding_name, database_uuid)`.
 pub async fn upload_worker_script(
     client: &CfClient,
     script_name: &str,
     js_source: &str,
     r2_bucket: &str,
+    d1_bindings: &[(&str, &str)],
+    worker_version: &str,
 ) -> Result<(), String> {
     let url = format!(
         "{CF_API}/accounts/{}/workers/scripts/{script_name}",
         client.account_id
     );
+    let mut bindings = vec![
+        json!({ "type": "r2_bucket", "name": "INBOUND", "bucket_name": r2_bucket }),
+        json!({ "type": "plain_text", "name": "WORKER_SCRIPT_NAME", "text": script_name }),
+        json!({ "type": "plain_text", "name": "INBOUND_BUCKET_NAME", "text": r2_bucket }),
+    ];
+    let version = if worker_version.trim().is_empty() {
+        "unknown"
+    } else {
+        worker_version.trim()
+    };
+    bindings.push(json!({
+        "type": "plain_text",
+        "name": "WORKER_VERSION",
+        "text": version
+    }));
+    for (binding, id) in d1_bindings {
+        if binding.is_empty() || id.is_empty() {
+            continue;
+        }
+        bindings.push(json!({
+            "type": "d1",
+            "name": binding,
+            "id": id,
+            "database_id": id
+        }));
+    }
     let metadata = json!({
-        "main_module": "index.js",
-        "bindings": [
-            { "type": "r2_bucket", "name": "INBOUND", "bucket_name": r2_bucket },
-            { "type": "plain_text", "name": "WORKER_SCRIPT_NAME", "text": script_name },
-            { "type": "plain_text", "name": "INBOUND_BUCKET_NAME", "text": r2_bucket }
-        ],
-        "compatibility_date": "2025-06-01"
+        "main_module": "worker.js",
+        "bindings": bindings,
+        "compatibility_date": "2025-06-01",
+        "triggers": { "crons": [DEFAULT_WORKER_CRON] }
     });
 
     let form = reqwest::multipart::Form::new()
         .text("metadata", metadata.to_string())
         .part(
-            "index.js",
+            "worker.js",
             reqwest::multipart::Part::bytes(js_source.as_bytes().to_vec())
-                .file_name("index.js")
+                .file_name("worker.js")
                 .mime_str("application/javascript+module")
                 .map_err(|e| e.to_string())?,
         );
@@ -347,6 +445,94 @@ pub async fn upload_worker_script(
         return Err(format!("Worker upload failed ({status}): {value}"));
     }
     Ok(())
+}
+
+/// Binding type:name pairs from script settings (OAuth-safe metadata).
+pub async fn list_worker_bindings(
+    client: &CfClient,
+    script_name: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let path = format!(
+        "/accounts/{}/workers/scripts/{script_name}/settings",
+        client.account_id
+    );
+    let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
+    let mut out = Vec::new();
+    if let Some(arr) = value
+        .pointer("/result/bindings")
+        .or_else(|| value.get("result").and_then(|v| v.get("bindings")))
+        .and_then(|v| v.as_array())
+    {
+        for b in arr {
+            let kind = b.get("type").and_then(|v| v.as_str()).unwrap_or("?");
+            let name = b.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+            out.push((kind.to_string(), name.to_string()));
+        }
+    }
+    Ok(out)
+}
+
+/// Audience / inbound-index cron from customer-install wrangler.toml.
+pub const DEFAULT_WORKER_CRON: &str = "*/15 * * * *";
+
+pub async fn put_worker_schedules(
+    client: &CfClient,
+    script_name: &str,
+    cron: &str,
+) -> Result<(), String> {
+    let path = format!(
+        "/accounts/{}/workers/scripts/{script_name}/schedules",
+        client.account_id
+    );
+    let _ = cf_request(
+        client,
+        reqwest::Method::PUT,
+        &path,
+        Some(json!([{ "cron": cron }])),
+    )
+    .await?;
+    Ok(())
+}
+
+/// Create a D1 database. If the name already exists, return its uuid.
+pub async fn create_d1_database(client: &CfClient, name: &str) -> Result<String, String> {
+    if let Some(id) = find_d1_id(client, name).await? {
+        return Ok(id);
+    }
+    let path = format!("/accounts/{}/d1/database", client.account_id);
+    match cf_request(
+        client,
+        reqwest::Method::POST,
+        &path,
+        Some(json!({ "name": name })),
+    )
+    .await
+    {
+        Ok(value) => parse_d1_uuid(&value).ok_or_else(|| {
+            format!("Cloudflare created D1 {name} but the response had no uuid")
+        }),
+        Err(e) if is_already_exists(&e) => find_d1_id(client, name)
+            .await?
+            .ok_or_else(|| format!("D1 {name} already exists but could not be listed")),
+        Err(e) => Err(e),
+    }
+}
+
+async fn find_d1_id(client: &CfClient, name: &str) -> Result<Option<String>, String> {
+    let list = list_d1_databases(client).await?;
+    Ok(list
+        .into_iter()
+        .find(|(n, _)| n == name)
+        .map(|(_, id)| id))
+}
+
+fn parse_d1_uuid(value: &Value) -> Option<String> {
+    value
+        .pointer("/result/uuid")
+        .or_else(|| value.pointer("/result/id"))
+        .and_then(|v| v.as_str())
+        .filter(|s| s.len() >= 16)
+        .map(|s| s.to_string())
 }
 
 pub async fn enable_workers_dev(
@@ -530,4 +716,13 @@ pub async fn empty_r2_bucket(client: &CfClient, name: &str) -> Result<u32, Strin
 fn is_not_found(err: &str) -> bool {
     let lower = err.to_lowercase();
     lower.contains("404") || lower.contains("not found") || lower.contains("does not exist")
+}
+
+fn is_already_exists(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("already exists")
+        || lower.contains("already exist")
+        || lower.contains("duplicate")
+        || lower.contains("409")
+        || lower.contains("code: 10004")
 }

@@ -1,8 +1,8 @@
 # Cloudflare OAuth — install token (Settings → Cloudflare)
 
-**Audience:** humans and coding agents changing Settings → Cloudflare, desktop wrangler auth, or `kembo/console` OAuth routes.
+**Audience:** humans and coding agents changing Settings → Cloudflare, desktop Cloudflare API install, or `kembo/console` OAuth routes.
 
-The **install token** (Workers Scripts / R2 / D1 / Secrets Store — used by Tauri `wrangler` for deploy and `secret put`) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit → Worker `CF_API_TOKEN`) is a manual paste in Settings after install.
+The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudflare HTTP API for deploy and Worker secrets) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit → Worker `CF_API_TOKEN`) is a manual paste in Settings after install.
 
 ---
 
@@ -12,7 +12,7 @@ The **install token** (Workers Scripts / R2 / D1 / Secrets Store — used by Tau
 |-------|------|
 | **Cloudflare OAuth client** | One public PKCE client on the operator’s CF account. Grant types: `authorization_code` + **`refresh_token`**. Token auth: **None (PKCE)**. Redirect URI: `https://console.relaybase.xyz/oauth/callback`. |
 | **`console.relaybase.xyz`** | Public `/api/v1/oauth/config` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `kembo-ops`. |
-| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION` static mutex — never written to disk). Overlays the access token into `installToken` for existing wrangler call sites. App restart clears the session. |
+| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION` static mutex — never written to disk). Overlays the access token into `installToken` for CF API call sites. App restart clears the session. Auto-install uses this memory token only — it does not call wrangler or require Node. |
 | **`~/.relaybase`** | Stores only the resolved CF account id (from the OAuth response). OAuth access/refresh tokens are **not** persisted — they live in Tauri memory only. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
 
 No KV, no D1, and no Relaybase console **session** is required to connect Cloudflare.
@@ -35,10 +35,11 @@ Create **Manage account → OAuth clients → Create client**:
 
 | Scope ID | Purpose |
 |----------|---------|
-| `workers-scripts.write` | Wrangler deploy / script edit |
+| `workers-scripts.write` | Worker script upload + Worker secrets (`ADMIN_TOKEN`, `CF_ACCOUNT_ID`, `CF_API_TOKEN`) |
 | `workers-r2.write` | R2 buckets |
-| `secrets-store.write` | `wrangler secret put` (e.g. `CF_API_TOKEN`) |
-| `d1.write` | D1 bindings on deploy |
+| `d1.write` | D1 create + bindings on deploy |
+
+`secrets-store.write` is **not** required for auto-install. Worker secrets go through `PUT /workers/scripts/{name}/secrets` (`workers-scripts.write`). The console may still advertise `secrets-store.write` for an existing OAuth client; extra scopes are harmless.
 
 Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query. Cloudflare adds `offline_access` itself when the client has the `refresh_token` grant; requesting unregistered scopes makes dash.cloudflare.com show “Relaybase authorization failed”.
 
@@ -75,11 +76,13 @@ Cloudflare redirects the browser to `console.relaybase.xyz/oauth/callback`. That
 1. **`fetch`** `http://127.0.0.1:32831/oauth/callback?code=…&state=…` (CORS-open). The Tauri app always listens on this loopback port (`tauri dev` and bundled `.app`). **Required for `tauri dev`** — macOS often does not register `relaybase://` for unsigned dev binaries.
 2. If loopback fails, **`window.location`** to `relaybase://oauth/callback?…` (works for installed `.app` with registered URL scheme).
 
+Only one Relaybase process can bind `127.0.0.1:32831`. If **Applications/Relaybase.app** is running while you use `tauri:dev`, the browser callback hits the installed app and the dev window waits forever. `start_cf_oauth` now fails immediately with a “quit Relaybase.app” error when the port is taken; retry Authorize after quitting the other window.
+
 Rust (`desktop/src-tauri/src/lib.rs`):
 
 - `start_cf_oauth` — fetch config, PKCE verifier/challenge, open authorize URL
 - Loopback server + `tauri-plugin-deep-link` — complete exchange, emit `cf-oauth-complete` / `cf-oauth-error`
-- `refresh_install_token_if_needed` — refresh via Cloudflare token endpoint when `cfOauthRefreshToken` is set; no-op if only access token (legacy manual install token path unchanged)
+- `refresh_install_token_if_needed` — if `CF_OAUTH_SESSION` has a fresh access token, use it; otherwise refresh via Cloudflare token endpoint when `cfOauthRefreshToken` is set; no-op if only a legacy disk install token is present
 
 Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `app/src/lib/desktop/bridge.ts` — not tied to staying on the Cloudflare settings page.
 
@@ -103,7 +106,7 @@ The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secret
 - **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + admin token copy). No separate install button.
 - **Settings → Cloudflare** — the standalone "Connect with Cloudflare" connection card is **removed**. OAuth is now requested at push time only: clicking **Verify, save & push** (labelled **Authorize & push** when no install token is in memory) opens the browser for a short-lived authorization kept in memory only and cleared on restart. After OAuth completes, the server token push runs automatically.
 - **Manual install** — admin token + terminal command inline on the install page; no Progress page.
-- **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. Pushed to the Worker as the `CF_API_TOKEN` wrangler secret via `wrangler secret put`. The Worker's `CF_API_TOKEN` secret (reported by `GET /console/connect` as `cfApiTokenSet`) is the source of truth for whether sending is configured — device-local storage is not a management signal, only a convenience for re-pushing.
+- **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. Pushed to the Worker as the `CF_API_TOKEN` secret via the Cloudflare API (`put_worker_secret`). The Worker's `CF_API_TOKEN` secret (reported by `GET /console/connect` as `cfApiTokenSet`) is the source of truth for whether sending is configured — device-local storage is not a management signal, only a convenience for re-pushing.
 - Do **not** ask the user to paste a Workers Scripts / R2 API token. That legacy field is replaced by OAuth. Install does not create KV.
 
 Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected” / install ZIP messaging.
@@ -129,3 +132,4 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 | Browser “Finishing connection…” but app stays **Not connected** | `tauri dev` without loopback listener — restart desktop after pulling; ensure port **32831** is free. |
 | `Token endpoint did not return a refresh_token` | Missing `refresh_token` grant or `offline_access` on authorize — fixed in code (connection succeeds with access token only); enable **Refresh Token** grant on the client for auto-refresh. |
 | `relaybase://` does nothing | Expected in dev; loopback should succeed. In production, install the bundled `.app` so the URL scheme is registered. |
+| `R2_SUBSCRIPTION_REQUIRED` / API `10042` / “enable R2” | Account has no R2 product — never enabled, or Cloudflare dropped the unused $0 subscription after a few days. Install checks this **before** deleting/creating resources. Send the user to `https://dash.cloudflare.com/{account_id}/r2` (overview, **not** `/r2/checkout/payment`). |

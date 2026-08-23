@@ -89,50 +89,63 @@ async function applyMigrationsForTarget(
     };
   }
 
-  const probeTable = PROBE_TABLES[target];
-  const wasInitialized = await tableExists(db, probeTable);
+  try {
+    const probeTable = PROBE_TABLES[target];
+    const wasInitialized = await tableExists(db, probeTable);
 
-  if (clear) {
-    await dropAllTables(db);
-  }
-
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)`,
-    )
-    .run();
-
-  const appliedNames = await listAppliedMigrations(db);
-  const appliedSet = new Set(appliedNames);
-
-  const targetMigrations = MIGRATIONS.filter((m) => m.target === target);
-  const applied: string[] = [];
-  const skipped: string[] = [];
-
-  for (const migration of targetMigrations) {
-    if (!clear && appliedSet.has(migration.name)) {
-      skipped.push(migration.name);
-      continue;
+    if (clear) {
+      await dropAllTables(db);
     }
-    const statements = splitMigrationSql(migration.sql);
-    for (const stmt of statements) {
-      await db.prepare(stmt).run();
-    }
+
     await db
-      .prepare(`INSERT INTO ${MIGRATIONS_TABLE} (name) VALUES (?)`)
-      .bind(migration.name)
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)`,
+      )
       .run();
-    applied.push(migration.name);
-  }
 
-  return {
-    target,
-    binding,
-    configured: true,
-    alreadyInitialized: wasInitialized,
-    applied,
-    skipped,
-  };
+    const appliedNames = await listAppliedMigrations(db);
+    const appliedSet = new Set(appliedNames);
+
+    const targetMigrations = MIGRATIONS.filter((m) => m.target === target);
+    const applied: string[] = [];
+    const skipped: string[] = [];
+
+    for (const migration of targetMigrations) {
+      if (!clear && appliedSet.has(migration.name)) {
+        skipped.push(migration.name);
+        continue;
+      }
+      const statements = splitMigrationSql(migration.sql);
+      for (const stmt of statements) {
+        await db.prepare(stmt).run();
+      }
+      await db
+        .prepare(`INSERT INTO ${MIGRATIONS_TABLE} (name) VALUES (?)`)
+        .bind(migration.name)
+        .run();
+      applied.push(migration.name);
+    }
+
+    return {
+      target,
+      binding,
+      configured: true,
+      alreadyInitialized: wasInitialized,
+      applied,
+      skipped,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      target,
+      binding,
+      configured: true,
+      alreadyInitialized: false,
+      applied: [],
+      skipped: [],
+      error: message,
+    };
+  }
 }
 
 /**
@@ -177,6 +190,21 @@ consoleInitDb.post("/", async (c) => {
   const alreadyInitialized = results.some((r) => r.alreadyInitialized);
   const applied = results.flatMap((r) => r.applied);
   const skipped = results.flatMap((r) => r.skipped);
+  const errors = results.filter((r) => r.error).map((r) => `${r.binding}: ${r.error}`);
+  if (errors.length > 0) {
+    return c.json(
+      {
+        ok: false,
+        alreadyInitialized,
+        applied,
+        skipped,
+        cleared: clear,
+        results,
+        error: errors.join("; "),
+      },
+      500,
+    );
+  }
 
   return c.json({
     ok: true,

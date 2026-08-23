@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, Copy, Download, Loader2, Square } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, Download, ExternalLink, Loader2, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  cloudflareWorkersDashboardUrl,
+  cloudflareInstallDashboardLinks,
+  cloudflareR2DashboardUrl,
   desktopAutoInstallWorker,
   desktopCancelAutoInstall,
   desktopInitWorkerDb,
@@ -40,6 +41,10 @@ function resourceKindLabel(kind: string): "Worker" | "R2" | "D1" {
   if (kind === "r2") return "R2";
   if (kind === "d1") return "D1";
   return "Worker";
+}
+
+function isR2InactiveError(error: DesktopErrorHelp | null): boolean {
+  return Boolean(error?.title.toLowerCase().includes("r2 is not active"));
 }
 
 function fireInstallConfetti() {
@@ -100,6 +105,7 @@ export function SetupProgressPanel() {
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
+  const [r2DashboardOpened, setR2DashboardOpened] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const installStartedRef = useRef(false);
   const busyRef = useRef(false);
@@ -113,12 +119,28 @@ export function SetupProgressPanel() {
     credentials?.accountId?.trim() ||
     "";
 
-  function installTokenFromCredentials() {
-    return (
-      credentials?.cfOauthAccessToken?.trim() ||
-      credentials?.installToken?.trim() ||
-      ""
-    );
+  async function ensureOauthSession() {
+    if (!cfOAuthConnected) {
+      setError({
+        title: "Connect Cloudflare first",
+        detail:
+          "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
+        fix: "Go back and click Authorize and install on Cloudflare.",
+      });
+      return false;
+    }
+    try {
+      await desktopRefreshInstallToken();
+    } catch (err) {
+      const raw = String(err ?? "");
+      if (
+        raw.toLowerCase().includes("cloudflare_auth_expired") ||
+        raw.toLowerCase().includes("invalid access token")
+      ) {
+        throw err;
+      }
+    }
+    return true;
   }
 
   useEffect(() => {
@@ -168,30 +190,10 @@ export function SetupProgressPanel() {
     return `${r.kind}:${r.name}`;
   }
 
-  async function resolvedToken() {
-    let token = installTokenFromCredentials();
-    try {
-      const refreshed = await desktopRefreshInstallToken();
-      token =
-        refreshed.cfOauthAccessToken?.trim() ||
-        refreshed.installToken?.trim() ||
-        token;
-    } catch (err) {
-      const raw = String(err ?? "");
-      if (
-        raw.toLowerCase().includes("cloudflare_auth_expired") ||
-        raw.toLowerCase().includes("invalid access token")
-      ) {
-        throw err;
-      }
-      /* use the current access token if refresh is unavailable */
-    }
-    return token;
-  }
-
   async function startFlow() {
     setProbing(true);
     setError(null);
+    setR2DashboardOpened(false);
     setStopped(false);
     setRolledBack(false);
     setAutoDone(null);
@@ -199,20 +201,10 @@ export function SetupProgressPanel() {
     setVerifyError(null);
     setExisting([]);
     try {
-      const token = await resolvedToken();
-      if (!token) {
-        setError({
-          title: "Connect Cloudflare first",
-          detail:
-            "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
-          fix: "Go back and click Authorize and install on Cloudflare.",
-        });
+      if (!(await ensureOauthSession())) {
         return;
       }
-      const probe = await desktopProbeInstall(
-        token,
-        cfOAuthAccountId || undefined,
-      );
+      const probe = await desktopProbeInstall(cfOAuthAccountId || undefined);
       const found = probe.resources.filter((r) => r.present);
       if (found.length === 0) {
         setProbing(false);
@@ -224,7 +216,11 @@ export function SetupProgressPanel() {
         Object.fromEntries(found.map((r) => [decisionKey(r), "skip" as const])),
       );
     } catch (err) {
-      setError(explainDesktopError(err, "Could not check existing resources"));
+      setError(
+        explainDesktopError(err, "Could not check existing resources", {
+          accountId: cfOAuthAccountId,
+        }),
+      );
     } finally {
       setProbing(false);
     }
@@ -271,6 +267,24 @@ export function SetupProgressPanel() {
     setVerifying(true);
     setVerifyError(null);
     try {
+      try {
+        await desktopInitWorkerDb(
+          pendingVerify.workerUrl,
+          pendingVerify.adminToken,
+          false,
+        );
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err);
+        if (
+          raw.includes("Internal server error") &&
+          !raw.includes("detail")
+        ) {
+          throw new Error(
+            `init-db ${raw} — hosted Worker still queries owner_config before migrations. Try again to re-upload local worker.js.`,
+          );
+        }
+        throw err;
+      }
       const connect = await desktopVerifyWorkerConnection(
         pendingVerify.workerUrl,
         pendingVerify.adminToken,
@@ -319,14 +333,7 @@ export function SetupProgressPanel() {
         name: r.name,
         action: decisions[decisionKey(r)] ?? "skip",
       }));
-    let token = await resolvedToken();
-    if (!token) {
-      setError({
-        title: "Connect Cloudflare first",
-        detail:
-          "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
-        fix: "Go back and click Authorize and install on Cloudflare.",
-      });
+    if (!(await ensureOauthSession())) {
       busyRef.current = false;
       setBusy(false);
       return;
@@ -337,7 +344,6 @@ export function SetupProgressPanel() {
         setLogs((prev) => [...prev, event]);
       });
       const result = await desktopAutoInstallWorker(
-        token,
         cfOAuthAccountId || undefined,
         undefined,
         chosen,
@@ -362,7 +368,11 @@ export function SetupProgressPanel() {
         setStopped(true);
         setError(null);
       } else {
-        setError(explainDesktopError(err, "Auto-install failed"));
+        setError(
+          explainDesktopError(err, "Auto-install failed", {
+            accountId: cfOAuthAccountId,
+          }),
+        );
       }
     } finally {
       if (unlisten) unlisten();
@@ -376,31 +386,16 @@ export function SetupProgressPanel() {
     if (rollingBack || busyRef.current) return;
     setRollingBack(true);
     setError(null);
-    let token = installTokenFromCredentials();
-    if (!token) {
-      setError({
-        title: "Connect Cloudflare first",
-        detail: "Authorize Relaybase with Cloudflare before rolling back.",
-        fix: "Go back and click Authorize and install on Cloudflare.",
-      });
+    if (!(await ensureOauthSession())) {
       setRollingBack(false);
       return;
     }
     let unlisten: (() => void) | null = null;
     try {
-      try {
-        const refreshed = await desktopRefreshInstallToken();
-        token =
-          refreshed.cfOauthAccessToken?.trim() ||
-          refreshed.installToken?.trim() ||
-          token;
-      } catch {
-        /* use the current access token if refresh is unavailable */
-      }
       unlisten = await listenInstallLog((event) => {
         setLogs((prev) => [...prev, event]);
       });
-      await desktopRollbackInstall(token, cfOAuthAccountId || undefined);
+      await desktopRollbackInstall(cfOAuthAccountId || undefined);
       setRolledBack(true);
       setAutoDone(null);
       setPendingVerify(null);
@@ -500,7 +495,7 @@ export function SetupProgressPanel() {
             {autoDone
               ? "Your Worker is live. Save your admin token before opening the mailbox."
               : pendingVerify
-              ? "Wrangler reported a successful deploy. Confirm the Worker is responding before continuing."
+              ? "The Worker was uploaded. Confirm it is responding before continuing."
               : existing.length > 0 && !busy && !autoDone
               ? "Some Relaybase resources already exist in this Cloudflare account. Choose Skip or Reinstall for each, then continue."
               : probing
@@ -691,10 +686,10 @@ export function SetupProgressPanel() {
               Deploy finished — verify connection
             </p>
             <p className="text-xs text-muted-foreground">
-              Wrangler deployed the Worker, but Relaybase could not confirm it
-              yet. This is normal right after deploy — Cloudflare can take up
-              to a minute to route traffic. Check the install log for the
-              workers.dev URL, then verify when ready.
+              The Worker was uploaded, but Relaybase could not confirm it yet.
+              If the log shows init-db 500 without a <code>detail</code> field,
+              this is the hosted 0.2.0 build — click Try again so the local
+              worker.js is uploaded. Verify now only retries init-db + connect.
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL:{" "}
@@ -776,6 +771,35 @@ export function SetupProgressPanel() {
                 </p>
               ) : null}
             </div>
+            {cfOAuthAccountId ? (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium">Check in Cloudflare</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Open each resource to confirm it was created in your account.
+                </p>
+                <ul className="space-y-1.5">
+                  {cloudflareInstallDashboardLinks(cfOAuthAccountId).map(
+                    (link) => (
+                      <li key={link.href}>
+                        <button
+                          type="button"
+                          className="flex w-full items-start gap-2 rounded-md border border-border bg-background/70 px-2.5 py-2 text-left hover:bg-muted/50"
+                          onClick={() => void desktopOpenExternal(link.href)}
+                        >
+                          <span className="shrink-0 text-[11px] font-medium">
+                            {link.label}
+                          </span>
+                          <span className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted-foreground">
+                            {link.href}
+                          </span>
+                          <ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
+                        </button>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              </div>
+            ) : null}
             <Button
               type="button"
               className="w-full"
@@ -845,7 +869,10 @@ export function SetupProgressPanel() {
         )}
 
         {error && !rollingBack && !pendingVerify ? (
-          <DesktopErrorBanner error={error} />
+          <DesktopErrorBanner
+            error={error}
+            hideLinks={isR2InactiveError(error)}
+          />
         ) : null}
 
         {logs.length > 0 || rollingBack ? (
@@ -906,6 +933,33 @@ export function SetupProgressPanel() {
             >
               Authorize again
             </Button>
+          ) : isR2InactiveError(error) ? (
+            <div className="space-y-2">
+              <Button
+                type="button"
+                variant={r2DashboardOpened ? "outline" : "default"}
+                className="w-full"
+                onClick={() => {
+                  const href =
+                    error.links?.[0]?.href ||
+                    cloudflareR2DashboardUrl(cfOAuthAccountId);
+                  void desktopOpenExternal(href);
+                  setR2DashboardOpened(true);
+                }}
+              >
+                Open R2 in Cloudflare
+                <ExternalLink className="size-3.5" />
+              </Button>
+              {r2DashboardOpened ? (
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => void startFlow()}
+                >
+                  I&apos;ve added R2 — continue
+                </Button>
+              ) : null}
+            </div>
           ) : (
             <Button
               type="button"
@@ -932,20 +986,6 @@ export function SetupProgressPanel() {
           </Button>
         ) : null}
 
-        {autoDone ? (
-          <p className="text-center">
-            <button
-              type="button"
-              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={() => {
-                const url = cloudflareWorkersDashboardUrl(cfOAuthAccountId);
-                void desktopOpenExternal(url);
-              }}
-            >
-              Open Cloudflare
-            </button>
-          </p>
-        ) : null}
       </div>
     </SetupScrollPage>
   );

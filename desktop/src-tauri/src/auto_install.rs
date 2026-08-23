@@ -1,22 +1,20 @@
 //! Background auto-install of the Relaybase routing Worker into the user's
-//! Cloudflare account using a pre-built install ZIP + `wrangler`.
+//! Cloudflare account using a pre-built install ZIP + the Cloudflare HTTP API.
 //!
 //! Flow (each step streams `install-log` events to the frontend):
 //!   0. `probe_install_resources` lists Worker / R2 / D1 that already exist.
 //!   1. Fetch worker-install-manifest.json and download the versioned ZIP.
-//!   2. `wrangler r2 bucket create relaybase-mailbox`.
-//!   3. Create D1 databases, patch ids (schema via POST /console/init-db after deploy).
-//!   4. Generate an admin token; `wrangler secret put ADMIN_TOKEN` (stdin).
-//!   5. `wrangler deploy` → parse the `*.workers.dev` URL.
+//!   2. Ensure R2 bucket `relaybase-mailbox`.
+//!   3. Create D1 databases (schema via POST /console/init-db after deploy).
+//!   4. Generate an admin token; PUT Worker secrets.
+//!   5. PUT `worker.js` with bindings; enable workers.dev.
 //!   6. POST /console/init-db; read version from GET /console/connect.
 //!
-//! The user's Cloudflare API token is passed via the `CLOUDFLARE_API_TOKEN`
-//! env var to each wrangler invocation. It is never sent to the Relaybase
-//! console or product Worker.
+//! Auth is the in-memory CF OAuth access token (or a legacy disk install
+//! token). It is never sent to the Relaybase console or product Worker.
 
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
@@ -24,13 +22,14 @@ use sha2::{Digest, Sha256};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::Notify;
 
 use crate::cloudflare::{
-    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket, find_r2_bucket,
-    is_cf_forbidden, list_d1_databases, resolve_account_id, worker_script_exists, CfClient,
+    assert_r2_subscription, create_d1_database, delete_d1_database, delete_r2_bucket,
+    delete_worker_script, empty_r2_bucket, enable_workers_dev, ensure_r2_bucket, find_r2_bucket,
+    list_d1_databases, list_worker_bindings, put_worker_schedules, put_worker_secret,
+    resolve_account_id, upload_worker_script, worker_script_exists, CfClient,
+    DEFAULT_WORKER_CRON,
 };
 use crate::secrets::StoredCredentials;
 use crate::worker::DEFAULT_SCRIPT;
@@ -99,12 +98,11 @@ pub struct WorkerUpdateCheck {
     pub zip_sha256: Option<String>,
 }
 
-/// D1 databases created during install. Each entry is (binding, db_name,
-/// migrations_dir, placeholder in wrangler.toml).
-const D1_DATABASES: &[(&str, &str, &str, &str)] = &[
-    ("RELAYBASE_LOGS", "relaybase-logs", "db/log/migrations", "REPLACE_WITH_relaybase-logs_ID"),
-    ("RELAYBASE_INBOX_INDEX", "relaybase-inbox-index", "db/inbox-index/migrations", "REPLACE_WITH_relaybase-inbox-index_ID"),
-    ("RELAYBASE_DB", "relaybase-db", "db/app/migrations", "REPLACE_WITH_relaybase-db_ID"),
+/// D1 databases created during install. Each entry is (binding, db_name).
+const D1_DATABASES: &[(&str, &str)] = &[
+    ("RELAYBASE_LOGS", "relaybase-logs"),
+    ("RELAYBASE_INBOX_INDEX", "relaybase-inbox-index"),
+    ("RELAYBASE_DB", "relaybase-db"),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -290,6 +288,58 @@ fn unzip_bytes(zip_bytes: &[u8], dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Prefer a freshly built `server/dist/worker-build/index.js` over the hosted
+/// ZIP. The public 0.2.0 ZIP crashes on empty D1 during admin auth (no
+/// `owner_config` table yet). Overlay is not debug-only — a local packaged
+/// build on this machine still has `CARGO_MANIFEST_DIR` pointing at the repo.
+fn overlay_local_worker_js(app: &AppHandle, work_dir: &Path) -> bool {
+    let server = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../server");
+    let local = [
+        server.join("dist/relaybase-worker-install/worker.js"),
+        server.join("dist/worker-build/index.js"),
+        server.join("customer-install/worker.js"),
+    ]
+    .into_iter()
+    .find(|p| p.is_file());
+    let Some(local) = local else {
+        emit_log(
+            app,
+            "prepare",
+            "stderr",
+            "No local worker.js overlay — hosted ZIP 0.2.0 will crash on empty D1. Run `pnpm run build:bundle` in server/.",
+        );
+        return false;
+    };
+    match std::fs::copy(&local, work_dir.join("worker.js")) {
+        Ok(_) => {
+            emit_log(
+                app,
+                "prepare",
+                "info",
+                format!("Using local worker.js ({})", local.display()),
+            );
+            if let Some(v) = read_staged_version(work_dir) {
+                let tagged = if v.contains("+local") {
+                    v
+                } else {
+                    format!("{v}+local")
+                };
+                let _ = std::fs::write(work_dir.join("VERSION"), format!("{tagged}\n"));
+            }
+            true
+        }
+        Err(e) => {
+            emit_log(
+                app,
+                "prepare",
+                "stderr",
+                format!("Could not overlay local worker.js: {e}"),
+            );
+            false
+        }
+    }
+}
+
 /// Download the versioned install ZIP, verify SHA-256, and stage wrangler.toml + worker.js.
 async fn stage_install_package(
     app: &AppHandle,
@@ -331,15 +381,14 @@ async fn stage_install_package(
             "Install ZIP is missing worker.js. Re-pack with pnpm pack:worker-install.".into(),
         );
     }
+    let _ = overlay_local_worker_js(app, &work_dir);
+    let staged = read_staged_version(&work_dir)
+        .unwrap_or_else(|| manifest.version.trim().to_string());
     emit_log(
         app,
         "prepare",
         "info",
-        format!(
-            "Staged Worker install v{} at {}",
-            manifest.version.trim(),
-            work_dir.display()
-        ),
+        format!("Staged Worker install v{staged} at {}", work_dir.display()),
     );
     Ok(work_dir)
 }
@@ -378,6 +427,11 @@ fn read_staged_version(work_dir: &Path) -> Option<String> {
 const WARMUP_BACKOFF_SECS: &[u64] = &[2, 4, 8, 16];
 
 async fn probe_worker_health(worker_url: &str) -> Result<bool, String> {
+    let value = fetch_worker_health_json(worker_url).await?;
+    Ok(value.get("ok") == Some(&serde_json::Value::Bool(true)))
+}
+
+async fn fetch_worker_health_json(worker_url: &str) -> Result<serde_json::Value, String> {
     let base = worker_url.trim().trim_end_matches('/');
     if base.is_empty() {
         return Err("Worker URL is empty".into());
@@ -389,12 +443,60 @@ async fn probe_worker_health(worker_url: &str) -> Result<bool, String> {
         .await
         .map_err(|e| e.to_string())?;
     if !res.status().is_success() {
-        return Ok(false);
+        return Err(format!("health HTTP {}", res.status()));
     }
     let body = res.text().await.unwrap_or_default();
-    let value: serde_json::Value =
-        serde_json::from_str(&body).unwrap_or(serde_json::Value::Null);
-    Ok(value.get("ok") == Some(&serde_json::Value::Bool(true)))
+    serde_json::from_str(&body).map_err(|e| e.to_string())
+}
+
+/// New Worker builds expose `d1Bound`. Hosted ZIP 0.2.0 does not — that build
+/// crashes on empty D1 during admin auth (not a D1 permission error).
+async fn log_worker_health_shape(app: &AppHandle, worker_url: &str) {
+    match fetch_worker_health_json(worker_url).await {
+        Ok(health) => {
+            let version = health
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            let d1_bound = health.get("d1Bound");
+            match d1_bound {
+                Some(bound) => emit_log(
+                    app,
+                    "warmup",
+                    "info",
+                    format!("Worker /health version={version} d1Bound={bound}"),
+                ),
+                None => emit_log(
+                    app,
+                    "warmup",
+                    "stderr",
+                    format!(
+                        "Worker /health version={version} has no d1Bound — this is the hosted 0.2.0 ZIP. \
+                         It can reach D1 but crashes on missing owner_config. Re-upload with the local overlay."
+                    ),
+                ),
+            }
+        }
+        Err(e) => emit_log(
+            app,
+            "warmup",
+            "info",
+            format!("Could not read /health after warmup: {e}"),
+        ),
+    }
+}
+
+fn explain_init_db_failure(e: &str) -> String {
+    let generic_old_build = e.contains("Internal server error") && !e.contains("\"detail\"");
+    if generic_old_build {
+        format!(
+            "{e}\nThis is not a D1 permission error. Same-account Workers can use bound D1. \
+             The hosted Worker still queries owner_config before migrations run, so init-db \
+             and Verify both 500. Click Try again (not Verify now) so the local worker.js overlay is uploaded."
+        )
+    } else {
+        e.to_string()
+    }
 }
 
 /// Poll GET /health until the Worker responds or ~30s elapses (post-deploy warm-up).
@@ -483,215 +585,7 @@ fn generate_admin_token() -> String {
     format!("{a}{b}")
 }
 
-/// Create a D1 database via wrangler, or reuse an existing one by listing.
-async fn create_d1_database(
-    app: &AppHandle,
-    work_dir: &Path,
-    api_token: &str,
-    db_name: &str,
-) -> Result<String, String> {
-    match run_wrangler(
-        app,
-        "d1-create",
-        work_dir,
-        &["d1", "create", db_name],
-        api_token,
-        None,
-    )
-    .await
-    {
-        Ok(create_out) => parse_d1_id(&create_out).ok_or_else(|| {
-            format!("Could not parse D1 id for {db_name} from wrangler output:\n{create_out}")
-        }),
-        Err(e) if is_cancelled_error(&e) => Err(e),
-        Err(e) => {
-            let list_out = run_wrangler(
-                app,
-                "d1-list",
-                work_dir,
-                &["d1", "list", "--json"],
-                api_token,
-                None,
-            )
-            .await
-            .map_err(|list_err| {
-                if is_cancelled_error(&list_err) {
-                    list_err
-                } else {
-                    e.clone()
-                }
-            })?;
-            parse_d1_id_from_list(&list_out, db_name).ok_or(e)
-        }
-    }
-}
-
-/// Patch a single D1 database id placeholder in the staged wrangler.toml.
-fn patch_d1_id(work_dir: &Path, placeholder: &str, db_id: &str) -> Result<(), String> {
-    let path = work_dir.join("wrangler.toml");
-    let raw = std::fs::read_to_string(&path).map_err(|e| format!("read wrangler.toml: {e}"))?;
-    let next = raw.replace(placeholder, db_id);
-    std::fs::write(&path, next).map_err(|e| format!("write wrangler.toml: {e}"))
-}
-
-/// Strip ANSI color/style escapes from wrangler output so the install log stays plain text.
-fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                for ch in chars.by_ref() {
-                    if ch.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            }
-            continue;
-        }
-        out.push(c);
-    }
-    out
-}
-
-/// Run a wrangler command in `work_dir`, streaming stdout+stderr lines as
-/// `install-log` events. Returns the combined stdout (for parsing).
-async fn run_wrangler(
-    app: &AppHandle,
-    step: &str,
-    work_dir: &Path,
-    args: &[&str],
-    api_token: &str,
-    stdin: Option<&[u8]>,
-) -> Result<String, String> {
-    let mut cmd = Command::new("npx");
-    cmd.arg("--yes").arg("wrangler");
-    cmd.args(args);
-    cmd.current_dir(work_dir);
-    cmd.env("CLOUDFLARE_API_TOKEN", api_token);
-    // Skip wrangler confirmation prompts (d1 migrations apply, etc.).
-    cmd.env("CI", "true");
-    cmd.env("NO_COLOR", "1");
-    cmd.env("FORCE_COLOR", "0");
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-    cmd.stdin(Stdio::piped());
-    cmd.kill_on_drop(true);
-
-    let mut child = cmd.spawn().map_err(|e| {
-        format!(
-            "Could not start wrangler (is Node/npx installed?): {e}. \
-             Install Node.js 20+ and retry, or use the manual install path."
-        )
-    })?;
-
-    if let Some(input) = stdin {
-        if let Some(mut stdin_pipe) = child.stdin.take() {
-            stdin_pipe.write_all(input).await.map_err(|e| format!("write stdin: {e}"))?;
-            drop(stdin_pipe);
-        }
-    } else {
-        // Drop stdin so the child doesn't wait for input.
-        drop(child.stdin.take());
-    }
-
-    let stdout = child.stdout.take().ok_or("no stdout")?;
-    let stderr = child.stderr.take().ok_or("no stderr")?;
-    let mut stdout = BufReader::new(stdout);
-    let mut stderr = BufReader::new(stderr);
-
-    let mut stdout_buf = String::new();
-    let mut stderr_buf = String::new();
-    let mut stdout_line = String::new();
-    let mut stderr_line = String::new();
-    let mut stdout_done = false;
-    let mut stderr_done = false;
-
-    if install_is_cancelled() {
-        let _ = child.kill().await;
-        let _ = child.wait().await;
-        return Err(cancelled_error());
-    }
-
-    loop {
-        if stdout_done && stderr_done {
-            break;
-        }
-        tokio::select! {
-            _ = cancel_notify().notified() => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
-                return Err(cancelled_error());
-            }
-            n = stdout.read_line(&mut stdout_line), if !stdout_done => {
-                match n {
-                    Ok(0) => stdout_done = true,
-                    Ok(_) => {
-                        stdout_buf.push_str(&stdout_line);
-                        let _ = app.emit(
-                            "install-log",
-                            LogEvent {
-                                step: step.into(),
-                                level: "stdout".into(),
-                                line: strip_ansi(stdout_line.trim_end()),
-                            },
-                        );
-                        stdout_line.clear();
-                    }
-                    Err(e) => return Err(format!("read stdout: {e}")),
-                }
-            }
-            n = stderr.read_line(&mut stderr_line), if !stderr_done => {
-                match n {
-                    Ok(0) => stderr_done = true,
-                    Ok(_) => {
-                        stderr_buf.push_str(&stderr_line);
-                        let _ = app.emit(
-                            "install-log",
-                            LogEvent {
-                                step: step.into(),
-                                level: "stderr".into(),
-                                line: strip_ansi(stderr_line.trim_end()),
-                            },
-                        );
-                        stderr_line.clear();
-                    }
-                    Err(e) => return Err(format!("read stderr: {e}")),
-                }
-            }
-        }
-    }
-
-    let status = child.wait().await.map_err(|e| format!("wait: {e}"))?;
-    if install_is_cancelled() {
-        return Err(cancelled_error());
-    }
-    if !status.success() {
-        let mut msg = format!("wrangler {step} exited with status {status}");
-        let detail = if !stderr_buf.trim().is_empty() {
-            stderr_buf
-        } else {
-            stdout_buf
-        };
-        if !detail.trim().is_empty() {
-            msg.push('\n');
-            msg.push_str(strip_ansi(detail.trim()).trim());
-        }
-        return Err(msg);
-    }
-    Ok(stdout_buf)
-}
-
-fn is_already_exists_error(err: &str) -> bool {
-    let lower = err.to_lowercase();
-    lower.contains("already exists")
-        || lower.contains("you own it")
-        || lower.contains("code: 10004")
-}
-
 fn emit_log(app: &AppHandle, step: &str, level: &str, line: impl Into<String>) {
-    let line = strip_ansi(&line.into());
     let _ = app.emit(
         "install-log",
         LogEvent {
@@ -756,7 +650,7 @@ pub async fn rollback_all_install(
     }
 
     emit_log(&app, "rollback", "info", "Looking up D1 databases…");
-    let d1_wanted: Vec<&str> = D1_DATABASES.iter().map(|(_, name, _, _)| *name).collect();
+    let d1_wanted: Vec<&str> = D1_DATABASES.iter().map(|(_, name)| *name).collect();
     match list_d1_databases(&client).await {
         Ok(all) => {
             let mut found = 0u32;
@@ -820,190 +714,6 @@ pub async fn rollback_all_install(
     Ok(())
 }
 
-/// Parse a wrangler resource id from CLI output (`id = ...` or JSON `"id"`).
-fn parse_wrangler_id(output: &str) -> Option<String> {
-    // wrangler prints: "id = <32 hex>" or a JSON-ish payload depending on version.
-    for line in output.lines() {
-        let trimmed = line.trim();
-        if let Some(idx) = trimmed.find("id =") {
-            let rest = trimmed[idx + 4..].trim();
-            if let Some(id) = rest.split_whitespace().next() {
-                if id.len() >= 16 {
-                    return Some(id.to_string());
-                }
-            }
-        }
-        if let Some(idx) = trimmed.find("\"id\"") {
-            let rest = trimmed[idx + 4..].trim_start_matches([':', ' ', '"']);
-            if let Some(id) = rest.split('"').next() {
-                if id.len() >= 16 {
-                    return Some(id.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Parse the D1 database id from `wrangler d1 create` output.
-/// wrangler prints: `database_id = "<uuid>"` or a JSON payload with `"uuid"`.
-fn parse_d1_id(output: &str) -> Option<String> {
-    for line in output.lines() {
-        let trimmed = line.trim();
-        // wrangler v4: `database_id = "<uuid>"`
-        if let Some(idx) = trimmed.find("database_id =") {
-            let rest = trimmed[idx + 13..].trim().trim_matches('"');
-            if rest.len() >= 16 {
-                return Some(rest.to_string());
-            }
-        }
-        // JSON: `"uuid": "<id>"`
-        if let Some(idx) = trimmed.find("\"uuid\"") {
-            let rest = trimmed[idx + 6..].trim_start_matches([':', ' ', '"']);
-            if let Some(id) = rest.split('"').next() {
-                if id.len() >= 16 {
-                    return Some(id.to_string());
-                }
-            }
-        }
-        // JSON: `"d1_database_id": "<id>"` or `"database_id": "<id>"`
-        for key in ["\"d1_database_id\"", "\"database_id\""] {
-            if let Some(idx) = trimmed.find(key) {
-                let rest = trimmed[idx + key.len()..].trim_start_matches([':', ' ', '"']);
-                if let Some(id) = rest.split('"').next() {
-                    if id.len() >= 16 {
-                        return Some(id.to_string());
-                    }
-                }
-            }
-        }
-    }
-    // Fallback: some wrangler versions print just `id = ...`
-    parse_wrangler_id(output)
-}
-
-/// Find a D1 id by name in `wrangler d1 list --json` output.
-fn parse_d1_id_from_list(output: &str, db_name: &str) -> Option<String> {
-    let json_start = output.find(['[', '{'])?;
-    let parsed: serde_json::Value = serde_json::from_str(&output[json_start..]).ok()?;
-    let rows = parsed
-        .as_array()
-        .or_else(|| parsed.get("result").and_then(|v| v.as_array()))?;
-    for row in rows {
-        let name = row.get("name").and_then(|v| v.as_str());
-        if name != Some(db_name) {
-            continue;
-        }
-        for key in ["uuid", "id", "database_id"] {
-            if let Some(id) = row.get(key).and_then(|v| v.as_str()) {
-                if id.len() >= 16 {
-                    return Some(id.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Parse the deployed workers.dev URL from `wrangler deploy` output.
-fn parse_worker_url(output: &str) -> Option<String> {
-    for line in output.lines() {
-        let trimmed = line.trim();
-        if trimmed.contains("workers.dev") {
-            // Take the first https://*.workers.dev token on the line.
-            if let Some(start) = trimmed.find("https://") {
-                let rest = &trimmed[start..];
-                if let Some(end) = rest.find(char::is_whitespace) {
-                    return Some(rest[..end].trim_end_matches('.').to_string());
-                }
-                return Some(rest.trim_end_matches('.').to_string());
-            }
-        }
-    }
-    None
-}
-
-async fn wrangler_stdout(api_token: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("npx")
-        .arg("--yes")
-        .arg("wrangler")
-        .args(args)
-        .env("CLOUDFLARE_API_TOKEN", api_token)
-        .env("CI", "true")
-        .env("NO_COLOR", "1")
-        .output()
-        .await
-        .map_err(|e| format!("Could not start wrangler: {e}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if !output.status.success() {
-        return Err(format!(
-            "wrangler {} failed: {}",
-            args.join(" "),
-            if stderr.trim().is_empty() {
-                stdout
-            } else {
-                stderr
-            }
-        ));
-    }
-    Ok(stdout)
-}
-
-async fn wrangler_resource_exists(
-    api_token: &str,
-    kind: &str,
-    name: &str,
-) -> Result<bool, String> {
-    match kind {
-        "r2" => {
-            let out = wrangler_stdout(api_token, &["r2", "bucket", "list"]).await?;
-            Ok(out.lines().any(|line| line.split_whitespace().any(|tok| tok == name)))
-        }
-        "worker" => {
-            let out = wrangler_stdout(api_token, &["deployments", "list", "--name", name]).await;
-            match out {
-                Ok(text) => Ok(!text.to_lowercase().contains("couldn't find")
-                    && !text.to_lowercase().contains("not found")),
-                Err(e) => {
-                    let lower = e.to_lowercase();
-                    if lower.contains("not found") || lower.contains("couldn't find") {
-                        Ok(false)
-                    } else {
-                        Err(e)
-                    }
-                }
-            }
-        }
-        _ => Ok(false),
-    }
-}
-
-async fn wrangler_list_d1(api_token: &str) -> Result<Vec<(String, String)>, String> {
-    let out = wrangler_stdout(api_token, &["d1", "list", "--json"]).await?;
-    let json_start = out.find(['[', '{']).unwrap_or(0);
-    let parsed: serde_json::Value = serde_json::from_str(&out[json_start..])
-        .map_err(|e| format!("parse d1 list: {e}"))?;
-    let rows = parsed
-        .as_array()
-        .or_else(|| parsed.get("result").and_then(|v| v.as_array()))
-        .cloned()
-        .unwrap_or_default();
-    let mut out_rows = Vec::new();
-    for row in rows {
-        let name = row.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let id = row
-            .get("uuid")
-            .or_else(|| row.get("id"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if !name.is_empty() && !id.is_empty() {
-            out_rows.push((name.to_string(), id.to_string()));
-        }
-    }
-    Ok(out_rows)
-}
-
 pub async fn probe_install_resources(
     api_token: String,
     account_id: Option<String>,
@@ -1023,28 +733,19 @@ pub async fn probe_install_resources(
         account_id: account_id.clone(),
         api_token: api_token.clone(),
     };
+    assert_r2_subscription(&client).await?;
 
     let mut resources = Vec::new();
-    let worker_present = match worker_script_exists(&client, DEFAULT_SCRIPT).await {
-        Ok(v) => v,
-        Err(e) if is_cf_forbidden(&e) => {
-            wrangler_resource_exists(&api_token, "worker", DEFAULT_SCRIPT).await?
-        }
-        Err(e) => return Err(e),
-    };
+    // OAuth write tokens often 403 on account-wide lists. Existence helpers
+    // already treat that as "not present" so first-time install can proceed.
+    let worker_present = worker_script_exists(&client, DEFAULT_SCRIPT).await?;
     resources.push(InstallResourceProbe {
         kind: "worker".into(),
         name: DEFAULT_SCRIPT.into(),
         present: worker_present,
         id: String::new(),
     });
-    let r2_present = match find_r2_bucket(&client, R2_BUCKET).await {
-        Ok(v) => v,
-        Err(e) if is_cf_forbidden(&e) => {
-            wrangler_resource_exists(&api_token, "r2", R2_BUCKET).await?
-        }
-        Err(e) => return Err(e),
-    };
+    let r2_present = find_r2_bucket(&client, R2_BUCKET).await?;
     resources.push(InstallResourceProbe {
         kind: "r2".into(),
         name: R2_BUCKET.into(),
@@ -1053,10 +754,9 @@ pub async fn probe_install_resources(
     });
     let d1_list = match list_d1_databases(&client).await {
         Ok(v) => v,
-        Err(e) if is_cf_forbidden(&e) => wrangler_list_d1(&api_token).await.unwrap_or_default(),
         Err(_) => Vec::new(),
     };
-    for (_binding, name, _migrations, _placeholder) in D1_DATABASES {
+    for (_binding, name) in D1_DATABASES {
         let id = d1_list
             .iter()
             .find(|(n, _)| n == name)
@@ -1079,7 +779,7 @@ pub async fn probe_install_resources(
 struct InstallRunOptions {
     /// When set, reuse this admin token instead of generating a new one (Worker update).
     existing_admin_token: Option<String>,
-    /// When true, skip wrangler secret put for ADMIN_TOKEN (update keeps existing secret).
+    /// When true, skip ADMIN_TOKEN secret put (update keeps existing secret).
     skip_admin_secret: bool,
 }
 
@@ -1234,6 +934,16 @@ async fn auto_install_steps(
         api_token: api_token.to_string(),
     };
 
+    // R2 must be on this account before we delete or create anything.
+    // Cloudflare sometimes drops the unused $0 subscription after a few days.
+    emit_log(
+        app,
+        "r2",
+        "info",
+        "Checking that R2 is enabled on this Cloudflare account…",
+    );
+    assert_r2_subscription(&client).await?;
+
     if plan.reinstall_worker {
         emit_log(
             app,
@@ -1256,41 +966,26 @@ async fn auto_install_steps(
     }
 
     // 1) R2 bucket (reuse if it already exists unless we just deleted it).
-    let r2_result = run_wrangler(
+    emit_log(
         app,
         "r2",
-        work_dir,
-        &["r2", "bucket", "create", R2_BUCKET],
-        api_token,
-        None,
-    )
-    .await;
-    match r2_result {
-        Ok(_) => {
-            check_cancelled()?;
-        }
-        Err(e) if is_cancelled_error(&e) => return Err(e),
-        Err(e) => {
-            if !is_already_exists_error(&e) {
-                return Err(e);
-            }
-            let _ = app.emit(
-                "install-log",
-                LogEvent {
-                    step: "r2".into(),
-                    level: "info".into(),
-                    line: format!("R2 bucket {R2_BUCKET} already exists — reusing"),
-                },
-            );
-        }
-    }
+        "info",
+        format!("Ensuring R2 bucket {R2_BUCKET}…"),
+    );
+    ensure_r2_bucket(&client, R2_BUCKET).await?;
+    check_cancelled()?;
+    emit_log(
+        app,
+        "r2",
+        "info",
+        format!("R2 bucket {R2_BUCKET} ready"),
+    );
 
-    // 2) D1 databases — create (or reuse), patch id into wrangler.toml.
-    //    Migrations are NOT applied here — the Worker owns its own schema via
-    //    POST /console/init-db, which the desktop calls after deploy.
+    // 2) D1 databases — create (or reuse). Migrations are NOT applied here —
+    //    the Worker owns its schema via POST /console/init-db after deploy.
     let existing_d1 = list_d1_databases(&client).await.unwrap_or_default();
     let mut d1_ids: Vec<String> = Vec::with_capacity(D1_DATABASES.len());
-    for (_binding, db_name, _migrations_dir, placeholder) in D1_DATABASES {
+    for (_binding, db_name) in D1_DATABASES {
         let db_id = if plan.should_reinstall_d1(db_name) {
             if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
                 emit_log(
@@ -1301,7 +996,8 @@ async fn auto_install_steps(
                 );
                 delete_d1_database(&client, id).await?;
             }
-            create_d1_database(app, work_dir, api_token, db_name).await?
+            emit_log(app, "d1", "info", format!("Creating D1 {db_name}…"));
+            create_d1_database(&client, db_name).await?
         } else if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
             emit_log(
                 app,
@@ -1311,9 +1007,9 @@ async fn auto_install_steps(
             );
             id.clone()
         } else {
-            create_d1_database(app, work_dir, api_token, db_name).await?
+            emit_log(app, "d1", "info", format!("Creating D1 {db_name}…"));
+            create_d1_database(&client, db_name).await?
         };
-        patch_d1_id(work_dir, placeholder, &db_id)?;
         check_cancelled()?;
         emit_log(
             app,
@@ -1321,34 +1017,101 @@ async fn auto_install_steps(
             "info",
             format!("D1 {db_name} ready (id {db_id}) — schema will be initialized by the Worker"),
         );
+        if db_id.trim().is_empty() {
+            return Err(format!(
+                "D1 {db_name} has no database id — cannot bind it to the Worker."
+            ));
+        }
         d1_ids.push(db_id);
     }
 
-    // 3) Admin token + secret
+    // 3) Deploy pre-built worker.js with R2 + D1 bindings, then secrets.
+    //    Secrets must be set after the script exists.
     check_cancelled()?;
+    let js_path = work_dir.join("worker.js");
+    let js_source = std::fs::read_to_string(&js_path)
+        .map_err(|e| format!("read staged worker.js: {e}"))?;
+    let version = staged_version.clone().unwrap_or_else(|| "unknown".into());
+    let d1_for_upload: Vec<(&str, &str)> = D1_DATABASES
+        .iter()
+        .zip(d1_ids.iter())
+        .map(|((binding, _), id)| (*binding, id.as_str()))
+        .collect();
+    emit_log(
+        app,
+        "deploy",
+        "info",
+        format!("Uploading Worker `{DEFAULT_SCRIPT}`…"),
+    );
+    upload_worker_script(
+        &client,
+        DEFAULT_SCRIPT,
+        &js_source,
+        R2_BUCKET,
+        &d1_for_upload,
+        &version,
+    )
+    .await?;
+    match list_worker_bindings(&client, DEFAULT_SCRIPT).await {
+        Ok(bindings) => {
+            let summary = if bindings.is_empty() {
+                "(none)".into()
+            } else {
+                bindings
+                    .iter()
+                    .map(|(kind, name)| format!("{kind}:{name}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            emit_log(app, "deploy", "info", format!("Worker bindings: {summary}"));
+            let d1_bound = D1_DATABASES
+                .iter()
+                .filter(|(binding, _)| {
+                    bindings
+                        .iter()
+                        .any(|(kind, name)| kind == "d1" && name == *binding)
+                })
+                .count();
+            if d1_bound < D1_DATABASES.len() {
+                return Err(format!(
+                    "Worker uploaded but D1 bindings are missing ({d1_bound}/{}). \
+                     Same-account D1 does not need extra Worker permissions — the \
+                     script upload did not attach RELAYBASE_DB / LOGS / INBOX_INDEX.",
+                    D1_DATABASES.len()
+                ));
+            }
+        }
+        Err(e) => emit_log(
+            app,
+            "deploy",
+            "info",
+            format!("Could not list Worker bindings after upload: {e}"),
+        ),
+    }
+    if let Err(e) = put_worker_schedules(&client, DEFAULT_SCRIPT, DEFAULT_WORKER_CRON).await {
+        emit_log(
+            app,
+            "deploy",
+            "stderr",
+            format!("Could not set Worker cron ({DEFAULT_WORKER_CRON}): {e}"),
+        );
+    }
+    let worker_url = enable_workers_dev(&client, DEFAULT_SCRIPT).await?;
+    emit_log(
+        app,
+        "deploy",
+        "info",
+        format!("Deployed at {worker_url}"),
+    );
+
     let admin_token = if let Some(existing) = run_opts.existing_admin_token.as_ref() {
         existing.clone()
     } else {
         generate_admin_token()
     };
     if !run_opts.skip_admin_secret {
-        run_wrangler(
-            app,
-            "secret",
-            work_dir,
-            &["secret", "put", "ADMIN_TOKEN"],
-            api_token,
-            Some(admin_token.as_bytes()),
-        )
-        .await?;
-        let _ = app.emit(
-            "install-log",
-            LogEvent {
-                step: "secret".into(),
-                level: "info".into(),
-                line: "ADMIN_TOKEN secret set".to_string(),
-            },
-        );
+        put_worker_secret(&client, DEFAULT_SCRIPT, "ADMIN_TOKEN", &admin_token).await?;
+        emit_log(app, "secret", "info", "ADMIN_TOKEN secret set");
     } else {
         emit_log(
             app,
@@ -1358,86 +1121,33 @@ async fn auto_install_steps(
         );
     }
 
-    // 3b) Cloudflare runtime secrets so the Worker can send mail. CF_ACCOUNT_ID
-    //     is always pushed. CF_API_TOKEN is only pushed when the user supplied
-    //     a server token with Email Sending Edit — pushing the install token
-    //     here caused [10000] Authentication errors on send_raw.
-    run_wrangler(
-        app,
-        "secret",
-        work_dir,
-        &["secret", "put", "CF_ACCOUNT_ID"],
-        api_token,
-        Some(account_id.as_bytes()),
-    )
-    .await?;
-    let _ = app.emit(
-        "install-log",
-        LogEvent {
-            step: "secret".into(),
-            level: "info".into(),
-            line: "CF_ACCOUNT_ID secret set".to_string(),
-        },
-    );
+    put_worker_secret(&client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", account_id).await?;
+    emit_log(app, "secret", "info", "CF_ACCOUNT_ID secret set");
 
     if let Some(server) = server_token {
-        run_wrangler(
+        put_worker_secret(&client, DEFAULT_SCRIPT, "CF_API_TOKEN", server).await?;
+        emit_log(
             app,
             "secret",
-            work_dir,
-            &["secret", "put", "CF_API_TOKEN"],
-            api_token,
-            Some(server.as_bytes()),
-        )
-        .await?;
-        let _ = app.emit(
-            "install-log",
-            LogEvent {
-                step: "secret".into(),
-                level: "info".into(),
-                line: "CF_API_TOKEN secret set (server token)".to_string(),
-            },
+            "info",
+            "CF_API_TOKEN secret set (server token)",
         );
     } else {
-        let _ = app.emit(
-            "install-log",
-            LogEvent {
-                step: "secret".into(),
-                level: "info".into(),
-                line: "CF_API_TOKEN skipped — set the server token (Email Sending Edit) in Settings to enable sending.".to_string(),
-            },
+        emit_log(
+            app,
+            "secret",
+            "info",
+            "CF_API_TOKEN skipped — set the server token (Email Sending Edit) in Settings to enable sending.",
         );
     }
 
-    // 4) Deploy (pre-built worker.js — no npm install)
-    check_cancelled()?;
-    let deploy_out = run_wrangler(
-        app,
-        "deploy",
-        work_dir,
-        &["deploy"],
-        api_token,
-        None,
-    )
-    .await?;
-    let worker_url = parse_worker_url(&deploy_out).ok_or_else(|| {
-        format!("Could not parse workers.dev URL from wrangler deploy output:\n{deploy_out}")
-    })?;
-    let _ = app.emit(
-        "install-log",
-        LogEvent {
-            step: "deploy".into(),
-            level: "info".into(),
-            line: format!("Deployed at {worker_url}"),
-        },
-    );
-
     wait_for_worker_ready(app, &worker_url).await?;
+    log_worker_health_shape(app, &worker_url).await;
 
     // 5) Initialize D1 schema via the Worker's own endpoint.
     //    The desktop never applies SQL — the Worker owns its schema.
-    let init = init_worker_db(&worker_url, &admin_token, false).await;
-    let (db_already_initialized, db_applied) = match &init {
+    let init = init_worker_db_with_retry(app, &worker_url, &admin_token, false).await;
+    let (db_already_initialized, db_applied) = match init {
         Ok(r) => {
             emit_log(
                 app,
@@ -1449,7 +1159,7 @@ async fn auto_install_steps(
                     format!("D1 schema initialized ({} migrations applied)", r.applied.len())
                 },
             );
-            (r.already_initialized, r.applied.clone())
+            (r.already_initialized, r.applied)
         }
         Err(e) => {
             emit_log(
@@ -1458,7 +1168,7 @@ async fn auto_install_steps(
                 "stderr",
                 format!("Worker init-db call failed: {e}"),
             );
-            (false, Vec::new())
+            return Err(explain_init_db_failure(&e));
         }
     };
 
@@ -1491,6 +1201,39 @@ pub struct InitDbResult {
     pub applied: Vec<String>,
     pub skipped: Vec<String>,
     pub cleared: bool,
+}
+
+async fn init_worker_db_with_retry(
+    app: &AppHandle,
+    worker_url: &str,
+    admin_token: &str,
+    clear: bool,
+) -> Result<InitDbResult, String> {
+    const ATTEMPTS: u32 = 4;
+    let mut last = String::new();
+    for attempt in 1..=ATTEMPTS {
+        match init_worker_db(worker_url, admin_token, clear).await {
+            Ok(r) => return Ok(r),
+            Err(e) => {
+                last = e;
+                let transient = last.contains("1042")
+                    || last.contains("404")
+                    || last.contains("1101")
+                    || last.to_lowercase().contains("not found");
+                if attempt == ATTEMPTS || !transient {
+                    break;
+                }
+                emit_log(
+                    app,
+                    "init-db",
+                    "info",
+                    format!("init-db not ready yet (attempt {attempt}/{ATTEMPTS}) — retrying…"),
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        }
+    }
+    Err(last)
 }
 
 /// Call the Worker's POST /console/init-db endpoint to initialize D1 schema.
@@ -1564,11 +1307,11 @@ pub fn merge_into_credentials(
     }
 }
 
-/// Run `wrangler secret put CF_API_TOKEN` against an already-deployed Worker
-/// using the install token for wrangler auth and the server token as the
-/// secret value. Returns the ISO timestamp of the push. Used by the Settings
-/// "push server token" action after install.
+/// PUT the Worker `CF_API_TOKEN` secret using the install (OAuth) token
+/// for API auth and the server token as the secret value. Used by Settings
+/// after install.
 pub async fn push_cf_api_token_secret(
+    account_id: &str,
     script_name: &str,
     install_token: &str,
     server_token: &str,
@@ -1582,51 +1325,16 @@ pub async fn push_cf_api_token_secret(
     if server_token.is_empty() {
         return Err("Server token is empty.".into());
     }
-
-    // Stage a minimal work dir so wrangler can resolve the script by name.
-    // wrangler secret put operates on the script in the current account,
-    // so we only need a wrangler.toml pointing at the existing script.
-    let work_dir = std::env::temp_dir().join(format!("relaybase-secret-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&work_dir)
-        .map_err(|e| format!("Failed to create temp dir: {e}"))?;
-    let wrangler_toml = format!(
-        "name = \"{script_name}\"\ncompatibility_date = \"2024-09-23\"\n"
-    );
-    std::fs::write(work_dir.join("wrangler.toml"), wrangler_toml)
-        .map_err(|e| format!("Failed to write wrangler.toml: {e}"))?;
-
-    // Reuse run_wrangler without an AppHandle by inlining a minimal version.
-    let mut cmd = Command::new("npx");
-    cmd.arg("--yes").arg("wrangler");
-    cmd.args(["secret", "put", "CF_API_TOKEN"]);
-    cmd.current_dir(&work_dir);
-    cmd.env("CLOUDFLARE_API_TOKEN", install_token);
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-    cmd.stdin(Stdio::piped());
-    cmd.kill_on_drop(true);
-
-    let mut child = cmd.spawn().map_err(|e| {
-        format!(
-            "Could not start wrangler (is Node/npx installed?): {e}. \
-             Install Node.js 20+ and retry."
-        )
-    })?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        // Write the server token as the secret value, then close stdin.
-        let _ = stdin.write_all(server_token.as_bytes()).await;
-        drop(stdin);
+    let account_id = if account_id.trim().is_empty() {
+        resolve_account_id(install_token).await?
     } else {
-        drop(child.stdin.take());
-    }
-
-    let status = child.wait().await.map_err(|e| format!("wait: {e}"))?;
-    let _ = std::fs::remove_dir_all(&work_dir);
-    if !status.success() {
-        return Err(format!("wrangler secret put CF_API_TOKEN exited with status {status}"));
-    }
-
+        account_id.trim().to_string()
+    };
+    let client = CfClient {
+        account_id,
+        api_token: install_token.to_string(),
+    };
+    put_worker_secret(&client, script_name, "CF_API_TOKEN", server_token).await?;
     Ok(now_iso())
 }
 

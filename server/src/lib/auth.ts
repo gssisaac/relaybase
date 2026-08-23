@@ -11,8 +11,15 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
 }
 
 async function d1AdminToken(env: Env): Promise<string | null> {
-  const config = await getOwnerConfig(createAppDb(env.RELAYBASE_DB));
-  return config.adminToken;
+  try {
+    const db = createAppDb(env.RELAYBASE_DB);
+    if (!db) return null;
+    const config = await getOwnerConfig(db);
+    return config.adminToken;
+  } catch {
+    // Empty D1 (pre-init-db) has no owner_config table yet.
+    return null;
+  }
 }
 
 /** Prefer wrangler secret; then D1 recovery override from `/console/recover-admin`. */

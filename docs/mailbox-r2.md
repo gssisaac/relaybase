@@ -91,6 +91,18 @@ Requires `CLOUDFLARE_API_TOKEN` (R2 + Workers edit) and `CLOUDFLARE_ACCOUNT_ID`.
 
 ---
 
+## R2 subscription (required)
+
+Cloudflare will not create or list buckets until the account has R2. A first install can succeed, then a few days later Cloudflare may drop the unused **$0** subscription. API calls then return **403** with code **10042** (`Please enable R2 through the Cloudflare Dashboard`).
+
+Desktop auto-install checks this **before** deleting or creating Worker / R2 / D1. The UI links to the account R2 overview — not checkout:
+
+`https://dash.cloudflare.com/{account_id}/r2`
+
+From that page the user can add R2 back if Cloudflare prompts. Do not deep-link `/r2/checkout/payment`.
+
+---
+
 ## Verify
 
 ```bash

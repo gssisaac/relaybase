@@ -1,6 +1,6 @@
 use crate::cloudflare::{
-    admin_auth_ok, enable_workers_dev, ensure_r2_bucket, find_r2_bucket, put_worker_secret,
-    upload_worker_script, worker_health_ok, worker_script_exists, CfClient,
+    admin_auth_ok, assert_r2_subscription, enable_workers_dev, ensure_r2_bucket, find_r2_bucket,
+    put_worker_secret, upload_worker_script, worker_health_ok, worker_script_exists, CfClient,
 };
 use crate::secrets::StoredCredentials;
 use serde::{Deserialize, Serialize};
@@ -105,6 +105,7 @@ fn client_from(account_id: &str, api_token: &str) -> CfClient {
 
 pub async fn probe_install(account_id: &str, api_token: &str) -> Result<ProbeResult, String> {
     let client = client_from(account_id, api_token);
+    assert_r2_subscription(&client).await?;
     let script_name = DEFAULT_SCRIPT.to_string();
 
     let script_present = worker_script_exists(&client, &script_name).await?;
@@ -295,6 +296,8 @@ pub async fn install_worker(
         &script_name,
         &source,
         R2_BUCKET,
+        &[],
+        "",
     )
     .await?;
 
@@ -367,6 +370,8 @@ pub async fn update_worker(
         &script_name,
         &source,
         R2_BUCKET,
+        &[],
+        "",
     )
     .await?;
     Ok(InstallResult {

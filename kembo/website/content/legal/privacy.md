@@ -1,34 +1,35 @@
 ---
 title: "Privacy Policy"
-description: "How Relaybase collects, uses, and protects information across the website, waitlist, API, and operator/customer dashboards."
+description: "How Relaybase collects, uses, and protects information across the website, beta signup, API, and operator/customer dashboards."
 date: "2026-08-06"
 ---
 
 This Privacy Policy describes how Strum Technology Corp, a Delaware corporation doing business as Relaybase ("we", "us", or "our"), collects, uses, and shares information when you use the Relaybase website at relaybase.xyz, the Relaybase API, and the operator and customer dashboards (together, the "Service").
 
-Relaybase is product email infrastructure: we help a Customer send and receive email on addresses at the Customer's own domain (`billing@yourdomain.com`, `support@yourdomain.com`, and similar). Because of that, this policy covers two different kinds of information: information about **you** if you visit the website, join the waitlist, or hold an account with us (where we act as a controller), and **message content** that flows through the API on behalf of a Customer (where we act as a processor, handling that content only to provide the Service).
+Relaybase is product email infrastructure: we help a Customer send and receive email on addresses at the Customer's own domain (`billing@yourdomain.com`, `support@yourdomain.com`, and similar). Because of that, this policy covers two different kinds of information: information about **you** if you visit the website, join the beta, or hold an account with us (where we act as a controller), and **message content** that flows through the API on behalf of a Customer (where we act as a processor, handling that content only to provide the Service).
 
 ## 1. Roles: controller and processor
 
 | Role | When it applies | What it covers |
 | --- | --- | --- |
-| Controller | Website visits, waitlist signups, account/API-key holders, support requests | Your contact details, account activity, analytics |
+| Controller | Website visits, beta signups, account/API-key holders, support requests | Your contact details, approximate location, device info, account activity, analytics |
 | Processor | Email sent or received through a Customer's domain via the API | Message content (sender, recipient, subject, body, attachments), inbound/outbound event metadata |
 
 If you are the person emailing `support@` or `billing@` on a domain that runs on Relaybase, we process your message on behalf of that domain's owner (our Customer), not on our own behalf. Questions about that specific correspondence should go to the domain owner; this policy explains how we, as their infrastructure provider, handle that data technically.
 
 ## 2. Information we collect directly
 
-### 2.1 Waitlist and account information
+### 2.1 Beta signup and account information
 
-When you join the waitlist or hold a Relaybase account, we collect:
+When you join the beta or hold a Relaybase account, we collect:
 
 - Email address
-- An optional source tag (which page or campaign you signed up from)
-- Your browser's user agent string, captured at signup
+- Approximate location derived from the request (country, city, region) and your timezone
+- Browser and operating system parsed from your user agent, plus the raw user agent string
+- Download timestamps when you use your personal download link
 - For account holders: your account identifier and any domains, API keys, and webhook endpoints you configure
 
-We use this to contact you about early access, product updates, and to operate your account.
+We use this to email you a personal Mac app download link, understand who is in the beta, and to operate your account.
 
 ### 2.2 Support and correspondence
 
@@ -36,7 +37,7 @@ If you email us or use an in-product contact form, we process the contents of th
 
 ### 2.3 Website analytics
 
-The website may load Google Analytics 4 when configured (`NEXT_PUBLIC_GA_MEASUREMENT_ID`). GA may set cookies and collect usage data (pages viewed, approximate location derived by Google, device/browser information, and custom events such as waitlist signup) under Google's terms. We do not currently show a separate cookie-consent banner; you can block or clear cookies in your browser settings.
+The website may load Google Analytics 4 when configured (`NEXT_PUBLIC_GA_MEASUREMENT_ID`). GA may set cookies and collect usage data (pages viewed, approximate location derived by Google, device/browser information, and custom events such as beta signup) under Google's terms. We do not currently show a separate cookie-consent banner; you can block or clear cookies in your browser settings.
 
 ## 3. Message content processed through the API (as processor)
 
@@ -72,7 +73,7 @@ We use information to:
 
 - Provide and operate the Service, including sending, receiving, storing, and delivering email content as instructed by our Customers
 - Verify domains and provision Cloudflare Email Sending / Email Routing
-- Communicate with waitlist members and account holders about updates and support
+- Communicate with beta participants and account holders about updates and support
 - Monitor for delivery failures, abuse, and security issues
 - Improve reliability and understand aggregate website usage
 - Comply with law and enforce our Terms
@@ -92,7 +93,7 @@ We do not sell your personal information, and we do not sell or share message co
 
 | Data | Retention |
 | --- | --- |
-| Waitlist entries | Until you ask us to delete them, or we no longer need them for the waitlist purpose |
+| Beta invites | Until you ask us to delete them, or we no longer need them for the beta |
 | Account and domain configuration (API keys, webhook URLs) | Until the account or domain is removed |
 | Send logs | Rolling window of the most recent 500 entries per environment |
 | Inbound messages and attachments | Rolling window of the most recent 500 per domain, or until deleted by the Customer |
@@ -103,7 +104,7 @@ We do not sell your personal information, and we do not sell or share message co
 
 You can:
 
-- Ask us to delete a waitlist entry by emailing us
+- Ask us to delete a beta invite by emailing us
 - Delete stored inbound messages via the dashboard or API (if you are a domain owner/Customer)
 - Rotate or revoke an API key at any time from the dashboard
 - Opt out of marketing emails we send

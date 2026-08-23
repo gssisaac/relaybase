@@ -6,8 +6,8 @@
 
 | Area | Paths |
 |------|------|
-| D1 binding | `kembo/console/wrangler.jsonc` and `kembo/admin/wrangler.jsonc` → `DB` / database `kembo-ops` |
-| Drizzle schema (all 6 tables) | `kembo/console/src/db/schema.ts` |
+| D1 binding | `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` → `DB` / database `kembo-ops` |
+| Drizzle schema (all 7 tables) | `kembo/console/src/db/schema.ts` |
 | Drizzle schema (admin subset) | `kembo/admin/src/db/schema.ts` (`product_settings` only) |
 | Clients | `kembo/console/src/db/client.ts`, `kembo/admin/src/db/client.ts` |
 | Kit config + SQL | `kembo/console/drizzle.config.ts`, `kembo/console/migrations/` |
@@ -38,13 +38,19 @@ Product Worker catalog state is a different database (`RELAYBASE_DB` on the cust
 
 ---
 
-## Schema (6 tables)
+## Schema (7 tables)
 
-Generated SQL: `kembo/console/migrations/0000_secret_wong.sql`.
+Generated SQL: `kembo/console/migrations/0000_secret_wong.sql` (initial) and `kembo/console/migrations/0001_bizarre_smasher.sql` (`beta_invites`).
 
 ### `waitlist`
 
 Public marketing signup (`POST /api/v1/waitlist`). Unique `email`. `source` + `user_agent` are optional.
+
+### `beta_invites`
+
+Public marketing beta signup (`POST /api/beta` on `kembo-website`). PK `uuid` is the download token at `relaybase.xyz/downloads/{uuid}`. Unique `email` reuses the same invite. `data` is the invite JSON as one blob: `email`, `createdAt`, `locale` (country/city/region/timezone), `browser`, `os`, `userAgent`, `downloads` (`{ at }` timestamps). Website Worker uses raw SQL; do not add a second schema copy.
+
+The website no longer calls `POST /api/v1/waitlist`. The `waitlist` table stays for existing rows.
 
 ### `accounts`
 
@@ -82,7 +88,9 @@ Console Next routes live under `/api/v1/…`. `next.config.ts` rewrites `/v1/:pa
 
 | Route | Auth | Store |
 |-------|------|-------|
-| `POST /api/v1/waitlist` | CORS allowlist (website) | `waitlist` |
+| `POST /api/v1/waitlist` | CORS allowlist (legacy) | `waitlist` |
+| `POST /api/beta` on `relaybase.xyz` | public (website Worker) | `beta_invites` |
+| `GET /downloads/:uuid` on `relaybase.xyz` | public; 404 if unknown uuid | `beta_invites` |
 | `/api/v1/account?action=…` | public signup/login/recover; session for worker register + recovery-token | `accounts`, `account_workers`, `account_recovery` |
 | `POST /api/v1/recovery/verify-admin-token` | public, token-bound | `account_recovery` + `account_workers` |
 | `GET/POST /api/v1/license/admin` | session **or** `RELAYBASE_ADMIN_TOKEN` bearer | `licenses` |

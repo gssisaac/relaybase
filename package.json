@@ -26,8 +26,8 @@
     "mobile:build:apk": "cd mobile && flutter build apk --release",
     "mobile:test": "cd mobile && flutter test",
     "pack:worker-install": "npm run pack:customer-install --prefix server",
-    "website:dev": "npm run dev --prefix kembo/website",
-    "website:build": "npm run build --prefix kembo/website",
-    "website:start": "npm run start --prefix kembo/website"
+    "website:dev": "pnpm --dir kembo/website dev",
+    "website:build": "pnpm --dir kembo/website build",
+    "website:start": "pnpm --dir kembo/website start"
   }
 }

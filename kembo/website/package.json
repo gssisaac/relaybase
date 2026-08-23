@@ -2,11 +2,13 @@
   "name": "relaybase-website",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "npm@10.9.2",
+  "packageManager": "pnpm@9.12.0",
   "scripts": {
     "dev": "next dev -p 32828",
     "build": "next build",
-    "build:cf": "npm ci && npm run build",
+    "build:cf": "corepack enable && pnpm install --frozen-lockfile && pnpm run build",
+    "preview:cf": "pnpm run build && pnpm dlx wrangler@4 dev",
+    "deploy:cf": "pnpm run build && pnpm dlx wrangler@4 deploy",
     "start": "next start -p 32828",
     "lint": "eslint"
   },

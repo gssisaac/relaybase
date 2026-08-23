@@ -2,12 +2,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
 
 const navItems = [
   { href: "/#addresses", label: "Addresses" },
-  { href: "/#pricing", label: "Pricing" },
   { href: "/#integrate", label: "Integrate" },
   { href: "/#features", label: "Features" },
   { href: "/#infrastructure", label: "Infrastructure" },
@@ -30,6 +30,9 @@ export function SiteHeader() {
           <span className="text-lg font-semibold tracking-tight">
             {siteConfig.name}
           </span>
+          <Badge variant="teal" className="hidden sm:inline-flex">
+            Beta
+          </Badge>
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm font-medium text-muted-foreground md:flex">
@@ -46,7 +49,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
-            Get started
+            Join the beta
             <ArrowRight data-icon="inline-end" />
           </Button>
         </div>

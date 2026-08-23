@@ -2,12 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { getCurrentProPrice, isEarlyAccessActive, siteConfig } from "@/lib/site-config";
+import { siteConfig } from "@/lib/site-config";
 
 export function Footer() {
   const year = new Date().getFullYear();
-  const earlyAccess = isEarlyAccessActive();
-  const price = getCurrentProPrice();
 
   return (
     <footer className="border-t border-border bg-white">
@@ -25,16 +23,12 @@ export function Footer() {
           </div>
 
           <p className="max-w-md text-sm text-muted-foreground">
-            The inbox for your Cloudflare domains. Free for one domain, or $
-            {price} once for everything
-            {earlyAccess
-              ? ` during Early Access (normally $${siteConfig.pricing.pro.price})`
-              : ""}
-            .
+            The inbox for your Cloudflare domains. Now in beta — join and we
+            will email you a download link for the Mac app.
           </p>
 
           <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-            Start free
+            Join the beta
           </Button>
 
           <div className="flex flex-wrap justify-center gap-4 text-sm">
@@ -61,9 +55,6 @@ export function Footer() {
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
             <Link href="/#addresses" className="hover:text-foreground">
               Addresses
-            </Link>
-            <Link href="/#pricing" className="hover:text-foreground">
-              Pricing
             </Link>
             <Link href="/#integrate" className="hover:text-foreground">
               Integrate

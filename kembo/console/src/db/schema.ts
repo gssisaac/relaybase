@@ -52,6 +52,14 @@ export const productSettings = sqliteTable("product_settings", {
   pk: primaryKey({ columns: [t.serviceId, t.filename] }),
 }));
 
+export const betaInvites = sqliteTable("beta_invites", {
+  uuid: text("uuid").primaryKey(),
+  email: text("email").notNull().unique(),
+  data: text("data").notNull(),
+}, (t) => ({
+  emailIdx: index("beta_invites_email_idx").on(t.email),
+}));
+
 export const licenses = sqliteTable("licenses", {
   id: text("id").primaryKey(),
   email: text("email").notNull(),

@@ -10,7 +10,7 @@ import { siteConfig } from "@/lib/site-config";
 
 type Status = "idle" | "loading" | "success" | "already" | "error";
 
-export function WaitlistForm() {
+export function BetaForm() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -20,13 +20,15 @@ export function WaitlistForm() {
     setError(null);
     setStatus("loading");
 
-    trackCtaClick({ label: "join_waitlist", location: "get-started" });
+    trackCtaClick({ label: "join_beta", location: "get-started" });
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     try {
-      const res = await fetch(`${siteConfig.apiUrl}/v1/waitlist`, {
+      const res = await fetch("/api/beta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source: "get-started" }),
+        body: JSON.stringify({ email, timezone }),
       });
 
       const data = (await res.json().catch(() => ({}))) as {
@@ -53,10 +55,12 @@ export function WaitlistForm() {
       <div className="rounded-xl border border-accent-teal/30 bg-accent p-6 text-center">
         <CheckCircle2 className="mx-auto size-8 text-accent-teal" />
         <p className="mt-3 text-lg font-semibold text-accent-foreground">
-          {status === "already" ? "You're already on the list" : "You're on the list"}
+          {status === "already"
+            ? "You're already in the beta"
+            : "You're in the beta"}
         </p>
         <p className="mt-1.5 text-sm text-accent-foreground/80">
-          We&apos;ll email you when checkout opens — {siteConfig.waitlist.note}.
+          Check your email for the download link.
         </p>
       </div>
     );
@@ -64,11 +68,11 @@ export function WaitlistForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <label htmlFor="waitlist-email" className="sr-only">
+      <label htmlFor="beta-email" className="sr-only">
         Email address
       </label>
       <Input
-        id="waitlist-email"
+        id="beta-email"
         type="email"
         name="email"
         autoComplete="email"
@@ -92,7 +96,7 @@ export function WaitlistForm() {
           </>
         ) : (
           <>
-            Join the waitlist
+            Join the beta
             <ArrowRight data-icon="inline-end" />
           </>
         )}
@@ -103,7 +107,7 @@ export function WaitlistForm() {
         </p>
       ) : (
         <p className="text-center text-xs text-muted-foreground">
-          No spam. Early access + waitlist pricing only.
+          We will email a personal download link from {siteConfig.beta.from}.
         </p>
       )}
     </form>

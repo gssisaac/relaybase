@@ -9,8 +9,18 @@
     { "pattern": "relaybase.xyz/*", "zone_name": "relaybase.xyz" },
     { "pattern": "www.relaybase.xyz/*", "zone_name": "relaybase.xyz" }
   ],
+  "main": "src/worker/index.ts",
   "assets": {
     "directory": "./out",
-    "not_found_handling": "single-page-application"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/beta", "/api/beta/", "/downloads/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kembo-ops",
+      "database_id": "e759ebf2-f43d-423c-b5e9-163a40432319"
+    }
+  ]
 }

@@ -18,7 +18,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Inbound Worker storage, conversation threading, account filters, Sent-in-Inbox, `(me)` labels, or compose send → Sent | [docs/inbox-threading-and-multi-account.md](docs/inbox-threading-and-multi-account.md) |
 | Flutter mobile app, `/mobile/*`, per-account mobile password, Other device tab, or teammate account scoping | [docs/mobile-email-companion.md](docs/mobile-email-companion.md) |
 | Send/bounce logging, Dashboard Log page, D1 `RELAYBASE_LOGS`, or `ops_log` schema | [docs/ops-log-d1.md](docs/ops-log-d1.md) |
-| Kembo console/admin storage (`kembo-ops`, licenses, accounts, waitlist, operator settings) | [docs/kembo-ops-d1.md](docs/kembo-ops-d1.md) |
+| Kembo console/admin storage (`kembo-ops`, licenses, accounts, waitlist, beta invites, operator settings) | [docs/kembo-ops-d1.md](docs/kembo-ops-d1.md) |
 | Mail search, D1 `RELAYBASE_INBOX_INDEX` / FTS5, list header counts, Sent pagination, or list virtualization | [docs/inbound-search-d1-fts5.md](docs/inbound-search-d1-fts5.md) |
 | Inbox/sent sender avatars (favicon), `SenderAvatar`, `SenderIconStore`, or `/mail/favicon` proxy | [docs/sender-favicon-cache.md](docs/sender-favicon-cache.md) |
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
@@ -34,7 +34,7 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 | Remote | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail bodies (`inbound/{domain}/…`) and send logs (`sent/_sendlog/*`). Unchanged. |
 | Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). R2 `sent/_sendlog/*` stays authoritative for send history. Drizzle schema/helper: `server/db/log/`. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
 | Remote | D1 `RELAYBASE_INBOX_INDEX` (optional) | FTS5 inbound search index, derived from R2. Drizzle schema/helper: `server/db/inbox-index/`. See **[docs/inbound-search-d1-fts5.md](docs/inbound-search-d1-fts5.md)**. |
-| Remote | D1 `kembo-ops` (binding `DB` on `kembo-admin` + `kembo-console`) | Shared Kembo store: operator settings (`product_settings`), licenses, accounts, account_workers, account_recovery, waitlist. Drizzle in `kembo/console/src/db/` (admin uses `product_settings` only). See **[docs/kembo-ops-d1.md](docs/kembo-ops-d1.md)**. |
+| Remote | D1 `kembo-ops` (binding `DB` on `kembo-admin` + `kembo-console` + `kembo-website`) | Shared Kembo store: operator settings (`product_settings`), licenses, accounts, account_workers, account_recovery, waitlist, `beta_invites`. Drizzle in `kembo/console/src/db/` (admin uses `product_settings` only; website Worker uses `beta_invites` via raw SQL). See **[docs/kembo-ops-d1.md](docs/kembo-ops-d1.md)**. |
 | Local | `~/.relaybase` | Credentials, team-login, API key plaintext vault (`api-keys.json`), mail/UI/dashboard cache |
 | Local (phone) | Flutter secure storage + Hive | Mobile email + password; inbox/draft cache — **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)** |
 

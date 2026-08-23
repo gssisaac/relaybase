@@ -6,10 +6,9 @@ import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
 import { IntroVideo } from "@/components/intro-video";
 import { JsonLd } from "@/components/json-ld";
-import { PricingComparison } from "@/components/pricing-comparison";
 import { SiteHeader } from "@/components/site-header";
 import { UseCases } from "@/components/use-cases";
-import { isEarlyAccessActive, siteConfig } from "@/lib/site-config";
+import { siteConfig } from "@/lib/site-config";
 
 export default function Home() {
   const ogImageUrl = new URL(siteConfig.ogImage.url, siteConfig.url).toString();
@@ -32,30 +31,6 @@ export default function Home() {
       description: siteConfig.description,
       url: siteConfig.url,
       image: ogImageUrl,
-      offers: [
-        {
-          "@type": "Offer",
-          name: siteConfig.pricing.free.label,
-          price: String(siteConfig.pricing.free.price),
-          priceCurrency: siteConfig.pricing.currency,
-        },
-        ...(isEarlyAccessActive()
-          ? [
-              {
-                "@type": "Offer",
-                name: siteConfig.pricing.earlyAccess.label,
-                price: String(siteConfig.pricing.earlyAccess.price),
-                priceCurrency: siteConfig.pricing.currency,
-              },
-            ]
-          : []),
-        {
-          "@type": "Offer",
-          name: siteConfig.pricing.pro.label,
-          price: String(siteConfig.pricing.pro.price),
-          priceCurrency: siteConfig.pricing.currency,
-        },
-      ],
       featureList: [
         "Mac app for Cloudflare Email Sending and Routing",
         "Worker installed in your Cloudflare account",
@@ -76,7 +51,6 @@ export default function Home() {
         <IntroVideo />
         <EmailAddresses />
         <UseCases />
-        <PricingComparison />
         <CodeEmbed />
         <Features />
         <CloudflareTrust />

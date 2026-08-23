@@ -56,4 +56,4 @@ This send-and-receive pairing is the core of what Relaybase does: one domain-sco
 
 If your product address only ever sends, a send-only API is fine. The moment a human might reply — and for `billing@`, `support@`, or `privacy@`, they eventually will — you need the receive half too, and bolting it on after the fact with forwarding rules is worse than designing for it from day one.
 
-See how domain-scoped keys keep this isolated per product in [domain-scoped API keys for multi-product teams](/resources/domain-scoped-api-keys-multi-product), or how the underlying routing layer works in [Cloudflare Email Routing for developers](/resources/cloudflare-email-routing-for-developers). Ready to wire up both directions on your own domain? [Join the Relaybase waitlist](/get-started).
+See how domain-scoped keys keep this isolated per product in [domain-scoped API keys for multi-product teams](/resources/domain-scoped-api-keys-multi-product), or how the underlying routing layer works in [Cloudflare Email Routing for developers](/resources/cloudflare-email-routing-for-developers). Ready to wire up both directions on your own domain? [Join the Relaybase beta](/get-started).

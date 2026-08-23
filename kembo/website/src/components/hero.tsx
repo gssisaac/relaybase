@@ -6,17 +6,13 @@ import {
   Layers,
   Mail,
   MonitorSmartphone,
-  Sparkles,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getCurrentProPrice, isEarlyAccessActive, siteConfig } from "@/lib/site-config";
+import { siteConfig } from "@/lib/site-config";
 
 export function Hero() {
-  const earlyAccess = isEarlyAccessActive();
-  const price = getCurrentProPrice();
-
   return (
     <section className="relative overflow-hidden border-b border-border">
       <div className="pointer-events-none absolute inset-0 grid-dots opacity-40" />
@@ -26,11 +22,10 @@ export function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 py-20 md:py-28">
         <div className="mx-auto max-w-3xl text-center">
           <Badge
-            variant="secondary"
-            className="mb-6 border border-border bg-white px-3 py-1 text-muted-foreground"
+            variant="teal"
+            className="mb-6 px-3 py-1"
           >
-            <Sparkles className="mr-1.5 size-3.5 text-brand" />
-            Built for your own Cloudflare account
+            Beta
           </Badge>
 
           <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl lg:text-6xl">
@@ -46,7 +41,7 @@ export function Hero() {
 
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-              Start free
+              Join the beta
               <ArrowRight data-icon="inline-end" />
             </Button>
             <Button
@@ -58,20 +53,6 @@ export function Hero() {
               See the API
             </Button>
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">
-            {earlyAccess ? (
-              <>
-                Free for one domain. Early Access: ${price} once for
-                everything —{" "}
-                <span className="line-through">
-                  ${siteConfig.pricing.pro.price}
-                </span>{" "}
-                after launch.
-              </>
-            ) : (
-              <>Free for one domain. ${price} once unlocks everything.</>
-            )}
-          </p>
         </div>
 
         <div className="mx-auto mt-16 grid max-w-4xl gap-4 sm:grid-cols-2 lg:grid-cols-4">

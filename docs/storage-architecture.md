@@ -10,7 +10,7 @@
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail bodies (`inbound/{domain}/…`) and send logs (`sent/_sendlog/*`). Unchanged. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
 | **Remote** | D1 `RELAYBASE_INBOX_INDEX` (optional) | FTS5 full-text search index over inbound mail (`inbound_search_fts`). Derived from R2 — R2 `meta.json` stays authoritative; the index is rebuildable via `server/scripts/backfill-inbound-search.mjs`. Drizzle schema/helper: `server/db/inbox-index/`. See **[inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md)**. |
-| **Remote** | D1 `kembo-ops` (binding `DB` on `kembo-admin` + `kembo-console`) | Shared Kembo store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`. See **[kembo-ops-d1.md](./kembo-ops-d1.md)**. |
+| **Remote** | D1 `kembo-ops` (binding `DB` on `kembo-admin` + `kembo-console` + `kembo-website`) | Shared Kembo store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[kembo-ops-d1.md](./kembo-ops-d1.md)**. |
 | **Local** | `~/.relaybase` | Credentials, API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login |
 
 Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
@@ -38,7 +38,7 @@ flowchart TB
     D1Search["D1 RELAYBASE_INBOX_INDEX\ninbound_search_fts (FTS5)"]
   end
   subgraph console [console.relaybase.xyz + admin.relaybase.xyz]
-    KemboD1["D1 kembo-ops\nproduct_settings, licenses,\naccounts, workers, recovery, waitlist"]
+    KemboD1["D1 kembo-ops\nproduct_settings, licenses,\naccounts, workers, recovery,\nwaitlist, beta_invites"]
   end
   UI --> Fetch
   Fetch -->|"admin Bearer"| worker
@@ -143,7 +143,7 @@ Customer install template: three D1 databases (`relaybase-db`, `relaybase-logs`,
 
 ## Remote — D1 `kembo-ops` (console + admin)
 
-Binding: `DB` on both `kembo/console/wrangler.jsonc` and `kembo/admin/wrangler.jsonc` (database `kembo-ops`). Drizzle schema: `kembo/console/src/db/schema.ts`. Full rules: **[kembo-ops-d1.md](./kembo-ops-d1.md)**.
+Binding: `DB` on `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` (database `kembo-ops`). Drizzle schema: `kembo/console/src/db/schema.ts`. Full rules: **[kembo-ops-d1.md](./kembo-ops-d1.md)**.
 
 Operator config lives in `product_settings` (`service_id=relaybase`, `filename=settings.json`):
 
@@ -152,7 +152,7 @@ Operator config lives in `product_settings` (`service_id=relaybase`, `filename=s
 | `workerUrl` | Product Worker URL — admin proxies `/console/*` and `/mail/send` here |
 | `adminToken` | Service admin token. Must match the Worker's `ADMIN_TOKEN` wrangler secret. Also authorizes the console license proxy (`kembo/admin/src/app/api/licenses/route.ts`) |
 
-Licenses, console accounts, worker registration, recovery tokens, and the public waitlist are the other tables in the same database. Legacy KV `KEMBO_OPS` / `KEMBO_LICENSES` and D1 `kembo-accounts` are not bound anymore.
+Licenses, console accounts, worker registration, recovery tokens, the legacy waitlist, and public beta invites (`beta_invites`) are the other tables in the same database. The marketing site Worker reads/writes `beta_invites` only. Legacy KV `KEMBO_OPS` / `KEMBO_LICENSES` and D1 `kembo-accounts` are not bound anymore.
 
 Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
 
@@ -217,6 +217,7 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Owner config / recovered admin token | D1 `RELAYBASE_DB` (`owner_config`) | — |
 | Pending inbound events | D1 `RELAYBASE_DB` (`inbound_events`, `expires_at`) | — |
 | Waitlist | D1 `kembo-ops` (`waitlist`) | — |
+| Beta invites | D1 `kembo-ops` (`beta_invites`) | — |
 | Console accounts / licenses | D1 `kembo-ops` (`accounts`, `licenses`, …) | — |
 
 ---

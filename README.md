@@ -116,7 +116,7 @@ cd app && pnpm run build:desktop   # → app/out
 ### 5. Marketing site
 
 ```bash
-cd kembo/website && npm install && npm run dev   # http://localhost:32828
+cd kembo/website && pnpm install && pnpm dev   # http://localhost:32828
 ```
 
 From the repo root you can also run:
@@ -381,13 +381,13 @@ Typical flow: webhook or poll → `GET /v1/inbox/messages/:id` → your app logi
 
 ## Website deploy (Cloudflare)
 
-`kembo/website/` is a standalone npm project (not pnpm). See `kembo/website/README.md`.
+`kembo/website/` is a pnpm workspace package. See `kembo/website/README.md`.
 
 ```bash
 cd kembo/website
-npm ci
-npm run build:cf
-npx wrangler deploy
+pnpm install
+pnpm run build:cf
+pnpm run deploy:cf
 ```
 
 Cloudflare project settings:

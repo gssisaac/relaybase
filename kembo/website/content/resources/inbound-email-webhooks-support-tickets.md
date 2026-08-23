@@ -56,4 +56,4 @@ Relaybase's inbound model is built around exactly this pattern: register a webho
 
 A `support@` or `billing@` address that silently drops replies into an unread inbox is worse than not having the address at all, because the customer assumes they were heard. Signed webhooks turn "someone has to check the inbox" into "the ticket already exists by the time anyone looks" — which is the actual bar customers expect from a product address in 2026.
 
-For the full send-and-receive picture, see [transactional email: send and receive on one domain](/resources/transactional-email-send-and-receive). For how this stays isolated per product, see [domain-scoped API keys for multi-product teams](/resources/domain-scoped-api-keys-multi-product). To wire your first webhook, [join the Relaybase waitlist](/get-started).
+For the full send-and-receive picture, see [transactional email: send and receive on one domain](/resources/transactional-email-send-and-receive). For how this stays isolated per product, see [domain-scoped API keys for multi-product teams](/resources/domain-scoped-api-keys-multi-product). To wire your first webhook, [join the Relaybase beta](/get-started).

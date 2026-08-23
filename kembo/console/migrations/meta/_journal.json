@@ -8,6 +8,13 @@
       "when": 1787204675660,
       "tag": "0000_secret_wong",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787475376313,
+      "tag": "0001_bizarre_smasher",
+      "breakpoints": true
     }
   ]
 }

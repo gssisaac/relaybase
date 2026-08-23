@@ -46,8 +46,9 @@ export const siteConfig = {
       active: true,
     },
   },
-  waitlist: {
-    note: "Early Access pricing for the first 300",
+  beta: {
+    from: "beta@relaybase.xyz",
+    note: "We will email a personal download link",
   },
   /**
    * Clarifies that Relaybase Pro is a one-time software license and that

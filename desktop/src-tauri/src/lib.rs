@@ -1183,6 +1183,12 @@ struct WorkerConnectResult {
     r2_usage_truncated: Option<bool>,
     /// True when the Worker has a CF_API_TOKEN wrangler secret set.
     cf_api_token_set: bool,
+    /// True when that secret passed a Cloudflare Zone Read probe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cf_api_token_valid: Option<bool>,
+    /// True when the Worker has a send_email EMAIL binding.
+    #[serde(default)]
+    email_binding_configured: bool,
     d1_logs: D1BindingSnapshot,
     d1_inbox_index: D1BindingSnapshot,
     d1_app: D1BindingSnapshot,
@@ -1437,6 +1443,13 @@ async fn verify_worker_connection(
             .and_then(|v| v.as_bool()),
         cf_api_token_set: value
             .get("cfApiTokenSet")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        cf_api_token_valid: value
+            .get("cfApiTokenValid")
+            .and_then(|v| v.as_bool()),
+        email_binding_configured: value
+            .get("emailBindingConfigured")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         d1_logs,

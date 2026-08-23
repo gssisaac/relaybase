@@ -1,6 +1,6 @@
 import type { Env } from "../../env";
 import { cloudflareSendErrorBody } from "../cloudflare-api-hints";
-import { createCloudflareClient } from "../cloudflare-config";
+import { sendOutboundEmail } from "../email-send";
 import { recordOpsLog } from "../ops-logs";
 import { previewText } from "../inbound-store";
 import { recordSendLog } from "../send-logs";
@@ -42,8 +42,8 @@ async function persistSendLog(
 
 /**
  * Shared send pipeline used by `/mail/send` (admin token) and `/mobile/send`
- * (mobile password). Validates the body, calls the Cloudflare Email Routing
- * send API, records an ops log, and returns a Hono-friendly JSON response.
+ * (mobile password). Validates the body, sends via the EMAIL binding (REST
+ * fallback), records an ops log, and returns a Hono-friendly JSON response.
  *
  * `source` controls the ops-log `source` field so the Dashboard Log page can
  * distinguish desktop compose, API-key sends, and mobile sends.
@@ -129,8 +129,7 @@ export async function sendMailMessage(
   }
 
   try {
-    const cf = await createCloudflareClient(env);
-    const result = await cf.sendEmail({
+    const result = await sendOutboundEmail(env, {
       from,
       fromName: body.fromName?.trim() || undefined,
       to: to.length === 1 ? to[0] : to,

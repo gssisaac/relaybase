@@ -81,6 +81,9 @@ WORKER_VERSION = "${version}"
 [triggers]
 crons = ["*/15 * * * *"]
 
+[[send_email]]
+name = "EMAIL"
+
 [[r2_buckets]]
 binding = "INBOUND"
 bucket_name = "relaybase-mailbox"

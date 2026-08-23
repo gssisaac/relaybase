@@ -27,7 +27,7 @@ const TAB_COPY: Record<
   cloudflare: {
     label: "Cloudflare",
     icon: Cloud,
-    description: "API token for zone import and Email Routing assist.",
+    description: "Worker CF_API_TOKEN for domains, inbox routing, and DNS.",
   },
   worker: {
     label: "Worker",

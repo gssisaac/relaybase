@@ -34,12 +34,14 @@ npx wrangler secret put ADMIN_TOKEN
 
 Choose a long random value (e.g. `openssl rand -hex 24`). **Save it** — you will paste the same value into the Relaybase desktop app. If you lose it later, you can reset it from the desktop app (Settings → Reset admin token) using a one-time recovery token issued by `console.relaybase.xyz`; no Wrangler required.
 
-Optional (needed later for Email Sending / zone automation from the Worker itself):
+Optional — `CF_ACCOUNT_ID` is set by desktop auto-install. For domain / inbox routing / DNS from the Worker, add `CF_API_TOKEN` as a **Secret** in the dashboard (Worker → Settings → Runtime variables and secrets) or:
 
 ```bash
 npx wrangler secret put CF_ACCOUNT_ID
 npx wrangler secret put CF_API_TOKEN
 ```
+
+The token needs Account → Email Sending → Edit, Zone → Email Routing Rules → Edit, and Zone → Zone → Read. Sending uses the `[[send_email]]` `EMAIL` binding in `wrangler.toml`, not this token.
 
 ## 3. Deploy
 

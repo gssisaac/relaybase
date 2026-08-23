@@ -374,7 +374,7 @@ pub async fn admin_auth_ok(worker_url: &str, admin_token: &str) -> bool {
     }
 }
 
-/// Upload a Worker module with R2, optional D1, and plain-text vars.
+/// Upload a Worker module with R2, optional D1, send_email, and plain-text vars.
 /// `d1_bindings` is `(binding_name, database_uuid)`.
 pub async fn upload_worker_script(
     client: &CfClient,
@@ -403,6 +403,7 @@ pub async fn upload_worker_script(
         "name": "WORKER_VERSION",
         "text": version
     }));
+    bindings.push(json!({ "type": "send_email", "name": "EMAIL" }));
     for (binding, id) in d1_bindings {
         if binding.is_empty() || id.is_empty() {
             continue;

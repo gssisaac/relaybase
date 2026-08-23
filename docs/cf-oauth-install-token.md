@@ -2,7 +2,7 @@
 
 **Audience:** humans and coding agents changing Settings → Cloudflare, desktop Cloudflare API install, or `kembo/console` OAuth routes.
 
-The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudflare HTTP API for deploy and Worker secrets) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit → Worker `CF_API_TOKEN`) is a manual paste in Settings after install.
+The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudflare HTTP API for deploy and Worker secrets) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit / Email Routing / Zone Read → Worker `CF_API_TOKEN`) is added by the user in the Cloudflare dashboard after install (optional paste-and-push remains). Sending uses the Worker `EMAIL` binding, not this token.
 
 ---
 
@@ -104,9 +104,12 @@ The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secret
 ## Settings + setup UX
 
 - **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + admin token copy). No separate install button.
-- **Settings → Cloudflare** — the standalone "Connect with Cloudflare" connection card is **removed**. OAuth is now requested at push time only: clicking **Verify, save & push** (labelled **Authorize & push** when no install token is in memory) opens the browser for a short-lived authorization kept in memory only and cleared on restart. After OAuth completes, the server token push runs automatically.
-- **Manual install** — admin token + terminal command inline on the install page; no Progress page.
-- **Server token** — still manual (Email Sending Edit) in Settings after install; required to send mail. Pushed to the Worker as the `CF_API_TOKEN` secret via the Cloudflare API (`put_worker_secret`). The Worker's `CF_API_TOKEN` secret (reported by `GET /console/connect` as `cfApiTokenSet`) is the source of truth for whether sending is configured — device-local storage is not a management signal, only a convenience for re-pushing.
+- **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe).
+- **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). Used when the user prefers not to use the dashboard secret UI.
+- **Settings → Cloudflare** — dashboard-first Enable email API dialog. OAuth is only requested if the user chooses paste & push and there is no install token in memory.
+- **Manual install** — admin token + terminal command inline on the install page; the same Enable email API dialog follows Worker URL verify.
+- **Sending** — the Worker `EMAIL` send_email binding, attached at deploy. `CF_API_TOKEN` is for domain / inbox routing / DNS API, not for send. `GET /console/connect` reports `emailBindingConfigured`.
+- **Server token source of truth** — the Worker's `CF_API_TOKEN` secret (`cfApiTokenSet` + `cfApiTokenValid`). Device-local storage is only a convenience for the optional re-push path.
 - Do **not** ask the user to paste a Workers Scripts / R2 API token. That legacy field is replaced by OAuth. Install does not create KV.
 
 Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected” / install ZIP messaging.
@@ -120,6 +123,7 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 | Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
 | Desktop Rust | `desktop/src-tauri/src/lib.rs`, `secrets.rs`, `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge.ts`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx` |
+| Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx` |
 | Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
 
 ---

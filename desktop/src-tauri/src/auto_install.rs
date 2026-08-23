@@ -1426,6 +1426,18 @@ async fn auto_install_steps(
                     D1_DATABASES.len()
                 ));
             }
+            let email_bound = bindings.iter().any(|(kind, name)| {
+                kind == "send_email" && name == "EMAIL"
+            });
+            if !email_bound {
+                emit_log(
+                    app,
+                    "deploy",
+                    "info",
+                    "send_email:EMAIL binding was not reported after upload. \
+                     Sending falls back to the CF_API_TOKEN REST API until the next deploy.",
+                );
+            }
         }
         Err(e) => emit_log(
             app,

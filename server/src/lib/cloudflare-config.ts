@@ -8,10 +8,10 @@ export type CloudflareRuntimeConfig = {
 
 /**
  * Read the Worker's Cloudflare runtime credentials from wrangler secrets
- * `CF_ACCOUNT_ID` + `CF_API_TOKEN` (pushed by the desktop install / Settings
- * "push server token" flow). If the secrets are absent (e.g. the user skipped
- * the server token during install), this returns null and
- * `createCloudflareClient` throws a clear "not configured" error.
+ * `CF_ACCOUNT_ID` + `CF_API_TOKEN` (dashboard secret or optional Settings
+ * paste-and-push). Used for Email Routing / DNS / zone API — not for send
+ * when the EMAIL binding is present. If the secrets are absent this returns
+ * null and `createCloudflareClient` throws a clear "not configured" error.
  */
 export async function readCloudflareRuntimeConfig(
   env: Env,
@@ -26,7 +26,7 @@ export async function createCloudflareClient(env: Env): Promise<CloudflareClient
   const config = await readCloudflareRuntimeConfig(env);
   if (!config) {
     throw new Error(
-      "Cloudflare Email Sending is not configured on this worker — set account ID and API token in the ops-dashboard Relaybase settings",
+      "Cloudflare API is not configured on this worker — add a CF_API_TOKEN secret (Email Sending + Email Routing + Zone Read) so the Worker can manage domains and DNS",
     );
   }
   return new CloudflareClient({

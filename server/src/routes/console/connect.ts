@@ -2,7 +2,23 @@ import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireAdmin } from "../../lib/auth";
 import { probeD1Connection } from "../../lib/d1-status";
+import { emailBindingConfigured } from "../../lib/email-send";
 import { measureInboundR2Usage } from "../../lib/r2-usage";
+
+const CF_API = "https://api.cloudflare.com/client/v4";
+
+/** True when CF_API_TOKEN can call the Cloudflare API (Zone Read). */
+async function probeCfApiTokenValid(token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${CF_API}/zones?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = (await res.json()) as { success?: boolean };
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
 
 const consoleConnect = new Hono<{ Bindings: Env }>();
 
@@ -25,7 +41,9 @@ consoleConnect.get("/", async (c) => {
   if (denied) return denied;
 
   const r2Configured = await checkInboundR2(c.env.INBOUND);
-  const [usage, d1] = await Promise.all([
+  const apiToken = c.env.CF_API_TOKEN?.trim() ?? "";
+  const cfApiTokenSet = Boolean(apiToken);
+  const [usage, d1, cfApiTokenValid] = await Promise.all([
     r2Configured ? measureInboundR2Usage(c.env.INBOUND) : Promise.resolve(null),
     probeD1Connection(
       c.env.RELAYBASE_LOGS,
@@ -34,6 +52,7 @@ consoleConnect.get("/", async (c) => {
       c.env.CF_ACCOUNT_ID,
       c.env.CF_API_TOKEN,
     ),
+    cfApiTokenSet ? probeCfApiTokenValid(apiToken) : Promise.resolve(false),
   ]);
 
   return c.json({
@@ -51,10 +70,11 @@ consoleConnect.get("/", async (c) => {
       usage,
     },
     d1,
-    // Whether the Worker has a CF_API_TOKEN wrangler secret set (i.e. the
-    // server token has been pushed). The dashboard uses this — together with
-    // the local serverToken + pushedAt — to show "Server token configured".
-    cfApiTokenSet: Boolean(c.env.CF_API_TOKEN?.trim()),
+    // Worker has a CF_API_TOKEN secret (domain / routing / DNS API).
+    cfApiTokenSet,
+    // Secret is present and Cloudflare accepted a Zone Read probe.
+    cfApiTokenValid,
+    emailBindingConfigured: emailBindingConfigured(c.env),
   });
 });
 

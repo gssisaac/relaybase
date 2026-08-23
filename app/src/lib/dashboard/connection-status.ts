@@ -1,5 +1,8 @@
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
-import { desktopVerifyWorkerConnection } from "@/lib/desktop/bridge";
+import {
+  desktopVerifyWorkerConnection,
+  mailApiReady,
+} from "@/lib/desktop/bridge";
 import {
   D1_APP_DEFAULT,
   D1_INBOX_INDEX_DEFAULT,
@@ -17,10 +20,10 @@ export type HealthStatus = {
 };
 
 export type ConnectionStatusSnapshot = {
-  /** True when the Worker reports a CF_API_TOKEN wrangler secret is set
+  /** True when the Worker reports a working CF_API_TOKEN secret
    * (the live probe is the source of truth). Falls back to the local
    * serverToken + pushedAt signal only when the probe can't run. This is what
-   * the dashboard "Cloudflare" card reflects. */
+   * the dashboard "Cloudflare" card reflects (domain / routing API, not send). */
   cfConnected: boolean;
   /** True when an install token (Workers Scripts Edit) is saved locally.
    * Used only inside Settings; not shown on the dashboard card. */
@@ -38,6 +41,10 @@ export type ConnectionStatusSnapshot = {
     r2UsageTruncated?: boolean | null;
     /** True when the Worker reports a CF_API_TOKEN wrangler secret is set. */
     cfApiTokenSet: boolean;
+    /** True when that secret passed a Cloudflare Zone Read probe. */
+    cfApiTokenValid?: boolean;
+    /** True when the Worker has a send_email EMAIL binding. */
+    emailBindingConfigured: boolean;
     d1Logs: D1BindingSnapshot;
     d1InboxIndex: D1BindingSnapshot;
     d1App: D1BindingSnapshot;
@@ -91,6 +98,8 @@ export function workerStatusFromConnect(
     r2ObjectCount: result.r2ObjectCount ?? null,
     r2UsageTruncated: result.r2UsageTruncated ?? null,
     cfApiTokenSet: Boolean(result.cfApiTokenSet),
+    cfApiTokenValid: result.cfApiTokenValid,
+    emailBindingConfigured: Boolean(result.emailBindingConfigured),
     d1Logs: result.d1Logs,
     d1InboxIndex: result.d1InboxIndex,
     d1App: result.d1App,
@@ -127,7 +136,7 @@ export async function probeConnectionStatus(
     // sending is configured. Device-local storage is not a management
     // signal — only a convenience for re-pushing. When the probe succeeds,
     // use it; fall back to the local signal only when the probe can't run.
-    const cfConnected = worker.ok ? worker.cfApiTokenSet : localCfConnected;
+    const cfConnected = worker.ok ? mailApiReady(worker) : localCfConnected;
     return {
       cfConnected,
       cfInstallTokenPresent: cfInstallTokenPresentVal,
@@ -148,6 +157,8 @@ export async function probeConnectionStatus(
         r2ObjectCount: null,
         r2UsageTruncated: null,
         cfApiTokenSet: false,
+        cfApiTokenValid: undefined,
+        emailBindingConfigured: false,
         d1Logs: { ...D1_LOGS_DEFAULT },
         d1InboxIndex: { ...D1_INBOX_INDEX_DEFAULT },
         d1App: { ...D1_APP_DEFAULT },
@@ -175,13 +186,13 @@ export function connectionHealthFromSnapshot(
         tone: "ok",
         label: "Configured",
         detail:
-          "Email Sending Edit token pushed to the Worker as the CF_API_TOKEN secret. Sending is enabled.",
+          "CF_API_TOKEN is set on the Worker and Cloudflare accepted it. Domain, address, and DNS API calls can run. Sending uses the EMAIL binding.",
       }
     : {
         tone: "bad",
         label: "Not configured",
         detail:
-          "Add an Email Sending Edit token in Settings and push it to the Worker to enable sending.",
+          "Add a CF_API_TOKEN secret on the Worker in Cloudflare so Relaybase can manage domains and inbox routing.",
       };
 
   const worker: HealthStatus = !hasWorker

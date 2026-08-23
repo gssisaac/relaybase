@@ -17,8 +17,11 @@ import {
   desktopProbeInstall,
   desktopRefreshInstallToken,
   desktopRollbackInstall,
+  desktopPushServerToken,
   desktopRegisterWorkerWithConsole,
+  desktopSaveCfCredentials,
   desktopSaveWorkerConnection,
+  desktopVerifyCfToken,
   desktopVerifyWorkerConnection,
   explainDesktopError,
   isInstallCancelledError,
@@ -41,6 +44,7 @@ import {
   resourceIsOccupied,
   wipePhraseIsValid,
 } from "@/console/components/setup/InstallWipeConfirmDialog";
+import { EnableEmailApiDialog } from "@/console/components/setup/EnableEmailApiDialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 
 type WipeIntent =
@@ -155,6 +159,12 @@ export function SetupProgressPanel() {
   >(() => new Set());
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
+  const [emailApiOpen, setEmailApiOpen] = useState(false);
+  const [mailApiDone, setMailApiDone] = useState(false);
+  const [mailApiVerified, setMailApiVerified] = useState(false);
+  const [pasteBusy, setPasteBusy] = useState(false);
+  const [pasteError, setPasteError] = useState<DesktopErrorHelp | null>(null);
+  const emailDialogShownRef = useRef(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
   const [r2DashboardOpened, setR2DashboardOpened] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
@@ -207,6 +217,10 @@ export function SetupProgressPanel() {
   }, [copiedToken]);
 
   useEffect(() => {
+    if (autoDone && !mailApiDone && !emailDialogShownRef.current) {
+      emailDialogShownRef.current = true;
+      setEmailApiOpen(true);
+    }
     if (!autoDone) {
       setTokenDownloaded(false);
       return;
@@ -491,6 +505,29 @@ export function SetupProgressPanel() {
     if (!autoDone?.adminToken) return;
     await navigator.clipboard.writeText(autoDone.adminToken);
     setCopiedToken(true);
+  }
+
+  async function handleSetupPasteServerToken(token: string) {
+    const acctId = cfOAuthAccountId;
+    if (!acctId) {
+      throw new Error("Authorize with Cloudflare first to push the server token.");
+    }
+    setPasteBusy(true);
+    setPasteError(null);
+    try {
+      const result = await desktopVerifyCfToken(acctId, token, "server");
+      if (!result.ok) throw new Error(result.message);
+      await desktopSaveCfCredentials(acctId, "", token);
+      const push = await desktopPushServerToken();
+      if (!push.ok) throw new Error(push.message);
+      setMailApiVerified(true);
+      setMailApiDone(true);
+    } catch (err) {
+      setPasteError(explainDesktopError(err, "Server token verification failed"));
+      throw err;
+    } finally {
+      setPasteBusy(false);
+    }
   }
 
   async function downloadAutoToken() {
@@ -999,6 +1036,29 @@ export function SetupProgressPanel() {
                   Download the token file to unlock Go to Mailbox.
                 </p>
               ) : null}
+              {!mailApiDone ? (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Enable the email API on your Worker to unlock Go to Mailbox.
+                </p>
+              ) : mailApiVerified ? (
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                  Email API verified on the Worker.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Email API skipped — finish it later in Settings → Cloudflare.
+                </p>
+              )}
+              {!mailApiDone ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEmailApiOpen(true)}
+                >
+                  Enable email API
+                </Button>
+              ) : null}
             </div>
             {cfOAuthAccountId ? (
               <div className="space-y-1.5">
@@ -1032,7 +1092,7 @@ export function SetupProgressPanel() {
             <Button
               type="button"
               className="w-full"
-              disabled={!tokenDownloaded}
+              disabled={!tokenDownloaded || !mailApiDone}
               onClick={() => {
                 if (typeof window !== "undefined") {
                   window.location.assign("/");
@@ -1041,6 +1101,26 @@ export function SetupProgressPanel() {
             >
               Go to Mailbox
             </Button>
+            <EnableEmailApiDialog
+              open={emailApiOpen}
+              onOpenChange={setEmailApiOpen}
+              accountId={cfOAuthAccountId}
+              workerUrl={autoDone.workerUrl}
+              adminToken={autoDone.adminToken}
+              allowSkip
+              onVerified={() => {
+                setMailApiVerified(true);
+                setMailApiDone(true);
+              }}
+              onSkip={() => {
+                setMailApiVerified(false);
+                setMailApiDone(true);
+              }}
+              onPasteAndPush={handleSetupPasteServerToken}
+              pasteBusy={pasteBusy}
+              pasteError={pasteError}
+              cfInstallTokenAvailable={cfOAuthConnected}
+            />
           </div>
         ) : stopped ? (
           <div className="space-y-3 rounded-lg border border-border p-4">

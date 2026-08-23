@@ -3,7 +3,7 @@ import type { Env } from "../env";
 import { requireApiKey } from "../lib/auth";
 import { emailMatchesDomain } from "../lib/crypto";
 import { cloudflareSendErrorBody } from "../lib/cloudflare-api-hints";
-import { createCloudflareClient } from "../lib/cloudflare-config";
+import { sendOutboundEmail } from "../lib/email-send";
 import { recordOpsLog } from "../lib/ops-logs";
 import { recordSendLog } from "../lib/send-logs";
 import { previewText } from "../lib/inbound-store";
@@ -188,8 +188,7 @@ send.post("/", async (c) => {
   }
 
   try {
-    const cf = await createCloudflareClient(c.env);
-    const result = await cf.sendEmail({
+    const result = await sendOutboundEmail(c.env, {
       from,
       fromName: body.fromName?.trim() || undefined,
       to: to.length === 1 ? to[0] : to,

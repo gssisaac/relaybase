@@ -57,7 +57,7 @@ function fullInstallCommand(
     lines.push(`printf '%s' '${tok}' | npx wrangler secret put CF_API_TOKEN`);
   } else {
     lines.push(
-      `# Optional: set CF_ACCOUNT_ID and a server token (Email Sending Edit) so the Worker can send mail`,
+      `# Optional: CF_ACCOUNT_ID + CF_API_TOKEN (Email Sending / Routing / Zone Read) for domain API`,
     );
     lines.push(
       `# printf '%s' '<account-id>' | npx wrangler secret put CF_ACCOUNT_ID`,

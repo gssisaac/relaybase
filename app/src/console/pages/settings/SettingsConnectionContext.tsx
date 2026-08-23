@@ -29,6 +29,7 @@ import {
   desktopOpenExternal,
   explainDesktopError,
   explainCfOAuthError,
+  mailApiReady,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
@@ -87,6 +88,7 @@ type SettingsConnectionContextValue = {
   resetCfDraft: () => void;
   resetWorkerDraft: () => void;
   handleSaveServerToken: () => Promise<void>;
+  handlePasteServerToken: (token: string) => Promise<void>;
   handleSaveWorker: () => Promise<void>;
   handleRefreshStatus: () => Promise<void>;
   handleRequestRecoveryToken: () => Promise<void>;
@@ -117,11 +119,12 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   const workerStatus = snapshot?.worker ?? null;
   // The Worker's CF_API_TOKEN secret is the source of truth for whether
-  // sending is configured. Device-local storage is not a management signal.
+  // the domain / routing API is configured. Device-local storage is not
+  // a management signal.
   // When the probe has run, use it; fall back to the local signal only when
   // the probe can't run (no worker status yet).
   const cfConnected = workerStatus
-    ? Boolean(workerStatus.cfApiTokenSet)
+    ? mailApiReady(workerStatus)
     : (snapshot?.cfConnected ?? cfServerTokenConfigured(credentials));
   const serverTokenPushed = Boolean(
     credentials?.serverToken?.trim() && credentials?.serverTokenPushedAt?.trim(),
@@ -251,8 +254,10 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       await refreshCredentials();
       await refreshConnectionStatus();
       setCfEditing(false);
+      return true;
     } catch (err) {
       setCfError(explainDesktopError(err, "Server token verification failed"));
+      return false;
     } finally {
       setCfBusy(false);
       setServerPushBusy(false);
@@ -271,6 +276,21 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       return;
     }
     await runServerTokenPush();
+  }
+
+  async function handlePasteServerToken(token: string) {
+    setServerToken(token);
+    if (!cfInstallTokenAvailable) {
+      pendingPushRef.current = true;
+      setCfError(null);
+      setCfMessage("Authorize with Cloudflare to push the server token.");
+      await handleStartCfOAuth();
+      return;
+    }
+    const ok = await runServerTokenPush({ serverToken: token });
+    if (!ok) {
+      throw new Error("Server token verification failed");
+    }
   }
 
   // Rust completes OAuth (localhost:32831 in tauri:dev, or relaybase:// in
@@ -608,6 +628,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       resetCfDraft,
       resetWorkerDraft,
       handleSaveServerToken,
+      handlePasteServerToken,
       handleSaveWorker,
       handleRefreshStatus,
       handleRequestRecoveryToken,

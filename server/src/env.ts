@@ -1,3 +1,8 @@
+/** Cloudflare Email Service send binding (`env.EMAIL.send()`). */
+export type SendEmailBinding = {
+  send(message: Record<string, unknown>): Promise<{ messageId?: string }>;
+};
+
 export type Env = {
   /** Mailbox R2 (`relaybase-mailbox`): inbound/{domain}/… and sent/{domain}/… */
   INBOUND: R2Bucket;
@@ -9,6 +14,8 @@ export type Env = {
   RELAYBASE_DB?: D1Database;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
+  /** Outbound Email Sending binding (`[[send_email]] name = "EMAIL"`). */
+  EMAIL?: SendEmailBinding;
   ADMIN_TOKEN?: string;
   WORKER_SCRIPT_NAME: string;
   INBOUND_BUCKET_NAME: string;

@@ -31,6 +31,7 @@ import {
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { AdminTokenPanel } from "@/console/components/setup/AdminTokenPanel";
+import { EnableEmailApiDialog } from "@/console/components/setup/EnableEmailApiDialog";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 import { WhatWeInstall } from "@/console/components/setup/SetupWizardParts";
@@ -95,6 +96,13 @@ export function WorkerInstallPanel() {
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
   const [doneUrl, setDoneUrl] = useState("");
+  const [emailApiOpen, setEmailApiOpen] = useState(false);
+  const [pendingContinue, setPendingContinue] = useState<{
+    url: string;
+    token: string;
+    scriptName?: string;
+  } | null>(null);
+  const finishingRef = useRef(false);
   const modeRef = useRef(mode);
   const oauthWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -211,6 +219,17 @@ export function WorkerInstallPanel() {
     await handleStartCfOAuth();
   }
 
+  function finishAfterEmailApi(opts?: {
+    url: string;
+    token: string;
+    scriptName?: string;
+  }) {
+    const next = opts ?? pendingContinue;
+    if (!next || finishingRef.current) return;
+    finishingRef.current = true;
+    void persistAndContinue(next);
+  }
+
   async function persistAndContinue(opts: {
     url: string;
     token: string;
@@ -236,11 +255,18 @@ export function WorkerInstallPanel() {
     try {
       const result = await desktopVerifyWorkerConnection(url, token);
       setDoneOpen(false);
-      await persistAndContinue({
+      await desktopSaveWorkerConnection({
+        workerUrl: result.workerUrl,
+        adminToken: token,
+        workerScriptName: result.workerScriptName,
+      });
+      await refresh();
+      setPendingContinue({
         url: result.workerUrl,
         token,
         scriptName: result.workerScriptName,
       });
+      setEmailApiOpen(true);
     } catch (err) {
       setError(explainDesktopError(err, "Could not verify Worker"));
     } finally {
@@ -334,6 +360,20 @@ export function WorkerInstallPanel() {
 
         <WhatWeInstall />
       </div>
+
+      <EnableEmailApiDialog
+        open={emailApiOpen}
+        onOpenChange={(next) => {
+          setEmailApiOpen(next);
+          if (!next) finishAfterEmailApi();
+        }}
+        accountId={cfOAuthAccountId}
+        workerUrl={pendingContinue?.url ?? doneUrl}
+        adminToken={pendingContinue?.token ?? adminToken}
+        allowSkip
+        onVerified={() => finishAfterEmailApi()}
+        onSkip={() => finishAfterEmailApi()}
+      />
 
       <Dialog open={doneOpen} onOpenChange={setDoneOpen}>
         <DialogContent className="sm:max-w-md">

@@ -30,7 +30,7 @@ import type {
   Broadcast,
   BroadcastSendRun,
 } from "./catalog-types";
-import { createCloudflareClient } from "./cloudflare-config";
+import { sendOutboundEmail } from "./email-send";
 import { isCloudflarePlanError } from "./cloudflare-api-hints";
 import { readMailbox } from "./catalog-store";
 import { recordOpsLog } from "./ops-logs";
@@ -328,14 +328,13 @@ export async function sendBroadcast(
     run.phase = "sending";
     await dbUpdateBroadcastSendProgress(db, broadcastId, run);
 
-    const cf = await createCloudflareClient(env);
     let successCount = 0;
     let failedCount = 0;
 
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]!;
       try {
-        const result = await cf.sendEmail({
+        const result = await sendOutboundEmail(env, {
           from,
           fromName,
           to: recipient.email,

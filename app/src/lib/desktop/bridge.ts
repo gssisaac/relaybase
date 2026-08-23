@@ -233,6 +233,27 @@ export function cloudflareWorkersDashboardUrl(
   return `https://dash.cloudflare.com/${id}/workers/services/view/${encodeURIComponent(scriptName)}/production`;
 }
 
+/** Cloudflare dashboard → Worker production settings (variables and secrets). */
+export function cloudflareWorkerSettingsUrl(
+  accountId: string,
+  scriptName = "relaybase-api",
+): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/workers/services/view/${encodeURIComponent(scriptName)}/production/settings`;
+}
+
+/** Mail API is ready when the Worker secret exists. A false probe fails; an
+ * omitted probe (older Worker) still counts as ready if the secret is set. */
+export function mailApiReady(result: {
+  cfApiTokenSet?: boolean;
+  cfApiTokenValid?: boolean;
+}): boolean {
+  if (!result.cfApiTokenSet) return false;
+  if (result.cfApiTokenValid === false) return false;
+  return true;
+}
+
 /** Cloudflare dashboard → this account's R2 home (not checkout). */
 export function cloudflareR2DashboardUrl(accountId: string): string {
   const id = accountId.trim();
@@ -312,6 +333,10 @@ export type WorkerConnectResult = {
   r2UsageTruncated?: boolean | null;
   /** True when the Worker has a CF_API_TOKEN wrangler secret set. */
   cfApiTokenSet?: boolean;
+  /** True when that secret passed a Cloudflare Zone Read probe. */
+  cfApiTokenValid?: boolean;
+  /** True when the Worker has a send_email EMAIL binding. */
+  emailBindingConfigured?: boolean;
   d1Logs: D1BindingSnapshot;
   d1InboxIndex: D1BindingSnapshot;
   d1App: D1BindingSnapshot;
@@ -1201,6 +1226,8 @@ export async function desktopVerifyWorkerConnection(
     };
     d1?: Parameters<typeof d1BindingFromPayload>[0];
     cfApiTokenSet?: boolean;
+    cfApiTokenValid?: boolean;
+    emailBindingConfigured?: boolean;
   };
   const usage = value.inbound?.usage;
   let d1Logs = d1BindingFromPayload(value.d1, "logs");
@@ -1234,6 +1261,11 @@ export async function desktopVerifyWorkerConnection(
     r2ObjectCount: usage?.objectCount ?? null,
     r2UsageTruncated: usage?.truncated ?? null,
     cfApiTokenSet: Boolean(value.cfApiTokenSet),
+    cfApiTokenValid:
+      typeof value.cfApiTokenValid === "boolean"
+        ? value.cfApiTokenValid
+        : undefined,
+    emailBindingConfigured: Boolean(value.emailBindingConfigured),
     d1Logs,
     d1InboxIndex,
     d1App,

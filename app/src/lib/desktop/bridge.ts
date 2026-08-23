@@ -341,6 +341,60 @@ function stripRawApiNoise(raw: string): string {
     .trim();
 }
 
+function extractCfWorkerCode(raw: string): string | null {
+  const plain = raw.match(/error code:\s*(\d{3,5})/i);
+  if (plain?.[1]) return plain[1];
+  const json = raw.match(/"code"\s*:\s*(\d{3,5})/i);
+  if (json?.[1]) return json[1];
+  return null;
+}
+
+const CF_WORKER_CODE_HELP: Record<
+  string,
+  { title: string; detail: string; fix: string }
+> = {
+  "1101": {
+    title: "Worker threw an exception (Cloudflare 1101)",
+    detail:
+      "The Worker started, then crashed with a JavaScript exception. This is a runtime error in the uploaded script — not a version label.",
+    fix: "Open Cloudflare → Workers → relaybase-api → Logs for the stack. If you just deployed, wait a few seconds and Try again.",
+  },
+  "1102": {
+    title: "Worker hit a CPU limit (Cloudflare 1102)",
+    detail:
+      "This request used more CPU time than Cloudflare allows for the Worker.",
+    fix: "Retry once. If it keeps happening, the uploaded worker.js may be too heavy for this request.",
+  },
+  "1103": {
+    title: "Workers runtime blocked this account (Cloudflare 1103)",
+    detail:
+      "Cloudflare is refusing to run Workers on this account until Support reviews it.",
+    fix: "Contact Cloudflare Support from the dashboard. Retrying install will not clear 1103.",
+  },
+  "1104": {
+    title: "Cloudflare cancelled the Worker (error 1104)",
+    detail:
+      "The Workers runtime cancelled this request while starting or running the isolate. This often happens right after a deploy, or if startup is too slow. It is not a Relaybase “old version” error.",
+    fix: "Wait a few seconds and Try again. If 1104 repeats after a current worker.js upload, open Workers → Logs and Cloudflare Status.",
+  },
+  "1027": {
+    title: "Workers free-tier daily limit (Cloudflare 1027)",
+    detail: "This Cloudflare account used up today’s free Workers requests.",
+    fix: "Wait for the daily reset, or upgrade the Workers plan, then Try again.",
+  },
+  "1042": {
+    title: "Worker-to-Worker fetch blocked (Cloudflare 1042)",
+    detail:
+      "A same-zone Worker fetch was blocked. This can appear right after deploy.",
+    fix: "Retry. If it persists, wait for the Worker URL to finish propagating.",
+  },
+  "1015": {
+    title: "Cloudflare rate limited the request (1015)",
+    detail: "Too many requests hit this Worker in a short window.",
+    fix: "Wait a moment, then Try again.",
+  },
+};
+
 /** Map common desktop failures to a short title + what to do next. */
 export function explainDesktopError(
   err: unknown,
@@ -349,6 +403,16 @@ export function explainDesktopError(
 ): DesktopErrorHelp {
   const raw = formatDesktopError(err);
   const lower = raw.toLowerCase();
+  const cfCode = extractCfWorkerCode(raw);
+  if (cfCode) {
+    return (
+      CF_WORKER_CODE_HELP[cfCode] ?? {
+        title: `Cloudflare Worker error ${cfCode}`,
+        detail: `Cloudflare returned error code ${cfCode}. This is a Workers runtime / edge error, not a Relaybase version label.`,
+        fix: "Wait a few seconds and Try again. If it repeats, open Cloudflare → Workers → relaybase-api → Logs.",
+      }
+    );
+  }
   const installLinks: DesktopErrorLink[] = [
     { label: "Download Worker install ZIP", href: WORKER_INSTALL_ZIP_URL },
     { label: "Open install setup", href: "/setup/install" },
@@ -400,14 +464,27 @@ export function explainDesktopError(
   }
 
   if (
-    lower.includes("internal server error") &&
-    (lower.includes("init-db") || lower.includes("owner_config") || lower.includes("hosted"))
+    lower.includes("no such table") &&
+    lower.includes("owner_config")
   ) {
     return {
-      title: "Worker is an older build",
+      title: "Worker ran before database setup",
       detail:
-        "D1 is bound on this Worker. The hosted 0.2.0 build crashes while reading owner_config before migrations run — that is not a Cloudflare permission error.",
-      fix: "Click Try again so Relaybase re-uploads the local worker.js. Verify now cannot replace the Worker.",
+        "The uploaded Worker queried owner_config before init-db created that table. A current worker.js skips that on an empty D1.",
+      fix: "From this repo run `cd server && pnpm run build:bundle`, then Try again so the current worker.js is uploaded. Rollback does not rebuild the script.",
+    };
+  }
+
+  if (
+    lower.includes("no d1bound") ||
+    lower.includes("too old to initialize") ||
+    (lower.includes("stale") && lower.includes("worker.js"))
+  ) {
+    return {
+      title: "Installer does not have a current Worker script",
+      detail:
+        "The script on this Mac is missing d1Bound (current /health). Tagging a file +local does not make it current. Rolling back Cloudflare resources does not replace worker.js on disk.",
+      fix: "Run `cd server && pnpm run build:bundle`, then Try again.",
     };
   }
 

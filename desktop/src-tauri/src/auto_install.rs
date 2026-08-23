@@ -371,35 +371,133 @@ fn unzip_bytes(zip_bytes: &[u8], dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Prefer a freshly built `server/dist/worker-build/index.js` over the hosted
-/// ZIP. The public 0.2.0 ZIP crashes on empty D1 during admin auth (no
-/// `owner_config` table yet). Overlay is not debug-only — a local packaged
-/// build on this machine still has `CARGO_MANIFEST_DIR` pointing at the repo.
-fn overlay_local_worker_js(app: &AppHandle, work_dir: &Path) -> bool {
-    let server = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../server");
-    let local = [
+/// Current Worker `/health` exposes `d1Bound`. Older packaged JS does not.
+/// `+local` on WORKER_VERSION only means a file was copied — not that it is current.
+fn worker_js_is_current(source: &str) -> bool {
+    source.contains("d1Bound")
+}
+
+fn server_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../server")
+}
+
+fn overlay_candidate_paths(server: &Path) -> [PathBuf; 3] {
+    [
         server.join("dist/relaybase-worker-install/worker.js"),
         server.join("dist/worker-build/index.js"),
         server.join("customer-install/worker.js"),
     ]
-    .into_iter()
-    .find(|p| p.is_file());
-    let Some(local) = local else {
-        emit_log(
-            app,
-            "prepare",
-            "stderr",
-            "No local worker.js overlay — hosted ZIP 0.2.0 will crash on empty D1. Run `pnpm run build:bundle` in server/.",
-        );
-        return false;
-    };
-    match std::fs::copy(&local, work_dir.join("worker.js")) {
+}
+
+fn first_current_local_worker(app: &AppHandle, server: &Path) -> Option<PathBuf> {
+    for path in overlay_candidate_paths(server) {
+        if !path.is_file() {
+            continue;
+        }
+        match std::fs::read_to_string(&path) {
+            Ok(src) if worker_js_is_current(&src) => return Some(path),
+            Ok(_) => emit_log(
+                app,
+                "prepare",
+                "stderr",
+                format!(
+                    "Skipping stale worker.js at {} (no d1Bound — too old to init empty D1)",
+                    path.display()
+                ),
+            ),
+            Err(e) => emit_log(
+                app,
+                "prepare",
+                "stderr",
+                format!("Could not read {}: {e}", path.display()),
+            ),
+        }
+    }
+    None
+}
+
+fn try_build_local_worker(app: &AppHandle, server: &Path) -> Option<PathBuf> {
+    if !server.join("package.json").is_file() {
+        return None;
+    }
+    emit_log(
+        app,
+        "prepare",
+        "info",
+        "No current worker.js on disk — building from server/ (`pnpm run build:bundle`)…",
+    );
+    let output = std::process::Command::new("pnpm")
+        .args(["run", "build:bundle"])
+        .current_dir(server)
+        .output();
+    match output {
+        Ok(out) if out.status.success() => {
+            let built = server.join("dist/worker-build/index.js");
+            match std::fs::read_to_string(&built) {
+                Ok(src) if worker_js_is_current(&src) => {
+                    emit_log(
+                        app,
+                        "prepare",
+                        "info",
+                        format!("Built current worker.js ({})", built.display()),
+                    );
+                    Some(built)
+                }
+                Ok(_) => {
+                    emit_log(
+                        app,
+                        "prepare",
+                        "stderr",
+                        "build:bundle finished but the output still has no d1Bound.",
+                    );
+                    None
+                }
+                Err(e) => {
+                    emit_log(
+                        app,
+                        "prepare",
+                        "stderr",
+                        format!("build:bundle did not write {}: {e}", built.display()),
+                    );
+                    None
+                }
+            }
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let tail: String = if stderr.len() > 400 {
+                stderr[stderr.len().saturating_sub(400)..].to_string()
+            } else {
+                stderr.to_string()
+            };
+            emit_log(
+                app,
+                "prepare",
+                "stderr",
+                format!("pnpm run build:bundle failed: {tail}"),
+            );
+            None
+        }
+        Err(e) => {
+            emit_log(
+                app,
+                "prepare",
+                "stderr",
+                format!("Could not run pnpm in {}: {e}", server.display()),
+            );
+            None
+        }
+    }
+}
+
+fn copy_worker_overlay(app: &AppHandle, work_dir: &Path, local: &Path) -> bool {
+    match std::fs::copy(local, work_dir.join("worker.js")) {
         Ok(_) => {
             emit_log(
                 app,
                 "prepare",
                 "info",
-                format!("Using local worker.js ({})", local.display()),
+                format!("Using current local worker.js ({})", local.display()),
             );
             if let Some(v) = read_staged_version(work_dir) {
                 let tagged = if v.contains("+local") {
@@ -421,6 +519,96 @@ fn overlay_local_worker_js(app: &AppHandle, work_dir: &Path) -> bool {
             false
         }
     }
+}
+
+/// Prefer a current local `worker.js` (has `d1Bound`) over the hosted ZIP.
+/// Skip stale overlays — copying an old file and tagging `+local` is how
+/// clean reinstalls were mis-diagnosed as “hosted 0.2.0”.
+fn overlay_local_worker_js(app: &AppHandle, work_dir: &Path) -> bool {
+    let server = server_dir();
+    if let Some(local) = first_current_local_worker(app, &server) {
+        return copy_worker_overlay(app, work_dir, &local);
+    }
+    if let Some(built) = try_build_local_worker(app, &server) {
+        return copy_worker_overlay(app, work_dir, &built);
+    }
+    false
+}
+
+fn parse_digits_after(hay: &str, needle: &str) -> Option<u32> {
+    let lower = hay.to_ascii_lowercase();
+    let idx = lower.find(needle)?;
+    let rest = hay[idx + needle.len()..].trim_start_matches([' ', ':', '"', '=']);
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.len() >= 3 && digits.len() <= 5 {
+        digits.parse().ok()
+    } else {
+        None
+    }
+}
+
+fn extract_cf_error_code(text: &str) -> Option<u32> {
+    parse_digits_after(text, "error code")
+        .or_else(|| parse_digits_after(text, "\"code\""))
+        .or_else(|| parse_digits_after(text, "code:"))
+}
+
+fn cf_worker_code_hint(code: u32) -> Option<&'static str> {
+    Some(match code {
+        1101 => {
+            "Cloudflare 1101: the Worker threw a JavaScript exception. Open Cloudflare → Workers → relaybase-api → Logs for the stack."
+        }
+        1102 => {
+            "Cloudflare 1102: the Worker exceeded its CPU time limit on this request."
+        }
+        1103 => {
+            "Cloudflare 1103: this account's Workers runtime needs Cloudflare Support."
+        }
+        1104 => {
+            "Cloudflare 1104: the runtime cancelled this Worker request (startup/isolate, not a Relaybase version mismatch). Common right after deploy — wait and retry."
+        }
+        1027 => "Cloudflare 1027: this account hit the Workers free-tier daily request limit.",
+        1042 => {
+            "Cloudflare 1042: a Worker-to-Worker fetch was blocked. Retry after deploy usually works."
+        }
+        1015 => "Cloudflare 1015: rate limited. Wait a moment and retry.",
+        _ => return None,
+    })
+}
+
+fn format_worker_http_error(endpoint: &str, status: impl std::fmt::Display, body: &str) -> String {
+    let trimmed = body.trim();
+    let json: Option<serde_json::Value> = serde_json::from_str(trimmed).ok();
+    let json_line = json.as_ref().and_then(|v| {
+        let err = v.get("error").and_then(|x| x.as_str()).unwrap_or("").trim();
+        let det = v.get("detail").and_then(|x| x.as_str()).unwrap_or("").trim();
+        if err.is_empty() && det.is_empty() {
+            None
+        } else if det.is_empty() {
+            Some(err.to_string())
+        } else if err.is_empty() {
+            Some(det.to_string())
+        } else {
+            Some(format!("{err} — {det}"))
+        }
+    });
+    let code = extract_cf_error_code(trimmed);
+    let hint = code.and_then(cf_worker_code_hint);
+    let mut parts = vec![format!("{endpoint} returned {status}")];
+    if let Some(line) = json_line {
+        parts.push(line);
+    } else if !trimmed.is_empty() {
+        let excerpt: String = trimmed.chars().take(280).collect();
+        parts.push(excerpt);
+    }
+    if let Some(h) = hint {
+        parts.push(h.to_string());
+    } else if let Some(c) = code {
+        parts.push(format!(
+            "Cloudflare error code {c}. This is a Workers runtime / edge error, not a Relaybase version label."
+        ));
+    }
+    parts.join("\n")
 }
 
 /// Download the versioned install ZIP, verify SHA-256, and stage wrangler.toml + worker.js.
@@ -465,6 +653,16 @@ async fn stage_install_package(
         );
     }
     let _ = overlay_local_worker_js(app, &work_dir);
+    let staged_js = std::fs::read_to_string(work_dir.join("worker.js"))
+        .map_err(|e| format!("Could not read staged worker.js: {e}"))?;
+    if !worker_js_is_current(&staged_js) {
+        return Err(
+            "The Worker script is too old to initialize an empty database (no d1Bound in worker.js). \
+             Rolling back Cloudflare resources does not fix this — the installer must upload a current build. \
+             From this repo run `cd server && pnpm run build:bundle`, then Try again."
+                .into(),
+        );
+    }
     let staged = read_staged_version(&work_dir)
         .unwrap_or_else(|| manifest.version.trim().to_string());
     emit_log(
@@ -532,8 +730,8 @@ async fn fetch_worker_health_json(worker_url: &str) -> Result<serde_json::Value,
     serde_json::from_str(&body).map_err(|e| e.to_string())
 }
 
-/// New Worker builds expose `d1Bound`. Hosted ZIP 0.2.0 does not — that build
-/// crashes on empty D1 during admin auth (not a D1 permission error).
+/// Log `/health` shape. Missing `d1Bound` is a stale script — `+local` only
+/// means a file was copied, not that it is current.
 async fn log_worker_health_shape(app: &AppHandle, worker_url: &str) {
     match fetch_worker_health_json(worker_url).await {
         Ok(health) => {
@@ -549,15 +747,19 @@ async fn log_worker_health_shape(app: &AppHandle, worker_url: &str) {
                     "info",
                     format!("Worker /health version={version} d1Bound={bound}"),
                 ),
-                None => emit_log(
-                    app,
-                    "warmup",
-                    "stderr",
-                    format!(
-                        "Worker /health version={version} has no d1Bound — this is the hosted 0.2.0 ZIP. \
-                         It can reach D1 but crashes on missing owner_config. Re-upload with the local overlay."
-                    ),
-                ),
+                None => {
+                    let reason = if version.contains("+local") {
+                        "a stale local worker.js was uploaded (`+local` is only a filename tag). Rebuild with `cd server && pnpm run build:bundle` and Try again."
+                    } else {
+                        "the uploaded script is an old install ZIP. Rebuild a current worker.js and Try again — rollback does not change the package on this Mac."
+                    };
+                    emit_log(
+                        app,
+                        "warmup",
+                        "stderr",
+                        format!("Worker /health version={version} has no d1Bound — {reason}"),
+                    );
+                }
             }
         }
         Err(e) => emit_log(
@@ -570,16 +772,18 @@ async fn log_worker_health_shape(app: &AppHandle, worker_url: &str) {
 }
 
 fn explain_init_db_failure(e: &str) -> String {
-    let generic_old_build = e.contains("Internal server error") && !e.contains("\"detail\"");
-    if generic_old_build {
-        format!(
-            "{e}\nThis is not a D1 permission error. Same-account Workers can use bound D1. \
-             The hosted Worker still queries owner_config before migrations run, so init-db \
-             and Verify both 500. Click Try again (not Verify now) so the local worker.js overlay is uploaded."
-        )
-    } else {
-        e.to_string()
+    if let Some(hint) = extract_cf_error_code(e).and_then(cf_worker_code_hint) {
+        if e.contains(hint) {
+            return e.to_string();
+        }
+        return format!("{e}\n{hint}");
     }
+    if e.contains("owner_config") && e.contains("no such table") {
+        return format!(
+            "{e}\nThe Worker ran admin auth against D1 before migrations. Upload a current worker.js (`pnpm run build:bundle`), then Try again."
+        );
+    }
+    e.to_string()
 }
 
 /// Poll GET /health until the Worker responds or ~30s elapses (post-deploy warm-up).
@@ -1361,6 +1565,7 @@ async fn init_worker_db_with_retry(
                 let transient = last.contains("1042")
                     || last.contains("404")
                     || last.contains("1101")
+                    || last.contains("1104")
                     || last.to_lowercase().contains("not found");
                 if attempt == ATTEMPTS || !transient {
                     break;
@@ -1419,7 +1624,7 @@ pub async fn init_worker_db(
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        return Err(format!("init-db returned {status}: {text}"));
+        return Err(format_worker_http_error("init-db", status, &text));
     }
     res.json::<InitDbResult>()
         .await
@@ -1568,5 +1773,36 @@ mod wipe_phrase_tests {
             Some("relaybase-db"),
             &["relaybase-mailbox"]
         ));
+    }
+}
+
+#[cfg(test)]
+mod worker_error_tests {
+    use super::{extract_cf_error_code, format_worker_http_error, worker_js_is_current};
+
+    #[test]
+    fn current_js_has_d1_bound() {
+        assert!(worker_js_is_current(r#"return { d1Bound: { app: true } }"#));
+        assert!(!worker_js_is_current(r#"export default { fetch() {} }"#));
+    }
+
+    #[test]
+    fn parses_plain_error_code() {
+        assert_eq!(
+            extract_cf_error_code("Internal Server Error: error code: 1104"),
+            Some(1104)
+        );
+        assert_eq!(extract_cf_error_code(r#"{"code":1101,"message":"x"}"#), Some(1101));
+    }
+
+    #[test]
+    fn formats_1104_with_hint() {
+        let msg = format_worker_http_error(
+            "init-db",
+            500,
+            "Internal Server Error\nerror code: 1104",
+        );
+        assert!(msg.contains("1104"), "{msg}");
+        assert!(msg.contains("not a Relaybase version"), "{msg}");
     }
 }

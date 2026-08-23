@@ -320,24 +320,11 @@ export function SetupProgressPanel() {
     setVerifying(true);
     setVerifyError(null);
     try {
-      try {
-        await desktopInitWorkerDb(
-          pendingVerify.workerUrl,
-          pendingVerify.adminToken,
-          false,
-        );
-      } catch (err) {
-        const raw = err instanceof Error ? err.message : String(err);
-        if (
-          raw.includes("Internal server error") &&
-          !raw.includes("detail")
-        ) {
-          throw new Error(
-            `init-db ${raw} — hosted Worker still queries owner_config before migrations. Try again to re-upload local worker.js.`,
-          );
-        }
-        throw err;
-      }
+      await desktopInitWorkerDb(
+        pendingVerify.workerUrl,
+        pendingVerify.adminToken,
+        false,
+      );
       const connect = await desktopVerifyWorkerConnection(
         pendingVerify.workerUrl,
         pendingVerify.adminToken,
@@ -928,9 +915,10 @@ export function SetupProgressPanel() {
             </p>
             <p className="text-xs text-muted-foreground">
               The Worker was uploaded, but Relaybase could not confirm it yet.
-              If the log shows init-db 500 without a <code>detail</code> field,
-              this is the hosted 0.2.0 build — click Try again so the local
-              worker.js is uploaded. Verify now only retries init-db + connect.
+              Verify now retries init-db and connect only — it does not
+              replace worker.js. If the log mentions error 1104, wait a few
+              seconds and Try again. If it says the script is too old, rebuild
+              with <code>pnpm run build:bundle</code> in server/.
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL:{" "}

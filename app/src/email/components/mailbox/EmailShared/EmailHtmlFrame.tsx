@@ -14,9 +14,12 @@ import { desktopOpenExternal } from "@/lib/desktop/bridge";
  *   to load. allow-popups lets target="_blank" work as a fallback in regular
  *   browsers; inside the Tauri webview a click interceptor routes links to
  *   the OS browser via the open_external_url command (window.open is blocked).
- * - Height auto-fits the content via a ResizeObserver on the iframe document.
+ * - Height auto-fits the content via a ResizeObserver on the iframe document
+ *   so the detail pane is the only vertical scroller (no iframe scrollbar).
  * - A minimal base stylesheet is prepended so emails without their own
- *   background render readably; emails that ship their own <style> win.
+ *   background render readably; emails that ship their own <style> win,
+ *   except overflow/height which we force last so marketing mail cannot
+ *   create a nested scroll viewport.
  */
 export function EmailHtmlFrame({
   html,
@@ -109,6 +112,12 @@ export function EmailHtmlFrame({
       style.textContent = BASE_EMAIL_CSS;
       doc.head.insertBefore(style, doc.head.firstChild);
 
+      // Appended last so it beats email `html, body { height: 100%; overflow: auto }`
+      // rules that otherwise create a second scrollbar inside the iframe.
+      const overflowStyle = doc.createElement("style");
+      overflowStyle.textContent = FRAME_OVERFLOW_CSS;
+      doc.head.appendChild(overflowStyle);
+
       measure();
 
       try {
@@ -155,12 +164,14 @@ export function EmailHtmlFrame({
       title="Email content"
       srcDoc={html}
       sandbox="allow-same-origin allow-popups"
+      scrolling="no"
       className={className}
       style={{
         width: "100%",
         height,
         border: 0,
         display: "block",
+        overflow: "hidden",
         background: "#ffffff",
         colorScheme: "light",
       }}
@@ -181,4 +192,18 @@ const BASE_EMAIL_CSS = `
   img { max-width: 100%; height: auto; }
   table { max-width: 100%; }
   a { color: #2563eb; }
+`;
+
+const FRAME_OVERFLOW_CSS = `
+  html, body {
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    scrollbar-width: none;
+  }
+  html::-webkit-scrollbar, body::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 `;

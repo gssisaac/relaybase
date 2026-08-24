@@ -59,6 +59,14 @@ export type ReissueAdminResult = {
   workerScriptName: string;
 };
 
+export type WorkerUpdateTarget = {
+  expectedWorkerUrl: string;
+  oauthAccountId: string;
+  oauthWorkerUrl: string;
+  connectedAccountId: string;
+  matches: boolean;
+};
+
 export type AutoInstallResult = {
   workerUrl: string;
   workerScriptName: string;
@@ -77,7 +85,7 @@ export type InitDbResult = {
   alreadyInitialized: boolean;
   applied: string[];
   skipped: string[];
-  cleared: boolean;
+  cleared?: boolean;
 };
 
 export type InstallResourceProbe = {
@@ -223,6 +231,16 @@ export const CF_OAUTH_INSTALL_SCOPES = [
 
 /** Max wait after opening the Cloudflare authorize URL before treating as cancelled. */
 export const CF_OAUTH_AUTHORIZE_WAIT_MS = 3 * 60 * 1000;
+
+/** True when Cloudflare's install OAuth session is gone or the access token is stale. */
+export function isCloudflareAuthExpired(err: unknown): boolean {
+  const lower = formatDesktopError(err).toLowerCase();
+  return (
+    lower.includes("cloudflare_auth_expired") ||
+    lower.includes("code: 9109") ||
+    lower.includes("invalid access token")
+  );
+}
 
 /** Remove ANSI color/style escapes from wrangler CLI output. */
 export function stripAnsi(text: string): string {
@@ -426,6 +444,52 @@ const CF_WORKER_CODE_HELP: Record<
   },
 };
 
+/** Worker-update OAuth / URL check. Never attach install-ZIP links. */
+export function explainWorkerUpdateTargetError(err: unknown): DesktopErrorHelp {
+  const raw = formatDesktopError(err);
+  const lower = raw.toLowerCase();
+  const saved = raw.match(/Saved Worker:\s*(\S+)/i)?.[1];
+  const next = raw.match(/This login would update:\s*(\S+)/i)?.[1];
+  if (lower.includes("worker_url_account_mismatch") || (saved && next && saved !== next)) {
+    return {
+      title: "Wrong Cloudflare account",
+      detail:
+        saved && next
+          ? `Your Relaybase Worker is ${saved}. This login would update ${next}.`
+          : "This Cloudflare login belongs to a different account than your saved Worker.",
+      fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+    };
+  }
+  if (lower.includes("authorize with cloudflare first")) {
+    return {
+      title: "Cloudflare account not ready",
+      detail:
+        "Authorization finished, but Relaybase could not read which Cloudflare account you picked.",
+      fix: "Authorize again and stay on the Cloudflare account that owns your saved Worker.",
+    };
+  }
+  if (
+    lower.includes("no workers.dev subdomain") ||
+    lower.includes("has no workers.dev")
+  ) {
+    return {
+      title: "Wrong Cloudflare account",
+      detail:
+        "This login has no workers.dev subdomain, so it is not the account that owns your saved Worker.",
+      fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+    };
+  }
+  const cleaned = stripRawApiNoise(raw);
+  return {
+    title: "Could not confirm Worker URL",
+    detail:
+      cleaned && cleaned.length < 220
+        ? cleaned
+        : "Relaybase could not compare this Cloudflare login with your saved Worker URL.",
+    fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+  };
+}
+
 /** Map common desktop failures to a short title + what to do next. */
 export function explainDesktopError(
   err: unknown,
@@ -461,6 +525,29 @@ export function explainDesktopError(
       title: "Could not save credentials on this Mac",
       detail: stripRawApiNoise(raw) || "Could not create or write ~/.relaybase/credentials.json.",
       fix: "Relaybase creates ~/.relaybase automatically. Ensure your home folder is writable, then Verify again. To reset, delete ~/.relaybase/credentials.json.",
+    };
+  }
+
+  if (lower.includes("worker_url_account_mismatch")) {
+    return explainWorkerUpdateTargetError(err);
+  }
+
+  if (
+    fallbackTitle.toLowerCase().includes("confirm worker") ||
+    lower.includes("authorize with cloudflare first")
+  ) {
+    return explainWorkerUpdateTargetError(err);
+  }
+
+  if (
+    lower.includes("db_already_initialized") ||
+    lower.includes("cannot clear existing data")
+  ) {
+    return {
+      title: "Database already has data",
+      detail:
+        "init-db only runs on empty D1. Existing product tables were left unchanged.",
+      fix: "To apply pending schema only, use migrate-db. To start empty, delete the D1 databases in Cloudflare, create new ones, then init-db.",
     };
   }
 
@@ -541,16 +628,12 @@ export function explainDesktopError(
     };
   }
 
-  if (
-    lower.includes("cloudflare_auth_expired") ||
-    lower.includes("code: 9109") ||
-    lower.includes("invalid access token")
-  ) {
+  if (isCloudflareAuthExpired(err)) {
     return {
       title: "Cloudflare authorization expired",
       detail:
         "The install token expired and Relaybase has no refresh token to renew it.",
-      fix: "Go back and Authorize Cloudflare again. After connecting, install will re-check existing resources.",
+      fix: "Authorize with Cloudflare again, then retry.",
     };
   }
 
@@ -582,6 +665,32 @@ export function explainDesktopError(
   }
 
   const cleaned = stripRawApiNoise(raw);
+
+  if (
+    lower.includes("migrate-db") ||
+    lower.includes("already exists") ||
+    lower.includes("d1_error")
+  ) {
+    return {
+      title: "Database migration failed",
+      detail:
+        cleaned && cleaned.length < 280
+          ? cleaned
+          : "The Worker was uploaded. migrate-db could not apply a pending file.",
+      fix: "The script is on Cloudflare. Retry migrate-db. If it repeats, check D1 d1_migrations against the schema — do not re-authorize.",
+    };
+  }
+
+  if (lower.includes("authorize") || lower.includes("oauth")) {
+    return {
+      title: fallbackTitle,
+      detail:
+        cleaned && cleaned.length < 220
+          ? cleaned
+          : "Relaybase could not finish this Cloudflare authorization step.",
+      fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+    };
+  }
 
   if (
     fallbackTitle.toLowerCase().includes("existing resources") ||
@@ -663,6 +772,10 @@ export function explainCfOAuthError(
         "Cloudflare returns to 127.0.0.1:32831. The installed Relaybase.app (or another window) is already listening there, so this window never sees the authorization.",
       fix: "Quit Relaybase.app in Applications, then click Authorize again in this window.",
     };
+  }
+
+  if (lower.includes("worker_url_account_mismatch")) {
+    return explainWorkerUpdateTargetError(err);
   }
 
   if (lower.includes("state does not match") || lower.includes("oauth state")) {
@@ -925,6 +1038,11 @@ export async function desktopCheckWorkerUpdate(): Promise<WorkerUpdateCheck> {
   return invoke("check_worker_update_cmd");
 }
 
+/** Compare saved Worker URL with the OAuth account's workers.dev URL. No upload. */
+export async function desktopPreviewWorkerUpdateTarget(): Promise<WorkerUpdateTarget> {
+  return invoke("preview_worker_update_target_cmd");
+}
+
 /** Download latest install ZIP and re-deploy the Worker (keeps ADMIN_TOKEN + D1). */
 export async function desktopUpdateInstalledWorker(
   serverToken?: string,
@@ -950,7 +1068,7 @@ export async function desktopRollbackInstall(
   });
 }
 
-/** Call the deployed Worker's POST /console/init-db to initialize or clear D1. */
+/** Empty D1 only. `clear` is rejected by the desktop command. */
 export async function desktopInitWorkerDb(
   workerUrl: string,
   adminToken: string,
@@ -964,6 +1082,17 @@ export async function desktopInitWorkerDb(
     clear,
     wipeConfirmation: wipeConfirmation?.trim() ? wipeConfirmation.trim() : null,
     accountId: accountId?.trim() ? accountId.trim() : null,
+  });
+}
+
+/** Pending migrations only. Never drops tables. */
+export async function desktopMigrateWorkerDb(
+  workerUrl: string,
+  adminToken: string,
+): Promise<InitDbResult> {
+  return invoke("migrate_worker_db_cmd", {
+    workerUrl,
+    adminToken,
   });
 }
 

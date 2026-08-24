@@ -63,19 +63,22 @@ curl -X POST https://relaybase-api.<your-subdomain>.workers.dev/console/init-db 
   -d '{}'
 ```
 
-If the databases already have tables from a previous install, the response
-includes `alreadyInitialized: true`. To clear all data and reinitialize:
+`init-db` refuses existing product tables (HTTP 409 `DB_ALREADY_INITIALIZED`)
+and never drops data, even with `{ "clear": true }`. On an existing install,
+apply pending schema only:
 
 ```bash
-curl -X POST https://relaybase-api.<your-subdomain>.workers.dev/console/init-db \
+curl -X POST https://relaybase-api.<your-subdomain>.workers.dev/console/migrate-db \
   -H "Authorization: Bearer <ADMIN_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"clear": true}'
+  -d '{}'
 ```
 
+To start empty, delete the D1 databases in Cloudflare, create new ones, bind
+them, deploy, then call `init-db`. Do not use `clear: true`.
+
 For manual installs you can also use `wrangler d1 migrations apply` directly,
-but the init endpoint is the recommended path — it is what the desktop
-auto-installer uses.
+but `init-db` (empty) / `migrate-db` (existing) is what the desktop uses.
 
 ## 5. Connect the desktop app
 
@@ -89,7 +92,8 @@ The app calls `GET /console/connect` on your Worker with that token. No Cloudfla
 
 - `GET /health` — liveness + R2 binding check (public)
 - `GET /console/connect` — desktop self-install probe (admin Bearer)
-- `POST /console/init-db` — initialize D1 schema (admin Bearer); `{ clear: true }` to drop and reapply
+- `POST /console/init-db` — initialize **empty** D1 only (admin Bearer); existing data → 409
+- `POST /console/migrate-db` — apply pending migrations only; never drops tables
 - `/console/*` — management (admin Bearer): mailbox, domains, addresses, keys, audience, broadcasts, stats, ops-logs, `register-owner`, `recover-admin`
 - `/mail/*` — desktop mail operations (admin Bearer)
 - `/mobile/*` — Flutter companion + desktop team-user login (per-account mobile password)

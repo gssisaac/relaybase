@@ -1,8 +1,50 @@
-# D1 migrations and `POST /console/init-db`
+# D1 migrations, `POST /console/init-db`, and `POST /console/migrate-db`
 
-**Audience:** humans and coding agents changing D1 schema, install flow, or `wrangler.toml` `migrations_dir` paths.
+**Audience:** humans and coding agents changing D1 schema, install flow, Worker updates, or `wrangler.toml` `migrations_dir` paths.
 
-The **Worker owns D1 schema**. The desktop installer creates empty D1 databases and deploys the Worker; it never runs `wrangler d1 migrations apply` or raw SQL. After deploy, the desktop calls **`POST /console/init-db`** with the admin token. The Worker applies embedded migrations and reports whether tables already existed.
+The **Worker owns D1 schema**. The desktop installer creates empty D1 databases and deploys the Worker; it never runs `wrangler d1 migrations apply` or raw SQL.
+
+| Endpoint | When | Behavior |
+|----------|------|----------|
+| **`POST /console/init-db`** | Empty D1 only (first install, or after D1s were deleted and recreated) | Apply all pending migrations. If any probe table already exists, **409 `DB_ALREADY_INITIALIZED`** and **no writes**. `clear: true` does **not** drop tables. |
+| **`POST /console/migrate-db`** | Existing D1 (install reuse + Settings Worker update) | Apply pending only. Never drops. Reconciles a missing ledger on an existing schema (see **Policy**). |
+
+Both require admin Bearer (`ADMIN_TOKEN` secret or D1 recovery override). Same as `/console/connect`.
+
+---
+
+## Policy
+
+The Worker is the only process that applies product SQL. Desktop and Wrangler do not run migrations on customer D1s during install/update.
+
+**Ledger:** each D1 has `d1_migrations` (`name` unique). Names are compared **without** a `.sql` suffix so Wrangler’s `0000_old_pandemic.sql` matches the Worker’s `0000_old_pandemic`.
+
+**Probe tables** (exist ⇒ this D1 already has product schema):
+
+| Target | Binding | Probe table |
+|--------|---------|-------------|
+| app | `RELAYBASE_DB` | `domains` |
+| logs | `RELAYBASE_LOGS` | `ops_log` |
+| inbox | `RELAYBASE_INBOX_INDEX` | `inbound_search_fts` |
+
+| Situation | `init-db` | `migrate-db` |
+|-----------|-----------|--------------|
+| Empty D1 (no probe table) | Apply every file, then stamp | Same as apply-pending |
+| Probe table exists | **409**, no writes, no DROP | Do **not** re-run the baseline file (the first migration for that target). Stamp it if the ledger missed it, then apply later files that are not in the ledger |
+| Statement already applied (`already exists`, `duplicate column`) | Does not run (409 first) | Treat as success, stamp, continue |
+| Nothing pending | — | `{ applied: [] }` |
+
+**Do not**
+
+- Use `init-db` `{ clear: true }` to wipe. It does not DROP. Wipe = delete the D1 in Cloudflare, create empty, then `init-db`.
+- Re-run `CREATE TABLE domains` (or other baseline SQL) on a live account because `d1_migrations` is empty. That is how `table 'domains' already exists` happens. `migrate-db` stamps the baseline and moves on.
+- Treat a migrate-db 500 as “wrong Cloudflare account” or “nothing was uploaded”. The Worker script is already on the account.
+
+**Do**
+
+- Add new schema only as a **new** numbered file + the same string in `server/db/migrations.ts`. Never edit an already-shipped file that live D1s have applied.
+- After `server/` changes, rebuild the Worker bundle (`pnpm run build:bundle` / `pnpm pack:worker-install`). See **AGENTS.md → Worker bundle**.
+- Confirm the new isolate with `/health` → `schemaMigrate: "reconcile-v1"`. If that field is missing, the uploaded `worker.js` is still the old migrate-db (it will 500 on `domains already exists`).
 
 ---
 
@@ -29,7 +71,9 @@ migrations_dir = "db/inbox-index/migrations" # RELAYBASE_INBOX_INDEX
 - `server/migrations/` — legacy waitlist D1; unbound and deleted.
 - `server/migrations-app/`, `server/migrations-logs/`, `server/migrations-inbox/` — moved into `server/db/*/migrations/`.
 
-Embedded migration strings for the Worker live in **`server/db/migrations.ts`**. Keep that file in sync when adding `.sql` files so `POST /console/init-db` and manual `wrangler d1 migrations apply` stay equivalent.
+Embedded migration strings for the Worker live in **`server/db/migrations.ts`**. Shared apply helper: **`server/src/lib/d1-migrations.ts`**. Keep `migrations.ts` in sync when adding `.sql` files so `init-db` / `migrate-db` and manual `wrangler d1 migrations apply` stay equivalent.
+
+**Rebuild after `server/` changes.** Desktop update uploads bundled `worker.js`, not live TypeScript. `cd server && pnpm run build:bundle` (local overlay) or `pnpm pack:worker-install` (hosted ZIP). Until that runs, `/console/migrate-db` 404s on the old script. See **AGENTS.md → Worker bundle**.
 
 ---
 
@@ -38,45 +82,17 @@ Embedded migration strings for the Worker live in **`server/db/migrations.ts`**.
 Route: `server/src/routes/console/init-db.ts`  
 Registered in `server/src/app.ts` as `/console/init-db`.
 
-**Auth:** admin Bearer (`ADMIN_TOKEN` secret or D1 recovery override). Same as `/console/connect`.
-
-**Body:**
+**Empty D1 only.** Before any CREATE/DROP/INSERT, the Worker probes `domains` / `ops_log` / `inbound_search_fts`. If any exists:
 
 ```json
-{ "clear": false }
+{ "ok": false, "error": "DB_ALREADY_INITIALIZED", "alreadyInitialized": true }
 ```
 
-| `clear` | Behavior |
-|---------|----------|
-| `false` (default) | Apply only pending migrations (tracked in each D1's `d1_migrations` table). Existing data is kept. |
-| `true` | Drop all user tables/indexes/triggers in all three D1 bindings, then re-apply every migration. |
+HTTP 409. Existing data is untouched. To apply pending schema on that database, use **`migrate-db`**. To start empty, delete the D1s in the Cloudflare dashboard (or Setup Reinstall), create new empty databases, then call `init-db` again.
 
-**Response (200):**
+Body is ignored for wipe. `{ "clear": true }` does **not** drop tables.
 
-```json
-{
-  "ok": true,
-  "alreadyInitialized": true,
-  "applied": ["0001_owner_admin_token"],
-  "skipped": ["0000_old_pandemic"],
-  "cleared": false,
-  "results": [
-    {
-      "target": "app",
-      "binding": "RELAYBASE_DB",
-      "configured": true,
-      "alreadyInitialized": true,
-      "applied": [],
-      "skipped": ["0000_old_pandemic", "0001_owner_admin_token"]
-    }
-  ]
-}
-```
-
-- **`alreadyInitialized`** — at least one probe table existed before this call (`domains`, `ops_log`, or `inbound_search_fts`).
-- If `alreadyInitialized` is true and nothing new was applied, the desktop shows **Keep existing data** vs **Clear and reinitialize** (second call with `clear: true`).
-
-Manual curl (after deploy):
+Manual curl (empty D1 after deploy):
 
 ```bash
 curl -X POST "https://<worker-url>/console/init-db" \
@@ -87,18 +103,46 @@ curl -X POST "https://<worker-url>/console/init-db" \
 
 ---
 
+## `POST /console/migrate-db`
+
+Route: `server/src/routes/console/migrate-db.ts`  
+Registered in `server/src/app.ts` as `/console/migrate-db`.
+
+Applies only migrations not yet in each D1's `d1_migrations` table (names normalized, no `.sql`). No `clear` field. If the probe table exists but the baseline file is missing from the ledger, that file is **stamped, not re-executed**. Statements that fail with `already exists` / `duplicate column` are treated as already applied. If nothing is pending, `applied` is `[]`.
+
+```bash
+curl -X POST "https://<worker-url>/console/migrate-db" \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Desktop: `desktopMigrateWorkerDb` / `migrate_worker_db_cmd`. After Worker deploy, the installer waits for `/health`, then retries migrate-db on transient 401 / 1104 / 404 (secret not on the isolate yet).
+
+---
+
 ## Desktop install flow
 
 1. **Probe** (`probe_auto_install`) — list existing Worker / R2 / D1 via Cloudflare API (OAuth install token). Uses script **list**, not GET-by-name (OAuth tokens return 403 on script download).
-2. **Confirm** — if resources exist, user picks **Skip** (reuse) or **Reinstall** (delete + recreate) per item. Default: Skip.
-3. **Create** — R2 + D1 via Cloudflare HTTP API (no migrations).
+2. **Confirm** — if resources exist, user picks **Skip** (reuse) or **Reinstall** (delete + recreate) per item. Default: Skip. Reinstall of D1 is how you wipe — not `init-db` `clear`.
+3. **Create** — R2 + D1 via Cloudflare HTTP API (no migrations). Skip reuses existing IDs.
 4. **Deploy** — PUT `worker.js` with bindings, set `ADMIN_TOKEN` / `CF_ACCOUNT_ID` secrets, enable workers.dev.
-5. **Init DB** — `POST /console/init-db` with `clear: false`.
+5. **Schema** — empty D1s (just created): `POST /console/init-db`. Reused D1s: `POST /console/migrate-db`.
 6. **Connect** — `GET /console/connect`, save credentials.
 
 Rollback deletes Worker + D1 + R2 from the account; it does not call `init-db`.
 
-OAuth install tokens expire (~1 hour). If there is no refresh token, probe/install fails with **Cloudflare authorization expired** — user must **Authorize again** on `/setup/install`.
+---
+
+## Settings → Worker update
+
+UI reuses Setup method + progress modules (`purpose: "worker-update"`):
+
+1. **Settings → Worker** — Check for updates. **Update Worker** goes to `/settings/worker/update`.
+2. **`/settings/worker/update`** — Recommended (OAuth) or Manual + CLI. After OAuth, confirm the account’s Worker URL matches the saved URL. Wrong Cloudflare account → stop, no upload.
+3. **Progress** — same URL check again, then upload Worker script only (existing R2/D1 lookup). Then **`migrate-db`**, never `init-db`. Pending Verify retries migrate-db + connect. No Keep/Clear, no R2/D1 rollback.
+
+OAuth install tokens expire (~1 hour). Authorize again on `/setup/install` or `/settings/worker/update`.
 
 See also: [cf-oauth-install-token.md](./cf-oauth-install-token.md), [storage-architecture.md](./storage-architecture.md).
 
@@ -111,13 +155,13 @@ See also: [cf-oauth-install-token.md](./cf-oauth-install-token.md), [storage-arc
 1. Change `server/db/app/schema.ts`.
 2. Run `pnpm exec drizzle-kit generate --config=drizzle.app.config.ts` → new file under `server/db/app/migrations/`.
 3. Copy the new SQL into `server/db/migrations.ts` (`MIGRATIONS` array, `target: "app"`).
-4. Deploy Worker; call `POST /console/init-db` (or `wrangler d1 migrations apply relaybase-db --remote` for manual ops).
+4. Deploy Worker; call **`POST /console/migrate-db`** on existing installs (or `init-db` only on empty D1). Do not rewrite `0000_old_pandemic` — existing D1s already have that schema.
 
 ### Logs or inbox index (hand-written SQL)
 
 1. Add `server/db/log/migrations/000X_….sql` or `server/db/inbox-index/migrations/000X_….sql`.
 2. Add the same SQL string to `server/db/migrations.ts` with `target: "logs"` or `"inbox"`.
-3. Deploy + `init-db`.
+3. Deploy + `migrate-db` (existing) or `init-db` (empty).
 
 Never mix migration files across databases in one directory — each `migrations_dir` applies to one D1 only.
 

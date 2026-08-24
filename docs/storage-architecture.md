@@ -62,7 +62,7 @@ Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 Binding: `server/wrangler.toml` → `RELAYBASE_DB` (database `relaybase-db`).  
 Env type: `server/src/env.ts`.  
 Drizzle schema + helpers: `server/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `inbound-events.ts`).  
-Migrations: `server/db/app/migrations/` — applied by the Worker via **`POST /console/init-db`** after deploy (not by the desktop). Full layout and checklist: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
+Migrations: `server/db/app/migrations/` — applied by the Worker via **`POST /console/init-db`** (empty D1 only) or **`POST /console/migrate-db`** (existing D1 / Worker update). The desktop never runs SQL. Ledger + baseline catch-up policy: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 
 This is the **sole source of truth** for product catalog state. No KV binding on the product Worker.
 

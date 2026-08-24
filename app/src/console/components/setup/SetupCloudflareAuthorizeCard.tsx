@@ -66,17 +66,19 @@ export function SetupCloudflareAuthorizeCard({
   onAuthorize,
   onCancelWait,
   authorizeLabel = "Authorize and install on Cloudflare",
+  waitingLabel = "Waiting for authorization…",
+  showCancelWait = true,
 }: {
   oauthBusy: boolean;
   oauthError: DesktopErrorHelp | null;
   onAuthorize: () => void;
   onCancelWait: () => void;
   authorizeLabel?: string;
+  waitingLabel?: string;
+  showCancelWait?: boolean;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const buttonLabel = oauthBusy
-    ? "Waiting for authorization…"
-    : authorizeLabel;
+  const buttonLabel = oauthBusy ? waitingLabel : authorizeLabel;
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
       <div className="flex flex-col items-center gap-2">
@@ -118,7 +120,7 @@ export function SetupCloudflareAuthorizeCard({
             ) : null}
             {buttonLabel}
           </Button>
-          {oauthBusy ? (
+          {oauthBusy && showCancelWait ? (
             <button
               type="button"
               className="text-xs text-muted-foreground hover:underline"

@@ -10,7 +10,9 @@ import {
   cloudflareR2DashboardUrl,
   desktopAutoInstallWorker,
   desktopCancelAutoInstall,
-  desktopInitWorkerDb,
+  desktopMigrateWorkerDb,
+  desktopPreviewWorkerUpdateTarget,
+  desktopUpdateInstalledWorker,
   desktopOpenExternal,
   desktopSaveDownloadFile,
   isDesktopRuntime,
@@ -21,6 +23,8 @@ import {
   desktopSaveWorkerConnection,
   desktopVerifyWorkerConnection,
   explainDesktopError,
+  explainWorkerUpdateTargetError,
+  isCloudflareAuthExpired,
   isInstallCancelledError,
   listenInstallLog,
   stripAnsi,
@@ -43,6 +47,7 @@ import {
 } from "@/console/components/setup/InstallWipeConfirmDialog";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
+import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 
 type WipeIntent =
   | { kind: "rollback" }
@@ -113,7 +118,11 @@ function fireInstallConfetti() {
   });
 }
 
-export function SetupProgressPanel() {
+export function SetupProgressPanel({
+  purpose = "install",
+}: {
+  purpose?: InstallFlowPurpose;
+}) {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
@@ -201,18 +210,17 @@ export function SetupProgressPanel() {
         title: "Connect Cloudflare first",
         detail:
           "Authorize Relaybase with Cloudflare before installing. There is no token to paste.",
-        fix: "Go back and click Authorize and install on Cloudflare.",
+        fix:
+          purpose === "worker-update"
+            ? "Go back and Authorize with Cloudflare on this Worker update page."
+            : "Go back and click Authorize and install on Cloudflare.",
       });
       return false;
     }
     try {
       await desktopRefreshInstallToken();
     } catch (err) {
-      const raw = String(err ?? "");
-      if (
-        raw.toLowerCase().includes("cloudflare_auth_expired") ||
-        raw.toLowerCase().includes("invalid access token")
-      ) {
+      if (isCloudflareAuthExpired(err)) {
         throw err;
       }
     }
@@ -232,6 +240,7 @@ export function SetupProgressPanel() {
   }, [copiedToken]);
 
   useEffect(() => {
+    if (purpose === "worker-update") return;
     if (autoDone && !mailApiDone && !emailDialogShownRef.current) {
       emailDialogShownRef.current = true;
       openMailApiDialog(autoDone);
@@ -247,7 +256,11 @@ export function SetupProgressPanel() {
   useEffect(() => {
     if (!credentials) return;
     if (!cfOAuthConnected) {
-      router.replace("/setup/install");
+      router.replace(
+        purpose === "worker-update"
+          ? "/settings/worker/update"
+          : "/setup/install",
+      );
       return;
     }
     if (installStartedRef.current) return;
@@ -284,6 +297,11 @@ export function SetupProgressPanel() {
     setConfirmedReinstallKeys(new Set());
     try {
       if (!(await ensureOauthSession())) {
+        return;
+      }
+      if (purpose === "worker-update") {
+        setProbing(false);
+        await runWorkerUpdate();
         return;
       }
       const probe = await desktopProbeInstall(cfOAuthAccountId || undefined);
@@ -330,17 +348,13 @@ export function SetupProgressPanel() {
     await refresh();
     setPendingVerify(null);
     setVerifyError(null);
-    if (result.dbAlreadyInitialized) {
-      setDbAlreadyInit({
-        workerUrl: connect.workerUrl,
-        adminToken: result.adminToken,
-      });
-    } else {
-      setAutoDone({
-        workerUrl: connect.workerUrl,
-        adminToken: result.adminToken,
-      });
-      setMessage(`Connected to ${connect.workerUrl}`);
+    setAutoDone({
+      workerUrl: connect.workerUrl,
+      adminToken: result.adminToken,
+    });
+    setMessage(`Connected to ${connect.workerUrl}`);
+    if (purpose === "worker-update") {
+      router.replace("/settings/worker");
     }
   }
 
@@ -349,10 +363,9 @@ export function SetupProgressPanel() {
     setVerifying(true);
     setVerifyError(null);
     try {
-      await desktopInitWorkerDb(
+      await desktopMigrateWorkerDb(
         pendingVerify.workerUrl,
         pendingVerify.adminToken,
-        false,
       );
       const connect = await desktopVerifyWorkerConnection(
         pendingVerify.workerUrl,
@@ -449,6 +462,75 @@ export function SetupProgressPanel() {
       } else {
         setError(
           explainDesktopError(err, "Auto-install failed", {
+            accountId: cfOAuthAccountId,
+          }),
+        );
+      }
+    } finally {
+      if (unlisten) unlisten();
+      busyRef.current = false;
+      setBusy(false);
+      setStopping(false);
+    }
+  }
+
+  async function runWorkerUpdate() {
+    busyRef.current = true;
+    setBusy(true);
+    setStopping(false);
+    setStopped(false);
+    setError(null);
+    setMessage(null);
+    setLogs([]);
+    setAutoDone(null);
+    setPendingVerify(null);
+    setVerifyError(null);
+    if (!(await ensureOauthSession())) {
+      busyRef.current = false;
+      setBusy(false);
+      return;
+    }
+    let unlisten: (() => void) | null = null;
+    try {
+      const target = await desktopPreviewWorkerUpdateTarget();
+      if (!target.matches) {
+        setError(
+          explainWorkerUpdateTargetError(
+            `WORKER_URL_ACCOUNT_MISMATCH: This Cloudflare login is a different account than your saved Worker.\nSaved Worker: ${target.expectedWorkerUrl}\nThis login would update: ${target.oauthWorkerUrl}`,
+          ),
+        );
+        busyRef.current = false;
+        setBusy(false);
+        return;
+      }
+      unlisten = await listenInstallLog((event) => {
+        setLogs((prev) => [...prev, event]);
+      });
+      const result = await desktopUpdateInstalledWorker(
+        credentials?.serverToken?.trim() || undefined,
+      );
+      try {
+        const connect = await desktopVerifyWorkerConnection(
+          result.workerUrl,
+          result.adminToken,
+        );
+        await finishInstall(result, connect);
+      } catch {
+        setPendingVerify({
+          workerUrl: result.workerUrl,
+          adminToken: result.adminToken,
+          workerVersion: result.workerVersion,
+          dbAlreadyInitialized: result.dbAlreadyInitialized,
+        });
+        setError(null);
+      }
+    } catch (err) {
+      if (isInstallCancelledError(err)) {
+        setStopped(true);
+        setError(null);
+      } else {
+        setError(
+          explainDesktopError(err, "Worker update failed", {
             accountId: cfOAuthAccountId,
           }),
         );
@@ -688,21 +770,13 @@ export function SetupProgressPanel() {
   ) {
     if (!dbAlreadyInit || clearingDb) return;
     if (clear) {
-      setClearingDb(true);
-      try {
-        await desktopInitWorkerDb(
-          dbAlreadyInit.workerUrl,
-          dbAlreadyInit.adminToken,
-          true,
-          wipeConfirmation,
-          cfOAuthAccountId || undefined,
-        );
-      } catch (err) {
-        setError(explainDesktopError(err, "Could not clear database"));
-        setClearingDb(false);
-        return;
-      }
-      setClearingDb(false);
+      setError({
+        title: "Cannot wipe via init-db",
+        detail:
+          "init-db refuses existing data. SQL DROP is no longer available.",
+        fix: "Mark D1 as Reinstall on the existing-resources step, or delete the databases in Cloudflare and create empty ones.",
+      });
+      return;
     }
     setAutoDone({
       workerUrl: dbAlreadyInit.workerUrl,
@@ -720,6 +794,12 @@ export function SetupProgressPanel() {
     <SetupScrollPage>
       <div className="flex justify-end">
         <SetupBackLink
+          href={purpose === "worker-update" ? "/settings/worker" : "/setup"}
+          label={
+            purpose === "worker-update"
+              ? "Back to Worker settings"
+              : "Back to start"
+          }
           onClick={async () => {
             if (busyRef.current) {
               await desktopCancelAutoInstall();
@@ -738,7 +818,9 @@ export function SetupProgressPanel() {
               ? "Existing resources"
               : probing
                 ? "Checking"
-                : "Installing"}
+                : purpose === "worker-update"
+                  ? "Updating Worker"
+                  : "Installing"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {autoDone
@@ -749,7 +831,9 @@ export function SetupProgressPanel() {
               ? "Some Relaybase resources already exist in this Cloudflare account. Choose Skip or Reinstall for each, then continue."
               : probing
                 ? "Looking for an existing Worker, R2 bucket, and D1 databases before creating anything."
-                : "Creating resources and deploying the Worker in your Cloudflare account."}
+                : purpose === "worker-update"
+                  ? "Uploading the Worker script, then applying pending migrations. R2 and D1 are not recreated."
+                  : "Creating resources and deploying the Worker in your Cloudflare account."}
           </p>
         </div>
 
@@ -1208,11 +1292,18 @@ export function SetupProgressPanel() {
         !rollingBack &&
         !rolledBack &&
         existing.length === 0 ? (
-          error.title.toLowerCase().includes("authorization expired") ? (
+          error.title.toLowerCase().includes("authorization expired") ||
+          error.title.toLowerCase().includes("wrong cloudflare account") ? (
             <Button
               type="button"
               className="w-full"
-              onClick={() => router.push("/setup/install")}
+              onClick={() =>
+                router.push(
+                  purpose === "worker-update"
+                    ? "/settings/worker/update"
+                    : "/setup/install",
+                )
+              }
             >
               Authorize again
             </Button>
@@ -1254,7 +1345,8 @@ export function SetupProgressPanel() {
           )
         ) : null}
 
-        {!busy &&
+        {purpose === "install" &&
+        !busy &&
         !stopping &&
         !rollingBack &&
         !rolledBack &&

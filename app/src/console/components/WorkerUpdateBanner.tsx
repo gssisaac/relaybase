@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   desktopCheckWorkerUpdate,
-  desktopUpdateInstalledWorker,
   isDesktopRuntime,
   type WorkerUpdateCheck,
 } from "@/lib/desktop/bridge";
@@ -84,7 +83,7 @@ export function WorkerUpdateBanner() {
             size="sm"
             variant="outline"
             nativeButton={false}
-            render={<Link href="/settings/worker" />}
+            render={<Link href="/settings/worker/update" />}
             className="h-7 w-full text-[11px]"
           >
             Update now
@@ -96,10 +95,9 @@ export function WorkerUpdateBanner() {
 }
 
 export function WorkerVersionSettingsCard() {
-  const { credentials, refresh } = useDesktop();
+  const { credentials } = useDesktop();
   const [check, setCheck] = useState<WorkerUpdateCheck | null>(null);
   const [checking, setChecking] = useState(false);
-  const [updating, setUpdating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,24 +117,6 @@ export function WorkerVersionSettingsCard() {
       setError(err instanceof Error ? err.message : "Could not check for updates");
     } finally {
       setChecking(false);
-    }
-  }
-
-  async function handleUpdate() {
-    setUpdating(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const result = await desktopUpdateInstalledWorker(
-        credentials?.serverToken?.trim() || undefined,
-      );
-      setMessage(`Worker updated to v${result.workerVersion || check?.latestVersion || "latest"}.`);
-      setCheck(null);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Worker update failed");
-    } finally {
-      setUpdating(false);
     }
   }
 
@@ -176,23 +156,21 @@ export function WorkerVersionSettingsCard() {
           type="button"
           size="sm"
           variant="outline"
-          disabled={checking || updating}
+          disabled={checking}
           onClick={() => void handleCheck()}
         >
           {checking ? <Loader2 className="size-3.5 animate-spin" /> : null}
           Check for updates
         </Button>
-        {check?.updateAvailable ? (
-          <Button
-            type="button"
-            size="sm"
-            disabled={updating || checking}
-            onClick={() => void handleUpdate()}
-          >
-            {updating ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Update Worker to v{check.latestVersion}
-          </Button>
-        ) : null}
+        <Button
+          size="sm"
+          nativeButton={false}
+          render={<Link href="/settings/worker/update" />}
+        >
+          {check?.updateAvailable
+            ? `Update Worker to v${check.latestVersion}`
+            : "Update Worker"}
+        </Button>
       </div>
     </div>
   );

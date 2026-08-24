@@ -23,7 +23,7 @@ counts, Sent pagination, list virtualization, or D1 `RELAYBASE_INBOX_INDEX`.
 | List header + virtualization | `app/src/email/components/mailbox/MailListView/MailListPane.tsx` (`react-window` `List`, header counts) |
 | Disk cache | `app/src/email/lib/disk/email-disk-store.ts` (`PersistedInboxCache`, `PersistedSentCache`) |
 
-Migration layout and `POST /console/init-db`: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
+Migration layout, `POST /console/init-db`, and `POST /console/migrate-db`: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 
 Read this before adding a search field, changing the FTS5 schema, changing
 how list totals/unread are computed, or touching the virtualized row

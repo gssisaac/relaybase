@@ -5,10 +5,10 @@
 //!   0. `probe_install_resources` lists Worker / R2 / D1 and their occupancy.
 //!   1. Fetch worker-install-manifest.json and download the versioned ZIP.
 //!   2. Ensure R2 bucket `relaybase-mailbox`.
-//!   3. Create D1 databases (schema via POST /console/init-db after deploy).
+//!   3. Create D1 databases (empty D1s only — schema via POST /console/init-db).
 //!   4. Generate an admin token; PUT Worker secrets.
 //!   5. PUT `worker.js` with bindings; enable workers.dev.
-//!   6. POST /console/init-db; read version from GET /console/connect.
+//!   6. Empty D1s: POST /console/init-db. Reused or Worker-update: POST /console/migrate-db.
 //!
 //! Auth is the in-memory CF OAuth access token (or a legacy disk install
 //! token). It is never sent to the Relaybase console or product Worker.
@@ -25,17 +25,19 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::Notify;
 
 use crate::cloudflare::{
-    assert_r2_subscription, count_d1_user_rows, count_r2_objects, create_d1_database,
-    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket,
-    enable_workers_dev, ensure_r2_bucket, find_r2_bucket, list_d1_databases, list_worker_bindings,
-    put_worker_schedules, put_worker_secret, resolve_account_id, upload_worker_script,
-    worker_script_exists, CfClient, DEFAULT_WORKER_CRON,
+    account_workers_dev_url, assert_r2_subscription, count_d1_user_rows, count_r2_objects,
+    create_d1_database, delete_d1_database, delete_r2_bucket, delete_worker_script,
+    empty_r2_bucket, enable_workers_dev, ensure_r2_bucket, find_r2_bucket, list_d1_databases,
+    list_worker_bindings, put_worker_schedules, put_worker_secret, resolve_account_id,
+    upload_worker_script, worker_script_exists, CfClient, DEFAULT_WORKER_CRON,
 };
-use crate::secrets::StoredCredentials;
+use crate::secrets::{load_credentials, StoredCredentials};
 use crate::worker::DEFAULT_SCRIPT;
 
 /// Returned to the UI when the user stops install. Keep this token stable.
 pub const INSTALL_CANCELLED: &str = "INSTALL_CANCELLED";
+/// OAuth account's workers.dev URL does not match the saved Worker.
+pub const WORKER_URL_ACCOUNT_MISMATCH: &str = "WORKER_URL_ACCOUNT_MISMATCH";
 
 static INSTALL_CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
 static INSTALL_CANCEL_NOTIFY: OnceLock<Notify> = OnceLock::new();
@@ -119,6 +121,130 @@ pub struct AutoInstallResult {
     pub db_already_initialized: bool,
     pub db_applied: Vec<String>,
     pub worker_version: String,
+}
+
+/// Compare the saved Worker URL with the workers.dev URL of the OAuth account.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkerUpdateTarget {
+    pub expected_worker_url: String,
+    pub oauth_account_id: String,
+    pub oauth_worker_url: String,
+    pub connected_account_id: String,
+    pub matches: bool,
+}
+
+pub fn worker_url_host(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_end_matches('/').to_lowercase();
+    let rest = trimmed
+        .strip_prefix("https://")
+        .or_else(|| trimmed.strip_prefix("http://"))?;
+    let host = rest.split('/').next()?.trim();
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_string())
+    }
+}
+
+pub fn worker_urls_match(expected: &str, oauth: &str) -> bool {
+    match (worker_url_host(expected), worker_url_host(oauth)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
+fn is_workers_dev_url(raw: &str) -> bool {
+    worker_url_host(raw)
+        .map(|h| h.ends_with(".workers.dev"))
+        .unwrap_or(false)
+}
+
+fn mismatch_error(expected: &str, oauth: &str) -> String {
+    format!(
+        "{WORKER_URL_ACCOUNT_MISMATCH}: This Cloudflare login is a different account than your saved Worker.\n\
+         Saved Worker: {expected}\n\
+         This login would update: {oauth}\n\
+         Authorize again and choose the Cloudflare account that owns your Worker. No script was uploaded."
+    )
+}
+
+async fn peek_worker_account_id(worker_url: &str, admin_token: &str) -> Option<String> {
+    let base = worker_url.trim().trim_end_matches('/');
+    let token = admin_token.trim();
+    if base.is_empty() || token.is_empty() {
+        return None;
+    }
+    let http = reqwest::Client::new();
+    let res = http
+        .get(format!("{base}/console/connect"))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .ok()?;
+    if !res.status().is_success() {
+        return None;
+    }
+    let value: serde_json::Value = res.json().await.ok()?;
+    value
+        .get("accountId")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+}
+
+/// Resolve the OAuth account's workers.dev URL and compare it to the saved Worker.
+/// Custom-domain installs match when `/console/connect` reports the same account id.
+pub async fn preview_worker_update_target(
+    api_token: &str,
+    account_id: &str,
+    expected_worker_url: &str,
+    script_name: &str,
+    admin_token: &str,
+) -> Result<WorkerUpdateTarget, String> {
+    let expected = expected_worker_url.trim().trim_end_matches('/').to_string();
+    if expected.is_empty() {
+        return Err("No Worker URL saved. Complete install first.".into());
+    }
+    if account_id.trim().is_empty() {
+        return Err("Authorize with Cloudflare first.".into());
+    }
+    let script = if script_name.trim().is_empty() {
+        DEFAULT_SCRIPT
+    } else {
+        script_name.trim()
+    };
+    let client = CfClient {
+        account_id: account_id.trim().to_string(),
+        api_token: api_token.trim().to_string(),
+    };
+    let oauth_worker_url = account_workers_dev_url(&client, script).await?;
+    let connected_account_id = peek_worker_account_id(&expected, admin_token)
+        .await
+        .unwrap_or_default();
+    let url_match = worker_urls_match(&expected, &oauth_worker_url);
+    let account_match = !connected_account_id.is_empty()
+        && connected_account_id.eq_ignore_ascii_case(account_id.trim());
+    let matches = url_match || (!is_workers_dev_url(&expected) && account_match);
+    Ok(WorkerUpdateTarget {
+        expected_worker_url: expected,
+        oauth_account_id: account_id.trim().to_string(),
+        oauth_worker_url,
+        connected_account_id,
+        matches,
+    })
+}
+
+pub fn assert_worker_update_target_matches(target: &WorkerUpdateTarget) -> Result<(), String> {
+    if target.matches {
+        Ok(())
+    } else {
+        Err(mismatch_error(
+            &target.expected_worker_url,
+            &target.oauth_worker_url,
+        ))
+    }
 }
 
 /// Typed confirmation required before wiping occupied R2 / D1.
@@ -371,10 +497,10 @@ fn unzip_bytes(zip_bytes: &[u8], dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Current Worker `/health` exposes `d1Bound`. Older packaged JS does not.
+/// Current Worker `/health` exposes `d1Bound` and `schemaMigrate: reconcile-v1`.
 /// `+local` on WORKER_VERSION only means a file was copied — not that it is current.
 fn worker_js_is_current(source: &str) -> bool {
-    source.contains("d1Bound")
+    source.contains("d1Bound") && source.contains("reconcile-v1")
 }
 
 fn server_dir() -> PathBuf {
@@ -383,8 +509,8 @@ fn server_dir() -> PathBuf {
 
 fn overlay_candidate_paths(server: &Path) -> [PathBuf; 3] {
     [
-        server.join("dist/relaybase-worker-install/worker.js"),
         server.join("dist/worker-build/index.js"),
+        server.join("dist/relaybase-worker-install/worker.js"),
         server.join("customer-install/worker.js"),
     ]
 }
@@ -740,12 +866,18 @@ async fn log_worker_health_shape(app: &AppHandle, worker_url: &str) {
                 .and_then(|v| v.as_str())
                 .unwrap_or("?");
             let d1_bound = health.get("d1Bound");
+            let schema_migrate = health
+                .get("schemaMigrate")
+                .and_then(|v| v.as_str())
+                .unwrap_or("missing");
             match d1_bound {
                 Some(bound) => emit_log(
                     app,
                     "warmup",
                     "info",
-                    format!("Worker /health version={version} d1Bound={bound}"),
+                    format!(
+                        "Worker /health version={version} schemaMigrate={schema_migrate} d1Bound={bound}"
+                    ),
                 ),
                 None => {
                     let reason = if version.contains("+local") {
@@ -1115,6 +1247,8 @@ struct InstallRunOptions {
     existing_admin_token: Option<String>,
     /// When true, skip ADMIN_TOKEN secret put (update keeps existing secret).
     skip_admin_secret: bool,
+    /// Worker script only — look up existing R2/D1, never create or wipe.
+    worker_only: bool,
 }
 
 pub async fn auto_install_worker(
@@ -1218,6 +1352,23 @@ pub async fn update_installed_worker(
         None => resolve_account_id(&api_token).await?,
     };
 
+    let saved = load_credentials()?.unwrap_or_default();
+    let expected_url = saved.worker_url.clone();
+    let script = if saved.worker_script_name.trim().is_empty() {
+        DEFAULT_SCRIPT
+    } else {
+        saved.worker_script_name.trim()
+    };
+    let target = preview_worker_update_target(
+        &api_token,
+        &account_id,
+        &expected_url,
+        script,
+        &admin,
+    )
+    .await?;
+    assert_worker_update_target_matches(&target)?;
+
     let manifest = fetch_install_manifest().await?;
     let work_dir = stage_install_package(&app, &manifest).await?;
     if install_is_cancelled() {
@@ -1228,6 +1379,7 @@ pub async fn update_installed_worker(
     let mut run_opts = InstallRunOptions::default();
     run_opts.existing_admin_token = Some(admin.clone());
     run_opts.skip_admin_secret = true;
+    run_opts.worker_only = true;
 
     let result = auto_install_steps(
         &app,
@@ -1272,63 +1424,135 @@ async fn auto_install_steps(
         api_token: api_token.to_string(),
     };
 
-    // R2 must be on this account before we delete or create anything.
-    // Cloudflare sometimes drops the unused $0 subscription after a few days.
-    emit_log(
-        app,
-        "r2",
-        "info",
-        "Checking that R2 is enabled on this Cloudflare account…",
-    );
-    assert_r2_subscription(&client).await?;
+    let existing_d1 = list_d1_databases(&client).await.unwrap_or_default();
+    let mut any_d1_reused = false;
 
-    if plan.reinstall_worker {
+    if run_opts.worker_only {
+        let saved = load_credentials()?.unwrap_or_default();
+        let script = if saved.worker_script_name.trim().is_empty() {
+            DEFAULT_SCRIPT
+        } else {
+            saved.worker_script_name.trim()
+        };
+        let target = preview_worker_update_target(
+            api_token,
+            account_id,
+            &saved.worker_url,
+            script,
+            run_opts
+                .existing_admin_token
+                .as_deref()
+                .unwrap_or(saved.admin_token.as_str()),
+        )
+        .await?;
         emit_log(
             app,
             "prepare",
             "info",
-            format!("Reinstall — deleting Worker `{DEFAULT_SCRIPT}`…"),
+            format!("Saved Worker: {}", target.expected_worker_url),
         );
-        delete_worker_script(&client, DEFAULT_SCRIPT).await?;
-    }
-
-    if plan.reinstall_r2 {
-        let occ = count_r2_objects(&client, R2_BUCKET).await;
-        if occ.occupied {
-            assert_wipe_phrase(wipe_confirmation, &[R2_BUCKET])?;
+        emit_log(
+            app,
+            "prepare",
+            "info",
+            format!(
+                "This Cloudflare account Worker: {}",
+                target.oauth_worker_url
+            ),
+        );
+        assert_worker_update_target_matches(&target)?;
+        emit_log(
+            app,
+            "prepare",
+            "info",
+            "Worker-only update — looking up existing R2 and D1 (no create or wipe).",
+        );
+        if !find_r2_bucket(&client, R2_BUCKET).await? {
+            return Err(format!(
+                "R2 bucket {R2_BUCKET} is missing. Complete Setup install first."
+            ));
         }
         emit_log(
             app,
             "r2",
             "info",
-            format!("Reinstall — emptying and deleting R2 {R2_BUCKET}…"),
+            format!("R2 bucket {R2_BUCKET} found — reusing"),
         );
-        let _ = empty_r2_bucket(&client, R2_BUCKET).await;
-        delete_r2_bucket(&client, R2_BUCKET).await?;
+    } else {
+        // R2 must be on this account before we delete or create anything.
+        // Cloudflare sometimes drops the unused $0 subscription after a few days.
+        emit_log(
+            app,
+            "r2",
+            "info",
+            "Checking that R2 is enabled on this Cloudflare account…",
+        );
+        assert_r2_subscription(&client).await?;
+
+        if plan.reinstall_worker {
+            emit_log(
+                app,
+                "prepare",
+                "info",
+                format!("Reinstall — deleting Worker `{DEFAULT_SCRIPT}`…"),
+            );
+            delete_worker_script(&client, DEFAULT_SCRIPT).await?;
+        }
+
+        if plan.reinstall_r2 {
+            let occ = count_r2_objects(&client, R2_BUCKET).await;
+            if occ.occupied {
+                assert_wipe_phrase(wipe_confirmation, &[R2_BUCKET])?;
+            }
+            emit_log(
+                app,
+                "r2",
+                "info",
+                format!("Reinstall — emptying and deleting R2 {R2_BUCKET}…"),
+            );
+            let _ = empty_r2_bucket(&client, R2_BUCKET).await;
+            delete_r2_bucket(&client, R2_BUCKET).await?;
+        }
+
+        emit_log(
+            app,
+            "r2",
+            "info",
+            format!("Ensuring R2 bucket {R2_BUCKET}…"),
+        );
+        ensure_r2_bucket(&client, R2_BUCKET).await?;
+        emit_log(
+            app,
+            "r2",
+            "info",
+            format!("R2 bucket {R2_BUCKET} ready"),
+        );
     }
-
-    // 1) R2 bucket (reuse if it already exists unless we just deleted it).
-    emit_log(
-        app,
-        "r2",
-        "info",
-        format!("Ensuring R2 bucket {R2_BUCKET}…"),
-    );
-    ensure_r2_bucket(&client, R2_BUCKET).await?;
     check_cancelled()?;
-    emit_log(
-        app,
-        "r2",
-        "info",
-        format!("R2 bucket {R2_BUCKET} ready"),
-    );
 
-    // 2) D1 databases — create (or reuse). Migrations are NOT applied here —
-    //    the Worker owns its schema via POST /console/init-db after deploy.
-    let existing_d1 = list_d1_databases(&client).await.unwrap_or_default();
+    // D1: worker-only looks up; install creates or reuses. Schema is applied
+    // after deploy via init-db (empty) or migrate-db (existing).
     let mut d1_ids: Vec<String> = Vec::with_capacity(D1_DATABASES.len());
     for (_binding, db_name) in D1_DATABASES {
-        let db_id = if plan.should_reinstall_d1(db_name) {
+        let db_id = if run_opts.worker_only {
+            match existing_d1.iter().find(|(n, _)| n == db_name) {
+                Some((_, id)) => {
+                    any_d1_reused = true;
+                    emit_log(
+                        app,
+                        "d1",
+                        "info",
+                        format!("D1 {db_name} found — reusing (id {id})"),
+                    );
+                    id.clone()
+                }
+                None => {
+                    return Err(format!(
+                        "D1 {db_name} is missing. Complete Setup install first."
+                    ));
+                }
+            }
+        } else if plan.should_reinstall_d1(db_name) {
             if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
                 let occ = count_d1_user_rows(&client, id).await;
                 if occ.occupied {
@@ -1345,6 +1569,7 @@ async fn auto_install_steps(
             emit_log(app, "d1", "info", format!("Creating D1 {db_name}…"));
             create_d1_database(&client, db_name).await?
         } else if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
+            any_d1_reused = true;
             emit_log(
                 app,
                 "d1",
@@ -1361,7 +1586,7 @@ async fn auto_install_steps(
             app,
             "d1",
             "info",
-            format!("D1 {db_name} ready (id {db_id}) — schema will be initialized by the Worker"),
+            format!("D1 {db_name} ready (id {db_id}) — schema via Worker init-db or migrate-db"),
         );
         if db_id.trim().is_empty() {
             return Err(format!(
@@ -1502,29 +1727,42 @@ async fn auto_install_steps(
     wait_for_worker_ready(app, &worker_url).await?;
     log_worker_health_shape(app, &worker_url).await;
 
-    // 5) Initialize D1 schema via the Worker's own endpoint.
-    //    The desktop never applies SQL — the Worker owns its schema.
-    let init = init_worker_db_with_retry(app, &worker_url, &admin_token, false).await;
+    // Schema: empty D1s use init-db. Reused D1s and worker-only updates use
+    // migrate-db (pending only — never wipe).
+    let use_migrate = run_opts.worker_only || any_d1_reused;
+    let init = if use_migrate {
+        migrate_worker_db_with_retry(app, &worker_url, &admin_token).await
+    } else {
+        init_worker_db_with_retry(app, &worker_url, &admin_token).await
+    };
+    let step = if use_migrate { "migrate-db" } else { "init-db" };
     let (db_already_initialized, db_applied) = match init {
         Ok(r) => {
             emit_log(
                 app,
-                "init-db",
+                step,
                 "info",
-                if r.already_initialized {
-                    "D1 already initialized — existing data kept".to_string()
+                if use_migrate {
+                    if r.applied.is_empty() {
+                        "D1 schema up to date — existing data kept".to_string()
+                    } else {
+                        format!(
+                            "D1 pending migrations applied ({})",
+                            r.applied.len()
+                        )
+                    }
                 } else {
                     format!("D1 schema initialized ({} migrations applied)", r.applied.len())
                 },
             );
-            (r.already_initialized, r.applied)
+            (use_migrate || r.already_initialized, r.applied)
         }
         Err(e) => {
             emit_log(
                 app,
-                "init-db",
+                step,
                 "stderr",
-                format!("Worker init-db call failed: {e}"),
+                format!("Worker {step} call failed: {e}"),
             );
             return Err(explain_init_db_failure(&e));
         }
@@ -1550,36 +1788,44 @@ async fn auto_install_steps(
     })
 }
 
-/// Result from the Worker's POST /console/init-db endpoint.
+/// Result from the Worker's POST /console/init-db or /console/migrate-db.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitDbResult {
     pub ok: bool,
+    #[serde(default)]
     pub already_initialized: bool,
     pub applied: Vec<String>,
+    #[serde(default)]
     pub skipped: Vec<String>,
+    #[serde(default)]
     pub cleared: bool,
+}
+
+fn is_transient_schema_error(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("1042")
+        || lower.contains("404")
+        || lower.contains("1101")
+        || lower.contains("1104")
+        || lower.contains("not found")
+        || lower.contains("401")
+        || lower.contains("unauthorized")
 }
 
 async fn init_worker_db_with_retry(
     app: &AppHandle,
     worker_url: &str,
     admin_token: &str,
-    clear: bool,
 ) -> Result<InitDbResult, String> {
     const ATTEMPTS: u32 = 4;
     let mut last = String::new();
     for attempt in 1..=ATTEMPTS {
-        match init_worker_db(worker_url, admin_token, clear).await {
+        match init_worker_db(worker_url, admin_token).await {
             Ok(r) => return Ok(r),
             Err(e) => {
                 last = e;
-                let transient = last.contains("1042")
-                    || last.contains("404")
-                    || last.contains("1101")
-                    || last.contains("1104")
-                    || last.to_lowercase().contains("not found");
-                if attempt == ATTEMPTS || !transient {
+                if attempt == ATTEMPTS || !is_transient_schema_error(&last) {
                     break;
                 }
                 emit_log(
@@ -1587,6 +1833,34 @@ async fn init_worker_db_with_retry(
                     "init-db",
                     "info",
                     format!("init-db not ready yet (attempt {attempt}/{ATTEMPTS}) — retrying…"),
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        }
+    }
+    Err(last)
+}
+
+async fn migrate_worker_db_with_retry(
+    app: &AppHandle,
+    worker_url: &str,
+    admin_token: &str,
+) -> Result<InitDbResult, String> {
+    const ATTEMPTS: u32 = 4;
+    let mut last = String::new();
+    for attempt in 1..=ATTEMPTS {
+        match migrate_worker_db(worker_url, admin_token).await {
+            Ok(r) => return Ok(r),
+            Err(e) => {
+                last = e;
+                if attempt == ATTEMPTS || !is_transient_schema_error(&last) {
+                    break;
+                }
+                emit_log(
+                    app,
+                    "migrate-db",
+                    "info",
+                    format!("migrate-db not ready yet (attempt {attempt}/{ATTEMPTS}) — retrying…"),
                 );
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             }
@@ -1611,36 +1885,50 @@ pub async fn assert_clear_db_allowed(
     assert_occupied_wipe_allowed(&occupied, wipe_confirmation)
 }
 
-/// Call the Worker's POST /console/init-db endpoint to initialize D1 schema.
-/// The Worker owns its own migrations — the desktop never runs SQL.
-pub async fn init_worker_db(
+async fn post_schema_endpoint(
     worker_url: &str,
     admin_token: &str,
-    clear: bool,
+    path: &str,
+    step: &str,
 ) -> Result<InitDbResult, String> {
     let base = worker_url.trim().trim_end_matches('/');
     if base.is_empty() {
         return Err("Worker URL is empty".into());
     }
-    let url = format!("{base}/console/init-db");
-    let body = serde_json::json!({ "clear": clear });
+    let url = format!("{base}{path}");
     let client = reqwest::Client::new();
     let res = client
         .post(&url)
         .header("Authorization", format!("Bearer {admin_token}"))
         .header("Content-Type", "application/json")
-        .json(&body)
+        .json(&serde_json::json!({}))
         .send()
         .await
-        .map_err(|e| format!("init-db request failed: {e}"))?;
+        .map_err(|e| format!("{step} request failed: {e}"))?;
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        return Err(format_worker_http_error("init-db", status, &text));
+        return Err(format_worker_http_error(step, status, &text));
     }
     res.json::<InitDbResult>()
         .await
-        .map_err(|e| format!("init-db response parse failed: {e}"))
+        .map_err(|e| format!("{step} response parse failed: {e}"))
+}
+
+/// Empty D1 only. Fails with 409 if product tables already exist.
+pub async fn init_worker_db(
+    worker_url: &str,
+    admin_token: &str,
+) -> Result<InitDbResult, String> {
+    post_schema_endpoint(worker_url, admin_token, "/console/init-db", "init-db").await
+}
+
+/// Pending migrations only. Never drops tables.
+pub async fn migrate_worker_db(
+    worker_url: &str,
+    admin_token: &str,
+) -> Result<InitDbResult, String> {
+    post_schema_endpoint(worker_url, admin_token, "/console/migrate-db", "migrate-db").await
 }
 
 /// Merge an auto-install result into stored credentials (preserves
@@ -1789,12 +2077,48 @@ mod wipe_phrase_tests {
 }
 
 #[cfg(test)]
+mod worker_url_match_tests {
+    use super::{worker_url_host, worker_urls_match};
+
+    #[test]
+    fn hosts_match_ignore_scheme_slash_case() {
+        assert!(worker_urls_match(
+            "https://relaybase-api.sf-parkinglot.workers.dev/",
+            "HTTPS://relaybase-api.sf-parkinglot.workers.dev"
+        ));
+        assert_eq!(
+            worker_url_host("https://relaybase-api.sf-parkinglot.workers.dev/foo"),
+            Some("relaybase-api.sf-parkinglot.workers.dev".into())
+        );
+    }
+
+    #[test]
+    fn different_subdomain_does_not_match() {
+        assert!(!worker_urls_match(
+            "https://relaybase-api.sf-parkinglot.workers.dev",
+            "https://relaybase-api.other-account.workers.dev"
+        ));
+    }
+
+    #[test]
+    fn custom_domain_does_not_match_workers_dev() {
+        assert!(!worker_urls_match(
+            "https://mail.example.com",
+            "https://relaybase-api.sf-parkinglot.workers.dev"
+        ));
+    }
+}
+
+#[cfg(test)]
 mod worker_error_tests {
     use super::{extract_cf_error_code, format_worker_http_error, worker_js_is_current};
 
     #[test]
     fn current_js_has_d1_bound() {
-        assert!(worker_js_is_current(r#"return { d1Bound: { app: true } }"#));
+        assert!(worker_js_is_current(
+            r#"return { d1Bound: { app: true }, schemaMigrate: "reconcile-v1" }"#
+        ));
+        assert!(!worker_js_is_current(r#"return { d1Bound: { app: true } }"#));
         assert!(!worker_js_is_current(r#"export default { fetch() {} }"#));
     }
 

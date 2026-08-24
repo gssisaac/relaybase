@@ -18,15 +18,18 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CF_OAUTH_AUTHORIZE_WAIT_MS,
   desktopOpenExternal,
+  desktopPreviewWorkerUpdateTarget,
   desktopRegisterWorkerWithConsole,
   desktopSaveWorkerConnection,
   desktopStartCfOAuth,
   desktopVerifyWorkerConnection,
   explainCfOAuthError,
   explainDesktopError,
+  explainWorkerUpdateTargetError,
   listenCfOAuthResult,
   oauthAuthorizationIncompleteHelp,
   type DesktopErrorHelp,
+  type WorkerUpdateTarget,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
@@ -35,6 +38,8 @@ import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enab
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 import { WhatWeInstall } from "@/console/components/setup/SetupWizardParts";
+import { WorkerUpdateTargetDialog } from "@/console/components/setup/WorkerUpdateTargetDialog";
+import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 
 const DRAFT_KEY = "relaybase.setup.install.draft";
 
@@ -83,7 +88,11 @@ function generateAdminToken(): string {
   return `rb_admin_${hex}`;
 }
 
-export function WorkerInstallPanel() {
+export function WorkerInstallPanel({
+  purpose = "install",
+}: {
+  purpose?: InstallFlowPurpose;
+}) {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
@@ -102,6 +111,11 @@ export function WorkerInstallPanel() {
     token: string;
     scriptName?: string;
   } | null>(null);
+  const [targetPreview, setTargetPreview] = useState<WorkerUpdateTarget | null>(
+    null,
+  );
+  const [targetConfirmOpen, setTargetConfirmOpen] = useState(false);
+  const [targetChecking, setTargetChecking] = useState(false);
   const finishingRef = useRef(false);
   const modeRef = useRef(mode);
   const oauthWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,7 +165,7 @@ export function WorkerInstallPanel() {
   }, [hydrated, adminToken, workerUrl]);
 
   useEffect(() => {
-    if (mode === "manual" && !adminToken.trim()) {
+    if (purpose === "install" && mode === "manual" && !adminToken.trim()) {
       setAdminToken(generateAdminToken());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,10 +187,39 @@ export function WorkerInstallPanel() {
         if (!active) return;
         void (async () => {
           await refresh();
-          finishOauthWait({ error: null });
-          if (modeRef.current === "auto") {
-            router.push("/setup/progress");
+          if (!active) return;
+          if (modeRef.current !== "auto") {
+            finishOauthWait({ error: null });
+            return;
           }
+          if (purpose === "worker-update") {
+            setTargetChecking(true);
+            try {
+              const target = await desktopPreviewWorkerUpdateTarget();
+              if (!active) return;
+              setTargetPreview(target);
+              setTargetConfirmOpen(true);
+              finishOauthWait({
+                error: target.matches
+                  ? null
+                  : {
+                      title: "Wrong Cloudflare account",
+                      detail: `Your Relaybase Worker is ${target.expectedWorkerUrl}. This login would update ${target.oauthWorkerUrl}.`,
+                      fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+                    },
+              });
+            } catch (err) {
+              if (!active) return;
+              finishOauthWait({
+                error: explainWorkerUpdateTargetError(err),
+              });
+            } finally {
+              if (active) setTargetChecking(false);
+            }
+            return;
+          }
+          finishOauthWait({ error: null });
+          router.push("/setup/progress");
         })();
       },
       onError: (message) => {
@@ -244,7 +287,7 @@ export function WorkerInstallPanel() {
       /* best-effort */
     });
     await refresh();
-    router.replace("/");
+    router.replace(purpose === "worker-update" ? "/settings/worker" : "/");
   }
 
   async function handleDoneVerify() {
@@ -266,6 +309,10 @@ export function WorkerInstallPanel() {
         token,
         scriptName: result.workerScriptName,
       };
+      if (purpose === "worker-update") {
+        await persistAndContinue(next);
+        return;
+      }
       setPendingContinue(next);
       openEnableEmailApiDialog({
         allowSkip: true,
@@ -296,23 +343,36 @@ export function WorkerInstallPanel() {
     <SetupScrollPage>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Get ready</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {purpose === "worker-update" ? "Update Worker" : "Get ready"}
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Relaybase runs entirely in <strong>your</strong> Cloudflare account.
-            Your email, API keys, and routing data never touch Relaybase
-            servers. Install and receive mail on the free plan; sending email
-            requires a Cloudflare Workers Paid plan (~$5/mo, billed by
-            Cloudflare).
+            {purpose === "worker-update"
+              ? "Replace the Worker script in your Cloudflare account. After you authorize, we compare that account's Worker URL with the one Relaybase already uses. They must match or we stop — nothing is uploaded. R2 and D1 stay as they are."
+              : "Relaybase runs entirely in your Cloudflare account. Your email, API keys, and routing data never touch Relaybase servers. Install and receive mail on the free plan; sending email requires a Cloudflare Workers Paid plan (~$5/mo, billed by Cloudflare)."}
           </p>
+          {purpose === "worker-update" && credentials?.workerUrl ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Saved Worker:{" "}
+              <span className="break-all font-mono">{credentials.workerUrl}</span>
+            </p>
+          ) : null}
         </div>
 
         <div className="flex justify-end">
-          <SetupBackLink />
+          <SetupBackLink
+            href={purpose === "worker-update" ? "/settings/worker" : "/setup"}
+            label={
+              purpose === "worker-update" ? "Back to Worker settings" : "Back to start"
+            }
+          />
         </div>
 
         <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Install method</p>
+            <p className="text-sm font-medium">
+              {purpose === "worker-update" ? "Update method" : "Install method"}
+            </p>
             <Tabs
               value={mode}
               onValueChange={(v) =>
@@ -327,17 +387,32 @@ export function WorkerInstallPanel() {
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
             {mode === "auto"
-              ? "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
-              : "Generate a token, copy the install command, and run it in a terminal."}
+              ? purpose === "worker-update"
+                ? "Authorize the Cloudflare account that owns your saved Worker. We show both URLs before any upload."
+                : "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
+              : purpose === "worker-update"
+                ? "Copy the update command, deploy the Worker, then run migrate-db."
+                : "Generate a token, copy the install command, and run it in a terminal."}
           </p>
 
           <div className="mt-2 flex min-h-0 flex-1 flex-col">
             {mode === "auto" ? (
               <SetupCloudflareAuthorizeCard
-                oauthBusy={oauthBusy}
+                oauthBusy={oauthBusy || targetChecking}
                 oauthError={oauthError}
                 onAuthorize={() => void handleAuthorize()}
                 onCancelWait={handleCancelOauthWait}
+                authorizeLabel={
+                  purpose === "worker-update"
+                    ? "Authorize with Cloudflare"
+                    : "Authorize and install on Cloudflare"
+                }
+                waitingLabel={
+                  targetChecking
+                    ? "Checking Worker URL…"
+                    : "Waiting for authorization…"
+                }
+                showCancelWait={!targetChecking}
               />
             ) : (
               <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -345,6 +420,10 @@ export function WorkerInstallPanel() {
                   value={adminToken}
                   onChange={setAdminToken}
                   cfAccountId={cfOAuthAccountId}
+                  variant={
+                    purpose === "worker-update" ? "worker-update" : "install"
+                  }
+                  allowRotate={purpose !== "worker-update"}
                 />
                 <DesktopErrorBanner error={error} />
                 <div className="mt-auto">
@@ -368,7 +447,7 @@ export function WorkerInstallPanel() {
           </div>
         </div>
 
-        <WhatWeInstall />
+        {purpose === "install" ? <WhatWeInstall /> : null}
       </div>
 
       <Dialog open={doneOpen} onOpenChange={setDoneOpen}>
@@ -413,6 +492,24 @@ export function WorkerInstallPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <WorkerUpdateTargetDialog
+        open={targetConfirmOpen}
+        target={targetPreview}
+        confirming={targetChecking}
+        onOpenChange={setTargetConfirmOpen}
+        onConfirm={() => {
+          if (!targetPreview?.matches) return;
+          setTargetConfirmOpen(false);
+          router.push("/settings/worker/progress");
+        }}
+        onAuthorizeAgain={() => {
+          setTargetConfirmOpen(false);
+          setTargetPreview(null);
+          setOauthError(null);
+          void handleAuthorize();
+        }}
+      />
     </SetupScrollPage>
   );
 }

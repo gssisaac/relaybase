@@ -7,7 +7,8 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | When you are changing… | Read first |
 |------------------------|------------|
 | **Where data lives** (KV, R2, `~/.relaybase`, API routing, new durable fields) | [docs/storage-architecture.md](docs/storage-architecture.md) |
-| **D1 migrations**, `POST /console/init-db`, install probe, or `migrations_dir` paths | [docs/d1-migrations-and-init-db.md](docs/d1-migrations-and-init-db.md) |
+| **D1 migrations**, `POST /console/init-db` (empty only), `POST /console/migrate-db`, install probe, or `migrations_dir` paths | [docs/d1-migrations-and-init-db.md](docs/d1-migrations-and-init-db.md) |
+| **Product Worker code** (`server/src/`, `server/db/`, new `/console/*` or `/mail/*` routes) | Rebuild the Worker bundle — see **Worker bundle** below |
 | Mailbox R2 bucket (`relaybase-mailbox`), `inbound/` / `sent/` prefixes, send-log move off KV, or bucket copy scripts | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Settings → Cloudflare OAuth (install token), `kembo/console` OAuth routes, or desktop CF API install | [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) |
@@ -61,6 +62,26 @@ Flutter app under `mobile/` is a **teammate inbox**, not a second desktop:
 - Do not put dashboard/management UI on the phone
 
 Full policy: **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)**.
+
+## Worker bundle
+
+Desktop install and Settings → Worker update upload a **pre-built** `worker.js`, not TypeScript from `server/src/`. Editing `server/` does **not** change the running Worker until you rebuild.
+
+After any change that ships in the product Worker (routes, `/health`, `init-db` / `migrate-db`, auth, mail, D1 helpers, `server/db/migrations.ts`):
+
+```bash
+cd server && pnpm run build:bundle
+```
+
+That writes `server/dist/worker-build/index.js`. The desktop overlays this (or `server/dist/relaybase-worker-install/worker.js`) over the hosted ZIP. Until you rebuild, update still uploads the old script — new routes like `/console/migrate-db` 404.
+
+For the public install ZIP (`https://relaybase.xyz/downloads`):
+
+```bash
+pnpm pack:worker-install
+```
+
+then deploy `kembo/website`. Pack also runs `build:bundle` and refreshes `kembo/website/public/downloads/`. See [server/customer-install/RELEASE.md](server/customer-install/RELEASE.md).
 
 ## General
 

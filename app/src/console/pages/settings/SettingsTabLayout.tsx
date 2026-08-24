@@ -15,9 +15,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { ReactNode } from "react";
 
 function tabFromPathname(pathname: string): SettingsTab {
-  // /settings            → cloudflare
-  // /settings/d1         → d1
-  const match = pathname.match(/^\/settings\/([^/]+)\/?$/);
+  // /settings                 → cloudflare
+  // /settings/d1              → d1
+  // /settings/worker/update   → worker
+  const match = pathname.match(/^\/settings\/([^/]+)/);
   const seg = match?.[1];
   if (seg && (SETTINGS_TABS as readonly string[]).includes(seg)) {
     return seg as SettingsTab;

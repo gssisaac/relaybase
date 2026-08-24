@@ -536,6 +536,27 @@ fn parse_d1_uuid(value: &Value) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Resolve `https://{script}.{subdomain}.workers.dev` for this account.
+/// GET only — does not enable workers.dev or upload a script.
+pub async fn account_workers_dev_url(
+    client: &CfClient,
+    script_name: &str,
+) -> Result<String, String> {
+    let sub_path = format!("/accounts/{}/workers/subdomain", client.account_id);
+    let sub = cf_request(client, reqwest::Method::GET, &sub_path, None).await?;
+    let subdomain = sub
+        .pointer("/result/subdomain")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            "This Cloudflare account has no workers.dev subdomain. \
+             Authorize the account that already owns your Relaybase Worker."
+                .to_string()
+        })?;
+    Ok(format!("https://{script_name}.{subdomain}.workers.dev"))
+}
+
 pub async fn enable_workers_dev(
     client: &CfClient,
     script_name: &str,
@@ -552,14 +573,7 @@ pub async fn enable_workers_dev(
     )
     .await;
 
-    // Resolve workers.dev subdomain for the account
-    let sub_path = format!("/accounts/{}/workers/subdomain", client.account_id);
-    let sub = cf_request(client, reqwest::Method::GET, &sub_path, None).await?;
-    let subdomain = sub
-        .pointer("/result/subdomain")
-        .and_then(|v| v.as_str())
-        .unwrap_or("workers");
-    Ok(format!("https://{script_name}.{subdomain}.workers.dev"))
+    account_workers_dev_url(client, script_name).await
 }
 
 pub async fn put_worker_secret(

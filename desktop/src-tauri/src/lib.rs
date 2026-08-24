@@ -15,12 +15,13 @@ fn console_base_url() -> String {
 }
 
 use auto_install::{
-    assert_clear_db_allowed, auto_install_worker, check_worker_update, init_worker_db,
-    merge_into_credentials, probe_install_resources, request_install_cancel, rollback_all_install,
-    update_installed_worker, AutoInstallResult, InitDbResult, InstallDecision, InstallProbeResult,
-    WorkerUpdateCheck,
+    auto_install_worker, check_worker_update, init_worker_db, merge_into_credentials,
+    migrate_worker_db, preview_worker_update_target, probe_install_resources,
+    request_install_cancel, rollback_all_install,
+    update_installed_worker, worker_urls_match, AutoInstallResult, InitDbResult, InstallDecision,
+    InstallProbeResult, WorkerUpdateCheck, WorkerUpdateTarget,
 };
-use cloudflare::{list_zones, verify_token, ZoneSummary};
+use cloudflare::{list_zones, resolve_account_id, verify_token, ZoneSummary};
 use secrets::{
     clear_cf_oauth_session, clear_credentials, clear_team_login, get_cf_oauth_session,
     load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
@@ -388,6 +389,38 @@ async fn check_worker_update_cmd() -> Result<WorkerUpdateCheck, String> {
     .await
 }
 
+/// Compare the saved Worker URL with the workers.dev URL of the OAuth account.
+/// Does not upload anything.
+#[tauri::command]
+async fn preview_worker_update_target_cmd() -> Result<WorkerUpdateTarget, String> {
+    let creds = load_credentials_merged()?;
+    if creds.worker_url.trim().is_empty() {
+        return Err("No Worker URL saved. Complete install first.".into());
+    }
+    let token = refresh_install_token_if_needed().await?;
+    let mut account_id = creds.account_id.trim().to_string();
+    if account_id.is_empty() {
+        account_id = get_cf_oauth_session()
+            .map(|s| s.account_id.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_default();
+    }
+    if account_id.is_empty() {
+        if token.trim().is_empty() {
+            return Err("Authorize with Cloudflare first.".into());
+        }
+        account_id = resolve_account_id(&token).await?;
+    }
+    preview_worker_update_target(
+        &token,
+        &account_id,
+        &creds.worker_url,
+        &creds.worker_script_name,
+        &creds.admin_token,
+    )
+    .await
+}
+
 /// Download the latest install ZIP and re-deploy the Worker (keeps ADMIN_TOKEN + D1).
 #[tauri::command]
 async fn update_installed_worker_cmd(
@@ -417,7 +450,7 @@ async fn update_installed_worker_cmd(
                 Some(creds.server_token.clone())
             }
         });
-    let result = update_installed_worker(
+    let mut result = update_installed_worker(
         app,
         token,
         account_id.clone(),
@@ -425,6 +458,12 @@ async fn update_installed_worker_cmd(
         creds.admin_token.clone(),
     )
     .await?;
+    if !creds.worker_url.trim().is_empty()
+        && !worker_urls_match(&creds.worker_url, &result.worker_url)
+    {
+        // Same account, custom domain — keep the URL the user already uses.
+        result.worker_url = creds.worker_url.trim().trim_end_matches('/').to_string();
+    }
     let existing = load_credentials()?.unwrap_or_default();
     let mut next = merge_into_credentials(&existing, &result, account_id);
     if let Some(srv) = server {
@@ -461,23 +500,32 @@ async fn rollback_auto_install(
     Ok(())
 }
 
-/// Call the deployed Worker's POST /console/init-db to initialize or clear D1.
-/// Used by the UI after install when the DB was already initialized — the user
-/// decides whether to clear existing data, and that decision goes through the
-/// Worker endpoint, not direct D1 access.
+/// Empty D1 only. `clear` is rejected — wipe by deleting D1s in Cloudflare.
 #[tauri::command]
 async fn init_worker_db_cmd(
     worker_url: String,
     admin_token: String,
     clear: bool,
-    wipe_confirmation: Option<String>,
-    account_id: Option<String>,
+    _wipe_confirmation: Option<String>,
+    _account_id: Option<String>,
 ) -> Result<InitDbResult, String> {
     if clear {
-        let token = refresh_install_token_if_needed().await?;
-        assert_clear_db_allowed(token, account_id, wipe_confirmation.as_deref()).await?;
+        return Err(
+            "init-db cannot clear existing data. Delete the D1 databases in Cloudflare, \
+             create empty ones, then call init-db. To apply pending schema only, use migrate-db."
+                .into(),
+        );
     }
-    init_worker_db(&worker_url, &admin_token, clear).await
+    init_worker_db(&worker_url, &admin_token).await
+}
+
+/// Pending migrations only. Never drops tables.
+#[tauri::command]
+async fn migrate_worker_db_cmd(
+    worker_url: String,
+    admin_token: String,
+) -> Result<InitDbResult, String> {
+    migrate_worker_db(&worker_url, &admin_token).await
 }
 
 /// Push the saved server token (Email Sending Edit) to the deployed Worker as
@@ -693,10 +741,14 @@ async fn complete_cf_oauth_inner(
         .get("expires_in")
         .and_then(|v| v.as_u64())
         .unwrap_or(3600);
-    let account_id = tokens
+    let mut account_id = tokens
         .get("account_id")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if account_id.is_none() {
+        account_id = resolve_account_id(&access_token).await.ok();
+    }
     let expires_at = new_iso_expires(expires_in);
 
     set_cf_oauth_session(CfOAuthSession {
@@ -913,7 +965,7 @@ async fn refresh_install_token_if_needed() -> Result<String, String> {
         if creds.install_token.trim().is_empty() {
             return Err(format!(
                 "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
-                 Go back and Authorize again."
+                 Authorize with Cloudflare again."
             ));
         }
         return Ok(creds.install_token);
@@ -930,7 +982,7 @@ async fn refresh_install_token_if_needed() -> Result<String, String> {
     if session.refresh_token.trim().is_empty() {
         return Err(format!(
             "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
-             Go back and Authorize again."
+             Authorize with Cloudflare again."
         ));
     }
 
@@ -958,7 +1010,7 @@ async fn refresh_install_token_if_needed() -> Result<String, String> {
             clear_cf_oauth_session();
             return Err(format!(
                 "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
-                 Go back and Authorize again."
+                 Authorize with Cloudflare again."
             ));
         }
         return Err(format!("Token refresh failed (HTTP {status}): {body}"));
@@ -1857,6 +1909,7 @@ pub fn run() {
             cancel_auto_install,
             rollback_auto_install,
             init_worker_db_cmd,
+            migrate_worker_db_cmd,
             push_server_token,
             start_cf_oauth,
             complete_cf_oauth,
@@ -1864,6 +1917,7 @@ pub fn run() {
             verify_worker_connection,
             save_worker_connection,
             check_worker_update_cmd,
+            preview_worker_update_target_cmd,
             update_installed_worker_cmd,
             get_desktop_info,
             open_external_url,

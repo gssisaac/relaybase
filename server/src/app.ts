@@ -7,6 +7,7 @@ import { consoleAuthTokens } from "./routes/console/auth-tokens";
 import { consoleBroadcasts } from "./routes/console/broadcasts";
 import { consoleConnect } from "./routes/console/connect";
 import { consoleInitDb } from "./routes/console/init-db";
+import { consoleMigrateDb } from "./routes/console/migrate-db";
 import {
   consoleAddresses,
   consoleDomains,
@@ -68,6 +69,8 @@ app.get("/health", async (c) => {
       inboxIndex: Boolean(c.env.RELAYBASE_INBOX_INDEX),
       app: Boolean(c.env.RELAYBASE_DB),
     },
+    // Proves this isolate has ledger catch-up (stamp baseline, skip already-exists).
+    schemaMigrate: "reconcile-v1",
   });
 });
 
@@ -79,6 +82,7 @@ app.route("/console/send-logs", consoleSendLogs);
 app.route("/console/branding", consoleBranding);
 app.route("/console/connect", consoleConnect);
 app.route("/console/init-db", consoleInitDb);
+app.route("/console/migrate-db", consoleMigrateDb);
 app.route("/console/register-owner", consoleRegisterOwner);
 app.route("/console/recover-admin", consoleRecoverAdmin);
 app.route("/console/mailbox", consoleMailbox);

@@ -71,7 +71,7 @@ CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
 CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);
 ```
 
-Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations/` and `db/inbox-index/migrations/`) so D1 migration directories never collide. Applied by `POST /console/init-db`.
+Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations/` and `db/inbox-index/migrations/`) so D1 migration directories never collide. Applied by `POST /console/init-db` (empty D1) or `POST /console/migrate-db` (existing).
 
 ---
 

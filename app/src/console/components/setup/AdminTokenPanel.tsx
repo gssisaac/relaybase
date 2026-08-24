@@ -33,6 +33,17 @@ function maskToken(token: string): string {
  * Build the full one-shot manual install script: download pre-built bundle +
  * wrangler R2/D1/secret/deploy. No npm install — the ZIP contains worker.js.
  */
+function workerUpdateCommand(token: string, zipUrl: string): string {
+  const escaped = token.replace(/'/g, `'\\''`);
+  return [
+    `curl -L -o relaybase-worker-install.zip '${zipUrl}'`,
+    `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
+    `cd relaybase-worker-install/relaybase-worker-install || cd relaybase-worker-install`,
+    `npx wrangler deploy`,
+    `curl -X POST https://relaybase-api.<subdomain>.workers.dev/console/migrate-db -H 'Authorization: Bearer ${escaped}' -H 'Content-Type: application/json' -d '{}'`,
+  ].join("\n");
+}
+
 function fullInstallCommand(
   token: string,
   zipUrl: string,
@@ -82,11 +93,15 @@ export function AdminTokenPanel({
   onChange,
   cfAccountId,
   cfServerToken,
+  variant = "install",
+  allowRotate = true,
 }: {
   value: string;
   onChange: (token: string) => void;
   cfAccountId?: string;
   cfServerToken?: string;
+  variant?: "install" | "worker-update";
+  allowRotate?: boolean;
 }) {
   const [copied, setCopied] = useState<"cmd" | "token" | null>(null);
   const [zipUrl, setZipUrl] = useState(WORKER_INSTALL_ZIP_URL);
@@ -119,14 +134,18 @@ export function AdminTokenPanel({
     setCopied(null);
   }
 
+  const commandPreview = value
+    ? variant === "worker-update"
+      ? workerUpdateCommand(value, zipUrl)
+      : fullInstallCommand(value, zipUrl, {
+          accountId: cfAccountId ?? "",
+          serverToken: cfServerToken ?? "",
+        })
+    : "Generate a token to reveal the full command.";
+
   async function copyCommand() {
     if (!value) return;
-    await copyText(
-      fullInstallCommand(value, zipUrl, {
-        accountId: cfAccountId ?? "",
-        serverToken: cfServerToken ?? "",
-      }),
-    );
+    await copyText(commandPreview);
     setCopied("cmd");
   }
 
@@ -135,13 +154,6 @@ export function AdminTokenPanel({
     await copyText(value);
     setCopied("token");
   }
-
-  const commandPreview = value
-    ? fullInstallCommand(value, zipUrl, {
-        accountId: cfAccountId ?? "",
-        serverToken: cfServerToken ?? "",
-      })
-    : "Generate a token to reveal the full command.";
 
   return (
     <div className="space-y-3">
@@ -193,22 +205,26 @@ export function AdminTokenPanel({
               <Copy className="size-3.5" />
             )}
           </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            aria-label={value.trim() ? "Rotate admin token" : "Generate admin token"}
-            onClick={rotate}
-          >
-            <RefreshCw className="size-3.5" />
-          </Button>
+          {allowRotate ? (
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label={value.trim() ? "Rotate admin token" : "Generate admin token"}
+              onClick={rotate}
+            >
+              <RefreshCw className="size-3.5" />
+            </Button>
+          ) : null}
         </div>
       </div>
 
       <div className="space-y-2 rounded-md border border-border/80 bg-muted/30 p-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-medium text-foreground">
-            Full install command
+            {variant === "worker-update"
+              ? "Worker update command"
+              : "Full install command"}
           </p>
           <Button
             type="button"
@@ -230,9 +246,14 @@ export function AdminTokenPanel({
         </pre>
         <p className="text-[11px] text-muted-foreground">
           Pre-built bundle — no <span className="font-mono">npm install</span>.
-          After <span className="font-mono">wrangler deploy</span> prints your{" "}
-          <span className="font-mono">*.workers.dev</span> URL, come back and tap
-          &ldquo;I&apos;m done&rdquo;.
+          After <span className="font-mono">wrangler deploy</span>
+          {variant === "worker-update"
+            ? ", wait a few seconds, then run migrate-db. Do not call init-db."
+            : <>
+                {" "}prints your{" "}
+                <span className="font-mono">*.workers.dev</span> URL, come back and tap
+                &ldquo;I&apos;m done&rdquo;.
+              </>}
         </p>
       </div>
     </div>

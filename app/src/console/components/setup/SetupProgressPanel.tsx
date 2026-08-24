@@ -2,7 +2,7 @@
 
 import { Check, ChevronDown, ChevronUp, Copy, Download, ExternalLink, Loader2, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,11 +17,8 @@ import {
   desktopProbeInstall,
   desktopRefreshInstallToken,
   desktopRollbackInstall,
-  desktopPushServerToken,
   desktopRegisterWorkerWithConsole,
-  desktopSaveCfCredentials,
   desktopSaveWorkerConnection,
-  desktopVerifyCfToken,
   desktopVerifyWorkerConnection,
   explainDesktopError,
   isInstallCancelledError,
@@ -44,7 +41,7 @@ import {
   resourceIsOccupied,
   wipePhraseIsValid,
 } from "@/console/components/setup/InstallWipeConfirmDialog";
-import { EnableEmailApiDialog } from "@/console/components/setup/EnableEmailApiDialog";
+import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 
 type WipeIntent =
@@ -119,6 +116,7 @@ function fireInstallConfetti() {
 export function SetupProgressPanel() {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
+  const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
   const [probing, setProbing] = useState(false);
   const [existing, setExisting] = useState<InstallResourceProbe[]>([]);
   const [decisions, setDecisions] = useState<Record<string, "skip" | "reinstall">>(
@@ -159,11 +157,8 @@ export function SetupProgressPanel() {
   >(() => new Set());
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
-  const [emailApiOpen, setEmailApiOpen] = useState(false);
   const [mailApiDone, setMailApiDone] = useState(false);
   const [mailApiVerified, setMailApiVerified] = useState(false);
-  const [pasteBusy, setPasteBusy] = useState(false);
-  const [pasteError, setPasteError] = useState<DesktopErrorHelp | null>(null);
   const emailDialogShownRef = useRef(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
   const [r2DashboardOpened, setR2DashboardOpened] = useState(false);
@@ -179,6 +174,26 @@ export function SetupProgressPanel() {
     credentials?.cfOauthAccountId?.trim() ||
     credentials?.accountId?.trim() ||
     "";
+
+  const openMailApiDialog = useCallback(
+    (done: { workerUrl: string; adminToken: string }) => {
+      openEnableEmailApiDialog({
+        allowSkip: true,
+        accountId: cfOAuthAccountId,
+        workerUrl: done.workerUrl,
+        adminToken: done.adminToken,
+        onVerified: () => {
+          setMailApiVerified(true);
+          setMailApiDone(true);
+        },
+        onSkip: () => {
+          setMailApiVerified(false);
+          setMailApiDone(true);
+        },
+      });
+    },
+    [openEnableEmailApiDialog, cfOAuthAccountId],
+  );
 
   async function ensureOauthSession() {
     if (!cfOAuthConnected) {
@@ -219,7 +234,7 @@ export function SetupProgressPanel() {
   useEffect(() => {
     if (autoDone && !mailApiDone && !emailDialogShownRef.current) {
       emailDialogShownRef.current = true;
-      setEmailApiOpen(true);
+      openMailApiDialog(autoDone);
     }
     if (!autoDone) {
       setTokenDownloaded(false);
@@ -227,7 +242,7 @@ export function SetupProgressPanel() {
     }
     setInstallLogExpanded(false);
     fireInstallConfetti();
-  }, [autoDone]);
+  }, [autoDone, mailApiDone, openMailApiDialog]);
 
   useEffect(() => {
     if (!credentials) return;
@@ -505,29 +520,6 @@ export function SetupProgressPanel() {
     if (!autoDone?.adminToken) return;
     await navigator.clipboard.writeText(autoDone.adminToken);
     setCopiedToken(true);
-  }
-
-  async function handleSetupPasteServerToken(token: string) {
-    const acctId = cfOAuthAccountId;
-    if (!acctId) {
-      throw new Error("Authorize with Cloudflare first to push the server token.");
-    }
-    setPasteBusy(true);
-    setPasteError(null);
-    try {
-      const result = await desktopVerifyCfToken(acctId, token, "server");
-      if (!result.ok) throw new Error(result.message);
-      await desktopSaveCfCredentials(acctId, "", token);
-      const push = await desktopPushServerToken();
-      if (!push.ok) throw new Error(push.message);
-      setMailApiVerified(true);
-      setMailApiDone(true);
-    } catch (err) {
-      setPasteError(explainDesktopError(err, "Server token verification failed"));
-      throw err;
-    } finally {
-      setPasteBusy(false);
-    }
   }
 
   async function downloadAutoToken() {
@@ -1054,7 +1046,9 @@ export function SetupProgressPanel() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => setEmailApiOpen(true)}
+                  onClick={() => {
+                    if (autoDone) openMailApiDialog(autoDone);
+                  }}
                 >
                   Enable email API
                 </Button>
@@ -1101,26 +1095,6 @@ export function SetupProgressPanel() {
             >
               Go to Mailbox
             </Button>
-            <EnableEmailApiDialog
-              open={emailApiOpen}
-              onOpenChange={setEmailApiOpen}
-              accountId={cfOAuthAccountId}
-              workerUrl={autoDone.workerUrl}
-              adminToken={autoDone.adminToken}
-              allowSkip
-              onVerified={() => {
-                setMailApiVerified(true);
-                setMailApiDone(true);
-              }}
-              onSkip={() => {
-                setMailApiVerified(false);
-                setMailApiDone(true);
-              }}
-              onPasteAndPush={handleSetupPasteServerToken}
-              pasteBusy={pasteBusy}
-              pasteError={pasteError}
-              cfInstallTokenAvailable={cfOAuthConnected}
-            />
           </div>
         ) : stopped ? (
           <div className="space-y-3 rounded-lg border border-border p-4">

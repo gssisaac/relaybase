@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Shield } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { EnableEmailApiDialog } from "@/console/components/setup/EnableEmailApiDialog";
+import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
 import {
   ConnectionCard,
@@ -18,20 +17,10 @@ export function SettingsCloudflarePage() {
     credentials,
     workerStatus,
     cfConnected,
-    serverToken,
-    cfBusy,
-    serverPushBusy,
-    cfError,
-    cfMessage,
-    handlePasteServerToken,
-    cfInstallTokenAvailable,
-    oauthBusy,
-    oauthError,
     handleRefreshStatus,
     resetCfDraft,
   } = useSettingsConnection();
-
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
 
   const accountId =
     workerStatus?.accountId?.trim() || credentials?.accountId?.trim() || "";
@@ -50,10 +39,10 @@ export function SettingsCloudflarePage() {
         title="Cloudflare API (domains and routing)"
         description={
           <>
-            A <span className="font-mono">CF_API_TOKEN</span> secret on your
-            Worker lets Relaybase add inboxes and DNS. Sending uses the Worker{" "}
-            <span className="font-mono">EMAIL</span> binding — you do not paste
-            a token for send.
+            Needed to send email and to register and manage accounts. Create a
+            Cloudflare API token, add it as a{" "}
+            <span className="font-mono">CF_API_TOKEN</span> secret on your
+            Worker, then verify.
           </>
         }
       >
@@ -63,7 +52,7 @@ export function SettingsCloudflarePage() {
           detail={
             cfConnected
               ? "CF_API_TOKEN is set on the Worker and Cloudflare accepted it."
-              : "Add a CF_API_TOKEN secret in the Cloudflare dashboard, then verify."
+              : "Use Enable email API to add the token, then verify."
           }
         />
 
@@ -88,7 +77,12 @@ export function SettingsCloudflarePage() {
             size="sm"
             onClick={() => {
               resetCfDraft();
-              setDialogOpen(true);
+              openEnableEmailApiDialog({
+                accountId,
+                workerScriptName: scriptName,
+                workerUrl,
+                adminToken,
+              });
             }}
           >
             {cfConnected ? "Set up again" : "Enable email API"}
@@ -103,22 +97,6 @@ export function SettingsCloudflarePage() {
           </Button>
         </div>
       </ConnectionCard>
-
-      <EnableEmailApiDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        accountId={accountId}
-        workerScriptName={scriptName}
-        workerUrl={workerUrl}
-        adminToken={adminToken}
-        onVerified={() => setDialogOpen(false)}
-        onPasteAndPush={handlePasteServerToken}
-        pasteBusy={cfBusy || serverPushBusy}
-        pasteError={cfError ?? oauthError}
-        pasteMessage={cfMessage}
-        cfInstallTokenAvailable={cfInstallTokenAvailable}
-        oauthBusy={oauthBusy}
-      />
     </SettingsPageBody>
   );
 }

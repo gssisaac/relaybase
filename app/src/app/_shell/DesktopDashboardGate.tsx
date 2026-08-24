@@ -12,6 +12,7 @@ import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
 import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
+import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
 import {
   DesktopProvider,
   useDesktop,
@@ -195,7 +196,9 @@ export function DesktopDashboardGate({
   return (
     <DesktopShell>
       <DesktopProvider>
-        <OperatorInner>{children}</OperatorInner>
+        <EnableEmailApiDialogHost>
+          <OperatorInner>{children}</OperatorInner>
+        </EnableEmailApiDialogHost>
       </DesktopProvider>
     </DesktopShell>
   );

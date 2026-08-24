@@ -32,6 +32,10 @@ import { normalizeQuoteForDisplay } from "@/email/lib/reply/reply-quote-body";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  isEmailApiNotConfiguredError,
+  openEnableEmailApiDialog,
+} from "@/console/components/setup/use-enable-email-api-dialog";
 export { PageLoadingOverlay } from "@/components/ui/page-loading-overlay";
 
 /** Relative Next path (mapped to Worker in the packaged shell). */
@@ -507,6 +511,17 @@ export function EmailAlerts({
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
             <FormattedErrorText text={error} />
+            {isEmailApiNotConfiguredError(error) ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => openEnableEmailApiDialog()}
+              >
+                Enable email API
+              </Button>
+            ) : null}
           </AlertDescription>
           {onDismissError ? (
             <Button
@@ -579,8 +594,16 @@ export function CloudflareConfigAlert({ show }: { show: boolean }) {
     <Alert>
       <AlertTitle>Cloudflare not configured</AlertTitle>
       <AlertDescription>
-        Email Sending and DNS are managed in Relaybase. Contact your operator if
-        domain onboarding fails.
+        Email Sending and DNS need a CF_API_TOKEN secret on your Worker.
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-2"
+          onClick={() => openEnableEmailApiDialog()}
+        >
+          Enable email API
+        </Button>
       </AlertDescription>
     </Alert>
   );

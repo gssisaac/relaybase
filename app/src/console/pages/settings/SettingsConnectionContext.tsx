@@ -33,6 +33,7 @@ import {
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
+import { registerEnableEmailApiPasteBridge } from "@/console/components/setup/use-enable-email-api-dialog";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
 
 type HealthBlock = { tone: HealthTone; label: string; detail: string };
@@ -671,6 +672,18 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       recoveryMessage,
     ],
   );
+
+  useEffect(() => {
+    registerEnableEmailApiPasteBridge({
+      handlePasteAndPush: value.handlePasteServerToken,
+      pasteBusy: value.cfBusy || value.serverPushBusy,
+      pasteError: value.cfError ?? value.oauthError,
+      pasteMessage: value.cfMessage,
+      cfInstallTokenAvailable: value.cfInstallTokenAvailable,
+      oauthBusy: value.oauthBusy,
+    });
+    return () => registerEnableEmailApiPasteBridge(null);
+  }, [value]);
 
   return (
     <SettingsConnectionContext.Provider value={value}>

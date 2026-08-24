@@ -108,4 +108,15 @@ describe("normalizeEntryPath", () => {
       "/settings",
     );
   });
+
+  it("rewrites removed admin-token settings onto Worker", () => {
+    assert.equal(
+      normalizeEntryPath("/settings/admin-token"),
+      "/settings/worker",
+    );
+    assert.equal(
+      normalizeEntryPath("/settings?tab=admin-token"),
+      "/settings/worker",
+    );
+  });
 });

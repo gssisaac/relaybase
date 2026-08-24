@@ -3,6 +3,8 @@
 import { makeAutoObservable, runInAction } from "mobx";
 import { toast } from "sonner";
 
+import { toastEmailApiAwareError } from "@/console/components/setup/use-enable-email-api-dialog";
+
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
@@ -537,7 +539,7 @@ export class AccountsStore {
         reverted = [...byEmail.values()];
         this.addressesByDomain[key] = reverted;
       });
-      toast.error(message);
+      toastEmailApiAwareError(message);
       throw e instanceof Error ? e : new Error(message);
     } finally {
       runInAction(() => {
@@ -693,7 +695,7 @@ export class AccountsStore {
         }
       });
       void this.persistCache(key, reverted);
-      toast.error(message);
+      toastEmailApiAwareError(message);
     } finally {
       runInAction(() => {
         this.inboundPendingEmails = this.inboundPendingEmails.filter(

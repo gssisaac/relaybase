@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
 import {
   DesktopProvider,
   useDesktop,
@@ -63,7 +64,9 @@ export default function SetupLayout({ children }: { children: ReactNode }) {
   return (
     <DesktopShell>
       <DesktopProvider>
-        <SetupShell>{children}</SetupShell>
+        <EnableEmailApiDialogHost>
+          <SetupShell>{children}</SetupShell>
+        </EnableEmailApiDialogHost>
       </DesktopProvider>
     </DesktopShell>
   );

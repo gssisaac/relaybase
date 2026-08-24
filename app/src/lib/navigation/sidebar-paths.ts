@@ -124,12 +124,12 @@ export function normalizeEntryPath(path: string): string {
   if (pathname === "/settings" || pathname === "/settings/") {
     const tab = params.get("tab");
     if (tab) {
-      const allowed = [
-        "worker",
-        "admin-token",
-        "inbound-r2",
-        "d1",
-      ] as const;
+      if (tab === "admin-token") {
+        params.delete("tab");
+        const qs = params.toString();
+        return qs ? `/settings/worker?${qs}` : "/settings/worker";
+      }
+      const allowed = ["worker", "inbound-r2", "d1"] as const;
       if ((allowed as readonly string[]).includes(tab)) {
         params.delete("tab");
         const qs = params.toString();
@@ -147,13 +147,8 @@ export function normalizeEntryPath(path: string): string {
     } catch {
       /* keep raw */
     }
-    const allowed = [
-      "cloudflare",
-      "worker",
-      "admin-token",
-      "inbound-r2",
-      "d1",
-    ] as const;
+    if (tab === "admin-token") return "/settings/worker";
+    const allowed = ["cloudflare", "worker", "inbound-r2", "d1"] as const;
     if ((allowed as readonly string[]).includes(tab)) {
       return tab === "cloudflare" ? "/settings" : `/settings/${tab}`;
     }

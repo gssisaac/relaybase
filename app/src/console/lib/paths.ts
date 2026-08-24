@@ -59,7 +59,6 @@ export function useDashboardPaths() {
 export type SettingsTab =
   | "cloudflare"
   | "worker"
-  | "admin-token"
   | "inbound-r2"
   | "d1";
 
@@ -68,7 +67,6 @@ const SETTINGS_TABS: SettingsTab[] = [
   "worker",
   "inbound-r2",
   "d1",
-  "admin-token",
 ];
 
 export { SETTINGS_TABS };

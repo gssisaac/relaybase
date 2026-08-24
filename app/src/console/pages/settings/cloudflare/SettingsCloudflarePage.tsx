@@ -1,9 +1,11 @@
 "use client";
 
 import { Shield } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
+import { CfApiTokenDetailsSheet } from "@/console/pages/settings/cloudflare/CfApiTokenDetailsSheet";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
 import {
   ConnectionCard,
@@ -21,6 +23,7 @@ export function SettingsCloudflarePage() {
     resetCfDraft,
   } = useSettingsConnection();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const accountId =
     workerStatus?.accountId?.trim() || credentials?.accountId?.trim() || "";
@@ -39,10 +42,18 @@ export function SettingsCloudflarePage() {
         title="Cloudflare API (domains and routing)"
         description={
           <>
-            Needed to send email and to register and manage accounts. Create a
-            Cloudflare API token, add it as a{" "}
-            <span className="font-mono">CF_API_TOKEN</span> secret on your
-            Worker, then verify.
+            The API token is for the Cloudflare REST API — inbox routing, MX,
+            and DMARC — not for sending. Create a Cloudflare API token, add it
+            on your Worker, then verify.{" "}
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto px-0 text-sm"
+              onClick={() => setDetailsOpen(true)}
+            >
+              View details
+            </Button>
           </>
         }
       >
@@ -51,7 +62,7 @@ export function SettingsCloudflarePage() {
           label={cfConnected ? "Configured" : "Not configured"}
           detail={
             cfConnected
-              ? "CF_API_TOKEN is set on the Worker and Cloudflare accepted it."
+              ? "The API token is set on the Worker and Cloudflare accepted it."
               : "Use Enable email API to add the token, then verify."
           }
         />
@@ -97,6 +108,7 @@ export function SettingsCloudflarePage() {
           </Button>
         </div>
       </ConnectionCard>
+      <CfApiTokenDetailsSheet open={detailsOpen} onOpenChange={setDetailsOpen} />
     </SettingsPageBody>
   );
 }

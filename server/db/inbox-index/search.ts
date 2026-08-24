@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { D1Database } from "@cloudflare/workers-types";
 import type { InboxIndexDb } from "./index";
-import type { InboundEmailMeta } from "../../src/lib/inbound-store";
+import type { InboundEmailMeta } from "../../src/lib/mailbox-store";
 
 export type InboundSearchOptions = {
   domains: string[];

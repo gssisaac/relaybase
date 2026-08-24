@@ -1,4 +1,4 @@
-import type { InboundEmailMeta } from "./inbound-store";
+import type { InboundEmailMeta } from "./mailbox-store";
 
 /**
  * D1 FTS5 search index over inbound mail (`RELAYBASE_INBOX_INDEX`).

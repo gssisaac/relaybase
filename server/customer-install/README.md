@@ -20,7 +20,7 @@ This package deploys the Relaybase routing Worker into **your** Cloudflare accou
 ```bash
 npx wrangler r2 bucket create relaybase-mailbox
 npx wrangler d1 create relaybase-logs
-npx wrangler d1 create relaybase-inbox-index
+npx wrangler d1 create relaybase-mail
 npx wrangler d1 create relaybase-db
 ```
 

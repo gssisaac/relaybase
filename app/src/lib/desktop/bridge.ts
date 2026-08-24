@@ -73,6 +73,8 @@ export type AutoInstallResult = {
   adminToken: string;
   r2Bucket: string;
   d1LogsId: string;
+  d1MailId: string;
+  /** @deprecated Renamed to d1MailId. Kept for callers being migrated. */
   d1InboxIndexId: string;
   d1DbId: string;
   dbAlreadyInitialized: boolean;
@@ -362,6 +364,8 @@ export type WorkerConnectResult = {
   /** True when the Worker has a send_email EMAIL binding. */
   emailBindingConfigured?: boolean;
   d1Logs: D1BindingSnapshot;
+  d1Mail: D1BindingSnapshot;
+  /** @deprecated Renamed to d1Mail. Kept for callers being migrated. */
   d1InboxIndex: D1BindingSnapshot;
   d1App: D1BindingSnapshot;
 };
@@ -1371,20 +1375,21 @@ export async function desktopVerifyWorkerConnection(
   };
   const usage = value.inbound?.usage;
   let d1Logs = d1BindingFromPayload(value.d1, "logs");
-  let d1InboxIndex = d1BindingFromPayload(value.d1, "inboxIndex");
+  let d1Mail = d1BindingFromPayload(value.d1, "mail");
   let d1App = d1BindingFromPayload(value.d1, "app");
 
   if (
     !value.d1 ||
     (!d1Logs.configured &&
-      !d1InboxIndex.configured &&
+      !d1Mail.configured &&
       !value.d1.logs &&
+      !value.d1.mail &&
       !value.d1.inboxIndex)
   ) {
     const fallback = await probeD1WhenConnectOmits(base, adminToken);
-    if (fallback.d1Logs.configured || fallback.d1InboxIndex.configured) {
+    if (fallback.d1Logs.configured || fallback.d1Mail.configured) {
       d1Logs = fallback.d1Logs;
-      d1InboxIndex = fallback.d1InboxIndex;
+      d1Mail = fallback.d1Mail;
     }
   }
 
@@ -1407,7 +1412,8 @@ export async function desktopVerifyWorkerConnection(
         : undefined,
     emailBindingConfigured: Boolean(value.emailBindingConfigured),
     d1Logs,
-    d1InboxIndex,
+    d1Mail,
+    d1InboxIndex: d1Mail,
     d1App,
   };
 }

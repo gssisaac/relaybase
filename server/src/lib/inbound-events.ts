@@ -1,4 +1,4 @@
-import type { InboundEmailMeta } from "./inbound-store";
+import type { InboundEmailMeta } from "./mailbox-store";
 import type { AppDb } from "../../db/app";
 import {
   ackPendingEventRows as dbAckPendingEventRows,

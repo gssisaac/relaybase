@@ -1,0 +1,832 @@
+/**
+ * Unified mailbox store: one R2 layout + one D1 index for inbound AND sent.
+ *
+ * R2 layout (binding `INBOUND`, bucket `relaybase-mailbox`):
+ *   inbound/{domain}/{uuid}/meta.json | raw.eml | attachments/…
+ *   inbound/{domain}/by-message-id/{encoded}        # single-key pointer
+ *   sent/{domain}/{uuid}/meta.json | raw.eml | attachments/…
+ *   sent/{domain}/by-message-id/{encoded}
+ *   sent/_sendlog/{uuid}.json                       # no _index.json
+ *
+ * `meta.json` is THIN: headers + `bodyPreview` (≤500 chars) + attachment list
+ * + `readAt`/`sentAt` + `hasText`/`hasHtml`. It NEVER contains `bodyText` or
+ * `bodyHtml` — those are parsed on demand from `raw.eml` via `parseInboundMime`.
+ *
+ * D1 `relaybase-mail` (`mailbox_messages` + `mailbox_fts`) is the list/count/
+ * search index. R2 stays the source of truth; D1 is rebuildable via
+ * `POST /console/rebuild-mail`. D1 writes are best-effort and must never
+ * fail the ingest path.
+ */
+import {
+  buildBouncePreview,
+  isBounceMessage,
+  parseBounceDiagnostic,
+} from "./bounce-detect";
+import { decodeMimeHeader, parseInboundMime } from "./mime-parse";
+import { buildMimeMessage, buildStrippedInboundMime } from "./mime";
+import type { MailDb } from "../../db/mail";
+import {
+  deleteMailboxFts,
+  upsertMailboxFts,
+} from "../../db/mail/search";
+import {
+  deleteMailboxMessages,
+  mailboxPruneIds,
+  updateMailboxReadState,
+  upsertMailboxMessage,
+  recipientsColumn,
+} from "../../db/mail/messages";
+import type { MailboxKind, MailboxMessageRow } from "../../db/mail/schema";
+
+export type InboundAttachmentMeta = {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  disposition: string;
+  contentId: string | null;
+};
+
+export type InboundEmailMeta = {
+  id: string;
+  domain: string;
+  fromEmail: string;
+  fromName?: string;
+  toEmail: string;
+  toEmails?: string[];
+  ccEmails?: string[];
+  subject: string;
+  receivedAt: string;
+  messageId: string | null;
+  inReplyTo: string | null;
+  references: string | null;
+  size: number;
+  bodyPreview: string;
+  bodyText: string;
+  bodyHtml: string | null;
+  attachments: InboundAttachmentMeta[];
+  readAt?: string | null;
+};
+
+/** Thin `meta.json` shape — no `bodyText` / `bodyHtml`. */
+export type ThinMailMeta = {
+  id: string;
+  kind: MailboxKind;
+  domain: string;
+  fromEmail: string;
+  fromName?: string;
+  toEmail: string;
+  toEmails?: string[];
+  ccEmails?: string[];
+  subject: string;
+  /** Inbound `receivedAt` or sent `sentAt` (ISO). */
+  occurredAt: string;
+  messageId: string | null;
+  inReplyTo: string | null;
+  references: string | null;
+  size: number;
+  bodyPreview: string;
+  attachments: InboundAttachmentMeta[];
+  /** Inbound only — null/missing on sent rows. */
+  readAt?: string | null;
+  /** True when `raw.eml` carries a text/html part. False for legacy sent rows
+   * imported from `_list.json` that only had `bodyPreview`. */
+  hasText?: boolean;
+  hasHtml?: boolean;
+};
+
+export const MAX_MESSAGES = 5000;
+const INBOUND_PREFIX = "inbound";
+const SENT_PREFIX = "sent";
+
+const JSON_META = { httpMetadata: { contentType: "application/json" } };
+const EML_META = { httpMetadata: { contentType: "message/rfc822" } };
+
+function domainFromAddress(address: string): string {
+  const at = address.lastIndexOf("@");
+  return at >= 0 ? address.slice(at + 1).trim().toLowerCase() : "";
+}
+
+function prefixFor(kind: MailboxKind): string {
+  return kind === "sent" ? SENT_PREFIX : INBOUND_PREFIX;
+}
+
+function objectPrefix(kind: MailboxKind, domain: string, id: string): string {
+  return `${prefixFor(kind)}/${domain}/${id}`;
+}
+
+function metaObjectKey(kind: MailboxKind, domain: string, id: string): string {
+  return `${objectPrefix(kind, domain, id)}/meta.json`;
+}
+
+function rawObjectKey(kind: MailboxKind, domain: string, id: string): string {
+  return `${objectPrefix(kind, domain, id)}/raw.eml`;
+}
+
+function attachmentObjectKey(
+  kind: MailboxKind,
+  domain: string,
+  id: string,
+  attachmentId: string,
+  filename: string,
+): string {
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
+  return `${objectPrefix(kind, domain, id)}/attachments/${attachmentId}-${safeName}`;
+}
+
+function messageIdIndexKey(
+  kind: MailboxKind,
+  domain: string,
+  normalizedMessageId: string,
+): string {
+  return `${prefixFor(kind)}/${domain}/by-message-id/${encodeURIComponent(normalizedMessageId)}`;
+}
+
+/** Normalize RFC Message-ID for comparison (`<id@host>` → `id@host`). */
+export function normalizeInboundMessageId(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) return null;
+  const unwrapped =
+    trimmed.startsWith("<") && trimmed.endsWith(">")
+      ? trimmed.slice(1, -1).trim()
+      : trimmed;
+  return unwrapped || null;
+}
+
+export function previewText(text: string, max = 500): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 1)}…`;
+}
+
+function joinAddressList(value: string[] | undefined): string {
+  return (value ?? []).map((entry) => entry.trim()).filter(Boolean).join(",");
+}
+
+function splitAddressList(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeThinMeta(meta: ThinMailMeta): ThinMailMeta {
+  return {
+    ...meta,
+    attachments: meta.attachments ?? [],
+    toEmails:
+      meta.toEmails && meta.toEmails.length > 0
+        ? meta.toEmails
+        : meta.toEmail
+          ? [meta.toEmail]
+          : [],
+    ccEmails: meta.ccEmails ?? [],
+    readAt: meta.kind === "sent" ? null : (meta.readAt ?? null),
+  };
+}
+
+function thinMetaToRow(meta: ThinMailMeta): MailboxMessageRow {
+  return {
+    id: meta.id,
+    kind: meta.kind,
+    domain: meta.domain,
+    from_email: meta.fromEmail,
+    from_name: meta.fromName ?? null,
+    to_email: meta.toEmail,
+    to_emails: joinAddressList(meta.toEmails),
+    cc_emails: joinAddressList(meta.ccEmails),
+    recipients: recipientsColumn({
+      toEmail: meta.toEmail,
+      toEmails: meta.toEmails,
+      ccEmails: meta.ccEmails,
+    }),
+    subject: meta.subject,
+    body_preview: meta.bodyPreview,
+    occurred_at: meta.occurredAt,
+    message_id: meta.messageId,
+    in_reply_to: meta.inReplyTo,
+    refs: meta.references,
+    size: meta.size,
+    attachment_count: meta.attachments?.length ?? 0,
+    read_at: meta.readAt ?? null,
+    r2_prefix: objectPrefix(meta.kind, meta.domain, meta.id),
+  };
+}
+
+function rowToInboundMeta(
+  row: Pick<
+    MailboxMessageRow,
+    | "id"
+    | "domain"
+    | "from_email"
+    | "from_name"
+    | "to_email"
+    | "to_emails"
+    | "cc_emails"
+    | "subject"
+    | "occurred_at"
+    | "message_id"
+    | "in_reply_to"
+    | "refs"
+    | "size"
+    | "attachment_count"
+    | "read_at"
+  >,
+  bodyPreview: string,
+): InboundEmailMeta {
+  return {
+    id: row.id,
+    domain: row.domain,
+    fromEmail: row.from_email,
+    fromName: row.from_name ?? undefined,
+    toEmail: row.to_email,
+    toEmails: splitAddressList(row.to_emails),
+    ccEmails: splitAddressList(row.cc_emails),
+    subject: row.subject,
+    receivedAt: row.occurred_at,
+    messageId: row.message_id,
+    inReplyTo: row.in_reply_to,
+    references: row.refs,
+    size: row.size,
+    bodyPreview,
+    bodyText: "",
+    bodyHtml: null,
+    attachments: Array.from({ length: row.attachment_count }, (_, index) => ({
+      id: String(index),
+      filename: "",
+      contentType: "application/octet-stream",
+      size: 0,
+      disposition: "attachment",
+      contentId: null,
+    })),
+    readAt: row.read_at,
+  };
+}
+
+function thinMetaToInboundMeta(
+  meta: ThinMailMeta,
+  bodyText: string,
+): InboundEmailMeta {
+  return {
+    id: meta.id,
+    domain: meta.domain,
+    fromEmail: meta.fromEmail,
+    fromName: meta.fromName,
+    toEmail: meta.toEmail,
+    toEmails: meta.toEmails,
+    ccEmails: meta.ccEmails,
+    subject: meta.subject,
+    receivedAt: meta.occurredAt,
+    messageId: meta.messageId,
+    inReplyTo: meta.inReplyTo,
+    references: meta.references,
+    size: meta.size,
+    bodyPreview: meta.bodyPreview,
+    bodyText,
+    bodyHtml: null,
+    attachments: meta.attachments ?? [],
+    readAt: meta.readAt ?? null,
+  };
+}
+
+async function writeMessageIdIndex(
+  bucket: R2Bucket,
+  kind: MailboxKind,
+  domain: string,
+  normalizedMessageId: string,
+  id: string,
+): Promise<void> {
+  await bucket.put(
+    messageIdIndexKey(kind, domain, normalizedMessageId),
+    id,
+    { httpMetadata: { contentType: "text/plain" } },
+  );
+}
+
+async function readMessageIdIndex(
+  bucket: R2Bucket,
+  kind: MailboxKind,
+  domain: string,
+  normalizedMessageId: string,
+): Promise<string | null> {
+  const object = await bucket.get(
+    messageIdIndexKey(kind, domain, normalizedMessageId),
+  );
+  if (!object) return null;
+  const id = (await object.text()).trim();
+  return id || null;
+}
+
+export async function loadThinMeta(
+  bucket: R2Bucket,
+  kind: MailboxKind,
+  domain: string,
+  id: string,
+): Promise<ThinMailMeta | null> {
+  const object = await bucket.get(metaObjectKey(kind, domain, id));
+  if (!object) return null;
+  try {
+    const meta = JSON.parse(await object.text()) as ThinMailMeta;
+    return normalizeThinMeta(meta);
+  } catch {
+    return null;
+  }
+}
+
+async function deleteMessageObjects(
+  bucket: R2Bucket,
+  kind: MailboxKind,
+  domain: string,
+  id: string,
+): Promise<void> {
+  const prefix = `${objectPrefix(kind, domain, id)}/`;
+  let cursor: string | undefined;
+  do {
+    const listed = await bucket.list({ prefix, cursor });
+    for (const object of listed.objects) {
+      await bucket.delete(object.key);
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+}
+
+async function indexMessage(
+  mailDb: MailDb,
+  meta: ThinMailMeta,
+  bodyText: string,
+): Promise<void> {
+  if (!mailDb) return;
+  await upsertMailboxMessage(mailDb, thinMetaToRow(meta));
+  await upsertMailboxFts(mailDb, [
+    {
+      id: meta.id,
+      kind: meta.kind,
+      domain: meta.domain,
+      subject: meta.subject,
+      from_email: meta.fromEmail,
+      from_name: meta.fromName ?? null,
+      to_emails: joinAddressList(meta.toEmails),
+      cc_emails: joinAddressList(meta.ccEmails),
+      body_text: bodyText,
+    },
+  ]);
+}
+
+export type StoreInboundMailResult = {
+  record: InboundEmailMeta;
+  created: boolean;
+};
+
+/**
+ * Store one inbound email. Dedupes by RFC Message-ID via the R2
+ * `by-message-id/{id}` pointer ONLY — never scans `meta.json` folders (the
+ * full-domain scan that used to OOM large mailboxes like `wedesk.so`).
+ */
+export async function storeInboundMail(
+  bucket: R2Bucket,
+  params: {
+    envelopeFrom: string;
+    toEmail: string;
+    subject: string;
+    messageId: string | null;
+    inReplyTo?: string | null;
+    references?: string | null;
+    size: number;
+    raw: ArrayBuffer;
+  },
+  mailDb: MailDb,
+): Promise<StoreInboundMailResult> {
+  const receivedAt = new Date().toISOString();
+  const domain = domainFromAddress(params.toEmail);
+  if (!domain) {
+    throw new Error("Inbound email is missing a recipient domain");
+  }
+
+  const normalizedMessageId = normalizeInboundMessageId(params.messageId);
+  if (normalizedMessageId) {
+    const existingId = await readMessageIdIndex(
+      bucket,
+      "inbound",
+      domain,
+      normalizedMessageId,
+    );
+    if (existingId) {
+      const existing = await loadThinMeta(bucket, "inbound", domain, existingId);
+      if (existing) {
+        return {
+          record: thinMetaToInboundMeta(existing, ""),
+          created: false,
+        };
+      }
+    }
+  }
+
+  const id = crypto.randomUUID();
+  const parsed = await parseInboundMime(params.raw);
+  const attachmentMeta: InboundAttachmentMeta[] = [];
+
+  for (const attachment of parsed.attachments) {
+    await bucket.put(
+      attachmentObjectKey("inbound", domain, id, attachment.id, attachment.filename),
+      attachment.content,
+      {
+        httpMetadata: { contentType: attachment.contentType },
+        customMetadata: {
+          filename: attachment.filename,
+          disposition: attachment.disposition,
+        },
+      },
+    );
+    attachmentMeta.push({
+      id: attachment.id,
+      filename: attachment.filename,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      disposition: attachment.disposition,
+      contentId: attachment.contentId,
+    });
+  }
+
+  const subject =
+    parsed.subject || decodeMimeHeader(params.subject) || "(no subject)";
+
+  const isBounce = isBounceMessage(params.raw, params.envelopeFrom);
+  const bounceDiagnostic = isBounce ? parseBounceDiagnostic(params.raw) : null;
+  const bouncePreview = bounceDiagnostic
+    ? buildBouncePreview(bounceDiagnostic)
+    : null;
+
+  const bodyText =
+    parsed.bodyText || (isBounce ? bouncePreview ?? "(empty message)" : "");
+  const bodyPreview = previewText(
+    bodyText || params.subject || (isBounce ? "Bounce notification" : ""),
+  );
+
+  const toEmails = parsed.toEmails.length ? parsed.toEmails : [params.toEmail];
+  const fromEmail = parsed.fromEmail || params.envelopeFrom;
+  const fromName = parsed.fromName;
+
+  const thin: ThinMailMeta = {
+    id,
+    kind: "inbound",
+    domain,
+    fromEmail,
+    fromName,
+    toEmail: params.toEmail,
+    toEmails,
+    ccEmails: parsed.ccEmails,
+    subject,
+    occurredAt: receivedAt,
+    messageId: params.messageId,
+    inReplyTo: params.inReplyTo ?? null,
+    references: params.references ?? null,
+    size: params.size,
+    bodyPreview,
+    attachments: attachmentMeta,
+    readAt: null,
+    hasText: Boolean(parsed.bodyText),
+    hasHtml: Boolean(parsed.bodyHtml),
+  };
+
+  await bucket.put(
+    metaObjectKey("inbound", domain, id),
+    JSON.stringify(thin),
+    JSON_META,
+  );
+
+  const rawBody =
+    attachmentMeta.length > 0
+      ? buildStrippedInboundMime({
+          fromEmail,
+          fromName,
+          toEmail: params.toEmail,
+          ccEmails: parsed.ccEmails,
+          subject,
+          messageId: params.messageId,
+          bodyText: parsed.bodyText,
+          bodyHtml: parsed.bodyHtml,
+          attachments: attachmentMeta,
+        })
+      : params.raw;
+
+  await bucket.put(rawObjectKey("inbound", domain, id), rawBody, {
+    ...EML_META,
+    customMetadata: {
+      from: params.envelopeFrom,
+      to: params.toEmail,
+      domain,
+    },
+  });
+
+  if (normalizedMessageId) {
+    await writeMessageIdIndex(bucket, "inbound", domain, normalizedMessageId, id);
+  }
+
+  try {
+    await indexMessage(mailDb, thin, bodyText);
+  } catch (error) {
+    console.error("Failed to index inbound email", error);
+  }
+
+  await pruneMail(bucket, mailDb, "inbound", domain);
+
+  return {
+    record: thinMetaToInboundMeta(thin, bodyText),
+    created: true,
+  };
+}
+
+export type StoreSentMailParams = {
+  from: string;
+  fromName?: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  text: string;
+  html?: string;
+  messageId: string | null;
+  inReplyTo?: string | null;
+  references?: string | null;
+  /** Pre-built MIME body to persist as `raw.eml`. When omitted, the MIME is
+   * built from the params via `buildMimeMessage`. */
+  rawMime?: string;
+  sentAt?: string;
+};
+
+export type StoreSentMailResult = {
+  record: ThinMailMeta;
+  created: boolean;
+};
+
+/**
+ * Persist one sent email under `sent/{domain}/{uuid}/` (thin meta + raw.eml
+ * + pointer) and upsert D1 `kind=sent`. Same shape as inbound. Returns the
+ * stored row id (the RFC Message-ID when present, else a fresh UUID).
+ */
+export async function storeSentMail(
+  bucket: R2Bucket,
+  params: StoreSentMailParams,
+  mailDb: MailDb,
+): Promise<StoreSentMailResult> {
+  const domain = domainFromAddress(params.from);
+  if (!domain) {
+    throw new Error("Sent email is missing a sender domain");
+  }
+
+  const sentAt = params.sentAt ?? new Date().toISOString();
+  const id = params.messageId?.trim() || crypto.randomUUID();
+  const normalizedMessageId = normalizeInboundMessageId(params.messageId);
+
+  // Dedupe by RFC Message-ID pointer only.
+  if (normalizedMessageId) {
+    const existingId = await readMessageIdIndex(
+      bucket,
+      "sent",
+      domain,
+      normalizedMessageId,
+    );
+    if (existingId && existingId !== id) {
+      const existing = await loadThinMeta(bucket, "sent", domain, existingId);
+      if (existing) {
+        return { record: existing, created: false };
+      }
+    }
+  }
+
+  const rawMime =
+    params.rawMime ??
+    buildSentMime({
+      from: params.from,
+      fromName: params.fromName,
+      to: params.to,
+      cc: params.cc,
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+      messageId: params.messageId,
+      inReplyTo: params.inReplyTo,
+      references: params.references,
+    });
+  const rawBytes = new TextEncoder().encode(rawMime);
+
+  const thin: ThinMailMeta = {
+    id,
+    kind: "sent",
+    domain,
+    fromEmail: params.from,
+    fromName: params.fromName,
+    toEmail: params.to[0] ?? params.from,
+    toEmails: params.to,
+    ccEmails: params.cc ?? [],
+    subject: params.subject,
+    occurredAt: sentAt,
+    messageId: params.messageId,
+    inReplyTo: params.inReplyTo ?? null,
+    references: params.references ?? null,
+    size: rawBytes.byteLength,
+    bodyPreview: previewText(params.text),
+    attachments: [],
+    readAt: null,
+    hasText: Boolean(params.text),
+    hasHtml: Boolean(params.html?.trim()),
+  };
+
+  await bucket.put(
+    metaObjectKey("sent", domain, id),
+    JSON.stringify(thin),
+    JSON_META,
+  );
+  await bucket.put(rawObjectKey("sent", domain, id), rawBytes, {
+    ...EML_META,
+    customMetadata: {
+      from: params.from,
+      to: params.to.join(", "),
+      domain,
+    },
+  });
+
+  if (normalizedMessageId) {
+    await writeMessageIdIndex(bucket, "sent", domain, normalizedMessageId, id);
+  }
+
+  try {
+    await indexMessage(mailDb, thin, params.text);
+  } catch (error) {
+    console.error("Failed to index sent email", error);
+  }
+
+  await pruneMail(bucket, mailDb, "sent", domain);
+
+  return { record: thin, created: true };
+}
+
+function buildSentMime(params: StoreSentMailParams): string {
+  return buildMimeMessage({
+    from: params.from,
+    fromName: params.fromName,
+    to: params.to.length === 1 ? params.to[0] : params.to,
+    cc: params.cc,
+    subject: params.subject,
+    text: params.text,
+    html: params.html,
+    messageId: params.messageId ?? undefined,
+    inReplyTo: params.inReplyTo ?? undefined,
+    references: params.references ?? undefined,
+  });
+}
+
+/**
+ * Fetch one message as a full `InboundEmailMeta` (body parsed on demand from
+ * `raw.eml`). Returns null when the meta or raw object is missing. For sent
+ * rows that never had a `raw.eml` (legacy `_list.json` import), `bodyText`
+ * stays empty and `bodyHtml` null — the list preview is the only body.
+ */
+export async function getMailMessage(
+  bucket: R2Bucket,
+  kind: MailboxKind,
+  domain: string,
+  id: string,
+): Promise<InboundEmailMeta | null> {
+  const normalizedDomain = domain.trim().toLowerCase();
+  const thin = await loadThinMeta(bucket, kind, normalizedDomain, id);
+  if (!thin) return null;
+
+  let bodyText = "";
+  let bodyHtml: string | null = null;
+  if (thin.hasText || thin.hasHtml) {
+    const rawObject = await bucket.get(
+      rawObjectKey(kind, normalizedDomain, id),
+    );
+    if (rawObject) {
+      try {
+        const parsed = await parseInboundMime(await rawObject.arrayBuffer());
+        bodyText = parsed.bodyText;
+        bodyHtml = parsed.bodyHtml;
+      } catch (error) {
+        console.error("Failed to parse raw.eml for detail", error);
+      }
+    }
+  }
+
+  const meta: InboundEmailMeta = thinMetaToInboundMeta(thin, bodyText);
+  meta.bodyHtml = bodyHtml;
+  return meta;
+}
+
+export async function getInboundAttachment(
+  bucket: R2Bucket,
+  params: { domain: string; messageId: string; attachmentId: string },
+): Promise<{ meta: InboundAttachmentMeta; body: ArrayBuffer } | null> {
+  const domain = params.domain.trim().toLowerCase();
+  const thin = await loadThinMeta(bucket, "inbound", domain, params.messageId);
+  if (!thin) return null;
+  const attachment = thin.attachments.find(
+    (item) => item.id === params.attachmentId,
+  );
+  if (!attachment) return null;
+  const prefix = `${objectPrefix("inbound", domain, params.messageId)}/attachments/${attachment.id}-`;
+  const listed = await bucket.list({ prefix, limit: 20 });
+  const objectKey = listed.objects[0]?.key;
+  if (!objectKey) return null;
+  const object = await bucket.get(objectKey);
+  if (!object) return null;
+  return { meta: attachment, body: await object.arrayBuffer() };
+}
+
+/**
+ * Bulk mark-read/unread for inbound messages. Updates thin `meta.json` and
+ * D1. Sent rows are skipped (sent has no read state). Ids that don't resolve
+ * to a message in this domain are skipped.
+ */
+export async function setMailReadState(
+  bucket: R2Bucket,
+  domain: string,
+  ids: string[],
+  readAt: string | null,
+  mailDb: MailDb,
+): Promise<{ updated: string[] }> {
+  const normalizedDomain = domain.trim().toLowerCase();
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  const updated: string[] = [];
+
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      const thin = await loadThinMeta(bucket, "inbound", normalizedDomain, id);
+      if (!thin) return;
+      const next: ThinMailMeta = { ...thin, readAt };
+      await bucket.put(
+        metaObjectKey("inbound", normalizedDomain, id),
+        JSON.stringify(next),
+        JSON_META,
+      );
+      updated.push(id);
+    }),
+  );
+
+  if (updated.length > 0 && mailDb) {
+    try {
+      await updateMailboxReadState(mailDb, updated, readAt);
+    } catch (error) {
+      console.error("Failed to sync read state to mail index", error);
+    }
+  }
+  return { updated };
+}
+
+/**
+ * Delete messages beyond `MAX_MESSAGES` per (kind, domain). Uses D1 to find
+ * the oldest ids to drop, then deletes their R2 prefixes and D1 rows. No
+ * array rewrite. Best-effort — a D1 miss falls back to a no-op.
+ */
+export async function pruneMail(
+  bucket: R2Bucket,
+  mailDb: MailDb,
+  kind: MailboxKind,
+  domain: string,
+): Promise<void> {
+  if (!mailDb) return;
+  const normalizedDomain = domain.trim().toLowerCase();
+  let staleIds: string[] = [];
+  try {
+    staleIds = await mailboxPruneIds(mailDb, kind, normalizedDomain, MAX_MESSAGES);
+  } catch (error) {
+    console.error("Failed to compute prune ids", error);
+    return;
+  }
+  if (staleIds.length === 0) return;
+  for (const id of staleIds) {
+    await deleteMessageObjects(bucket, kind, normalizedDomain, id);
+  }
+  try {
+    await deleteMailboxMessages(mailDb, staleIds);
+    await deleteMailboxFts(mailDb, staleIds);
+  } catch (error) {
+    console.error("Failed to prune mail index rows", error);
+  }
+}
+
+/** Per-message `{id}/` folder ids under a domain (skips `by-message-id/`). */
+export async function listMessageFolderIds(
+  bucket: R2Bucket,
+  kind: MailboxKind,
+  domain: string,
+): Promise<string[]> {
+  const prefix = `${prefixFor(kind)}/${domain.trim().toLowerCase()}/`;
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const listed = await bucket.list({ prefix, delimiter: "/", cursor });
+    for (const folder of listed.delimitedPrefixes ?? []) {
+      if (!folder.startsWith(prefix)) continue;
+      const id = folder.slice(prefix.length).replace(/\/$/, "");
+      if (!id || id.includes("/") || id === "by-message-id") continue;
+      ids.push(id);
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+  return ids;
+}

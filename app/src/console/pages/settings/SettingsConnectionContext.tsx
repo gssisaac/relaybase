@@ -473,7 +473,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   const hasWorker = Boolean(credentials?.workerUrl?.trim());
   const logsOk = workerStatus?.d1Logs?.configured === true;
-  const searchOk = workerStatus?.d1InboxIndex?.configured === true;
+  const searchOk = workerStatus?.d1Mail?.configured === true;
   const appOk = workerStatus?.d1App?.configured === true;
 
   const workerHealth: HealthBlock = !hasWorker

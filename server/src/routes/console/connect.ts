@@ -47,7 +47,7 @@ consoleConnect.get("/", async (c) => {
     r2Configured ? measureInboundR2Usage(c.env.INBOUND) : Promise.resolve(null),
     probeD1Connection(
       c.env.RELAYBASE_LOGS,
-      c.env.RELAYBASE_INBOX_INDEX,
+      c.env.RELAYBASE_MAIL,
       c.env.RELAYBASE_DB,
       c.env.CF_ACCOUNT_ID,
       c.env.CF_API_TOKEN,

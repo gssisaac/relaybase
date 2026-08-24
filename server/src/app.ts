@@ -49,7 +49,7 @@ app.get("/health", async (c) => {
     checkInboundR2(c.env.INBOUND),
     probeD1Connection(
       c.env.RELAYBASE_LOGS,
-      c.env.RELAYBASE_INBOX_INDEX,
+      c.env.RELAYBASE_MAIL,
       c.env.RELAYBASE_DB,
       c.env.CF_ACCOUNT_ID,
       c.env.CF_API_TOKEN,
@@ -66,7 +66,9 @@ app.get("/health", async (c) => {
     // Binding present ≠ schema ready. `configured` is table-ready.
     d1Bound: {
       logs: Boolean(c.env.RELAYBASE_LOGS),
-      inboxIndex: Boolean(c.env.RELAYBASE_INBOX_INDEX),
+      mail: Boolean(c.env.RELAYBASE_MAIL),
+      // Legacy alias for desktop clients still reading the old name.
+      inboxIndex: Boolean(c.env.RELAYBASE_MAIL),
       app: Boolean(c.env.RELAYBASE_DB),
     },
     // Proves this isolate has ledger catch-up (stamp baseline, skip already-exists).

@@ -21,10 +21,10 @@ export type SendLogSummary = {
 };
 
 const MAX_LOGS = 500;
-const INDEX_KEY = "sent/_sendlog/_index.json";
+const SENDLOG_PREFIX = "sent/_sendlog/";
 
 function logKey(id: string): string {
-  return `sent/_sendlog/${id}.json`;
+  return `${SENDLOG_PREFIX}${id}.json`;
 }
 
 const JSON_META = { httpMetadata: { contentType: "application/json" } };
@@ -39,6 +39,20 @@ async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
   }
 }
 
+/** True when a key looks like a send-log JSON object (not the old array index). */
+function isSendLogKey(key: string): boolean {
+  return (
+    key.startsWith(SENDLOG_PREFIX) &&
+    key.endsWith(".json") &&
+    key !== `${SENDLOG_PREFIX}_index.json`
+  );
+}
+
+function idFromKey(key: string): string {
+  const base = key.slice(SENDLOG_PREFIX.length).replace(/\.json$/, "");
+  return base;
+}
+
 export async function recordSendLog(
   bucket: R2Bucket,
   entry: Omit<SendLogEntry, "id" | "at"> & { id?: string; at?: string },
@@ -48,17 +62,6 @@ export async function recordSendLog(
   const record: SendLogEntry = { ...entry, id, at };
 
   await bucket.put(logKey(id), JSON.stringify(record), JSON_META);
-
-  const index = (await readJson<string[]>(bucket, INDEX_KEY)) ?? [];
-  const next = [id, ...index.filter((item) => item !== id)].slice(0, MAX_LOGS);
-  await bucket.put(INDEX_KEY, JSON.stringify(next), JSON_META);
-
-  for (const staleId of index.slice(MAX_LOGS - 1)) {
-    if (!next.includes(staleId)) {
-      await bucket.delete(logKey(staleId));
-    }
-  }
-
   return record;
 }
 
@@ -92,6 +95,11 @@ function summarize(logs: SendLogEntry[]): SendLogSummary {
   return { total: logs.length, failed, failedLast24h };
 }
 
+/**
+ * List send logs by listing `sent/_sendlog/*.json` in R2 (newest first by
+ * object listing order is not guaranteed, so we sort by `at` after load).
+ * No `_index.json` array is maintained. Caps at MAX_LOGS objects listed.
+ */
 export async function listSendLogs(
   bucket: R2Bucket,
   filters: {
@@ -101,23 +109,31 @@ export async function listSendLogs(
   } = {},
 ): Promise<{ logs: SendLogEntry[]; summary: SendLogSummary }> {
   const limit = Math.min(Math.max(filters.limit ?? 100, 1), MAX_LOGS);
-  const index = (await readJson<string[]>(bucket, INDEX_KEY)) ?? [];
 
-  const logs: SendLogEntry[] = [];
-  for (const id of index) {
-    if (logs.length >= limit) break;
-    const log = await readJson<SendLogEntry>(bucket, logKey(id));
-    if (!log) continue;
-    if (!matchesFilters(log, filters)) continue;
-    logs.push(log);
-  }
+  const listed: SendLogEntry[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await bucket.list({
+      prefix: SENDLOG_PREFIX,
+      limit: 1000,
+      cursor,
+    });
+    for (const object of page.objects) {
+      if (!isSendLogKey(object.key)) continue;
+      const id = idFromKey(object.key);
+      const log = await readJson<SendLogEntry>(bucket, object.key);
+      if (!log) continue;
+      // Keep `id` consistent with the key (legacy entries stored their own).
+      if (!log.id) log.id = id;
+      listed.push(log);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+    if (listed.length >= MAX_LOGS) break;
+  } while (cursor);
 
-  const allForSummary: SendLogEntry[] = [];
-  for (const id of index) {
-    const log = await readJson<SendLogEntry>(bucket, logKey(id));
-    if (!log) continue;
-    allForSummary.push(log);
-  }
+  listed.sort((a, b) => b.at.localeCompare(a.at));
 
-  return { logs, summary: summarize(allForSummary) };
+  const filtered = listed.filter((log) => matchesFilters(log, filters));
+  const logs = filtered.slice(0, limit);
+  return { logs, summary: summarize(listed) };
 }

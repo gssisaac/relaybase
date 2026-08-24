@@ -4,7 +4,7 @@
  * SQL files live next to each D1 module:
  *   db/app/migrations/*.sql
  *   db/log/migrations/*.sql
- *   db/inbox-index/migrations/*.sql
+ *   db/mail/migrations/*.sql
  *
  * The desktop creates the D1 databases and deploys the Worker, then calls
  * POST /console/init-db. The Worker applies these strings. Desktop never
@@ -15,7 +15,7 @@
  * in sync.
  */
 
-export type MigrationTarget = "app" | "logs" | "inbox";
+export type MigrationTarget = "app" | "logs" | "mail";
 
 export type Migration = {
   target: MigrationTarget;
@@ -221,32 +221,59 @@ CREATE INDEX IF NOT EXISTS ops_log_ok_idx ON ops_log (ok, at DESC);
 CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
 CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);`;
 
-const INBOX_0001 = `CREATE VIRTUAL TABLE IF NOT EXISTS inbound_search_fts USING fts5(
+const MAIL_0001 = `CREATE TABLE IF NOT EXISTS mailbox_messages (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  from_email TEXT NOT NULL,
+  from_name TEXT,
+  to_email TEXT NOT NULL,
+  to_emails TEXT,
+  cc_emails TEXT,
+  recipients TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body_preview TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  message_id TEXT,
+  in_reply_to TEXT,
+  refs TEXT,
+  size INTEGER NOT NULL,
+  attachment_count INTEGER NOT NULL,
+  read_at TEXT,
+  r2_prefix TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS mailbox_rfc_idx
+  ON mailbox_messages (domain, kind, message_id)
+  WHERE message_id IS NOT NULL;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mailbox_list_idx
+  ON mailbox_messages (kind, domain, occurred_at DESC, id DESC);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mailbox_unread_idx
+  ON mailbox_messages (kind, domain, read_at)
+  WHERE kind = 'inbound' AND read_at IS NULL;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mailbox_domain_idx
+  ON mailbox_messages (domain, kind);
+--> statement-breakpoint
+CREATE VIRTUAL TABLE IF NOT EXISTS mailbox_fts USING fts5(
   id UNINDEXED,
+  kind UNINDEXED,
   domain UNINDEXED,
   subject,
   from_email,
   from_name,
-  to_email UNINDEXED,
   to_emails,
   cc_emails,
-  recipients UNINDEXED,
-  body_text,
-  body_preview UNINDEXED,
-  received_at UNINDEXED,
-  message_id UNINDEXED,
-  in_reply_to UNINDEXED,
-  refs UNINDEXED,
-  size UNINDEXED,
-  attachment_count UNINDEXED,
-  read_at UNINDEXED
+  body_text
 );`;
 
 export const MIGRATIONS: Migration[] = [
   { target: "app", name: "0000_old_pandemic", sql: APP_0000 },
   { target: "app", name: "0001_owner_admin_token", sql: APP_0001 },
   { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
-  { target: "inbox", name: "0001_create_inbound_search", sql: INBOX_0001 },
+  { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 },
 ];
 
 /** Split a Drizzle migration on `--> statement-breakpoint` into statements. */

@@ -1,17 +1,17 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 export const D1_LOGS_DATABASE_NAME = "relaybase-logs";
-export const D1_INBOX_INDEX_DATABASE_NAME = "relaybase-inbox-index";
+export const D1_MAIL_DATABASE_NAME = "relaybase-mail";
 export const D1_APP_DATABASE_NAME = "relaybase-db";
 export const D1_LOGS_BINDING = "RELAYBASE_LOGS";
-export const D1_INBOX_INDEX_BINDING = "RELAYBASE_INBOX_INDEX";
+export const D1_MAIL_BINDING = "RELAYBASE_MAIL";
 export const D1_APP_BINDING = "RELAYBASE_DB";
 
 /** Cloudflare D1 per-database size cap on Workers Paid (display only). */
 export const D1_DATABASE_SIZE_LIMIT_BYTES = 10 * 1024 ** 3;
 
 const LOGS_TABLE = "ops_log";
-const INBOX_INDEX_TABLE = "inbound_search_fts";
+const MAIL_TABLE = "mailbox_messages";
 const APP_TABLE = "domains";
 
 export type D1BindingStatus = {
@@ -23,7 +23,7 @@ export type D1BindingStatus = {
 
 export type D1ConnectionStatus = {
   logs: D1BindingStatus;
-  inboxIndex: D1BindingStatus;
+  mail: D1BindingStatus;
   app: D1BindingStatus;
 };
 
@@ -122,12 +122,12 @@ async function probeBinding(
 /** Binding present + expected table readable (migrations applied). */
 export async function probeD1Connection(
   logs: D1Database | undefined,
-  inboxIndex: D1Database | undefined,
+  mail: D1Database | undefined,
   app: D1Database | undefined,
   cfAccountId?: string,
   cfApiToken?: string,
 ): Promise<D1ConnectionStatus> {
-  const [logsStatus, inboxIndexStatus, appStatus] = await Promise.all([
+  const [logsStatus, mailStatus, appStatus] = await Promise.all([
     probeBinding(
       logs,
       LOGS_TABLE,
@@ -137,10 +137,10 @@ export async function probeD1Connection(
       cfApiToken,
     ),
     probeBinding(
-      inboxIndex,
-      INBOX_INDEX_TABLE,
-      D1_INBOX_INDEX_DATABASE_NAME,
-      D1_INBOX_INDEX_BINDING,
+      mail,
+      MAIL_TABLE,
+      D1_MAIL_DATABASE_NAME,
+      D1_MAIL_BINDING,
       cfAccountId,
       cfApiToken,
     ),
@@ -155,7 +155,7 @@ export async function probeD1Connection(
   ]);
   return {
     logs: logsStatus,
-    inboxIndex: inboxIndexStatus,
+    mail: mailStatus,
     app: appStatus,
   };
 }

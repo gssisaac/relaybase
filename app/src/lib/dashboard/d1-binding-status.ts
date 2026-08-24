@@ -15,12 +15,15 @@ export const D1_LOGS_DEFAULT: D1BindingSnapshot = {
   sizeBytes: null,
 };
 
-export const D1_INBOX_INDEX_DEFAULT: D1BindingSnapshot = {
+export const D1_MAIL_DEFAULT: D1BindingSnapshot = {
   configured: false,
-  databaseName: "relaybase-inbox-index",
-  binding: "RELAYBASE_INBOX_INDEX",
+  databaseName: "relaybase-mail",
+  binding: "RELAYBASE_MAIL",
   sizeBytes: null,
 };
+
+/** @deprecated Use D1_MAIL_DEFAULT. Kept for callers being migrated. */
+export const D1_INBOX_INDEX_DEFAULT: D1BindingSnapshot = D1_MAIL_DEFAULT;
 
 export const D1_APP_DEFAULT: D1BindingSnapshot = {
   configured: false,
@@ -36,6 +39,13 @@ type D1Payload = {
     binding?: string;
     sizeBytes?: number | null;
   };
+  mail?: {
+    configured?: boolean;
+    databaseName?: string;
+    binding?: string;
+    sizeBytes?: number | null;
+  };
+  /** Legacy field name from Workers still on the old binding. */
   inboxIndex?: {
     configured?: boolean;
     databaseName?: string;
@@ -50,6 +60,9 @@ type D1Payload = {
   };
   logsConfigured?: boolean;
   logsDatabaseName?: string;
+  mailConfigured?: boolean;
+  mailDatabaseName?: string;
+  /** Legacy flat fields from Workers still on the old binding. */
   inboxIndexConfigured?: boolean;
   inboxIndexDatabaseName?: string;
 };
@@ -62,17 +75,22 @@ function parseSize(value: unknown): number | null {
 
 export function d1BindingFromPayload(
   d1: D1Payload | undefined,
-  kind: "logs" | "inboxIndex" | "app",
+  kind: "logs" | "mail" | "app",
 ): D1BindingSnapshot {
   const defaults =
     kind === "logs"
       ? D1_LOGS_DEFAULT
-      : kind === "inboxIndex"
-        ? D1_INBOX_INDEX_DEFAULT
+      : kind === "mail"
+        ? D1_MAIL_DEFAULT
         : D1_APP_DEFAULT;
   if (!d1) return defaults;
 
-  const nested = kind === "logs" ? d1.logs : kind === "inboxIndex" ? d1.inboxIndex : d1.app;
+  const nested =
+    kind === "logs"
+      ? d1.logs
+      : kind === "mail"
+        ? (d1.mail ?? d1.inboxIndex)
+        : d1.app;
   if (nested) {
     return {
       configured: Boolean(nested.configured),
@@ -91,10 +109,13 @@ export function d1BindingFromPayload(
     };
   }
 
-  if (kind === "inboxIndex") {
+  if (kind === "mail") {
     return {
-      configured: Boolean(d1.inboxIndexConfigured),
-      databaseName: d1.inboxIndexDatabaseName ?? defaults.databaseName,
+      configured: Boolean(d1.mailConfigured ?? d1.inboxIndexConfigured),
+      databaseName:
+        d1.mailDatabaseName ??
+        d1.inboxIndexDatabaseName ??
+        defaults.databaseName,
       binding: defaults.binding,
       sizeBytes: null,
     };

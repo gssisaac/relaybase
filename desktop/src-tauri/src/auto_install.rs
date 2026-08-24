@@ -103,7 +103,7 @@ pub struct WorkerUpdateCheck {
 /// D1 databases created during install. Each entry is (binding, db_name).
 const D1_DATABASES: &[(&str, &str)] = &[
     ("RELAYBASE_LOGS", "relaybase-logs"),
-    ("RELAYBASE_INBOX_INDEX", "relaybase-inbox-index"),
+    ("RELAYBASE_MAIL", "relaybase-mail"),
     ("RELAYBASE_DB", "relaybase-db"),
 ];
 
@@ -116,7 +116,7 @@ pub struct AutoInstallResult {
     pub r2_bucket: String,
     pub account_id: String,
     pub d1_logs_id: String,
-    pub d1_inbox_index_id: String,
+    pub d1_mail_id: String,
     pub d1_db_id: String,
     pub db_already_initialized: bool,
     pub db_applied: Vec<String>,
@@ -1647,7 +1647,7 @@ async fn auto_install_steps(
                 return Err(format!(
                     "Worker uploaded but D1 bindings are missing ({d1_bound}/{}). \
                      Same-account D1 does not need extra Worker permissions — the \
-                     script upload did not attach RELAYBASE_DB / LOGS / INBOX_INDEX.",
+                     script upload did not attach RELAYBASE_DB / LOGS / MAIL.",",
                     D1_DATABASES.len()
                 ));
             }
@@ -1780,7 +1780,7 @@ async fn auto_install_steps(
         r2_bucket: R2_BUCKET.to_string(),
         account_id: account_id.to_string(),
         d1_logs_id: d1_ids.get(0).cloned().unwrap_or_default(),
-        d1_inbox_index_id: d1_ids.get(1).cloned().unwrap_or_default(),
+        d1_mail_id: d1_ids.get(1).cloned().unwrap_or_default(),
         d1_db_id: d1_ids.get(2).cloned().unwrap_or_default(),
         db_already_initialized,
         db_applied,

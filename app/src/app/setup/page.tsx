@@ -5,14 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  desktopOpenExternal,
-} from "@/lib/desktop/bridge";
 import { SETUP_PAGE_SHELL } from "@/console/components/setup/setup-page-chrome";
 import { cn } from "@/lib/utils";
-
-const CONSOLE_URL =
-  process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
 
 export default function SetupChoicePage() {
   const router = useRouter();
@@ -33,10 +27,6 @@ export default function SetupChoicePage() {
   function goAlreadyInstalled() {
     setNavigating("connect");
     router.push("/setup/connect");
-  }
-
-  async function goRecover() {
-    await desktopOpenExternal(`${CONSOLE_URL}/recover`);
   }
 
   return (
@@ -79,13 +69,6 @@ export default function SetupChoicePage() {
               {navigating === "install" ? "Opening…" : "Start install"}
             </Button>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <button
-                type="button"
-                className="hover:underline"
-                onClick={() => void goRecover()}
-              >
-                I lost my admin token
-              </button>
               <button
                 type="button"
                 className="hover:underline"

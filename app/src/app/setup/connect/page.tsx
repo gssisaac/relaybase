@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  desktopOpenExternal,
   desktopRegisterWorkerWithConsole,
   desktopSaveWorkerConnection,
   desktopVerifyWorkerConnection,
@@ -18,9 +17,6 @@ import {
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
-
-const CONSOLE_URL =
-  process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
 
 export default function SetupConnectPage() {
   const router = useRouter();
@@ -99,9 +95,7 @@ export default function SetupConnectPage() {
             <button
               type="button"
               className="text-left text-xs text-muted-foreground hover:underline"
-              onClick={() =>
-                void desktopOpenExternal(`${CONSOLE_URL}/recover`)
-              }
+              onClick={() => router.push("/setup/recover-admin")}
             >
               I forgot my admin token
             </button>

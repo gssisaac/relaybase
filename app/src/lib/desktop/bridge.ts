@@ -53,6 +53,12 @@ export type InstallResult = {
   adminRelinked: boolean;
 };
 
+export type ReissueAdminResult = {
+  workerUrl: string;
+  adminToken: string;
+  workerScriptName: string;
+};
+
 export type AutoInstallResult = {
   workerUrl: string;
   workerScriptName: string;
@@ -875,6 +881,11 @@ export async function desktopProbeWorker(): Promise<ProbeResult> {
 
 export async function desktopAdoptWorker(): Promise<InstallResult> {
   return invoke("adopt_routing_worker");
+}
+
+/** Generate a new ADMIN_TOKEN and push it as a Worker secret via the in-memory OAuth session. */
+export async function desktopReissueAdminToken(): Promise<ReissueAdminResult> {
+  return invoke("reissue_admin_token");
 }
 
 export async function desktopInstallWorker(

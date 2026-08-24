@@ -208,6 +208,51 @@ async fn relink_admin(
     Ok((admin_token, true))
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReissueAdminResult {
+    pub worker_url: String,
+    pub admin_token: String,
+    pub worker_script_name: String,
+}
+
+/// Issue a new ADMIN_TOKEN and push it as a Worker secret. Requires an
+/// existing `relaybase-api` script — does not install or re-push other secrets.
+pub async fn reissue_admin_token(
+    account_id: &str,
+    api_token: &str,
+    existing: &StoredCredentials,
+) -> Result<(ReissueAdminResult, StoredCredentials), String> {
+    let client = client_from(account_id, api_token);
+    let script_name = DEFAULT_SCRIPT.to_string();
+
+    let script_present = worker_script_exists(&client, &script_name).await?;
+    if !script_present {
+        return Err(
+            "No Worker named `relaybase-api` found on this Cloudflare account. Install first, or authorize the account that already has Relaybase."
+                .into(),
+        );
+    }
+
+    let worker_url = enable_workers_dev(&client, &script_name).await?;
+    let admin_token = format!("rb_admin_{}", Uuid::new_v4());
+    put_worker_secret(&client, &script_name, "ADMIN_TOKEN", &admin_token).await?;
+
+    let result = ReissueAdminResult {
+        worker_url: worker_url.clone(),
+        admin_token: admin_token.clone(),
+        worker_script_name: script_name.clone(),
+    };
+
+    let mut creds = existing.clone();
+    creds.account_id = account_id.to_string();
+    creds.worker_url = worker_url;
+    creds.admin_token = admin_token;
+    creds.worker_script_name = script_name;
+
+    Ok((result, creds))
+}
+
 /// Bind an already-installed named Worker into local credentials without re-uploading script.
 pub async fn adopt_worker(
     account_id: &str,

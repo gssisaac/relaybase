@@ -23,8 +23,11 @@ function SetupShell({ children }: { children: ReactNode }) {
     // Leave setup once a Worker is connected. A Relaybase console account is
     // optional (added later from Settings for license + ADMIN_TOKEN recovery),
     // so we do not gate the dashboard on relaybaseSession here.
-    // Stay on /setup/progress so the user can copy the admin token after install.
-    if (pathname === "/setup/progress") return;
+    // Stay on /setup/progress and /setup/recover-admin so the user can copy
+    // the admin token after install or reissue.
+    if (pathname === "/setup/progress" || pathname === "/setup/recover-admin") {
+      return;
+    }
     if (credentials?.workerUrl && credentials.adminToken) {
       router.replace("/");
     }

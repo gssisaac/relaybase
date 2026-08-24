@@ -32,7 +32,10 @@ use secrets::{
     ApiKeyVaultEntry, CfOAuthSession, EmailPrefs, StorageLayoutMarker, StoredCredentials,
     TeamLogin,
 };
-use worker::{adopt_worker, install_worker, probe_install, update_worker, InstallResult, ProbeResult};
+use worker::{
+    adopt_worker, install_worker, probe_install, reissue_admin_token as reissue_admin_token_inner,
+    update_worker, InstallResult, ProbeResult, ReissueAdminResult,
+};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -211,6 +214,29 @@ async fn probe_routing_worker() -> Result<ProbeResult, String> {
         return Err("Connect Cloudflare first".into());
     }
     probe_install(&creds.account_id, &install_token).await
+}
+
+#[tauri::command]
+async fn reissue_admin_token() -> Result<ReissueAdminResult, String> {
+    if get_cf_oauth_session().is_none() {
+        return Err("Authorize with Cloudflare first.".into());
+    }
+    let install_token = refresh_install_token_if_needed().await?;
+    let creds = load_credentials()?.unwrap_or_default();
+    let account_id = get_cf_oauth_session()
+        .map(|s| s.account_id)
+        .filter(|id| !id.trim().is_empty())
+        .or_else(|| {
+            let id = creds.account_id.trim().to_string();
+            (!id.is_empty()).then_some(id)
+        })
+        .ok_or_else(|| {
+            "Could not resolve Cloudflare account. Authorize again.".to_string()
+        })?;
+    let (result, next) =
+        reissue_admin_token_inner(&account_id, &install_token, &creds).await?;
+    save_credentials(&next)?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1816,6 +1842,7 @@ pub fn run() {
             verify_cf_token,
             list_cf_zones,
             probe_routing_worker,
+            reissue_admin_token,
             adopt_routing_worker,
             install_routing_worker,
             update_routing_worker,

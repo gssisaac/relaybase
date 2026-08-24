@@ -63,15 +63,17 @@ export function SetupCloudflareAuthorizeCard({
   oauthError,
   onAuthorize,
   onCancelWait,
+  authorizeLabel = "Authorize and install on Cloudflare",
 }: {
   oauthBusy: boolean;
   oauthError: DesktopErrorHelp | null;
   onAuthorize: () => void;
   onCancelWait: () => void;
+  authorizeLabel?: string;
 }) {
   const buttonLabel = oauthBusy
     ? "Waiting for authorization…"
-    : "Authorize and install on Cloudflare";
+    : authorizeLabel;
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
       <div className="flex flex-col items-center gap-2">

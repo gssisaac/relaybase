@@ -13,9 +13,13 @@ export const SETUP_PAGE_SHELL =
 export function SetupBackLink({
   className,
   onClick,
+  href = "/setup",
+  label = "Back to start",
 }: {
   className?: string;
   onClick?: () => void | Promise<void>;
+  href?: string;
+  label?: string;
 }) {
   const router = useRouter();
   return (
@@ -27,12 +31,12 @@ export function SetupBackLink({
       )}
       onClick={() => {
         void Promise.resolve(onClick?.()).finally(() => {
-          router.push("/setup");
+          router.push(href);
         });
       }}
     >
       <ArrowLeft className="size-3" />
-      Back to start
+      {label}
     </button>
   );
 }
@@ -41,15 +45,19 @@ export function SetupBackLink({
 export function SetupCenteredPage({
   children,
   maxWidth = "max-w-md",
+  backHref,
+  backLabel,
 }: {
   children: ReactNode;
   maxWidth?: "max-w-md" | "max-w-3xl";
+  backHref?: string;
+  backLabel?: string;
 }) {
   return (
     <div className={cn(SETUP_PAGE_SHELL, maxWidth)}>
       <div className="w-full space-y-3">
         <div className="flex justify-end">
-          <SetupBackLink />
+          <SetupBackLink href={backHref} label={backLabel} />
         </div>
         {children}
       </div>

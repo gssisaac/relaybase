@@ -45,7 +45,7 @@ Credentials: `~/.relaybase/credentials.json` (admin) and `~/.relaybase/team-logi
 ## Recovery
 
 - **Console admin password lost** → `console.relaybase.xyz/recover` (email link).
-- **ADMIN_TOKEN lost** → desktop Settings → Reset admin token: the console issues a one-time recovery token (emailed), the desktop posts it + a new admin token to the customer Worker `/console/recover-admin`, which verifies with the console and writes the new token to D1 `owner_config` (no Wrangler).
+- **ADMIN_TOKEN lost** → desktop **Setup → Connect existing Worker → I forgot my admin token**. Cloudflare OAuth (same as install) then generates a new token and pushes it as the Worker `ADMIN_TOKEN` secret. Do not use console email recovery or Settings reset for this.
 
 ## Relationship to `business-plan-risk-and-market.md`
 

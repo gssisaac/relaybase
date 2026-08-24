@@ -15,8 +15,10 @@ import {
 } from "./routes/console/mailbox";
 import { consoleBranding } from "./routes/console/branding";
 import { consoleKeys } from "./routes/console/keys";
+import { consoleMailboxHealth } from "./routes/console/mailbox-health";
 import { consoleOpsLogs } from "./routes/console/ops-logs";
 import { consoleRecoverAdmin } from "./routes/console/recover-admin";
+import { consoleRebuildMail } from "./routes/console/rebuild-mail";
 import { consoleRegisterOwner } from "./routes/console/register-owner";
 import { consoleSendLogs } from "./routes/console/send-logs";
 import { consoleStats } from "./routes/console/stats";
@@ -93,6 +95,8 @@ app.route("/console/addresses", consoleAddresses);
 app.route("/console/audience-groups", consoleAudienceGroups);
 app.route("/console/broadcasts", consoleBroadcasts);
 app.route("/console/stats", consoleStats);
+app.route("/console/rebuild-mail", consoleRebuildMail);
+app.route("/console/mailbox-health", consoleMailboxHealth);
 
 // End-user mail operations (admin-token auth).
 app.route("/mail/inbox", mailInbox);

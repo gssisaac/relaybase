@@ -830,3 +830,257 @@ export async function listMessageFolderIds(
   } while (cursor);
   return ids;
 }
+
+// ──────────────────────────────────────────────────────────────────────────
+// Rebuild helpers (POST /console/rebuild-mail). These read legacy fat metas /
+// array indexes once, write thin metas + D1 rows, and delete array keys. They
+// are NOT on the ingest path.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Read whatever JSON lives at a key (legacy array or fat meta). */
+async function readJsonAt<T>(bucket: R2Bucket, key: string): Promise<T | null> {
+  const object = await bucket.get(key);
+  if (!object) return null;
+  try {
+    return JSON.parse(await object.text()) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort: parse `raw.eml` body text for FTS. Never throws. */
+async function readEmlBodyText(
+  bucket: R2Bucket,
+  kind: MailboxKind,
+  domain: string,
+  id: string,
+): Promise<string> {
+  try {
+    const object = await bucket.get(rawObjectKey(kind, domain, id));
+    if (!object) return "";
+    const parsed = await parseInboundMime(await object.arrayBuffer());
+    return parsed.bodyText;
+  } catch {
+    return "";
+  }
+}
+
+/** Coerce a legacy fat meta (with bodyText/bodyHtml) into a thin meta. */
+type LegacyMeta = {
+  fromEmail?: string;
+  fromName?: string;
+  toEmail?: string;
+  toEmails?: string[];
+  ccEmails?: string[];
+  subject?: string;
+  occurredAt?: string;
+  receivedAt?: string;
+  sentAt?: string;
+  messageId?: string | null;
+  inReplyTo?: string | null;
+  references?: string | null;
+  size?: number;
+  bodyPreview?: string;
+  bodyText?: string;
+  bodyHtml?: string | null;
+  attachments?: InboundAttachmentMeta[];
+  readAt?: string | null;
+  hasText?: boolean;
+  hasHtml?: boolean;
+};
+
+function stripFatMeta(meta: Record<string, unknown>): LegacyMeta {
+  const next: Record<string, unknown> = { ...meta };
+  delete next.bodyText;
+  delete next.bodyHtml;
+  return next as unknown as LegacyMeta;
+}
+
+export type RebuildDomainResult = {
+  domain: string;
+  inbound: number;
+  sent: number;
+  deletedKeys: string[];
+};
+
+/**
+ * Rebuild one domain: thin every inbound meta, materialize sent folders from
+ * legacy `_list.json`/`_sent.json`, upsert D1 rows + FTS, delete array keys.
+ * Chunked via `waitUntil` by the caller — this function processes one domain
+ * end-to-end and returns counts.
+ */
+export async function rebuildDomain(
+  bucket: R2Bucket,
+  mailDb: MailDb,
+  domain: string,
+): Promise<RebuildDomainResult> {
+  const normalized = domain.trim().toLowerCase();
+  const deletedKeys: string[] = [];
+  let inboundCount = 0;
+  let sentCount = 0;
+
+  // 1. Inbound: list uuid folders, thin fat metas, upsert D1.
+  const inboundIds = await listMessageFolderIds(bucket, "inbound", normalized);
+  for (const id of inboundIds) {
+    const metaKey = metaObjectKey("inbound", normalized, id);
+    const raw = await readJsonAt<Record<string, unknown>>(bucket, metaKey);
+    if (!raw) continue;
+    const stripped = stripFatMeta(raw);
+    const thin = normalizeThinMeta({
+      id,
+      kind: "inbound",
+      domain: normalized,
+      fromEmail: stripped.fromEmail ?? "",
+      fromName: stripped.fromName,
+      toEmail: stripped.toEmail ?? "",
+      toEmails: stripped.toEmails,
+      ccEmails: stripped.ccEmails,
+      subject: stripped.subject ?? "",
+      occurredAt: stripped.occurredAt ?? stripped.receivedAt ?? new Date().toISOString(),
+      messageId: stripped.messageId ?? null,
+      inReplyTo: stripped.inReplyTo ?? null,
+      references: stripped.references ?? null,
+      size: stripped.size ?? 0,
+      bodyPreview: previewText(stripped.bodyPreview ?? ""),
+      attachments: stripped.attachments ?? [],
+      readAt: stripped.readAt ?? null,
+      hasText: stripped.hasText ?? Boolean(stripped.bodyText),
+      hasHtml: stripped.hasHtml ?? Boolean(stripped.bodyHtml),
+    });
+    await bucket.put(metaKey, JSON.stringify(thin), JSON_META);
+    const bodyText = await readEmlBodyText(bucket, "inbound", normalized, id);
+    try {
+      await indexMessage(mailDb, thin, bodyText);
+    } catch (error) {
+      console.error(`rebuild inbound index failed ${normalized}/${id}`, error);
+    }
+    inboundCount += 1;
+  }
+
+  // 2. Sent: prefer existing sent uuid folders; otherwise materialize from
+  //    legacy _list.json / _sent.json arrays (no raw.eml — preview only).
+  const sentIds = await listMessageFolderIds(bucket, "sent", normalized);
+  for (const id of sentIds) {
+    const metaKey = metaObjectKey("sent", normalized, id);
+    const raw = await readJsonAt<Record<string, unknown>>(bucket, metaKey);
+    if (!raw) continue;
+    const stripped = stripFatMeta(raw);
+    const thin = normalizeThinMeta({
+      id,
+      kind: "sent",
+      domain: normalized,
+      fromEmail: stripped.fromEmail ?? "",
+      fromName: stripped.fromName,
+      toEmail: stripped.toEmail ?? "",
+      toEmails: stripped.toEmails,
+      ccEmails: stripped.ccEmails,
+      subject: stripped.subject ?? "",
+      occurredAt: stripped.occurredAt ?? stripped.sentAt ?? new Date().toISOString(),
+      messageId: stripped.messageId ?? null,
+      inReplyTo: stripped.inReplyTo ?? null,
+      references: stripped.references ?? null,
+      size: stripped.size ?? 0,
+      bodyPreview: previewText(stripped.bodyPreview ?? ""),
+      attachments: stripped.attachments ?? [],
+      hasText: stripped.hasText ?? false,
+      hasHtml: stripped.hasHtml ?? false,
+    });
+    await bucket.put(metaKey, JSON.stringify(thin), JSON_META);
+    const bodyText = await readEmlBodyText(bucket, "sent", normalized, id);
+    try {
+      await indexMessage(mailDb, thin, bodyText);
+    } catch (error) {
+      console.error(`rebuild sent index failed ${normalized}/${id}`, error);
+    }
+    sentCount += 1;
+  }
+
+  // Materialize sent from legacy arrays when no sent folders exist yet.
+  if (sentIds.length === 0) {
+    const legacy = await readJsonAt<unknown[]>(
+      bucket,
+      `sent/${normalized}/_list.json`,
+    );
+    const legacySent = legacy ?? await readJsonAt<unknown[]>(
+      bucket,
+      `inbound/${normalized}/_sent.json`,
+    );
+    if (legacySent && Array.isArray(legacySent)) {
+      for (const entry of legacySent) {
+        const row = entry as Record<string, unknown>;
+        const id = String(row.id ?? row.messageId ?? crypto.randomUUID());
+        const fromEmail = String(row.from ?? "");
+        const toEmails = Array.isArray(row.to)
+          ? (row.to as string[])
+          : String(row.to ?? "")
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+        const ccEmails = Array.isArray(row.cc)
+          ? (row.cc as string[])
+          : String(row.cc ?? "")
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+        const thin: ThinMailMeta = normalizeThinMeta({
+          id,
+          kind: "sent",
+          domain: normalized,
+          fromEmail,
+          fromName: row.fromName ? String(row.fromName) : undefined,
+          toEmail: toEmails[0] ?? fromEmail,
+          toEmails: toEmails,
+          ccEmails: ccEmails,
+          subject: String(row.subject ?? ""),
+          occurredAt: String(row.sentAt ?? new Date().toISOString()),
+          messageId: row.messageId ? String(row.messageId) : null,
+          inReplyTo: row.inReplyTo ? String(row.inReplyTo) : null,
+          references: row.references ? String(row.references) : null,
+          size: Number(row.size ?? 0),
+          bodyPreview: previewText(String(row.bodyPreview ?? "")),
+          attachments: [],
+          hasText: false,
+          hasHtml: false,
+        });
+        await bucket.put(
+          metaObjectKey("sent", normalized, id),
+          JSON.stringify(thin),
+          JSON_META,
+        );
+        try {
+          await indexMessage(mailDb, thin, thin.bodyPreview);
+        } catch (error) {
+          console.error(`rebuild sent legacy index failed ${normalized}/${id}`, error);
+        }
+        sentCount += 1;
+      }
+    }
+  }
+
+  // 3. Delete array keys (legacy indexes).
+  const arrayKeys = [
+    `inbound/${normalized}/_list.json`,
+    `sent/${normalized}/_list.json`,
+    `inbound/${normalized}/_sent.json`,
+  ];
+  for (const key of arrayKeys) {
+    const object = await bucket.head(key);
+    if (object) {
+      await bucket.delete(key);
+      deletedKeys.push(key);
+    }
+  }
+
+  return { domain: normalized, inbound: inboundCount, sent: sentCount, deletedKeys };
+}
+
+/** Delete the global send-log index (legacy). */
+export async function deleteSendLogIndex(bucket: R2Bucket): Promise<boolean> {
+  const key = "sent/_sendlog/_index.json";
+  const object = await bucket.head(key);
+  if (object) {
+    await bucket.delete(key);
+    return true;
+  }
+  return false;
+}

@@ -29,6 +29,14 @@ export function maskSecret(value: string): string {
   return `${trimmed.slice(0, 6)}${"•".repeat(14)}${trimmed.slice(-4)}`;
 }
 
+/** First 4 + asterisks + last 4, e.g. `3a38*********************4328`. */
+export function maskAccountId(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "—";
+  if (trimmed.length <= 8) return "*".repeat(trimmed.length);
+  return `${trimmed.slice(0, 4)}${"*".repeat(trimmed.length - 8)}${trimmed.slice(-4)}`;
+}
+
 export function HealthStatus({
   tone,
   label,

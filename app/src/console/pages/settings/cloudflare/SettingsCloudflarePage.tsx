@@ -12,6 +12,7 @@ import {
   HealthStatus,
   SettingsPageBody,
   SummaryRow,
+  maskAccountId,
 } from "@/console/pages/settings/settings-shared";
 
 export function SettingsCloudflarePage() {
@@ -69,7 +70,10 @@ export function SettingsCloudflarePage() {
 
         {cfConnected ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <SummaryRow label="Account ID" value={accountId || "—"} />
+            <SummaryRow
+              label="Account ID"
+              value={accountId ? maskAccountId(accountId) : "—"}
+            />
             <SummaryRow label="API token" value="Set on Worker" />
             <SummaryRow
               label="Sending"

@@ -1,8 +1,10 @@
 "use client";
 
 import { ArrowRight, Loader2 } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { CfOauthInstallDetailsSheet } from "@/console/components/setup/CfOauthInstallDetailsSheet";
 import { CF_OAUTH_INSTALL_SCOPES, type DesktopErrorHelp } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 
@@ -71,6 +73,7 @@ export function SetupCloudflareAuthorizeCard({
   onCancelWait: () => void;
   authorizeLabel?: string;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const buttonLabel = oauthBusy
     ? "Waiting for authorization…"
     : authorizeLabel;
@@ -86,6 +89,15 @@ export function SetupCloudflareAuthorizeCard({
               <li key={scope}>{scope}</li>
             ))}
           </ul>
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="mt-1 h-auto px-0 text-xs"
+            onClick={() => setDetailsOpen(true)}
+          >
+            View details
+          </Button>
         </div>
 
         {oauthError ? (
@@ -117,6 +129,10 @@ export function SetupCloudflareAuthorizeCard({
           ) : null}
         </div>
       </div>
+      <CfOauthInstallDetailsSheet
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+      />
     </div>
   );
 }

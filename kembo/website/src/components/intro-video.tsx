@@ -17,7 +17,7 @@ export function IntroVideo() {
           </p>
         </div>
 
-        <div className="mx-auto mt-8 w-full max-w-[1000px] overflow-hidden rounded-2xl border border-border bg-black shadow-sm">
+        <div className="mx-auto mt-8 w-full max-w-[1000px] overflow-hidden rounded-3xl border border-border bg-black shadow-sm">
           <video
             className="aspect-[1280/898] h-auto w-full object-cover"
             autoPlay

@@ -32,11 +32,11 @@ export function CloudflareTrust() {
               {[
                 {
                   icon: KeyRound,
-                  text: "No Workers/KV/R2 API token in the Mac app — you deploy; we never hold account edit rights",
+                  text: "No Workers/D1/R2 API token in the Mac app — you deploy; we never hold account edit rights",
                 },
                 {
                   icon: MonitorSmartphone,
-                  text: "Worker, KV, and R2 live in your account — we ship the install ZIP, you own the runtime",
+                  text: "Worker, D1, and R2 live in your account — we ship the install ZIP, you own the runtime",
                 },
                 {
                   icon: Shield,
@@ -66,7 +66,7 @@ export function CloudflareTrust() {
               <div>
                 <p className="font-semibold">Your Cloudflare stack</p>
                 <p className="text-sm text-slate-500">
-                  Workers · Email Routing · Email Sending · R2 · KV
+                  Workers · Email Routing · Email Sending · R2 · D1
                 </p>
               </div>
             </div>

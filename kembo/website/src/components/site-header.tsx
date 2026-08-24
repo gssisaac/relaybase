@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
 
 const navItems = [
-  { href: "/#addresses", label: "Addresses" },
   { href: "/#integrate", label: "Integrate" },
   { href: "/#features", label: "Features" },
   { href: "/#infrastructure", label: "Infrastructure" },

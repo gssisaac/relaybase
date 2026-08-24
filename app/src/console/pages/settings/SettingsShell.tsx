@@ -8,7 +8,6 @@ import {
   Loader2,
   RefreshCw,
   Server,
-  Shield,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -34,11 +33,6 @@ const TAB_COPY: Record<
     icon: Server,
     description: "Routing Worker URL and admin token verification.",
   },
-  "admin-token": {
-    label: "Admin token",
-    icon: Shield,
-    description: "Recover a lost ADMIN_TOKEN without Wrangler.",
-  },
   "inbound-r2": {
     label: "Inbound R2",
     icon: HardDrive,
@@ -56,7 +50,6 @@ const NAV: SettingsTab[] = [
   "worker",
   "inbound-r2",
   "d1",
-  "admin-token",
 ];
 
 export function SettingsShell({

@@ -1,17 +1,12 @@
 import type { InboundEmailMeta } from "./mailbox-store";
 
 /**
- * D1 FTS5 search index over inbound mail (`RELAYBASE_INBOX_INDEX`).
+ * Legacy D1 FTS5 search index over inbound mail (`RELAYBASE_INBOX_INDEX`,
+ * now superseded by `relaybase-mail` / `mailbox_fts` — see `server/db/mail/`).
  *
- * R2 stays the source of truth — every write here is best-effort and must
- * never fail the mail ingest path. Rows are synced by `inbound-store.ts`
- * (insert on store, delete on prune, read-state updates) and backfilled by
- * `server/scripts/backfill-inbound-search.mjs`.
- *
- * Table (see server/db/inbox-index/migrations/0001_create_inbound_search.sql):
- * FTS5-indexed columns: subject, from_email, from_name, to_emails,
- * cc_emails, body_text. Everything else is UNINDEXED metadata so a search
- * hit can be serialized as a list item without touching R2.
+ * Only `MIN_SEARCH_QUERY_LENGTH` is still used by routes; the FTS helpers
+ * below are retained for reference but are not wired (routes use
+ * `searchMailbox` from `server/db/mail/search.ts`).
  */
 
 const TABLE = "inbound_search_fts";

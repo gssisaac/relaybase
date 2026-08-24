@@ -544,35 +544,35 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
         ? {
             tone: "ok",
             label: "Configured — healthy",
-            detail: "Ops log, inbox search, and product DB tables are reachable.",
+            detail: "Ops log, mail index, and product DB tables are reachable.",
           }
         : logsOk && searchOk
           ? {
               tone: "ok",
               label: "Logs + search configured",
               detail:
-                "RELAYBASE_LOGS + RELAYBASE_INBOX_INDEX work. Bind RELAYBASE_DB for product state.",
+                "RELAYBASE_LOGS + RELAYBASE_MAIL work. Bind RELAYBASE_DB for product state.",
             }
-          : logsOk
+        : logsOk
+          ? {
+              tone: "ok",
+              label: "Logs configured",
+              detail:
+                "RELAYBASE_LOGS works. Bind RELAYBASE_MAIL and RELAYBASE_DB.",
+            }
+        : searchOk
+          ? {
+              tone: "ok",
+              label: "Search configured",
+              detail:
+                "RELAYBASE_MAIL works. Bind RELAYBASE_LOGS and RELAYBASE_DB.",
+            }
+        : appOk
             ? {
                 tone: "ok",
-                label: "Logs configured",
+                label: "Product DB configured",
                 detail:
-                  "RELAYBASE_LOGS works. Bind RELAYBASE_INBOX_INDEX and RELAYBASE_DB.",
-              }
-          : searchOk
-            ? {
-                tone: "ok",
-                label: "Search configured",
-                detail:
-                  "RELAYBASE_INBOX_INDEX works. Bind RELAYBASE_LOGS and RELAYBASE_DB.",
-              }
-            : appOk
-              ? {
-                  tone: "ok",
-                  label: "Product DB configured",
-                  detail:
-                    "RELAYBASE_DB works. Bind RELAYBASE_LOGS and RELAYBASE_INBOX_INDEX.",
+                  "RELAYBASE_DB works. Bind RELAYBASE_LOGS and RELAYBASE_MAIL.",
                 }
               : {
                   tone: "bad",

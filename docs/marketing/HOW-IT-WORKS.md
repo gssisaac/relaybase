@@ -52,7 +52,7 @@
 ## 4. Search is a D1 index; originals stay in R2
 
 * **Purpose:** You need to find a phrase in the body, not just the subject line. Opening every stored message on each query does not scale once a domain has thousands of messages.
-* **How it works:** D1 `inbox-index` is a rebuildable full-text side index. On receive, subject, sender, recipients, and body text are written there. Search hits that index and returns a flat result list. Opening a hit always reloads the real message from R2. If the index is missing or briefly down, receive, storage, and read state still work — the Mac falls back to filtering mail it already loaded, instead of showing a false empty result.
+* **How it works:** D1 `relaybase-mail` is a rebuildable index (`mailbox_messages` + `mailbox_fts`) over your R2 originals. On receive or send, subject, sender, recipients, and body text are written there. Search hits that index and returns a flat result list. Opening a hit always reloads the real message from R2 (`raw.eml`). R2 is the source of truth — the index can be rebuilt any time with `POST /console/rebuild-mail`.
 
 **Copy line:** Originals stay in your bucket. Search is a fast index over those originals — not a forwarded Gmail copy.
 

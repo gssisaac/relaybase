@@ -93,6 +93,10 @@ describe("normalizeEntryPath", () => {
       "/settings/worker",
     );
     assert.equal(
+      normalizeEntryPath("/settings/mailbox"),
+      "/settings/mailbox",
+    );
+    assert.equal(
       normalizeEntryPath("/settings/cloudflare"),
       "/settings",
     );

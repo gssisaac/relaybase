@@ -60,13 +60,15 @@ export type SettingsTab =
   | "cloudflare"
   | "worker"
   | "inbound-r2"
-  | "d1";
+  | "d1"
+  | "mailbox";
 
 const SETTINGS_TABS: SettingsTab[] = [
   "cloudflare",
   "worker",
   "inbound-r2",
   "d1",
+  "mailbox",
 ];
 
 export { SETTINGS_TABS };

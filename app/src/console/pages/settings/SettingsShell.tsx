@@ -5,6 +5,7 @@ import {
   Cloud,
   Database,
   HardDrive,
+  Inbox,
   Loader2,
   RefreshCw,
   Server,
@@ -43,6 +44,11 @@ const TAB_COPY: Record<
     icon: Database,
     description: "Ops log and inbox search database bindings.",
   },
+  mailbox: {
+    label: "Mailbox",
+    icon: Inbox,
+    description: "How long inbound mail is kept per domain.",
+  },
 };
 
 const NAV: SettingsTab[] = [
@@ -50,6 +56,7 @@ const NAV: SettingsTab[] = [
   "worker",
   "inbound-r2",
   "d1",
+  "mailbox",
 ];
 
 export function SettingsShell({

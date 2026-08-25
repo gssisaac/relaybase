@@ -328,15 +328,32 @@ export async function listMailboxPage(
   };
 }
 
-/** Resolve R2 folder ids for retention pruning (oldest beyond `keep`). */
+/**
+ * Resolve R2 folder ids for retention pruning (rows past the newest `keep`).
+ * When `limit` is set, only that many ids are returned (newest-beyond-cap
+ * first) so a cron tick cannot delete thousands of prefixes in one isolate.
+ */
 export async function mailboxPruneIds(
   db: MailDb,
   kind: MailboxKind,
   domain: string,
   keep: number,
+  limit?: number,
 ): Promise<string[]> {
   if (!db || keep <= 0) return [];
   const raw: D1Database = db.$client;
+  if (limit != null && limit > 0) {
+    const rows = await raw
+      .prepare(
+        `SELECT id FROM mailbox_messages
+         WHERE kind = ? AND domain = ?
+         ORDER BY occurred_at DESC, id DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .bind(kind, domain, limit, keep)
+      .all<{ id: string }>();
+    return (rows.results ?? []).map((row) => row.id);
+  }
   const rows = await raw
     .prepare(
       `SELECT id FROM mailbox_messages

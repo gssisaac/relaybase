@@ -52,6 +52,10 @@ describe("mapEmailApiToWorker", () => {
       mapEmailApiToWorker("/api/email/logs?domain=a.com"),
       "/console/ops-logs?domain=a.com",
     );
+    assert.equal(
+      mapEmailApiToWorker("/api/email/settings"),
+      "/console/settings",
+    );
   });
 
   it("handles sent and onboard specials", () => {

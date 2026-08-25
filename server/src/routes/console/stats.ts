@@ -37,7 +37,7 @@ type InboundAccountRow = {
 
 /**
  * Pull inbound rows for one account from D1 `mailbox_messages`, scoped to
- * the recipient's To+Cc membership. Caps at MAX_MESSAGES so the dashboard
+ * the recipient's To+Cc membership. Caps the query so the dashboard
  * never loads thousands of rows into memory.
  */
 async function listInboundRowsForAccount(

@@ -80,9 +80,9 @@ D1 is **derived** from R2 thin `meta.json`. The ingest path keeps it in sync (be
 
 - **Store:** `storeInboundMail` / `storeSentMail` PUT thin `meta.json` + `raw.eml` + pointer, then `upsertMailboxMessage` + `upsertMailboxFts` (best-effort).
 - **Dedupe:** single-key `by-message-id/{id}` pointer GET only — never a full-domain `meta.json` scan.
-- **Prune:** `mailboxPruneIds` (D1 `OFFSET MAX_MESSAGES`) → delete those R2 `{id}/` prefixes + D1 rows. No array rewrite.
+- **Prune:** ingest never prunes. Cron reads `app_settings.inbound_retain_per_domain` (`null` = unlimited). When set, `mailboxPruneIds` + batch `pruneMail` (50 prefixes/domain/tick) delete oldest inbound only. Sent is not auto-pruned.
 - **Read state:** `setMailReadState` updates thin `meta.json` + `updateMailboxReadState` (D1). Sent has no read state.
-- **Cron:** `runInboundIndexCron` lists R2 `{kind}/{domain}/` folders, diffs against D1 ids, upserts only missing thin metas, deletes stale D1 rows. Never GET `raw.eml` on the request/cron path.
+- **Cron:** `runInboundIndexCron` lists R2 `{kind}/{domain}/` folders, diffs against D1 ids, upserts only missing thin metas, deletes stale D1 rows, then batch-prunes inbound when a retain cap is set. Never GET `raw.eml` on the request/cron path.
 
 ---
 
@@ -101,3 +101,4 @@ Until rebuild finishes, list is empty or 503 — do not leave a Worker on a mail
 - [ ] List/counts/search must 503 (not silently fall back to R2 scans) when `RELAYBASE_MAIL` is unbound.
 - [ ] Account scoping uses the `recipients` column (`LIKE '%,addr,%'`), not a runtime To/Cc parse.
 - [ ] Do not reintroduce a per-domain array JSON (`_list.json` / `_sent.json`) for lists.
+- [ ] Do not prune on the `email()` / store path. Retention is cron-only and optional (`app_settings`).

@@ -58,7 +58,7 @@
   sent/{domain}/{id}/meta.json | raw.eml | attachments/…
   ```
 
-  Each message is its own folder. A thin `meta.json` holds headers and a short preview; the body lives in `raw.eml`. Lists, unread counts, and pagination come from D1 `relaybase-mail`, not a per-domain array file. Opening a message parses `raw.eml` on demand. The Mac `~/.relaybase` folder caches list pages; it is not a second mailbox. Each domain keeps recent mail (about 5,000 messages) and prunes older ones.
+  Each message is its own folder. A thin `meta.json` holds headers and a short preview; the body lives in `raw.eml`. Lists, unread counts, and pagination come from D1 `relaybase-mail`, not a per-domain array file. Opening a message parses `raw.eml` on demand. The Mac `~/.relaybase` folder caches list pages; it is not a second mailbox. Inbound retention is unlimited by default; a per-domain cap can be set in desktop Settings → Mailbox.
 
 **Copy line:** Mail stacks in your R2, not in a Relaybase cloud.
 

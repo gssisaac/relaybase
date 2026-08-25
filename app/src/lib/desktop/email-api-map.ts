@@ -79,6 +79,9 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/logs" || rest.startsWith("/logs")) {
     return `/console/ops-logs${search}`;
   }
+  if (rest === "/settings" || rest.startsWith("/settings/")) {
+    return `/console/settings${search}`;
+  }
 
   return null;
 }

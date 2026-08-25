@@ -96,7 +96,8 @@ export type ThinMailMeta = {
   hasHtml?: boolean;
 };
 
-export const MAX_MESSAGES = 5000;
+/** Max R2 prefixes deleted per pruneMail call (cron batch). */
+export const PRUNE_BATCH_LIMIT = 50;
 const INBOUND_PREFIX = "inbound";
 const SENT_PREFIX = "sent";
 
@@ -533,8 +534,6 @@ export async function storeInboundMail(
     console.error("Failed to index inbound email", error);
   }
 
-  await pruneMail(bucket, mailDb, "inbound", domain);
-
   return {
     record: thinMetaToInboundMeta(thin, bodyText),
     created: true,
@@ -660,8 +659,6 @@ export async function storeSentMail(
     console.error("Failed to index sent email", error);
   }
 
-  await pruneMail(bucket, mailDb, "sent", domain);
-
   return { record: thin, created: true };
 }
 
@@ -779,26 +776,34 @@ export async function setMailReadState(
 }
 
 /**
- * Delete messages beyond `MAX_MESSAGES` per (kind, domain). Uses D1 to find
- * the oldest ids to drop, then deletes their R2 prefixes and D1 rows. No
- * array rewrite. Best-effort — a D1 miss falls back to a no-op.
+ * Delete messages beyond `keep` per (kind, domain). Uses D1 to find ids,
+ * then deletes their R2 prefixes and D1 rows. `keep <= 0` is a no-op
+ * (unlimited). `limit` caps how many prefixes this isolate deletes.
  */
 export async function pruneMail(
   bucket: R2Bucket,
   mailDb: MailDb,
   kind: MailboxKind,
   domain: string,
-): Promise<void> {
-  if (!mailDb) return;
+  keep: number,
+  limit = PRUNE_BATCH_LIMIT,
+): Promise<number> {
+  if (!mailDb || keep <= 0) return 0;
   const normalizedDomain = domain.trim().toLowerCase();
   let staleIds: string[] = [];
   try {
-    staleIds = await mailboxPruneIds(mailDb, kind, normalizedDomain, MAX_MESSAGES);
+    staleIds = await mailboxPruneIds(
+      mailDb,
+      kind,
+      normalizedDomain,
+      keep,
+      limit,
+    );
   } catch (error) {
     console.error("Failed to compute prune ids", error);
-    return;
+    return 0;
   }
-  if (staleIds.length === 0) return;
+  if (staleIds.length === 0) return 0;
   for (const id of staleIds) {
     await deleteMessageObjects(bucket, kind, normalizedDomain, id);
   }
@@ -808,6 +813,7 @@ export async function pruneMail(
   } catch (error) {
     console.error("Failed to prune mail index rows", error);
   }
+  return staleIds.length;
 }
 
 /** Per-message `{id}/` folder ids under a domain (skips `by-message-id/`). */

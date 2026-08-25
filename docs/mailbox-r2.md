@@ -127,3 +127,4 @@ Cloudflare script settings must show `r2_bucket INBOUND` → `relaybase-mailbox`
 - [ ] Successful compose and `/v1/send` write `sent/{domain}/{id}/` + upsert `mailbox_messages` `kind=sent`.
 - [ ] Customer-install + desktop `R2_BUCKET` stay `relaybase-mailbox`.
 - [ ] Treat dashboard object-count cards as stale; use list API for migration checks.
+- [ ] Inbound retention is `app_settings.inbound_retain_per_domain` (default unlimited). Do not reintroduce a hard 5000 cap on ingest.

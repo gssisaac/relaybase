@@ -198,6 +198,12 @@ CREATE TABLE \`webhook_secrets\` (
 
 const APP_0001 = `ALTER TABLE \`owner_config\` ADD \`admin_token\` text;`;
 
+const APP_0002 = `CREATE TABLE \`app_settings\` (
+	\`id\` integer PRIMARY KEY NOT NULL,
+	\`inbound_retain_per_domain\` integer,
+	\`updated_at\` text NOT NULL
+);`;
+
 const LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
   id TEXT PRIMARY KEY,
   at TEXT NOT NULL,
@@ -272,6 +278,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS mailbox_fts USING fts5(
 export const MIGRATIONS: Migration[] = [
   { target: "app", name: "0000_old_pandemic", sql: APP_0000 },
   { target: "app", name: "0001_owner_admin_token", sql: APP_0001 },
+  { target: "app", name: "0002_app_settings", sql: APP_0002 },
   { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
   { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 },
 ];

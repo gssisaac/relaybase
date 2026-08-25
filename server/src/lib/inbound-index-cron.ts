@@ -11,11 +11,13 @@
  */
 import type { Env } from "../env";
 import { createAppDb } from "../../db/app";
+import { getAppSettings } from "../../db/app/settings";
 import { createMailDb } from "../../db/mail";
 import { readMailbox } from "./catalog-store";
 import {
   listMessageFolderIds,
   loadThinMeta,
+  pruneMail,
 } from "./mailbox-store";
 import {
   mailboxAddressCounts,
@@ -28,7 +30,8 @@ export async function runInboundIndexCron(env: Env): Promise<void> {
   const mailDb = createMailDb(env.RELAYBASE_MAIL);
   if (!mailDb) return;
 
-  const mailbox = await readMailbox(createAppDb(env.RELAYBASE_DB));
+  const appDb = createAppDb(env.RELAYBASE_DB);
+  const mailbox = await readMailbox(appDb);
   for (const domainEntry of mailbox.domains) {
     const domain = domainEntry.trim().toLowerCase();
     if (!domain) continue;
@@ -41,6 +44,19 @@ export async function runInboundIndexCron(env: Env): Promise<void> {
           error,
         );
       }
+    }
+  }
+
+  const retain = (await getAppSettings(appDb)).inboundRetainPerDomain;
+  if (retain == null) return;
+
+  for (const domainEntry of mailbox.domains) {
+    const domain = domainEntry.trim().toLowerCase();
+    if (!domain) continue;
+    try {
+      await pruneMail(env.INBOUND, mailDb, "inbound", domain, retain);
+    } catch (error) {
+      console.error(`Mailbox inbound prune failed for ${domain}`, error);
     }
   }
 }

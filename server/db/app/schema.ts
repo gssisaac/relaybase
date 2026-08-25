@@ -187,6 +187,15 @@ export const webhookFails = sqliteTable(
   ],
 );
 
+// ─── app settings (singleton — product options, not owner identity) ──────
+
+export const appSettings = sqliteTable("app_settings", {
+  id: integer("id").primaryKey(),
+  /** NULL = unlimited inbound per domain. Positive = keep newest N inbound. */
+  inboundRetainPerDomain: integer("inbound_retain_per_domain"),
+  updatedAt: text("updated_at").notNull(),
+});
+
 // ─── owner config (singleton) ────────────────────────────────────────────
 
 export const ownerConfig = sqliteTable("owner_config", {
@@ -230,4 +239,5 @@ export type WebhookRow = typeof webhooks.$inferSelect;
 export type WebhookSecretRow = typeof webhookSecrets.$inferSelect;
 export type WebhookFailRow = typeof webhookFails.$inferSelect;
 export type OwnerConfigRow = typeof ownerConfig.$inferSelect;
+export type AppSettingsRow = typeof appSettings.$inferSelect;
 export type InboundEventRow = typeof inboundEvents.$inferSelect;

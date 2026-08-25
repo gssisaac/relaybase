@@ -13,10 +13,16 @@ import { toast } from "sonner";
 
 import { EnableEmailApiDialog } from "@/console/components/setup/EnableEmailApiDialog";
 import {
+  desktopGetCredentials,
+  desktopOpenExternal,
   desktopPushServerToken,
   desktopSaveCfCredentials,
+  desktopStartCfOAuth,
   desktopVerifyCfToken,
+  explainCfOAuthError,
   explainDesktopError,
+  isCloudflareAuthExpired,
+  listenCfOAuthResult,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
@@ -33,7 +39,8 @@ export type EnableEmailApiOpenOptions = {
 };
 
 export type EnableEmailApiPasteBridge = {
-  handlePasteAndPush: (token: string) => Promise<void>;
+  /** Resolves true when the token was pushed; false when OAuth was started and push is deferred. */
+  handlePasteAndPush: (token: string) => Promise<boolean>;
   pasteBusy: boolean;
   pasteError: DesktopErrorHelp | null;
   pasteMessage: string | null;
@@ -121,14 +128,25 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
   const optsRef = useRef<EnableEmailApiOpenOptions>({});
   const [pasteBusy, setPasteBusy] = useState(false);
   const [pasteError, setPasteError] = useState<DesktopErrorHelp | null>(null);
+  const [hostPasteMessage, setHostPasteMessage] = useState<string | null>(null);
+  const [hostOauthBusy, setHostOauthBusy] = useState(false);
+  const pendingPasteTokenRef = useRef<string | null>(null);
 
   const openDialog = useCallback((next?: EnableEmailApiOpenOptions) => {
     const resolved = next ?? {};
     optsRef.current = resolved;
     setOpts(resolved);
     setPasteError(null);
+    setHostPasteMessage(null);
     setOpen(true);
   }, []);
+
+  function finishVerified(message: string) {
+    setHostPasteMessage(message);
+    toast.success(message);
+    optsRef.current.onVerified?.();
+    setOpen(false);
+  }
 
   useEffect(() => {
     openImpl = openDialog;
@@ -158,33 +176,128 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
       credentials?.installToken?.trim(),
   );
 
-  async function handleDefaultPaste(token: string) {
-    if (!accountId) {
+  async function startHostOauth() {
+    setHostOauthBusy(true);
+    setPasteError(null);
+    try {
+      const start = await desktopStartCfOAuth();
+      await desktopOpenExternal(start.authorizeUrl);
+    } catch (err) {
+      setHostOauthBusy(false);
+      setPasteError(explainCfOAuthError(err));
+      throw err;
+    }
+  }
+
+  async function runDefaultPaste(token: string, acctOverride?: string) {
+    const acctId =
+      acctOverride?.trim() ||
+      accountId ||
+      credentials?.accountId?.trim() ||
+      credentials?.cfOauthAccountId?.trim() ||
+      "";
+    if (!acctId) {
       throw new Error("Authorize with Cloudflare first to push the server token.");
     }
     setPasteBusy(true);
     setPasteError(null);
     try {
-      const result = await desktopVerifyCfToken(accountId, token, "server");
+      const result = await desktopVerifyCfToken(acctId, token, "server");
       if (!result.ok) throw new Error(result.message);
-      await desktopSaveCfCredentials(accountId, "", token);
+      await desktopSaveCfCredentials(acctId, "", token);
       const push = await desktopPushServerToken();
       if (!push.ok) throw new Error(push.message);
       await desktop?.refresh();
-    } catch (err) {
-      setPasteError(explainDesktopError(err, "Server token verification failed"));
-      throw err;
+      return push.pushedAt
+        ? "Server token verified, saved, and pushed to the Worker."
+        : "Server token verified and saved locally.";
     } finally {
       setPasteBusy(false);
     }
   }
 
+  async function handleDefaultPaste(token: string): Promise<boolean> {
+    const hasSession = Boolean(
+      credentials?.cfOauthRefreshToken?.trim() ||
+        credentials?.cfOauthAccessToken?.trim() ||
+        credentials?.installToken?.trim(),
+    );
+    if (!hasSession) {
+      pendingPasteTokenRef.current = token;
+      await startHostOauth();
+      return false;
+    }
+    try {
+      finishVerified(await runDefaultPaste(token));
+      return true;
+    } catch (err) {
+      if (isCloudflareAuthExpired(err)) {
+        pendingPasteTokenRef.current = token;
+        await startHostOauth();
+        return false;
+      }
+      setPasteError(explainDesktopError(err, "Server token verification failed"));
+      throw err;
+    }
+  }
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let active = true;
+    listenCfOAuthResult({
+      onComplete: () => {
+        if (!active) return;
+        const token = pendingPasteTokenRef.current;
+        pendingPasteTokenRef.current = null;
+        setHostOauthBusy(false);
+        if (!token) return;
+        void (async () => {
+          await desktop?.refresh();
+          try {
+            const fresh = await desktopGetCredentials();
+            finishVerified(await runDefaultPaste(token, fresh?.accountId));
+          } catch (err) {
+            if (isCloudflareAuthExpired(err)) return;
+            setPasteError(
+              explainDesktopError(err, "Server token verification failed"),
+            );
+          }
+        })();
+      },
+      onError: (message) => {
+        if (!active) return;
+        const hadPending = Boolean(pendingPasteTokenRef.current);
+        pendingPasteTokenRef.current = null;
+        setHostOauthBusy(false);
+        if (hadPending) {
+          setPasteError(explainCfOAuthError(message));
+        }
+      },
+    }).then((fn) => {
+      if (active) unlisten = fn;
+      else fn();
+    });
+    return () => {
+      active = false;
+      unlisten?.();
+    };
+    // Default paste OAuth is only used when Settings is not mounted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desktop]);
+
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (!next) {
+      pendingPasteTokenRef.current = null;
+      setHostOauthBusy(false);
       optsRef.current.onClose?.();
     }
   }
+
+  const rawPasteError = settingsPaste?.pasteError ?? pasteError;
+  const visiblePasteError = isCloudflareAuthExpired(rawPasteError)
+    ? null
+    : rawPasteError;
 
   const value: EnableEmailApiContextValue = {
     openEnableEmailApiDialog: openDialog,
@@ -213,10 +326,10 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
           settingsPaste?.handlePasteAndPush ?? handleDefaultPaste
         }
         pasteBusy={settingsPaste?.pasteBusy ?? pasteBusy}
-        pasteError={settingsPaste?.pasteError ?? pasteError}
-        pasteMessage={settingsPaste?.pasteMessage ?? null}
+        pasteError={visiblePasteError}
+        pasteMessage={settingsPaste?.pasteMessage ?? hostPasteMessage}
         cfInstallTokenAvailable={cfInstallTokenAvailable}
-        oauthBusy={settingsPaste?.oauthBusy ?? false}
+        oauthBusy={settingsPaste?.oauthBusy ?? hostOauthBusy}
       />
     </EnableEmailApiContext.Provider>
   );

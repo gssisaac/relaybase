@@ -22,6 +22,7 @@ import {
   desktopOpenExternal,
   desktopVerifyWorkerConnection,
   explainDesktopError,
+  isCloudflareAuthExpired,
   mailApiReady,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
@@ -84,7 +85,7 @@ export function EnableEmailApiDialog({
   allowSkip?: boolean;
   onVerified: () => void;
   onSkip?: () => void;
-  onPasteAndPush?: (token: string) => Promise<void>;
+  onPasteAndPush?: (token: string) => Promise<boolean | void>;
   pasteBusy?: boolean;
   pasteError?: DesktopErrorHelp | null;
   pasteMessage?: string | null;
@@ -156,8 +157,9 @@ export function EnableEmailApiDialog({
     if (!onPasteAndPush || !pasteToken.trim()) return;
     setVerifyError(null);
     try {
-      await onPasteAndPush(pasteToken.trim());
-      if (cfInstallTokenAvailable) {
+      const done = await onPasteAndPush(pasteToken.trim());
+      // OAuth-first paste returns false and finishes later via pasteMessage / host.
+      if (done !== false && cfInstallTokenAvailable) {
         onVerified();
         onOpenChange(false);
       }
@@ -317,8 +319,12 @@ export function EnableEmailApiDialog({
           </div>
         )}
 
-        <DesktopErrorBanner error={verifyError} />
-        <DesktopErrorBanner error={pasteError} />
+        <DesktopErrorBanner
+          error={isCloudflareAuthExpired(verifyError) ? null : verifyError}
+        />
+        <DesktopErrorBanner
+          error={isCloudflareAuthExpired(pasteError) ? null : pasteError}
+        />
         {pasteMessage ? (
           <p className="text-sm text-emerald-700 dark:text-emerald-400">
             {pasteMessage}

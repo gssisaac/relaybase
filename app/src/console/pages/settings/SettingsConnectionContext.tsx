@@ -29,6 +29,7 @@ import {
   desktopOpenExternal,
   explainDesktopError,
   explainCfOAuthError,
+  isCloudflareAuthExpired,
   mailApiReady,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
@@ -89,7 +90,7 @@ type SettingsConnectionContextValue = {
   resetCfDraft: () => void;
   resetWorkerDraft: () => void;
   handleSaveServerToken: () => Promise<void>;
-  handlePasteServerToken: (token: string) => Promise<void>;
+  handlePasteServerToken: (token: string) => Promise<boolean>;
   handleSaveWorker: () => Promise<void>;
   handleRefreshStatus: () => Promise<void>;
   handleRequestRecoveryToken: () => Promise<void>;
@@ -257,6 +258,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       setCfEditing(false);
       return true;
     } catch (err) {
+      if (isCloudflareAuthExpired(err)) return "expired";
       setCfError(explainDesktopError(err, "Server token verification failed"));
       return false;
     } finally {
@@ -265,33 +267,40 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     }
   }
 
+  async function authorizeThenPush() {
+    pendingPushRef.current = true;
+    setCfError(null);
+    setCfMessage("Authorize with Cloudflare to push the server token.");
+    await handleStartCfOAuth();
+  }
+
   async function handleSaveServerToken() {
     // No install token in memory or on disk: request a short-lived Cloudflare
     // authorization (memory only — cleared on app restart). After OAuth
     // completes, the pending-push effect runs the push automatically.
     if (!cfInstallTokenAvailable) {
-      pendingPushRef.current = true;
-      setCfError(null);
-      setCfMessage("Authorize with Cloudflare to push the server token.");
-      await handleStartCfOAuth();
+      await authorizeThenPush();
       return;
     }
-    await runServerTokenPush();
+    const result = await runServerTokenPush();
+    if (result === "expired") await authorizeThenPush();
   }
 
-  async function handlePasteServerToken(token: string) {
+  async function handlePasteServerToken(token: string): Promise<boolean> {
     setServerToken(token);
     if (!cfInstallTokenAvailable) {
-      pendingPushRef.current = true;
-      setCfError(null);
-      setCfMessage("Authorize with Cloudflare to push the server token.");
-      await handleStartCfOAuth();
-      return;
+      await authorizeThenPush();
+      return false;
     }
-    const ok = await runServerTokenPush({ serverToken: token });
-    if (!ok) {
+    const result = await runServerTokenPush({ serverToken: token });
+    if (result === "expired") {
+      await authorizeThenPush();
+      return false;
+    }
+    if (!result) {
       throw new Error("Server token verification failed");
     }
+    return true;
   }
 
   // Rust completes OAuth (localhost:32831 in tauri:dev, or relaybase:// in
@@ -677,7 +686,9 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     registerEnableEmailApiPasteBridge({
       handlePasteAndPush: value.handlePasteServerToken,
       pasteBusy: value.cfBusy || value.serverPushBusy,
-      pasteError: value.cfError ?? value.oauthError,
+      pasteError: isCloudflareAuthExpired(value.cfError ?? value.oauthError)
+        ? null
+        : (value.cfError ?? value.oauthError),
       pasteMessage: value.cfMessage,
       cfInstallTokenAvailable: value.cfInstallTokenAvailable,
       oauthBusy: value.oauthBusy,

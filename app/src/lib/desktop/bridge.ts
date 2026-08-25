@@ -239,8 +239,22 @@ export const CF_OAUTH_AUTHORIZE_WAIT_MS = 3 * 60 * 1000;
 /** True when Cloudflare's install OAuth session is gone or the access token is stale. */
 export function isCloudflareAuthExpired(err: unknown): boolean {
   const lower = formatDesktopError(err).toLowerCase();
+  if (err && typeof err === "object") {
+    const help = err as { title?: unknown; detail?: unknown; fix?: unknown };
+    const blob = [help.title, help.detail, help.fix]
+      .filter((v) => typeof v === "string")
+      .join(" ")
+      .toLowerCase();
+    if (
+      blob.includes("authorization expired") ||
+      blob.includes("cloudflare_auth_expired")
+    ) {
+      return true;
+    }
+  }
   return (
     lower.includes("cloudflare_auth_expired") ||
+    lower.includes("authorization expired") ||
     lower.includes("code: 9109") ||
     lower.includes("invalid access token")
   );
@@ -638,8 +652,8 @@ export function explainDesktopError(
     return {
       title: "Cloudflare authorization expired",
       detail:
-        "The install token expired and Relaybase has no refresh token to renew it.",
-      fix: "Authorize with Cloudflare again, then retry.",
+        "Relaybase is no longer connected to your Cloudflare account. This connection is only kept while the app is open, and Cloudflare may also expire it.",
+      fix: "Enable the email API on your Worker, then retry.",
     };
   }
 

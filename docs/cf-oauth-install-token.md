@@ -108,6 +108,7 @@ The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secret
 - **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe).
 - **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). Used when the user prefers not to use the dashboard secret UI.
 - **Settings → Cloudflare** — dashboard-first Enable email API dialog. OAuth is only requested if the user chooses paste & push and there is no install token in memory.
+- **Domains → Refresh from Cloudflare** — if listing zones fails with expired Cloudflare authorization, the dialog opens the same shared Enable email API dialog (`openEnableEmailApiDialog`). After verify, it retries the zone list. Do not add a second OAuth flow on that page.
 - **Settings → Worker** — Check for updates on the card. **Update Worker** goes to `/settings/worker/update` (same OAuth / Manual + CLI UI as Setup, worker-only copy). After OAuth, the app resolves that account’s `workers.dev` URL and **must match** the saved Worker URL (custom domains match via `/console/connect` `accountId`). Mismatch stops before any upload. Then `/settings/worker/progress` uploads the script and calls **`migrate-db`**, not `init-db`.
 - **Manual install** — admin token + terminal command inline on the install page; the same Enable email API dialog follows Worker URL verify.
 - **Sending** — the Worker `EMAIL` send_email binding, attached at deploy. `CF_API_TOKEN` is for domain / inbox routing / DNS API, not for send. `GET /console/connect` reports `emailBindingConfigured`.
@@ -125,7 +126,7 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 | Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
 | Desktop Rust | `desktop/src-tauri/src/lib.rs`, `secrets.rs`, `auto_install.rs` (`preview_worker_update_target`), `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge.ts`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx`, `WorkerUpdateBanner.tsx`, `/settings/worker/update`, `/settings/worker/progress` |
-| Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx` |
+| Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx`, `use-enable-email-api-dialog.tsx` (also opened from Domains → Refresh from Cloudflare) |
 | Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
 | Admin token reissue | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx`, `reissue_admin_token` in `desktop/src-tauri/src/lib.rs` + `worker.rs` |
 

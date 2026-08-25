@@ -16,6 +16,7 @@ import {
   type DomainOnboardingSummary,
 } from "@/lib/dashboard/DomainContext";
 import { useMailboxHealth, lastInboundForDomain } from "@/lib/dashboard/mailbox-health";
+import { AddDomainDialog } from "@/console/pages/domains/AddDomainDialog";
 import { ImportCloudflareZonesDialog } from "@/console/pages/domains/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -239,6 +240,7 @@ export function DomainsView() {
   const [message, setMessage] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [workingDomain, setWorkingDomain] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [refreshOpen, setRefreshOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [mxConflictDomain, setMxConflictDomain] = useState<string | null>(null);
@@ -307,6 +309,7 @@ export function DomainsView() {
         className="px-4 py-3"
         end={
           <>
+            <AddDomainDialog open={addOpen} onOpenChange={setAddOpen} />
             <ImportCloudflareZonesDialog
               open={refreshOpen}
               onOpenChange={setRefreshOpen}
@@ -530,15 +533,24 @@ export function DomainsView() {
             <div className="space-y-3 py-2">
               <p className="text-sm text-muted-foreground">
                 {desktop
-                  ? "No domains yet. Refresh from Cloudflare to pull in zones from your account."
-                  : "No domains yet. Use the Mac app to refresh domains from your Cloudflare account."}
+                  ? "No domains yet. Add a domain or refresh from Cloudflare to pull in zones from your account."
+                  : "No domains yet. Add a domain managed on your Cloudflare account."}
               </p>
-              {desktop ? (
-                <Button size="sm" onClick={() => setRefreshOpen(true)}>
-                  <RefreshCw className="mr-1.5 size-3.5" />
-                  Refresh from Cloudflare
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" onClick={() => setAddOpen(true)}>
+                  Add domain
                 </Button>
-              ) : null}
+                {desktop ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setRefreshOpen(true)}
+                  >
+                    <RefreshCw className="mr-1.5 size-3.5" />
+                    Refresh from Cloudflare
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Loading domains…</p>

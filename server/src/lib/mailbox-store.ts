@@ -679,9 +679,10 @@ function buildSentMime(params: StoreSentMailParams): string {
 
 /**
  * Fetch one message as a full `InboundEmailMeta` (body parsed on demand from
- * `raw.eml`). Returns null when the meta or raw object is missing. For sent
- * rows that never had a `raw.eml` (legacy `_list.json` import), `bodyText`
- * stays empty and `bodyHtml` null — the list preview is the only body.
+ * `raw.eml`). Returns null when `meta.json` is missing. `hasText`/`hasHtml`
+ * are hints only — always try `raw.eml` when the object exists (rebuild used
+ * to write those flags as false after stripping fat `bodyText`/`bodyHtml`).
+ * Legacy sent rows with no `raw.eml` fall back to `bodyPreview`.
  */
 export async function getMailMessage(
   bucket: R2Bucket,
@@ -695,22 +696,23 @@ export async function getMailMessage(
 
   let bodyText = "";
   let bodyHtml: string | null = null;
-  if (thin.hasText || thin.hasHtml) {
-    const rawObject = await bucket.get(
-      rawObjectKey(kind, normalizedDomain, id),
-    );
-    if (rawObject) {
-      try {
-        const parsed = await parseInboundMime(await rawObject.arrayBuffer());
-        bodyText = parsed.bodyText;
-        bodyHtml = parsed.bodyHtml;
-      } catch (error) {
-        console.error("Failed to parse raw.eml for detail", error);
-      }
+  const rawObject = await bucket.get(
+    rawObjectKey(kind, normalizedDomain, id),
+  );
+  if (rawObject) {
+    try {
+      const parsed = await parseInboundMime(await rawObject.arrayBuffer());
+      bodyText = parsed.bodyText;
+      bodyHtml = parsed.bodyHtml;
+    } catch (error) {
+      console.error("Failed to parse raw.eml for detail", error);
     }
   }
 
-  const meta: InboundEmailMeta = thinMetaToInboundMeta(thin, bodyText);
+  const meta: InboundEmailMeta = thinMetaToInboundMeta(
+    thin,
+    bodyText || (rawObject ? "" : thin.bodyPreview),
+  );
   meta.bodyHtml = bodyHtml;
   return meta;
 }
@@ -938,7 +940,12 @@ export async function rebuildDomain(
     const metaKey = metaObjectKey("inbound", normalized, id);
     const raw = await readJsonAt<Record<string, unknown>>(bucket, metaKey);
     if (!raw) continue;
+    const fatHasText = Boolean(raw.hasText ?? raw.bodyText);
+    const fatHasHtml = Boolean(raw.hasHtml ?? raw.bodyHtml);
     const stripped = stripFatMeta(raw);
+    const emlExists = Boolean(
+      await bucket.head(rawObjectKey("inbound", normalized, id)),
+    );
     const thin = normalizeThinMeta({
       id,
       kind: "inbound",
@@ -957,8 +964,8 @@ export async function rebuildDomain(
       bodyPreview: previewText(stripped.bodyPreview ?? ""),
       attachments: stripped.attachments ?? [],
       readAt: stripped.readAt ?? null,
-      hasText: stripped.hasText ?? Boolean(stripped.bodyText),
-      hasHtml: stripped.hasHtml ?? Boolean(stripped.bodyHtml),
+      hasText: fatHasText || emlExists,
+      hasHtml: fatHasHtml || emlExists,
     });
     await bucket.put(metaKey, JSON.stringify(thin), JSON_META);
     const bodyText = await readEmlBodyText(bucket, "inbound", normalized, id);
@@ -983,6 +990,9 @@ export async function rebuildDomain(
     const raw = await readJsonAt<Record<string, unknown>>(bucket, metaKey);
     if (!raw) continue;
     const stripped = stripFatMeta(raw);
+    const emlExists = Boolean(
+      await bucket.head(rawObjectKey("sent", normalized, id)),
+    );
     const thin = normalizeThinMeta({
       id,
       kind: "sent",
@@ -1000,8 +1010,8 @@ export async function rebuildDomain(
       size: stripped.size ?? 0,
       bodyPreview: previewText(stripped.bodyPreview ?? ""),
       attachments: stripped.attachments ?? [],
-      hasText: stripped.hasText ?? false,
-      hasHtml: stripped.hasHtml ?? false,
+      hasText: Boolean(stripped.hasText) || emlExists,
+      hasHtml: Boolean(stripped.hasHtml) || emlExists,
     });
     await bucket.put(metaKey, JSON.stringify(thin), JSON_META);
     const bodyText = await readEmlBodyText(bucket, "sent", normalized, id);

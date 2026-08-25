@@ -15,6 +15,7 @@ import {
   useDomain,
   type DomainOnboardingSummary,
 } from "@/lib/dashboard/DomainContext";
+import { useMailboxHealth, lastInboundForDomain } from "@/lib/dashboard/mailbox-health";
 import { ImportCloudflareZonesDialog } from "@/console/pages/domains/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -243,6 +244,7 @@ export function DomainsView() {
   const [mxConflictDomain, setMxConflictDomain] = useState<string | null>(null);
   const [mxResolving, setMxResolving] = useState(false);
   const { isDesktop: desktop } = useDesktopChrome();
+  const mailboxHealth = useMailboxHealth();
 
   const mxConflictEntry = mxConflictDomain
     ? domains.find((d) => d.domain === mxConflictDomain)
@@ -361,6 +363,7 @@ export function DomainsView() {
                   <TableHead>Senders</TableHead>
                   <TableHead>Audience</TableHead>
                   <TableHead>Inbound R2</TableHead>
+                  <TableHead>Last inbound</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -429,6 +432,34 @@ export function DomainsView() {
                             Not provisioned
                           </span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const last = lastInboundForDomain(
+                            mailboxHealth.snapshot,
+                            entry.domain,
+                          );
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              {last.stale ? (
+                                <AlertCircle className="size-3.5 text-amber-600 dark:text-amber-400" />
+                              ) : null}
+                              <span
+                                className={cn(
+                                  "text-xs",
+                                  last.stale
+                                    ? "text-amber-700 dark:text-amber-400"
+                                    : "text-muted-foreground",
+                                )}
+                                title={last.at ?? undefined}
+                              >
+                                {mailboxHealth.loading && !mailboxHealth.snapshot
+                                  ? "…"
+                                  : last.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex flex-wrap justify-end gap-2">

@@ -6,8 +6,8 @@ import { cloudflareSendErrorBody } from "../lib/cloudflare-api-hints";
 import { sendOutboundEmail } from "../lib/email-send";
 import { recordOpsLog } from "../lib/ops-logs";
 import { recordSendLog } from "../lib/send-logs";
-import { previewText } from "../lib/inbound-store";
-import { upsertStoredSent } from "../lib/sent-store";
+import { createMailDb } from "../../db/mail";
+import { storeSentMail } from "../lib/mailbox-store";
 import {
   findInvalidRecipients,
   normalizeRecipients,
@@ -233,18 +233,22 @@ send.post("/", async (c) => {
       });
     }
     try {
-      await upsertStoredSent(c.env.INBOUND, record.domain, {
-        id: result.messageId || crypto.randomUUID(),
-        from,
-        to: to.join(", "),
-        cc: cc.length ? cc.join(", ") : undefined,
-        subject,
-        bodyPreview: previewText(text),
-        sentAt: new Date().toISOString(),
-        messageId: result.messageId,
-        inReplyTo: body.inReplyTo?.trim(),
-        references: body.references?.trim(),
-      });
+      await storeSentMail(
+        c.env.INBOUND,
+        {
+          from,
+          fromName: body.fromName?.trim() || undefined,
+          to,
+          cc: cc.length ? cc : undefined,
+          subject,
+          text,
+          html: body.html,
+          messageId: result.messageId,
+          inReplyTo: body.inReplyTo?.trim() || null,
+          references: body.references?.trim() || null,
+        },
+        createMailDb(c.env.RELAYBASE_MAIL),
+      );
     } catch (error) {
       console.error("Failed to persist sent mail", error);
     }

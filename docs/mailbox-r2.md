@@ -9,31 +9,32 @@
 | Worker binding | `server/wrangler.toml` (`INBOUND` → bucket `relaybase-mailbox`, var `INBOUND_BUCKET_NAME`) |
 | Customer install template | `server/customer-install/wrangler.toml`, `server/customer-install/README.md` |
 | Desktop auto-install | `desktop/src-tauri/src/auto_install.rs`, `desktop/src-tauri/src/worker.rs` (`R2_BUCKET`) |
-| Inbound objects | `server/src/lib/inbound-store.ts` (`inbound/{domain}/…`) |
-| Mailbox Sent index | `server/src/lib/sent-store.ts` (`sent/{domain}/_list.json`) |
-| Send history | `server/src/lib/send-logs.ts` (`sent/_sendlog/…`) |
-| Compose / API persist | `server/src/lib/mail/send-message.ts`, `server/src/routes/send.ts` |
-| In-place key rename + KV send-log export | `server/scripts/migrate-mailbox-r2.mjs` |
+| **Mailbox store (inbound + sent)** | `server/src/lib/mailbox-store.ts` |
+| Send history | `server/src/lib/send-logs.ts` (`sent/_sendlog/{id}.json`, no `_index.json`) |
+| Compose / API persist | `server/src/lib/mail/send-message.ts`, `server/routes/send.ts` |
+| One-time backfill | `server/src/routes/console/rebuild-mail.ts`, `rebuildDomain` in `mailbox-store.ts` |
 | Bucket-to-bucket copy (Worker) | `server/scripts/copy-mailbox-r2.mjs`, `server/scripts/mailbox-copy-worker/` |
 
-Storage map and forbidden stores: **[storage-architecture.md](./storage-architecture.md)**. Ops-event D1 log (additive, not send history): **[ops-log-d1.md](./ops-log-d1.md)**.
+Storage map and forbidden stores: **[storage-architecture.md](./storage-architecture.md)**. D1 mail index (`relaybase-mail`): **[mailbox-d1.md](./mailbox-d1.md)**. Ops-event D1 log (additive, not send history): **[ops-log-d1.md](./ops-log-d1.md)**.
 
 ---
 
-## What changed (2026-08-20)
+## What changed (2026-08-24) — kill `list.json`, unify mail D1
 
-The product R2 bucket is no longer inbound-only.
+The per-domain array JSON indexes are gone. R2 now holds **one folder per mail**; lists/search/counts come from D1 `relaybase-mail`.
 
 | Before | After |
 |--------|--------|
-| Bucket `relaybase-inbound` | Bucket `relaybase-mailbox` |
-| Sent mailbox index at `inbound/{domain}/_sent.json` (Takeout import only) | `sent/{domain}/_list.json` (compose, `/v1/send`, Takeout) |
-| Send history in KV `srv:sendlog:*` | R2 `sent/_sendlog/_index.json` + `sent/_sendlog/{id}.json` |
-| Compose wrote D1 ops log only | Compose also writes send-log + mailbox Sent |
+| `inbound/{domain}/_list.json` (array of all messages) | deleted — list is `SELECT mailbox_messages` |
+| `inbound/{domain}/{id}/meta.json` with `bodyText`/`bodyHtml` | thin `meta.json` (headers + `bodyPreview` only) + `raw.eml` |
+| `sent/{domain}/_list.json` (array) | `sent/{domain}/{id}/meta.json` (+ `raw.eml` when compose/API wrote MIME) |
+| `sent/_sendlog/_index.json` | deleted — `listSendLogs` does `bucket.list({ prefix: "sent/_sendlog/" })` |
+| `RELAYBASE_INBOX_INDEX` D1 (inbound FTS only) | `RELAYBASE_MAIL` D1 (`mailbox_messages` + `mailbox_fts`, inbound **and** sent) |
+| Message-ID dedupe = full-domain `meta.json` scan (the `wedesk.so` ingest killer) | single-key `by-message-id/{id}` pointer GET |
 
-The Worker **binding name stays `INBOUND`**. Only the Cloudflare bucket name and object-key prefixes changed.
+The Worker **binding name stays `INBOUND`**. The bucket name `relaybase-mailbox` is unchanged. Only object keys and the D1 binding changed.
 
-New customer installs create `relaybase-mailbox` from day one (`server/customer-install/`, desktop auto-install).
+Cutover is **code first → `POST /console/rebuild-mail` once → delete array keys**. Until rebuild finishes on a mailbox, lists are empty or 503 — do not leave a Worker on a mailbox without running rebuild.
 
 ---
 
@@ -41,18 +42,24 @@ New customer installs create `relaybase-mailbox` from day one (`server/customer-
 
 ```text
 relaybase-mailbox/
-  inbound/{domain}/_list.json
-  inbound/{domain}/{id}/meta.json | raw.eml | attachments/…
-  inbound/{domain}/by-message-id/{encodedMessageId}
+  inbound/{domain}/{id}/meta.json | raw.eml | attachments/{aid}-{name}
+  inbound/{domain}/by-message-id/{encodedMessageId}     # pointer → id (text)
 
-  sent/{domain}/_list.json
-  sent/_sendlog/_index.json
-  sent/_sendlog/{uuid}.json
+  sent/{domain}/{id}/meta.json | raw.eml | attachments/{aid}-{name}
+  sent/{domain}/by-message-id/{encodedMessageId}
+
+  sent/_sendlog/{uuid}.json                            # no _index.json
 ```
 
-`listStoredSent` still reads legacy `inbound/{domain}/_sent.json` if the new `_list.json` is missing.
+Deleted after backfill: `inbound/{domain}/_list.json`, `sent/{domain}/_list.json`, `inbound/{domain}/_sent.json`, `sent/_sendlog/_index.json`.
 
-Broadcasts write `sent/_sendlog/*` only — they do **not** append every recipient into the mailbox Sent folder.
+### `meta.json` contract (THIN)
+
+Headers, `bodyPreview` (≤500 chars), `attachments[]`, `occurredAt` (inbound `receivedAt` / sent `sentAt`), `readAt` (inbound only), `messageId`, `inReplyTo`, `references`, `size`, `hasText`, `hasHtml`. **No `bodyText` / `bodyHtml` keys.** Detail APIs parse `raw.eml` on demand via `parseInboundMime`.
+
+Legacy sent rows imported from `_list.json` have **no `raw.eml`** (only `bodyPreview`); `hasText`/`hasHtml` stay false and the detail endpoint returns preview-only. Recovering those bodies is explicitly out of scope.
+
+Broadcasts still write `sent/_sendlog/*` only — they do **not** insert every recipient into `mailbox_messages`.
 
 ---
 
@@ -66,28 +73,16 @@ Dashboard **Object count / Storage size** are eventual-consistency rollups. Afte
 
 ---
 
-## Dogfood migration (already applied)
+## Operator cutover (dogfood `relaybase-api`, account `3adf03…`)
 
-Account `3adf03d991843094a7343eebc0a98007`, Worker `relaybase-api`:
+1. Create + bind `relaybase-mail` D1 (`wrangler d1 create relaybase-mail`, set `database_id` in `wrangler.toml`).
+2. `cd server && pnpm run build:bundle` → deploy.
+3. `POST /console/migrate-db` (creates `mailbox_messages` + `mailbox_fts`).
+4. `POST /console/rebuild-mail` (one-time backfill: thin metas, materialize sent, fill D1+FTS, delete array keys). Pass `?domain=` to rebuild one domain at a time on large mailboxes.
+5. Confirm Inbox / Sent / search; then **delete `relaybase-inbox-index`** so the account stays at 3 D1s.
+6. Pull-to-refresh desktop so the `~/.relaybase` inbox/sent disk cache dies.
 
-1. In-place on `relaybase-inbound`: rename `inbound/wedesk.so/_sent.json` → `sent/wedesk.so/_list.json`; write 35 KV send logs to `sent/_sendlog/*`.
-2. Worker-copy all keys `relaybase-inbound` → `relaybase-mailbox` (8,349 = 8,349). Copy Worker `relaybase-mailbox-copy` deleted after the run.
-3. Product Worker rebound: `INBOUND` + `INBOUND_BUCKET_NAME` = `relaybase-mailbox`. Verified `GET /health` → `r2Configured: true`, `bucketName: "relaybase-mailbox"`.
-
-`relaybase-inbound` remains as a read-only backup until Inbox / Sent / Logs look right, then delete it.
-
-Re-run (another install) from `server/`:
-
-```bash
-# Server-side copy source → relaybase-mailbox (if needed)
-pnpm run copy:mailbox-r2             # dry-run
-pnpm run copy:mailbox-r2:apply
-
-# Point wrangler.toml at relaybase-mailbox, then:
-pnpm run deploy
-```
-
-Requires `CLOUDFLARE_API_TOKEN` (R2 + Workers edit) and `CLOUDFLARE_ACCOUNT_ID`.
+Until rebuild finishes, list is empty or 503 — do not leave this Worker on a mailbox without running rebuild.
 
 ---
 
@@ -109,19 +104,26 @@ From that page the user can add R2 back if Cloudflare prompts. Do not deep-link 
 curl -sS https://<worker>/health
 # inbound.r2Configured === true
 # inbound.bucketName === "relaybase-mailbox"
+# d1.mailConfigured === true
+
+curl -sS -H "Authorization: Bearer <admin>" https://<worker>/console/mailbox-health
+# per-domain last inbound + stale flag
+
+curl -sS -X POST -H "Authorization: Bearer <admin>" https://<worker>/console/rebuild-mail
+# { domains, inbound, sent, deletedKeys }
 ```
 
-Cloudflare script settings must show `r2_bucket INBOUND` → `relaybase-mailbox`.
-
-List both buckets via the R2 REST API and compare key counts / `inbound/` vs `sent/` prefixes before deleting the legacy bucket.
+Cloudflare script settings must show `r2_bucket INBOUND` → `relaybase-mailbox` and `d1_database RELAYBASE_MAIL` → `relaybase-mail`.
 
 ---
 
 ## Checklist when changing this area
 
-- [ ] New mail objects stay under `inbound/` or `sent/` — do not invent a third top-level prefix without updating this doc and the copy Worker.
+- [ ] New mail objects stay under `inbound/{domain}/{id}/` or `sent/{domain}/{id}/` — never reintroduce a per-domain array JSON.
+- [ ] `meta.json` never contains `bodyText` / `bodyHtml`; bodies live only in `raw.eml`.
+- [ ] Message-ID dedupe uses the `by-message-id/{id}` pointer only — never a full-domain `meta.json` scan.
 - [ ] Binding name remains `INBOUND` unless desktop upload metadata (`cloudflare.rs`) and health JSON are updated together.
-- [x] `recordSendLog` / `listSendLogs` take the R2 bucket.
-- [ ] Successful compose and `/v1/send` upsert `sent/{domain}/_list.json`.
+- [ ] `recordSendLog` / `listSendLogs` take the R2 bucket and never touch `_index.json`.
+- [ ] Successful compose and `/v1/send` write `sent/{domain}/{id}/` + upsert `mailbox_messages` `kind=sent`.
 - [ ] Customer-install + desktop `R2_BUCKET` stay `relaybase-mailbox`.
 - [ ] Treat dashboard object-count cards as stale; use list API for migration checks.

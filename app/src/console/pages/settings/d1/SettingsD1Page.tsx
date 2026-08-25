@@ -50,7 +50,7 @@ export function SettingsD1Page() {
   const { workerStatus, hasWorker, statusBusy } = useSettingsConnection();
 
   const logs = workerStatus?.d1Logs;
-  const inboxIndex = workerStatus?.d1InboxIndex;
+  const mail = workerStatus?.d1Mail;
   const app = workerStatus?.d1App;
   const pending = statusBusy && workerStatus == null;
 
@@ -62,11 +62,11 @@ export function SettingsD1Page() {
       sizeBytes: null,
     };
 
-  const inboxBinding =
-    inboxIndex ?? {
+  const mailBinding =
+    mail ?? {
       configured: false,
-      databaseName: "relaybase-inbox-index",
-      binding: "RELAYBASE_INBOX_INDEX",
+      databaseName: "relaybase-mail",
+      binding: "RELAYBASE_MAIL",
       sizeBytes: null,
     };
 
@@ -106,23 +106,23 @@ export function SettingsD1Page() {
       />
       <StorageBindingCard
         icon={Database}
-        title="Inbox search"
-        description="FTS5 index for server-side inbox search (subject, from, to, body)."
+        title="Mailbox"
+        description="List/count/search index for inbound + sent mail (FTS5 over subject, from, to, cc, body)."
         status={d1Status(
           hasWorker,
           pending,
-          inboxIndex,
-          "Probing RELAYBASE_INBOX_INDEX binding.",
-          "Inbox search index is reachable.",
-          "Bind RELAYBASE_INBOX_INDEX and run POST /console/init-db.",
+          mail,
+          "Probing RELAYBASE_MAIL binding.",
+          "Mailbox index is reachable.",
+          "Bind RELAYBASE_MAIL and run POST /console/init-db.",
         )}
         resourceLabel="Database"
-        resourceName={inboxBinding.databaseName}
-        binding={inboxBinding.binding}
-        usedBytes={inboxBinding.configured ? inboxBinding.sizeBytes : null}
+        resourceName={mailBinding.databaseName}
+        binding={mailBinding.binding}
+        usedBytes={mailBinding.configured ? mailBinding.sizeBytes : null}
         limitBytes={D1_DATABASE_SIZE_LIMIT_BYTES}
         pending={
-          pending && inboxBinding.configured && inboxBinding.sizeBytes == null
+          pending && mailBinding.configured && mailBinding.sizeBytes == null
         }
       />
       <StorageBindingCard

@@ -2,26 +2,30 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireApiKey } from "../lib/auth";
 import { createAppDb } from "../../db/app";
+import { createMailDb } from "../../db/mail";
 import {
   ackPendingEvents,
   listPendingEvents,
 } from "../lib/inbound-events";
 import {
   getInboundAttachment,
-  getInboundEmail,
-  listInboundEmailsPage,
-  listInboundIndexEntries,
-  setInboundReadState,
-} from "../lib/inbound-store";
+  getMailMessage,
+  setMailReadState,
+} from "../lib/mailbox-store";
 import {
   MIN_SEARCH_QUERY_LENGTH,
-  searchInboundEmails,
 } from "../lib/inbound-search";
 import {
   serializeInboundListItem,
   serializeInboundMessage,
 } from "../lib/inbound-serialize";
-import { aggregateInboundCounts } from "../lib/inbound-counts";
+import {
+  listMailboxPage,
+  mailboxAddressCounts,
+} from "../../db/mail/messages";
+import {
+  searchMailbox,
+} from "../../db/mail/search";
 
 const v1Inbox = new Hono<{ Bindings: Env }>();
 
@@ -54,24 +58,75 @@ v1Inbox.post("/events/ack", async (c) => {
   return c.json({ acked });
 });
 
+function rowToInboundMeta(row: {
+  id: string;
+  domain: string;
+  from_email: string;
+  from_name: string | null;
+  to_email: string;
+  to_emails: string | null;
+  cc_emails: string | null;
+  subject: string;
+  occurred_at: string;
+  message_id: string | null;
+  in_reply_to: string | null;
+  refs: string | null;
+  size: number;
+  attachment_count: number;
+  read_at: string | null;
+  body_preview: string;
+}) {
+  return {
+    id: row.id,
+    domain: row.domain,
+    fromEmail: row.from_email,
+    fromName: row.from_name ?? undefined,
+    toEmail: row.to_email,
+    toEmails: row.to_emails ? row.to_emails.split(",").filter(Boolean) : [],
+    ccEmails: row.cc_emails ? row.cc_emails.split(",").filter(Boolean) : [],
+    subject: row.subject,
+    receivedAt: row.occurred_at,
+    messageId: row.message_id,
+    inReplyTo: row.in_reply_to,
+    references: row.refs,
+    size: row.size,
+    bodyPreview: row.body_preview,
+    bodyText: "",
+    bodyHtml: null,
+    attachments: Array.from({ length: row.attachment_count }, (_, i) => ({
+      id: String(i),
+      filename: "",
+      contentType: "application/octet-stream",
+      size: 0,
+      disposition: "attachment",
+      contentId: null,
+    })),
+    readAt: row.read_at,
+  };
+}
+
 v1Inbox.get("/messages", async (c) => {
   const auth = await requireApiKey(c);
   if (auth instanceof Response) return auth;
 
+  const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
+  if (!mailDb) {
+    return c.json({ error: "Mail index is not configured" }, 503);
+  }
+
   const limit = Number(c.req.query("limit") ?? "50");
   const before = c.req.query("before")?.trim() || undefined;
-  const page = await listInboundEmailsPage(
-    c.env.INBOUND,
-    {
-      domain: auth.record.domain,
-      limit: Number.isFinite(limit) ? limit : 50,
-      before,
-    },
-    c.env.RELAYBASE_INBOX_INDEX,
-  );
+  const page = await listMailboxPage(mailDb, {
+    kind: "inbound",
+    domain: auth.record.domain,
+    limit: Number.isFinite(limit) ? limit : 50,
+    before,
+  });
 
   return c.json({
-    messages: page.messages.map(serializeInboundListItem),
+    messages: page.rows.map((row) =>
+      serializeInboundListItem(rowToInboundMeta(row)),
+    ),
     nextBefore: page.nextBefore,
     hasMore: page.hasMore,
     total: page.total,
@@ -83,12 +138,20 @@ v1Inbox.get("/messages/counts", async (c) => {
   const auth = await requireApiKey(c);
   if (auth instanceof Response) return auth;
 
-  const entries = await listInboundIndexEntries(
-    c.env.INBOUND,
-    auth.record.domain,
-    c.env.RELAYBASE_INBOX_INDEX,
-  );
-  return c.json(aggregateInboundCounts(entries));
+  const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
+  if (!mailDb) {
+    return c.json({ error: "Mail index is not configured" }, 503);
+  }
+  const byAddress = await mailboxAddressCounts(mailDb, "inbound", auth.record.domain);
+  let totalAll = 0;
+  let unreadAll = 0;
+  const counts: Record<string, { total: number; unread: number }> = {};
+  for (const [address, value] of Object.entries(byAddress)) {
+    counts[address] = value;
+    totalAll += value.total;
+    unreadAll += value.unread;
+  }
+  return c.json({ counts, totalAll, unreadAll });
 });
 
 // Server-side full-text search (subject/from/to/cc/body). Flat results.
@@ -103,13 +166,15 @@ v1Inbox.get("/messages/search", async (c) => {
       400,
     );
   }
-  if (!c.env.RELAYBASE_INBOX_INDEX) {
-    return c.json({ error: "Search index is not configured" }, 503);
+  const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
+  if (!mailDb) {
+    return c.json({ error: "Mail index is not configured" }, 503);
   }
 
   const limit = Number(c.req.query("limit") ?? "50");
   const before = c.req.query("before")?.trim() || undefined;
-  const page = await searchInboundEmails(c.env.RELAYBASE_INBOX_INDEX, {
+  const page = await searchMailbox(mailDb, {
+    kind: "inbound",
     domains: [auth.record.domain],
     q,
     limit: Number.isFinite(limit) ? limit : 50,
@@ -117,7 +182,9 @@ v1Inbox.get("/messages/search", async (c) => {
   });
 
   return c.json({
-    messages: page.messages.map(serializeInboundListItem),
+    messages: page.rows.map((row) =>
+      serializeInboundListItem(rowToInboundMeta(row)),
+    ),
     total: page.total,
     nextBefore: page.nextBefore,
     hasMore: page.hasMore,
@@ -144,12 +211,12 @@ v1Inbox.post("/messages/read", async (c) => {
   }
 
   const readAt = body.read ? new Date().toISOString() : null;
-  const result = await setInboundReadState(
+  const result = await setMailReadState(
     c.env.INBOUND,
     auth.record.domain,
     ids,
     readAt,
-    c.env.RELAYBASE_INBOX_INDEX,
+    createMailDb(c.env.RELAYBASE_MAIL),
   );
   return c.json(result);
 });
@@ -181,10 +248,11 @@ v1Inbox.get("/messages/:id", async (c) => {
   const auth = await requireApiKey(c);
   if (auth instanceof Response) return auth;
 
-  const message = await getInboundEmail(
+  const message = await getMailMessage(
     c.env.INBOUND,
-    c.req.param("id"),
+    "inbound",
     auth.record.domain,
+    c.req.param("id"),
   );
   if (!message || message.domain !== auth.record.domain) {
     return c.json({ error: "Message not found" }, 404);

@@ -37,10 +37,10 @@ export default {
             binding: "RELAYBASE_LOGS",
             sizeBytes: null,
           },
-          inboxIndex: {
-            configured: !!env.RELAYBASE_INBOX_INDEX,
-            databaseName: "relaybase-inbox-index",
-            binding: "RELAYBASE_INBOX_INDEX",
+          mail: {
+            configured: !!env.RELAYBASE_MAIL,
+            databaseName: "relaybase-mail",
+            binding: "RELAYBASE_MAIL",
             sizeBytes: null,
           },
           app: {

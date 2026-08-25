@@ -9,7 +9,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | **Where data lives** (KV, R2, `~/.relaybase`, API routing, new durable fields) | [docs/storage-architecture.md](docs/storage-architecture.md) |
 | **D1 migrations**, `POST /console/init-db` (empty only), `POST /console/migrate-db`, install probe, or `migrations_dir` paths | [docs/d1-migrations-and-init-db.md](docs/d1-migrations-and-init-db.md) |
 | **Product Worker code** (`server/src/`, `server/db/`, new `/console/*` or `/mail/*` routes) | Rebuild the Worker bundle — see **Worker bundle** below |
-| Mailbox R2 bucket (`relaybase-mailbox`), `inbound/` / `sent/` prefixes, send-log move off KV, or bucket copy scripts | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
+| Mailbox R2 layout (`relaybase-mailbox`, `inbound|sent {domain}/{id}/` thin `meta.json` + `raw.eml`, send-log, bucket copy scripts) | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Settings → Cloudflare OAuth (install token), `kembo/console` OAuth routes, or desktop CF API install | [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) |
 | Email Cmd+K, row context menus, mail action shortcuts, or anything under `app/src/email/commands/` | [docs/email-command-system.md](docs/email-command-system.md) |
@@ -20,7 +20,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Flutter mobile app, `/mobile/*`, per-account mobile password, Other device tab, or teammate account scoping | [docs/mobile-email-companion.md](docs/mobile-email-companion.md) |
 | Send/bounce logging, Dashboard Log page, D1 `RELAYBASE_LOGS`, or `ops_log` schema | [docs/ops-log-d1.md](docs/ops-log-d1.md) |
 | Kembo console/admin storage (`kembo-ops`, licenses, accounts, waitlist, beta invites, operator settings) | [docs/kembo-ops-d1.md](docs/kembo-ops-d1.md) |
-| Mail search, D1 `RELAYBASE_INBOX_INDEX` / FTS5, list header counts, Sent pagination, or list virtualization | [docs/inbound-search-d1-fts5.md](docs/inbound-search-d1-fts5.md) |
+| Mail search, D1 `RELAYBASE_MAIL` / `mailbox_fts`, list header counts, Sent pagination, or list virtualization | [docs/mailbox-d1.md](docs/mailbox-d1.md) |
 | Inbox/sent sender avatars (favicon), `SenderAvatar`, `SenderIconStore`, or `/mail/favicon` proxy | [docs/sender-favicon-cache.md](docs/sender-favicon-cache.md) |
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
@@ -33,9 +33,9 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 | Layer | Store | Use for |
 |-------|--------|---------|
 | Remote | D1 `RELAYBASE_DB` (`server/db/app/`, binding `RELAYBASE_DB`) | All durable product state: domains, addresses, audience groups/contacts, broadcasts, branding, API keys, dashboard auth tokens, mobile passwords, webhooks, owner config (including recovered `admin_token`), pending inbound events. Sole source of truth — no KV. |
-| Remote | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail bodies (`inbound/{domain}/…`) and send logs (`sent/_sendlog/*`). Unchanged. |
+| Remote | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound|sent {domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. |
 | Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). R2 `sent/_sendlog/*` stays authoritative for send history. Drizzle schema/helper: `server/db/log/`. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
-| Remote | D1 `RELAYBASE_INBOX_INDEX` (optional) | FTS5 inbound search index, derived from R2. Drizzle schema/helper: `server/db/inbox-index/`. See **[docs/inbound-search-d1-fts5.md](docs/inbound-search-d1-fts5.md)**. |
+| Remote | D1 `RELAYBASE_MAIL` (`server/db/mail/`, binding `RELAYBASE_MAIL`) | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. See **[docs/mailbox-d1.md](docs/mailbox-d1.md)**. |
 | Remote | D1 `kembo-ops` (binding `DB` on `kembo-admin` + `kembo-console` + `kembo-website`) | Shared Kembo store: operator settings (`product_settings`), licenses, accounts, account_workers, account_recovery, waitlist, `beta_invites`. Drizzle in `kembo/console/src/db/` (admin uses `product_settings` only; website Worker uses `beta_invites` via raw SQL). See **[docs/kembo-ops-d1.md](docs/kembo-ops-d1.md)**. |
 | Local | `~/.relaybase` | Credentials, team-login, API key plaintext vault (`api-keys.json`), mail/UI/dashboard cache |
 | Local (phone) | Flutter secure storage + Hive | Mobile email + password; inbox/draft cache — **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)** |

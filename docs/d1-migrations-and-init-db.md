@@ -25,7 +25,7 @@ The Worker is the only process that applies product SQL. Desktop and Wrangler do
 |--------|---------|-------------|
 | app | `RELAYBASE_DB` | `domains` |
 | logs | `RELAYBASE_LOGS` | `ops_log` |
-| inbox | `RELAYBASE_INBOX_INDEX` | `inbound_search_fts` |
+| mail | `RELAYBASE_MAIL` | `mailbox_messages` |
 
 | Situation | `init-db` | `migrate-db` |
 |-----------|-----------|--------------|
@@ -56,20 +56,21 @@ Each D1 binding has its own migration directory under `server/db/`:
 |---------|----------|---------------|----------------|
 | `RELAYBASE_DB` | `relaybase-db` | `server/db/app/migrations/` | `server/db/app/schema.ts` (drizzle-kit) |
 | `RELAYBASE_LOGS` | `relaybase-logs` | `server/db/log/migrations/` | `server/db/log/schema.ts` (reference only) |
-| `RELAYBASE_INBOX_INDEX` | `relaybase-inbox-index` | `server/db/inbox-index/migrations/` | `server/db/inbox-index/schema.ts` (reference only) |
+| `RELAYBASE_MAIL` | `relaybase-mail` | `server/db/mail/migrations/` | `server/db/mail/schema.ts` (reference only) |
 
 Wrangler paths (dogfood + customer-install template):
 
 ```toml
 migrations_dir = "db/app/migrations"          # RELAYBASE_DB
-migrations_dir = "db/log/migrations"        # RELAYBASE_LOGS
-migrations_dir = "db/inbox-index/migrations" # RELAYBASE_INBOX_INDEX
+migrations_dir = "db/log/migrations"           # RELAYBASE_LOGS
+migrations_dir = "db/mail/migrations"           # RELAYBASE_MAIL
 ```
 
 **Removed (do not recreate):**
 
 - `server/migrations/` — legacy waitlist D1; unbound and deleted.
 - `server/migrations-app/`, `server/migrations-logs/`, `server/migrations-inbox/` — moved into `server/db/*/migrations/`.
+- `server/db/inbox-index/` — replaced by `server/db/mail/` (`RELAYBASE_INBOX_INDEX` → `RELAYBASE_MAIL`). Delete the old `relaybase-inbox-index` D1 after running `POST /console/rebuild-mail` so the account stays at 3 D1s.
 
 Embedded migration strings for the Worker live in **`server/db/migrations.ts`**. Shared apply helper: **`server/src/lib/d1-migrations.ts`**. Keep `migrations.ts` in sync when adding `.sql` files so `init-db` / `migrate-db` and manual `wrangler d1 migrations apply` stay equivalent.
 
@@ -82,7 +83,7 @@ Embedded migration strings for the Worker live in **`server/db/migrations.ts`**.
 Route: `server/src/routes/console/init-db.ts`  
 Registered in `server/src/app.ts` as `/console/init-db`.
 
-**Empty D1 only.** Before any CREATE/DROP/INSERT, the Worker probes `domains` / `ops_log` / `inbound_search_fts`. If any exists:
+**Empty D1 only.** Before any CREATE/DROP/INSERT, the Worker probes `domains` / `ops_log` / `mailbox_messages`. If any exists:
 
 ```json
 { "ok": false, "error": "DB_ALREADY_INITIALIZED", "alreadyInitialized": true }
@@ -157,10 +158,10 @@ See also: [cf-oauth-install-token.md](./cf-oauth-install-token.md), [storage-arc
 3. Copy the new SQL into `server/db/migrations.ts` (`MIGRATIONS` array, `target: "app"`).
 4. Deploy Worker; call **`POST /console/migrate-db`** on existing installs (or `init-db` only on empty D1). Do not rewrite `0000_old_pandemic` — existing D1s already have that schema.
 
-### Logs or inbox index (hand-written SQL)
+### Logs or mail index (hand-written SQL)
 
-1. Add `server/db/log/migrations/000X_….sql` or `server/db/inbox-index/migrations/000X_….sql`.
-2. Add the same SQL string to `server/db/migrations.ts` with `target: "logs"` or `"inbox"`.
+1. Add `server/db/log/migrations/000X_….sql` or `server/db/mail/migrations/000X_….sql`.
+2. Add the same SQL string to `server/db/migrations.ts` with `target: "logs"` or `"mail"`.
 3. Deploy + `migrate-db` (existing) or `init-db` (empty).
 
 Never mix migration files across databases in one directory — each `migrations_dir` applies to one D1 only.
@@ -173,6 +174,6 @@ Never mix migration files across databases in one directory — each `migrations
 |-------|-----|
 | Product D1 tables | [storage-architecture.md](./storage-architecture.md) |
 | Ops log schema | [ops-log-d1.md](./ops-log-d1.md) |
-| FTS5 inbox index | [inbound-search-d1-fts5.md](./inbound-search-d1-fts5.md) |
+| Mail index (list/search/counts) | [mailbox-d1.md](./mailbox-d1.md) |
 | Customer manual install | [server/customer-install/README.md](../server/customer-install/README.md) |
 | OAuth install token | [cf-oauth-install-token.md](./cf-oauth-install-token.md) |

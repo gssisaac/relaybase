@@ -3,13 +3,15 @@
 import {
   d1BindingFromPayload,
   D1_APP_DEFAULT,
-  D1_INBOX_INDEX_DEFAULT,
+  D1_MAIL_DEFAULT,
   D1_LOGS_DEFAULT,
   type D1BindingSnapshot,
 } from "@/lib/dashboard/d1-binding-status";
 
 export type D1ProbeResult = {
   d1Logs: D1BindingSnapshot;
+  d1Mail: D1BindingSnapshot;
+  /** @deprecated Renamed to d1Mail. Kept for callers being migrated. */
   d1InboxIndex: D1BindingSnapshot;
   d1App: D1BindingSnapshot;
 };
@@ -21,7 +23,7 @@ export async function probeD1WhenConnectOmits(
 ): Promise<D1ProbeResult> {
   const headers = { Authorization: `Bearer ${adminToken}` };
   let d1Logs = { ...D1_LOGS_DEFAULT };
-  let d1InboxIndex = { ...D1_INBOX_INDEX_DEFAULT };
+  let d1Mail = { ...D1_MAIL_DEFAULT };
   let d1App = { ...D1_APP_DEFAULT };
 
   try {
@@ -31,9 +33,11 @@ export async function probeD1WhenConnectOmits(
         d1?: Parameters<typeof d1BindingFromPayload>[0];
       };
       if (json.d1) {
+        const mail = d1BindingFromPayload(json.d1, "mail");
         return {
           d1Logs: d1BindingFromPayload(json.d1, "logs"),
-          d1InboxIndex: d1BindingFromPayload(json.d1, "inboxIndex"),
+          d1Mail: mail,
+          d1InboxIndex: mail,
           d1App: d1BindingFromPayload(json.d1, "app"),
         };
       }
@@ -79,8 +83,8 @@ export async function probeD1WhenConnectOmits(
           `${base}/mail/inbox/search?domain=${encodeURIComponent(domain)}&q=te&limit=1`,
           { headers, cache: "no-store" },
         );
-        d1InboxIndex = {
-          ...d1InboxIndex,
+        d1Mail = {
+          ...d1Mail,
           configured: search.status !== 503,
         };
       }
@@ -92,5 +96,5 @@ export async function probeD1WhenConnectOmits(
     // continue
   }
 
-  return { d1Logs, d1InboxIndex, d1App };
+  return { d1Logs, d1Mail, d1InboxIndex: d1Mail, d1App };
 }

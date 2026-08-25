@@ -167,7 +167,7 @@ relaybase/
 
 ## Worker — deploy
 
-The product Worker (`server/`) deploys into the **customer's** Cloudflare account (end-user side). It binds the `INBOUND` R2 mailbox bucket and D1 databases (`RELAYBASE_DB`, `RELAYBASE_LOGS`, `RELAYBASE_INBOX_INDEX`). No KV namespace.
+The product Worker (`server/`) deploys into the **customer's** Cloudflare account (end-user side). It binds the `INBOUND` R2 mailbox bucket and D1 databases (`RELAYBASE_DB`, `RELAYBASE_LOGS`, `RELAYBASE_MAIL`). No KV namespace.
 
 ```bash
 cd server
@@ -192,9 +192,9 @@ Bindings in `server/wrangler.toml`:
 | Binding | Resource | Purpose |
 |---------|----------|---------|
 | `RELAYBASE_DB` | D1 `relaybase-db` | Catalog, API keys, auth tokens, mobile passwords, webhooks, owner config, inbound events |
-| `INBOUND` | R2 `relaybase-mailbox` | Mailbox objects: inbound mail (`inbound/{domain}/…`) and sent mail (`sent/{domain}/…`, `sent/_sendlog/…`) |
+| `INBOUND` | R2 `relaybase-mailbox` | Mail atoms: `inbound|sent {domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and `sent/_sendlog/{id}.json` |
 | `RELAYBASE_LOGS` | D1 `relaybase-logs` | Ops-event log (compose/API/broadcast sends + inbound bounces) |
-| `RELAYBASE_INBOX_INDEX` | D1 `relaybase-inbox-index` | FTS5 inbound search index (optional) |
+| `RELAYBASE_MAIL` | D1 `relaybase-mail` | Mail index: `mailbox_messages` (list/counts, inbound + sent) + `mailbox_fts` (FTS5 search). Rebuildable from R2 via `POST /console/rebuild-mail` |
 
 ---
 

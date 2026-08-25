@@ -57,7 +57,7 @@ const walkthrough: WalkthroughFeature[] = [
       duration: "14–18s",
       frame: "Mac app, full window, 16:9 crop. Hide the dock and desktop clutter.",
       shots: [
-        "Open Setup → Install. Hold on the five resources: Worker relaybase-api, R2 relaybase-mailbox, D1 relaybase-db, relaybase-inbox-index, relaybase-logs.",
+        "Open Setup → Install. Hold on the five resources: Worker relaybase-api, R2 relaybase-mailbox, D1 relaybase-db, relaybase-mail, relaybase-logs.",
         "Click Authorize (or flash Authorize and Manual so both paths are visible).",
         "End on Verify success with the Worker URL on screen.",
       ],

@@ -2,9 +2,9 @@ import type { Env } from "../../env";
 import { cloudflareSendErrorBody } from "../cloudflare-api-hints";
 import { sendOutboundEmail } from "../email-send";
 import { recordOpsLog } from "../ops-logs";
-import { previewText } from "../inbound-store";
 import { recordSendLog } from "../send-logs";
-import { upsertStoredSent, type StoredSentEmail } from "../sent-store";
+import { createMailDb } from "../../../db/mail";
+import { storeSentMail } from "../mailbox-store";
 import {
   findInvalidRecipients,
   normalizeRecipients,
@@ -224,21 +224,24 @@ export async function sendMailMessage(
       metaJson: JSON.stringify(meta),
     });
 
-    const sent: StoredSentEmail = {
-      id: result.messageId || crypto.randomUUID(),
-      from,
-      to: toJoined ?? "",
-      cc: ccJoined,
-      subject,
-      bodyPreview: previewText(text),
-      sentAt: new Date().toISOString(),
-      messageId: result.messageId,
-      inReplyTo: body.inReplyTo?.trim(),
-      references: body.references?.trim(),
-    };
     if (domain) {
       try {
-        await upsertStoredSent(env.INBOUND, domain, sent);
+        await storeSentMail(
+          env.INBOUND,
+          {
+            from,
+            fromName: body.fromName?.trim() || undefined,
+            to,
+            cc: cc.length ? cc : undefined,
+            subject,
+            text,
+            html: body.html,
+            messageId: result.messageId,
+            inReplyTo: body.inReplyTo?.trim() || null,
+            references: body.references?.trim() || null,
+          },
+          createMailDb(env.RELAYBASE_MAIL),
+        );
       } catch (error) {
         console.error("Failed to persist sent mail", error);
       }
@@ -246,7 +249,7 @@ export async function sendMailMessage(
 
     return {
       response: new Response(
-        JSON.stringify({ messageId: result.messageId, sent }),
+        JSON.stringify({ messageId: result.messageId }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
     };

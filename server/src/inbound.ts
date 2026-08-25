@@ -1,4 +1,5 @@
 import type { Env } from "./env";
+import { createMailDb } from "../db/mail";
 import {
   buildBouncePreview,
   isBounceMessage,
@@ -6,16 +7,16 @@ import {
 } from "./lib/bounce-detect";
 import { recordOpsLog } from "./lib/ops-logs";
 import {
-  storeInboundEmail,
-  type StoreInboundEmailResult,
-} from "./lib/inbound-store";
+  storeInboundMail,
+  type StoreInboundMailResult,
+} from "./lib/mailbox-store";
 
 export async function handleInboundEmail(
   message: ForwardableEmailMessage,
   env: Env,
-): Promise<StoreInboundEmailResult> {
+): Promise<StoreInboundMailResult> {
   const raw = await new Response(message.raw).arrayBuffer();
-  const result = await storeInboundEmail(
+  const result = await storeInboundMail(
     env.INBOUND,
     {
       envelopeFrom: message.from,
@@ -27,7 +28,7 @@ export async function handleInboundEmail(
       size: message.rawSize,
       raw,
     },
-    env.RELAYBASE_INBOX_INDEX,
+    createMailDb(env.RELAYBASE_MAIL),
   );
 
   if (isBounceMessage(raw, message.from)) {

@@ -1163,11 +1163,11 @@ fn default_d1_logs() -> D1BindingSnapshot {
     }
 }
 
-fn default_d1_inbox_index() -> D1BindingSnapshot {
+fn default_d1_mail() -> D1BindingSnapshot {
     D1BindingSnapshot {
         configured: false,
-        database_name: "relaybase-inbox-index".into(),
-        binding: "RELAYBASE_INBOX_INDEX".into(),
+        database_name: "relaybase-mail".into(),
+        binding: "RELAYBASE_MAIL".into(),
         size_bytes: None,
     }
 }
@@ -1184,7 +1184,7 @@ fn default_d1_app() -> D1BindingSnapshot {
 fn parse_d1_binding(value: &serde_json::Value, kind: &str) -> D1BindingSnapshot {
     let defaults = match kind {
         "logs" => default_d1_logs(),
-        "inboxIndex" => default_d1_inbox_index(),
+        "mail" | "inboxIndex" => default_d1_mail(),
         _ => default_d1_app(),
     };
     let Some(d1) = value.get("d1") else {
@@ -1228,15 +1228,15 @@ fn parse_d1_binding(value: &serde_json::Value, kind: &str) -> D1BindingSnapshot 
     } else {
         D1BindingSnapshot {
             configured: d1
-                .get("inboxIndexConfigured")
+                .get("mailConfigured")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
             database_name: d1
-                .get("inboxIndexDatabaseName")
+                .get("mailDatabaseName")
                 .and_then(|v| v.as_str())
-                .unwrap_or("relaybase-inbox-index")
+                .unwrap_or("relaybase-mail")
                 .into(),
-            binding: "RELAYBASE_INBOX_INDEX".into(),
+            binding: "RELAYBASE_MAIL".into(),
             size_bytes: None,
         }
     }
@@ -1268,7 +1268,7 @@ struct WorkerConnectResult {
     #[serde(default)]
     email_binding_configured: bool,
     d1_logs: D1BindingSnapshot,
-    d1_inbox_index: D1BindingSnapshot,
+    d1_mail: D1BindingSnapshot,
     d1_app: D1BindingSnapshot,
 }
 
@@ -1298,7 +1298,7 @@ async fn probe_d1_when_connect_omits(
 ) -> (bool, bool) {
     let auth = format!("Bearer {token}");
     let mut logs_configured = false;
-    let mut inbox_configured = false;
+    let mut mail_configured = false;
 
     if let Ok(res) = http
         .get(format!("{base}/health"))
@@ -1312,11 +1312,15 @@ async fn probe_d1_when_connect_omits(
                         .pointer("/d1/logsConfigured")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
-                    inbox_configured = json
-                        .pointer("/d1/inboxIndexConfigured")
+                    mail_configured = json
+                        .pointer("/d1/mailConfigured")
                         .and_then(|v| v.as_bool())
+                        .or_else(|| {
+                            json.pointer("/d1/inboxIndexConfigured")
+                                .and_then(|v| v.as_bool())
+                        })
                         .unwrap_or(false);
-                    return (logs_configured, inbox_configured);
+                    return (logs_configured, mail_configured);
                 }
             }
         }
@@ -1373,14 +1377,14 @@ async fn probe_d1_when_connect_omits(
                         .send()
                         .await
                     {
-                        inbox_configured = search.status().as_u16() != 503;
+                        mail_configured = search.status().as_u16() != 503;
                     }
                 }
             }
         }
     }
 
-    (logs_configured, inbox_configured)
+    (logs_configured, mail_configured)
 }
 
 /// Backoff delays (seconds) between connect-check retries (~30s total).
@@ -1469,16 +1473,16 @@ async fn verify_worker_connection(
 
     let usage = value.pointer("/inbound/usage");
     let mut d1_logs = parse_d1_binding(&value, "logs");
-    let mut d1_inbox_index = parse_d1_binding(&value, "inboxIndex");
+    let mut d1_mail = parse_d1_binding(&value, "mail");
     let d1_app = parse_d1_binding(&value, "app");
 
     if value.get("d1").is_none()
         && !d1_logs.configured
-        && !d1_inbox_index.configured
+        && !d1_mail.configured
     {
-        let (logs, inbox) = probe_d1_when_connect_omits(&http, &base, token).await;
+        let (logs, mail) = probe_d1_when_connect_omits(&http, &base, token).await;
         d1_logs.configured = logs;
-        d1_inbox_index.configured = inbox;
+        d1_mail.configured = mail;
     }
 
     Ok(WorkerConnectResult {
@@ -1531,7 +1535,7 @@ async fn verify_worker_connection(
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         d1_logs,
-        d1_inbox_index,
+        d1_mail,
         d1_app,
     })
 }

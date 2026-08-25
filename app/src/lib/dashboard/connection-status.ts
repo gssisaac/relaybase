@@ -5,7 +5,7 @@ import {
 } from "@/lib/desktop/bridge";
 import {
   D1_APP_DEFAULT,
-  D1_INBOX_INDEX_DEFAULT,
+  D1_MAIL_DEFAULT,
   D1_LOGS_DEFAULT,
   type D1BindingSnapshot,
 } from "@/lib/dashboard/d1-binding-status";
@@ -46,6 +46,8 @@ export type ConnectionStatusSnapshot = {
     /** True when the Worker has a send_email EMAIL binding. */
     emailBindingConfigured: boolean;
     d1Logs: D1BindingSnapshot;
+    d1Mail: D1BindingSnapshot;
+    /** @deprecated Renamed to d1Mail. Kept for callers being migrated. */
     d1InboxIndex: D1BindingSnapshot;
     d1App: D1BindingSnapshot;
   } | null;
@@ -101,7 +103,8 @@ export function workerStatusFromConnect(
     cfApiTokenValid: result.cfApiTokenValid,
     emailBindingConfigured: Boolean(result.emailBindingConfigured),
     d1Logs: result.d1Logs,
-    d1InboxIndex: result.d1InboxIndex,
+    d1Mail: result.d1Mail,
+    d1InboxIndex: result.d1Mail,
     d1App: result.d1App,
   };
 }
@@ -124,12 +127,13 @@ export async function probeConnectionStatus(
     if (
       worker.ok &&
       !worker.d1Logs.configured &&
-      !worker.d1InboxIndex.configured
+      !worker.d1Mail.configured
     ) {
       const fallback = await probeD1WhenConnectOmits(url.replace(/\/$/, ""), token);
-      if (fallback.d1Logs.configured || fallback.d1InboxIndex.configured) {
+      if (fallback.d1Logs.configured || fallback.d1Mail.configured) {
         worker.d1Logs = fallback.d1Logs;
-        worker.d1InboxIndex = fallback.d1InboxIndex;
+        worker.d1Mail = fallback.d1Mail;
+        worker.d1InboxIndex = fallback.d1Mail;
       }
     }
     // The Worker's CF_API_TOKEN secret is the source of truth for whether
@@ -160,7 +164,8 @@ export async function probeConnectionStatus(
         cfApiTokenValid: undefined,
         emailBindingConfigured: false,
         d1Logs: { ...D1_LOGS_DEFAULT },
-        d1InboxIndex: { ...D1_INBOX_INDEX_DEFAULT },
+        d1Mail: { ...D1_MAIL_DEFAULT },
+        d1InboxIndex: { ...D1_MAIL_DEFAULT },
         d1App: { ...D1_APP_DEFAULT },
       },
     };
@@ -244,7 +249,7 @@ export function connectionHealthFromSnapshot(
           };
 
   const logsOk = snapshot?.worker?.d1Logs?.configured === true;
-  const searchOk = snapshot?.worker?.d1InboxIndex?.configured === true;
+  const searchOk = snapshot?.worker?.d1Mail?.configured === true;
   const appOk = snapshot?.worker?.d1App?.configured === true;
   const d1: HealthStatus = !hasWorker
     ? {

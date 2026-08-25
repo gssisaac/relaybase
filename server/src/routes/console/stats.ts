@@ -4,10 +4,10 @@ import { requireAdmin } from "../../lib/auth";
 import { readAudienceCatalog } from "../../lib/catalog-audience";
 import { readBroadcasts } from "../../lib/catalog-broadcasts";
 import { readMailbox } from "../../lib/catalog-store";
-import { listInboundEmails, MAX_MESSAGES } from "../../lib/inbound-store";
 import { listKeys } from "../../lib/keys";
 import { listSendLogs, type SendLogEntry } from "../../lib/send-logs";
 import { createAppDb } from "../../../db/app";
+import { createMailDb } from "../../../db/mail";
 import {
   bucketIndex,
   createBuckets,
@@ -28,25 +28,38 @@ function domainFromEmail(email: string): string {
   return at >= 0 ? email.slice(at + 1).toLowerCase() : "";
 }
 
-function inboundMatchesEmail(
-  message: {
-    toEmail?: string | null;
-    toEmails?: string[] | null;
-    ccEmails?: string[] | null;
-  },
+type InboundAccountRow = {
+  id: string;
+  occurred_at: string;
+  from_email: string;
+  subject: string;
+};
+
+/**
+ * Pull inbound rows for one account from D1 `mailbox_messages`, scoped to
+ * the recipient's To+Cc membership. Caps at MAX_MESSAGES so the dashboard
+ * never loads thousands of rows into memory.
+ */
+async function listInboundRowsForAccount(
+  c: { env: Env },
+  domain: string,
   email: string,
-): boolean {
-  const needle = email.trim().toLowerCase();
-  if (!needle) return false;
-  const addrs = new Set<string>();
-  const add = (value: string | null | undefined) => {
-    const trimmed = value?.trim().toLowerCase();
-    if (trimmed) addrs.add(trimmed);
-  };
-  add(message.toEmail);
-  for (const to of message.toEmails ?? []) add(to);
-  for (const cc of message.ccEmails ?? []) add(cc);
-  return addrs.has(needle);
+): Promise<InboundAccountRow[]> {
+  const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
+  if (!mailDb) return [];
+  const raw: D1Database = mailDb.$client;
+  const result = await raw
+    .prepare(
+      `SELECT id, occurred_at, from_email, subject
+       FROM mailbox_messages
+       WHERE kind = 'inbound' AND domain = ?
+         AND (',' || recipients || ',') LIKE ?
+       ORDER BY occurred_at DESC
+       LIMIT 5000`,
+    )
+    .bind(domain, `%,${email},%`)
+    .all<InboundAccountRow>();
+  return result.results ?? [];
 }
 
 function sumBuckets(buckets: StatsBucket[]): number {
@@ -156,15 +169,11 @@ consoleStats.get("/account-stats", async (c) => {
   const since = now - RANGE_MS[range];
   const domain = domainFromEmail(email);
 
-  const [mailbox, sendLogs, inbound] = await Promise.all([
+  const [mailbox, sendLogs, inboundRows] = await Promise.all([
     readMailbox(createAppDb(c.env.RELAYBASE_DB)),
     listSendLogs(c.env.INBOUND, { limit: 500 }),
     domain
-      ? listInboundEmails(
-          c.env.INBOUND,
-          { domain, limit: MAX_MESSAGES },
-          c.env.RELAYBASE_INBOX_INDEX,
-        )
+      ? listInboundRowsForAccount(c, domain, email)
       : Promise.resolve([]),
   ]);
 
@@ -172,9 +181,7 @@ consoleStats.get("/account-stats", async (c) => {
   const fromLogs = sendLogs.logs.filter(
     (l) => l.from?.toLowerCase() === email,
   );
-  const receivedMessages = inbound.filter((m) =>
-    inboundMatchesEmail(m, email),
-  );
+  const receivedMessages = inboundRows;
 
   const receivedBuckets = createBuckets(range, now);
   const sentBuckets = createBuckets(range, now);
@@ -183,7 +190,7 @@ consoleStats.get("/account-stats", async (c) => {
   const apiRequestBuckets = createBuckets(range, now);
 
   for (const message of receivedMessages) {
-    const ts = new Date(message.receivedAt).getTime();
+    const ts = new Date(message.occurred_at).getTime();
     if (Number.isNaN(ts) || ts < since) continue;
     incrementBucket(receivedBuckets, bucketIndex(ts, range, now));
   }
@@ -236,14 +243,10 @@ consoleStats.get("/account-logs", async (c) => {
   );
   const domain = domainFromEmail(email);
 
-  const [sendLogs, inbound] = await Promise.all([
+  const [sendLogs, inboundRows] = await Promise.all([
     listSendLogs(c.env.INBOUND, { limit: 500 }),
     domain
-      ? listInboundEmails(
-          c.env.INBOUND,
-          { domain, limit: MAX_MESSAGES },
-          c.env.RELAYBASE_INBOX_INDEX,
-        )
+      ? listInboundRowsForAccount(c, domain, email)
       : Promise.resolve([]),
   ]);
 
@@ -282,15 +285,14 @@ consoleStats.get("/account-logs", async (c) => {
     });
   }
 
-  for (const message of inbound) {
-    if (!inboundMatchesEmail(message, email)) continue;
+  for (const message of inboundRows) {
     rows.push({
       id: message.id,
-      at: message.receivedAt,
+      at: message.occurred_at,
       source: "inbound",
       direction: "received",
       ok: true,
-      from: message.fromEmail ?? "",
+      from: message.from_email ?? "",
       to: email,
       subject: message.subject ?? "",
       status: null,

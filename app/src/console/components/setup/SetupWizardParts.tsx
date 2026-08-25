@@ -32,11 +32,11 @@ export const RESOURCE_NAMES = [
       "This is Relaybase's source of truth inside your Cloudflare account. It holds domains, addresses, audience lists, broadcasts, branding, API keys, auth tokens, and settings. It lives entirely in your account — Relaybase can't read it.",
   },
   {
-    name: "relaybase-inbox-index",
+    name: "relaybase-mail",
     kind: "D1",
-    why: "Full-text search index for inbound mail.",
+    why: "List/count/search index for inbound + sent mail.",
     detail:
-      "A searchable index of inbound mail so the inbox can find messages by subject or body without opening every stored email. Mail bodies stay in R2; this database is a rebuildable index.",
+      "A searchable index of inbound and sent mail so the inbox can list, count, and find messages by subject, from, to, or body without opening every stored email. Mail bodies stay in R2; this database is a rebuildable index.",
   },
   {
     name: "relaybase-logs",

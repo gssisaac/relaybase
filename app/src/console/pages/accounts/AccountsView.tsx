@@ -30,6 +30,7 @@ import { toast } from "sonner";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
+import { useMailboxHealth, lastInboundForDomain } from "@/lib/dashboard/mailbox-health";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
@@ -178,6 +179,7 @@ export function AccountsView() {
   const accountDetail = accountDetailFromSearch(searchParams);
   const { domains, loading: domainsLoading } = useDomain();
   const accountsStore = useAccounts();
+  const mailboxHealth = useMailboxHealth();
 
   const readyDomains = useMemo(
     () =>
@@ -646,6 +648,22 @@ export function AccountsView() {
                                 {domainUnread > 99 ? "99+" : domainUnread}
                               </span>
                             ) : null}
+                            {(() => {
+                              const last = lastInboundForDomain(
+                                mailboxHealth.snapshot,
+                                entry.domain,
+                              );
+                              if (!last.stale) return null;
+                              return (
+                                <span
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-400/60 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                                  title={`Last inbound: ${last.label}`}
+                                >
+                                  <MailX className="size-3" />
+                                  No recent inbound
+                                </span>
+                              );
+                            })()}
                           </CardTitle>
                           <CardDescription>
                             {accountSummary}

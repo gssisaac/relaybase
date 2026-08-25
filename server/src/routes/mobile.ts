@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { requireMobilePassword, type MobileAuthResult } from "../lib/mobile-auth";
 import { createAppDb } from "../../db/app";
+import { createMailDb } from "../../db/mail";
 import {
   mobileEnabledAddresses,
   readMailbox,
@@ -21,7 +22,7 @@ import {
 import { MIN_SEARCH_QUERY_LENGTH } from "../lib/inbound-search";
 import { serializeInboundListItem } from "../lib/inbound-serialize";
 import { sendMailMessage, type SendMailBody } from "../lib/mail/send-message";
-import { listSendLogs } from "../lib/send-logs";
+import { listMailboxPage } from "../../db/mail/messages";
 
 const mobile = new Hono<{
   Bindings: Env;
@@ -181,12 +182,61 @@ mobile.get("/inbox/search", async (c) => {
     return c.json({ error: "Search index is not configured" }, 503);
   }
   return c.json({
-    messages: page.messages.map(serializeInboundListItem),
+    messages: page.rows.map((row) =>
+      serializeInboundListItem(rowToInboundMeta(row)),
+    ),
     total: page.total,
     nextBefore: page.nextBefore,
     hasMore: page.hasMore,
   });
 });
+
+function rowToInboundMeta(row: {
+  id: string;
+  domain: string;
+  from_email: string;
+  from_name: string | null;
+  to_email: string;
+  to_emails: string | null;
+  cc_emails: string | null;
+  subject: string;
+  occurred_at: string;
+  message_id: string | null;
+  in_reply_to: string | null;
+  refs: string | null;
+  size: number;
+  attachment_count: number;
+  read_at: string | null;
+  body_preview: string;
+}) {
+  return {
+    id: row.id,
+    domain: row.domain,
+    fromEmail: row.from_email,
+    fromName: row.from_name ?? undefined,
+    toEmail: row.to_email,
+    toEmails: row.to_emails ? row.to_emails.split(",").filter(Boolean) : [],
+    ccEmails: row.cc_emails ? row.cc_emails.split(",").filter(Boolean) : [],
+    subject: row.subject,
+    receivedAt: row.occurred_at,
+    messageId: row.message_id,
+    inReplyTo: row.in_reply_to,
+    references: row.refs,
+    size: row.size,
+    bodyPreview: row.body_preview,
+    bodyText: "",
+    bodyHtml: null,
+    attachments: Array.from({ length: row.attachment_count }, (_, i) => ({
+      id: String(i),
+      filename: "",
+      contentType: "application/octet-stream",
+      size: 0,
+      disposition: "attachment",
+      contentId: null,
+    })),
+    readAt: row.read_at,
+  };
+}
 
 /** Per-address total/unread counts across mobile-enabled domains. */
 mobile.get("/inbox/counts", async (c) => {
@@ -256,18 +306,77 @@ mobile.get("/inbox/:id/attachments/:attachmentId", async (c) => {
   });
 });
 
-/** Sent history (read from R2 `sent/_sendlog/*`). */
+/** Sent history for the authenticated account (read from D1 mailbox_messages
+ * kind=sent, scoped to the account's To+Cc membership). Ops log stays on
+ * `/console/send-logs`. */
 mobile.get("/sent", async (c) => {
+  const domains = c.get("mobileDomains");
+  const authEmail = c.get("authEmail");
+  const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
+  if (!mailDb) {
+    return c.json({ error: "Mail index is not configured" }, 503);
+  }
+
   const limit = Number(c.req.query("limit") ?? "50");
-  const { logs, summary } = await listSendLogs(c.env.INBOUND, {
-    limit: Number.isFinite(limit) ? limit : 50,
-  });
+  const before = c.req.query("before")?.trim() || undefined;
+
+  const collected: Array<ReturnType<typeof rowToSentItem>> = [];
+  let total = 0;
+  for (const domain of domains) {
+    const normalized = domain.trim().toLowerCase();
+    if (!normalized) continue;
+    const page = await listMailboxPage(mailDb, {
+      kind: "sent",
+      domain: normalized,
+      account: authEmail,
+      limit: Number.isFinite(limit) ? limit : 50,
+      before,
+    });
+    total += page.total;
+    for (const row of page.rows) collected.push(rowToSentItem(row));
+  }
+  collected.sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+  const sliced = collected.slice(0, Number.isFinite(limit) ? limit : 50);
   return c.json({
-    sent: logs,
-    total: summary.total,
-    hasMore: summary.total > logs.length,
+    sent: sliced,
+    total,
+    hasMore: total > sliced.length,
   });
 });
+
+function rowToSentItem(row: {
+  id: string;
+  domain: string;
+  from_email: string;
+  from_name: string | null;
+  to_email: string;
+  to_emails: string | null;
+  cc_emails: string | null;
+  subject: string;
+  occurred_at: string;
+  message_id: string | null;
+  in_reply_to: string | null;
+  refs: string | null;
+  size: number;
+  attachment_count: number;
+  body_preview: string;
+}) {
+  return {
+    id: row.id,
+    from: row.from_email,
+    fromName: row.from_name ?? null,
+    to: row.to_emails ?? row.to_email,
+    cc: row.cc_emails ?? "",
+    subject: row.subject,
+    bodyPreview: row.body_preview,
+    sentAt: row.occurred_at,
+    messageId: row.message_id,
+    inReplyTo: row.in_reply_to,
+    references: row.refs,
+    size: row.size,
+    attachmentCount: row.attachment_count,
+  };
+}
 
 /** Send email. `from` must be a mobile-enabled address. */
 mobile.post("/send", async (c) => {

@@ -1,4 +1,4 @@
-import type { InboundEmailMeta } from "./inbound-store";
+import type { InboundEmailMeta } from "./mailbox-store";
 
 /**
  * Minimal shape needed to aggregate counts — satisfied by both the full

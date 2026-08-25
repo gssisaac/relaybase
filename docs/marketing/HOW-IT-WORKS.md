@@ -20,7 +20,7 @@
   | `relaybase-api` | Worker | Routing + admin API. After install, the Mac talks only to this URL + your admin token. Relaybase’s servers never see your mail. |
   | `relaybase-mailbox` | R2 | Inbound and sent originals (`inbound/` and `sent/`). Only you and your Worker can read them. |
   | `relaybase-db` | D1 | Domains, addresses, API keys, webhooks, audience, broadcasts, settings. Lives entirely in your account. |
-  | `relaybase-inbox-index` | D1 | Rebuildable full-text search index. Bodies stay in R2. |
+  | `relaybase-mail` | D1 | Rebuildable list, count, and full-text search index. Bodies stay in R2. |
   | `relaybase-logs` | D1 | Send and bounce events for the Dashboard Log page. |
 
   Two paths, same result:
@@ -54,12 +54,11 @@
 
   ```text
   inbound/{domain}/{id}/meta.json | raw.eml | attachments/…
-  inbound/{domain}/_list.json          ← compact list (no body) for scroll and unread counts
   inbound/{domain}/by-message-id/…     ← one stored copy per RFC Message-ID
-  sent/{domain}/_list.json
+  sent/{domain}/{id}/meta.json | raw.eml | attachments/…
   ```
 
-  The list file is thin on purpose: the inbox can paginate and show unread without opening every body. Opening a message loads `meta.json` and attachments from R2. The Mac `~/.relaybase` folder caches list pages; it is not a second mailbox. Each domain keeps recent mail (about 5,000 messages) and prunes older ones.
+  Each message is its own folder. A thin `meta.json` holds headers and a short preview; the body lives in `raw.eml`. Lists, unread counts, and pagination come from D1 `relaybase-mail`, not a per-domain array file. Opening a message parses `raw.eml` on demand. The Mac `~/.relaybase` folder caches list pages; it is not a second mailbox. Each domain keeps recent mail (about 5,000 messages) and prunes older ones.
 
 **Copy line:** Mail stacks in your R2, not in a Relaybase cloud.
 
@@ -68,9 +67,9 @@
 ## 4. Search is a D1 index; originals stay in R2
 
 * **Purpose:** You need to find a phrase in the body, not just the subject line. Opening every stored message on each query does not scale once a domain has thousands of messages. Forwarded Gmail copies are not the originals.
-* **How it works:** D1 `relaybase-inbox-index` is a rebuildable full-text **side** index. On receive, subject, sender, recipients, and body text are written there. Search hits that index and returns a flat result list. Opening a hit always reloads the real message from R2.
+* **How it works:** D1 `relaybase-mail` is a rebuildable index (`mailbox_messages` + `mailbox_fts`) over your R2 originals. On receive or send, subject, sender, recipients, and body text are written there. Search hits that index and returns a flat result list. Opening a hit always reloads the real message from R2 (`raw.eml`).
 
-  R2 stays authoritative. Index writes are best-effort: if the index is missing or briefly down, receive, storage, and read state still work. The Mac then filters mail it already loaded, instead of showing a false “no results.” Historical mail can be backfilled into the index later. Sent search filters the already-loaded per-domain sent list — it does not need a second index.
+  R2 stays authoritative. Index writes are best-effort: if the index is missing or briefly down, receive, storage, and read state still work. The Mac then filters mail it already loaded, instead of showing a false “no results.” Historical mail can be backfilled with `POST /console/rebuild-mail`. Sent search uses the same index (`kind=sent`) — it is not a second database.
 
 **Copy line:** Originals stay in your bucket. Search is a fast index over those originals — not a forwarded copy.
 
@@ -130,6 +129,6 @@
 - Install / BYO Worker: [`../pivot-byo-cloudflare.md`](../pivot-byo-cloudflare.md)
 - Storage map: [`../storage-architecture.md`](../storage-architecture.md)
 - R2 mailbox layout: [`../mailbox-r2.md`](../mailbox-r2.md)
-- Inbound search index: [`../inbound-search-d1-fts5.md`](../inbound-search-d1-fts5.md)
+- Mail index (list + search): [`../mailbox-d1.md`](../mailbox-d1.md)
 - Threading / multi-account: [`../inbox-threading-and-multi-account.md`](../inbox-threading-and-multi-account.md)
 - Mobile companion: [`../mobile-email-companion.md`](../mobile-email-companion.md)

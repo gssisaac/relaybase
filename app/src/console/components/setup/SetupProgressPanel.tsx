@@ -378,6 +378,7 @@ export function SetupProgressPanel({
           workerScriptName: connect.workerScriptName,
           r2Bucket: "",
           d1LogsId: "",
+          d1MailId: "",
           d1InboxIndexId: "",
           d1DbId: "",
           dbAlreadyInitialized: pendingVerify.dbAlreadyInitialized,

@@ -71,7 +71,7 @@ CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
 CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);
 ```
 
-Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations/` and `db/inbox-index/migrations/`) so D1 migration directories never collide. Applied by `POST /console/init-db` (empty D1) or `POST /console/migrate-db` (existing).
+Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations/` and `db/mail/migrations/`) so D1 migration directories never collide. Applied by `POST /console/init-db` (empty D1) or `POST /console/migrate-db` (existing).
 
 ---
 
@@ -80,7 +80,7 @@ Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations
 | Source | Route | Kinds | Notes |
 |--------|-------|-------|-------|
 | Compose | `POST /mail/send` | `send`, `api_error` | Validation errors, all-bounce, CF exception, success, partial bounce. Also returns a `sent` object so the client upserts Sent. |
-| API | `POST /v1/send` | `send`, `api_error` | Dual-write: R2 `sent/_sendlog/*` + D1 `ops_log` (+ mailbox `sent/{domain}/_list.json` on success). Partial bounce keeps send-log `ok: true` but D1 `ok: false` so the dashboard catches it. |
+| API | `POST /v1/send` | `send`, `api_error` | Dual-write: R2 `sent/_sendlog/*` + D1 `ops_log` (+ mailbox `sent/{domain}/{id}/` + D1 `mailbox_messages` `kind=sent` on success). Partial bounce keeps send-log `ok: true` but D1 `ok: false` so the dashboard catches it. |
 | Broadcast | `catalog-broadcasts.ts` | `send` | Dual-write per recipient (KV + D1). |
 | Inbound | `server/src/inbound.ts` | `bounce` | Detected via `bounce-detect.ts`; logged with `Final-Recipient`, `Diagnostic-Code`, `Status` when present. |
 
@@ -108,18 +108,18 @@ Do **not** overwrite `bodyText` on normal mail — only fill the fallback when t
 
 ## Compose → Sent
 
-`/mail/send` now returns `{ messageId, sent }` on success, where `sent` is a `SentEmail`-shaped object (`app/src/email/components/mailbox/types.ts`). The Worker also upserts that record into R2 `sent/{domain}/_list.json` (mailbox Sent) and `sent/_sendlog/*` (operational send history). The client (`useComposeDraftController.ts`) upserts `sent` into the local mailbox store and unions it on refresh.
+`/mail/send` now returns `{ messageId }` on success. The Worker also persists the sent mail into R2 `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml`) + the `by-message-id` pointer, upserts D1 `mailbox_messages` (`kind=sent`) + `mailbox_fts`, and writes `sent/_sendlog/{id}.json` (operational send history). The client (`useComposeDraftController.ts`) upserts the sent record into the local mailbox store and unions it on refresh.
 
 ---
 
 ## D1 configured probe
 
-`server/src/lib/d1-status.ts` checks whether each optional D1 binding is present **and** migrated (expected table exists in `sqlite_master`):
+`server/src/lib/d1-status.ts` checks whether each D1 binding is present **and** migrated (expected table exists in `sqlite_master`):
 
 | Binding | Table | Database name |
 |---------|-------|---------------|
 | `RELAYBASE_LOGS` | `ops_log` | `relaybase-logs` |
-| `RELAYBASE_INBOX_INDEX` | `inbound_search_fts` | `relaybase-inbox-index` |
+| `RELAYBASE_MAIL` | `mailbox_messages` | `relaybase-mail` |
 
 Exposed on:
 
@@ -138,10 +138,10 @@ Connect payload shape:
       "binding": "RELAYBASE_LOGS",
       "sizeBytes": 49152
     },
-    "inboxIndex": {
+    "mail": {
       "configured": true,
-      "databaseName": "relaybase-inbox-index",
-      "binding": "RELAYBASE_INBOX_INDEX",
+      "databaseName": "relaybase-mail",
+      "binding": "RELAYBASE_MAIL",
       "sizeBytes": 37433344
     }
   }
@@ -150,7 +150,7 @@ Connect payload shape:
 
 `sizeBytes` comes from the Cloudflare D1 API (`file_size`) when Worker secrets `CF_ACCOUNT_ID` + `CF_API_TOKEN` are set; otherwise null.
 
-Probe is read-only and soft-fails (returns `false` on D1 errors). Customer installs without D1 bindings keep working.
+Probe is read-only and soft-fails (returns `false` on D1 errors). `RELAYBASE_MAIL` is **required** for list/search/counts (503 when unbound); the legacy `inboxIndex` key is kept as a deprecated alias of `mail` for older desktop clients.
 
 ---
 
@@ -175,7 +175,7 @@ Dashboard home (`ConnectionStatusCards`) and Settings show a **D1** status card 
 - **Customer install ZIP keeps D1 optional.** `server/customer-install/wrangler.toml` has the binding commented out; `recordOpsLog` no-ops when the binding is missing.
 - **Soft-fail only.** A D1 write error must never break a send or an inbound store. Helpers catch + `console.error`; routes continue.
 - **Bounce detection is best-effort.** Missed bounces are acceptable; false bounce classification of normal mail is not. Only fill fallback `bodyText` when the parsed body is empty.
-- **Migrations dir is `server/db/log/migrations/`.** Do not add product-log migrations under `db/app/migrations/` or `db/inbox-index/migrations/`.
+- **Migrations dir is `server/db/log/migrations/`.** Do not add product-log migrations under `db/app/migrations/` or `db/mail/migrations/`.
 
 ---
 

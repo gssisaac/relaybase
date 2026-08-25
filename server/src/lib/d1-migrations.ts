@@ -16,15 +16,15 @@ export { isSchemaAlreadyPresentError, normalizeMigrationName };
 export const PROBE_TABLES: Record<MigrationTarget, string> = {
   app: "domains",
   logs: "ops_log",
-  inbox: "inbound_search_fts",
+  mail: "mailbox_messages",
 };
 
-export const MIGRATION_TARGETS: MigrationTarget[] = ["app", "logs", "inbox"];
+export const MIGRATION_TARGETS: MigrationTarget[] = ["app", "logs", "mail"];
 
 const BINDING_MAP: Record<MigrationTarget, string> = {
   app: "RELAYBASE_DB",
   logs: "RELAYBASE_LOGS",
-  inbox: "RELAYBASE_INBOX_INDEX",
+  mail: "RELAYBASE_MAIL",
 };
 
 export type DbMigrationResult = {

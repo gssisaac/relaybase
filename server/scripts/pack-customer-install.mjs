@@ -94,9 +94,9 @@ database_name = "relaybase-logs"
 database_id = "REPLACE_WITH_relaybase-logs_ID"
 
 [[d1_databases]]
-binding = "RELAYBASE_INBOX_INDEX"
-database_name = "relaybase-inbox-index"
-database_id = "REPLACE_WITH_relaybase-inbox-index_ID"
+binding = "RELAYBASE_MAIL"
+database_name = "relaybase-mail"
+database_id = "REPLACE_WITH_relaybase-mail_ID"
 
 [[d1_databases]]
 binding = "RELAYBASE_DB"

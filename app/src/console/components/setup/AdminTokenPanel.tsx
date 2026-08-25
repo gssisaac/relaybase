@@ -56,7 +56,7 @@ function fullInstallCommand(
     `cd relaybase-worker-install/relaybase-worker-install || cd relaybase-worker-install`,
     `npx wrangler r2 bucket create relaybase-mailbox`,
     `npx wrangler d1 create relaybase-logs`,
-    `npx wrangler d1 create relaybase-inbox-index`,
+    `npx wrangler d1 create relaybase-mail`,
     `npx wrangler d1 create relaybase-db`,
     `# paste each database_id into wrangler.toml (REPLACE_WITH_* placeholders)`,
     `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,

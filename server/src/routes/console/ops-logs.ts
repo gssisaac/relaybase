@@ -26,7 +26,7 @@ consoleOpsLogs.get("/", async (c) => {
     }),
     probeD1Connection(
       c.env.RELAYBASE_LOGS,
-      c.env.RELAYBASE_INBOX_INDEX,
+      c.env.RELAYBASE_MAIL,
       c.env.RELAYBASE_DB,
       c.env.CF_ACCOUNT_ID,
       c.env.CF_API_TOKEN,

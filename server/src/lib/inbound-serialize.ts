@@ -1,4 +1,4 @@
-import type { InboundEmailMeta } from "./inbound-store";
+import type { InboundEmailMeta } from "./mailbox-store";
 import { decodeMimeHeader } from "./mime-parse";
 
 export function decodeSubject(subject: string): string {

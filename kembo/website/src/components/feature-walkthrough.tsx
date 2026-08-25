@@ -52,6 +52,7 @@ const walkthrough: WalkthroughFeature[] = [
       "Hosted email services ask you to hand over nameservers or mail. That is a second vendor — and a trust problem if you already run on Cloudflare.",
     solution:
       "The routing Worker installs into your Cloudflare account. Relaybase is the app. We do not host your mail.",
+    src: "/video/features/01-mail-in-your-account.mp4?v=1520x998",
     record: {
       duration: "14–18s",
       frame: "Mac app, full window, 16:9 crop. Hide the dock and desktop clutter.",
@@ -66,19 +67,19 @@ const walkthrough: WalkthroughFeature[] = [
   },
   {
     n: "02",
-    title: "A real mail stack on the Mac",
+    title: "A locally cached inbox you can scan at full speed",
     problem:
-      "Cloudflare Email Routing has no inbox. Product mail gets forwarded into a personal mailbox, where folders, drafts, and replies live in someone else’s client.",
+      "Cloudflare Email Routing has no inbox. Product mail gets forwarded into a personal mailbox — and every row is another round-trip.",
     solution:
-      "The usual stack in the Mac app: Inbox, Sent, Drafts, and Trash; compose; reply / reply all / forward; conversation threads; read / unread; attachments; per-account signatures; search; ⌘K and right-click actions.",
+      "The Mac app keeps the inbox on disk. Arrow keys move the list instantly, so you can skim threads without waiting on the network.",
+    src: "/video/features/02-mail-stack.mp4?v=1520x998-2",
     record: {
-      duration: "16–20s",
-      frame: "Mac inbox: sidebar + list + detail. One continuous take.",
+      duration: "6–10s",
+      frame: "Mac inbox: list + detail. Arrow keys only.",
       shots: [
-        "Start on Inbox with a few demo threads visible.",
-        "Open a thread, then Reply (or press r).",
-        "Click Drafts, Sent, then Trash in the sidebar so the folders read as a stack.",
-        "End on Compose (c) with From / To / Subject filled.",
+        "Start on Inbox with several demo threads visible.",
+        "Hold ↑ / ↓ through the list so the detail pane keeps up.",
+        "No mouse. The scan should feel instant.",
       ],
       hide: "Real customer names or inboxes — use demo addresses only.",
       file: "/video/features/02-mail-stack.mp4",
@@ -91,6 +92,7 @@ const walkthrough: WalkthroughFeature[] = [
       "The Cloudflare dashboard and a stack of browser tabs are not a client for reading and clearing mail quickly.",
     solution:
       "Stay on the keyboard. Arrows or j / k move the list; Enter opens; r reply, a reply all, f forward; c compose, ⇧C compose new; e / Backspace / Delete trash; Esc or u back to the list; ⌘K for any command.",
+    src: "/video/features/03-keyboard-triage.mp4?v=1520x998",
     record: {
       duration: "14–18s",
       frame: "Inbox list + detail. Keep the pointer off-screen if you can.",
@@ -106,21 +108,22 @@ const walkthrough: WalkthroughFeature[] = [
   },
   {
     n: "04",
-    title: "Send and receive on the same domain",
+    title: "Compose and drafts that never lose your work",
     problem:
-      "Sending through one service and receiving through a forward splits brand, replies, and debugging across two systems.",
+      "A thin compose box is not a client. Close the tab, hit Esc, or refresh — and the reply is gone.",
     solution:
-      "Cloudflare Email Sending outbound and Email Routing inbound close the loop on yourdomain.com.",
+      "Autosave as you type. Esc closes without discarding. Reopen the same draft and keep writing — the compose UX of a real email client.",
+    src: "/video/features/04-compose-drafts.mp4?v=1520x998",
     record: {
-      duration: "14–18s",
-      frame: "Compose, then Sent, then Inbox — same Mac window.",
+      duration: "12–16s",
+      frame: "Compose or inline reply. Mac app, 3290/2160 crop.",
       shots: [
-        "Compose from support@yourdomain.com to a test address. Send.",
-        "Cut to Sent — the same message is there.",
-        "Cut to Inbox — a reply lands on support@yourdomain.com.",
+        "Start a reply and type a few sentences.",
+        "Esc — composer closes, the draft remains.",
+        "Reopen Drafts or press c — the same text is there.",
       ],
-      hide: "Any other email provider’s dashboard.",
-      file: "/video/features/04-send-and-receive.mp4",
+      hide: "Real customer mail.",
+      file: "/video/features/04-compose-drafts.mp4",
     },
   },
   {
@@ -130,6 +133,7 @@ const walkthrough: WalkthroughFeature[] = [
       "A mailbox nobody lives in still often costs a full seat, so billing@ and support@ get treated like people.",
     solution:
       "Treat the address as domain infrastructure — one billing@ or support@ with no per-seat fee.",
+    src: "/video/features/05-product-address.mp4?v=1520x998",
     record: {
       duration: "10–14s",
       frame: "Dashboard → Accounts, 16:9.",
@@ -148,6 +152,7 @@ const walkthrough: WalkthroughFeature[] = [
       "The same thread can duplicate, or a reply sent as another address leaks into the wrong conversation.",
     solution:
       "Dedupe on Message-ID, merge Sent only for the active account, and mark your own replies with (me).",
+    src: "/video/features/06-threading.mp4?v=1520x998",
     record: {
       duration: "14–18s",
       frame: "Inbox list + open thread. Stay on one conversation.",
@@ -167,6 +172,7 @@ const walkthrough: WalkthroughFeature[] = [
       "You cannot find a body from the list alone, and a forwarded copy only shows what that other inbox indexed.",
     solution:
       "An inbound full-text index searches subject and body. Originals stay in your R2.",
+    src: "/video/features/07-search.mp4?v=1520x998",
     record: {
       duration: "10–14s",
       frame: "Inbox search field + results + opened message.",
@@ -181,40 +187,42 @@ const walkthrough: WalkthroughFeature[] = [
   },
   {
     n: "08",
-    title: "Signed inbound webhooks / event API",
+    title: "Console mode for the stack on your account",
     problem:
-      "support@ → forward → Zapier has no signature check, and tickets sit unread over a weekend.",
+      "Worker, D1, and R2 live in your Cloudflare account — but checking whether they are actually connected usually means leaving the app.",
     solution:
-      "HMAC-signed webhooks or pollable events on receive. Fetch the full body only when you need it.",
+      "Console mode is the Dashboard. See and control Worker, D1, and R2 connection status from one place, because the mailbox runs on your account — not ours.",
+    src: "/video/features/08-console-mode.mp4?v=1520x998",
     record: {
-      duration: "14–18s",
-      frame: "Terminal first, then Mac inbox — or a 16:9 split.",
+      duration: "8–12s",
+      frame: "Dashboard / console. Worker, D1, and R2 status in frame.",
       shots: [
-        "POST /v1/webhooks with a destination URL (one frame of the secret, then hide it).",
-        "Send a test inbound to support@.",
-        "Show the signed POST arriving, or poll /v1/inbox/events.",
+        "Open Dashboard (console mode).",
+        "Hold on Worker, D1, and R2 connection status.",
+        "Show a connect / reconnect or health control if it is in the take.",
       ],
-      hide: "Lingering on the HMAC secret.",
-      file: "/video/features/08-webhooks.mp4",
+      hide: "Admin token, account ID, Cloudflare API token.",
+      file: "/video/features/08-console-mode.mp4",
     },
   },
   {
     n: "09",
-    title: "Transactional send API + human inbox",
+    title: "One-pass install into your Cloudflare account",
     problem:
-      "Receipts and password resets need an API; replies to those messages need a person — so teams split tools.",
+      "Standing up an email client usually means provisioning a Worker, a database, and object storage by hand — or handing the mailbox to a host.",
     solution:
-      "POST /v1/send for automation. Replies to the same address land in the Mac inbox.",
+      "Download the desktop app and authorize Cloudflare. The server and databases — Worker, D1, R2 — install into your account in one pass, ready to run mail.",
+    src: "/video/features/09-one-pass-install.mp4?v=1520x998",
     record: {
-      duration: "14–18s",
-      frame: "Terminal, then Mac inbox. Same From address in both.",
+      duration: "10–14s",
+      frame: "Mac app Setup → Install. Authorize, then the resource list.",
       shots: [
-        "curl or fetch POST /v1/send as billing@ (a receipt).",
-        "Cut to the Mac inbox — a customer reply to that receipt.",
-        "Open it and Reply from billing@.",
+        "Start on the desktop app download or Setup → Install.",
+        "Click Authorize and return from Cloudflare.",
+        "End on Worker, D1, and R2 in the account — one pass.",
       ],
-      hide: "A second sending service.",
-      file: "/video/features/09-send-api-inbox.mp4",
+      hide: "Cloudflare API token, admin token, account ID.",
+      file: "/video/features/09-one-pass-install.mp4",
     },
   },
   {
@@ -224,6 +232,7 @@ const walkthrough: WalkthroughFeature[] = [
       "A Cloudflare token copied into an app .env can send as any domain on the account if it leaks.",
     solution:
       "One key per domain. A from that does not match that domain is rejected.",
+    src: "/video/features/10-domain-keys.mp4?v=1520x998",
     record: {
       duration: "12–16s",
       frame: "Dashboard → API Keys. 16:9.",
@@ -250,6 +259,7 @@ const paidGroups: PaidGroup[] = [
           "Cloudflare Email Routing only forwards. Mail for each domain ends up scattered across tabs and accounts.",
         solution:
           "One Worker and one Mac app show every mailbox on the account, side by side.",
+        src: "/images/features/paid-multi-domain.png",
         imageNote:
           "Mac inbox with two or more domains visible — list + account filter, not a single mailbox.",
         file: "/images/features/paid-multi-domain.png",
@@ -260,6 +270,7 @@ const paidGroups: PaidGroup[] = [
           "Each new domain means repeating Email Sending onboarding, DKIM, MX, and routing rules in the Cloudflare dashboard.",
         solution:
           "Import zones from the account. The app continues through DNS wait, provisioning, and address routing.",
+        src: "/images/features/paid-import-zones.png",
         imageNote:
           "Domains → Import Cloudflare zones. Dialog open with two zones checked, before Import.",
         file: "/images/features/paid-import-zones.png",
@@ -277,6 +288,7 @@ const paidGroups: PaidGroup[] = [
           "Switching between you@ and support@ means another login, or a personal inbox where the real recipient is unclear.",
         solution:
           "See everything in one list or filter by address, with unread counts per account.",
+        src: "/images/features/paid-account-switcher.png",
         imageNote:
           "Inbox account switcher — All inboxes selected, unread counts on you@ and support@.",
         file: "/images/features/paid-account-switcher.png",
@@ -287,16 +299,17 @@ const paidGroups: PaidGroup[] = [
           "Every new product means recreating billing@ through admin@, display names, and inbound on/off by hand.",
         solution:
           "Adding a domain seeds the six defaults. noreply@ is send-only; the rest receive immediately.",
+        src: "/images/features/paid-default-addresses.png",
         imageNote:
-          "Accounts list right after adding a domain: billing@, support@, privacy@, noreply@, hello@, admin@.",
+          "Accounts list: billing@ Inbound off, menu open on the inbound toggle.",
         file: "/images/features/paid-default-addresses.png",
       },
     ],
   },
   {
     id: "paid-team-broadcasts",
-    title: "Teammates and broadcasts",
-    lede: "Hand someone only that mailbox. Keep audience lists and send progress on the same dashboard.",
+    title: "Teammates and audience",
+    lede: "Hand someone only that mailbox. Keep subscriber lists on the same dashboard.",
     items: [
       {
         title: "Teammate mobile / email-only access",
@@ -304,32 +317,37 @@ const paidGroups: PaidGroup[] = [
           "Handing someone support@ usually means a Cloudflare token, a full mailbox seat, or a forward that widens access.",
         solution:
           "Accounts → Other device issues a per-address password. The teammate sees only that mailbox on phone or desktop.",
+        src: "/images/features/paid-other-device.png",
         imageNote:
           "Accounts → support@ → Other device. Password issued, QR in frame. No admin token.",
         file: "/images/features/paid-other-device.png",
       },
       {
-        title: "Audience / Broadcasts",
+        title: "Audience",
         problem:
-          "Product announcements need another sending tool, and subscriber lists leave the domain.",
+          "Subscriber lists often leave the domain, or live in a tool that is not the inbox.",
         solution:
-          "Audience groups (manual or synced) on the domain. Broadcasts and send progress stay in the same dashboard.",
+          "Audience groups (manual or synced) stay on the domain.",
+        src: "/images/features/paid-audience.png",
         imageNote:
-          "Broadcasts dashboard: one draft and send progress on the same domain as the inbox.",
-        file: "/images/features/paid-broadcasts.png",
+          "Audience groups list on the domain — one group, contact count, data source.",
+        file: "/images/features/paid-audience.png",
       },
     ],
   },
 ];
 
+/** Feature clips encode at 1520×998 (760 CSS ×2, 3290/2160). H.264 High, CRF 18, 60fps. */
 function FeatureClip({ feature }: { feature: WalkthroughFeature }) {
   const { record, src, title } = feature;
 
   if (src) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-border bg-black shadow-sm">
+      <div className="overflow-hidden rounded-lg border border-border bg-black shadow-sm">
         <video
-          className="aspect-video h-auto w-full object-cover"
+          className="aspect-[3290/2160] h-auto w-full object-cover object-top"
+          width={760}
+          height={499}
           autoPlay
           muted
           loop
@@ -344,7 +362,7 @@ function FeatureClip({ feature }: { feature: WalkthroughFeature }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-left shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950 text-left shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-2.5">
         <div className="flex items-center gap-2 text-xs font-medium text-slate-300">
           <Video className="size-3.5 text-brand" aria-hidden />
@@ -383,7 +401,7 @@ function PaidStill({ item }: { item: PaidItem }) {
       <img
         src={item.src}
         alt=""
-        className="aspect-[16/10] w-full object-cover"
+        className="aspect-[3290/2160] w-full object-cover object-top"
       />
     );
   }
@@ -445,7 +463,7 @@ export function FeatureWalkthrough() {
           key={feature.n}
           aria-labelledby={`feature-${feature.n}`}
           className={cn(
-            "border-b border-border py-16 md:py-20",
+            "overflow-x-clip border-b border-border py-16 md:py-[140px]",
             index % 2 === 1 ? "bg-well" : "bg-background",
           )}
         >
@@ -460,7 +478,13 @@ export function FeatureWalkthrough() {
             <div className={index % 2 === 1 ? "lg:order-2" : undefined}>
               <FeatureCopy feature={feature} />
             </div>
-            <div className={index % 2 === 1 ? "lg:order-1" : undefined}>
+            <div
+              className={cn(
+                index % 2 === 1 ? "lg:order-1" : undefined,
+                "min-w-0 lg:w-[115%]",
+                index % 2 === 1 && "lg:-ml-[15%]",
+              )}
+            >
               <FeatureClip feature={feature} />
             </div>
           </div>

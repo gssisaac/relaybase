@@ -53,9 +53,6 @@ export function Footer() {
           </div>
 
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-            <Link href="/#addresses" className="hover:text-foreground">
-              Addresses
-            </Link>
             <Link href="/#integrate" className="hover:text-foreground">
               Integrate
             </Link>

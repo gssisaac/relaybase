@@ -19,7 +19,7 @@ Inside each section, higher items are the stronger pitch for that tier.
 3. Mail on the Cloudflare account they already run
 4. API, webhooks, broadcasts (power features, not the first pitch)
 
-Folders, compose, reply, and trash sit under **Gmail-like mail stack**. Shortcuts sit under **keyboard-first triage**.
+Local cache and fast list scanning sit under **locally cached inbox**. Shortcuts sit under **keyboard-first triage**.
 
 ---
 
@@ -32,20 +32,20 @@ Draft Free: one Cloudflare domain, one address, Mac inbox, send + receive API on
 - **Problem:** Hosted ESPs ask you to hand over nameservers or mail, which is a second vendor and a trust problem for people already on Cloudflare.
 - **Solution:** The routing Worker installs into **the customer's** Cloudflare account. Relaybase is the app. We do not host your mail.
 
-### 2. Gmail-like mail stack
+### 2. A locally cached inbox you can scan at full speed
 
-- **Problem:** Cloudflare Email Routing has no inbox. Product mail ends up forwarded into Gmail, where folders, drafts, and replies live in someone else's client.
-- **Solution:** The usual mail stack in the Mac app: Inbox, Sent, Drafts, and Trash; compose; reply / reply all / forward; conversation threads; read / unread; attachments; per-account signatures; search; ⌘K and right-click actions.
+- **Problem:** Cloudflare Email Routing has no inbox. Product mail ends up forwarded into someone else's client — and every row is another round-trip.
+- **Solution:** The Mac app keeps the inbox on disk. Arrow keys move the list instantly, so you can skim threads without waiting on the network.
 
 ### 3. Keyboard-first triage inbox
 
 - **Problem:** The Cloudflare dashboard and a stack of browser tabs are not a client for reading and clearing mail quickly.
 - **Solution:** Stay on the keyboard. Arrows or `j`/`k` move the list; `Enter` opens; `r` reply, `a` reply all, `f` forward; `c` compose, `⇧C` compose new; `e` / Backspace / Delete trash (restore in Trash); `Esc` or `u` back to the list; ⌘K for any command.
 
-### 4. Send and receive on the same domain
+### 4. Compose and drafts that never lose your work
 
-- **Problem:** Sending via an ESP and receiving via Gmail forwarding splits brand, replies, and debugging across two systems.
-- **Solution:** Cloudflare Email Sending outbound and Email Routing inbound close the loop on `yourdomain.com`.
+- **Problem:** A thin compose box is not a client. Close the tab, hit Esc, or refresh — and the reply is gone.
+- **Solution:** Autosave as you type. Esc closes without discarding. Reopen the same draft and keep writing — the compose UX of a real email client.
 
 ### 5. A product address without a Workspace seat
 
@@ -62,15 +62,15 @@ Draft Free: one Cloudflare domain, one address, Mac inbox, send + receive API on
 - **Problem:** You cannot find a body from the list alone, and Gmail search only sees forwarded copies.
 - **Solution:** An inbound FTS index searches subject and body; originals stay in the customer's R2.
 
-### 8. Signed inbound webhooks / event API
+### 8. Console mode for the stack on your account
 
-- **Problem:** `support@` → Gmail → forward → Zapier has no signature check, and tickets sit unread over a weekend.
-- **Solution:** HMAC-signed webhooks or pollable events on receive; fetch the full body only when you need it.
+- **Problem:** Worker, D1, and R2 live in your Cloudflare account — but checking whether they are actually connected usually means leaving the app.
+- **Solution:** Console mode is the Dashboard. See and control Worker, D1, and R2 connection status from one place, because the mailbox runs on your account — not ours.
 
-### 9. Transactional send API + human inbox
+### 9. One-pass install into your Cloudflare account
 
-- **Problem:** Receipts and password resets need an API; replies to those messages need a person — so teams split tools.
-- **Solution:** `POST /v1/send` for automation; the same address's replies land in the Mac inbox.
+- **Problem:** Standing up an email client usually means provisioning a Worker, a database, and object storage by hand — or handing the mailbox to a host.
+- **Solution:** Download the desktop app and authorize Cloudflare. The server and databases — Worker, D1, R2 — install into your account in one pass, ready to run mail.
 
 ### 10. Domain-scoped API keys
 

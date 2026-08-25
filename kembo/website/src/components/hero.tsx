@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  Code2,
   KeyRound,
   Layers,
   Mail,
@@ -44,14 +43,6 @@ export function Hero() {
               Join the beta
               <ArrowRight data-icon="inline-end" />
             </Button>
-            <Button
-              render={<Link href="/#integrate" />}
-              variant="outline"
-              size="lg"
-            >
-              <Code2 data-icon="inline-start" />
-              See the API
-            </Button>
           </div>
         </div>
 
@@ -59,12 +50,12 @@ export function Hero() {
           {[
             {
               icon: Mail,
-              title: "6+ addresses",
+              title: "Unlimited accounts",
               desc: "billing, support, privacy & more",
             },
             {
               icon: Layers,
-              title: "Multi-domain",
+              title: "Unlimited domains",
               desc: "every zone on your CF account",
             },
             {

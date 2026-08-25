@@ -24,6 +24,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Inbox/sent sender avatars (favicon), `SenderAvatar`, `SenderIconStore`, or `/mail/favicon` proxy | [docs/sender-favicon-cache.md](docs/sender-favicon-cache.md) |
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
+| Marketing site feature clips (`kembo/website` homepage videos) | [kembo/website/docs/feature-video-encode.md](kembo/website/docs/feature-video-encode.md) — also [kembo/website/AGENT.md](kembo/website/AGENT.md) |
 
 ## Storage (summary)
 

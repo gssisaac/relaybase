@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 
 import { useDashboardPaths } from "@/console/lib/paths";
 import { useEmailPaths } from "@/email/lib/paths";
+import { useNotificationOpenMail } from "@/lib/desktop/notify";
 import { cn } from "@/lib/utils";
 
 export function EmailShell({
@@ -14,6 +15,7 @@ export function EmailShell({
   forceFullBleed?: boolean;
 }) {
   const pathname = usePathname();
+  useNotificationOpenMail();
   const { email } = useEmailPaths();
   const {
     dashboard,

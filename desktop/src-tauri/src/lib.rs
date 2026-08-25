@@ -1930,6 +1930,7 @@ pub fn run() {
             open_file_path,
             reveal_file_in_folder,
             notify::show_notification,
+            notify::take_pending_open_mail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Relaybase desktop");

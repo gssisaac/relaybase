@@ -1847,10 +1847,15 @@ export class EmailMailboxStore {
       // plain refresh already reflects the correct unread state.
       await this.refresh(true);
 
+      allEvents.sort((a, b) =>
+        b.data.receivedAt.localeCompare(a.data.receivedAt),
+      );
       void notifyNewMail(
         allEvents.map((event) => ({
           from: event.data.from,
           subject: event.data.subject,
+          messageId: event.data.messageId,
+          account: event.data.to,
         })),
       );
 

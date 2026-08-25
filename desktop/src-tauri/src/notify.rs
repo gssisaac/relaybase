@@ -7,6 +7,14 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use serde::Serialize;
+use tauri::AppHandle;
+#[cfg(target_os = "macos")]
+use tauri::{Emitter, Manager};
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -14,12 +22,72 @@ use std::os::unix::fs::PermissionsExt;
 /// Embedded at compile time so notifications always match the built icon set.
 const APP_ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
 
+#[cfg(target_os = "macos")]
+const MAX_CLICK_WAITERS: usize = 8;
+#[cfg(target_os = "macos")]
+static CLICK_WAITERS: AtomicUsize = AtomicUsize::new(0);
+static PENDING_OPEN_MAIL: Mutex<Option<OpenMailPayload>> = Mutex::new(None);
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenMailPayload {
+    pub message_id: String,
+    pub account: Option<String>,
+}
+
 fn home_dir() -> Result<PathBuf, String> {
     dirs::home_dir().ok_or_else(|| "Could not resolve home directory".into())
 }
 
 fn icon_path() -> Result<PathBuf, String> {
     Ok(home_dir()?.join(".relaybase").join("app-icon.png"))
+}
+
+fn nonempty(value: Option<String>) -> Option<String> {
+    value.and_then(|raw| {
+        let trimmed = raw.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn store_and_emit_open_mail(app: &AppHandle, payload: OpenMailPayload) {
+    if let Ok(mut guard) = PENDING_OPEN_MAIL.lock() {
+        *guard = Some(payload.clone());
+    }
+    let _ = app.emit("notification-open-mail", &payload);
+    focus_main_window(app);
+}
+
+#[cfg(target_os = "macos")]
+fn focus_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn try_acquire_click_waiter() -> bool {
+    CLICK_WAITERS
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| {
+            if n >= MAX_CLICK_WAITERS {
+                None
+            } else {
+                Some(n + 1)
+            }
+        })
+        .is_ok()
+}
+
+#[cfg(target_os = "macos")]
+fn release_click_waiter() {
+    CLICK_WAITERS.fetch_sub(1, Ordering::SeqCst);
 }
 
 /// Write/update `~/.relaybase/app-icon.png` from the embedded icon bytes.
@@ -51,13 +119,28 @@ pub fn ensure_notification_icon() -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Consume a notification-click payload that raced the first frontend listener.
 #[tauri::command]
-pub async fn show_notification(title: String, body: String) -> Result<(), String> {
+pub fn take_pending_open_mail() -> Option<OpenMailPayload> {
+    PENDING_OPEN_MAIL.lock().ok().and_then(|mut guard| guard.take())
+}
+
+#[tauri::command]
+pub async fn show_notification(
+    app: AppHandle,
+    title: String,
+    body: String,
+    message_id: Option<String>,
+    account: Option<String>,
+) -> Result<(), String> {
     let title = title.trim().to_string();
     let body = body.trim().to_string();
     if title.is_empty() && body.is_empty() {
         return Ok(());
     }
+
+    let message_id = nonempty(message_id);
+    let account = nonempty(account);
 
     #[cfg(target_os = "macos")]
     {
@@ -68,27 +151,44 @@ pub async fn show_notification(title: String, body: String) -> Result<(), String
         } else {
             title
         };
-        // mac-notification-sys is sync and talks to NSUserNotificationCenter.
+        let wait_for_click = message_id.is_some() && try_acquire_click_waiter();
+        // Do not await: wait_for_click blocks until the user acts, and the
+        // mailbox store must ack events immediately after showing the banner.
         tauri::async_runtime::spawn_blocking(move || {
-            use mac_notification_sys::Notification;
+            use mac_notification_sys::{Notification, NotificationResponse};
             let _ = notify_rust::set_application("com.relaybase.desktop");
             let result = Notification::new()
                 .title(&summary)
                 .message(&body)
                 .app_icon(&icon_str)
+                .wait_for_click(wait_for_click)
                 .send();
-            if let Err(e) = result {
-                log::warn!("show_notification failed: {e}");
+            if wait_for_click {
+                release_click_waiter();
             }
-        })
-        .await
-        .map_err(|e| format!("Notification task failed: {e}"))?;
+            match result {
+                Ok(NotificationResponse::Click)
+                | Ok(NotificationResponse::ActionButton(_)) => {
+                    if let Some(id) = message_id {
+                        store_and_emit_open_mail(
+                            &app,
+                            OpenMailPayload {
+                                message_id: id,
+                                account,
+                            },
+                        );
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => log::warn!("show_notification failed: {e}"),
+            }
+        });
         return Ok(());
     }
 
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (title, body);
+        let _ = (app, title, body, message_id, account);
         Err("Custom notifications are only implemented on macOS".into())
     }
 }

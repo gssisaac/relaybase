@@ -13,8 +13,14 @@ import {
 } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { BroadcastDetailProvider } from "@/console/pages/broadcasts/BroadcastDetailContext";
+import { BroadcastDetailSwitch } from "@/console/pages/broadcasts/BroadcastDetailSwitch";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { broadcastDetailHref, useDashboardPaths } from "@/console/lib/paths";
+import {
+  broadcastDetailFromSearch,
+  broadcastDetailHref,
+  useDashboardPaths,
+} from "@/console/lib/paths";
 import { useEmailPaths } from "@/email/lib/paths";
 import {
   fetchEmailCached,
@@ -228,10 +234,6 @@ function BroadcastsViewInner() {
     }
   }
 
-  function openBroadcast(id: string) {
-    router.push(broadcastDetailHref(id));
-  }
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <Dialog
@@ -403,7 +405,7 @@ function BroadcastsViewInner() {
                   {filtered.map((b) => (
                     <EmailTableRow
                       key={b.id}
-                      onClick={() => openBroadcast(b.id)}
+                      href={broadcastDetailHref(b.id)}
                       primary={b.subject?.trim() || "Untitled draft"}
                       subject={b.groupIds
                         .map((id) => groupById.get(id)?.name ?? id)
@@ -448,6 +450,22 @@ function BroadcastsViewInner() {
   );
 }
 
+function BroadcastsRoute() {
+  const searchParams = useSearchParams();
+  const detail = broadcastDetailFromSearch(searchParams);
+  if (detail) {
+    return (
+      <BroadcastDetailProvider
+        key={detail.broadcastId}
+        broadcastId={detail.broadcastId}
+      >
+        <BroadcastDetailSwitch tab={detail.tab} />
+      </BroadcastDetailProvider>
+    );
+  }
+  return <BroadcastsViewInner />;
+}
+
 export function BroadcastsView() {
   return (
     <Suspense
@@ -455,7 +473,7 @@ export function BroadcastsView() {
         <div className="p-4 text-sm text-muted-foreground">Loading…</div>
       }
     >
-      <BroadcastsViewInner />
+      <BroadcastsRoute />
     </Suspense>
   );
 }

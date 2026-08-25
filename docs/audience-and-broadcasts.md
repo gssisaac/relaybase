@@ -60,13 +60,13 @@ Lifecycle:
 | `/audience?id=<groupId>&tab=history` | Sheet — Send history (broadcasts that include this group) |
 | `/audience?id=<groupId>&tab=settings` | Sheet — Name, default sender, data source, cron, delete |
 | `/broadcasts` | List + **New broadcast** dialog (audience only) |
-| `/broadcasts/new` | Redirects to `/broadcasts?new=1` |
-| `/broadcasts/:id` | Draft compose **or** sent Overview |
-| `/broadcasts/:id/audience` | Sent — audience tab |
-| `/broadcasts/:id/content` | Sent — content tab (+ reuse into new draft) |
-| `/broadcasts/:id/progress` | Live send progress while sending; past runs when idle |
+| `/broadcasts?new=1` | Opens the New broadcast dialog (`/broadcasts/new` redirects here) |
+| `/broadcasts?id=<id>` | Draft compose **or** sent Overview (by status) |
+| `/broadcasts?id=<id>&tab=audience` | Sent — audience tab |
+| `/broadcasts?id=<id>&tab=content` | Sent — content tab (+ reuse into new draft) |
+| `/broadcasts?id=<id>&tab=progress` | Live send progress while sending; past runs when idle |
 
-Legacy `/audience/:groupId[/contacts|history|settings]` segments are normalized to `/audience?id=&tab=`. Starting a broadcast for a group happens from the Broadcasts page audience picker (the per-group Send tab was removed).
+Legacy `/audience/:groupId[/contacts|history|settings]` and `/broadcasts/:id[/audience|content|progress]` segments are normalized to `?id=&tab=`. Starting a broadcast for a group happens from the Broadcasts page audience picker (the per-group Send tab was removed).
 
 ---
 
@@ -210,11 +210,11 @@ Do not reintroduce “replace whole `dataSource` object with empty credential”
 
 - Select audience groups only
 - **New audience** link → `/audience`
-- **Create broadcast** → `POST /api/email/broadcasts` with `status: "draft"` → navigate to `/broadcasts/:id`
+- **Create broadcast** → `POST /api/email/broadcasts` with `status: "draft"` → navigate to `/broadcasts?id=<id>`
 
 ### 2. Draft page
 
-While `status === "draft"`, `/broadcasts/:id` shows compose-shaped UI (`BroadcastComposeForm`):
+While `status === "draft"`, `/broadcasts?id=<id>` shows compose-shaped UI (`BroadcastComposeForm`):
 
 - From / To (group badges) / Subject / body / footer
 - Same chrome as mail `ComposeForm`
@@ -222,7 +222,7 @@ While `status === "draft"`, `/broadcasts/:id` shows compose-shaped UI (`Broadcas
 - **From select** is scoped to addresses on the selected audience group **domain(s)** only (not all accounts)
 - **Default From** = each group’s Settings → **Default sender** (`defaultFrom`), else first address on that domain; set at draft create and corrected in the UI if wrong
 - **Save draft** → `PATCH /api/email/broadcasts/:id`
-- **Broadcast** (⌘Enter) → MobX `queueBroadcast` (background save + send) → navigate to `/broadcasts/:id/progress`
+- **Broadcast** (⌘Enter) → MobX `queueBroadcast` (background save + send) → navigate to `/broadcasts?id=<id>&tab=progress`
 
 ### 3. Progress + sent detail
 

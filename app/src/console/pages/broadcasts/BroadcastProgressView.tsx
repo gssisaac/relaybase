@@ -275,7 +275,9 @@ export function BroadcastProgressView() {
 
   const status = data?.status ?? detail?.broadcast.status;
   const jobBusy =
-    job?.phase === "uploading" || job?.phase === "sending";
+    job?.phase === "pending" ||
+    job?.phase === "uploading" ||
+    job?.phase === "sending";
 
   const progressCandidate =
     data?.progress ?? detail?.broadcast.sendProgress ?? null;
@@ -303,7 +305,13 @@ export function BroadcastProgressView() {
   useEffect(() => {
     if (!job) return;
     if (status === "sent" || status === "failed") {
-      if (job.phase === "uploading" || job.phase === "sending") return;
+      if (
+        job.phase === "pending" ||
+        job.phase === "uploading" ||
+        job.phase === "sending"
+      ) {
+        return;
+      }
       store.dismissJob(broadcastId);
     }
   }, [broadcastId, job, status, store]);

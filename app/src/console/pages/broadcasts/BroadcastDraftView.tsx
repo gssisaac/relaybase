@@ -17,6 +17,7 @@ import { broadcastDetailHref, useDashboardPaths } from "@/console/lib/paths";
 import { useEmailPaths } from "@/email/lib/paths";
 import { fetchEmailCachedOptional } from "@/email/components/mailbox/email-cached-fetch";
 import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
+import { scheduleEmailSend } from "@/email/components/compose/email-pending-send";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import type { Address, AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
@@ -103,12 +104,14 @@ export function BroadcastDraftView() {
 
   useEffect(() => {
     if (!detail || hydrated) return;
-    setSelectedGroupIds(detail.broadcast.groupIds);
-    setFrom(detail.broadcast.from ?? "");
-    setSubject(detail.broadcast.subject ?? "");
-    setBody(detail.broadcast.body ?? "");
+    const local = broadcastStore.getDraft(broadcastId);
+    const src = local ?? detail.broadcast;
+    setSelectedGroupIds(src.groupIds);
+    setFrom(src.from ?? "");
+    setSubject(src.subject ?? "");
+    setBody(src.body ?? "");
     setHydrated(true);
-  }, [detail, hydrated]);
+  }, [broadcastId, broadcastStore, detail, hydrated]);
 
   const selectedGroups = useMemo(() => {
     const fromDetail = detail?.groups ?? [];
@@ -211,14 +214,24 @@ export function BroadcastDraftView() {
     }
     if (resolvedFrom !== from) setFrom(resolvedFrom);
 
-    broadcastStore.queueBroadcast({
+    const payload = {
       broadcastId,
       groupIds: selectedGroupIds,
       from: resolvedFrom,
       subject,
       body,
-    });
+    };
+    broadcastStore.armBroadcast(payload);
     router.replace(broadcastDetailHref(broadcastId, "progress"));
+    scheduleEmailSend({
+      onUnsend: () => {
+        broadcastStore.cancelArmed(broadcastId);
+        router.replace(broadcastDetailHref(broadcastId));
+      },
+      execute: () => {
+        broadcastStore.queueBroadcast(payload);
+      },
+    });
   }
 
   if (loading && !detail) {

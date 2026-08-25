@@ -22,6 +22,7 @@ function clearBroadcastCaches(productId: string, broadcastId: string) {
 }
 
 export type BroadcastJobPhase =
+  | "pending"
   | "uploading"
   | "sending"
   | "done"
@@ -35,6 +36,18 @@ export type BroadcastJob = {
   error: string | null;
   startedAt: number;
 };
+
+export type BroadcastQueueInput = {
+  broadcastId: string;
+  groupIds: string[];
+  from: string;
+  subject: string;
+  body: string;
+};
+
+function isInFlightPhase(phase: BroadcastJobPhase): boolean {
+  return phase === "pending" || phase === "uploading" || phase === "sending";
+}
 
 /**
  * Local broadcast drafts + background send jobs.
@@ -152,6 +165,33 @@ export class BroadcastStore {
     return draft;
   }
 
+  /** Create or update a local draft so Unsend can restore compose fields. */
+  persistQueueInput(input: BroadcastQueueInput) {
+    const updated = this.upsertDraft({
+      id: input.broadcastId,
+      groupIds: input.groupIds,
+      from: input.from,
+      subject: input.subject,
+      body: input.body,
+    });
+    if (updated) return updated;
+    const now = new Date().toISOString();
+    const draft: LocalBroadcastDraft = {
+      id: input.broadcastId,
+      subject: input.subject,
+      body: input.body,
+      from: input.from,
+      status: "draft",
+      createdAt: now,
+      updatedAt: now,
+      groupIds: input.groupIds,
+      recipientCount: 0,
+    };
+    this.drafts = [draft, ...this.drafts];
+    void this.persistDrafts();
+    return draft;
+  }
+
   upsertDraft(patch: {
     id: string;
     groupIds?: string[];
@@ -199,22 +239,48 @@ export class BroadcastStore {
 
   isActive(broadcastId: string): boolean {
     const job = this.jobFor(broadcastId);
-    return Boolean(
-      job && (job.phase === "uploading" || job.phase === "sending"),
-    );
+    return Boolean(job && isInFlightPhase(job.phase));
+  }
+
+  /**
+   * Hold a send in the Unsend window. Persists local draft fields and creates
+   * a pending job — no network until `queueBroadcast`.
+   */
+  armBroadcast(input: BroadcastQueueInput): BroadcastJob {
+    const existing = this.jobFor(input.broadcastId);
+    this.persistQueueInput(input);
+    if (existing && isInFlightPhase(existing.phase)) {
+      return existing;
+    }
+
+    const job: BroadcastJob = {
+      id: crypto.randomUUID(),
+      broadcastId: input.broadcastId,
+      phase: "pending",
+      message: "Starting broadcast…",
+      error: null,
+      startedAt: Date.now(),
+    };
+    this.jobs = [
+      job,
+      ...this.jobs.filter((j) => j.broadcastId !== input.broadcastId),
+    ];
+    return job;
+  }
+
+  /** Cancel a pending Unsend window. No-op once upload/send has started. */
+  cancelArmed(broadcastId: string) {
+    const job = this.jobFor(broadcastId);
+    if (!job || job.phase !== "pending") return;
+    this.dismissJob(broadcastId);
   }
 
   /**
    * Push local draft to the server and send in the background.
+   * Commits a pending job from `armBroadcast`, or starts a new one.
    * Returns immediately — caller should navigate to Progress.
    */
-  queueBroadcast(input: {
-    broadcastId: string;
-    groupIds: string[];
-    from: string;
-    subject: string;
-    body: string;
-  }): BroadcastJob {
+  queueBroadcast(input: BroadcastQueueInput): BroadcastJob {
     const existing = this.jobFor(input.broadcastId);
     if (
       existing &&
@@ -223,14 +289,16 @@ export class BroadcastStore {
       return existing;
     }
 
-    // Persist latest compose fields locally before upload.
-    this.upsertDraft({
-      id: input.broadcastId,
-      groupIds: input.groupIds,
-      from: input.from,
-      subject: input.subject,
-      body: input.body,
-    });
+    this.persistQueueInput(input);
+
+    if (existing?.phase === "pending") {
+      existing.phase = "uploading";
+      existing.message = "Starting broadcast…";
+      existing.error = null;
+      existing.startedAt = Date.now();
+      void this.runJob(existing, input);
+      return existing;
+    }
 
     const job: BroadcastJob = {
       id: crypto.randomUUID(),
@@ -261,16 +329,7 @@ export class BroadcastStore {
     }
   }
 
-  private async runJob(
-    job: BroadcastJob,
-    input: {
-      broadcastId: string;
-      groupIds: string[];
-      from: string;
-      subject: string;
-      body: string;
-    },
-  ) {
+  private async runJob(job: BroadcastJob, input: BroadcastQueueInput) {
     const { broadcastId } = input;
     try {
       // Upsert onto the server only at send time (not while drafting).

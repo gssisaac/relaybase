@@ -42,12 +42,12 @@ Broadcasts target one or more audience groups (`groupIds`). Recipients are the d
 Lifecycle:
 
 1. **draft** — created from audience picker; editable compose UI  
-2. **sending** — **Broadcast** queues work in the client MobX `BroadcastStore`, navigates to Progress, and the server fans out mail with live `sendProgress`  
+2. **sending** — **Broadcast** shows a 5s Unsend toast (same as mail Send), then `BroadcastStore.queueBroadcast` fans out mail with live `sendProgress`  
 3. **sent** / **failed** — detail shell with tabs (Overview, Audience, Content, Progress)
 
 **Content tab:** **Use this to broadcast** creates a new draft with the same `groupIds`, `from`, `subject`, and body, then opens compose.
 
-**Progress tab:** Shows a live **Current run** panel only while a send is in flight (`sendProgress.status === "running"`, broadcast `sending`, or client upload/send job). When idle, only the **Past runs** list is shown (no empty current-run or summary cards).
+**Progress tab:** Shows a live **Current run** panel only while a send is in flight (`sendProgress.status === "running"`, broadcast `sending`, or a client pending/upload/send job). When idle, only the **Past runs** list is shown (no empty current-run or summary cards).
 
 ---
 
@@ -110,7 +110,7 @@ Includes `defaultFrom`, `dataSource`, cron fields, `lastSync*`, `syncProgress`, 
 
 Store helpers: `createBroadcastDraft`, `updateBroadcastDraft`, `sendBroadcast`, `getBroadcastDetail`, `getBroadcastProgress`, `listContactsForGroups`.
 
-Client MobX: `BroadcastStore` / `BroadcastProvider` (`app/src/lib/dashboard/broadcast-store.ts`) — `queueBroadcast` saves then POSTs `/send` in the background so the UI can open Progress immediately.
+Client MobX: `BroadcastStore` / `BroadcastProvider` (`app/src/lib/dashboard/broadcast-store.ts`) — **Broadcast** arms a pending job + 5s Unsend toast, then `queueBroadcast` saves and POSTs `/send` in the background so Progress can open immediately.
 
 ---
 
@@ -222,7 +222,7 @@ While `status === "draft"`, `/broadcasts?id=<id>` shows compose-shaped UI (`Broa
 - **From select** is scoped to addresses on the selected audience group **domain(s)** only (not all accounts)
 - **Default From** = each group’s Settings → **Default sender** (`defaultFrom`), else first address on that domain; set at draft create and corrected in the UI if wrong
 - **Save draft** → `PATCH /api/email/broadcasts/:id`
-- **Broadcast** (⌘Enter) → MobX `queueBroadcast` (background save + send) → navigate to `/broadcasts?id=<id>&tab=progress`
+- **Broadcast** (⌘Enter) → 5s Unsend toast (same as mail Send) → then MobX `queueBroadcast` (background save + send) → `/broadcasts?id=<id>&tab=progress`. Unsend / Esc during the window returns to the draft.
 
 ### 3. Progress + sent detail
 
@@ -289,7 +289,7 @@ When changing this area:
 - [ ] Preserve credential merge (empty token must not wipe stored auth)
 - [ ] Keep data-source parse: root array first; wrappers secondary
 - [ ] Auth: token in credential field; header name is only the header name
-- [ ] Broadcast create = draft → compose → queue send → Progress tab → sent detail
+- [ ] Broadcast create = draft → compose → 5s Unsend → queue send → Progress tab → sent detail
 - [ ] Audience sync progress updates go through `syncProgress` + optional `onProgress` D1 writes
 - [ ] Broadcast send progress updates go through `sendProgress` / `sendHistory`
 - [ ] Update this doc if routes, statuses, or the API contract change

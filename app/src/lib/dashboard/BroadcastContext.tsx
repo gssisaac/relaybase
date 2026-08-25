@@ -77,5 +77,6 @@ export { BroadcastStore } from "@/lib/dashboard/broadcast-store";
 export type {
   BroadcastJob,
   BroadcastJobPhase,
+  BroadcastQueueInput,
 } from "@/lib/dashboard/broadcast-store";
 export type { LocalBroadcastDraft } from "@/lib/dashboard/broadcast-drafts-disk";

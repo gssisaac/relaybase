@@ -43,7 +43,7 @@ The Worker is the only process that applies product SQL. Desktop and Wrangler do
 **Do**
 
 - Add new schema only as a **new** numbered file + the same string in `server/db/migrations.ts`. Never edit an already-shipped file that live D1s have applied.
-- After `server/` changes, rebuild the Worker bundle (`pnpm run build:bundle` / `pnpm pack:worker-install`). See **AGENTS.md → Worker bundle**.
+- After `server/` changes, rebuild the Worker bundle (`pnpm run build:bundle` for dogfood `wrangler deploy`, or `pnpm pack:worker-install` for the public ZIP). See **AGENTS.md → Worker bundle**.
 - Confirm the new isolate with `/health` → `schemaMigrate: "reconcile-v1"`. If that field is missing, the uploaded `worker.js` is still the old migrate-db (it will 500 on `domains already exists`).
 
 ---
@@ -74,7 +74,7 @@ migrations_dir = "db/mail/migrations"           # RELAYBASE_MAIL
 
 Embedded migration strings for the Worker live in **`server/db/migrations.ts`**. Shared apply helper: **`server/src/lib/d1-migrations.ts`**. Keep `migrations.ts` in sync when adding `.sql` files so `init-db` / `migrate-db` and manual `wrangler d1 migrations apply` stay equivalent.
 
-**Rebuild after `server/` changes.** Desktop update uploads bundled `worker.js`, not live TypeScript. `cd server && pnpm run build:bundle` (local overlay) or `pnpm pack:worker-install` (hosted ZIP). Until that runs, `/console/migrate-db` 404s on the old script. See **AGENTS.md → Worker bundle**.
+**Rebuild after `server/` changes.** Desktop update uploads the hosted install ZIP, not live TypeScript and not a local overlay. `pnpm pack:worker-install` then deploy `kembo/website`. Until that runs, `/console/migrate-db` 404s on the old script. See **AGENTS.md → Worker bundle**.
 
 ---
 

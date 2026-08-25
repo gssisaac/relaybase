@@ -88,6 +88,8 @@ pub struct WorkerInstallManifest {
     pub zip_url: String,
     pub zip_sha256: String,
     pub published_at: String,
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -498,167 +500,8 @@ fn unzip_bytes(zip_bytes: &[u8], dest: &Path) -> Result<(), String> {
 }
 
 /// Current Worker `/health` exposes `d1Bound` and `schemaMigrate: reconcile-v1`.
-/// `+local` on WORKER_VERSION only means a file was copied — not that it is current.
 fn worker_js_is_current(source: &str) -> bool {
     source.contains("d1Bound") && source.contains("reconcile-v1")
-}
-
-fn server_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../server")
-}
-
-fn overlay_candidate_paths(server: &Path) -> [PathBuf; 3] {
-    [
-        server.join("dist/worker-build/index.js"),
-        server.join("dist/relaybase-worker-install/worker.js"),
-        server.join("customer-install/worker.js"),
-    ]
-}
-
-fn first_current_local_worker(app: &AppHandle, server: &Path) -> Option<PathBuf> {
-    for path in overlay_candidate_paths(server) {
-        if !path.is_file() {
-            continue;
-        }
-        match std::fs::read_to_string(&path) {
-            Ok(src) if worker_js_is_current(&src) => return Some(path),
-            Ok(_) => emit_log(
-                app,
-                "prepare",
-                "stderr",
-                format!(
-                    "Skipping stale worker.js at {} (no d1Bound — too old to init empty D1)",
-                    path.display()
-                ),
-            ),
-            Err(e) => emit_log(
-                app,
-                "prepare",
-                "stderr",
-                format!("Could not read {}: {e}", path.display()),
-            ),
-        }
-    }
-    None
-}
-
-fn try_build_local_worker(app: &AppHandle, server: &Path) -> Option<PathBuf> {
-    if !server.join("package.json").is_file() {
-        return None;
-    }
-    emit_log(
-        app,
-        "prepare",
-        "info",
-        "No current worker.js on disk — building from server/ (`pnpm run build:bundle`)…",
-    );
-    let output = std::process::Command::new("pnpm")
-        .args(["run", "build:bundle"])
-        .current_dir(server)
-        .output();
-    match output {
-        Ok(out) if out.status.success() => {
-            let built = server.join("dist/worker-build/index.js");
-            match std::fs::read_to_string(&built) {
-                Ok(src) if worker_js_is_current(&src) => {
-                    emit_log(
-                        app,
-                        "prepare",
-                        "info",
-                        format!("Built current worker.js ({})", built.display()),
-                    );
-                    Some(built)
-                }
-                Ok(_) => {
-                    emit_log(
-                        app,
-                        "prepare",
-                        "stderr",
-                        "build:bundle finished but the output still has no d1Bound.",
-                    );
-                    None
-                }
-                Err(e) => {
-                    emit_log(
-                        app,
-                        "prepare",
-                        "stderr",
-                        format!("build:bundle did not write {}: {e}", built.display()),
-                    );
-                    None
-                }
-            }
-        }
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            let tail: String = if stderr.len() > 400 {
-                stderr[stderr.len().saturating_sub(400)..].to_string()
-            } else {
-                stderr.to_string()
-            };
-            emit_log(
-                app,
-                "prepare",
-                "stderr",
-                format!("pnpm run build:bundle failed: {tail}"),
-            );
-            None
-        }
-        Err(e) => {
-            emit_log(
-                app,
-                "prepare",
-                "stderr",
-                format!("Could not run pnpm in {}: {e}", server.display()),
-            );
-            None
-        }
-    }
-}
-
-fn copy_worker_overlay(app: &AppHandle, work_dir: &Path, local: &Path) -> bool {
-    match std::fs::copy(local, work_dir.join("worker.js")) {
-        Ok(_) => {
-            emit_log(
-                app,
-                "prepare",
-                "info",
-                format!("Using current local worker.js ({})", local.display()),
-            );
-            if let Some(v) = read_staged_version(work_dir) {
-                let tagged = if v.contains("+local") {
-                    v
-                } else {
-                    format!("{v}+local")
-                };
-                let _ = std::fs::write(work_dir.join("VERSION"), format!("{tagged}\n"));
-            }
-            true
-        }
-        Err(e) => {
-            emit_log(
-                app,
-                "prepare",
-                "stderr",
-                format!("Could not overlay local worker.js: {e}"),
-            );
-            false
-        }
-    }
-}
-
-/// Prefer a current local `worker.js` (has `d1Bound`) over the hosted ZIP.
-/// Skip stale overlays — copying an old file and tagging `+local` is how
-/// clean reinstalls were mis-diagnosed as “hosted 0.2.0”.
-fn overlay_local_worker_js(app: &AppHandle, work_dir: &Path) -> bool {
-    let server = server_dir();
-    if let Some(local) = first_current_local_worker(app, &server) {
-        return copy_worker_overlay(app, work_dir, &local);
-    }
-    if let Some(built) = try_build_local_worker(app, &server) {
-        return copy_worker_overlay(app, work_dir, &built);
-    }
-    false
 }
 
 fn parse_digits_after(hay: &str, needle: &str) -> Option<u32> {
@@ -778,14 +621,12 @@ async fn stage_install_package(
             "Install ZIP is missing worker.js. Re-pack with pnpm pack:worker-install.".into(),
         );
     }
-    let _ = overlay_local_worker_js(app, &work_dir);
     let staged_js = std::fs::read_to_string(work_dir.join("worker.js"))
         .map_err(|e| format!("Could not read staged worker.js: {e}"))?;
     if !worker_js_is_current(&staged_js) {
         return Err(
-            "The Worker script is too old to initialize an empty database (no d1Bound in worker.js). \
-             Rolling back Cloudflare resources does not fix this — the installer must upload a current build. \
-             From this repo run `cd server && pnpm run build:bundle`, then Try again."
+            "The hosted install ZIP is too old to initialize an empty database (no d1Bound in worker.js). \
+             Re-pack with `pnpm pack:worker-install`, deploy the website, then Try again."
                 .into(),
         );
     }
@@ -856,8 +697,7 @@ async fn fetch_worker_health_json(worker_url: &str) -> Result<serde_json::Value,
     serde_json::from_str(&body).map_err(|e| e.to_string())
 }
 
-/// Log `/health` shape. Missing `d1Bound` is a stale script — `+local` only
-/// means a file was copied, not that it is current.
+/// Log `/health` shape. Missing `d1Bound` means the hosted ZIP is stale.
 async fn log_worker_health_shape(app: &AppHandle, worker_url: &str) {
     match fetch_worker_health_json(worker_url).await {
         Ok(health) => {
@@ -880,16 +720,13 @@ async fn log_worker_health_shape(app: &AppHandle, worker_url: &str) {
                     ),
                 ),
                 None => {
-                    let reason = if version.contains("+local") {
-                        "a stale local worker.js was uploaded (`+local` is only a filename tag). Rebuild with `cd server && pnpm run build:bundle` and Try again."
-                    } else {
-                        "the uploaded script is an old install ZIP. Rebuild a current worker.js and Try again — rollback does not change the package on this Mac."
-                    };
                     emit_log(
                         app,
                         "warmup",
                         "stderr",
-                        format!("Worker /health version={version} has no d1Bound — {reason}"),
+                        format!(
+                            "Worker /health version={version} has no d1Bound — the hosted install ZIP is stale. Re-pack with `pnpm pack:worker-install`, deploy the website, then Try again."
+                        ),
                     );
                 }
             }
@@ -912,7 +749,7 @@ fn explain_init_db_failure(e: &str) -> String {
     }
     if e.contains("owner_config") && e.contains("no such table") {
         return format!(
-            "{e}\nThe Worker ran admin auth against D1 before migrations. Upload a current worker.js (`pnpm run build:bundle`), then Try again."
+            "{e}\nThe Worker ran admin auth against D1 before migrations. Re-pack with `pnpm pack:worker-install`, deploy the website, then Try again."
         );
     }
     e.to_string()

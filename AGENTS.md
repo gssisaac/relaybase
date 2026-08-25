@@ -25,6 +25,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
 | Marketing site feature clips (`kembo/website` homepage videos) | [kembo/website/docs/feature-video-encode.md](kembo/website/docs/feature-video-encode.md) — also [kembo/website/AGENT.md](kembo/website/AGENT.md) |
+| **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [desktop/docs/release.md](desktop/docs/release.md) and [server/customer-install/RELEASE.md](server/customer-install/RELEASE.md) |
 
 ## Storage (summary)
 
@@ -74,7 +75,7 @@ After any change that ships in the product Worker (routes, `/health`, `init-db` 
 cd server && pnpm run build:bundle
 ```
 
-That writes `server/dist/worker-build/index.js`. The desktop overlays this (or `server/dist/relaybase-worker-install/worker.js`) over the hosted ZIP. Until you rebuild, update still uploads the old script — new routes like `/console/migrate-db` 404.
+That writes `server/dist/worker-build/index.js` for dogfood `wrangler deploy`. Desktop install/update uploads **only** the hosted ZIP — it does not overlay a local `worker.js`. Until you pack and deploy the website, Settings → Update Worker still uploads the old public script — new routes like `/console/migrate-db` 404.
 
 For the public install ZIP (`https://relaybase.xyz/downloads`):
 

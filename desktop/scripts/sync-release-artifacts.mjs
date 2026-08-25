@@ -57,9 +57,14 @@ function main() {
   const existing = readExistingLatest(latestPath);
 
   const notesPath = path.join(root, 'public', 'release-notes', `${version}.md`);
-  let releaseNotes = existing?.notes ?? '';
-  if (fs.existsSync(notesPath)) {
-    releaseNotes = stripFrontmatter(fs.readFileSync(notesPath, 'utf8'));
+  if (!fs.existsSync(notesPath)) {
+    console.error(`[sync-release] Missing ${notesPath}. Write kloy-style release notes before building.`);
+    process.exit(1);
+  }
+  const releaseNotes = stripFrontmatter(fs.readFileSync(notesPath, 'utf8'));
+  if (!releaseNotes) {
+    console.error(`[sync-release] Release notes at ${notesPath} are empty.`);
+    process.exit(1);
   }
 
   /** @type {{ version: string; notes: string; pub_date: string; platforms: Record<string, { url: string; signature: string }> }} */

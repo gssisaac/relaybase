@@ -6,8 +6,8 @@
  *   1. `wrangler deploy --dry-run` → dist/worker-build/index.js
  *   2. Stage worker.js + generated wrangler.toml + README + VERSION
  *   3. ZIP as relaybase-worker-install-{version}.zip
- *   4. Write worker-install-manifest.json (version, zipUrl, sha256)
- *   5. Copy to kembo/website/public/downloads/
+ *   4. Write worker-install-manifest.json (version, zipUrl, sha256, notes)
+ *   5. Copy to kembo/website/public/downloads/ and drop older versioned ZIPs
  */
 import {
   cpSync,
@@ -17,6 +17,7 @@ import {
   readFileSync,
   writeFileSync,
   createReadStream,
+  readdirSync,
 } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,6 +34,26 @@ const pkg = JSON.parse(readFileSync(join(serverRoot, "package.json"), "utf8"));
 const version = pkg.version;
 if (!version || version === "0.0.0") {
   console.error("Set a release version in server/package.json before packing.");
+  process.exit(1);
+}
+
+const notesPath = join(serverRoot, "release-notes", `${version}.md`);
+if (!existsSync(notesPath)) {
+  console.error(
+    `Missing ${notesPath}. Write kloy-style release notes before packing.`,
+  );
+  process.exit(1);
+}
+
+function stripFrontmatter(raw) {
+  const normalized = raw.replace(/\r\n/g, "\n");
+  const match = normalized.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
+  return (match ? match[1] : normalized).trim();
+}
+
+const notes = stripFrontmatter(readFileSync(notesPath, "utf8"));
+if (!notes) {
+  console.error(`Release notes at ${notesPath} are empty.`);
   process.exit(1);
 }
 
@@ -135,12 +156,24 @@ const manifest = {
   zipUrl: `${DOWNLOAD_BASE}/${versionedZipName}`,
   zipSha256: sha256,
   publishedAt: new Date().toISOString(),
+  notes,
 };
 
 mkdirSync(downloadsDir, { recursive: true });
 cpSync(versionedZipPath, versionedZipOut);
 cpSync(versionedZipPath, stableZipPath);
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+for (const name of readdirSync(downloadsDir)) {
+  if (
+    name.startsWith("relaybase-worker-install-") &&
+    name.endsWith(".zip") &&
+    name !== versionedZipName
+  ) {
+    rmSync(join(downloadsDir, name), { force: true });
+    console.log(`Removed stale ${name}`);
+  }
+}
 
 console.log(`Packed ${versionedZipPath}`);
 console.log(`SHA-256: ${sha256}`);

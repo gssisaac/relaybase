@@ -198,6 +198,7 @@ export type WorkerInstallManifest = {
   zipUrl: string;
   zipSha256: string;
   publishedAt: string;
+  notes?: string;
 };
 
 export type WorkerUpdateCheck = {
@@ -609,7 +610,7 @@ export function explainDesktopError(
       title: "Worker ran before database setup",
       detail:
         "The uploaded Worker queried owner_config before init-db created that table. A current worker.js skips that on an empty D1.",
-      fix: "From this repo run `cd server && pnpm run build:bundle`, then Try again so the current worker.js is uploaded. Rollback does not rebuild the script.",
+      fix: "Re-pack with `pnpm pack:worker-install`, deploy the website, then Try again. Rollback does not replace worker.js.",
     };
   }
 
@@ -621,8 +622,8 @@ export function explainDesktopError(
     return {
       title: "Installer does not have a current Worker script",
       detail:
-        "The script on this Mac is missing d1Bound (current /health). Tagging a file +local does not make it current. Rolling back Cloudflare resources does not replace worker.js on disk.",
-      fix: "Run `cd server && pnpm run build:bundle`, then Try again.",
+        "The hosted install ZIP is missing d1Bound (current /health). Rolling back Cloudflare resources does not replace the package on this Mac.",
+      fix: "Re-pack with `pnpm pack:worker-install`, deploy the website, then Try again.",
     };
   }
 

@@ -1031,8 +1031,8 @@ export function SetupProgressPanel({
               The Worker was uploaded, but Relaybase could not confirm it yet.
               Verify now retries init-db and connect only — it does not
               replace worker.js. If the log mentions error 1104, wait a few
-              seconds and Try again. If it says the script is too old, rebuild
-              with <code>pnpm run build:bundle</code> in server/.
+              seconds and Try again. If it says the script is too old, re-pack
+              with <code>pnpm pack:worker-install</code> and deploy the website.
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL:{" "}

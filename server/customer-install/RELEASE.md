@@ -2,18 +2,95 @@
 
 Customer-facing Worker installs ship as **pre-built JS bundles** (not TypeScript source).
 
-## Bump and publish
+Desktop and Worker versions are **independent**. Both start at **0.1.0**. Later
+updates bump the **patch** only (`0.1.1`, `0.1.2`, …). There is no separate
+dev / `+local` channel. Desktop install/update uploads **only** this hosted ZIP.
 
-1. Bump version in [`server/package.json`](../package.json) (e.g. `0.2.0` → `0.3.0`).
-2. From repo root:
-   ```bash
-   pnpm pack:worker-install
-   ```
-3. Commit artifacts under `kembo/website/public/downloads/`:
-   - `relaybase-worker-install-{version}.zip`
-   - `relaybase-worker-install.zip` (stable alias → latest)
-   - `worker-install-manifest.json`
-4. Deploy the kembo website so `relaybase.xyz/downloads/*` serves the new files.
+Desktop releases: [desktop/docs/release.md](../../desktop/docs/release.md).
+
+---
+
+## Git workflow
+
+Every Worker release uses a dedicated branch. Do **not** bump versions or
+commit download artifacts straight on `main`.
+
+```text
+release-worker-<semver>    # e.g. release-worker-0.1.1
+```
+
+1. `git checkout main && git pull`
+2. `git checkout -b release-worker-X.Y.Z`
+3. All release work on that branch
+4. Push branch
+5. Merge into `main`, push `main`
+6. Deploy `kembo/website` so `downloads/*` is live
+7. Keep `release-worker-X.Y.Z` on the remote
+
+---
+
+## Checklist
+
+### 1. Version bump
+
+Set the version in [`server/package.json`](../package.json) (e.g. `0.1.0` → `0.1.1`).
+
+### 2. Release notes (required)
+
+Create `server/release-notes/X.Y.Z.md`:
+
+```markdown
+---
+date: YYYY-MM-DD
+---
+
+# Relaybase Worker X.Y.Z
+
+## Highlights
+- …
+
+## Changes
+- …
+```
+
+`pack-customer-install.mjs` **fails** if this file is missing.
+
+### 3. Pack
+
+From repo root:
+
+```bash
+pnpm pack:worker-install
+```
+
+Pack runs `build:bundle`, writes the versioned ZIP, a stable alias, and
+`worker-install-manifest.json` (includes `notes`). Older versioned ZIPs under
+`kembo/website/public/downloads/` are removed.
+
+### 4. Commit
+
+Commit artifacts under `kembo/website/public/downloads/`:
+
+- `relaybase-worker-install-{version}.zip`
+- `relaybase-worker-install.zip` (stable alias → latest)
+- `worker-install-manifest.json`
+
+### 5. Deploy the website
+
+```bash
+cd kembo/website
+pnpm run deploy:cf
+```
+
+### 6. Verify
+
+```bash
+curl -s https://relaybase.xyz/downloads/worker-install-manifest.json
+# expect version + notes matching this release
+curl -sI https://relaybase.xyz/downloads/relaybase-worker-install-X.Y.Z.zip | grep -i HTTP
+```
+
+---
 
 ## What the pack script produces
 
@@ -22,9 +99,10 @@ Customer-facing Worker installs ship as **pre-built JS bundles** (not TypeScript
 | `worker.js` | Wrangler-bundled Worker (all deps inlined) |
 | `wrangler.toml` | `main = "worker.js"`, `WORKER_VERSION`, D1/R2 bindings |
 | `VERSION` | Plaintext version for staging |
-| `worker-install-manifest.json` | `{ version, zipUrl, zipSha256, publishedAt }` |
+| `worker-install-manifest.json` | `{ version, zipUrl, zipSha256, publishedAt, notes }` |
 
-Desktop auto-install and Worker updates download the manifest, verify SHA-256, unzip, and run `wrangler deploy` — **no `npm install`**.
+Desktop auto-install and Worker updates download the manifest, verify SHA-256,
+unzip, and upload the script — **no `npm install`**, no local overlay.
 
 ## Desktop behavior
 
@@ -32,7 +110,7 @@ Desktop auto-install and Worker updates download the manifest, verify SHA-256, u
 - **Startup banner:** compares stored version to manifest; prompts update.
 - **Settings → Cloudflare:** manual check + “Update Worker” re-deploy.
 
-## Local overrides (dev)
+## Local overrides
 
 | Env var | Effect |
 |---------|--------|

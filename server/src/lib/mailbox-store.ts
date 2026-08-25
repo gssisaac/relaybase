@@ -31,6 +31,7 @@ import {
 } from "../../db/mail/search";
 import {
   deleteMailboxMessages,
+  mailboxIdsForDomain,
   mailboxPruneIds,
   updateMailboxReadState,
   upsertMailboxMessage,
@@ -920,8 +921,14 @@ export async function rebuildDomain(
   let sentCount = 0;
 
   // 1. Inbound: list uuid folders, thin fat metas, upsert D1.
+  // Skip ids already in D1 so a timed-out rebuild can resume.
+  const inboundDone = await mailboxIdsForDomain(mailDb, "inbound", normalized);
   const inboundIds = await listMessageFolderIds(bucket, "inbound", normalized);
   for (const id of inboundIds) {
+    if (inboundDone.has(id)) {
+      inboundCount += 1;
+      continue;
+    }
     const metaKey = metaObjectKey("inbound", normalized, id);
     const raw = await readJsonAt<Record<string, unknown>>(bucket, metaKey);
     if (!raw) continue;
@@ -959,8 +966,13 @@ export async function rebuildDomain(
 
   // 2. Sent: prefer existing sent uuid folders; otherwise materialize from
   //    legacy _list.json / _sent.json arrays (no raw.eml — preview only).
+  const sentDone = await mailboxIdsForDomain(mailDb, "sent", normalized);
   const sentIds = await listMessageFolderIds(bucket, "sent", normalized);
   for (const id of sentIds) {
+    if (sentDone.has(id)) {
+      sentCount += 1;
+      continue;
+    }
     const metaKey = metaObjectKey("sent", normalized, id);
     const raw = await readJsonAt<Record<string, unknown>>(bucket, metaKey);
     if (!raw) continue;

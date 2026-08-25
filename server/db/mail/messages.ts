@@ -150,6 +150,25 @@ export type MailboxCounts = {
   unread: number;
 };
 
+/** All indexed ids for a domain+kind — used by rebuild to resume after a timeout. */
+export async function mailboxIdsForDomain(
+  db: MailDb,
+  kind: MailboxKind,
+  domain: string,
+): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!db) return ids;
+  const raw: D1Database = db.$client;
+  const rows = await raw
+    .prepare(`SELECT id FROM mailbox_messages WHERE kind = ? AND domain = ?`)
+    .bind(kind, domain)
+    .all<{ id: string }>();
+  for (const row of rows.results ?? []) {
+    if (row.id) ids.add(row.id);
+  }
+  return ids;
+}
+
 export async function mailboxCounts(
   db: MailDb,
   kind: MailboxKind,

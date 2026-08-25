@@ -5,7 +5,6 @@ import {
   incrementBucket,
   RANGE_MS,
 } from "@/lib/admin/time-buckets";
-import { listUsers } from "@/lib/users-store";
 import {
   listEmailSenderKeys,
   listEmailSenderLogs,
@@ -22,7 +21,6 @@ export type StatsRange = "24h" | "7d" | "30d" | "90d";
 export type { StatsBucket };
 
 export type AdminStatsSeries = {
-  users: StatsBucket[];
   authTokens: StatsBucket[];
   apiKeysUsed: StatsBucket[];
   requests: StatsBucket[];
@@ -34,7 +32,6 @@ export type AdminStats = {
   range: StatsRange;
   workerConnected: boolean;
   totals: {
-    users: number;
     authTokens: number;
     apiKeysIssued: number;
     apiKeysUsed: number;
@@ -93,23 +90,16 @@ export async function collectAdminStats(
   const now = Date.now();
   const since = now - RANGE_MS[range];
 
-  const users = await listUsers();
   const authTokens = await loadAuthTokens();
   const apiKeysIssued = await loadWorkerKeysCount();
   const logs = await loadSendLogs();
   const workerConnected = (await resolveEmailSenderConfig()) !== null;
 
-  const userBuckets = createBuckets(range, now);
   const authTokenBuckets = createBuckets(range, now);
   const apiKeyBuckets = createBuckets(range, now);
   const requestBuckets = createBuckets(range, now);
   const errorBuckets = createBuckets(range, now);
   const emailBuckets = createBuckets(range, now);
-
-  for (const user of users) {
-    const ts = new Date(user.createdAt).getTime();
-    incrementBucket(userBuckets, bucketIndex(ts, range, now));
-  }
 
   for (const token of authTokens) {
     const ts = new Date(token.createdAt).getTime();
@@ -148,7 +138,6 @@ export async function collectAdminStats(
     range,
     workerConnected,
     totals: {
-      users: users.length,
       authTokens: authTokens.length,
       apiKeysIssued,
       apiKeysUsed: keysUsedInRange.size,
@@ -157,7 +146,6 @@ export async function collectAdminStats(
       emails: emailBuckets.reduce((sum, b) => sum + b.value, 0),
     },
     series: {
-      users: userBuckets,
       authTokens: authTokenBuckets,
       apiKeysUsed: apiKeyBuckets,
       requests: requestBuckets,

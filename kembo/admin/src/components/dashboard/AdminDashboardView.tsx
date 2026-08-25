@@ -22,7 +22,6 @@ type AdminStatsResponse = {
   range: StatsRange;
   workerConnected: boolean;
   totals: {
-    users: number;
     authTokens: number;
     apiKeysIssued: number;
     apiKeysUsed: number;
@@ -31,7 +30,6 @@ type AdminStatsResponse = {
     emails: number;
   };
   series: {
-    users: { value: number }[];
     authTokens: { value: number }[];
     apiKeysUsed: { value: number }[];
     requests: { value: number }[];
@@ -58,14 +56,6 @@ type StatCard = {
 };
 
 const STAT_CARDS: StatCard[] = [
-  {
-    key: "users",
-    label: "Users",
-    description: "Registered accounts",
-    seriesKey: "users",
-    color: "#22c55e",
-    href: "/users",
-  },
   {
     key: "authTokens",
     label: "Auth tokens",
@@ -157,7 +147,7 @@ export function AdminDashboardView() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
-            Platform overview for Relaybase — users, tokens, API traffic, and email
+            Platform overview for Relaybase — tokens, API traffic, and email
             volume.
           </p>
         </div>
@@ -254,7 +244,6 @@ export function AdminDashboardView() {
             <CardTitle className="text-sm">Worker not connected</CardTitle>
             <CardDescription>
               Requests, errors, and email metrics require a linked Relaybase worker.
-              User and auth token counts are still tracked locally.
             </CardDescription>
           </CardHeader>
           <CardContent>

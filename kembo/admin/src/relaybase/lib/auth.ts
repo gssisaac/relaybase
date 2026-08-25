@@ -86,7 +86,7 @@ export async function requireRelaybaseAuth(
   if (token) {
     if (!(await resolveRelaybaseAuthCredential(token))) {
       throw new RelaybaseAuthError(
-        "Invalid Relaybase auth token — use rb-auth-… from Relaybase Admin → Users, not a Cloudflare API token (cfut_…)",
+        "Invalid Relaybase auth token — use an rb-auth-… dashboard token, not a Cloudflare API token (cfut_…)",
       );
     }
     const baseUrl = await resolveWorkerBaseUrl();
@@ -119,14 +119,14 @@ export async function requireDashboardRelaybaseAuth(
 
   if (!dashboardToken) {
     throw new RelaybaseAuthError(
-      "Relaybase auth token is required — issue one in Relaybase Admin → Users",
+      "Relaybase auth token is required — issue an rb-auth-… dashboard token",
     );
   }
 
   const dashboardRecord = await resolveDashboardAuthToken(dashboardToken);
   if (!dashboardRecord) {
     throw new RelaybaseAuthError(
-        "Invalid Relaybase auth token — issue a fresh rb-auth-… token in Relaybase Admin → Users. Cloudflare API tokens (cfut_…) are not accepted.",
+        "Invalid Relaybase auth token — issue a fresh rb-auth-… dashboard token. Cloudflare API tokens (cfut_…) are not accepted.",
     );
   }
 

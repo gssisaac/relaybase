@@ -28,8 +28,7 @@ export type EmailSenderSettings = {
   workerUrl: string;
   /**
    * Internal worker bridge token. Must match the worker's `ADMIN_TOKEN`
-   * wrangler secret (set via the desktop install flow). Also authorizes the
-   * console license proxy.
+   * wrangler secret (set via the desktop install flow).
    */
   adminToken: string;
 };

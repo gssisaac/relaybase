@@ -6,7 +6,7 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | D1 `RELAYBASE_DB` (binding in `server/wrangler.toml`; Drizzle in `server/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `auth_tokens`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (including recovered `admin_token`), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
+| **Remote** | D1 `RELAYBASE_DB` (binding in `server/wrangler.toml`; Drizzle in `server/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `auth_tokens`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (including recovered `admin_token`), `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
 | **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `server/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
@@ -61,7 +61,7 @@ Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 
 Binding: `server/wrangler.toml` → `RELAYBASE_DB` (database `relaybase-db`).  
 Env type: `server/src/env.ts`.  
-Drizzle schema + helpers: `server/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `inbound-events.ts`).  
+Drizzle schema + helpers: `server/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `settings.ts`, `inbound-events.ts`).  
 Migrations: `server/db/app/migrations/` — applied by the Worker via **`POST /console/init-db`** (empty D1 only) or **`POST /console/migrate-db`** (existing D1 / Worker update). The desktop never runs SQL. Ledger + baseline catch-up policy: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 
 This is the **sole source of truth** for product catalog state. No KV binding on the product Worker.
@@ -90,6 +90,7 @@ The product Worker resolves Cloudflare credentials and the admin token from wran
 | `/console/send-logs` | Send history read from R2 `sent/_sendlog/*` (admin Logs page / Sent tab) |
 | `/console/rebuild-mail` | One-time backfill: thin inbound metas, materialize sent folders, fill `mailbox_messages` + `mailbox_fts`, delete legacy array JSON keys |
 | `/console/mailbox-health` | Per-domain last inbound/sent freshness + stale flag (D1 `RELAYBASE_MAIL`) |
+| `/console/settings` (GET / PUT) | Product options in D1 `app_settings` (inbound retain-per-domain; `null` = unlimited) |
 | `/console/branding` (GET status / PUT merge / POST apply DNS) | Per-domain DMARC config in D1 `domain_branding` + DMARC TXT via the Worker's Cloudflare client |
 | `/console/connect` | Desktop self-install probe (admin-token proof) |
 | `/console/register-owner` | Record the console account that owns this Worker (admin token; for ADMIN_TOKEN recovery) |
@@ -101,7 +102,7 @@ The product Worker resolves Cloudflare credentials and the admin token from wran
 
 Account / license / billing / recovery-token issuance are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`, `/api/v1/recovery/verify-admin-token`), not on the product Worker.
 
-Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` in `server/src/index.ts` (single catalog, no per-user fan-out).
+Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` + `runInboundIndexCron` in `server/src/index.ts` (index reconcile + optional inbound prune; single catalog, no per-user fan-out).
 
 ### R2 `INBOUND` (bucket `relaybase-mailbox`)
 
@@ -117,7 +118,7 @@ sent/{domain}/by-message-id/{encodedMessageId}
 sent/_sendlog/{uuid}.json                            # no _index.json
 ```
 
-R2 holds **one folder per mail**. `meta.json` is THIN (headers + `bodyPreview` ≤500 chars + attachments + `readAt`/`occurredAt` + `hasText`/`hasHtml`); it **never** contains `bodyText`/`bodyHtml` — detail APIs parse `raw.eml` on demand. There is **no per-domain array JSON** (`_list.json` / `_sent.json`) anymore — list/counts/search come from D1 `RELAYBASE_MAIL`. Message-ID dedupe uses the single-key `by-message-id/{id}` pointer (no full-domain scan). Retention is the most recent 5000 messages per (kind, domain), pruned via D1. `~/.relaybase/mail/desktop/inbox.json` is cache only.
+R2 holds **one folder per mail**. `meta.json` is THIN (headers + `bodyPreview` ≤500 chars + attachments + `readAt`/`occurredAt` + `hasText`/`hasHtml`); it **never** contains `bodyText`/`bodyHtml` — detail APIs parse `raw.eml` on demand. There is **no per-domain array JSON** (`_list.json` / `_sent.json`) anymore — list/counts/search come from D1 `RELAYBASE_MAIL`. Message-ID dedupe uses the single-key `by-message-id/{id}` pointer (no full-domain scan). Inbound retention is optional (`app_settings.inbound_retain_per_domain`; default unlimited). When set, cron prunes oldest inbound per domain in batches. Sent is not auto-pruned. `~/.relaybase/mail/desktop/inbox.json` is cache only.
 
 `sent/{domain}/{id}/` is the per-message stored-sent atom (compose, API send). Historical sent imported from legacy `_list.json` has no `raw.eml` (preview-only). Operational send history (ok/fail, API key, bounce) lives at `sent/_sendlog/*` and is read by `/console/send-logs`. The Worker binding name stays `INBOUND`; the Cloudflare bucket is `relaybase-mailbox`.
 
@@ -152,7 +153,7 @@ Operator config lives in `product_settings` (`service_id=relaybase`, `filename=s
 | Field | Purpose |
 |-------|---------|
 | `workerUrl` | Product Worker URL — admin proxies `/console/*` and `/mail/send` here |
-| `adminToken` | Service admin token. Must match the Worker's `ADMIN_TOKEN` wrangler secret. Also authorizes the console license proxy (`kembo/admin/src/app/api/licenses/route.ts`) |
+| `adminToken` | Service admin token. Must match the Worker's `ADMIN_TOKEN` wrangler secret. Authorizes admin → product Worker calls only — not license admin. |
 
 Licenses, console accounts, worker registration, recovery tokens, the legacy waitlist, and public beta invites (`beta_invites`) are the other tables in the same database. The marketing site Worker reads/writes `beta_invites` only. Legacy KV `KEMBO_OPS` / `KEMBO_LICENSES` and D1 `kembo-accounts` are not bound anymore.
 
@@ -218,6 +219,7 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Webhooks | D1 `RELAYBASE_DB` (`webhooks`, `webhook_secrets`, `webhook_fails`) | — |
 | Mobile passwords | D1 `RELAYBASE_DB` (`mobile_passwords`) | — |
 | Owner config / recovered admin token | D1 `RELAYBASE_DB` (`owner_config`) | — |
+| Product options (inbound retain) | D1 `RELAYBASE_DB` (`app_settings`) | — |
 | Pending inbound events | D1 `RELAYBASE_DB` (`inbound_events`, `expires_at`) | — |
 | Waitlist | D1 `kembo-ops` (`waitlist`) | — |
 | Beta invites | D1 `kembo-ops` (`beta_invites`) | — |

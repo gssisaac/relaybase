@@ -88,6 +88,7 @@ export default function LicensesPage() {
       if (!res.ok) throw new Error(data.error ?? "Issue failed");
       setIssuedKey(data.licenseKey ?? null);
       setEmail("");
+      setAddOpen(false);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Issue failed");
@@ -117,7 +118,7 @@ export default function LicensesPage() {
             <CardTitle>Licenses</CardTitle>
             <CardDescription>
               One-time ($39) Mac app license keys — issued via Stripe webhook or
-              manually. SaaS &quot;Users&quot; are legacy; new buyers live here.
+              manually.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -128,11 +129,9 @@ export default function LicensesPage() {
                 if (!open) setIssuedKey(null);
               }}
             >
-              <DialogTrigger>
-                <Button size="sm">
-                  <Plus className="size-3.5" />
-                  Issue license
-                </Button>
+              <DialogTrigger render={<Button size="sm" />}>
+                <Plus className="size-3.5" />
+                Issue license
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
@@ -149,16 +148,6 @@ export default function LicensesPage() {
                       placeholder="buyer@example.com"
                     />
                   </div>
-                  {issuedKey ? (
-                    <div className="rounded-md border border-border bg-muted/40 p-3">
-                      <p className="text-xs text-muted-foreground">
-                        Copy now — shown once
-                      </p>
-                      <p className="mt-1 break-all font-mono text-xs">
-                        {issuedKey}
-                      </p>
-                    </div>
-                  ) : null}
                   <Button
                     className="w-full"
                     disabled={!email.trim() || saving}
@@ -181,6 +170,14 @@ export default function LicensesPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {issuedKey ? (
+            <div className="mb-4 rounded-md border border-border bg-muted/40 p-3">
+              <p className="text-xs text-muted-foreground">
+                Copy now — shown once
+              </p>
+              <p className="mt-1 break-all font-mono text-xs">{issuedKey}</p>
+            </div>
+          ) : null}
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : error ? (

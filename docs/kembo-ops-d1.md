@@ -8,12 +8,12 @@
 |------|------|
 | D1 binding | `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` → `DB` / database `kembo-ops` |
 | Drizzle schema (all 7 tables) | `kembo/console/src/db/schema.ts` |
-| Drizzle schema (admin subset) | `kembo/admin/src/db/schema.ts` (`product_settings` only) |
+| Drizzle schema (admin subset) | `kembo/admin/src/db/schema.ts` (`product_settings` + `beta_invites` + `licenses`) |
 | Clients | `kembo/console/src/db/client.ts`, `kembo/admin/src/db/client.ts` |
 | Kit config + SQL | `kembo/console/drizzle.config.ts`, `kembo/console/migrations/` |
 | Accounts / recovery / sessions | `kembo/console/src/lib/accounts.ts` |
-| Licenses | `kembo/console/src/lib/licenses.ts` |
-| License admin gate | `kembo/console/src/lib/license-admin.ts` |
+| Licenses | `kembo/console/src/lib/licenses.ts` (verify + Stripe); `kembo/admin/src/lib/licenses.ts` (list / issue / revoke) |
+| License admin gate | `kembo/console/src/lib/license-admin.ts` (console `/v1/license/admin` only) |
 | Operator settings | `kembo/admin/src/lib/config/product-store.ts`, `kembo/admin/src/relaybase/lib/settings.ts` |
 | KV → D1 one-shot | `kembo/console/scripts/migrate-kv-to-d1.mjs` |
 
@@ -72,7 +72,7 @@ Replaces `KEMBO_OPS`. Composite PK `(service_id, filename)`. Current row:
 |------------|----------|-------------|
 | `relaybase` | `settings.json` | `{ workerUrl, adminToken }` only |
 
-`adminToken` must match the product Worker's `ADMIN_TOKEN` secret. It also authorizes admin → console license proxy (`kembo/admin/src/app/api/licenses/route.ts` sends it as `Authorization: Bearer`, compared to console secret `RELAYBASE_ADMIN_TOKEN`).
+`adminToken` must match the product Worker's `ADMIN_TOKEN` secret. It authorizes admin → product Worker calls (`/console/*`, `/mail/send`). It does **not** authorize license admin — admin reads `licenses` from D1 directly.
 
 **Never** store Cloudflare credentials, end-user `rb-auth-…` tokens, or plaintext API keys here.
 
@@ -84,12 +84,13 @@ One row per Mac license. KV's four duplicate keys collapse to unique `key_hash` 
 
 ## HTTP surface
 
-Console Next routes live under `/api/v1/…`. `next.config.ts` rewrites `/v1/:path*` → `/api/v1/:path*` so the desktop and admin can keep calling `https://console.relaybase.xyz/v1/…`.
+Console Next routes live under `/api/v1/…`. `next.config.ts` rewrites `/v1/:path*` → `/api/v1/:path*` so the desktop can keep calling `https://console.relaybase.xyz/v1/…`.
 
 | Route | Auth | Store |
 |-------|------|-------|
 | `POST /api/v1/waitlist` | CORS allowlist (legacy) | `waitlist` |
 | `POST /api/beta` on `relaybase.xyz` | public (website Worker) | `beta_invites` |
+| `GET /api/beta` on `admin.relaybase.xyz` | admin (direct D1 read) | `beta_invites` |
 | `GET /downloads/:uuid` on `relaybase.xyz` | public; 404 if unknown uuid | `beta_invites` |
 | `/api/v1/account?action=…` | public signup/login/recover; session for worker register + recovery-token | `accounts`, `account_workers`, `account_recovery` |
 | `POST /api/v1/recovery/verify-admin-token` | public, token-bound | `account_recovery` + `account_workers` |
@@ -97,8 +98,11 @@ Console Next routes live under `/api/v1/…`. `next.config.ts` rewrites `/v1/:pa
 | `DELETE /api/v1/license/admin/[id]` | same | `licenses` |
 | `POST /api/v1/license/verify` | public (desktop activate) | `licenses` |
 | `/api/v1/billing/*` | session / Stripe signature | `accounts` + `licenses` |
+| `GET/POST/DELETE /api/licenses` on `admin.relaybase.xyz` | admin (direct D1) | `licenses` |
 
-Admin Licenses page fetches `/api/licenses`, which proxies to `console.relaybase.xyz/v1/license/admin`. Nested App Router files are required — a single `license/route.ts` does **not** match `/license/admin`.
+Admin Licenses page fetches `/api/licenses`, which queries `kembo-ops.licenses` directly (no console hop). Desktop activate still uses `POST /v1/license/verify` on console. Nested App Router files are required for console `/v1/license/admin` — a single `license/route.ts` does **not** match `/license/admin`.
+
+Admin Beta page fetches `/api/beta`, which queries `kembo-ops.beta_invites` directly (no console hop). Invite-email status is joined from the product Worker send logs (`/api/relaybase/logs`, `from: beta@relaybase.xyz`).
 
 Do not put `export const runtime = "edge"` on these OpenNext routes. Edge chunks are not bundled into the Worker and the handlers 500.
 

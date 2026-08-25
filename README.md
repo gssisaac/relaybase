@@ -240,7 +240,6 @@ Routes under `kembo/admin/src/relaybase/`:
 | Email | `/email`, `/email/compose` | Inbox + manual send (operator) |
 | Branding | `/branding` | Domain display names |
 | Settings | `/settings` | Worker URL + admin token (Cloudflare credentials live on the Worker as wrangler secrets) |
-| Users | `/users` | Customer accounts (`data/users.json`) |
 
 Admin API routes proxy to the Worker (`kembo/admin/src/app/api/relaybase/*`) using `ADMIN_TOKEN` from product settings.
 

@@ -58,7 +58,7 @@ export async function listWorkerSendLogs(params?: {
   };
 }
 
-/** Convenience: return only the log entries (used by stats/user-profile). */
+/** Convenience: return only the log entries (used by stats). */
 export async function listWorkerSendLogEntries(
   params?: {
     limit?: number;

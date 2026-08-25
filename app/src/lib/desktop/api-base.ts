@@ -4,6 +4,7 @@ import {
   isEmailApiPath,
   mapEmailApiToWorker,
 } from "@/lib/desktop/email-api-map";
+import { isUnauthorizedGraceActive } from "@/lib/desktop/unauthorized-grace";
 import { workerFetch } from "@/lib/desktop/worker-api";
 
 export { mapEmailApiToWorker, mapPackagedEmailApiToWorker } from "@/lib/desktop/email-api-map";
@@ -12,6 +13,8 @@ export { mapEmailApiToWorker, mapPackagedEmailApiToWorker } from "@/lib/desktop/
 let unauthorizedRedirecting = false;
 function handleWorkerUnauthorized(): void {
   if (typeof window === "undefined") return;
+  // After ADMIN_TOKEN reissue the new secret can lag; do not latch or wipe.
+  if (isUnauthorizedGraceActive()) return;
   if (unauthorizedRedirecting) return;
   unauthorizedRedirecting = true;
   window.dispatchEvent(new CustomEvent("relaybase:unauthorized"));

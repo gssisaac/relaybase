@@ -12,6 +12,7 @@ import {
   desktopReissueAdminToken,
   desktopSaveDownloadFile,
   desktopStartCfOAuth,
+  desktopVerifyWorkerConnection,
   explainCfOAuthError,
   explainDesktopError,
   isDesktopRuntime,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { markAdminTokenJustRotated } from "@/lib/desktop/unauthorized-grace";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
@@ -34,6 +36,7 @@ export function RecoverAdminPanel() {
   const [done, setDone] = useState<ReissueAdminResult | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const issuingRef = useRef(false);
   const oauthWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -71,6 +74,7 @@ export function RecoverAdminPanel() {
     setIssueError(null);
     try {
       const result = await desktopReissueAdminToken();
+      markAdminTokenJustRotated();
       void desktopRegisterWorkerWithConsole(result.workerUrl).catch(() => {
         /* best-effort */
       });
@@ -133,6 +137,23 @@ export function RecoverAdminPanel() {
     finishOauthWait({ error: oauthAuthorizationIncompleteHelp("cancelled") });
   }
 
+  async function retryVerify() {
+    if (!done?.adminToken || verifying) return;
+    setVerifying(true);
+    setIssueError(null);
+    try {
+      await desktopVerifyWorkerConnection(done.workerUrl, done.adminToken);
+      markAdminTokenJustRotated();
+      setDone({ ...done, verified: true });
+    } catch (err) {
+      setIssueError(
+        explainDesktopError(err, "Worker has not accepted the new token yet"),
+      );
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function copyToken() {
     if (!done?.adminToken) return;
     await navigator.clipboard.writeText(done.adminToken);
@@ -179,15 +200,23 @@ export function RecoverAdminPanel() {
 
         {done ? (
           <div className="space-y-3">
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-              New admin token is on your Worker.
+            <p
+              className={
+                done.verified !== false
+                  ? "text-sm font-medium text-emerald-700 dark:text-emerald-400"
+                  : "text-sm font-medium text-amber-700 dark:text-amber-400"
+              }
+            >
+              {done.verified !== false
+                ? "New admin token is on your Worker."
+                : "New admin token is saved — waiting for the Worker to accept it."}
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL:{" "}
               <span className="font-mono">{done.workerUrl}</span>
             </p>
             <p className="text-xs text-muted-foreground">
-              Download and save this token. You can reissue it again from
+              Copy this token and save it. You can reissue it again from
               Connect existing Worker if you lose it.
             </p>
             <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
@@ -197,7 +226,7 @@ export function RecoverAdminPanel() {
               <Button
                 type="button"
                 size="icon-sm"
-                variant="outline"
+                variant={copiedToken ? "default" : "outline"}
                 aria-label="Copy admin token"
                 onClick={() => void copyToken()}
               >
@@ -221,15 +250,38 @@ export function RecoverAdminPanel() {
                 )}
               </Button>
             </div>
-            {!tokenDownloaded ? (
+            {done.verified === false ? (
+              <>
+                {issueError ? <DesktopErrorBanner error={issueError} /> : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  disabled={verifying}
+                  onClick={() => void retryVerify()}
+                >
+                  {verifying ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : null}
+                  Retry verify
+                </Button>
+              </>
+            ) : null}
+            {!copiedToken && !tokenDownloaded ? (
               <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                Download the token file to unlock Go to Mailbox.
+                Copy this token to unlock Go to Mailbox.
+              </p>
+            ) : done.verified === false ? (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                Wait until the Worker accepts the token, then Go to Mailbox.
               </p>
             ) : null}
             <Button
               type="button"
               className="w-full"
-              disabled={!tokenDownloaded}
+              disabled={
+                done.verified === false || (!copiedToken && !tokenDownloaded)
+              }
               onClick={() => {
                 if (typeof window !== "undefined") {
                   window.location.assign("/");
@@ -242,7 +294,7 @@ export function RecoverAdminPanel() {
         ) : issuing ? (
           <div className="flex flex-col items-center gap-3 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
-            Issuing a new admin token…
+            Issuing a new admin token and waiting for the Worker…
           </div>
         ) : (
           <div className="space-y-3">

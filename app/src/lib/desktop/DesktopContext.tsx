@@ -20,6 +20,7 @@ import {
   writeDesktopSessionCache,
 } from "@/lib/desktop/desktop-session-cache";
 import { clearAllDashboardClientCache } from "@/lib/dashboard/shared/dashboard-client-cache";
+import { isUnauthorizedGraceActive } from "@/lib/desktop/unauthorized-grace";
 
 type DesktopContextValue = {
   isDesktop: boolean;
@@ -139,6 +140,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   // credentials and redirect to /setup so the user can re-connect.
   React.useEffect(() => {
     async function onUnauthorized() {
+      if (isUnauthorizedGraceActive()) return;
       setCredentials(null);
       applyCredentialGlobals(null);
       const snap = readDesktopSessionCache();

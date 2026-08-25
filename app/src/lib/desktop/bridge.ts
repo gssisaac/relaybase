@@ -57,6 +57,8 @@ export type ReissueAdminResult = {
   workerUrl: string;
   adminToken: string;
   workerScriptName: string;
+  /** False when the secret was saved but /console/connect has not accepted it yet. */
+  verified?: boolean;
 };
 
 export type WorkerUpdateTarget = {

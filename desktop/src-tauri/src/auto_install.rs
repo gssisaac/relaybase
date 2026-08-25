@@ -1647,7 +1647,7 @@ async fn auto_install_steps(
                 return Err(format!(
                     "Worker uploaded but D1 bindings are missing ({d1_bound}/{}). \
                      Same-account D1 does not need extra Worker permissions — the \
-                     script upload did not attach RELAYBASE_DB / LOGS / MAIL.",",
+                     script upload did not attach RELAYBASE_DB / LOGS / MAIL.",
                     D1_DATABASES.len()
                 ));
             }

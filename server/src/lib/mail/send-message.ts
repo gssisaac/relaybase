@@ -5,6 +5,11 @@ import { recordOpsLog } from "../ops-logs";
 import { recordSendLog } from "../send-logs";
 import { createMailDb } from "../../../db/mail";
 import { storeSentMail } from "../mailbox-store";
+import { buildMimeMessage } from "../mime";
+import {
+  deliverToLocalInboxes,
+  type LocalDeliverWaitUntil,
+} from "./local-deliver";
 import {
   findInvalidRecipients,
   normalizeRecipients,
@@ -29,6 +34,10 @@ export type SendMailResult = {
 
 export type SendMailSource = "compose" | "api" | "mobile";
 
+export type SendMailOptions = {
+  waitUntil?: LocalDeliverWaitUntil;
+};
+
 async function persistSendLog(
   env: Env,
   entry: Parameters<typeof recordSendLog>[1],
@@ -43,7 +52,8 @@ async function persistSendLog(
 /**
  * Shared send pipeline used by `/mail/send` (admin token) and `/mobile/send`
  * (mobile password). Validates the body, sends via the EMAIL binding (REST
- * fallback), records an ops log, and returns a Hono-friendly JSON response.
+ * fallback), records an ops log, locally ingests on-install recipients, and
+ * returns a Hono-friendly JSON response.
  *
  * `source` controls the ops-log `source` field so the Dashboard Log page can
  * distinguish desktop compose, API-key sends, and mobile sends.
@@ -52,6 +62,7 @@ export async function sendMailMessage(
   env: Env,
   body: SendMailBody,
   source: SendMailSource,
+  options?: SendMailOptions,
 ): Promise<SendMailResult> {
   const from = body.from?.trim();
   const to = normalizeRecipients(body.to);
@@ -224,6 +235,20 @@ export async function sendMailMessage(
       metaJson: JSON.stringify(meta),
     });
 
+    const rawMime = buildMimeMessage({
+      from,
+      fromName: body.fromName?.trim() || undefined,
+      to: to.length === 1 ? to[0] : to,
+      cc: cc.length ? cc : undefined,
+      subject,
+      text,
+      html: body.html,
+      replyTo: body.replyTo,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || undefined,
+      references: body.references?.trim() || undefined,
+    });
+
     if (domain) {
       try {
         await storeSentMail(
@@ -239,6 +264,7 @@ export async function sendMailMessage(
             messageId: result.messageId,
             inReplyTo: body.inReplyTo?.trim() || null,
             references: body.references?.trim() || null,
+            rawMime,
           },
           createMailDb(env.RELAYBASE_MAIL),
         );
@@ -246,6 +272,19 @@ export async function sendMailMessage(
         console.error("Failed to persist sent mail", error);
       }
     }
+
+    await deliverToLocalInboxes(env, {
+      from,
+      to,
+      cc: cc.length ? cc : undefined,
+      subject,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || null,
+      references: body.references?.trim() || null,
+      rawMime,
+      skipAddresses: result.permanentBounces,
+      waitUntil: options?.waitUntil,
+    });
 
     return {
       response: new Response(

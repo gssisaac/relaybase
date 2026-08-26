@@ -398,7 +398,9 @@ mobile.post("/send", async (c) => {
     );
   }
 
-  const result = await sendMailMessage(c.env, body, "mobile");
+  const result = await sendMailMessage(c.env, body, "mobile", {
+    waitUntil: (promise) => c.executionCtx.waitUntil(promise),
+  });
   return result.response;
 });
 

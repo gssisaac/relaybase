@@ -93,6 +93,18 @@ Do **not** reintroduce “every Sent is me” when an account filter is active.
 
 ---
 
+## Same-install compose → Inbox (local deliver)
+
+Compose / API / mobile send persist Sent via `storeSentMail`, then **also** ingest a copy for each To/Cc address that exists on this Worker with `inboundEnabled !== false` (`server/src/lib/mail/local-deliver.ts`).
+
+Cloudflare Email Sending `EMAIL` binding accept is not delivery into `email()`. Same-account hairpins (e.g. `jon@kloyapp.com` → `isaac@wedesk.so`) can succeed in Sent + ops_log while `email()` never runs. Local ingest writes the same R2/D1 inbound atom the handler would, then enqueues `inbound_events` so desktop polling can refresh.
+
+RFC Message-ID `by-message-id` pointers still dedupe: if Email Routing later invokes `email()`, `storeInboundMail` returns `created: false` and does not notify twice.
+
+External recipients are unchanged (Sending + async bounce DSN only).
+
+---
+
 ## Compose send → Sent folder
 
 Related reliability rules (compose Unsend → `POST /api/email/send`):
@@ -107,7 +119,8 @@ Related reliability rules (compose Unsend → `POST /api/email/send`):
 
 ## Checklist when changing this area
 
-- [ ] Ingest still idempotent on Message-ID (To+Cc dual delivery + CF redelivery).
+- [ ] Ingest still idempotent on Message-ID (To+Cc dual delivery + CF redelivery + local deliver).
+- [ ] Compose/API/mobile send to an `inbound_enabled` local address writes inbound R2+D1 without waiting for `email()`.
 - [ ] Duplicate deliveries do not enqueue a second inbox notification / webhook.
 - [ ] Account filter + Cc membership still shows the mail after single-copy storage.
 - [ ] Filtered inbox threads do not pull in another account’s Sent / `(me)`.

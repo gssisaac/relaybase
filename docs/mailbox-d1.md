@@ -12,6 +12,7 @@ This doc replaces the old `inbound-search-d1-fts5.md` (inbound-only FTS). Mail s
 | Drizzle schema + helpers | `server/db/mail/` (`schema.ts`, `index.ts`, `messages.ts`, `search.ts`) |
 | Env type | `server/src/env.ts` (`RELAYBASE_MAIL?: D1Database`) |
 | Unified store (R2 + D1) | `server/src/lib/mailbox-store.ts` (`storeInboundMail`, `storeSentMail`, `getMailMessage`, `setMailReadState`, `pruneMail`, `rebuildDomain`) |
+| Same-install send → Inbox | `server/src/lib/mail/local-deliver.ts` |
 | Counts (`total`/`unread`) | `server/db/mail/messages.ts` (`mailboxCounts`, `mailboxAddressCounts`, `mailboxFreshness`) |
 | List cursor | `server/db/mail/messages.ts` (`listMailboxPage`, `parseMailboxCursor`, `encodeMailboxCursor`) |
 | FTS5 query + sync | `server/db/mail/search.ts` (`buildMailboxFtsQuery`, `upsertMailboxFts`, `searchMailbox`) |
@@ -78,7 +79,7 @@ D1 is **derived** from R2 thin `meta.json`. The ingest path keeps it in sync (be
 
 ## Sync model
 
-- **Store:** `storeInboundMail` / `storeSentMail` PUT thin `meta.json` + `raw.eml` + pointer, then `upsertMailboxMessage` + `upsertMailboxFts` (best-effort).
+- **Store:** `storeInboundMail` / `storeSentMail` PUT thin `meta.json` + `raw.eml` + pointer, then `upsertMailboxMessage` + `upsertMailboxFts` (best-effort). Compose/API/mobile send also calls `storeInboundMail` for on-install `inbound_enabled` recipients (`local-deliver.ts`) so Inbox does not depend on Email Routing `email()`.
 - **Dedupe:** single-key `by-message-id/{id}` pointer GET only — never a full-domain `meta.json` scan.
 - **Prune:** ingest never prunes. Cron reads `app_settings.inbound_retain_per_domain` (`null` = unlimited). When set, `mailboxPruneIds` + batch `pruneMail` (50 prefixes/domain/tick) delete oldest inbound only. Sent is not auto-pruned.
 - **Read state:** `setMailReadState` updates thin `meta.json` + `updateMailboxReadState` (D1). Sent has no read state.

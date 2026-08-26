@@ -20,7 +20,9 @@ mailSend.post("/", async (c) => {
     body = {};
   }
 
-  const result = await sendMailMessage(c.env, body, "compose");
+  const result = await sendMailMessage(c.env, body, "compose", {
+    waitUntil: (promise) => c.executionCtx.waitUntil(promise),
+  });
   return result.response;
 });
 

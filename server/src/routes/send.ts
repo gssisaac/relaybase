@@ -8,6 +8,8 @@ import { recordOpsLog } from "../lib/ops-logs";
 import { recordSendLog } from "../lib/send-logs";
 import { createMailDb } from "../../db/mail";
 import { storeSentMail } from "../lib/mailbox-store";
+import { buildMimeMessage } from "../lib/mime";
+import { deliverToLocalInboxes } from "../lib/mail/local-deliver";
 import {
   findInvalidRecipients,
   normalizeRecipients,
@@ -232,6 +234,19 @@ send.post("/", async (c) => {
         metaJson: meta,
       });
     }
+    const rawMime = buildMimeMessage({
+      from,
+      fromName: body.fromName?.trim() || undefined,
+      to: to.length === 1 ? to[0] : to,
+      cc: cc.length ? cc : undefined,
+      subject,
+      text,
+      html: body.html,
+      replyTo: body.replyTo,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || undefined,
+      references: body.references?.trim() || undefined,
+    });
     try {
       await storeSentMail(
         c.env.INBOUND,
@@ -246,12 +261,25 @@ send.post("/", async (c) => {
           messageId: result.messageId,
           inReplyTo: body.inReplyTo?.trim() || null,
           references: body.references?.trim() || null,
+          rawMime,
         },
         createMailDb(c.env.RELAYBASE_MAIL),
       );
     } catch (error) {
       console.error("Failed to persist sent mail", error);
     }
+    await deliverToLocalInboxes(c.env, {
+      from,
+      to,
+      cc: cc.length ? cc : undefined,
+      subject,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || null,
+      references: body.references?.trim() || null,
+      rawMime,
+      skipAddresses: result.permanentBounces,
+      waitUntil: (promise) => c.executionCtx.waitUntil(promise),
+    });
     return logAndRespond(c, {
       ok: true,
       opsOk: !hadBounces,

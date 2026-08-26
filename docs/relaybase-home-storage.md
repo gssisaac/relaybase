@@ -120,6 +120,8 @@ paths under the new `{scopeId}/`).
 
 ### `credentials.json`
 
+> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. During the migration, `credentials.json` keeps only **non-secret connection info** (`workerUrl`, `accountId`, console account fields). The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** moves to the OS keyring; **access** lives in process memory only.
+
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
 | Field | Purpose |
@@ -129,13 +131,13 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `serverToken` | Cloudflare token with Email Sending Edit, pushed to the Worker as the `CF_API_TOKEN` wrangler secret |
 | `serverTokenPushedAt` | ISO timestamp of the last successful `wrangler secret put CF_API_TOKEN` |
 | `workerUrl` | Deployed Worker base URL |
-| `adminToken` | Worker admin token (`ADMIN_TOKEN` wrangler secret or D1 recovery override; resettable via recovery) |
 | `workerScriptName` | Wrangler script name |
 | `licenseKey` | License key (legacy; verify now via `console.relaybase.xyz`) |
 | `relaybaseAccountId` | Relaybase console account id (`console.relaybase.xyz`) |
 | `relaybaseEmail` | Relaybase console account email |
 | `relaybaseSession` | Signed console session token (stored locally; sent as `Authorization: Bearer` to console APIs) |
 | `relaybaseTier` | License tier mirrored from the console (`free` / `pro`) |
+| ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext only in the user's download). |
 
 CF OAuth access/refresh tokens are **not** persisted on disk — they live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Only `accountId` is written to `credentials.json`. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**. Summary: public PKCE client on Cloudflare; `console.relaybase.xyz` exposes `/api/v1/oauth/config` and `/oauth/callback` (relays `code` to the desktop only); the desktop exchanges the code with PKCE and holds tokens in memory. No CF user credentials in D1 `kembo-ops`.
 

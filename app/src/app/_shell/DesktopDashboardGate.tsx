@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { Suspense, useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
@@ -13,10 +13,12 @@ import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
+import { OwnerUnlockPanel } from "@/console/components/setup/OwnerUnlockPanel";
 import {
   DesktopProvider,
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { hasOwnerSession } from "@/lib/desktop/owner-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
@@ -31,12 +33,12 @@ const LOCAL_OPERATOR_USER_ID = "desktop";
 
 function setupPathFor(credentials: {
   workerUrl?: string;
-  relaybaseSession?: string;
 } | null): string | null {
   // Install-first: a Relaybase console account is optional. The gate is a
-  // Worker URL plus an in-memory owner session (passtoken login).
+  // Worker URL. Desktop then unlocks via Touch ID / Windows Hello (keyring);
+  // browser `pnpm next` uses the in-memory owner session.
   if (!credentials?.workerUrl) return "/setup";
-  if (!hasOwnerSession()) return "/setup/connect";
+  if (!isDesktopRuntime() && !hasOwnerSession()) return "/setup/connect";
   return null;
 }
 
@@ -135,11 +137,10 @@ function DashboardShell({
 function OperatorInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { ready, credentials, teamLogin } = useDesktop();
+  const [ownerReady, setOwnerReady] = useState(false);
 
   useEffect(() => {
     if (!ready) return;
-    // Team users (per-account mobile password) skip the admin/account setup
-    // path entirely — they render the email-only shell below.
     if (teamLogin) return;
     const path = setupPathFor(credentials);
     if (path) router.replace(path);
@@ -153,7 +154,6 @@ function OperatorInner({ children }: { children: ReactNode }) {
     );
   }
 
-  // Team user: email-only mode (no admin token, no management console).
   if (teamLogin) {
     return (
       <DashboardShell userId={teamLogin.accountEmail} teamMode>
@@ -162,13 +162,21 @@ function OperatorInner({ children }: { children: ReactNode }) {
     );
   }
 
-  const readyToUse = Boolean(credentials?.workerUrl && hasOwnerSession());
-
-  if (!readyToUse) {
+  const workerUrl = credentials?.workerUrl?.trim() ?? "";
+  if (!workerUrl) {
     return (
       <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
         Opening setup…
       </div>
+    );
+  }
+
+  if (isDesktopRuntime() && !ownerReady) {
+    return (
+      <OwnerUnlockPanel
+        workerUrl={workerUrl}
+        onUnlocked={() => setOwnerReady(true)}
+      />
     );
   }
 

@@ -8,13 +8,10 @@ import { resolveEmailApiBase } from "@/lib/desktop/api-base";
  * The passtoken, access token, and refresh token are NEVER written to disk,
  * cookies, localStorage, or sessionStorage. The user keeps the one-time
  * passtoken download; the app holds the session in memory for the lifetime
- * of the process and re-logs-in (or uses the OS keyring refresh, once the
- * Rust keyring layer lands) on restart.
- *
- * In the full plan, access lives in Rust memory and refresh in the OS
- * keychain (biometric-protected). This module is the transitional JS-memory
- * source the Tauri webview uses until the Rust `worker_request` IPC replaces
- * `workerFetch`'s Bearer injection.
+ * of the process. On the desktop, refresh lives in the OS keyring and daily
+ * unlock is Touch ID / Windows Hello (`biometry.ts` + Rust `owner_unlock`).
+ * This module is the browser `pnpm next` in-memory session; the Tauri
+ * webview uses Rust `worker_request` so JS never sees tokens.
  */
 
 export type OwnerSession = {

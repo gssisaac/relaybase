@@ -195,8 +195,8 @@ async fn relink_admin(
         return Ok((existing_admin.to_string(), false));
     }
 
-    let admin_token = format!("rb_admin_{}", Uuid::new_v4());
-    put_worker_secret(client, script_name, "ADMIN_TOKEN", &admin_token).await?;
+    let auth_pepper = format!("{}", Uuid::new_v4().simple());
+    put_worker_secret(client, script_name, "AUTH_PEPPER", &auth_pepper).await?;
     put_worker_secret(client, script_name, "CF_ACCOUNT_ID", account_id).await?;
     // Only push CF_API_TOKEN when a server token (Email Sending Edit) is
     // available — pushing the install token here is what caused the
@@ -205,7 +205,7 @@ async fn relink_admin(
         put_worker_secret(client, script_name, "CF_API_TOKEN", server).await?;
     }
     let _ = api_token;
-    Ok((admin_token, true))
+    Ok((auth_pepper, true))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -255,29 +255,11 @@ pub async fn reissue_admin_token(
         );
     }
 
-    let worker_url = enable_workers_dev(&client, &script_name).await?;
-    let admin_token = format!("rb_admin_{}", Uuid::new_v4());
-    put_worker_secret(&client, &script_name, "ADMIN_TOKEN", &admin_token).await?;
-
-    // Secret PUT deploys a new version. Poll until the Worker accepts the new
-    // token (401 = isolate still on the old secret). Always return the token
-    // so the UI can show copy even if warmup times out.
-    let verified = wait_for_reissue_admin_auth(&worker_url, &admin_token).await;
-
-    let result = ReissueAdminResult {
-        worker_url: worker_url.clone(),
-        admin_token: admin_token.clone(),
-        worker_script_name: script_name.clone(),
-        verified,
-    };
-
-    let mut creds = existing.clone();
-    creds.account_id = account_id.to_string();
-    creds.worker_url = worker_url;
-    creds.admin_token = admin_token;
-    creds.worker_script_name = script_name;
-
-    Ok((result, creds))
+    let _ = (client, script_name, existing, account_id);
+    Err(
+        "Passtoken recovery uses Cloudflare OAuth → Setup → I forgot my passtoken. The ADMIN_TOKEN secret is retired."
+            .into(),
+    )
 }
 
 /// Bind an already-installed named Worker into local credentials without re-uploading script.
@@ -313,7 +295,7 @@ pub async fn adopt_worker(
     let result = InstallResult {
         worker_url: worker_url.clone(),
         worker_script_name: script_name.clone(),
-        admin_token: admin_token.clone(),
+        admin_token: String::new(),
         r2_bucket: R2_BUCKET.to_string(),
         skipped: true,
         admin_relinked,
@@ -354,16 +336,16 @@ pub async fn install_worker(
     )
     .await?;
 
-    let admin_token = format!("rb_admin_{}", Uuid::new_v4());
-    put_worker_secret(&client, &script_name, "ADMIN_TOKEN", &admin_token).await?;
+    let auth_pepper = format!("{}", Uuid::new_v4().simple());
+    put_worker_secret(&client, &script_name, "AUTH_PEPPER", &auth_pepper).await?;
     put_worker_secret(&client, &script_name, "CF_ACCOUNT_ID", account_id).await?;
 
     let worker_url = enable_workers_dev(&client, &script_name).await?;
 
     let result = InstallResult {
         worker_url: worker_url.clone(),
+        admin_token: String::new(),
         worker_script_name: script_name.clone(),
-        admin_token: admin_token.clone(),
         r2_bucket: R2_BUCKET.to_string(),
         skipped: false,
         admin_relinked: false,
@@ -372,7 +354,7 @@ pub async fn install_worker(
     let mut creds = existing.clone();
     creds.account_id = account_id.to_string();
     creds.worker_url = worker_url;
-    creds.admin_token = admin_token;
+    creds.admin_token.clear();
     creds.worker_script_name = script_name;
 
     Ok((result, creds))

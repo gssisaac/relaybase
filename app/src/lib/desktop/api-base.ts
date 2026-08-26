@@ -56,7 +56,6 @@ function readDesktopCredentialsFromWindow(): DesktopCredentials | null {
   if (typeof window === "undefined") return null;
   const w = window as unknown as {
     __RELAYBASE_WORKER_URL__?: string;
-    __RELAYBASE_ADMIN_TOKEN__?: string;
   };
   const workerUrl = w.__RELAYBASE_WORKER_URL__?.trim().replace(/\/$/, "") ?? "";
   if (!workerUrl) return null;

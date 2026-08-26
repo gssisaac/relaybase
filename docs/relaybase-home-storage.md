@@ -120,7 +120,7 @@ paths under the new `{scopeId}/`).
 
 ### `credentials.json`
 
-> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. During the migration, `credentials.json` keeps only **non-secret connection info** (`workerUrl`, `accountId`, console account fields). The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** moves to the OS keyring; **access** lives in process memory only.
+> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. During the migration, `credentials.json` keeps only **non-secret connection info** (`workerUrl`, `accountId`, console account fields). The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** is stored in the OS keyring (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Daily unlock uses Touch ID or Windows Hello (`tauri-plugin-biometry`, device PIN fallback), then Rust reads the keyring.
 
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
@@ -136,6 +136,17 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext only in the user's download). |
 
 Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. CF OAuth access/refresh tokens live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
+
+### OS keyring (owner refresh)
+
+Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/owner_session.rs`) stores a JSON blob in the OS secret store via the `keyring` crate:
+
+| Field | Service / account |
+|-------|-------------------|
+| service | `com.relaybase.desktop` |
+| account | `owner-session` |
+
+Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. The passtoken is never stored. Daily unlock: JS prompts **Touch ID** (Mac) or **Windows Hello** (Windows) with device PIN fallback (`app/src/lib/desktop/biometry.ts`), then Rust `owner_unlock` reads this blob and rotates refresh. Access stays in process memory. Linux has no biometry plugin — fallback is username + passtoken.
 
 ### `team-login.json`
 

@@ -137,7 +137,8 @@ fn credentials_for_disk(creds: &StoredCredentials) -> DiskCredentials {
     DiskCredentials {
         account_id: creds.account_id.trim().to_string(),
         worker_url: creds.worker_url.trim().to_string(),
-        admin_token: creds.admin_token.trim().to_string(),
+        // Never persist the retired god token or the owner passtoken.
+        admin_token: String::new(),
         worker_script_name: creds.worker_script_name.trim().to_string(),
         worker_version: creds.worker_version.trim().to_string(),
         relaybase_account_id: creds.relaybase_account_id.trim().to_string(),
@@ -150,7 +151,7 @@ fn stored_from_disk(disk: DiskCredentials) -> StoredCredentials {
     StoredCredentials {
         account_id: disk.account_id,
         worker_url: disk.worker_url,
-        admin_token: disk.admin_token,
+        admin_token: String::new(),
         worker_script_name: disk.worker_script_name,
         worker_version: disk.worker_version,
         relaybase_account_id: disk.relaybase_account_id,
@@ -540,6 +541,7 @@ pub fn load_credentials() -> Result<Option<StoredCredentials>, String> {
     if credentials_json_is_dirty(&value) {
         save_credentials(&creds)?;
     }
+    creds.admin_token.clear();
     Ok(Some(creds))
 }
 

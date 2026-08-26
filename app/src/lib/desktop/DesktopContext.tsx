@@ -40,12 +40,9 @@ function applyCredentialGlobals(creds: DesktopCredentials | null) {
   if (typeof window === "undefined") return;
   const w = window as unknown as {
     __RELAYBASE_WORKER_URL__?: string;
-    __RELAYBASE_ADMIN_TOKEN__?: string;
   };
   if (creds?.workerUrl) w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
   else delete w.__RELAYBASE_WORKER_URL__;
-  if (creds?.adminToken) w.__RELAYBASE_ADMIN_TOKEN__ = creds.adminToken;
-  else delete w.__RELAYBASE_ADMIN_TOKEN__;
 }
 
 async function loadLocalCredentials(): Promise<DesktopCredentials | null> {

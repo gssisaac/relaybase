@@ -1,16 +1,51 @@
 "use client";
 
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
+import { desktopWorkerRequest, isDesktopRuntime } from "@/lib/desktop/bridge";
 
 /**
  * Call the Worker installed in the user's Cloudflare account.
- * Owner routes use the in-memory access token (passtoken is never sent again).
+ *
+ * Desktop: Rust `worker_request` attaches the in-memory access token.
+ * Tokens never enter JS. Browser `pnpm next`: JS-memory session Bearer.
  */
 export async function workerFetch(
   creds: DesktopCredentials,
   path: string,
   init?: RequestInit & { admin?: boolean },
 ): Promise<Response> {
+  if (isDesktopRuntime()) {
+    const headers: Record<string, string> = {};
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => {
+        headers[key] = value;
+      });
+    }
+    if (init?.body && !headers["Content-Type"] && !headers["content-type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+    let body: string | undefined;
+    if (typeof init?.body === "string") {
+      body = init.body;
+    } else if (init?.body) {
+      body = String(init.body);
+    }
+    const result = await desktopWorkerRequest({
+      method: (init?.method ?? "GET").toUpperCase(),
+      path,
+      headers,
+      body,
+    });
+    const resHeaders = new Headers();
+    for (const [k, v] of result.headers) {
+      resHeaders.append(k, v);
+    }
+    return new Response(result.body, {
+      status: result.status,
+      headers: resHeaders,
+    });
+  }
+
   const base = creds.workerUrl.replace(/\/$/, "");
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
   const headers = new Headers(init?.headers);

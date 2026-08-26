@@ -100,7 +100,7 @@ export function EnableEmailApiDialog({
 
   const settingsUrl = cloudflareWorkerSettingsUrl(accountId, workerScriptName);
   const busy = verifyBusy || pasteBusy || oauthBusy;
-  const canVerify = Boolean(workerUrl.trim() && adminToken.trim());
+  const canVerify = Boolean(workerUrl.trim());
 
   useEffect(() => {
     if (!open) return;
@@ -127,11 +127,10 @@ export function EnableEmailApiDialog({
     setVerifyError(null);
     try {
       const url = workerUrl.trim();
-      const token = adminToken.trim();
-      if (!url || !token) {
-        throw new Error("Worker URL and admin token are required to verify.");
+      if (!url) {
+        throw new Error("Worker URL is required to verify.");
       }
-      const result = await desktopVerifyWorkerConnection(url, token);
+      const result = await desktopVerifyWorkerConnection(url, "");
       if (!result.cfApiTokenSet) {
         throw new Error(
           "The Worker has no CF_API_TOKEN secret yet. Add it under Runtime variables and secrets, then try again.",

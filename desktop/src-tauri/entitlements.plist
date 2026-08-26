@@ -10,5 +10,11 @@
   <true/>
   <key>com.apple.security.automation.apple-events</key>
   <true/>
+  <!-- Touch ID / LocalAuthentication. Unsigned `tauri dev` builds often cannot
+       use the keychain; production must be Developer ID signed. -->
+  <key>keychain-access-groups</key>
+  <array>
+    <string>$(AppIdentifierPrefix)com.relaybase.desktop</string>
+  </array>
 </dict>
 </plist>

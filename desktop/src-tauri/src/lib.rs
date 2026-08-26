@@ -1,6 +1,7 @@
 mod auto_install;
 mod cloudflare;
 mod notify;
+mod owner_session;
 mod secrets;
 mod worker;
 
@@ -32,6 +33,13 @@ use secrets::{
     save_team_login, set_cf_oauth_session, upsert_api_key_vault_entry, ApiKeyVault,
     ApiKeyVaultEntry, CfOAuthSession, EmailPrefs, StorageLayoutMarker, StoredCredentials,
     TeamLogin,
+};
+use owner_session::{
+    owner_login as owner_login_inner, owner_logout as owner_logout_inner,
+    owner_reset_admin as owner_reset_admin_inner, owner_session_status,
+    owner_set_biometry_enabled, owner_setup_admin as owner_setup_admin_inner,
+    owner_unlock as owner_unlock_inner, worker_request as worker_request_inner,
+    OwnerSessionStatus, OwnerSetupResult, WorkerRequestInput, WorkerRequestOutput,
 };
 use worker::{
     adopt_worker, install_worker, probe_install, reissue_admin_token as reissue_admin_token_inner,
@@ -380,7 +388,6 @@ async fn preview_worker_update_target_cmd() -> Result<WorkerUpdateTarget, String
         &account_id,
         &creds.worker_url,
         &creds.worker_script_name,
-        &creds.admin_token,
     )
     .await
 }
@@ -395,8 +402,8 @@ async fn update_installed_worker_cmd(
     if creds.worker_url.trim().is_empty() {
         return Err("No Worker URL saved. Complete install first.".into());
     }
-    if creds.admin_token.trim().is_empty() {
-        return Err("No admin token saved. Complete install first.".into());
+    if crate::owner_session::current_access_token().is_none() {
+        return Err("Sign in with your owner session before updating the Worker.".into());
     }
     let token = refresh_install_token_if_needed().await?;
     let account_id = if creds.account_id.trim().is_empty() {
@@ -412,7 +419,6 @@ async fn update_installed_worker_cmd(
         token,
         account_id.clone(),
         server,
-        creds.admin_token.clone(),
     )
     .await?;
     if !creds.worker_url.trim().is_empty()
@@ -457,7 +463,7 @@ async fn rollback_auto_install(
 #[tauri::command]
 async fn init_worker_db_cmd(
     worker_url: String,
-    admin_token: String,
+    _admin_token: String,
     clear: bool,
     _wipe_confirmation: Option<String>,
     _account_id: Option<String>,
@@ -469,16 +475,26 @@ async fn init_worker_db_cmd(
                 .into(),
         );
     }
-    init_worker_db(&worker_url, &admin_token).await
+    init_worker_db(
+        &worker_url,
+        None,
+        crate::owner_session::current_access_token().as_deref(),
+    )
+    .await
 }
 
 /// Pending migrations only. Never drops tables.
 #[tauri::command]
 async fn migrate_worker_db_cmd(
     worker_url: String,
-    admin_token: String,
+    _admin_token: String,
 ) -> Result<InitDbResult, String> {
-    migrate_worker_db(&worker_url, &admin_token).await
+    migrate_worker_db(
+        &worker_url,
+        None,
+        crate::owner_session::current_access_token().as_deref(),
+    )
+    .await
 }
 
 /// Push a one-shot server token (Email Sending Edit) to the deployed Worker
@@ -1390,16 +1406,16 @@ async fn fetch_connect_with_retry(
     Err("Worker connect check failed. Is this a Relaybase Worker URL?".into())
 }
 
-/// Verify user-deployed Worker via GET /console/connect (admin Bearer).
+/// Verify user-deployed Worker via GET /console/connect (owner access Bearer).
 #[tauri::command]
 async fn verify_worker_connection(
     worker_url: String,
-    admin_token: String,
+    _admin_token: String,
 ) -> Result<WorkerConnectResult, String> {
     let base = normalize_worker_url(&worker_url)?;
-    let token = admin_token.trim();
+    let token = crate::owner_session::current_access_token().unwrap_or_default();
     if token.is_empty() {
-        return Err("Admin token is required (the ADMIN_TOKEN Worker secret).".into());
+        return Err("Sign in with your owner username and passtoken first.".into());
     }
 
     let url = format!("{base}/console/connect");
@@ -1497,10 +1513,7 @@ async fn save_worker_connection(
     worker_version: Option<String>,
 ) -> Result<StoredCredentials, String> {
     let base = normalize_worker_url(&worker_url)?;
-    let token = admin_token.trim();
-    if token.is_empty() {
-        return Err("Admin token is required".into());
-    }
+    let _token = admin_token.trim();
     // Prefer merging into existing creds, but never block a successful verify
     // on a legacy/unreadable credentials.json — overwrite with what we know.
     let mut creds = match load_credentials() {
@@ -1511,7 +1524,7 @@ async fn save_worker_connection(
         }
     };
     creds.worker_url = base;
-    creds.admin_token = token.to_string();
+    creds.admin_token.clear();
     creds.worker_script_name = worker_script_name
         .unwrap_or_default()
         .trim()
@@ -1709,12 +1722,72 @@ async fn reveal_file_in_folder(path: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn owner_session_status_cmd() -> OwnerSessionStatus {
+    owner_session_status()
+}
+
+#[tauri::command]
+async fn owner_login_cmd(
+    worker_url: String,
+    username: String,
+    passtoken: String,
+    biometry_enabled: Option<bool>,
+) -> Result<OwnerSessionStatus, String> {
+    owner_login_inner(worker_url, username, passtoken, biometry_enabled).await
+}
+
+#[tauri::command]
+async fn owner_unlock_cmd() -> Result<OwnerSessionStatus, String> {
+    owner_unlock_inner().await
+}
+
+#[tauri::command]
+async fn owner_logout_cmd() -> Result<(), String> {
+    owner_logout_inner().await
+}
+
+#[tauri::command]
+fn owner_set_biometry_enabled_cmd(enabled: bool) -> Result<OwnerSessionStatus, String> {
+    owner_set_biometry_enabled(enabled)
+}
+
+#[tauri::command]
+async fn owner_setup_admin_cmd(
+    worker_url: String,
+    username: String,
+    pepper: String,
+) -> Result<OwnerSetupResult, String> {
+    owner_setup_admin_inner(worker_url, username, pepper).await
+}
+
+#[tauri::command]
+async fn owner_reset_admin_cmd(
+    worker_url: String,
+    cf_access_token: String,
+    username: Option<String>,
+) -> Result<OwnerSetupResult, String> {
+    owner_reset_admin_inner(worker_url, cf_access_token, username).await
+}
+
+#[tauri::command]
+async fn worker_request_cmd(input: WorkerRequestInput) -> Result<WorkerRequestOutput, String> {
+    worker_request_inner(input).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+    // Touch ID (macOS) / Windows Hello. Linux has no plugin backend — JS
+    // checkStatus fails closed and the unlock UI falls back to passtoken.
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        builder = builder.plugin(tauri_plugin_biometry::init());
+    }
+    builder
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -1879,6 +1952,14 @@ pub fn run() {
             reveal_file_in_folder,
             notify::show_notification,
             notify::take_pending_open_mail,
+            owner_session_status_cmd,
+            owner_login_cmd,
+            owner_unlock_cmd,
+            owner_logout_cmd,
+            owner_set_biometry_enabled_cmd,
+            owner_setup_admin_cmd,
+            owner_reset_admin_cmd,
+            worker_request_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Relaybase desktop");

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { createMailDb } from "../../../db/mail";
 import {
   getMailMessage,
@@ -52,7 +52,7 @@ function rowToSentItem(row: {
 // Cursor-paginated (newest first). Reads from D1 `mailbox_messages`
 // (kind=sent). Optional `q` runs an FTS5 search over subject/from/to/cc/body.
 mailSent.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();
@@ -105,7 +105,7 @@ mailSent.get("/", async (c) => {
 // from `_list.json` have no `raw.eml` — `bodyText` stays empty and only the
 // `bodyPreview` is returned.
 mailSent.get("/:id", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();

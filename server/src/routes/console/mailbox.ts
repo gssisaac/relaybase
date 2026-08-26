@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
 import { createAppDb } from "../../../db/app";
 import {
@@ -32,14 +32,14 @@ const consoleMailbox = new Hono<{ Bindings: Env }>();
 
 /** Full mailbox blob (domains + addresses). */
 consoleMailbox.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   return c.json(data);
 });
 
 consoleMailbox.put("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: { domains?: string[]; addresses?: MailboxAddress[] };
   try {
@@ -88,7 +88,7 @@ consoleMailbox.put("/", async (c) => {
 
 /** Config subset for EmailMailboxStore. */
 consoleMailbox.get("/config", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   const domains = data.domains;
@@ -116,14 +116,14 @@ export { consoleMailbox };
 const consoleDomains = new Hono<{ Bindings: Env }>();
 
 consoleDomains.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   return c.json({ domains: listDomainSummaries(data) });
 });
 
 consoleDomains.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: { domain?: string };
   try {
@@ -147,7 +147,7 @@ consoleDomains.post("/", async (c) => {
 });
 
 consoleDomains.delete("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim();
   if (!domain) {
@@ -165,7 +165,7 @@ export { consoleDomains };
 const consoleAddresses = new Hono<{ Bindings: Env }>();
 
 consoleAddresses.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const data = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
   if (c.req.query("all") === "1") {
@@ -184,7 +184,7 @@ consoleAddresses.get("/", async (c) => {
 });
 
 consoleAddresses.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   let body: {
@@ -320,7 +320,7 @@ consoleAddresses.post("/", async (c) => {
 });
 
 consoleAddresses.patch("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   let body: {
@@ -410,7 +410,7 @@ consoleAddresses.patch("/", async (c) => {
 });
 
 consoleAddresses.delete("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const email = c.req.query("email")?.trim().toLowerCase();
   if (!email) {
@@ -441,7 +441,7 @@ consoleAddresses.delete("/", async (c) => {
  * The Flutter app logs in with the account email + this password.
  */
 consoleAddresses.get("/mobile-password", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const email = c.req.query("email")?.trim().toLowerCase();
   if (!email) {
@@ -453,7 +453,7 @@ consoleAddresses.get("/mobile-password", async (c) => {
 
 /** Generate or regenerate the per-account mobile password. Returns the plain password once. */
 consoleAddresses.post("/mobile-password", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: { email?: string };
   try {
@@ -478,7 +478,7 @@ consoleAddresses.post("/mobile-password", async (c) => {
 
 /** Clear the per-account mobile password (disables mobile login for this account). */
 consoleAddresses.delete("/mobile-password", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const email = c.req.query("email")?.trim().toLowerCase();
   if (!email) {

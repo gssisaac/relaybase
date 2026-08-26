@@ -1,8 +1,9 @@
 import type { Context } from "hono";
 import type { Env } from "../env";
 import { createAppDb } from "../../db/app";
-import { getOwnerConfig } from "../../db/app/owner";
 import { resolveKey } from "./keys";
+import { verifyAccessToken } from "./owner-auth";
+import { getOwnerLoginConfig } from "../../db/app/owner";
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
   if (!authHeader) return null;
@@ -10,34 +11,51 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
   return match?.[1]?.trim() ?? null;
 }
 
-async function d1AdminToken(env: Env): Promise<string | null> {
-  try {
-    const db = createAppDb(env.RELAYBASE_DB);
-    if (!db) return null;
-    const config = await getOwnerConfig(db);
-    return config.adminToken;
-  } catch {
-    // Empty D1 (pre-init-db) has no owner_config table yet.
-    return null;
-  }
-}
-
-/** Prefer wrangler secret; then D1 recovery override from `/console/recover-admin`. */
-export async function resolveAdminToken(env: Env): Promise<string | null> {
-  return env.ADMIN_TOKEN?.trim() || (await d1AdminToken(env)) || null;
-}
-
-export async function requireAdmin(
+/**
+ * Validate an owner access token (HMAC-signed, self-contained).
+ * Returns null on success, or a 401 Response on failure.
+ */
+export async function requireOwnerSession(
   c: Context<{ Bindings: Env }>,
 ): Promise<Response | null> {
   const token = extractBearerToken(c.req.header("Authorization"));
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  const secret = c.env.ADMIN_TOKEN?.trim() || null;
-  const fromD1 = await d1AdminToken(c.env);
-  const allowed = [secret, fromD1].filter(Boolean) as string[];
-  if (allowed.length === 0 || !allowed.includes(token)) {
+  const pepper = c.env.AUTH_PEPPER?.trim() ?? "";
+  if (!pepper) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const payload = await verifyAccessToken(pepper, token);
+  if (!payload) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  // Confirm the owner still exists (revoked via passtoken reset).
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  if (db) {
+    const cfg = await getOwnerLoginConfig(db);
+    if (!cfg?.adminUsername) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+  }
+  return null;
+}
+
+/**
+ * Bootstrap auth for install-time endpoints (init-db, migrate-db, setup-admin).
+ * Allowed only when no owner is configured yet AND the body/secret proves
+ * knowledge of AUTH_PEPPER. Once an owner exists, these endpoints require a
+ * normal owner session.
+ */
+export async function requirePepperBootstrap(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response | null> {
+  const pepper = c.env.AUTH_PEPPER?.trim() ?? "";
+  if (!pepper) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const provided = c.req.header("X-Auth-Pepper")?.trim() ?? "";
+  if (!provided || provided !== pepper) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   return null;

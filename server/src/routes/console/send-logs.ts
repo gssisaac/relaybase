@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { listSendLogs } from "../../lib/send-logs";
 
 const consoleSendLogs = new Hono<{ Bindings: Env }>();
 
 consoleSendLogs.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const limit = Number(c.req.query("limit") ?? "100");

@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession, requirePepperBootstrap } from "../../lib/auth";
 import { applyPendingMigrations } from "../../lib/d1-migrations";
+import { ownerIsConfigured } from "../../../db/app/owner";
+import { createAppDb } from "../../../db/app";
 
 const consoleMigrateDb = new Hono<{ Bindings: Env }>();
 
@@ -11,10 +13,14 @@ const consoleMigrateDb = new Hono<{ Bindings: Env }>();
  * Apply pending D1 migrations only. Never drops tables. No `clear` body.
  * Used after Worker updates and when install reuses existing D1s.
  *
- * Requires admin-token auth (ADMIN_TOKEN).
+ * Auth: owner access token, or AUTH_PEPPER bootstrap when no owner exists yet.
  */
 consoleMigrateDb.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  const hasOwner = db ? await ownerIsConfigured(db) : false;
+  const denied = hasOwner
+    ? await requireOwnerSession(c)
+    : await requirePepperBootstrap(c);
   if (denied) return denied;
 
   const applied = await applyPendingMigrations(c.env);

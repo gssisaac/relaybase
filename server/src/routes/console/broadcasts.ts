@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { cloudflareSendErrorBody } from "../../lib/cloudflare-api-hints";
 import { createAppDb } from "../../../db/app";
 import {
@@ -15,7 +15,7 @@ import {
 const consoleBroadcasts = new Hono<{ Bindings: Env }>();
 
 consoleBroadcasts.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const broadcasts = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
   const domain = c.req.query("domain")?.trim().toLowerCase();
@@ -26,7 +26,7 @@ consoleBroadcasts.get("/", async (c) => {
 });
 
 consoleBroadcasts.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: {
     id?: string;
@@ -56,7 +56,7 @@ consoleBroadcasts.post("/", async (c) => {
 });
 
 consoleBroadcasts.get("/:broadcastId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const detail = await getBroadcastDetail(
     createAppDb(c.env.RELAYBASE_DB),
@@ -67,7 +67,7 @@ consoleBroadcasts.get("/:broadcastId", async (c) => {
 });
 
 consoleBroadcasts.patch("/:broadcastId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: {
     groupIds?: string[];
@@ -94,7 +94,7 @@ consoleBroadcasts.patch("/:broadcastId", async (c) => {
 });
 
 consoleBroadcasts.post("/:broadcastId/send", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: { from?: string } = {};
   try {
@@ -117,7 +117,7 @@ consoleBroadcasts.post("/:broadcastId/send", async (c) => {
 });
 
 consoleBroadcasts.get("/:broadcastId/progress", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const broadcasts = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
   const broadcast = broadcasts.find(

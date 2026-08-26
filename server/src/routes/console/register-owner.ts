@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { createAppDb } from "../../../db/app";
 import {
-  getOwnerConfig,
+  getOwnerLoginConfig,
   setOwnerConfig,
 } from "../../../db/app/owner";
 
@@ -14,15 +14,13 @@ const EMAIL_RE =
 
 /**
  * Records the Relaybase console account that owns this Worker. Called by the
- * desktop app after a successful install (admin-token auth proves the caller
- * controls this Worker). The owner email is later matched during
- * ADMIN_TOKEN recovery so a recovery token can only reset a Worker that
- * belongs to the issuing account.
+ * desktop app after a successful install (owner session proves the caller
+ * controls this Worker). The owner email is informational binding metadata.
  *
  * Body: { accountEmail, workerUrl }
  */
 consoleRegisterOwner.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   let body: { accountEmail?: string; workerUrl?: string };
@@ -47,16 +45,16 @@ consoleRegisterOwner.post("/", async (c) => {
   return c.json({ ok: true, ownerEmail: email, workerUrl });
 });
 
-/** Returns the owner email (admin auth) — used by the desktop to confirm. */
+/** Returns the owner email (owner session) — used by the desktop to confirm. */
 consoleRegisterOwner.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const db = createAppDb(c.env.RELAYBASE_DB);
-  const config = await getOwnerConfig(db);
+  const config = await getOwnerLoginConfig(db);
   return c.json({
     ok: true,
-    ownerEmail: config.ownerEmail,
-    workerUrl: config.workerUrl,
+    ownerEmail: config?.ownerEmail ?? null,
+    workerUrl: config?.workerUrl ?? null,
   });
 });
 

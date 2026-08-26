@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 
 const mailFavicon = new Hono<{ Bindings: Env }>();
 
@@ -67,7 +67,7 @@ async function fetchIcon(domain: string, path: string): Promise<string | null> {
 // browser <img> loads work, but a JSON data-URL response lets the client keep
 // one in-memory copy per domain (and CORS never blocks the read).
 mailFavicon.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = sanitizeDomain(c.req.query("domain"));

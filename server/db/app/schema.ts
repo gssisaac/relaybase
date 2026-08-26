@@ -124,17 +124,6 @@ export const apiKeys = sqliteTable(
   ],
 );
 
-// ─── auth tokens ──────────────────────────────────────────────────────────
-
-export const authTokens = sqliteTable("auth_tokens", {
-  id: text("id").primaryKey(),
-  tokenHash: text("token_hash").notNull().unique(),
-  label: text("label"),
-  productId: text("product_id"),
-  tokenPrefix: text("token_prefix").notNull(),
-  createdAt: text("created_at").notNull(),
-});
-
 // ─── mobile passwords ────────────────────────────────────────────────────
 
 export const mobilePasswords = sqliteTable("mobile_passwords", {
@@ -193,9 +182,36 @@ export const ownerConfig = sqliteTable("owner_config", {
   id: integer("id").primaryKey(),
   ownerEmail: text("owner_email"),
   workerUrl: text("worker_url"),
-  /** Recovered ADMIN_TOKEN override (wrangler secret still accepted). */
-  adminToken: text("admin_token"),
+  /** Owner login name (user-chosen). Paired with the issued passtoken. */
+  adminUsername: text("admin_username"),
+  /** Salt for the passtoken hash. */
+  passtokenSalt: text("passtoken_salt"),
+  /** sha256(pepper || salt || passtoken). Plaintext is shown once at issue. */
+  passtokenHash: text("passtoken_hash"),
+  passtokenPrefix: text("passtoken_prefix"),
+  passtokenUpdatedAt: text("passtoken_updated_at"),
+  /** Brute-force lockout for POST /console/login. */
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  lockedUntil: text("locked_until"),
 });
+
+// ─── owner sessions (refresh tokens, hash-only) ──────────────────────────
+
+export const ownerSessions = sqliteTable(
+  "owner_sessions",
+  {
+    id: text("id").primaryKey(),
+    /** sha256(refresh). Plaintext lives only in the OS keyring. */
+    tokenHash: text("token_hash").notNull().unique(),
+    /** Groups access+refresh issued by one login; reuse of a revoked refresh
+     *  revokes the whole family. */
+    family: text("family").notNull(),
+    label: text("label"),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+  },
+  (t) => [index("owner_sessions_family_idx").on(t.family)],
+);
 
 // ─── inbound events (KV TTL queue replacement) ───────────────────────────
 
@@ -224,10 +240,10 @@ export type AudienceContactRow = typeof audienceContacts.$inferSelect;
 export type BroadcastRow = typeof broadcasts.$inferSelect;
 export type DomainBrandingRow = typeof domainBranding.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
-export type AuthTokenRow = typeof authTokens.$inferSelect;
 export type MobilePasswordRow = typeof mobilePasswords.$inferSelect;
 export type WebhookRow = typeof webhooks.$inferSelect;
 export type WebhookSecretRow = typeof webhookSecrets.$inferSelect;
 export type WebhookFailRow = typeof webhookFails.$inferSelect;
 export type OwnerConfigRow = typeof ownerConfig.$inferSelect;
+export type OwnerSessionRow = typeof ownerSessions.$inferSelect;
 export type InboundEventRow = typeof inboundEvents.$inferSelect;

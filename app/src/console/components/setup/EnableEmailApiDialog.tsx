@@ -114,7 +114,8 @@ export function EnableEmailApiDialog({
     if (!open || !pasteMessage) return;
     if (
       pasteMessage.includes("pushed to the Worker") ||
-      pasteMessage.includes("verified and saved")
+      pasteMessage.includes("verified and pushed") ||
+      pasteMessage.includes("Server token verified.")
     ) {
       onVerified();
       onOpenChange(false);

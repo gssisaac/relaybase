@@ -60,7 +60,6 @@ export default function SetupAccountPage() {
         accountId: data.account.id,
         email: data.account.email,
         session: data.sessionToken ?? "",
-        tier: "free",
       });
       await refresh?.();
       router.replace(alreadyConnected ? "/" : "/setup/install");

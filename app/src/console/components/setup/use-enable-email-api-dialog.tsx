@@ -16,7 +16,6 @@ import {
   desktopGetCredentials,
   desktopOpenExternal,
   desktopPushServerToken,
-  desktopSaveCfCredentials,
   desktopStartCfOAuth,
   desktopVerifyCfToken,
   explainCfOAuthError,
@@ -204,13 +203,12 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
     try {
       const result = await desktopVerifyCfToken(acctId, token, "server");
       if (!result.ok) throw new Error(result.message);
-      await desktopSaveCfCredentials(acctId, "", token);
-      const push = await desktopPushServerToken();
+      const push = await desktopPushServerToken(token);
       if (!push.ok) throw new Error(push.message);
       await desktop?.refresh();
       return push.pushedAt
-        ? "Server token verified, saved, and pushed to the Worker."
-        : "Server token verified and saved locally.";
+        ? "Server token verified and pushed to the Worker."
+        : "Server token verified.";
     } finally {
       setPasteBusy(false);
     }

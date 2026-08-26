@@ -20,48 +20,59 @@ const API_KEYS_FILE: &str = "api-keys.json";
 /// Path: ~/.relaybase/storage-layout-v2.json
 const STORAGE_LAYOUT_MARKER_FILE: &str = "storage-layout-v2.json";
 
+/// Keys that may appear in `~/.relaybase/credentials.json`.
+/// Everything else is stripped on load and never written back.
+const DISK_CREDENTIAL_KEYS: &[&str] = &[
+    "accountId",
+    "workerUrl",
+    "adminToken",
+    "workerScriptName",
+    "workerVersion",
+    "relaybaseAccountId",
+    "relaybaseEmail",
+    "relaybaseSession",
+];
+
+/// Disk-only shape. Tokens and OAuth session fields are never serialized here.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct DiskCredentials {
+    account_id: String,
+    worker_url: String,
+    admin_token: String,
+    worker_script_name: String,
+    worker_version: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    relaybase_account_id: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    relaybase_email: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    relaybase_session: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct StoredCredentials {
     pub account_id: String,
-    /// Cloudflare API token used by Tauri wrangler (deploy / KV / R2 / D1 /
-    /// `wrangler secret put`). Needs Workers Scripts/KV/R2 Edit. Not pushed
-    /// to the Worker as a runtime secret. Migrated from the legacy `apiToken`
-    /// field via the serde alias below.
+    /// IPC overlay only — OAuth access token (or a leftover legacy field).
+    /// Never written to `credentials.json`.
     #[serde(alias = "apiToken", alias = "api_token")]
     pub install_token: String,
-    /// Cloudflare API token with Account → Email Sending → Edit, pushed to
-    /// the Worker as the `CF_API_TOKEN` wrangler secret so the Worker can send
-    /// mail. Separate from `install_token` so a deploy-only token never ends
-    /// up authorizing (and failing) Email Sending.
-    pub server_token: String,
-    /// ISO timestamp of the last successful `wrangler secret put CF_API_TOKEN`
-    /// run from Settings. Empty until the server token has been pushed.
-    pub server_token_pushed_at: String,
     pub worker_url: String,
     pub admin_token: String,
     pub worker_script_name: String,
     /// Deployed Worker bundle version (from WORKER_VERSION var / connect probe).
     pub worker_version: String,
-    pub license_key: String,
-    /// Relaybase console account (console.relaybase.xyz) — separate from the
-    /// Cloudflare `account_id`/`api_token` above. Populated after the user
-    /// logs in from /setup/account.
-    /// Struct-level `default` keeps older ~/.relaybase/credentials.json files
-    /// (missing these fields) loadable instead of hard-failing save/verify.
+    /// Relaybase console account (console.relaybase.xyz). Written to disk
+    /// only when non-empty.
     pub relaybase_account_id: String,
     pub relaybase_email: String,
     /// Signed session token from console.relaybase.xyz (stored locally only,
     /// never sent to the product Worker).
     pub relaybase_session: String,
-    /// License tier mirrored from the console for feature gating.
-    pub relaybase_tier: String,
 
     // --- Cloudflare OAuth (install token) ---
-    // Install token is sourced from CF OAuth. Tokens live in Tauri process
-    // memory only — never written to credentials.json. `install_token` above
-    // may still hold a legacy manual token on disk when no OAuth session is
-    // active.
+    // Process memory only. Overlaid onto IPC responses; never on disk.
     pub cf_oauth_access_token: String,
     pub cf_oauth_refresh_token: String,
     /// ISO timestamp of access-token expiry. Empty when not using OAuth.
@@ -100,14 +111,6 @@ pub fn clear_cf_oauth_session() {
     }
 }
 
-/// Remove OAuth fields from a credentials struct (disk or API payload).
-pub fn strip_oauth_from_credentials(creds: &mut StoredCredentials) {
-    creds.cf_oauth_access_token.clear();
-    creds.cf_oauth_refresh_token.clear();
-    creds.cf_oauth_access_expires_at.clear();
-    creds.cf_oauth_account_id.clear();
-}
-
 /// Overlay the in-memory OAuth session onto credentials for UI / IPC responses.
 pub fn apply_cf_oauth_session(creds: &mut StoredCredentials) {
     let Some(session) = get_cf_oauth_session() else {
@@ -130,15 +133,54 @@ pub fn load_credentials_merged() -> Result<StoredCredentials, String> {
     Ok(creds)
 }
 
-fn credentials_for_disk(creds: &StoredCredentials) -> StoredCredentials {
-    let mut disk = creds.clone();
-    strip_oauth_from_credentials(&mut disk);
-    // OAuth access token lives only in memory — do not persist install_token
-    // sourced from an active OAuth session.
-    if get_cf_oauth_session().is_some() {
-        disk.install_token.clear();
+fn credentials_for_disk(creds: &StoredCredentials) -> DiskCredentials {
+    DiskCredentials {
+        account_id: creds.account_id.trim().to_string(),
+        worker_url: creds.worker_url.trim().to_string(),
+        admin_token: creds.admin_token.trim().to_string(),
+        worker_script_name: creds.worker_script_name.trim().to_string(),
+        worker_version: creds.worker_version.trim().to_string(),
+        relaybase_account_id: creds.relaybase_account_id.trim().to_string(),
+        relaybase_email: creds.relaybase_email.trim().to_string(),
+        relaybase_session: creds.relaybase_session.trim().to_string(),
     }
-    disk
+}
+
+fn stored_from_disk(disk: DiskCredentials) -> StoredCredentials {
+    StoredCredentials {
+        account_id: disk.account_id,
+        worker_url: disk.worker_url,
+        admin_token: disk.admin_token,
+        worker_script_name: disk.worker_script_name,
+        worker_version: disk.worker_version,
+        relaybase_account_id: disk.relaybase_account_id,
+        relaybase_email: disk.relaybase_email,
+        relaybase_session: disk.relaybase_session,
+        ..Default::default()
+    }
+}
+
+fn credentials_json_is_dirty(value: &serde_json::Value) -> bool {
+    let Some(obj) = value.as_object() else {
+        return true;
+    };
+    for key in obj.keys() {
+        if !DISK_CREDENTIAL_KEYS.contains(&key.as_str()) {
+            return true;
+        }
+    }
+    for key in [
+        "relaybaseAccountId",
+        "relaybaseEmail",
+        "relaybaseSession",
+    ] {
+        if let Some(v) = obj.get(key) {
+            if v.as_str().is_some_and(|s| s.trim().is_empty()) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -481,16 +523,22 @@ pub fn load_credentials() -> Result<Option<StoredCredentials>, String> {
             path.display()
         )
     })?;
-    let mut creds: StoredCredentials = serde_json::from_str(&json).map_err(|e| {
+    let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
         format!(
             "Invalid credentials file {}: {e}. Delete the file and verify again.",
             path.display()
         )
     })?;
-    // Ignore OAuth tokens persisted before the memory-only migration.
-    if !creds.cf_oauth_access_token.is_empty() || !creds.cf_oauth_refresh_token.is_empty() {
-        strip_oauth_from_credentials(&mut creds);
-        creds.install_token.clear();
+    let disk: DiskCredentials = serde_json::from_value(value.clone()).map_err(|e| {
+        format!(
+            "Invalid credentials file {}: {e}. Delete the file and verify again.",
+            path.display()
+        )
+    })?;
+    let creds = stored_from_disk(disk);
+    // Drop leftover tokens / empty console keys so they never stay on disk.
+    if credentials_json_is_dirty(&value) {
+        save_credentials(&creds)?;
     }
     Ok(Some(creds))
 }

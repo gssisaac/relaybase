@@ -79,29 +79,9 @@ fn pkce_challenge(verifier: &str) -> String {
 }
 
 #[tauri::command]
-async fn save_cf_credentials(
-    account_id: String,
-    install_token: String,
-    server_token: String,
-) -> Result<StoredCredentials, String> {
+async fn save_cf_credentials(account_id: String) -> Result<StoredCredentials, String> {
     let mut creds = load_credentials()?.unwrap_or_default();
     creds.account_id = account_id.trim().to_string();
-    // Merge semantics: an empty install_token means "leave the existing one
-    // alone" (Settings only manages the server token; the install token is
-    // persisted during install and reused for wrangler auth). Only overwrite
-    // when a non-empty value is passed (install flow / explicit re-enter).
-    let install_trimmed = install_token.trim();
-    if !install_trimmed.is_empty() && get_cf_oauth_session().is_none() {
-        creds.install_token = install_trimmed.to_string();
-    }
-    // Clearing the server token also clears the pushed-at timestamp so the
-    // dashboard stops claiming "Pushed to Worker" after a wipe.
-    if server_token.trim().is_empty() {
-        creds.server_token.clear();
-        creds.server_token_pushed_at.clear();
-    } else {
-        creds.server_token = server_token.trim().to_string();
-    }
     save_credentials(&creds)?;
     load_credentials_merged()
 }
@@ -272,24 +252,15 @@ async fn update_routing_worker(worker_js: Option<String>) -> Result<InstallResul
 }
 
 #[tauri::command]
-async fn save_license_key(license_key: String) -> Result<(), String> {
-    let mut creds = load_credentials()?.unwrap_or_default();
-    creds.license_key = license_key.trim().to_string();
-    save_credentials(&creds)
-}
-
-#[tauri::command]
 async fn save_relaybase_account(
     account_id: String,
     email: String,
     session: String,
-    tier: Option<String>,
 ) -> Result<StoredCredentials, String> {
     let mut creds = load_credentials()?.unwrap_or_default();
     creds.relaybase_account_id = account_id.trim().to_string();
     creds.relaybase_email = email.trim().to_string();
     creds.relaybase_session = session.trim().to_string();
-    creds.relaybase_tier = tier.unwrap_or_default().trim().to_string();
     save_credentials(&creds)?;
     Ok(creds)
 }
@@ -300,7 +271,6 @@ async fn clear_relaybase_account() -> Result<StoredCredentials, String> {
     creds.relaybase_account_id.clear();
     creds.relaybase_email.clear();
     creds.relaybase_session.clear();
-    creds.relaybase_tier.clear();
     save_credentials(&creds)?;
     Ok(creds)
 }
@@ -362,13 +332,7 @@ async fn auto_install_routing_worker(
     )
     .await?;
     let existing = load_credentials()?.unwrap_or_default();
-    let mut next = merge_into_credentials(&existing, &result, account_id);
-    // OAuth access token stays in CF_OAUTH_SESSION only. Legacy disk
-    // install_token is left as-is (empty when a session is active).
-    if let Some(srv) = server {
-        next.server_token = srv;
-        next.server_token_pushed_at = auto_install::now_iso();
-    }
+    let next = merge_into_credentials(&existing, &result, account_id);
     save_credentials(&next)?;
     Ok(result)
 }
@@ -442,19 +406,12 @@ async fn update_installed_worker_cmd(
     };
     let server = server_token
         .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .or_else(|| {
-            if creds.server_token.trim().is_empty() {
-                None
-            } else {
-                Some(creds.server_token.clone())
-            }
-        });
+        .filter(|s| !s.is_empty());
     let mut result = update_installed_worker(
         app,
         token,
         account_id.clone(),
-        server.clone(),
+        server,
         creds.admin_token.clone(),
     )
     .await?;
@@ -465,11 +422,7 @@ async fn update_installed_worker_cmd(
         result.worker_url = creds.worker_url.trim().trim_end_matches('/').to_string();
     }
     let existing = load_credentials()?.unwrap_or_default();
-    let mut next = merge_into_credentials(&existing, &result, account_id);
-    if let Some(srv) = server {
-        next.server_token = srv;
-        next.server_token_pushed_at = auto_install::now_iso();
-    }
+    let next = merge_into_credentials(&existing, &result, account_id);
     save_credentials(&next)?;
     Ok(result)
 }
@@ -528,18 +481,19 @@ async fn migrate_worker_db_cmd(
     migrate_worker_db(&worker_url, &admin_token).await
 }
 
-/// Push the saved server token (Email Sending Edit) to the deployed Worker as
-/// the `CF_API_TOKEN` secret via the Cloudflare API. Auth is the in-memory
-/// OAuth access token (refreshed if needed).
+/// Push a one-shot server token (Email Sending Edit) to the deployed Worker
+/// as the `CF_API_TOKEN` secret. The token is not written to disk. Auth is
+/// the in-memory OAuth access token (refreshed if needed).
 #[tauri::command]
-async fn push_server_token() -> Result<serde_json::Value, String> {
+async fn push_server_token(server_token: String) -> Result<serde_json::Value, String> {
+    let server = server_token.trim().to_string();
+    if server.is_empty() {
+        return Err("Server token is empty.".into());
+    }
     let install_token = refresh_install_token_if_needed().await?;
     let creds = load_credentials_merged()?;
     if creds.account_id.is_empty() || install_token.is_empty() {
-        return Err("Install token (Workers Scripts Edit) is required to push the server token".into());
-    }
-    if creds.server_token.is_empty() {
-        return Err("No server token saved. Add an Email Sending Edit token in Settings first.".into());
+        return Err("Authorize with Cloudflare first to push the server token".into());
     }
     if creds.worker_script_name.is_empty() {
         return Err("No deployed Worker found. Install the routing Worker first.".into());
@@ -549,14 +503,9 @@ async fn push_server_token() -> Result<serde_json::Value, String> {
         &creds.account_id,
         &creds.worker_script_name,
         &install_token,
-        &creds.server_token,
+        &server,
     )
     .await?;
-
-    // Persist the pushed-at timestamp so the dashboard can show "Pushed".
-    let mut next = creds;
-    next.server_token_pushed_at = pushed_at.clone();
-    save_credentials(&next)?;
 
     Ok(serde_json::json!({ "ok": true, "message": "Server token pushed to Worker as CF_API_TOKEN.", "pushedAt": pushed_at }))
 }
@@ -1902,7 +1851,6 @@ pub fn run() {
             adopt_routing_worker,
             install_routing_worker,
             update_routing_worker,
-            save_license_key,
             save_relaybase_account,
             clear_relaybase_account,
             get_team_login,

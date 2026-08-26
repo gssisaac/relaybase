@@ -507,9 +507,7 @@ export function SetupProgressPanel({
       unlisten = await listenInstallLog((event) => {
         setLogs((prev) => [...prev, event]);
       });
-      const result = await desktopUpdateInstalledWorker(
-        credentials?.serverToken?.trim() || undefined,
-      );
+      const result = await desktopUpdateInstalledWorker();
       try {
         const connect = await desktopVerifyWorkerConnection(
           result.workerUrl,

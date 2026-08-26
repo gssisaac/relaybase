@@ -299,18 +299,13 @@ pub async fn adopt_worker(
         .clone()
         .ok_or_else(|| "Could not resolve workers.dev URL".to_string())?;
 
-    let server_token_opt = if existing.server_token.is_empty() {
-        None
-    } else {
-        Some(existing.server_token.as_str())
-    };
     let (admin_token, admin_relinked) = relink_admin(
         &client,
         &script_name,
         &worker_url,
         account_id,
         api_token,
-        server_token_opt,
+        None,
         &existing.admin_token,
     )
     .await?;
@@ -324,25 +319,11 @@ pub async fn adopt_worker(
         admin_relinked,
     };
 
-    let creds = StoredCredentials {
-        account_id: account_id.to_string(),
-        install_token: api_token.to_string(),
-        server_token: existing.server_token.clone(),
-        server_token_pushed_at: existing.server_token_pushed_at.clone(),
-        worker_url,
-        admin_token,
-        worker_script_name: script_name,
-        worker_version: existing.worker_version.clone(),
-        license_key: existing.license_key.clone(),
-        relaybase_account_id: existing.relaybase_account_id.clone(),
-        relaybase_email: existing.relaybase_email.clone(),
-        relaybase_session: existing.relaybase_session.clone(),
-        relaybase_tier: existing.relaybase_tier.clone(),
-        cf_oauth_access_token: existing.cf_oauth_access_token.clone(),
-        cf_oauth_refresh_token: existing.cf_oauth_refresh_token.clone(),
-        cf_oauth_access_expires_at: existing.cf_oauth_access_expires_at.clone(),
-        cf_oauth_account_id: existing.cf_oauth_account_id.clone(),
-    };
+    let mut creds = existing.clone();
+    creds.account_id = account_id.to_string();
+    creds.worker_url = worker_url;
+    creds.admin_token = admin_token;
+    creds.worker_script_name = script_name;
 
     Ok((result, creds))
 }
@@ -376,17 +357,6 @@ pub async fn install_worker(
     let admin_token = format!("rb_admin_{}", Uuid::new_v4());
     put_worker_secret(&client, &script_name, "ADMIN_TOKEN", &admin_token).await?;
     put_worker_secret(&client, &script_name, "CF_ACCOUNT_ID", account_id).await?;
-    // Only push CF_API_TOKEN when a server token (Email Sending Edit) is
-    // available — pushing the install token here caused [10000] auth errors
-    // on send_raw. If none, the user sets it later in Settings.
-    let server_token_opt = if existing.server_token.is_empty() {
-        None
-    } else {
-        Some(existing.server_token.as_str())
-    };
-    if let Some(server) = server_token_opt {
-        put_worker_secret(&client, &script_name, "CF_API_TOKEN", server).await?;
-    }
 
     let worker_url = enable_workers_dev(&client, &script_name).await?;
 
@@ -399,25 +369,11 @@ pub async fn install_worker(
         admin_relinked: false,
     };
 
-    let creds = StoredCredentials {
-        account_id: account_id.to_string(),
-        install_token: api_token.to_string(),
-        server_token: existing.server_token.clone(),
-        server_token_pushed_at: existing.server_token_pushed_at.clone(),
-        worker_url,
-        admin_token,
-        worker_script_name: script_name,
-        worker_version: existing.worker_version.clone(),
-        license_key: existing.license_key.clone(),
-        relaybase_account_id: existing.relaybase_account_id.clone(),
-        relaybase_email: existing.relaybase_email.clone(),
-        relaybase_session: existing.relaybase_session.clone(),
-        relaybase_tier: existing.relaybase_tier.clone(),
-        cf_oauth_access_token: existing.cf_oauth_access_token.clone(),
-        cf_oauth_refresh_token: existing.cf_oauth_refresh_token.clone(),
-        cf_oauth_access_expires_at: existing.cf_oauth_access_expires_at.clone(),
-        cf_oauth_account_id: existing.cf_oauth_account_id.clone(),
-    };
+    let mut creds = existing.clone();
+    creds.account_id = account_id.to_string();
+    creds.worker_url = worker_url;
+    creds.admin_token = admin_token;
+    creds.worker_script_name = script_name;
 
     Ok((result, creds))
 }

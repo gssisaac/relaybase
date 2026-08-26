@@ -10,17 +10,13 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  cfServerTokenConfigured,
-  type HealthTone,
-} from "@/lib/dashboard/connection-status";
+import { type HealthTone } from "@/lib/dashboard/connection-status";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
   desktopGetCredentials,
   desktopPushServerToken,
   desktopRecoverAdminToken,
   desktopRequestAdminRecoveryToken,
-  desktopSaveCfCredentials,
   desktopSaveWorkerConnection,
   desktopStartCfOAuth,
   listenCfOAuthResult,
@@ -56,10 +52,6 @@ type SettingsConnectionContextValue = {
   appOk: boolean;
   accountId: string;
   setAccountId: (value: string) => void;
-  serverToken: string;
-  setServerToken: (value: string) => void;
-  /** True when the server token has been pushed to the Worker (pushedAt set). */
-  serverTokenPushed: boolean;
   workerUrl: string;
   setWorkerUrl: (value: string) => void;
   adminToken: string;
@@ -127,10 +119,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   // the probe can't run (no worker status yet).
   const cfConnected = workerStatus
     ? mailApiReady(workerStatus)
-    : (snapshot?.cfConnected ?? cfServerTokenConfigured(credentials));
-  const serverTokenPushed = Boolean(
-    credentials?.serverToken?.trim() && credentials?.serverTokenPushedAt?.trim(),
-  );
+    : Boolean(snapshot?.cfConnected);
   const statusBusy = statusLoading || statusRefreshing;
 
   const [accountId, setAccountId] = useState("");
@@ -184,7 +173,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   function resetCfDraft() {
     setAccountId(credentials?.accountId ?? "");
-    setServerToken(credentials?.serverToken ?? "");
+    setServerToken("");
     setCfError(null);
     setCfMessage(null);
   }
@@ -203,7 +192,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   useEffect(() => {
     if (!cfEditing) {
       setAccountId(credentials?.accountId ?? "");
-      setServerToken(credentials?.serverToken ?? "");
     }
     if (!workerEditing) {
       setWorkerUrl(credentials?.workerUrl ?? "");
@@ -241,18 +229,14 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       }
       const result = await desktopVerifyCfToken(acctId, token, "server");
       if (!result.ok) throw new Error(result.message);
-      // Pass empty install token — save_cf_credentials preserves the existing
-      // install token (now sourced from CF OAuth memory). Settings only
-      // manages the server token.
-      await desktopSaveCfCredentials(acctId, "", token);
-      // Push the server token to the Worker as the CF_API_TOKEN wrangler secret.
-      const push = await desktopPushServerToken();
+      const push = await desktopPushServerToken(token);
       if (!push.ok) throw new Error(push.message);
       setCfMessage(
         push.pushedAt
-          ? "Server token verified, saved, and pushed to the Worker."
-          : "Server token verified and saved locally.",
+          ? "Server token verified and pushed to the Worker."
+          : "Server token verified.",
       );
+      setServerToken("");
       await refreshCredentials();
       await refreshConnectionStatus();
       setCfEditing(false);
@@ -606,9 +590,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       appOk,
       accountId,
       setAccountId,
-      serverToken,
-      setServerToken,
-      serverTokenPushed,
       workerUrl,
       setWorkerUrl,
       adminToken,
@@ -649,7 +630,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       refreshCredentials,
       workerStatus,
       cfConnected,
-      serverTokenPushed,
       statusBusy,
       hasWorker,
       workerHealth,
@@ -659,7 +639,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       searchOk,
       appOk,
       accountId,
-      serverToken,
       workerUrl,
       adminToken,
       cfEditing,

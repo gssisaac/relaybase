@@ -8,7 +8,6 @@ import {
   saveDashboardCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
 import {
-  cfServerTokenConfigured,
   probeConnectionStatus,
   type ConnectionStatusSnapshot,
 } from "@/lib/dashboard/connection-status";
@@ -38,7 +37,7 @@ export function useConnectionStatus() {
         setLoading(false);
       } else {
         setSnapshot({
-          cfConnected: cfServerTokenConfigured(credentials),
+          cfConnected: false,
           cfInstallTokenPresent: Boolean(credentials?.installToken?.trim()),
           worker: null,
         });
@@ -60,7 +59,7 @@ export function useConnectionStatus() {
         await saveDashboardCache(CONNECTION_STATUS_CACHE_KEY, next);
       } catch {
         const fallback: ConnectionStatusSnapshot = {
-          cfConnected: cfServerTokenConfigured(credentials),
+          cfConnected: false,
           cfInstallTokenPresent: Boolean(credentials?.installToken?.trim()),
           worker: null,
         };

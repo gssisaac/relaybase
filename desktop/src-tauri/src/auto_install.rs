@@ -1769,42 +1769,24 @@ pub async fn migrate_worker_db(
 }
 
 /// Merge an auto-install result into stored credentials (preserves
-/// Relaybase account + CF account id if already present). Also persists the
-/// install token used (so later update/relink work without re-entering) and
-/// the server token + pushed-at timestamp when one was supplied.
+/// Relaybase account + CF account id if already present).
 pub fn merge_into_credentials(
     existing: &StoredCredentials,
     result: &AutoInstallResult,
     account_id: Option<String>,
 ) -> StoredCredentials {
-    StoredCredentials {
-        account_id: account_id
-            .filter(|a| !a.trim().is_empty())
-            .or_else(|| (!result.account_id.is_empty()).then(|| result.account_id.clone()))
-            .unwrap_or_else(|| existing.account_id.clone()),
-        // install_token is filled by the caller via save_cf_credentials or the
-        // auto_install_routing_worker command before merge; preserve existing.
-        install_token: existing.install_token.clone(),
-        server_token: existing.server_token.clone(),
-        server_token_pushed_at: existing.server_token_pushed_at.clone(),
-        worker_url: result.worker_url.clone(),
-        admin_token: result.admin_token.clone(),
-        worker_script_name: result.worker_script_name.clone(),
-        worker_version: if result.worker_version.trim().is_empty() {
-            existing.worker_version.clone()
-        } else {
-            result.worker_version.clone()
-        },
-        license_key: existing.license_key.clone(),
-        relaybase_account_id: existing.relaybase_account_id.clone(),
-        relaybase_email: existing.relaybase_email.clone(),
-        relaybase_session: existing.relaybase_session.clone(),
-        relaybase_tier: existing.relaybase_tier.clone(),
-        cf_oauth_access_token: existing.cf_oauth_access_token.clone(),
-        cf_oauth_refresh_token: existing.cf_oauth_refresh_token.clone(),
-        cf_oauth_access_expires_at: existing.cf_oauth_access_expires_at.clone(),
-        cf_oauth_account_id: existing.cf_oauth_account_id.clone(),
+    let mut next = existing.clone();
+    next.account_id = account_id
+        .filter(|a| !a.trim().is_empty())
+        .or_else(|| (!result.account_id.is_empty()).then(|| result.account_id.clone()))
+        .unwrap_or_else(|| existing.account_id.clone());
+    next.worker_url = result.worker_url.clone();
+    next.admin_token = result.admin_token.clone();
+    next.worker_script_name = result.worker_script_name.clone();
+    if !result.worker_version.trim().is_empty() {
+        next.worker_version = result.worker_version.clone();
     }
+    next
 }
 
 /// PUT the Worker `CF_API_TOKEN` secret using the install (OAuth) token

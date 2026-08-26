@@ -8,112 +8,118 @@ import { NextResponse } from "next/server";
  * ~/.relaybase/credentials.json the same way the desktop shell does.
  * Not deployed — app Worker / OpenNext is decommissioned.
  *
- * CF OAuth install tokens are never read from or written to disk — they live
- * in Tauri process memory only. Responses always return empty OAuth fields.
+ * Disk allowlist: accountId, workerUrl, adminToken, workerScriptName,
+ * workerVersion, plus non-empty relaybaseAccountId / Email / Session.
+ * CF OAuth and API tokens are never read from or written to disk.
  */
 
-type CredentialsFile = {
-  accountId?: string;
-  /** Legacy single-token field; migrated to installToken on read. */
-  apiToken?: string;
-  installToken?: string;
-  serverToken?: string;
-  serverTokenPushedAt?: string;
-  workerUrl?: string;
-  adminToken?: string;
-  workerScriptName?: string;
-  workerVersion?: string;
-  licenseKey?: string;
+type DiskCredentials = {
+  accountId: string;
+  workerUrl: string;
+  adminToken: string;
+  workerScriptName: string;
+  workerVersion: string;
   relaybaseAccountId?: string;
   relaybaseEmail?: string;
   relaybaseSession?: string;
-  relaybaseTier?: string;
-  // Legacy — stripped on read/write; OAuth is memory-only in Tauri.
-  cfOauthAccessToken?: string;
-  cfOauthRefreshToken?: string;
-  cfOauthAccessExpiresAt?: string;
-  cfOauthAccountId?: string;
 };
+
+const DISK_KEYS = [
+  "accountId",
+  "workerUrl",
+  "adminToken",
+  "workerScriptName",
+  "workerVersion",
+  "relaybaseAccountId",
+  "relaybaseEmail",
+  "relaybaseSession",
+] as const;
 
 function credentialsPath(): string {
   return join(homedir(), ".relaybase", "credentials.json");
 }
 
-function stripLegacyOAuthFields(parsed: CredentialsFile): CredentialsFile {
-  const next = { ...parsed };
-  delete next.cfOauthAccessToken;
-  delete next.cfOauthRefreshToken;
-  delete next.cfOauthAccessExpiresAt;
-  delete next.cfOauthAccountId;
-  // OAuth-sourced install tokens must not persist on disk.
-  if (parsed.cfOauthAccessToken || parsed.cfOauthRefreshToken) {
-    next.installToken = "";
-    next.apiToken = "";
+function emptyOverlay() {
+  return {
+    installToken: "",
+    cfOauthAccessToken: "",
+    cfOauthRefreshToken: "",
+    cfOauthAccessExpiresAt: "",
+    cfOauthAccountId: "",
+  };
+}
+
+function toDisk(input: Record<string, unknown>): DiskCredentials {
+  const str = (key: string) =>
+    typeof input[key] === "string" ? (input[key] as string).trim() : "";
+  const disk: DiskCredentials = {
+    accountId: str("accountId"),
+    workerUrl: str("workerUrl").replace(/\/$/, ""),
+    adminToken: str("adminToken"),
+    workerScriptName: str("workerScriptName"),
+    workerVersion: str("workerVersion"),
+  };
+  const accountId = str("relaybaseAccountId");
+  const email = str("relaybaseEmail");
+  const session = str("relaybaseSession");
+  if (accountId) disk.relaybaseAccountId = accountId;
+  if (email) disk.relaybaseEmail = email;
+  if (session) disk.relaybaseSession = session;
+  return disk;
+}
+
+function isDirty(parsed: Record<string, unknown>): boolean {
+  for (const key of Object.keys(parsed)) {
+    if (!DISK_KEYS.includes(key as (typeof DISK_KEYS)[number])) return true;
   }
-  return next;
+  for (const key of ["relaybaseAccountId", "relaybaseEmail", "relaybaseSession"] as const) {
+    if (typeof parsed[key] === "string" && !(parsed[key] as string).trim()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function writeDisk(disk: DiskCredentials): Promise<void> {
+  const dir = join(homedir(), ".relaybase");
+  await mkdir(dir, { recursive: true });
+  await writeFile(credentialsPath(), `${JSON.stringify(disk, null, 2)}\n`, {
+    mode: 0o600,
+  });
+}
+
+function toResponse(disk: DiskCredentials) {
+  return {
+    ...disk,
+    relaybaseAccountId: disk.relaybaseAccountId ?? "",
+    relaybaseEmail: disk.relaybaseEmail ?? "",
+    relaybaseSession: disk.relaybaseSession ?? "",
+    ...emptyOverlay(),
+  };
 }
 
 export async function GET() {
   try {
     const raw = await readFile(credentialsPath(), "utf8");
-    const parsed = stripLegacyOAuthFields(JSON.parse(raw) as CredentialsFile);
-    return NextResponse.json({
-      accountId: parsed.accountId ?? "",
-      // Migrate legacy apiToken → installToken on read.
-      installToken: parsed.installToken ?? parsed.apiToken ?? "",
-      serverToken: parsed.serverToken ?? "",
-      serverTokenPushedAt: parsed.serverTokenPushedAt ?? "",
-      workerUrl: parsed.workerUrl ?? "",
-      adminToken: parsed.adminToken ?? "",
-      workerScriptName: parsed.workerScriptName ?? "",
-      workerVersion: parsed.workerVersion ?? "",
-      licenseKey: parsed.licenseKey ?? "",
-      relaybaseAccountId: parsed.relaybaseAccountId ?? "",
-      relaybaseEmail: parsed.relaybaseEmail ?? "",
-      relaybaseSession: parsed.relaybaseSession ?? "",
-      relaybaseTier: parsed.relaybaseTier ?? "",
-      cfOauthAccessToken: "",
-      cfOauthRefreshToken: "",
-      cfOauthAccessExpiresAt: "",
-      cfOauthAccountId: "",
-    });
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const disk = toDisk(parsed);
+    if (isDirty(parsed)) {
+      await writeDisk(disk);
+    }
+    return NextResponse.json(toResponse(disk));
   } catch {
     return NextResponse.json(null);
   }
 }
 
 export async function PUT(req: Request) {
-  let body: CredentialsFile;
+  let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as CredentialsFile;
+    body = (await req.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const dir = join(homedir(), ".relaybase");
-  await mkdir(dir, { recursive: true });
-  const next = stripLegacyOAuthFields({
-    accountId: body.accountId?.trim() ?? "",
-    installToken: body.installToken?.trim() ?? "",
-    serverToken: body.serverToken?.trim() ?? "",
-    serverTokenPushedAt: body.serverTokenPushedAt?.trim() ?? "",
-    workerUrl: body.workerUrl?.trim().replace(/\/$/, "") ?? "",
-    adminToken: body.adminToken?.trim() ?? "",
-    workerScriptName: body.workerScriptName?.trim() ?? "",
-    workerVersion: body.workerVersion?.trim() ?? "",
-    licenseKey: body.licenseKey?.trim() ?? "",
-    relaybaseAccountId: body.relaybaseAccountId?.trim() ?? "",
-    relaybaseEmail: body.relaybaseEmail?.trim() ?? "",
-    relaybaseSession: body.relaybaseSession?.trim() ?? "",
-    relaybaseTier: body.relaybaseTier?.trim() ?? "",
-  });
-  await writeFile(credentialsPath(), `${JSON.stringify(next, null, 2)}\n`, {
-    mode: 0o600,
-  });
-  return NextResponse.json({
-    ...next,
-    cfOauthAccessToken: "",
-    cfOauthRefreshToken: "",
-    cfOauthAccessExpiresAt: "",
-    cfOauthAccountId: "",
-  });
+  const disk = toDisk(body);
+  await writeDisk(disk);
+  return NextResponse.json(toResponse(disk));
 }

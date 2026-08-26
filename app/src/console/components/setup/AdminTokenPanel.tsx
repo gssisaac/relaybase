@@ -47,7 +47,7 @@ function workerUpdateCommand(token: string, zipUrl: string): string {
 function fullInstallCommand(
   token: string,
   zipUrl: string,
-  cf?: { accountId: string; serverToken: string },
+  cf?: { accountId: string },
 ): string {
   const escaped = token.replace(/'/g, `'\\''`);
   const lines = [
@@ -61,22 +61,20 @@ function fullInstallCommand(
     `# paste each database_id into wrangler.toml (REPLACE_WITH_* placeholders)`,
     `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,
   ];
-  if (cf?.accountId.trim() && cf?.serverToken.trim()) {
+  if (cf?.accountId.trim()) {
     const acct = cf.accountId.replace(/'/g, `'\\''`);
-    const tok = cf.serverToken.replace(/'/g, `'\\''`);
     lines.push(`printf '%s' '${acct}' | npx wrangler secret put CF_ACCOUNT_ID`);
-    lines.push(`printf '%s' '${tok}' | npx wrangler secret put CF_API_TOKEN`);
   } else {
     lines.push(
-      `# Optional: CF_ACCOUNT_ID + CF_API_TOKEN (Email Sending / Routing / Zone Read) for domain API`,
+      `# Optional: CF_ACCOUNT_ID for domain API`,
     );
     lines.push(
       `# printf '%s' '<account-id>' | npx wrangler secret put CF_ACCOUNT_ID`,
     );
-    lines.push(
-      `# printf '%s' '<server-token>' | npx wrangler secret put CF_API_TOKEN`,
-    );
   }
+  lines.push(
+    `# Add CF_API_TOKEN (Email Sending / Routing / Zone Read) in the Cloudflare dashboard — do not paste it here.`,
+  );
   lines.push(`npx wrangler deploy`);
   lines.push(
     `curl -X POST https://relaybase-api.<subdomain>.workers.dev/console/init-db -H 'Authorization: Bearer ${escaped}' -H 'Content-Type: application/json' -d '{}'`,
@@ -92,14 +90,12 @@ export function AdminTokenPanel({
   value,
   onChange,
   cfAccountId,
-  cfServerToken,
   variant = "install",
   allowRotate = true,
 }: {
   value: string;
   onChange: (token: string) => void;
   cfAccountId?: string;
-  cfServerToken?: string;
   variant?: "install" | "worker-update";
   allowRotate?: boolean;
 }) {
@@ -139,7 +135,6 @@ export function AdminTokenPanel({
       ? workerUpdateCommand(value, zipUrl)
       : fullInstallCommand(value, zipUrl, {
           accountId: cfAccountId ?? "",
-          serverToken: cfServerToken ?? "",
         })
     : "Generate a token to reveal the full command.";
 

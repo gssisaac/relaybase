@@ -95,7 +95,6 @@ OAuth access/refresh tokens are **not** written to `credentials.json` — they l
 | Field | Purpose |
 |-------|---------|
 | `accountId` | CF account id from the OAuth token response (persisted on disk) |
-| `installToken` | Legacy manual install token (persisted on disk); cleared when an OAuth session is active |
 
 The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) holds `access_token`, `refresh_token`, `access_expires_at`, `account_id` and is overlaid into IPC credentials for the lifetime of the process.
 
@@ -106,13 +105,13 @@ The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secret
 - **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + admin token copy). No separate install button.
 - **Lost ADMIN_TOKEN** — **Setup → Connect existing Worker → I forgot my admin token** (`/setup/recover-admin`). Same Cloudflare OAuth as install; after authorization the app generates a new token and `PUT`s the Worker `ADMIN_TOKEN` secret, then polls `GET /console/connect` until the new Bearer is accepted. The success screen stays until the user copies (or downloads) the token; that unlocks Go to Mailbox. A short 401 grace window after reissue avoids wiping `~/.relaybase` if an old isolate still rejects the new token. Not console email recovery or Settings reset.
 - **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe).
-- **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). Used when the user prefers not to use the dashboard secret UI.
+- **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). The token is not written to disk.
 - **Settings → Cloudflare** — dashboard-first Enable email API dialog. OAuth is only requested if the user chooses paste & push and there is no install token in memory.
 - **Domains → Refresh from Cloudflare** — if listing zones fails with expired Cloudflare authorization, the dialog opens the same shared Enable email API dialog (`openEnableEmailApiDialog`). After verify, it retries the zone list. Do not add a second OAuth flow on that page.
 - **Settings → Worker** — Check for updates on the card. **Update Worker** goes to `/settings/worker/update` (same OAuth / Manual + CLI UI as Setup, worker-only copy). After OAuth, the app resolves that account’s `workers.dev` URL and **must match** the saved Worker URL (custom domains match via `/console/connect` `accountId`). Mismatch stops before any upload. Then `/settings/worker/progress` uploads the script and calls **`migrate-db`**, not `init-db`.
 - **Manual install** — admin token + terminal command inline on the install page; the same Enable email API dialog follows Worker URL verify.
 - **Sending** — the Worker `EMAIL` send_email binding, attached at deploy. `CF_API_TOKEN` is for domain / inbox routing / DNS API, not for send. `GET /console/connect` reports `emailBindingConfigured`.
-- **Server token source of truth** — the Worker's `CF_API_TOKEN` secret (`cfApiTokenSet` + `cfApiTokenValid`). Device-local storage is only a convenience for the optional re-push path.
+- **Server token source of truth** — the Worker's `CF_API_TOKEN` secret (`cfApiTokenSet` + `cfApiTokenValid`). The desktop does not persist that token.
 - Do **not** ask the user to paste a Workers Scripts / R2 API token. That legacy field is replaced by OAuth. Install does not create KV.
 
 Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected” / install ZIP messaging.

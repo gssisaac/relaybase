@@ -6,25 +6,18 @@ import { probeD1WhenConnectOmits } from "@/lib/dashboard/d1-fallback-probe";
 
 export type DesktopCredentials = {
   accountId: string;
-  /** Cloudflare OAuth access token (memory overlay) or legacy disk install token. */
+  /** Cloudflare OAuth access token (memory overlay). Never persisted. */
   installToken: string;
-  /** Cloudflare token with Email Sending Edit, pushed to Worker as CF_API_TOKEN. */
-  serverToken: string;
-  /** ISO timestamp of last successful Worker `CF_API_TOKEN` secret push. */
-  serverTokenPushedAt: string;
   workerUrl: string;
   adminToken: string;
   workerScriptName: string;
   /** Deployed Worker bundle version (WORKER_VERSION). */
   workerVersion: string;
-  licenseKey: string;
   /** Relaybase console account (console.relaybase.xyz). */
   relaybaseAccountId: string;
   relaybaseEmail: string;
   /** Signed session token, stored locally only. */
   relaybaseSession: string;
-  /** License tier mirrored from the console ("free" | "pro"). */
-  relaybaseTier: string;
   // --- Cloudflare OAuth (install token) ---
   // Short-lived access token; kept in sync with `installToken` so existing
   // wrangler/CF-API call sites work unchanged. Populated from Tauri process
@@ -847,10 +840,8 @@ export async function desktopGetCredentials(): Promise<DesktopCredentials | null
 
 export async function desktopSaveCfCredentials(
   accountId: string,
-  installToken: string,
-  serverToken: string,
 ): Promise<DesktopCredentials> {
-  return invoke("save_cf_credentials", { accountId, installToken, serverToken });
+  return invoke("save_cf_credentials", { accountId });
 }
 
 export async function desktopVerifyCfToken(
@@ -861,13 +852,13 @@ export async function desktopVerifyCfToken(
   return invoke("verify_cf_token", { accountId, apiToken, scope });
 }
 
-/** Push the saved server token to the Worker as `CF_API_TOKEN` via the Cloudflare API. */
-export async function desktopPushServerToken(): Promise<{
+/** Push a one-shot server token to the Worker as `CF_API_TOKEN`. Not persisted. */
+export async function desktopPushServerToken(serverToken: string): Promise<{
   ok: boolean;
   message: string;
   pushedAt: string;
 }> {
-  return invoke("push_server_token");
+  return invoke("push_server_token", { serverToken: serverToken.trim() });
 }
 
 // --- Cloudflare OAuth (install token) ---
@@ -1146,39 +1137,29 @@ export async function desktopUpdateWorker(
   return invoke("update_routing_worker", { workerJs: workerJs ?? null });
 }
 
-export async function desktopSaveLicense(licenseKey: string): Promise<void> {
-  return invoke("save_license_key", { licenseKey });
-}
-
 export async function desktopSaveRelaybaseAccount(input: {
   accountId: string;
   email: string;
   session: string;
-  tier?: string;
 }): Promise<DesktopCredentials> {
   if (isDesktopRuntime()) {
     return invoke("save_relaybase_account", {
       accountId: input.accountId,
       email: input.email,
       session: input.session,
-      tier: input.tier ?? null,
     });
   }
   const existing = await loadLocalCredentialsFile();
   const next: DesktopCredentials = {
     accountId: existing?.accountId ?? "",
     installToken: existing?.installToken ?? "",
-    serverToken: existing?.serverToken ?? "",
-    serverTokenPushedAt: existing?.serverTokenPushedAt ?? "",
     workerUrl: existing?.workerUrl ?? "",
     adminToken: existing?.adminToken ?? "",
     workerScriptName: existing?.workerScriptName ?? "",
     workerVersion: existing?.workerVersion ?? "",
-    licenseKey: existing?.licenseKey ?? "",
     relaybaseAccountId: input.accountId,
     relaybaseEmail: input.email,
     relaybaseSession: input.session,
-    relaybaseTier: input.tier ?? "",
     cfOauthAccessToken: existing?.cfOauthAccessToken ?? "",
     cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
     cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
@@ -1243,7 +1224,6 @@ export async function desktopClearRelaybaseAccount(): Promise<void> {
     relaybaseAccountId: "",
     relaybaseEmail: "",
     relaybaseSession: "",
-    relaybaseTier: "",
   };
   await fetch("/api/local-credentials", {
     method: "PUT",
@@ -1453,19 +1433,15 @@ export async function desktopSaveWorkerConnection(input: {
   const next: DesktopCredentials = {
     accountId: existing?.accountId ?? "",
     installToken: existing?.installToken ?? "",
-    serverToken: existing?.serverToken ?? "",
-    serverTokenPushedAt: existing?.serverTokenPushedAt ?? "",
     workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
     adminToken: input.adminToken.trim(),
     workerScriptName:
       input.workerScriptName?.trim() || existing?.workerScriptName || "",
     workerVersion:
       input.workerVersion?.trim() || existing?.workerVersion || "",
-    licenseKey: existing?.licenseKey ?? "",
     relaybaseAccountId: existing?.relaybaseAccountId ?? "",
     relaybaseEmail: existing?.relaybaseEmail ?? "",
     relaybaseSession: existing?.relaybaseSession ?? "",
-    relaybaseTier: existing?.relaybaseTier ?? "",
     cfOauthAccessToken: existing?.cfOauthAccessToken ?? "",
     cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
     cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
@@ -1491,22 +1467,10 @@ export async function desktopClearCredentials(): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       accountId: "",
-      installToken: "",
-      serverToken: "",
-      serverTokenPushedAt: "",
       workerUrl: "",
       adminToken: "",
       workerScriptName: "",
       workerVersion: "",
-      licenseKey: "",
-      relaybaseAccountId: "",
-      relaybaseEmail: "",
-      relaybaseSession: "",
-      relaybaseTier: "",
-      cfOauthAccessToken: "",
-      cfOauthRefreshToken: "",
-      cfOauthAccessExpiresAt: "",
-      cfOauthAccountId: "",
     }),
   });
 }

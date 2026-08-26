@@ -66,7 +66,6 @@ export function SettingsWorkerPage() {
               value={adminToken}
               onChange={setAdminToken}
               cfAccountId={credentials?.accountId ?? ""}
-              cfServerToken={credentials?.serverToken ?? ""}
             />
 
             <DesktopErrorBanner error={workerError} />

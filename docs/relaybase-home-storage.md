@@ -124,20 +124,16 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 
 | Field | Purpose |
 |-------|---------|
-| `accountId` | Cloudflare account id (resolved from the OAuth flow, or legacy manual entry) |
-| `installToken` | Cloudflare token used by Tauri wrangler (deploy / KV / R2 / `secret put`). Legacy manual tokens still persist here; when a CF OAuth session is active, this is cleared on disk and sourced from the in-memory session instead. |
-| `serverToken` | Cloudflare token with Email Sending Edit, pushed to the Worker as the `CF_API_TOKEN` wrangler secret |
-| `serverTokenPushedAt` | ISO timestamp of the last successful `wrangler secret put CF_API_TOKEN` |
+| `accountId` | Cloudflare account id (resolved from the OAuth flow) |
 | `workerUrl` | Deployed Worker base URL |
 | `adminToken` | Worker admin token (`ADMIN_TOKEN` wrangler secret or D1 recovery override; resettable via recovery) |
 | `workerScriptName` | Wrangler script name |
-| `licenseKey` | License key (legacy; verify now via `console.relaybase.xyz`) |
-| `relaybaseAccountId` | Relaybase console account id (`console.relaybase.xyz`) |
-| `relaybaseEmail` | Relaybase console account email |
-| `relaybaseSession` | Signed console session token (stored locally; sent as `Authorization: Bearer` to console APIs) |
-| `relaybaseTier` | License tier mirrored from the console (`free` / `pro`) |
+| `workerVersion` | Deployed Worker bundle version |
+| `relaybaseAccountId` | Relaybase console account id — written only when non-empty |
+| `relaybaseEmail` | Relaybase console account email — written only when non-empty |
+| `relaybaseSession` | Signed console session token (local only; Bearer to console APIs) — written only when non-empty |
 
-CF OAuth access/refresh tokens are **not** persisted on disk — they live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Only `accountId` is written to `credentials.json`. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**. Summary: public PKCE client on Cloudflare; `console.relaybase.xyz` exposes `/api/v1/oauth/config` and `/oauth/callback` (relays `code` to the desktop only); the desktop exchanges the code with PKCE and holds tokens in memory. No CF user credentials in D1 `kembo-ops`.
+Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. CF OAuth access/refresh tokens live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 
 ### `team-login.json`
 

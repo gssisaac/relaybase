@@ -21,9 +21,7 @@ export type HealthStatus = {
 
 export type ConnectionStatusSnapshot = {
   /** True when the Worker reports a working CF_API_TOKEN secret
-   * (the live probe is the source of truth). Falls back to the local
-   * serverToken + pushedAt signal only when the probe can't run. This is what
-   * the dashboard "Cloudflare" card reflects (domain / routing API, not send). */
+   * (`cfApiTokenSet` + `cfApiTokenValid`). Domain / routing API, not send. */
   cfConnected: boolean;
   /** True when an install token (Workers Scripts Edit) is saved locally.
    * Used only inside Settings; not shown on the dashboard card. */
@@ -53,37 +51,11 @@ export type ConnectionStatusSnapshot = {
   } | null;
 };
 
-/**
- * Server token is "configured" for dashboard purposes when it is saved
- * locally AND has been pushed to the Worker at least once (pushedAt set).
- * The install token alone must not make this true — that was the bug where
- * the dashboard showed "Connected" but sending failed with [10000].
- */
-export function cfServerTokenConfigured(
-  credentials: DesktopCredentials | null | undefined,
-): boolean {
-  return Boolean(
-    credentials?.serverToken?.trim() &&
-      credentials?.serverTokenPushedAt?.trim(),
-  );
-}
-
 /** Install token present (Workers Scripts Edit). Settings-only signal. */
 export function cfInstallTokenPresent(
   credentials: DesktopCredentials | null | undefined,
 ): boolean {
   return Boolean(credentials?.installToken?.trim());
-}
-
-/**
- * @deprecated Use {@link cfServerTokenConfigured}. Kept temporarily for
- * callers being migrated; returns the server-token-configured state so old
- * "cfConnected" semantics now mean "ready to send".
- */
-export function cfConnectedFromCredentials(
-  credentials: DesktopCredentials | null | undefined,
-): boolean {
-  return cfServerTokenConfigured(credentials);
 }
 
 export function workerStatusFromConnect(
@@ -112,13 +84,12 @@ export function workerStatusFromConnect(
 export async function probeConnectionStatus(
   credentials: DesktopCredentials | null | undefined,
 ): Promise<ConnectionStatusSnapshot> {
-  const localCfConnected = cfServerTokenConfigured(credentials);
   const cfInstallTokenPresentVal = cfInstallTokenPresent(credentials);
   const url = credentials?.workerUrl?.trim();
   const token = credentials?.adminToken?.trim();
 
   if (!url || !token) {
-    return { cfConnected: localCfConnected, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
+    return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
   }
 
   try {
@@ -136,11 +107,7 @@ export async function probeConnectionStatus(
         worker.d1InboxIndex = fallback.d1Mail;
       }
     }
-    // The Worker's CF_API_TOKEN secret is the source of truth for whether
-    // sending is configured. Device-local storage is not a management
-    // signal — only a convenience for re-pushing. When the probe succeeds,
-    // use it; fall back to the local signal only when the probe can't run.
-    const cfConnected = worker.ok ? mailApiReady(worker) : localCfConnected;
+    const cfConnected = worker.ok ? mailApiReady(worker) : false;
     return {
       cfConnected,
       cfInstallTokenPresent: cfInstallTokenPresentVal,
@@ -148,7 +115,7 @@ export async function probeConnectionStatus(
     };
   } catch {
     return {
-      cfConnected: localCfConnected,
+      cfConnected: false,
       cfInstallTokenPresent: cfInstallTokenPresentVal,
       worker: {
         ok: false,

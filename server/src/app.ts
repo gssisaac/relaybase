@@ -3,7 +3,12 @@ import type { Env } from "./env";
 import { desktopCors } from "./lib/cors";
 import { probeD1Connection } from "./lib/d1-status";
 import { consoleAudienceGroups } from "./routes/console/audience-groups";
-import { consoleAuthTokens } from "./routes/console/auth-tokens";
+import { consoleOpsLogs } from "./routes/console/ops-logs";
+import { consoleOwnerAuth } from "./routes/console/owner-auth";
+import { consoleRebuildMail } from "./routes/console/rebuild-mail";
+import { consoleRegisterOwner } from "./routes/console/register-owner";
+import { consoleSendLogs } from "./routes/console/send-logs";
+import { consoleStats } from "./routes/console/stats";
 import { consoleBroadcasts } from "./routes/console/broadcasts";
 import { consoleConnect } from "./routes/console/connect";
 import { consoleInitDb } from "./routes/console/init-db";
@@ -17,12 +22,6 @@ import { consoleBranding } from "./routes/console/branding";
 import { consoleKeys } from "./routes/console/keys";
 import { consoleMailboxHealth } from "./routes/console/mailbox-health";
 import { consoleSettings } from "./routes/console/settings";
-import { consoleOpsLogs } from "./routes/console/ops-logs";
-import { consoleRecoverAdmin } from "./routes/console/recover-admin";
-import { consoleRebuildMail } from "./routes/console/rebuild-mail";
-import { consoleRegisterOwner } from "./routes/console/register-owner";
-import { consoleSendLogs } from "./routes/console/send-logs";
-import { consoleStats } from "./routes/console/stats";
 import { mailFavicon } from "./routes/mail/favicon";
 import { mailInbox } from "./routes/mail/inbox";
 import { mailSend } from "./routes/mail/send";
@@ -79,9 +78,8 @@ app.get("/health", async (c) => {
   });
 });
 
-// End-user management (admin-token auth).
+// End-user management (owner-session auth).
 app.route("/console/keys", consoleKeys);
-app.route("/console/auth-tokens", consoleAuthTokens);
 app.route("/console/ops-logs", consoleOpsLogs);
 app.route("/console/send-logs", consoleSendLogs);
 app.route("/console/branding", consoleBranding);
@@ -89,7 +87,8 @@ app.route("/console/connect", consoleConnect);
 app.route("/console/init-db", consoleInitDb);
 app.route("/console/migrate-db", consoleMigrateDb);
 app.route("/console/register-owner", consoleRegisterOwner);
-app.route("/console/recover-admin", consoleRecoverAdmin);
+// Owner login / session / passtoken recovery (public or self-contained auth).
+app.route("/console", consoleOwnerAuth);
 app.route("/console/mailbox", consoleMailbox);
 app.route("/console/domains", consoleDomains);
 app.route("/console/addresses", consoleAddresses);
@@ -100,7 +99,7 @@ app.route("/console/rebuild-mail", consoleRebuildMail);
 app.route("/console/mailbox-health", consoleMailboxHealth);
 app.route("/console/settings", consoleSettings);
 
-// End-user mail operations (admin-token auth).
+// End-user mail operations (owner-session auth).
 app.route("/mail/inbox", mailInbox);
 app.route("/mail/send", mailSend);
 app.route("/mail/sent", mailSent);

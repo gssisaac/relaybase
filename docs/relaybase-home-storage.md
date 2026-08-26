@@ -120,18 +120,20 @@ paths under the new `{scopeId}/`).
 
 ### `credentials.json`
 
+> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. During the migration, `credentials.json` keeps only **non-secret connection info** (`workerUrl`, `accountId`, console account fields). The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** moves to the OS keyring; **access** lives in process memory only.
+
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
 | Field | Purpose |
 |-------|---------|
 | `accountId` | Cloudflare account id (resolved from the OAuth flow) |
 | `workerUrl` | Deployed Worker base URL |
-| `adminToken` | Worker admin token (`ADMIN_TOKEN` wrangler secret or D1 recovery override; resettable via recovery) |
 | `workerScriptName` | Wrangler script name |
 | `workerVersion` | Deployed Worker bundle version |
 | `relaybaseAccountId` | Relaybase console account id — written only when non-empty |
 | `relaybaseEmail` | Relaybase console account email — written only when non-empty |
 | `relaybaseSession` | Signed console session token (local only; Bearer to console APIs) — written only when non-empty |
+| ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext only in the user's download). |
 
 Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. CF OAuth access/refresh tokens live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 

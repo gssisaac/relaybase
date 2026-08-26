@@ -10,6 +10,7 @@ import {
   DesktopProvider,
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
+import { hasOwnerSession } from "@/lib/desktop/owner-session";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 
 function SetupShell({ children }: { children: ReactNode }) {
@@ -28,7 +29,7 @@ function SetupShell({ children }: { children: ReactNode }) {
     if (pathname === "/setup/progress" || pathname === "/setup/recover-admin") {
       return;
     }
-    if (credentials?.workerUrl && credentials.adminToken) {
+    if (credentials?.workerUrl && hasOwnerSession()) {
       router.replace("/");
     }
   }, [ready, credentials, router, pathname]);

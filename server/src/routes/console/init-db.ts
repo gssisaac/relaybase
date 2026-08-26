@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession, requirePepperBootstrap } from "../../lib/auth";
+import { ownerIsConfigured } from "../../../db/app/owner";
+import { createAppDb } from "../../../db/app";
 import {
   anyProbeTableExists,
   applyPendingMigrations,
@@ -16,10 +18,16 @@ const consoleInitDb = new Hono<{ Bindings: Env }>();
  * use POST /console/migrate-db. To wipe, delete the D1s in Cloudflare and
  * create empty ones, then call this again.
  *
- * Requires admin-token auth (ADMIN_TOKEN).
+ * Auth: before an owner exists, the caller proves knowledge of AUTH_PEPPER
+ * (X-Auth-Pepper header, held in desktop memory only during install). Once
+ * an owner exists, a normal owner access token is required.
  */
 consoleInitDb.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  const hasOwner = db ? await ownerIsConfigured(db) : false;
+  const denied = hasOwner
+    ? await requireOwnerSession(c)
+    : await requirePepperBootstrap(c);
   if (denied) return denied;
 
   const probe = await anyProbeTableExists(c.env);

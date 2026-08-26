@@ -1,0 +1,185 @@
+import { Hono } from "hono";
+import type { Env } from "../../env";
+import { createAppDb } from "../../../db/app";
+import { ownerIsConfigured } from "../../../db/app/owner";
+import {
+  loginOwner,
+  logoutOwner,
+  refreshOwner,
+  resetOwner,
+  rotatePasstoken,
+  setupOwner,
+} from "../../lib/owner-auth";
+import {
+  requirePepperBootstrap,
+  requireOwnerSession,
+} from "../../lib/auth";
+
+const consoleOwnerAuth = new Hono<{ Bindings: Env }>();
+
+/**
+ * POST /console/setup-admin
+ *
+ * First-time owner setup. Allowed only when no owner exists yet and the
+ * caller proves knowledge of AUTH_PEPPER (X-Auth-Pepper header, held in
+ * desktop memory only during install). Returns the issued passtoken ONCE.
+ */
+consoleOwnerAuth.post("/setup-admin", async (c) => {
+  const denied = await requirePepperBootstrap(c);
+  if (denied) return denied;
+
+  let body: { username?: string; pepper?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+
+  const result = await setupOwner(c.env, {
+    username: body.username ?? "",
+    pepper: c.req.header("X-Auth-Pepper") ?? "",
+  });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json(
+    {
+      ok: true,
+      username: result.result.username,
+      passtoken: result.result.passtoken,
+      message: "Copy this passtoken now. It will not be shown again.",
+    },
+    201,
+  );
+});
+
+/**
+ * POST /console/login
+ *
+ * Public (rate-limited + lockout). Body: { username, passtoken, label? }.
+ * Returns { accessToken, refreshToken, expiresIn }.
+ */
+consoleOwnerAuth.post("/login", async (c) => {
+  let body: { username?: string; passtoken?: string; label?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const result = await loginOwner(c.env, {
+    username: body.username ?? "",
+    passtoken: body.passtoken ?? "",
+    label: body.label,
+  });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({ ok: true, ...result.result });
+});
+
+/**
+ * POST /console/refresh
+ *
+ * Body: { refreshToken }. Rotates the refresh token; returns a new
+ * access + refresh pair.
+ */
+consoleOwnerAuth.post("/refresh", async (c) => {
+  let body: { refreshToken?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const refreshToken = body.refreshToken?.trim() ?? "";
+  if (!refreshToken) return c.json({ error: "refreshToken is required" }, 400);
+  const result = await refreshOwner(c.env, refreshToken);
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({ ok: true, ...result.result });
+});
+
+/**
+ * POST /console/logout
+ *
+ * Requires an owner session. Body: { refreshToken }.
+ */
+consoleOwnerAuth.post("/logout", async (c) => {
+  const denied = await requireOwnerSession(c);
+  if (denied) return denied;
+  let body: { refreshToken?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const refreshToken = body.refreshToken?.trim() ?? "";
+  if (refreshToken) await logoutOwner(c.env, refreshToken);
+  return c.json({ ok: true });
+});
+
+/**
+ * POST /console/rotate-passtoken
+ *
+ * Requires an owner session. Issues a new passtoken (shown once) and
+ * revokes every existing session.
+ */
+consoleOwnerAuth.post("/rotate-passtoken", async (c) => {
+  const denied = await requireOwnerSession(c);
+  if (denied) return denied;
+  const result = await rotatePasstoken(c.env);
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({
+    ok: true,
+    username: result.username,
+    passtoken: result.passtoken,
+    message: "Copy this passtoken now. It will not be shown again.",
+  });
+});
+
+/**
+ * POST /console/reset-admin
+ *
+ * Forgot-passtoken recovery. Unauthenticated by design; security comes from
+ * the caller presenting a Cloudflare access token whose account matches this
+ * Worker's CF_ACCOUNT_ID. Issues a new passtoken (shown once) and revokes
+ * every existing session.
+ */
+consoleOwnerAuth.post("/reset-admin", async (c) => {
+  let body: { cfAccessToken?: string; username?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const cfAccessToken = body.cfAccessToken?.trim() ?? "";
+  if (!cfAccessToken) return c.json({ error: "cfAccessToken is required" }, 400);
+  const result = await resetOwner(c.env, {
+    cfAccessToken,
+    username: body.username,
+  });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({
+    ok: true,
+    username: result.username,
+    passtoken: result.passtoken,
+    message: "Copy this passtoken now. It will not be shown again.",
+  });
+});
+
+/**
+ * GET /console/auth-status
+ *
+ * Public probe used by the desktop to decide whether to show setup vs login.
+ */
+consoleOwnerAuth.get("/auth-status", async (c) => {
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  const configured = db ? await ownerIsConfigured(db) : false;
+  return c.json({ ok: true, ownerConfigured: configured });
+});
+
+export { consoleOwnerAuth };

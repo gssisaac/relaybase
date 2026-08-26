@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
 import { createAppDb } from "../../../db/app";
 import { createMailDb } from "../../../db/mail";
@@ -36,7 +36,7 @@ const mailInbox = new Hono<{ Bindings: Env }>();
 
 // Consumed by the desktop mail client (poll + ack) for live inbox updates.
 mailInbox.get("/notifications", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();
@@ -51,7 +51,7 @@ mailInbox.get("/notifications", async (c) => {
 });
 
 mailInbox.post("/notifications/ack", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   let body: { domain?: string; ids?: string[] };
@@ -83,7 +83,7 @@ function serializeMessage(message: Awaited<ReturnType<typeof getMailMessage>>) {
 // Per-address total/unread counts across every retained message for a
 // domain — powers the dashboard Accounts list.
 mailInbox.get("/counts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();
@@ -110,7 +110,7 @@ mailInbox.get("/counts", async (c) => {
 // Server-side full-text search (subject/from/to/cc/body) over the D1 FTS
 // index. Results are flat messages (no thread grouping), newest first.
 mailInbox.get("/search", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();
@@ -198,7 +198,7 @@ function rowToInboundMeta(row: {
 
 // Bulk mark-read/unread (desktop client + Cmd+K mail commands).
 mailInbox.post("/read", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   let body: { domain?: string; ids?: string[]; read?: boolean };
@@ -232,7 +232,7 @@ mailInbox.post("/read", async (c) => {
 });
 
 mailInbox.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();
@@ -266,7 +266,7 @@ mailInbox.get("/", async (c) => {
 });
 
 mailInbox.get("/:id/attachments/:attachmentId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();
@@ -294,7 +294,7 @@ mailInbox.get("/:id/attachments/:attachmentId", async (c) => {
 });
 
 mailInbox.get("/routing", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const mailbox = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
@@ -327,7 +327,7 @@ mailInbox.get("/routing", async (c) => {
 });
 
 mailInbox.post("/routing", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   let body: { domain?: string; addresses?: string[] };
@@ -373,7 +373,7 @@ mailInbox.post("/routing", async (c) => {
 });
 
 mailInbox.delete("/routing", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   let body: { domain?: string; addresses?: string[] };
@@ -410,7 +410,7 @@ mailInbox.delete("/routing", async (c) => {
 });
 
 mailInbox.get("/:id", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim().toLowerCase();

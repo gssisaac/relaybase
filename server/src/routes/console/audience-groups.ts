@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { createAppDb } from "../../../db/app";
 import {
   addManualContact,
@@ -21,14 +21,14 @@ import type { AudienceDataSourcePatch } from "../../lib/catalog-types";
 const consoleAudienceGroups = new Hono<{ Bindings: Env }>();
 
 consoleAudienceGroups.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   return c.json({ groups: listGroupSummaries(catalog) });
 });
 
 consoleAudienceGroups.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: {
     name?: string;
@@ -58,7 +58,7 @@ consoleAudienceGroups.post("/", async (c) => {
 });
 
 consoleAudienceGroups.post("/test", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: AudienceDataSourcePatch & { groupId?: string };
   try {
@@ -87,7 +87,7 @@ consoleAudienceGroups.post("/test", async (c) => {
 });
 
 consoleAudienceGroups.get("/:groupId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const detail = getGroupDetail(catalog, c.req.param("groupId"));
@@ -96,7 +96,7 @@ consoleAudienceGroups.get("/:groupId", async (c) => {
 });
 
 consoleAudienceGroups.patch("/:groupId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: Parameters<typeof updateAudienceGroup>[2];
   try {
@@ -118,7 +118,7 @@ consoleAudienceGroups.patch("/:groupId", async (c) => {
 });
 
 consoleAudienceGroups.delete("/:groupId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   try {
     await deleteAudienceGroup(createAppDb(c.env.RELAYBASE_DB), c.req.param("groupId"));
@@ -130,7 +130,7 @@ consoleAudienceGroups.delete("/:groupId", async (c) => {
 });
 
 consoleAudienceGroups.get("/:groupId/contacts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const detail = getGroupDetail(catalog, c.req.param("groupId"));
@@ -139,7 +139,7 @@ consoleAudienceGroups.get("/:groupId/contacts", async (c) => {
 });
 
 consoleAudienceGroups.post("/:groupId/contacts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   let body: { email?: string; name?: string };
   try {
@@ -161,7 +161,7 @@ consoleAudienceGroups.post("/:groupId/contacts", async (c) => {
 });
 
 consoleAudienceGroups.delete("/:groupId/contacts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const contactId = c.req.query("id")?.trim();
   if (!contactId) return c.json({ error: "id is required" }, 400);
@@ -179,7 +179,7 @@ consoleAudienceGroups.delete("/:groupId/contacts", async (c) => {
 });
 
 consoleAudienceGroups.post("/:groupId/sync", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   try {
     const result = await syncAudienceGroup(
@@ -195,7 +195,7 @@ consoleAudienceGroups.post("/:groupId/sync", async (c) => {
 });
 
 consoleAudienceGroups.get("/:groupId/progress", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const progress = getGroupProgress(catalog, c.req.param("groupId"));

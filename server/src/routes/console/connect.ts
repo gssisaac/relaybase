@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { probeD1Connection } from "../../lib/d1-status";
 import { emailBindingConfigured } from "../../lib/email-send";
 import { measureInboundR2Usage } from "../../lib/r2-usage";
@@ -33,11 +33,11 @@ async function checkInboundR2(bucket: R2Bucket): Promise<boolean> {
 }
 
 /**
- * Desktop self-install probe: proves the user controls this Worker via ADMIN_TOKEN.
+ * Desktop self-install probe: proves the user controls this Worker via owner session.
  * Public GET /health is not sufficient (no admin proof).
  */
 consoleConnect.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const r2Configured = await checkInboundR2(c.env.INBOUND);

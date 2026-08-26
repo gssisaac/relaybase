@@ -6,7 +6,7 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | D1 `RELAYBASE_DB` (binding in `server/wrangler.toml`; Drizzle in `server/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `auth_tokens`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (including recovered `admin_token`), `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
+| **Remote** | D1 `RELAYBASE_DB` (binding in `server/wrangler.toml`; Drizzle in `server/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (username + passtoken hash), `owner_sessions`, `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
 | **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `server/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
@@ -66,18 +66,27 @@ Migrations: `server/db/app/migrations/` — applied by the Worker via **`POST /c
 
 This is the **sole source of truth** for product catalog state. No KV binding on the product Worker.
 
-### Admin auth
+### Owner auth
 
-Admin auth is the `ADMIN_TOKEN` wrangler secret, plus an optional D1 `owner_config.admin_token` override written by `/console/recover-admin` when the owner resets a lost token without Wrangler.
+The desktop **god token is retired**. Owner auth is now a **Worker-issued passtoken + session** model — the customer `worker.js` is the authentication authority for its own resources.
+
+- The owner chooses a username; the Worker issues a **random passtoken** (`rb_pass_…`, API-key-style) once. The plaintext is shown **once** and the user downloads it; the Worker stores only `sha256(AUTH_PEPPER || salt || passtoken)`.
+- The app **never writes the passtoken** (or access/refresh tokens) to `~/.relaybase`, cookies, localStorage, or sessionStorage. The user keeps the downloaded file.
+- `POST /console/login` (`{ username, passtoken }`) returns a short-lived **access** token (HMAC-signed with `AUTH_PEPPER`, ~10 min) + an opaque **refresh** token (hash-only in D1 `owner_sessions`). Refresh rotates on each use; reuse revokes the session family.
+- All `/console/*` and `/mail/*` routes require an **access Bearer** (`requireOwnerSession`). `POST /console/init-db` / `migrate-db` accept an `AUTH_PEPPER` bootstrap (`X-Auth-Pepper`) only while no owner is configured yet.
+- Lost passtoken: `POST /console/reset-admin` verifies a Cloudflare access token whose account matches `CF_ACCOUNT_ID`, then re-issues a passtoken once and revokes all sessions. No console email, no central god token.
+- `AUTH_PEPPER` (random, set once at install) replaces the old `ADMIN_TOKEN` wrangler secret. `owner_config.admin_token` and D1 `auth_tokens` (`rb-auth-…`) are dropped (migration `0003_owner_login`; after local `0002_app_settings`).
+
+Mobile passwords (`/mobile/*`) and product API keys (`/v1/*`, `~/.relaybase/{scopeId}/api-keys.json`) are unchanged and separate from the owner passtoken.
 
 ### What stays in R2 (source of truth for mail atoms)
 
 - Mail atoms (`inbound/{domain}/{id}/` and `sent/{domain}/{id}/`: thin `meta.json` + `raw.eml` + attachments) — see **[mailbox-r2.md](./mailbox-r2.md)**.
 - Send logs (`sent/_sendlog/{id}.json`, no `_index.json`) — authoritative for Account Logs and admin send-log reads.
 
-### HTTP surface (Bearer admin token)
+### HTTP surface (Bearer owner access token)
 
-The product Worker resolves Cloudflare credentials and the admin token from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`, `ADMIN_TOKEN`), set via the desktop install flow. The admin Next.js server proxies to the Worker's `/console/*` routes. The Worker exposes:
+The product Worker resolves Cloudflare credentials from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`), set via the desktop install flow. Owner auth uses `AUTH_PEPPER` (passtoken hashing + access-token HMAC) — see **Owner auth** above. The Worker exposes:
 
 | Route | Purpose |
 |-------|---------|
@@ -85,22 +94,25 @@ The product Worker resolves Cloudflare credentials and the admin token from wran
 | `/console/audience-groups` (+ contacts/sync/progress) | Audience |
 | `/console/broadcasts` (+ send/progress) | Broadcasts |
 | `/console/keys` (+ rotate, PATCH active) | API keys |
-| `/console/auth-tokens` (POST issue / GET list / DELETE revoke / POST verify) | Dashboard auth tokens (`rb-auth-…`) — stored hash-only in D1 `auth_tokens`; plaintext returned once at issue |
 | `/console/ops-logs` | Ops event log (D1 `RELAYBASE_LOGS`) |
 | `/console/send-logs` | Send history read from R2 `sent/_sendlog/*` (admin Logs page / Sent tab) |
 | `/console/rebuild-mail` | One-time backfill: thin inbound metas, materialize sent folders, fill `mailbox_messages` + `mailbox_fts`, delete legacy array JSON keys |
 | `/console/mailbox-health` | Per-domain last inbound/sent freshness + stale flag (D1 `RELAYBASE_MAIL`) |
 | `/console/settings` (GET / PUT) | Product options in D1 `app_settings` (inbound retain-per-domain; `null` = unlimited) |
 | `/console/branding` (GET status / PUT merge / POST apply DNS) | Per-domain DMARC config in D1 `domain_branding` + DMARC TXT via the Worker's Cloudflare client |
-| `/console/connect` | Desktop self-install probe (admin-token proof) |
-| `/console/register-owner` | Record the console account that owns this Worker (admin token; for ADMIN_TOKEN recovery) |
-| `/console/recover-admin` | Reset ADMIN_TOKEN via a one-time console recovery token (unauth by design; verifies with `console.relaybase.xyz`) |
+| `/console/connect` | Desktop self-install probe (owner access token) |
+| `/console/register-owner` | Record the console account that owns this Worker (owner session) |
+| `/console/setup-admin` | First-time owner setup: issue passtoken once (AUTH_PEPPER bootstrap) |
+| `/console/login` / `/console/refresh` / `/console/logout` | Owner session create / rotate / revoke |
+| `/console/rotate-passtoken` | Re-issue passtoken once (owner session); revokes all sessions |
+| `/console/reset-admin` | Re-issue passtoken once via CF OAuth account proof (forgot passtoken) |
+| `/console/auth-status` | Public probe: is an owner configured yet? |
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
-| `/console/addresses/mobile-password` | Per-account mobile password (admin token) |
-| `/mail/inbox`, `/mail/send`, `/mail/favicon`, … | Mail I/O (desktop / admin token). Favicon proxy: **[sender-favicon-cache.md](./sender-favicon-cache.md)** |
+| `/console/addresses/mobile-password` | Per-account mobile password (owner session) |
+| `/mail/inbox`, `/mail/send`, `/mail/favicon`, … | Mail I/O (desktop / owner access token). Favicon proxy: **[sender-favicon-cache.md](./sender-favicon-cache.md)** |
 | `/mobile/*` | Flutter companion + desktop team-user login (mobile-password auth; single-account scope) — **[mobile-email-companion.md](./mobile-email-companion.md)** |
 
-Account / license / billing / recovery-token issuance are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`, `/api/v1/recovery/verify-admin-token`), not on the product Worker.
+Account / license / billing are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`), not on the product Worker. The console no longer holds or verifies an admin token.
 
 Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` + `runInboundIndexCron` in `server/src/index.ts` (index reconcile + optional inbound prune; single catalog, no per-user fan-out).
 
@@ -134,7 +146,7 @@ Full design (schema, query safety, sync model, backfill, freshness): **[mailbox-
 
 - Cloudflare KV binding on the product Worker for app data
 - Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in Kembo ops — the Worker reads them from wrangler secrets; D1 `kembo-ops` `product_settings` holds only `workerUrl` + `adminToken` (operator config)
-- End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `kembo-ops` — tokens live in the product Worker's D1 `auth_tokens` (hash-only); plaintext API keys live only in `~/.relaybase/api-keys.json`
+- End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `kembo-ops` — owner sessions live in the product Worker's D1 `owner_sessions` (hash-only); plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`
 - Global mobile password (no per-account row) — use the per-account row in D1 `mobile_passwords` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
 - Hosted OpenNext `app.relaybase.xyz` as a product API (removed)
@@ -215,10 +227,10 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Mail list / search / counts | D1 `RELAYBASE_MAIL` (`mailbox_messages`, `mailbox_fts`) | `mail/desktop/inbox.json` |
 | API key existence | D1 `RELAYBASE_DB` (`api_keys`) | `cache/dashboard/api-keys-*` |
 | API key plaintext | `~/.relaybase/api-keys.json` | — |
-| Dashboard auth tokens | D1 `RELAYBASE_DB` (`auth_tokens`, hash-only) | — |
+| Owner sessions | D1 `RELAYBASE_DB` (`owner_sessions`, refresh hash-only) | — |
 | Webhooks | D1 `RELAYBASE_DB` (`webhooks`, `webhook_secrets`, `webhook_fails`) | — |
 | Mobile passwords | D1 `RELAYBASE_DB` (`mobile_passwords`) | — |
-| Owner config / recovered admin token | D1 `RELAYBASE_DB` (`owner_config`) | — |
+| Owner config / passtoken hash | D1 `RELAYBASE_DB` (`owner_config`) | — |
 | Product options (inbound retain) | D1 `RELAYBASE_DB` (`app_settings`) | — |
 | Pending inbound events | D1 `RELAYBASE_DB` (`inbound_events`, `expires_at`) | — |
 | Waitlist | D1 `kembo-ops` (`waitlist`) | — |

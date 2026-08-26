@@ -53,7 +53,7 @@ async function loadLocalCredentials(): Promise<DesktopCredentials | null> {
     const res = await fetch("/api/local-credentials", { cache: "no-store" });
     if (!res.ok) return null;
     const data = (await res.json()) as DesktopCredentials | null;
-    if (!data?.workerUrl || !data?.adminToken) return null;
+    if (!data?.workerUrl) return null;
     return data;
   } catch {
     return null;

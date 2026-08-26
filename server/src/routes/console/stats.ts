@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireAdmin } from "../../lib/auth";
+import { requireOwnerSession } from "../../lib/auth";
 import { readAudienceCatalog } from "../../lib/catalog-audience";
 import { readBroadcasts } from "../../lib/catalog-broadcasts";
 import { readMailbox } from "../../lib/catalog-store";
@@ -67,7 +67,7 @@ function sumBuckets(buckets: StatsBucket[]): number {
 }
 
 consoleStats.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const range = parseStatsRange(c.req.query("range"));
@@ -158,7 +158,7 @@ consoleStats.get("/", async (c) => {
 });
 
 consoleStats.get("/account-stats", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const email = c.req.query("email")?.trim().toLowerCase();
@@ -229,7 +229,7 @@ consoleStats.get("/account-stats", async (c) => {
 });
 
 consoleStats.get("/account-logs", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireOwnerSession(c);
   if (denied) return denied;
 
   const email = c.req.query("email")?.trim().toLowerCase();

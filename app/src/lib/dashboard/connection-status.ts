@@ -3,6 +3,7 @@ import {
   desktopVerifyWorkerConnection,
   mailApiReady,
 } from "@/lib/desktop/bridge";
+import { ensureAccessToken } from "@/lib/desktop/owner-session";
 import {
   D1_APP_DEFAULT,
   D1_MAIL_DEFAULT,
@@ -87,20 +88,24 @@ export async function probeConnectionStatus(
   const cfInstallTokenPresentVal = cfInstallTokenPresent(credentials);
   const url = credentials?.workerUrl?.trim();
   const token = credentials?.adminToken?.trim();
+  const access = await ensureAccessToken();
 
-  if (!url || !token) {
+  if (!url) {
     return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
   }
 
   try {
-    const result = await desktopVerifyWorkerConnection(url, token);
+    if (!access && !token) {
+      return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
+    }
+    const result = await desktopVerifyWorkerConnection(url, access || token || "");
     const worker = workerStatusFromConnect(result);
     if (
       worker.ok &&
       !worker.d1Logs.configured &&
       !worker.d1Mail.configured
     ) {
-      const fallback = await probeD1WhenConnectOmits(url.replace(/\/$/, ""), token);
+      const fallback = await probeD1WhenConnectOmits(url.replace(/\/$/, ""), access || token || "");
       if (fallback.d1Logs.configured || fallback.d1Mail.configured) {
         worker.d1Logs = fallback.d1Logs;
         worker.d1Mail = fallback.d1Mail;

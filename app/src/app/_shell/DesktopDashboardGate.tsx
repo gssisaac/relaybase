@@ -17,6 +17,7 @@ import {
   DesktopProvider,
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
+import { hasOwnerSession } from "@/lib/desktop/owner-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -30,16 +31,12 @@ const LOCAL_OPERATOR_USER_ID = "desktop";
 
 function setupPathFor(credentials: {
   workerUrl?: string;
-  adminToken?: string;
   relaybaseSession?: string;
 } | null): string | null {
-  // Install-first: a Relaybase console account is optional and can be added
-  // later from Settings (for license + ADMIN_TOKEN recovery). The only setup
-  // gate is a connected Worker. New users land on the /setup choice screen
-  // (Install on my Cloudflare / I was invited) rather than the login page.
-  if (!credentials?.workerUrl || !credentials.adminToken) {
-    return "/setup";
-  }
+  // Install-first: a Relaybase console account is optional. The gate is a
+  // Worker URL plus an in-memory owner session (passtoken login).
+  if (!credentials?.workerUrl) return "/setup";
+  if (!hasOwnerSession()) return "/setup/connect";
   return null;
 }
 
@@ -165,9 +162,7 @@ function OperatorInner({ children }: { children: ReactNode }) {
     );
   }
 
-  const readyToUse = Boolean(
-    credentials?.workerUrl && credentials.adminToken,
-  );
+  const readyToUse = Boolean(credentials?.workerUrl && hasOwnerSession());
 
   if (!readyToUse) {
     return (

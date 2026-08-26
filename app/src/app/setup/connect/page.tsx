@@ -9,20 +9,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   desktopRegisterWorkerWithConsole,
-  desktopSaveWorkerConnection,
-  desktopVerifyWorkerConnection,
   explainDesktopError,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import {
+  ownerConnectProbe,
+  ownerLogin,
+} from "@/lib/desktop/owner-session";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
+
+function applyWorkerUrl(url: string) {
+  if (typeof window === "undefined") return;
+  const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+  w.__RELAYBASE_WORKER_URL__ = url.replace(/\/$/, "");
+}
 
 export default function SetupConnectPage() {
   const router = useRouter();
-  const { refresh } = useDesktop();
-  const [workerUrl, setWorkerUrl] = useState("");
-  const [adminToken, setAdminToken] = useState("");
+  const { credentials, setCredentials } = useDesktop();
+  const [workerUrl, setWorkerUrl] = useState(credentials?.workerUrl ?? "");
+  const [username, setUsername] = useState("");
+  const [passtoken, setPasstoken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
 
@@ -31,19 +40,29 @@ export default function SetupConnectPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await desktopVerifyWorkerConnection(
-        workerUrl.trim(),
-        adminToken.trim(),
-      );
-      await desktopSaveWorkerConnection({
-        workerUrl: result.workerUrl,
-        adminToken: adminToken.trim(),
-        workerScriptName: result.workerScriptName,
+      const url = workerUrl.trim().replace(/\/$/, "");
+      applyWorkerUrl(url);
+      await ownerLogin({ username, passtoken, label: "desktop" });
+      const result = await ownerConnectProbe();
+      setCredentials({
+        accountId: result.accountId || credentials?.accountId || "",
+        installToken: credentials?.installToken ?? "",
+        workerUrl: url,
+        adminToken: "",
+        workerScriptName:
+          result.workerScriptName || credentials?.workerScriptName || "",
+        workerVersion: credentials?.workerVersion ?? "",
+        relaybaseAccountId: credentials?.relaybaseAccountId ?? "",
+        relaybaseEmail: credentials?.relaybaseEmail ?? "",
+        relaybaseSession: credentials?.relaybaseSession ?? "",
+        cfOauthAccessToken: credentials?.cfOauthAccessToken ?? "",
+        cfOauthRefreshToken: credentials?.cfOauthRefreshToken ?? "",
+        cfOauthAccessExpiresAt: credentials?.cfOauthAccessExpiresAt ?? "",
+        cfOauthAccountId: credentials?.cfOauthAccountId ?? "",
       });
-      void desktopRegisterWorkerWithConsole(result.workerUrl).catch(() => {
+      void desktopRegisterWorkerWithConsole(url).catch(() => {
         /* best-effort */
       });
-      await refresh();
       router.replace("/");
     } catch (err) {
       setError(explainDesktopError(err, "Could not verify Worker"));
@@ -57,11 +76,11 @@ export default function SetupConnectPage() {
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">
-            Connect existing Worker
+            Owner login
           </h1>
           <p className="text-xs text-muted-foreground">
-            Already installed Relaybase on Cloudflare? Paste your Worker URL
-            and admin token to continue on this Mac.
+            Sign in with the username and passtoken issued by this Worker.
+            The passtoken is not saved on this Mac.
           </p>
         </div>
 
@@ -70,7 +89,7 @@ export default function SetupConnectPage() {
             <Label htmlFor="worker-url">Worker URL</Label>
             <Input
               id="worker-url"
-              autoFocus
+              autoFocus={!workerUrl}
               value={workerUrl}
               onChange={(e) => setWorkerUrl(e.target.value)}
               placeholder="https://relaybase-api.<subdomain>.workers.dev"
@@ -80,15 +99,27 @@ export default function SetupConnectPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="admin-token">Admin token</Label>
+            <Label htmlFor="owner-username">Username</Label>
             <Input
-              id="admin-token"
+              id="owner-username"
+              autoFocus={Boolean(workerUrl)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="owner"
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="owner-passtoken">Passtoken</Label>
+            <Input
+              id="owner-passtoken"
               type="password"
-              value={adminToken}
-              onChange={(e) => setAdminToken(e.target.value)}
-              placeholder="rb_admin_…"
+              value={passtoken}
+              onChange={(e) => setPasstoken(e.target.value)}
+              placeholder="rb_pass_…"
               className="font-mono text-xs"
-              autoComplete="off"
+              autoComplete="current-password"
               spellCheck={false}
               required
             />
@@ -97,17 +128,22 @@ export default function SetupConnectPage() {
               className="text-left text-xs text-muted-foreground hover:underline"
               onClick={() => router.push("/setup/recover-admin")}
             >
-              I forgot my admin token
+              I forgot my passtoken
             </button>
           </div>
           <DesktopErrorBanner error={error} />
           <Button
             type="submit"
             className="w-full"
-            disabled={busy || !workerUrl.trim() || !adminToken.trim()}
+            disabled={
+              busy ||
+              !workerUrl.trim() ||
+              !username.trim() ||
+              !passtoken.trim()
+            }
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            Verify &amp; continue
+            Sign in
           </Button>
         </form>
       </div>

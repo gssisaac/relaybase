@@ -4,7 +4,7 @@ import type { DesktopCredentials } from "@/lib/desktop/bridge";
 
 /**
  * Call the Worker installed in the user's Cloudflare account.
- * Admin routes use the admin token; domain API can use issued keys later.
+ * Owner routes use the in-memory access token (passtoken is never sent again).
  */
 export async function workerFetch(
   creds: DesktopCredentials,
@@ -15,12 +15,26 @@ export async function workerFetch(
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
   const headers = new Headers(init?.headers);
   if (!headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${creds.adminToken}`);
+    const { ensureAccessToken } = await import("@/lib/desktop/owner-session");
+    const access = await ensureAccessToken();
+    if (access) {
+      headers.set("Authorization", `Bearer ${access}`);
+    }
   }
   if (init?.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  return fetch(url, { ...init, headers });
+  const res = await fetch(url, { ...init, headers });
+  if (res.status !== 401 || headers.has("X-Relaybase-Retried")) {
+    return res;
+  }
+  const { ownerRefresh } = await import("@/lib/desktop/owner-session");
+  const next = await ownerRefresh();
+  if (!next?.accessToken) return res;
+  const retryHeaders = new Headers(headers);
+  retryHeaders.set("Authorization", `Bearer ${next.accessToken}`);
+  retryHeaders.set("X-Relaybase-Retried", "1");
+  return fetch(url, { ...init, headers: retryHeaders });
 }
 
 export async function workerAdminJson<T>(

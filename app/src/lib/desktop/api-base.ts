@@ -59,13 +59,12 @@ function readDesktopCredentialsFromWindow(): DesktopCredentials | null {
     __RELAYBASE_ADMIN_TOKEN__?: string;
   };
   const workerUrl = w.__RELAYBASE_WORKER_URL__?.trim().replace(/\/$/, "") ?? "";
-  const adminToken = w.__RELAYBASE_ADMIN_TOKEN__?.trim() ?? "";
-  if (!workerUrl || !adminToken) return null;
+  if (!workerUrl) return null;
   return {
     accountId: "",
     installToken: "",
     workerUrl,
-    adminToken,
+    adminToken: "",
     workerScriptName: "",
     workerVersion: "",
     relaybaseAccountId: "",

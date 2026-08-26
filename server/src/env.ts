@@ -16,7 +16,8 @@ export type Env = {
   CF_API_TOKEN?: string;
   /** Outbound Email Sending binding (`[[send_email]] name = "EMAIL"`). */
   EMAIL?: SendEmailBinding;
-  ADMIN_TOKEN?: string;
+  /** Random pepper for owner passtoken + access-token HMAC. Set once at install. */
+  AUTH_PEPPER?: string;
   WORKER_SCRIPT_NAME: string;
   INBOUND_BUCKET_NAME: string;
   /** Set in customer-install wrangler.toml [vars] at pack time. */

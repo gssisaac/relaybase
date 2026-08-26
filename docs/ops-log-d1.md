@@ -51,7 +51,7 @@ D1 `ops_log` is an **additional** event log that covers compose, API, broadcast,
 CREATE TABLE IF NOT EXISTS ops_log (
   id TEXT PRIMARY KEY,
   at TEXT NOT NULL,
-  kind TEXT NOT NULL,          -- send | bounce | api_error
+  kind TEXT NOT NULL,          -- send | bounce | api_error | inbound
   ok INTEGER NOT NULL,
   status INTEGER,
   source TEXT,                 -- compose | api | broadcast | inbound
@@ -82,7 +82,7 @@ Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations
 | Compose | `POST /mail/send` | `send`, `api_error` | Validation errors, all-bounce, CF exception, success, partial bounce. Also returns a `sent` object so the client upserts Sent. |
 | API | `POST /v1/send` | `send`, `api_error` | Dual-write: R2 `sent/_sendlog/*` + D1 `ops_log` (+ mailbox `sent/{domain}/{id}/` + D1 `mailbox_messages` `kind=sent` on success). Partial bounce keeps send-log `ok: true` but D1 `ok: false` so the dashboard catches it. |
 | Broadcast | `catalog-broadcasts.ts` | `send` | Dual-write per recipient (KV + D1). |
-| Inbound | `server/src/inbound.ts` | `bounce` | Detected via `bounce-detect.ts`; logged with `Final-Recipient`, `Diagnostic-Code`, `Status` when present. |
+| Inbound | `server/src/inbound.ts` / `email()` | `inbound`, `bounce` | Every `email()` store success or throw is `kind=inbound` (`created` in `meta_json`). Detected DSN bounces also write `kind=bounce` via `bounce-detect.ts`. Dashboard Log shows receive as empty when Routing never invokes `email()`. |
 
 `recordOpsLog` soft-fails (returns `null`, logs to `console.error`) when `RELAYBASE_LOGS` is missing — customer installs without the binding keep working.
 

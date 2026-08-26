@@ -31,6 +31,21 @@ export async function handleInboundEmail(
     createMailDb(env.RELAYBASE_MAIL),
   );
 
+  await recordOpsLog(env.RELAYBASE_LOGS, {
+    kind: "inbound",
+    ok: true,
+    source: "inbound",
+    domain: result.record.domain,
+    fromAddr: message.from,
+    toAddr: message.to,
+    subject: result.record.subject,
+    messageId: result.record.messageId,
+    metaJson: JSON.stringify({
+      inboundId: result.record.id,
+      created: result.created,
+    }),
+  });
+
   if (isBounceMessage(raw, message.from)) {
     const diagnostic = parseBounceDiagnostic(raw);
     const error = buildBouncePreview(diagnostic, "Bounce: delivery failed");

@@ -17,6 +17,59 @@ export type InboundRoutingResult = {
   }>;
 };
 
+export type ListedInboundRoutingRule = {
+  ruleId: string;
+  enabled: boolean;
+  address: string | null;
+  matcherType: string;
+  action: string;
+  worker: string | null;
+};
+
+export type ListedInboundRouting = {
+  domain: string;
+  zoneId: string;
+  routingEnabled: boolean;
+  rules: ListedInboundRoutingRule[];
+};
+
+function describeRule(rule: CfEmailRoutingRule): ListedInboundRoutingRule {
+  const literal = rule.matchers.find(
+    (matcher) => matcher.type === "literal" && matcher.field === "to",
+  );
+  const action = rule.actions[0];
+  const actionType = action?.type ?? "unknown";
+  return {
+    ruleId: rule.id,
+    enabled: rule.enabled,
+    address: literal?.value?.trim().toLowerCase() ?? null,
+    matcherType: literal ? "literal" : (rule.matchers[0]?.type ?? "unknown"),
+    action: actionType,
+    worker:
+      actionType === "worker" && Array.isArray(action?.value)
+        ? action.value[0] ?? null
+        : null,
+  };
+}
+
+/** Read-only snapshot of Email Routing enablement + rules for one zone. */
+export async function listInboundRouting(
+  cf: CloudflareClient,
+  domain: string,
+): Promise<ListedInboundRouting> {
+  const zoneId = await resolveZoneId(cf, domain);
+  const [routing, existing] = await Promise.all([
+    cf.getEmailRoutingSettings(zoneId),
+    cf.listEmailRoutingRules(zoneId),
+  ]);
+  return {
+    domain,
+    zoneId,
+    routingEnabled: routing.enabled,
+    rules: existing.map(describeRule),
+  };
+}
+
 type CfEmailRoutingRule = {
   id: string;
   enabled: boolean;
@@ -177,6 +230,8 @@ export async function ensureInboundRouting(
 
     const current = existing.find((rule) => matchesAddress(rule, address));
     if (current) {
+      // CF can leave worker rules `enabled: false` after a script upload;
+      // always turn them back on or inbound never reaches email().
       const updated = await cf.updateEmailRoutingRule(zoneId, current.id, {
         enabled: true,
         actions: [action],

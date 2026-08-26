@@ -29,7 +29,7 @@ type StatusFilter = "all" | "failed" | "success";
 type OpsLogEntry = {
   id: string;
   at: string;
-  kind: "send" | "bounce" | "api_error";
+  kind: "send" | "bounce" | "api_error" | "inbound";
   ok: boolean;
   status: number | null;
   source: "compose" | "api" | "broadcast" | "inbound";
@@ -94,6 +94,8 @@ function kindLabel(kind: OpsLogEntry["kind"]) {
       return "Bounce";
     case "api_error":
       return "API Error";
+    case "inbound":
+      return "Receive";
     default:
       return kind;
   }
@@ -217,7 +219,7 @@ export function LogsView() {
             Logs
           </h1>
           <p className="text-sm text-muted-foreground">
-            Send, bounce, and API events across all accounts
+            Send, receive, bounce, and API events across all accounts
           </p>
         </div>
       </DesktopTitleBar>

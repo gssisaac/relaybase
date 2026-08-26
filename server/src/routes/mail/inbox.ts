@@ -6,6 +6,7 @@ import { createAppDb } from "../../../db/app";
 import { createMailDb } from "../../../db/mail";
 import {
   ensureInboundRouting,
+  listInboundRouting,
   removeInboundWorkerRouting,
   type InboundRoutingResult,
   type RemoveInboundRoutingResult,
@@ -290,6 +291,39 @@ mailInbox.get("/:id/attachments/:attachmentId", async (c) => {
       "Cache-Control": "private, max-age=3600",
     },
   });
+});
+
+mailInbox.get("/routing", async (c) => {
+  const denied = await requireAdmin(c);
+  if (denied) return denied;
+
+  const mailbox = await readMailbox(createAppDb(c.env.RELAYBASE_DB));
+  const requested = c.req.query("domain")?.trim().toLowerCase();
+  const domains = requested
+    ? [requested]
+    : mailbox.domains.map((domain) => domain.trim().toLowerCase()).filter(Boolean);
+
+  try {
+    const cf = await createCloudflareClient(c.env);
+    const results = await Promise.all(
+      domains.map(async (domain) => {
+        try {
+          return await listInboundRouting(cf, domain);
+        } catch (error) {
+          return {
+            domain,
+            error:
+              error instanceof Error ? error.message : "Failed to list routing",
+          };
+        }
+      }),
+    );
+    return c.json({ domains: results });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to list routing";
+    return c.json({ error: message }, 502);
+  }
 });
 
 mailInbox.post("/routing", async (c) => {

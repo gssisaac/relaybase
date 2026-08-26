@@ -4,6 +4,7 @@ import { handleInboundEmail } from "./inbound";
 import { runAudienceCron } from "./lib/catalog-audience";
 import { runInboundIndexCron } from "./lib/inbound-index-cron";
 import { enqueueInboundEvent } from "./lib/inbound-events";
+import { recordOpsLog } from "./lib/ops-logs";
 import { deliverWebhooks } from "./lib/webhooks";
 import { createAppDb, type AppDb } from "../db/app";
 
@@ -45,6 +46,21 @@ export default {
       }
     } catch (error) {
       console.error("Failed to store inbound email", error);
+      const to = message.to;
+      const domain = to.includes("@")
+        ? to.slice(to.lastIndexOf("@") + 1).trim().toLowerCase()
+        : null;
+      await recordOpsLog(env.RELAYBASE_LOGS, {
+        kind: "inbound",
+        ok: false,
+        source: "inbound",
+        domain,
+        fromAddr: message.from,
+        toAddr: to,
+        subject: message.headers.get("subject")?.trim() || null,
+        messageId: message.headers.get("message-id")?.trim() || null,
+        error: error instanceof Error ? error.message : "Failed to store inbound email",
+      });
       throw error;
     }
   },

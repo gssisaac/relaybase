@@ -56,6 +56,8 @@ In `storeInboundEmail`:
 4. If new → write meta/raw, write the Message-ID index, return `created: true`.
 5. `email()` handler must **skip** webhook / inbox-notification enqueue when `created === false`.
 
+After a Worker script upload, Cloudflare may leave Email Routing literal-To rules pointing at the Worker but **`enabled: false`**. Catch-all drop then silently eats mail (`email()` never runs). `ensureInboundRouting` always writes `enabled: true`. `GET /mail/inbox/routing` lists live rules (Worker CF token). Every `email()` store success/throw is `ops_log` `kind=inbound` so Dashboard Log can tell Routing miss (no row) from ingest throw (`ok: false`).
+
 `listInboundEmails` also collapses historical duplicates that share a Message-ID (keeps newest).
 
 ### Client safety net

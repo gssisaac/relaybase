@@ -8,8 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  desktopOwnerLogin,
   desktopRegisterWorkerWithConsole,
+  desktopSaveWorkerConnection,
   explainDesktopError,
+  isDesktopRuntime,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
@@ -28,7 +31,7 @@ function applyWorkerUrl(url: string) {
 
 export default function SetupConnectPage() {
   const router = useRouter();
-  const { credentials, setCredentials } = useDesktop();
+  const { credentials, setCredentials, refresh } = useDesktop();
   const [workerUrl, setWorkerUrl] = useState(credentials?.workerUrl ?? "");
   const [username, setUsername] = useState("");
   const [passtoken, setPasstoken] = useState("");
@@ -41,31 +44,45 @@ export default function SetupConnectPage() {
     setError(null);
     try {
       const url = workerUrl.trim().replace(/\/$/, "");
-      applyWorkerUrl(url);
-      await ownerLogin({ username, passtoken, label: "desktop" });
-      const result = await ownerConnectProbe();
-      setCredentials({
-        accountId: result.accountId || credentials?.accountId || "",
-        installToken: credentials?.installToken ?? "",
-        workerUrl: url,
-        adminToken: "",
-        workerScriptName:
-          result.workerScriptName || credentials?.workerScriptName || "",
-        workerVersion: credentials?.workerVersion ?? "",
-        relaybaseAccountId: credentials?.relaybaseAccountId ?? "",
-        relaybaseEmail: credentials?.relaybaseEmail ?? "",
-        relaybaseSession: credentials?.relaybaseSession ?? "",
-        cfOauthAccessToken: credentials?.cfOauthAccessToken ?? "",
-        cfOauthRefreshToken: credentials?.cfOauthRefreshToken ?? "",
-        cfOauthAccessExpiresAt: credentials?.cfOauthAccessExpiresAt ?? "",
-        cfOauthAccountId: credentials?.cfOauthAccountId ?? "",
-      });
+      if (isDesktopRuntime()) {
+        await desktopOwnerLogin({
+          workerUrl: url,
+          username: username.trim(),
+          passtoken: passtoken.trim(),
+        });
+        await desktopSaveWorkerConnection({
+          workerUrl: url,
+          adminToken: "",
+          workerScriptName: "relaybase-api",
+        });
+        await refresh();
+      } else {
+        applyWorkerUrl(url);
+        await ownerLogin({ username, passtoken, label: "desktop" });
+        const result = await ownerConnectProbe();
+        setCredentials({
+          accountId: result.accountId || credentials?.accountId || "",
+          installToken: credentials?.installToken ?? "",
+          workerUrl: url,
+          adminToken: "",
+          workerScriptName:
+            result.workerScriptName || credentials?.workerScriptName || "",
+          workerVersion: credentials?.workerVersion ?? "",
+          relaybaseAccountId: credentials?.relaybaseAccountId ?? "",
+          relaybaseEmail: credentials?.relaybaseEmail ?? "",
+          relaybaseSession: credentials?.relaybaseSession ?? "",
+          cfOauthAccessToken: credentials?.cfOauthAccessToken ?? "",
+          cfOauthRefreshToken: credentials?.cfOauthRefreshToken ?? "",
+          cfOauthAccessExpiresAt: credentials?.cfOauthAccessExpiresAt ?? "",
+          cfOauthAccountId: credentials?.cfOauthAccountId ?? "",
+        });
+      }
       void desktopRegisterWorkerWithConsole(url).catch(() => {
         /* best-effort */
       });
       router.replace("/");
     } catch (err) {
-      setError(explainDesktopError(err, "Could not verify Worker"));
+      setError(explainDesktopError(err, "Could not sign in"));
     } finally {
       setBusy(false);
     }
@@ -108,6 +125,7 @@ export default function SetupConnectPage() {
               placeholder="owner"
               autoComplete="username"
               required
+              minLength={3}
             />
           </div>
           <div className="space-y-1.5">
@@ -138,7 +156,7 @@ export default function SetupConnectPage() {
             disabled={
               busy ||
               !workerUrl.trim() ||
-              !username.trim() ||
+              username.trim().length < 3 ||
               !passtoken.trim()
             }
           >

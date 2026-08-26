@@ -114,6 +114,11 @@ const D1_DATABASES: &[(&str, &str)] = &[
 pub struct AutoInstallResult {
     pub worker_url: String,
     pub worker_script_name: String,
+    /// AUTH_PEPPER just set on the Worker. Held in JS memory only during
+    /// setup-admin; never written to ~/.relaybase.
+    pub auth_pepper: String,
+    /// Always empty — kept so older JS still deserializes.
+    #[serde(default)]
     pub admin_token: String,
     pub r2_bucket: String,
     pub account_id: String,
@@ -203,7 +208,6 @@ pub async fn preview_worker_update_target(
     account_id: &str,
     expected_worker_url: &str,
     script_name: &str,
-    admin_token: &str,
 ) -> Result<WorkerUpdateTarget, String> {
     let expected = expected_worker_url.trim().trim_end_matches('/').to_string();
     if expected.is_empty() {
@@ -222,7 +226,8 @@ pub async fn preview_worker_update_target(
         api_token: api_token.trim().to_string(),
     };
     let oauth_worker_url = account_workers_dev_url(&client, script).await?;
-    let connected_account_id = peek_worker_account_id(&expected, admin_token)
+    let access = crate::owner_session::current_access_token().unwrap_or_default();
+    let connected_account_id = peek_worker_account_id(&expected, &access)
         .await
         .unwrap_or_default();
     let url_match = worker_urls_match(&expected, &oauth_worker_url);
@@ -810,18 +815,13 @@ async fn wait_for_worker_ready(app: &AppHandle, worker_url: &str) -> Result<(), 
     Ok(())
 }
 
-async fn fetch_worker_version(worker_url: &str, admin_token: &str) -> Option<String> {
+async fn fetch_worker_version(worker_url: &str) -> Option<String> {
     let base = worker_url.trim().trim_end_matches('/');
-    if base.is_empty() || admin_token.trim().is_empty() {
+    if base.is_empty() {
         return None;
     }
     let client = reqwest::Client::new();
-    let res = client
-        .get(format!("{base}/console/connect"))
-        .header("Authorization", format!("Bearer {}", admin_token.trim()))
-        .send()
-        .await
-        .ok()?;
+    let res = client.get(format!("{base}/health")).send().await.ok()?;
     if !res.status().is_success() {
         return None;
     }
@@ -834,7 +834,7 @@ async fn fetch_worker_version(worker_url: &str, admin_token: &str) -> Option<Str
         .filter(|s| !s.is_empty() && s != "unknown")
 }
 
-fn generate_admin_token() -> String {
+fn generate_auth_pepper() -> String {
     // 32 hex chars = 128 bits of entropy (two uuid v4s concatenated).
     let a = uuid::Uuid::new_v4().simple().to_string();
     let b = uuid::Uuid::new_v4().simple().to_string();
@@ -1080,10 +1080,10 @@ pub async fn probe_install_resources(
 
 #[derive(Default)]
 struct InstallRunOptions {
-    /// When set, reuse this admin token instead of generating a new one (Worker update).
-    existing_admin_token: Option<String>,
-    /// When true, skip ADMIN_TOKEN secret put (update keeps existing secret).
-    skip_admin_secret: bool,
+    /// When set, reuse this AUTH_PEPPER instead of generating a new one (Worker update).
+    existing_auth_pepper: Option<String>,
+    /// When true, skip AUTH_PEPPER secret put (update keeps existing secret).
+    skip_auth_pepper: bool,
     /// Worker script only — look up existing R2/D1, never create or wipe.
     worker_only: bool,
 }
@@ -1160,22 +1160,17 @@ pub async fn auto_install_worker(
     result
 }
 
-/// Re-deploy the Worker from the latest hosted install ZIP (keeps ADMIN_TOKEN + D1).
+/// Re-deploy the Worker from the latest hosted install ZIP (keeps AUTH_PEPPER + D1).
 pub async fn update_installed_worker(
     app: AppHandle,
     api_token: String,
     account_id: Option<String>,
     server_token: Option<String>,
-    existing_admin_token: String,
 ) -> Result<AutoInstallResult, String> {
     reset_install_cancel();
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
         return Err("A Cloudflare API token is required.".into());
-    }
-    let admin = existing_admin_token.trim().to_string();
-    if admin.is_empty() {
-        return Err("Admin token is required to update the Worker.".into());
     }
     let server_token = server_token
         .map(|s| s.trim().to_string())
@@ -1201,7 +1196,6 @@ pub async fn update_installed_worker(
         &account_id,
         &expected_url,
         script,
-        &admin,
     )
     .await?;
     assert_worker_update_target_matches(&target)?;
@@ -1214,8 +1208,7 @@ pub async fn update_installed_worker(
     }
 
     let mut run_opts = InstallRunOptions::default();
-    run_opts.existing_admin_token = Some(admin.clone());
-    run_opts.skip_admin_secret = true;
+    run_opts.skip_auth_pepper = true;
     run_opts.worker_only = true;
 
     let result = auto_install_steps(
@@ -1251,7 +1244,7 @@ async fn auto_install_steps(
         LogEvent {
             step: "prepare".into(),
             level: "info".into(),
-            line: "Skipping KV — product state is D1 + R2; ADMIN_TOKEN is a Worker secret."
+            line: "Skipping KV — product state is D1 + R2; AUTH_PEPPER is a Worker secret."
                 .into(),
         },
     );
@@ -1276,10 +1269,6 @@ async fn auto_install_steps(
             account_id,
             &saved.worker_url,
             script,
-            run_opts
-                .existing_admin_token
-                .as_deref()
-                .unwrap_or(saved.admin_token.as_str()),
         )
         .await?;
         emit_log(
@@ -1524,20 +1513,23 @@ async fn auto_install_steps(
         format!("Deployed at {worker_url}"),
     );
 
-    let admin_token = if let Some(existing) = run_opts.existing_admin_token.as_ref() {
+    let access = crate::owner_session::current_access_token();
+    let auth_pepper = if run_opts.skip_auth_pepper {
+        String::new()
+    } else if let Some(existing) = run_opts.existing_auth_pepper.as_ref() {
         existing.clone()
     } else {
-        generate_admin_token()
+        generate_auth_pepper()
     };
-    if !run_opts.skip_admin_secret {
-        put_worker_secret(&client, DEFAULT_SCRIPT, "ADMIN_TOKEN", &admin_token).await?;
-        emit_log(app, "secret", "info", "ADMIN_TOKEN secret set");
+    if !run_opts.skip_auth_pepper {
+        put_worker_secret(&client, DEFAULT_SCRIPT, "AUTH_PEPPER", &auth_pepper).await?;
+        emit_log(app, "secret", "info", "AUTH_PEPPER secret set");
     } else {
         emit_log(
             app,
             "secret",
             "info",
-            "ADMIN_TOKEN unchanged — reusing existing secret",
+            "AUTH_PEPPER unchanged — reusing existing secret",
         );
     }
 
@@ -1567,10 +1559,15 @@ async fn auto_install_steps(
     // Schema: empty D1s use init-db. Reused D1s and worker-only updates use
     // migrate-db (pending only — never wipe).
     let use_migrate = run_opts.worker_only || any_d1_reused;
-    let init = if use_migrate {
-        migrate_worker_db_with_retry(app, &worker_url, &admin_token).await
+    let pepper = if auth_pepper.is_empty() {
+        None
     } else {
-        init_worker_db_with_retry(app, &worker_url, &admin_token).await
+        Some(auth_pepper.as_str())
+    };
+    let init = if use_migrate {
+        migrate_worker_db_with_retry(app, &worker_url, pepper, access.as_deref()).await
+    } else {
+        init_worker_db_with_retry(app, &worker_url, pepper, access.as_deref()).await
     };
     let step = if use_migrate { "migrate-db" } else { "init-db" };
     let (db_already_initialized, db_applied) = match init {
@@ -1605,7 +1602,7 @@ async fn auto_install_steps(
         }
     };
 
-    let worker_version = fetch_worker_version(&worker_url, &admin_token)
+    let worker_version = fetch_worker_version(&worker_url)
         .await
         .or(staged_version)
         .unwrap_or_else(|| "unknown".to_string());
@@ -1613,7 +1610,8 @@ async fn auto_install_steps(
     Ok(AutoInstallResult {
         worker_url,
         worker_script_name: DEFAULT_SCRIPT.to_string(),
-        admin_token,
+        auth_pepper,
+        admin_token: String::new(),
         r2_bucket: R2_BUCKET.to_string(),
         account_id: account_id.to_string(),
         d1_logs_id: d1_ids.get(0).cloned().unwrap_or_default(),
@@ -1653,12 +1651,13 @@ fn is_transient_schema_error(err: &str) -> bool {
 async fn init_worker_db_with_retry(
     app: &AppHandle,
     worker_url: &str,
-    admin_token: &str,
+    pepper: Option<&str>,
+    access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
     const ATTEMPTS: u32 = 4;
     let mut last = String::new();
     for attempt in 1..=ATTEMPTS {
-        match init_worker_db(worker_url, admin_token).await {
+        match init_worker_db(worker_url, pepper, access_token).await {
             Ok(r) => return Ok(r),
             Err(e) => {
                 last = e;
@@ -1681,12 +1680,13 @@ async fn init_worker_db_with_retry(
 async fn migrate_worker_db_with_retry(
     app: &AppHandle,
     worker_url: &str,
-    admin_token: &str,
+    pepper: Option<&str>,
+    access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
     const ATTEMPTS: u32 = 4;
     let mut last = String::new();
     for attempt in 1..=ATTEMPTS {
-        match migrate_worker_db(worker_url, admin_token).await {
+        match migrate_worker_db(worker_url, pepper, access_token).await {
             Ok(r) => return Ok(r),
             Err(e) => {
                 last = e;
@@ -1724,7 +1724,8 @@ pub async fn assert_clear_db_allowed(
 
 async fn post_schema_endpoint(
     worker_url: &str,
-    admin_token: &str,
+    pepper: Option<&str>,
+    access_token: Option<&str>,
     path: &str,
     step: &str,
 ) -> Result<InitDbResult, String> {
@@ -1734,11 +1735,18 @@ async fn post_schema_endpoint(
     }
     let url = format!("{base}{path}");
     let client = reqwest::Client::new();
-    let res = client
+    let mut req = client
         .post(&url)
-        .header("Authorization", format!("Bearer {admin_token}"))
         .header("Content-Type", "application/json")
-        .json(&serde_json::json!({}))
+        .json(&serde_json::json!({}));
+    if let Some(token) = access_token.filter(|s| !s.trim().is_empty()) {
+        req = req.header("Authorization", format!("Bearer {}", token.trim()));
+    } else if let Some(p) = pepper.filter(|s| !s.trim().is_empty()) {
+        req = req.header("X-Auth-Pepper", p.trim());
+    } else {
+        return Err(format!("{step} requires an owner session or AUTH_PEPPER"));
+    }
+    let res = req
         .send()
         .await
         .map_err(|e| format!("{step} request failed: {e}"))?;
@@ -1755,17 +1763,19 @@ async fn post_schema_endpoint(
 /// Empty D1 only. Fails with 409 if product tables already exist.
 pub async fn init_worker_db(
     worker_url: &str,
-    admin_token: &str,
+    pepper: Option<&str>,
+    access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
-    post_schema_endpoint(worker_url, admin_token, "/console/init-db", "init-db").await
+    post_schema_endpoint(worker_url, pepper, access_token, "/console/init-db", "init-db").await
 }
 
 /// Pending migrations only. Never drops tables.
 pub async fn migrate_worker_db(
     worker_url: &str,
-    admin_token: &str,
+    pepper: Option<&str>,
+    access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
-    post_schema_endpoint(worker_url, admin_token, "/console/migrate-db", "migrate-db").await
+    post_schema_endpoint(worker_url, pepper, access_token, "/console/migrate-db", "migrate-db").await
 }
 
 /// Merge an auto-install result into stored credentials (preserves
@@ -1781,7 +1791,7 @@ pub fn merge_into_credentials(
         .or_else(|| (!result.account_id.is_empty()).then(|| result.account_id.clone()))
         .unwrap_or_else(|| existing.account_id.clone());
     next.worker_url = result.worker_url.clone();
-    next.admin_token = result.admin_token.clone();
+    next.admin_token.clear();
     next.worker_script_name = result.worker_script_name.clone();
     if !result.worker_version.trim().is_empty() {
         next.worker_version = result.worker_version.clone();

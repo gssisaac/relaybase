@@ -65,7 +65,10 @@ export type WorkerUpdateTarget = {
 export type AutoInstallResult = {
   workerUrl: string;
   workerScriptName: string;
+  /** @deprecated Retired god token. Empty. Use authPepper once for setup-admin. */
   adminToken: string;
+  /** AUTH_PEPPER just set. JS memory only — never persist. Empty on Worker update. */
+  authPepper?: string;
   r2Bucket: string;
   d1LogsId: string;
   d1MailId: string;
@@ -1678,6 +1681,95 @@ export async function desktopGetAccountScopeId(): Promise<string> {
 export async function desktopMigrateStorageLayout(): Promise<void> {
   if (!isDesktopRuntime()) return;
   await invoke("migrate_storage_layout");
+}
+
+export type OwnerSessionStatus = {
+  hasRefresh: boolean;
+  hasAccess: boolean;
+  username: string;
+  workerUrl: string;
+  biometryEnabled: boolean;
+  platform: string;
+};
+
+export type OwnerSetupResult = {
+  username: string;
+  passtoken: string;
+};
+
+export async function desktopOwnerSessionStatus(): Promise<OwnerSessionStatus> {
+  if (!isDesktopRuntime()) {
+    return {
+      hasRefresh: false,
+      hasAccess: false,
+      username: "",
+      workerUrl: "",
+      biometryEnabled: true,
+      platform: "other",
+    };
+  }
+  return invoke("owner_session_status_cmd");
+}
+
+export async function desktopOwnerLogin(input: {
+  workerUrl: string;
+  username: string;
+  passtoken: string;
+  biometryEnabled?: boolean;
+}): Promise<OwnerSessionStatus> {
+  return invoke("owner_login_cmd", {
+    workerUrl: input.workerUrl,
+    username: input.username,
+    passtoken: input.passtoken,
+    biometryEnabled: input.biometryEnabled,
+  });
+}
+
+export async function desktopOwnerUnlock(): Promise<OwnerSessionStatus> {
+  return invoke("owner_unlock_cmd");
+}
+
+export async function desktopOwnerLogout(): Promise<void> {
+  await invoke("owner_logout_cmd");
+}
+
+export async function desktopOwnerSetBiometryEnabled(
+  enabled: boolean,
+): Promise<OwnerSessionStatus> {
+  return invoke("owner_set_biometry_enabled_cmd", { enabled });
+}
+
+export async function desktopOwnerSetupAdmin(input: {
+  workerUrl: string;
+  username: string;
+  pepper: string;
+}): Promise<OwnerSetupResult> {
+  return invoke("owner_setup_admin_cmd", {
+    workerUrl: input.workerUrl,
+    username: input.username,
+    pepper: input.pepper,
+  });
+}
+
+export async function desktopOwnerResetAdmin(input: {
+  workerUrl: string;
+  cfAccessToken: string;
+  username?: string;
+}): Promise<OwnerSetupResult> {
+  return invoke("owner_reset_admin_cmd", {
+    workerUrl: input.workerUrl,
+    cfAccessToken: input.cfAccessToken,
+    username: input.username,
+  });
+}
+
+export async function desktopWorkerRequest(input: {
+  method: string;
+  path: string;
+  headers?: Record<string, string>;
+  body?: string;
+}): Promise<{ status: number; headers: [string, string][]; body: string }> {
+  return invoke("worker_request_cmd", { input });
 }
 
 const BROWSER_API_KEY_VAULT = "relaybase:api-keys-vault:v1";

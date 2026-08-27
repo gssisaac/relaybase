@@ -1420,7 +1420,7 @@ async fn verify_worker_connection(
 
     let url = format!("{base}/console/connect");
     let http = reqwest::Client::new();
-    let body = fetch_connect_with_retry(&http, &url, token).await?;
+    let body = fetch_connect_with_retry(&http, &url, &token).await?;
 
     let value: serde_json::Value =
         serde_json::from_str(&body).map_err(|_| {
@@ -1445,7 +1445,7 @@ async fn verify_worker_connection(
         && !d1_logs.configured
         && !d1_mail.configured
     {
-        let (logs, mail) = probe_d1_when_connect_omits(&http, &base, token).await;
+        let (logs, mail) = probe_d1_when_connect_omits(&http, &base, &token).await;
         d1_logs.configured = logs;
         d1_mail.configured = mail;
     }

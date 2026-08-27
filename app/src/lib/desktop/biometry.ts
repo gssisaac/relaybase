@@ -5,6 +5,10 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge";
 /**
  * Touch ID (macOS) / Windows Hello via tauri-plugin-biometry.
  *
+ * Invokes the plugin commands through `@tauri-apps/api` so the dashboard
+ * shell can compile without resolving the plugin's JS package (Turbopack
+ * treats `import("…-biometry-api")` as a hard compile error).
+ *
  * Production Mac builds must be Developer ID signed or LocalAuthentication /
  * keychain calls fail. `tauri dev` unsigned builds typically report
  * unavailable and the unlock UI falls back to username + passtoken.
@@ -14,7 +18,7 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge";
  */
 
 export type BiometryType = 0 | 1 | 2 | 3 | 4;
-// 0 None, 1 TouchID, 2 FaceID, 3 Iris, 4 Auto (Windows Hello)
+// Plugin enum: 0 None, 1 Auto (Windows Hello), 2 TouchID, 3 FaceID, 4 Iris
 
 export type BiometryStatus = {
   isAvailable: boolean;
@@ -23,11 +27,18 @@ export type BiometryStatus = {
   errorCode?: string;
 };
 
+type PluginStatus = {
+  isAvailable?: boolean;
+  biometryType?: number;
+  error?: string;
+  errorCode?: string;
+};
+
 export function biometryLabel(type: BiometryType, platform?: string): string {
-  if (type === 1) return "Touch ID";
-  if (type === 2) return "Face ID";
-  if (type === 3) return "Iris";
-  if (type === 4 || platform === "windows") return "Windows Hello";
+  if (type === 2) return "Touch ID";
+  if (type === 3) return "Face ID";
+  if (type === 4) return "Iris";
+  if (type === 1 || platform === "windows") return "Windows Hello";
   if (platform === "macos") return "Touch ID";
   return "device password";
 }
@@ -37,10 +48,8 @@ export async function desktopCheckBiometry(): Promise<BiometryStatus> {
     return { isAvailable: false, biometryType: 0, errorCode: "notSupported" };
   }
   try {
-    const { checkStatus } = await import(
-      "@choochmeque/tauri-plugin-biometry-api"
-    );
-    const status = await checkStatus();
+    const { invoke } = await import("@tauri-apps/api/core");
+    const status = await invoke<PluginStatus>("plugin:biometry|status");
     return {
       isAvailable: Boolean(status.isAvailable),
       biometryType: (status.biometryType ?? 0) as BiometryType,
@@ -62,15 +71,16 @@ export async function desktopCheckBiometry(): Promise<BiometryStatus> {
 export async function desktopAuthenticateBiometry(
   reason = "Unlock Relaybase",
 ): Promise<void> {
-  const { authenticate } = await import(
-    "@choochmeque/tauri-plugin-biometry-api"
-  );
-  await authenticate(reason, {
-    allowDeviceCredential: true,
-    cancelTitle: "Cancel",
-    fallbackTitle: "Use device password",
-    title: "Unlock Relaybase",
-    subtitle: reason,
-    confirmationRequired: false,
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("plugin:biometry|authenticate", {
+    reason,
+    options: {
+      allowDeviceCredential: true,
+      cancelTitle: "Cancel",
+      fallbackTitle: "Use device password",
+      title: "Unlock Relaybase",
+      subtitle: reason,
+      confirmationRequired: false,
+    },
   });
 }

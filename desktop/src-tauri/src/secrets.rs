@@ -536,7 +536,7 @@ pub fn load_credentials() -> Result<Option<StoredCredentials>, String> {
             path.display()
         )
     })?;
-    let creds = stored_from_disk(disk);
+    let mut creds = stored_from_disk(disk);
     // Drop leftover tokens / empty console keys so they never stay on disk.
     if credentials_json_is_dirty(&value) {
         save_credentials(&creds)?;

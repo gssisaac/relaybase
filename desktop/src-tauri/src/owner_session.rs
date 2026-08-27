@@ -6,7 +6,7 @@
 //! and rotates refresh. `tauri dev` unsigned macOS builds often cannot talk
 //! to the keychain / LocalAuthentication — fallback is username + passtoken.
 
-use crate::secrets::{load_credentials, save_credentials, StoredCredentials};
+use crate::secrets::{load_credentials, save_credentials};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;

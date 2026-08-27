@@ -3140,11 +3140,15 @@ name = "relaybase_desktop"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "block2",
  "dirs",
  "keyring",
  "log",
  "mac-notification-sys",
  "notify-rust",
+ "objc2",
+ "objc2-foundation",
+ "objc2-local-authentication",
  "open",
  "reqwest 0.12.28",
  "serde",

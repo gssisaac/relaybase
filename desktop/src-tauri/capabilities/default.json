@@ -9,6 +9,7 @@
     "core:webview:allow-set-webview-zoom",
     "notification:default",
     "updater:default",
-    "deep-link:default"
+    "deep-link:default",
+    "biometry:default"
   ]
 }

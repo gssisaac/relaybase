@@ -184,7 +184,7 @@ export function RecoverAdminPanel() {
   return (
     <SetupCenteredPage
       backHref="/setup/connect"
-      backLabel="Back to connect"
+      backLabel="Back"
     >
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">

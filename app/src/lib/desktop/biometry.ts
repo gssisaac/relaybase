@@ -10,8 +10,8 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge";
  * treats `import("…-biometry-api")` as a hard compile error).
  *
  * Production Mac builds must be Developer ID signed or LocalAuthentication /
- * keychain calls fail. `tauri dev` unsigned builds typically report
- * unavailable and the unlock UI falls back to username + passtoken.
+ * keychain calls fail. Plugin `status` is label-only — daily unlock prompts
+ * via `owner_touch_id_cmd` whenever a keyring refresh exists.
  *
  * allowDeviceCredential: if biometry fails, the OS offers the device PIN /
  * password. Both failing → passtoken re-entry.
@@ -33,6 +33,8 @@ type PluginStatus = {
   error?: string;
   errorCode?: string;
 };
+
+export { isUserDismissedBiometry } from "./biometry-dismiss";
 
 export function biometryLabel(type: BiometryType, platform?: string): string {
   if (type === 2) return "Touch ID";
@@ -72,15 +74,5 @@ export async function desktopAuthenticateBiometry(
   reason = "Unlock Relaybase",
 ): Promise<void> {
   const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("plugin:biometry|authenticate", {
-    reason,
-    options: {
-      allowDeviceCredential: true,
-      cancelTitle: "Cancel",
-      fallbackTitle: "Use device password",
-      title: "Unlock Relaybase",
-      subtitle: reason,
-      confirmationRequired: false,
-    },
-  });
+  await invoke("owner_touch_id_cmd", { reason });
 }

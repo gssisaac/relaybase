@@ -3,6 +3,7 @@ mod cloudflare;
 mod notify;
 mod owner_session;
 mod secrets;
+mod touch_id;
 mod worker;
 
 /// Relaybase console base URL. The desktop calls console.relaybase.xyz for
@@ -1723,7 +1724,7 @@ async fn reveal_file_in_folder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn owner_session_status_cmd() -> OwnerSessionStatus {
+fn owner_session_status_cmd() -> Result<OwnerSessionStatus, String> {
     owner_session_status()
 }
 
@@ -1750,6 +1751,11 @@ async fn owner_logout_cmd() -> Result<(), String> {
 #[tauri::command]
 fn owner_set_biometry_enabled_cmd(enabled: bool) -> Result<OwnerSessionStatus, String> {
     owner_set_biometry_enabled(enabled)
+}
+
+#[tauri::command]
+async fn owner_touch_id_cmd(app: tauri::AppHandle, reason: String) -> Result<(), String> {
+    crate::touch_id::authenticate(app, reason).await
 }
 
 #[tauri::command]
@@ -1957,6 +1963,7 @@ pub fn run() {
             owner_unlock_cmd,
             owner_logout_cmd,
             owner_set_biometry_enabled_cmd,
+            owner_touch_id_cmd,
             owner_setup_admin_cmd,
             owner_reset_admin_cmd,
             worker_request_cmd,

@@ -170,10 +170,12 @@ fn platform_name() -> String {
     }
 }
 
-pub fn owner_session_status() -> OwnerSessionStatus {
-    let blob = load_keyring().ok().flatten();
+/// Keyring `Err` is returned to the caller. A missing entry is
+/// `has_refresh: false`, not a read failure.
+pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
+    let blob = load_keyring()?;
     let access = access_if_valid();
-    OwnerSessionStatus {
+    Ok(OwnerSessionStatus {
         has_refresh: blob.is_some(),
         has_access: access.is_some(),
         username: blob
@@ -188,7 +190,7 @@ pub fn owner_session_status() -> OwnerSessionStatus {
             .unwrap_or_default(),
         biometry_enabled: blob.as_ref().map(|b| b.biometry_enabled).unwrap_or(true),
         platform: platform_name(),
-    }
+    })
 }
 
 /// POST /console/login. Stores refresh in the OS keyring and access in memory.
@@ -252,20 +254,20 @@ pub async fn owner_login(
     })?;
     set_access(base, &username, access, expires_in);
     persist_worker_url(base)?;
-    Ok(owner_session_status())
+    owner_session_status()
 }
 
 /// Read refresh from the keyring and rotate it. Caller must have already
 /// passed biometric / device-PIN (or opted out of biometry).
 pub async fn owner_unlock() -> Result<OwnerSessionStatus, String> {
     if access_if_valid().is_some() {
-        return Ok(owner_session_status());
+        return owner_session_status();
     }
     let blob = load_keyring()?.ok_or_else(|| {
         "No saved session. Sign in with your username and passtoken.".to_string()
     })?;
     refresh_with_blob(&blob).await?;
-    Ok(owner_session_status())
+    owner_session_status()
 }
 
 async fn refresh_with_blob(blob: &KeyringBlob) -> Result<(), String> {
@@ -329,7 +331,7 @@ pub fn owner_set_biometry_enabled(enabled: bool) -> Result<OwnerSessionStatus, S
     })?;
     blob.biometry_enabled = enabled;
     save_keyring(&blob)?;
-    Ok(owner_session_status())
+    owner_session_status()
 }
 
 /// First-time owner setup. Returns the issued passtoken ONCE. The app must

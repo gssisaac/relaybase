@@ -26,7 +26,10 @@ function SetupShell({ children }: { children: ReactNode }) {
     // so we do not gate the dashboard on relaybaseSession here.
     // Stay on /setup/progress and /setup/recover-admin so the user can copy
     // the admin token after install or reissue.
-    if (pathname === "/setup/progress" || pathname === "/setup/recover-admin") {
+    if (
+      pathname === "/setup/progress" ||
+      pathname === "/setup/recover-admin"
+    ) {
       return;
     }
     if (credentials?.workerUrl && hasOwnerSession()) {
@@ -40,6 +43,11 @@ function SetupShell({ children }: { children: ReactNode }) {
         Loading…
       </div>
     );
+  }
+
+  // Already-installed is the same Touch ID unlock as the daily gate.
+  if (pathname === "/setup/connect") {
+    return children;
   }
 
   return (

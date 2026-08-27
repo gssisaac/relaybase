@@ -1697,6 +1697,7 @@ export type OwnerSetupResult = {
   passtoken: string;
 };
 
+/** Throws if the OS keyring cannot be read. Missing session is `hasRefresh: false`. */
 export async function desktopOwnerSessionStatus(): Promise<OwnerSessionStatus> {
   if (!isDesktopRuntime()) {
     return {

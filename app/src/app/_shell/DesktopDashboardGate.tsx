@@ -18,7 +18,10 @@ import {
   DesktopProvider,
   useDesktop,
 } from "@/lib/desktop/DesktopContext";
-import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import {
+  desktopOwnerSessionStatus,
+  isDesktopRuntime,
+} from "@/lib/desktop/bridge";
 import { hasOwnerSession } from "@/lib/desktop/owner-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
@@ -137,7 +140,9 @@ function DashboardShell({
 function OperatorInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { ready, credentials, teamLogin } = useDesktop();
-  const [ownerReady, setOwnerReady] = useState(false);
+  const [ownerAccess, setOwnerAccess] = useState<boolean | null>(
+    isDesktopRuntime() ? null : true,
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -145,6 +150,32 @@ function OperatorInner({ children }: { children: ReactNode }) {
     const path = setupPathFor(credentials);
     if (path) router.replace(path);
   }, [ready, credentials, teamLogin, router]);
+
+  useEffect(() => {
+    if (!ready || teamLogin || !isDesktopRuntime()) return;
+    if (!credentials?.workerUrl?.trim()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const session = await desktopOwnerSessionStatus();
+        if (!cancelled) setOwnerAccess(session.hasAccess);
+      } catch {
+        if (!cancelled) setOwnerAccess(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, teamLogin, credentials?.workerUrl]);
+
+  async function refreshOwnerAccess() {
+    try {
+      const session = await desktopOwnerSessionStatus();
+      setOwnerAccess(session.hasAccess);
+    } catch {
+      setOwnerAccess(false);
+    }
+  }
 
   if (!ready) {
     return (
@@ -171,11 +202,18 @@ function OperatorInner({ children }: { children: ReactNode }) {
     );
   }
 
-  if (isDesktopRuntime() && !ownerReady) {
+  if (isDesktopRuntime() && ownerAccess !== true) {
+    if (ownerAccess === null) {
+      return (
+        <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      );
+    }
     return (
       <OwnerUnlockPanel
         workerUrl={workerUrl}
-        onUnlocked={() => setOwnerReady(true)}
+        onUnlocked={() => void refreshOwnerAccess()}
       />
     );
   }

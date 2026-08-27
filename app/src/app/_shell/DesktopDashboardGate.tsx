@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
@@ -22,10 +22,7 @@ import {
 import { MailAccountsProvider } from "@/email/components/accounts/MailAccountsContext";
 import { EmailMailboxProvider } from "@/email/components/mailbox/EmailMailboxContext";
 import { SenderIconProvider } from "@/email/components/sender/SenderIconContext";
-import { UnlockView } from "@/console/components/setup/UnlockView";
-import { OfferBiometryView } from "@/console/components/setup/OfferBiometryView";
-import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
-import { BootScreen } from "@/console/components/setup/BootScreen";
+import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
 
@@ -116,54 +113,24 @@ function DashboardShell({
 
 function GateInner({ children }: { children: ReactNode }) {
   const store = useAppSession();
-  const router = useRouter();
-  const phase = store.phase;
-
-  // When the welcome choice is selected, route to the setup page so the
-  // install flow owns its own chrome. The store stays the source of truth
-  // for "can the dashboard render".
-  if (phase.kind === "choice") {
-    if (typeof window !== "undefined" && window.location.pathname !== "/setup") {
-      // Defer the redirect so we don't navigate during render.
-      queueMicrotask(() => {
-        if (window.location.pathname !== "/setup") router.replace("/setup");
-      });
-    }
-    return <BootScreen />;
-  }
-
-  switch (phase.kind) {
-    case "boot":
-      return <BootScreen />;
-    case "invitedLogin":
-      return <TeamLoginView />;
-    case "offerBiometry":
-      return <OfferBiometryView role={phase.role} />;
-    case "unlock":
-      return <UnlockView role={phase.role} mode={phase.mode} />;
-    case "invitedReady":
-      return (
-        <DashboardShell userId={store.teamStatus?.accountEmail ?? "team"} teamMode>
-          {children}
-        </DashboardShell>
-      );
-    case "ownerReady":
-      return (
-        <DashboardShell userId={LOCAL_OPERATOR_USER_ID}>{children}</DashboardShell>
-      );
-    case "install":
-    case "ownerRecover":
-      // Install / recover own their own chrome under /setup; if we land here
-      // outside /setup, bounce there. The setup layout renders the steps.
-      if (typeof window !== "undefined" && window.location.pathname !== "/setup") {
-        queueMicrotask(() => {
-          if (window.location.pathname !== "/setup") router.replace("/setup");
-        });
+  return (
+    <SessionPhaseScreen>
+      {(role) =>
+        role === "invited" ? (
+          <DashboardShell
+            userId={store.teamStatus?.accountEmail ?? "team"}
+            teamMode
+          >
+            {children}
+          </DashboardShell>
+        ) : (
+          <DashboardShell userId={LOCAL_OPERATOR_USER_ID}>
+            {children}
+          </DashboardShell>
+        )
       }
-      return <BootScreen />;
-    default:
-      return <BootScreen />;
-  }
+    </SessionPhaseScreen>
+  );
 }
 
 /**

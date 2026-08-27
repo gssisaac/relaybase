@@ -1,5 +1,8 @@
 # Desktop session state machine
 
+**Launch unlock is unresolved.** Touch ID still does not appear first — see
+**[desktop-unlock-unresolved.md](./desktop-unlock-unresolved.md)**.
+
 **Audience:** humans and coding agents changing the desktop app's
 authentication / unlock flow, the owner or invited (team) session, or anything
 that decides "who can enter the app right now".

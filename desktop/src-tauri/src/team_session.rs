@@ -244,7 +244,7 @@ pub async fn team_login(
     save_keyring(&TeamKeyringBlob {
         worker_url: base.to_string(),
         account_email: email.clone(),
-        mobile_password: password,
+        mobile_password: password.clone(),
         biometry_enabled: biometry,
     })?;
     // Persist identity-only team-login.json so the gate knows the user is an
@@ -374,6 +374,7 @@ pub async fn team_worker_request(
 }
 
 /// Current account email for Rust-side team calls (if any).
+#[allow(dead_code)]
 pub fn current_team_email() -> Option<String> {
     memory_if_valid().map(|m| m.account_email)
 }

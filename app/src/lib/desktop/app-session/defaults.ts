@@ -32,12 +32,24 @@ export function createDefaultDeps(
       bridge().then((b) => b.desktopOwnerSetupAdmin(input)),
     ownerResetAdmin: (input) =>
       bridge().then((b) => b.desktopOwnerResetAdmin(input)),
+    ownerSetBiometryEnabled: (enabled) =>
+      bridge().then((b) => b.desktopOwnerSetBiometryEnabled(enabled)),
     teamSessionStatus: () => bridge().then((b) => b.desktopTeamSessionStatus()),
     teamLogin: (input) => bridge().then((b) => b.desktopTeamLogin(input)),
     teamUnlock: () => bridge().then((b) => b.desktopTeamUnlock()),
     teamLogout: () => bridge().then((b) => b.desktopTeamLogout()),
     teamSetBiometryEnabled: (enabled) =>
       bridge().then((b) => b.desktopTeamSetBiometryEnabled(enabled)),
+    refreshIdentity: overrides?.refreshIdentity ?? (() => Promise.resolve()),
+    clearOwnerDisk: () =>
+      bridge().then((b) =>
+        Promise.all([
+          b.desktopClearCredentials(),
+          b.desktopClearRelaybaseAccount(),
+        ]).then(() => undefined),
+      ),
+    clearTeamDisk: () =>
+      bridge().then((b) => b.desktopClearTeamLogin()),
     ...overrides,
   };
 }

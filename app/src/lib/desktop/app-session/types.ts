@@ -13,7 +13,7 @@ export type AppSessionPhase =
       step: "oauth" | "progress" | "createOwner" | "revealPasstoken";
     }
   | { kind: "invitedLogin" }
-  | { kind: "offerBiometry"; role: "invited" }
+  | { kind: "offerBiometry"; role: "owner" | "invited" }
   | {
       kind: "unlock";
       role: "owner" | "invited";
@@ -55,6 +55,7 @@ export type AppSessionDeps = {
     cfAccessToken: string;
     username?: string;
   }) => Promise<{ username: string; passtoken: string }>;
+  ownerSetBiometryEnabled: (enabled: boolean) => Promise<OwnerSessionStatus>;
   teamSessionStatus: () => Promise<TeamSessionStatus>;
   teamLogin: (input: {
     workerUrl: string;
@@ -65,4 +66,8 @@ export type AppSessionDeps = {
   teamUnlock: () => Promise<TeamSessionStatus>;
   teamLogout: () => Promise<void>;
   teamSetBiometryEnabled: (enabled: boolean) => Promise<TeamSessionStatus>;
+  /** Reload ~/.relaybase credentials + team identity and mirror into the store. */
+  refreshIdentity: () => Promise<void>;
+  clearOwnerDisk: () => Promise<void>;
+  clearTeamDisk: () => Promise<void>;
 };

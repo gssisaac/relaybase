@@ -12,6 +12,7 @@ import {
 } from "@/lib/desktop/bridge";
 import { useDesktop } from "@/lib/desktop/shell";
 
+import { createDefaultDeps } from "./defaults";
 import { AppSessionStore } from "./store";
 import type { AppSessionPhase, SessionRole } from "./types";
 
@@ -77,12 +78,29 @@ export function AppSessionProvider({
   children: React.ReactNode;
 }) {
   const desktop = useDesktop();
-  const [store] = React.useState(() => new AppSessionStore());
+  const desktopRef = React.useRef(desktop);
+  desktopRef.current = desktop;
+  const storeRef = React.useRef<AppSessionStore | null>(null);
 
-  // Fetch owner + team keyring status. Re-runs when the desktop runtime
-  // appears (Tauri injects after first paint). A fake empty status from
-  // `!isDesktopRuntime()` must not be the last word — that was the daily
-  // launch bug that skipped Touch ID and opened the passtoken form.
+  const [store] = React.useState(() => {
+    const instance = new AppSessionStore(
+      createDefaultDeps({
+        refreshIdentity: async () => {
+          const snap = await desktopRef.current.refresh();
+          storeRef.current?.setIdentity({
+            ready: true,
+            isDesktop: isDesktopRuntime(),
+            credentials: snap.credentials,
+            teamIdentity: snap.teamLogin,
+          });
+        },
+      }),
+    );
+    storeRef.current = instance;
+    return instance;
+  });
+
+  // Fetch owner + team keyring status after credentials are loaded.
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -99,6 +117,14 @@ export function AppSessionProvider({
           return;
         }
       }
+      const snap = await desktop.refresh();
+      if (cancelled) return;
+      store.setIdentity({
+        ready: true,
+        isDesktop: isDesktopRuntime(),
+        credentials: snap.credentials,
+        teamIdentity: snap.teamLogin,
+      });
       const [ownerStatus, teamStatus] = await Promise.all([
         readStatusWithRetry(desktopOwnerSessionStatus, EMPTY_OWNER, (s) =>
           Boolean(s.hasRefresh || s.hasAccess),
@@ -113,7 +139,7 @@ export function AppSessionProvider({
     return () => {
       cancelled = true;
     };
-  }, [store, desktop.isDesktop]);
+  }, [store, desktop.isDesktop, desktop.refresh]);
 
   // Mirror DesktopContext identity into the store so non-prompt phases
   // (choice / invitedLogin / owner UnlockView) resolve once ready.
@@ -130,15 +156,6 @@ export function AppSessionProvider({
     desktop.credentials,
     desktop.teamLogin,
   ]);
-
-  // Unlock writes workerUrl to ~/.relaybase; refresh credentials before the
-  // mailbox shell mounts so desktopAwareFetch sees __RELAYBASE_WORKER_URL__.
-  React.useEffect(() => {
-    if (store.phase.kind !== "ownerReady" && store.phase.kind !== "invitedReady") {
-      return;
-    }
-    void desktop.refresh();
-  }, [store.phase.kind, desktop, desktop.refresh]);
 
   // Global 401 handler: re-prompt unlock without wiping the worker URL or
   // keyring. The refresh may simply be stale; the store falls back to the
@@ -175,7 +192,10 @@ export function useAppSession(): AppSessionStore {
         JSON.stringify({
           kind: ctx.phase.kind,
           mode: ctx.phase.kind === "unlock" ? ctx.phase.mode : "",
-          role: ctx.phase.kind === "unlock" ? ctx.phase.role : "",
+          role:
+            ctx.phase.kind === "unlock" || ctx.phase.kind === "offerBiometry"
+              ? ctx.phase.role
+              : "",
           step: ctx.phase.kind === "install" ? ctx.phase.step : "",
           busy: ctx.busy,
           error: ctx.error,

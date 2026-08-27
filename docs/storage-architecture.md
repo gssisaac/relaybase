@@ -195,7 +195,7 @@ Highlights for the consolidated model:
 
 | Path | Purpose |
 |------|---------|
-| `credentials.json` | Worker URL + admin token + CF account id + Worker script/version. Optional console login fields (`relaybaseAccountId` / `Email` / `Session`) when signed in. No API tokens. |
+| `credentials.json` | Optional disk mirror: Worker URL, CF account id, Worker script/version. Optional console login fields (`relaybaseAccountId` / `Email` / `Session`) when signed in. No passtoken, admin token, or API tokens. |
 | `api-keys.json` | Plaintext API secrets (Worker has hashes only) |
 | `email.json` | Account colors |
 | `mail/desktop/**` | Mail + UI cache; fixed userId |
@@ -225,7 +225,7 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 
 | Concern | Source of truth | Local cache |
 |---------|-----------------|-------------|
-| Worker connection | `~/.relaybase/credentials.json` | window globals |
+| Worker connection | OS keyring (`owner-session` / `team-session` `workerUrl`) → optional `~/.relaybase/credentials.json` / `team-login.json` | window globals |
 | Domains / addresses | D1 `RELAYBASE_DB` (`domains`, `addresses`) | `cache/dashboard/addresses-*` |
 | Enabled mail accounts | `mail/desktop/ui/enabled-accounts.json` | localStorage mirror |
 | Accounts domain card expand | `mail/desktop/ui/accounts.json` | localStorage mirror |

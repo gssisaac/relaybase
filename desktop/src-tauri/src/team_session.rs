@@ -271,11 +271,10 @@ pub async fn team_unlock() -> Result<TeamSessionStatus, String> {
     team_session_status()
 }
 
+/// Lock the team session: drop in-memory password only. The keyring secret
+/// (and biometry preference) stay for the next Touch ID unlock.
 pub async fn team_logout() -> Result<(), String> {
-    delete_keyring();
     clear_memory();
-    // Keep team-login.json identity so the user lands on the invited login
-    // form prefilled — clearing the keyring is the sign-out.
     Ok(())
 }
 

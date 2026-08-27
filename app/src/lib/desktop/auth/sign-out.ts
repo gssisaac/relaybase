@@ -1,19 +1,20 @@
-import {
-  desktopClearCredentials,
-  desktopClearRelaybaseAccount,
-  desktopClearTeamLogin,
-} from "@/lib/desktop/bridge";
+import type { AppSessionStore } from "@/lib/desktop/app-session";
 
-/** Entry screen after sign-out (welcome/setup or team login). */
-export function signOutRedirectPath(isTeam: boolean): string {
-  return isTeam ? "/login" : "/setup";
+/** Where to land after sign-out: unlock when a keyring session remains, else setup/login. */
+export function signOutRedirectPath(
+  isTeam: boolean,
+  store: AppSessionStore,
+): string {
+  if (isTeam) {
+    return store.teamStatus?.hasSecret ? "/" : "/login";
+  }
+  return store.ownerStatus?.hasRefresh ? "/" : "/setup";
 }
 
-export async function signOutRelaybase(isTeam: boolean): Promise<void> {
-  if (isTeam) {
-    await desktopClearTeamLogin();
-    return;
-  }
-  await desktopClearCredentials();
-  await desktopClearRelaybaseAccount();
+/** Sign out (lock): clear in-memory access, keep keyring for daily unlock. */
+export async function signOutRelaybase(
+  _isTeam: boolean,
+  store: AppSessionStore,
+): Promise<void> {
+  await store.signOut();
 }

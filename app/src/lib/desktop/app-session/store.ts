@@ -7,6 +7,12 @@ import { biometryLabel } from "../biometry/label";
 import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
 import { createDefaultDeps } from "./defaults";
 import { visibleUnlockError } from "./errors";
+import { resolveWorkerUrl } from "./resolve-worker-url";
+import {
+  isValidPasstokenFormat,
+  normalizePasstokenInput,
+  passtokenFormatHint,
+} from "../worker-url/normalize-passtoken";
 import type {
   AppSessionDeps,
   AppSessionPhase,
@@ -57,9 +63,10 @@ export class AppSessionStore {
   get role(): SessionRole {
     switch (this.phase.kind) {
       case "invitedReady":
-      case "offerBiometry":
       case "invitedLogin":
         return "invited";
+      case "offerBiometry":
+        return this.phase.role;
       case "ownerReady":
       case "ownerRecover":
         return "owner";
@@ -77,17 +84,66 @@ export class AppSessionStore {
     return this.hasWorkerConnected();
   }
 
-  /** Worker URL must be wired before the mailbox shell can load live mail. */
+  /** Worker URL: keyring first, then disk identity files. */
   private hasWorkerConnected(): boolean {
-    const credUrl = this.identity.credentials?.workerUrl?.trim() ?? "";
-    if (credUrl) return true;
-    const ownerUrl = this.ownerStatus?.workerUrl?.trim() ?? "";
-    if (ownerUrl) return true;
-    const teamUrl =
-      this.teamStatus?.workerUrl?.trim() ??
-      this.identity.teamIdentity?.workerUrl?.trim() ??
-      "";
-    return Boolean(teamUrl);
+    const role = this.role;
+    if (role === "invited") {
+      return Boolean(this.resolvedWorkerUrl("invited"));
+    }
+    if (role === "owner") {
+      return Boolean(this.resolvedWorkerUrl("owner"));
+    }
+    return Boolean(
+      this.resolvedWorkerUrl("owner") || this.resolvedWorkerUrl("invited"),
+    );
+  }
+
+  private resolvedWorkerUrl(role: "owner" | "invited"): string {
+    return resolveWorkerUrl({
+      role,
+      ownerStatus: this.ownerStatus,
+      teamStatus: this.teamStatus,
+      credentials: this.identity.credentials,
+      teamLogin: this.identity.teamIdentity,
+    });
+  }
+
+  private hasKeyringUnlock(role: "owner" | "invited"): boolean {
+    return role === "invited"
+      ? Boolean(this.teamStatus?.hasSecret)
+      : Boolean(this.ownerStatus?.hasRefresh);
+  }
+
+  /** User opted into auto Touch ID / Windows Hello on launch. */
+  private wantsBiometryUnlock(role: "owner" | "invited"): boolean {
+    if (role === "owner") {
+      return Boolean(
+        this.ownerStatus?.hasRefresh && this.ownerStatus?.biometryEnabled,
+      );
+    }
+    return Boolean(
+      this.teamStatus?.hasSecret && this.teamStatus?.biometryEnabled,
+    );
+  }
+
+  /** Touch ID surface when a keyring secret exists; passtoken form otherwise. */
+  private unlockSurfaceMode(role: "owner" | "invited"): "idle" | "secret" {
+    return this.hasKeyringUnlock(role) ? "idle" : "secret";
+  }
+
+  private enterUnlockForRole(role: "owner" | "invited"): void {
+    if (!this.hasKeyringUnlock(role)) return;
+    if (this.wantsBiometryUnlock(role)) {
+      this.phase = { kind: "unlock", role, mode: "prompting" };
+      this.prompted = false;
+      this.maybeAutoPrompt();
+      return;
+    }
+    this.phase = { kind: "unlock", role, mode: "idle" };
+  }
+
+  private isNoSavedSessionError(message: string | null): boolean {
+    return Boolean(message?.includes("No saved session"));
   }
 
   get needsUnlockPrompt(): boolean {
@@ -119,10 +175,7 @@ export class AppSessionStore {
    * non-prompt branches (choice / invitedLogin / owner unlock). */
   setIdentity(snapshot: IdentitySnapshot): void {
     this.identity = snapshot;
-    if (
-      snapshot.ready &&
-      (this.phase.kind === "boot" || this.phase.kind === "choice")
-    ) {
+    if (snapshot.ready) {
       this.reconcileFromStatuses();
     }
     // Late Tauri inject: statuses already said "prompt" but invoke was missing.
@@ -146,9 +199,7 @@ export class AppSessionStore {
         return;
       }
       if (owner?.hasRefresh) {
-        this.phase = { kind: "unlock", role: "owner", mode: "prompting" };
-        this.prompted = false;
-        this.maybeAutoPrompt();
+        this.enterUnlockForRole("owner");
       }
       return;
     }
@@ -159,9 +210,7 @@ export class AppSessionStore {
         return;
       }
       if (team?.hasSecret) {
-        this.phase = { kind: "unlock", role: "invited", mode: "prompting" };
-        this.prompted = false;
-        this.maybeAutoPrompt();
+        this.enterUnlockForRole("invited");
       }
       return;
     }
@@ -177,12 +226,7 @@ export class AppSessionStore {
         return;
       }
       if (team?.hasSecret) {
-        this.phase = {
-          kind: "unlock",
-          role: "invited",
-          mode: "prompting",
-        };
-        this.maybeAutoPrompt();
+        this.enterUnlockForRole("invited");
         return;
       }
       // Identity present but no keyring secret yet → first-time invited login.
@@ -201,24 +245,33 @@ export class AppSessionStore {
       return;
     }
     if (owner?.hasRefresh) {
-      this.phase = { kind: "unlock", role: "owner", mode: "prompting" };
-      this.maybeAutoPrompt();
+      this.enterUnlockForRole("owner");
       return;
     }
 
-    // No confirmed keyring secret. UnlockView (idle) is the daily surface;
-    // the passtoken form is a user fallback only (`showSecretForm`).
+    // No keyring refresh → passtoken / mobile-password form (not Touch ID idle).
     if (!this.identity.ready) {
       if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
       return;
     }
-    const workerUrl = this.identity.credentials?.workerUrl?.trim() ?? "";
-    if (workerUrl) {
-      this.phase = { kind: "unlock", role: "owner", mode: "idle" };
+    if (this.resolvedWorkerUrl("owner")) {
+      this.phase = {
+        kind: "unlock",
+        role: "owner",
+        mode: this.unlockSurfaceMode("owner"),
+      };
       return;
     }
     if (!this.statusesHydrated) {
       if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
+      return;
+    }
+    // Keep explicit owner unlock (Already installed / secret fallback / recover back).
+    if (
+      this.phase.kind === "unlock" &&
+      this.phase.role === "owner" &&
+      (this.phase.mode === "idle" || this.phase.mode === "secret")
+    ) {
       return;
     }
     this.phase = { kind: "choice" };
@@ -247,6 +300,34 @@ export class AppSessionStore {
     }
   }
 
+  private async enterAppAfterUnlock(
+    role: "owner" | "invited",
+    status: OwnerSessionStatus | TeamSessionStatus,
+  ): Promise<void> {
+    if (role === "invited") {
+      runInAction(() => {
+        this.teamStatus = status as TeamSessionStatus;
+      });
+    } else {
+      runInAction(() => {
+        this.ownerStatus = status as OwnerSessionStatus;
+      });
+    }
+    await this.deps.refreshIdentity();
+    runInAction(() => {
+      if (role === "invited") {
+        this.phase = this.hasWorkerConnected()
+          ? { kind: "invitedReady" }
+          : { kind: "invitedLogin" };
+      } else {
+        this.phase = this.hasWorkerConnected()
+          ? { kind: "ownerReady" }
+          : { kind: "choice" };
+      }
+      this.busy = false;
+    });
+  }
+
   /** Trigger Touch ID / Windows Hello, then unlock the active role. */
   async promptUnlock(): Promise<void> {
     if (this.phase.kind !== "unlock") return;
@@ -269,26 +350,21 @@ export class AppSessionStore {
       }
       if (role === "invited") {
         const status = await this.deps.teamUnlock();
-        runInAction(() => {
-          this.teamStatus = status;
-          this.phase = { kind: "invitedReady" };
-          this.busy = false;
-        });
+        await this.enterAppAfterUnlock("invited", status);
         return;
       }
       const status = await this.deps.ownerUnlock();
-      runInAction(() => {
-        this.ownerStatus = status;
-        this.phase = { kind: "ownerReady" };
-        this.busy = false;
-      });
+      await this.enterAppAfterUnlock("owner", status);
     } catch (err) {
       const shown = visibleUnlockError(err);
       runInAction(() => {
-        this.error = shown;
-        // Passtoken is a user fallback (`showSecretForm`), never an automatic
-        // redirect after Touch ID. Stay on the fingerprint surface.
-        this.phase = { kind: "unlock", role, mode: "idle" };
+        if (this.isNoSavedSessionError(shown)) {
+          this.error = null;
+          this.phase = { kind: "unlock", role, mode: "secret" };
+        } else {
+          this.error = shown;
+          this.phase = { kind: "unlock", role, mode: "idle" };
+        }
         this.busy = false;
       });
     }
@@ -301,22 +377,20 @@ export class AppSessionStore {
     this.error = null;
   }
 
-  /** Leave the secret form and return to UnlockView. Re-prompt Touch ID
-   * when a keyring secret exists; otherwise stay on the idle fingerprint
-   * surface so Back is never a no-op. */
+  /** Leave the secret form. Return to Touch ID when a keyring secret exists. */
   requestPrompt(): void {
     if (this.phase.kind !== "unlock") return;
     const role = this.phase.role;
-    const hasKeyringSecret =
-      role === "invited"
-        ? Boolean(this.teamStatus?.hasSecret)
-        : Boolean(this.ownerStatus?.hasRefresh);
     this.error = null;
-    if (hasKeyringSecret) {
-      void this.promptUnlock();
+    if (this.hasKeyringUnlock(role)) {
+      if (this.wantsBiometryUnlock(role)) {
+        void this.promptUnlock();
+      } else {
+        this.phase = { kind: "unlock", role, mode: "idle" };
+      }
       return;
     }
-    this.phase = { kind: "unlock", role, mode: "idle" };
+    this.phase = { kind: "unlock", role, mode: "secret" };
   }
 
   /** Owner: exchange username + passtoken for a session. */
@@ -325,17 +399,43 @@ export class AppSessionStore {
     username: string;
     passtoken: string;
   }): Promise<void> {
+    const passtoken = normalizePasstokenInput(input.passtoken);
+    const username = input.username.trim();
+    const workerUrl = input.workerUrl.trim().replace(/\/$/, "");
+    if (!isValidPasstokenFormat(passtoken)) {
+      const hint = passtokenFormatHint();
+      runInAction(() => {
+        this.error = hint;
+        this.busy = false;
+      });
+      throw new Error(hint);
+    }
     this.busy = true;
     this.error = null;
     try {
       const status = await this.deps.ownerLogin({
-        workerUrl: input.workerUrl,
-        username: input.username,
-        passtoken: input.passtoken,
+        workerUrl,
+        username,
+        passtoken,
+        biometryEnabled: false,
       });
       runInAction(() => {
         this.ownerStatus = status;
-        this.phase = { kind: "ownerReady" };
+      });
+      await this.deps.refreshIdentity();
+      runInAction(() => {
+        if (
+          this.deps.isDesktop() &&
+          status.platform !== "linux" &&
+          status.hasRefresh
+        ) {
+          this.phase = { kind: "offerBiometry", role: "owner" };
+          this.busy = false;
+          return;
+        }
+        this.phase = this.hasWorkerConnected()
+          ? { kind: "ownerReady" }
+          : { kind: "choice" };
         this.busy = false;
       });
     } catch (err) {
@@ -372,8 +472,11 @@ export class AppSessionStore {
           this.phase = { kind: "offerBiometry", role: "invited" };
         });
       } else {
+        await this.deps.refreshIdentity();
         runInAction(() => {
-          this.phase = { kind: "invitedReady" };
+          this.phase = this.hasWorkerConnected()
+            ? { kind: "invitedReady" }
+            : { kind: "invitedLogin" };
         });
       }
     } catch (err) {
@@ -386,15 +489,34 @@ export class AppSessionStore {
     }
   }
 
-  /** Invited accepted biometry: enable it on the keyring and enter the app. */
+  /** Accepted biometry: persist preference in the keyring and enter the app. */
   async acceptBiometry(): Promise<void> {
     if (this.phase.kind !== "offerBiometry") return;
+    const { role } = this.phase;
     this.busy = true;
     try {
-      const status = await this.deps.teamSetBiometryEnabled(true);
+      if (role === "owner") {
+        const status = await this.deps.ownerSetBiometryEnabled(true);
+        runInAction(() => {
+          this.ownerStatus = status;
+        });
+      } else {
+        const status = await this.deps.teamSetBiometryEnabled(true);
+        runInAction(() => {
+          this.teamStatus = status;
+        });
+      }
+      await this.deps.refreshIdentity();
       runInAction(() => {
-        this.teamStatus = status;
-        this.phase = { kind: "invitedReady" };
+        if (role === "owner") {
+          this.phase = this.hasWorkerConnected()
+            ? { kind: "ownerReady" }
+            : { kind: "choice" };
+        } else {
+          this.phase = this.hasWorkerConnected()
+            ? { kind: "invitedReady" }
+            : { kind: "invitedLogin" };
+        }
         this.busy = false;
       });
     } catch (err) {
@@ -405,46 +527,138 @@ export class AppSessionStore {
     }
   }
 
-  /** Invited declined biometry: disable it and still enter the app this run. */
+  /** Declined biometry: persist opt-out and still enter the app this run. */
   async declineBiometry(): Promise<void> {
     if (this.phase.kind !== "offerBiometry") return;
+    const { role } = this.phase;
     this.busy = true;
     try {
-      const status = await this.deps.teamSetBiometryEnabled(false);
+      if (role === "owner") {
+        const status = await this.deps.ownerSetBiometryEnabled(false);
+        runInAction(() => {
+          this.ownerStatus = status;
+        });
+      } else {
+        const status = await this.deps.teamSetBiometryEnabled(false);
+        runInAction(() => {
+          this.teamStatus = status;
+        });
+      }
+      await this.deps.refreshIdentity();
       runInAction(() => {
-        this.teamStatus = status;
-        this.phase = { kind: "invitedReady" };
+        if (role === "owner") {
+          this.phase = this.hasWorkerConnected()
+            ? { kind: "ownerReady" }
+            : { kind: "choice" };
+        } else {
+          this.phase = this.hasWorkerConnected()
+            ? { kind: "invitedReady" }
+            : { kind: "invitedLogin" };
+        }
         this.busy = false;
       });
     } catch {
+      await this.deps.refreshIdentity();
       runInAction(() => {
-        this.phase = { kind: "invitedReady" };
+        if (role === "owner") {
+          this.phase = this.hasWorkerConnected()
+            ? { kind: "ownerReady" }
+            : { kind: "choice" };
+        } else {
+          this.phase = this.hasWorkerConnected()
+            ? { kind: "invitedReady" }
+            : { kind: "invitedLogin" };
+        }
         this.busy = false;
       });
     }
   }
 
-  /** Sign out the active role and return to the welcome choice. */
+  /** "Already installed" from the welcome screen — enter the unlock flow. */
+  openAlreadyInstalled(): void {
+    this.error = null;
+    const teamUrl = this.identity.teamIdentity?.workerUrl?.trim() ?? "";
+    if (this.teamStatus?.hasSecret || this.teamStatus?.hasAccess || teamUrl) {
+      if (this.teamStatus?.hasSecret || this.teamStatus?.hasAccess) {
+        this.enterUnlockForRole("invited");
+      } else {
+        this.phase = {
+          kind: "unlock",
+          role: "invited",
+          mode: this.unlockSurfaceMode("invited"),
+        };
+      }
+      return;
+    }
+    if (this.ownerStatus?.hasRefresh) {
+      this.enterUnlockForRole("owner");
+      return;
+    }
+    if (this.resolvedWorkerUrl("owner")) {
+      this.phase = {
+        kind: "unlock",
+        role: "owner",
+        mode: this.unlockSurfaceMode("owner"),
+      };
+      return;
+    }
+    this.phase = { kind: "unlock", role: "owner", mode: "secret" };
+  }
+
+  /** Lock the active session and return to unlock (Touch ID) or welcome. */
   async signOut(): Promise<void> {
     this.busy = true;
+    const invited =
+      this.role === "invited" ||
+      Boolean(this.teamStatus?.hasAccess || this.teamStatus?.hasSecret);
     try {
-      if (this.role === "invited") {
+      if (invited) {
         await this.deps.teamLogout();
-      } else if (this.role === "owner") {
+        await this.deps.clearTeamDisk();
+      } else {
         await this.deps.ownerLogout();
+        await this.deps.clearOwnerDisk();
       }
     } catch {
       /* best-effort */
     }
+    try {
+      await this.deps.refreshIdentity();
+    } catch {
+      /* best-effort */
+    }
+    let owner = this.ownerStatus;
+    let team = this.teamStatus;
+    try {
+      [owner, team] = await Promise.all([
+        this.deps.ownerSessionStatus(),
+        this.deps.teamSessionStatus(),
+      ]);
+    } catch {
+      /* keep last known status */
+    }
     runInAction(() => {
-      this.ownerStatus = null;
-      this.teamStatus = null;
+      this.ownerStatus = owner;
+      this.teamStatus = team;
+      this.statusesHydrated = true;
       this.error = null;
       this.revealedPasstoken = null;
       this.prompted = false;
-      this.statusesHydrated = false;
-      this.phase = { kind: "choice" };
       this.busy = false;
+
+      if (invited) {
+        if (team?.hasSecret) {
+          this.enterUnlockForRole("invited");
+        } else {
+          this.phase = { kind: "invitedLogin" };
+        }
+        return;
+      }
+      if (owner?.hasRefresh) {
+        this.enterUnlockForRole("owner");
+        return;
+      }
+      this.phase = { kind: "choice" };
     });
   }
 
@@ -457,7 +671,11 @@ export class AppSessionStore {
   /** Leave forgot-passtoken recovery and return to UnlockView. */
   leaveRecover(): void {
     this.error = null;
-    this.phase = { kind: "unlock", role: "owner", mode: "idle" };
+    this.phase = {
+      kind: "unlock",
+      role: "owner",
+      mode: this.unlockSurfaceMode("owner"),
+    };
   }
 
   /** Owner recover: reset the admin passtoken via a CF access token. */

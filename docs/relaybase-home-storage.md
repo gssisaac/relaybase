@@ -120,14 +120,14 @@ paths under the new `{scopeId}/`).
 
 ### `credentials.json`
 
-> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. During the migration, `credentials.json` keeps only **non-secret connection info** (`workerUrl`, `accountId`, console account fields). The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** is stored in the OS keyring (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Daily unlock uses Touch ID or Windows Hello (`tauri-plugin-biometry`, device PIN fallback), then Rust reads the keyring.
+> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. **Daily unlock** resolves the Worker URL from the OS keyring first (`owner-session` blob `workerUrl`); `credentials.json` `workerUrl` is an optional disk mirror for install scope, CF linkage, and browser `pnpm next`. The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** is stored in the OS keyring (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Daily unlock uses Touch ID or Windows Hello (`tauri-plugin-biometry`, device PIN fallback), then Rust reads the keyring. The Worker URL input on UnlockView appears only when neither keyring nor disk has a URL.
 
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
 | Field | Purpose |
 |-------|---------|
 | `accountId` | Cloudflare account id (resolved from the OAuth flow) |
-| `workerUrl` | Deployed Worker base URL |
+| `workerUrl` | Deployed Worker base URL (disk mirror; daily unlock prefers keyring `owner-session.workerUrl`) |
 | `workerScriptName` | Wrangler script name |
 | `workerVersion` | Deployed Worker bundle version |
 | `relaybaseAccountId` | Relaybase console account id — written only when non-empty |
@@ -146,7 +146,7 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/owner_session.rs`)
 | service | `com.relaybase.desktop` |
 | account | `owner-session` |
 
-Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. The passtoken is never stored. Daily unlock: JS prompts **Touch ID** (Mac) or **Windows Hello** (Windows) with device PIN fallback (`app/src/lib/desktop/biometry/`), then Rust `owner_unlock` reads this blob and rotates refresh. Access stays in process memory. Linux has no biometry plugin — fallback is username + passtoken.
+Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. **`workerUrl` is the source of truth for daily unlock** — JS resolves it before `credentials.json`. The passtoken is never stored. Daily unlock: JS prompts **Touch ID** (Mac) or **Windows Hello** (Windows) with device PIN fallback (`app/src/lib/desktop/biometry/`), then Rust `owner_unlock` reads this blob and rotates refresh. Access stays in process memory. Linux has no biometry plugin — fallback is username + passtoken.
 
 ### OS keyring (team mobile password)
 

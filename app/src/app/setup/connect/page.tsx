@@ -3,16 +3,22 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { useAppSession } from "@/lib/desktop/app-session";
+
 /**
- * "Already installed" entry from the welcome choice. The dashboard gate (and
- * the session store) own the unlock flow now, so just bounce to `/` — the
- * gate renders Touch ID / the passtoken form as needed.
+ * "Already installed" entry from the welcome choice. Enter UnlockView on `/` —
+ * Touch ID when a keyring secret exists, otherwise the fingerprint surface
+ * with passtoken as an optional fallback (not the default screen).
  */
 export default function SetupConnectPage() {
   const router = useRouter();
+  const store = useAppSession();
+
   useEffect(() => {
+    store.openAlreadyInstalled();
     router.replace("/");
-  }, [router]);
+  }, [router, store]);
+
   return (
     <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
       Opening…

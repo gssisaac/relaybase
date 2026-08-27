@@ -68,6 +68,7 @@ import {
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useDesktop } from "@/lib/desktop/shell";
+import { useAppSession } from "@/lib/desktop/app-session";
 import {
   signOutRedirectPath,
   signOutRelaybase,
@@ -507,7 +508,8 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const searchParams = useSearchParams();
   const userId = useProductId();
   const router = useRouter();
-  const { teamLogin, refresh: refreshDesktop } = useDesktop();
+  const { teamLogin } = useDesktop();
+  const session = useAppSession();
   const { settings: settingsHref } = useEmailPaths();
   const isTeam = teamMode || Boolean(teamLogin);
   const [addOpen, setAddOpen] = useState(false);
@@ -565,12 +567,10 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOutRelaybase(isTeam);
-      await refreshDesktop();
-      router.replace(signOutRedirectPath(isTeam));
+      await signOutRelaybase(isTeam, session);
+      router.replace(signOutRedirectPath(isTeam, session));
     } catch {
-      /* redirect anyway on partial clear */
-      router.replace(signOutRedirectPath(isTeam));
+      router.replace(signOutRedirectPath(isTeam, session));
     } finally {
       setSigningOut(false);
       setSignOutOpen(false);

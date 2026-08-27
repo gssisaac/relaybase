@@ -30,6 +30,14 @@ export function SessionPhaseScreen({
       router.replace("/setup");
       return;
     }
+    if (
+      (phase.kind === "ownerReady" || phase.kind === "invitedReady") &&
+      !store.canShowApp &&
+      path !== "/setup"
+    ) {
+      router.replace("/setup");
+      return;
+    }
     if (phase.kind === "ownerRecover" && path !== "/setup/recover-admin") {
       router.replace("/setup/recover-admin");
       return;
@@ -37,7 +45,7 @@ export function SessionPhaseScreen({
     if (phase.kind === "install" && !path.startsWith("/setup")) {
       router.replace("/setup");
     }
-  }, [phase.kind, router]);
+  }, [phase.kind, router, store.canShowApp]);
 
   switch (phase.kind) {
     case "boot":
@@ -52,9 +60,17 @@ export function SessionPhaseScreen({
     case "unlock":
       return <UnlockView role={phase.role} mode={phase.mode} />;
     case "invitedReady":
-      return <>{children("invited")}</>;
+      return store.canShowApp ? (
+        <>{children("invited")}</>
+      ) : (
+        <BootScreen />
+      );
     case "ownerReady":
-      return <>{children("owner")}</>;
+      return store.canShowApp ? (
+        <>{children("owner")}</>
+      ) : (
+        <BootScreen />
+      );
     default:
       return <BootScreen />;
   }

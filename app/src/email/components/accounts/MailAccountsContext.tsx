@@ -42,12 +42,18 @@ const MailAccountsStoreContext = createContext<MailAccountsStore | null>(null);
 export function MailAccountsProvider({ children }: { children: ReactNode }) {
   const userId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { teamLogin } = useDesktop();
+  const { teamLogin, credentials, ready } = useDesktop();
   const [store] = useState(() => new MailAccountsStore());
 
   useEffect(() => {
-    store.configure({ userId, apiBase, teamLogin });
-  }, [store, userId, apiBase, teamLogin]);
+    store.configure({
+      userId,
+      apiBase,
+      teamLogin,
+      workerUrl: credentials?.workerUrl,
+      desktopReady: ready,
+    });
+  }, [store, userId, apiBase, teamLogin, credentials?.workerUrl, ready]);
 
   useEffect(() => {
     store.start();

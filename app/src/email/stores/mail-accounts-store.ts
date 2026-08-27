@@ -38,6 +38,8 @@ export class MailAccountsStore {
   private userId = "";
   private apiBase = "/api/email";
   private teamLogin: DesktopTeamLogin | null = null;
+  private workerUrl = "";
+  private desktopReady = false;
   private hydrated = false;
   private prefsReady = false;
   private started = false;
@@ -72,19 +74,30 @@ export class MailAccountsStore {
     userId: string;
     apiBase: string;
     teamLogin?: DesktopTeamLogin | null;
+    workerUrl?: string;
+    desktopReady?: boolean;
   }) {
     const userChanged = this.userId !== input.userId;
     const apiChanged =
       this.apiBase !== (input.apiBase.replace(/\/$/, "") || "/api/email");
     const teamChanged = this.teamLogin !== (input.teamLogin ?? null);
+    const workerChanged =
+      this.workerUrl !== (input.workerUrl?.trim() ?? "");
+    const readyChanged =
+      this.desktopReady !== Boolean(input.desktopReady);
     this.userId = input.userId;
     this.apiBase = input.apiBase.replace(/\/$/, "") || "/api/email";
     this.teamLogin = input.teamLogin ?? null;
+    this.workerUrl = input.workerUrl?.trim() ?? "";
+    this.desktopReady = Boolean(input.desktopReady);
     if (userChanged) {
       this.hydrated = false;
       void this.hydrateEnabled();
     }
-    if (this.started && (userChanged || apiChanged || teamChanged)) {
+    if (
+      this.started &&
+      (userChanged || apiChanged || teamChanged || workerChanged || readyChanged)
+    ) {
       void this.refreshAddresses();
     }
   }
@@ -126,6 +139,13 @@ export class MailAccountsStore {
 
   async refreshAddresses(): Promise<void> {
     if (!this.apiBase) return;
+    if (!this.teamLogin && !this.workerUrl) {
+      runInAction(() => {
+        this.loading = false;
+        this.error = "Worker is not connected. Finish setup to load live mail.";
+      });
+      return;
+    }
     // Team mode: the authenticated account is the only one in scope. Seed it
     // directly from teamLogin instead of calling the admin /console/addresses
     // endpoint (team users have no admin token).

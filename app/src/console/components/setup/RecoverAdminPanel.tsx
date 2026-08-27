@@ -22,6 +22,7 @@ import {
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { useDesktop } from "@/lib/desktop/shell";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
@@ -69,9 +70,17 @@ export function RecoverAdminPanel() {
     }, CF_OAUTH_AUTHORIZE_WAIT_MS);
   }, [clearOauthWaitTimer]);
 
+  const resolvedWorkerUrl = resolveWorkerUrl({
+    role: "owner",
+    ownerStatus: store.ownerStatus,
+    teamStatus: store.teamStatus,
+    credentials,
+    teamLogin: null,
+  });
+
   const runReset = useCallback(async () => {
     setIssueError(null);
-    const workerUrl = credentials?.workerUrl?.trim().replace(/\/$/, "") ?? "";
+    const workerUrl = resolvedWorkerUrl;
     const cfAccessToken = credentials?.cfOauthAccessToken?.trim() ?? "";
     if (!workerUrl || !cfAccessToken) {
       setIssueError({
@@ -89,7 +98,7 @@ export function RecoverAdminPanel() {
     } catch (err) {
       setIssueError(explainDesktopError(err, "Could not reset passtoken"));
     }
-  }, [credentials, store]);
+  }, [credentials, resolvedWorkerUrl, store]);
 
   useEffect(() => {
     return () => {
@@ -152,7 +161,7 @@ export function RecoverAdminPanel() {
     if (!revealed) return;
     const content = [
       "# Relaybase owner passtoken — save this file securely",
-      `# Worker URL: ${credentials?.workerUrl ?? ""}`,
+      `# Worker URL: ${resolvedWorkerUrl}`,
       `# Username: ${revealed.username}`,
       `# Generated: ${new Date().toISOString()}`,
       "",
@@ -171,7 +180,7 @@ export function RecoverAdminPanel() {
   }
 
   const revealed = store.revealedPasstoken;
-  const workerUrl = credentials?.workerUrl ?? "";
+  const workerUrl = resolvedWorkerUrl;
 
   return (
     <SetupCenteredPage

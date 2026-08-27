@@ -138,6 +138,22 @@ fn json_string<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty())
 }
 
+fn normalize_passtoken(raw: &str) -> String {
+    let mut token = raw.trim().to_string();
+    if let Some(rest) = token.strip_prefix("PASSTOKEN=") {
+        token = rest.trim().to_string();
+    } else if let Some(rest) = token.strip_prefix("passtoken=") {
+        token = rest.trim().to_string();
+    }
+    if (token.starts_with('"') && token.ends_with('"') && token.len() >= 2)
+        || (token.starts_with('\'') && token.ends_with('\'') && token.len() >= 2)
+    {
+        token = token[1..token.len() - 1].trim().to_string();
+    }
+    token.retain(|c| !c.is_whitespace());
+    token
+}
+
 fn persist_worker_url(worker_url: &str) -> Result<(), String> {
     let mut creds = load_credentials()?.unwrap_or_default();
     creds.worker_url = worker_url.trim().trim_end_matches('/').to_string();
@@ -203,7 +219,7 @@ pub async fn owner_login(
 ) -> Result<OwnerSessionStatus, String> {
     let base = worker_url.trim().trim_end_matches('/');
     let username = username.trim().to_lowercase();
-    let passtoken = passtoken.trim().to_string();
+    let passtoken = normalize_passtoken(&passtoken);
     if base.is_empty() {
         return Err("Worker URL is required".into());
     }
@@ -212,6 +228,12 @@ pub async fn owner_login(
     }
     if passtoken.is_empty() {
         return Err("Passtoken is required".into());
+    }
+    if !passtoken.starts_with("rb_pass_") {
+        return Err(
+            "Passtoken must start with rb_pass_. Paste only the token, not a PASSTOKEN= line."
+                .into(),
+        );
     }
 
     let url = format!("{base}/console/login");
@@ -232,8 +254,15 @@ pub async fn owner_login(
     }
     if status != 200 {
         return Err(json_string(&value, "error")
-            .unwrap_or("Invalid credentials")
-            .to_string());
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                if status == 401 {
+                    "Invalid credentials. Check username and passtoken (paste only the rb_pass_… token)."
+                        .to_string()
+                } else {
+                    format!("Worker login failed (HTTP {status})")
+                }
+            }));
     }
     let access = json_string(&value, "accessToken")
         .ok_or_else(|| "Worker login did not return an access token".to_string())?;
@@ -245,7 +274,11 @@ pub async fn owner_login(
         .unwrap_or(600);
 
     let existing = load_keyring().ok().flatten();
-    let biometry = biometry_enabled.unwrap_or(existing.map(|b| b.biometry_enabled).unwrap_or(true));
+    let biometry = biometry_enabled.unwrap_or_else(|| {
+        existing
+            .map(|b| b.biometry_enabled)
+            .unwrap_or(false)
+    });
     save_keyring(&KeyringBlob {
         worker_url: base.to_string(),
         username: username.clone(),
@@ -310,22 +343,9 @@ async fn refresh_with_blob(blob: &KeyringBlob) -> Result<(), String> {
     Ok(())
 }
 
+/// Lock the owner session: drop in-memory access only. The keyring refresh
+/// (and biometry preference) stay so the next open can Touch ID unlock.
 pub async fn owner_logout() -> Result<(), String> {
-    let blob = load_keyring().ok().flatten();
-    let access = access_if_valid();
-    if let (Some(blob), Some(access)) = (blob.as_ref(), access.as_ref()) {
-        let url = format!(
-            "{}/console/logout",
-            blob.worker_url.trim().trim_end_matches('/')
-        );
-        let _ = post_json(
-            &url,
-            serde_json::json!({ "refreshToken": blob.refresh_token }),
-            &[("Authorization", &format!("Bearer {}", access.access_token))],
-        )
-        .await;
-    }
-    delete_keyring();
     clear_access();
     Ok(())
 }

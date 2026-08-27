@@ -9,13 +9,11 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 /**
- * One-time biometry offer shown after an invited teammate's first login.
- * Accept → store the mobile password in the OS keyring and enable biometry
- * (next launch prompts Touch ID). Decline → disable biometry and still
- * enter the app this run; nothing is persisted to disk.
+ * One-time biometry offer after first owner passtoken or invited login.
+ * Accept → enable Touch ID / Windows Hello in the OS keyring blob.
+ * Decline → keep the keyring session but require passtoken/password next launch.
  */
-export function OfferBiometryView({ role }: { role: "invited" }) {
-  void role;
+export function OfferBiometryView({ role }: { role: "owner" | "invited" }) {
   const store = useAppSession();
   const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
     useDesktopChrome();
@@ -43,9 +41,9 @@ export function OfferBiometryView({ role }: { role: "invited" }) {
               Unlock with {label}?
             </h1>
             <p className="text-xs text-muted-foreground">
-              Store your mobile password in this device&apos;s keychain so the
-              next time you open Relaybase it unlocks with {label}. The
-              password is never written to disk.
+              {role === "owner"
+                ? `Save this device session in the keychain so the next time you open Relaybase it unlocks with ${label}. Your passtoken is never written to disk.`
+                : `Store your mobile password in this device's keychain so the next time you open Relaybase it unlocks with ${label}. The password is never written to disk.`}
             </p>
           </div>
           {store.error ? (
@@ -69,7 +67,8 @@ export function OfferBiometryView({ role }: { role: "invited" }) {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Not now means you&apos;ll re-enter your password every launch.
+            Not now means you&apos;ll re-enter your{" "}
+            {role === "owner" ? "passtoken" : "password"} every launch.
           </p>
         </div>
       </div>

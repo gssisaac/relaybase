@@ -73,9 +73,11 @@ boot effect.
 
 `DesktopContext` (credentials, scope id, mail-cache migration) still loads in
 parallel; the store waits for it only to resolve the **non-prompt** branches
-(`choice` / `invitedLogin` / owner UnlockView), which need `credentials.workerUrl`.
+(`choice` / `invitedLogin` / owner UnlockView), which need a resolved Worker
+URL (`resolveWorkerUrl`: keyring first, then `credentials.json` / `team-login.json`).
 A worker URL with no keyring secret opens `unlock { mode: "idle" }` — the
-fingerprint surface — not the passtoken form.
+fingerprint surface — not the passtoken form. Keyring-only `workerUrl` (no
+`credentials.json`) is enough for idle unlock; the URL field is hidden.
 
 ## State diagram
 
@@ -88,7 +90,7 @@ stateDiagram-v2
     boot --> unlock_prompting : team hasSecret (no access)
     boot --> invitedReady : team hasAccess
     boot --> invitedLogin : team identity, no keyring secret
-    boot --> unlock_idle : owner workerUrl, no keyring
+    boot --> unlock_idle : owner workerUrl (keyring or disk), no keyring refresh
     boot --> choice : nothing enrolled
     boot --> boot : waiting on DesktopContext.ready
 
@@ -115,8 +117,12 @@ stateDiagram-v2
     install_createOwner --> install_reveal : createOwner (setup-admin)
     install_reveal --> unlock_secret : consumeRevealedPasstoken
 
-    ownerReady --> choice : signOut
-    invitedReady --> choice : signOut
+    ownerReady --> unlock_prompting : signOut (keyring + biometry)
+    ownerReady --> unlock_secret : signOut (keyring, no biometry)
+    ownerReady --> choice : signOut (no keyring)
+    invitedReady --> unlock_prompting : signOut (keyring + biometry)
+    invitedReady --> unlock_secret : signOut (keyring, no biometry)
+    invitedReady --> invitedLogin : signOut (no keyring)
 
     ownerReady --> unlock_prompting : Worker 401 (re-prompt, keep keyring)
     invitedReady --> unlock_prompting : Worker 401 (re-prompt, keep keyring)

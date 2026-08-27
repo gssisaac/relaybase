@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { useAppSession } from "@/lib/desktop/app-session";
 import {
   DEFAULT_DASHBOARD_PATH,
   normalizeEntryPath,
@@ -23,8 +24,11 @@ export function RestoreLastRoute({
   fallbackUserId?: string;
 }) {
   const router = useRouter();
+  const store = useAppSession();
 
   useEffect(() => {
+    if (!store.canShowApp) return;
+
     const id = userId?.trim() || fallbackUserId;
     let cancelled = false;
     const failSafe = window.setTimeout(() => {
@@ -42,7 +46,7 @@ export function RestoreLastRoute({
       cancelled = true;
       window.clearTimeout(failSafe);
     };
-  }, [router, userId, fallbackUserId]);
+  }, [router, userId, fallbackUserId, store.canShowApp]);
 
   return (
     <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">

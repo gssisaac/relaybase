@@ -28,7 +28,10 @@ type DesktopContextValue = {
   /** Opaque account-scope id (`s-{16hex}`) for the current session. Changes
    * when the CF / Relaybase console account or Worker URL changes. */
   accountScopeId: string;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<{
+    credentials: DesktopCredentials | null;
+    teamLogin: DesktopTeamLogin | null;
+  }>;
   setCredentials: (c: DesktopCredentials | null) => void;
 };
 
@@ -74,9 +77,14 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     if (snap?.credentials) applyCredentialGlobals(snap.credentials);
   }, []);
 
-  const refresh = React.useCallback(async () => {
+  const refresh = React.useCallback(async (): Promise<{
+    credentials: DesktopCredentials | null;
+    teamLogin: DesktopTeamLogin | null;
+  }> => {
     const desktop = isDesktopRuntime();
     setIsDesktop(desktop);
+    let creds: DesktopCredentials | null = null;
+    let team: DesktopTeamLogin | null = null;
     try {
       // Run the flat→scoped layout migration BEFORE loading credentials so
       // the scope id is stable when mail/cache stores hydrate. Best-effort.
@@ -88,7 +96,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
           /* best-effort one-shot */
         }
       }
-      const [creds, team] = desktop
+      [creds, team] = desktop
         ? await Promise.all([desktopGetCredentials(), desktopGetTeamLogin()])
         : [await loadLocalCredentials(), null];
       setCredentials(creds);
@@ -113,6 +121,8 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
         teamLogin: team,
       });
     } catch {
+      creds = null;
+      team = null;
       setCredentials(null);
       setTeamLogin(null);
       applyCredentialGlobals(null);
@@ -125,6 +135,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setReady(true);
     }
+    return { credentials: creds, teamLogin: team };
   }, []);
 
   React.useEffect(() => {

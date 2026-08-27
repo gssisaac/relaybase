@@ -42,8 +42,8 @@ import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext
 import { ACCOUNT_COLOR_PALETTE } from "@/email/lib/accounts/account-colors";
 import { useEmailPaths } from "@/email/lib/paths";
 import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
-import { useDesktop } from "@/lib/desktop/shell";
-import { useDesktopChrome } from "@/lib/desktop/shell";
+import { useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
+import { useAppSession } from "@/lib/desktop/app-session";
 import {
   signOutRedirectPath,
   signOutRelaybase,
@@ -71,7 +71,8 @@ export function EmailSettingsView() {
   const searchParams = useSearchParams();
   const productId = useProductId();
   const { apiBase, inbox } = useEmailPaths();
-  const { teamLogin, refresh: refreshDesktop } = useDesktop();
+  const { teamLogin } = useDesktop();
+  const session = useAppSession();
   const { dragRegionProps, dragRegionClassName, noDragClassName } =
     useDesktopChrome();
   const isTeam = Boolean(teamLogin);
@@ -267,11 +268,11 @@ export function EmailSettingsView() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOutRelaybase(isTeam);
-      await refreshDesktop();
-      router.replace(signOutRedirectPath(isTeam));
+      await signOutRelaybase(isTeam, session);
+      router.replace(signOutRedirectPath(isTeam, session));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign out failed");
+      router.replace(signOutRedirectPath(isTeam, session));
     } finally {
       setSigningOut(false);
     }

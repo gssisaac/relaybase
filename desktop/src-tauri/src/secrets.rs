@@ -869,16 +869,24 @@ const TEAM_LOGIN_FILE: &str = "team-login.json";
 pub struct TeamLogin {
     pub worker_url: String,
     pub account_email: String,
-    /// Per-account mobile password (plaintext; same model as the Flutter
-    /// companion). Stored locally only and sent to the customer Worker as a
-    /// Bearer over /mobile/*.
+    /// Per-account mobile password. **Legacy only.** New writes keep this
+    /// empty — the password lives in the OS keyring (`team_session.rs`).
+    /// Kept as an `Option`-ish field so old `team-login.json` files with a
+    /// plaintext password can still be read once and migrated.
+    #[serde(default)]
     pub mobile_password: String,
 }
 
 pub fn save_team_login(login: &TeamLogin) -> Result<(), String> {
     let dir = ensure_dir()?;
     let path = dir.join(TEAM_LOGIN_FILE);
-    let json = serde_json::to_string_pretty(login).map_err(|e| e.to_string())?;
+    // Never persist the password to disk — identity only.
+    let identity = TeamLogin {
+        worker_url: login.worker_url.trim().trim_end_matches('/').to_string(),
+        account_email: login.account_email.trim().to_lowercase(),
+        mobile_password: String::new(),
+    };
+    let json = serde_json::to_string_pretty(&identity).map_err(|e| e.to_string())?;
     fs::write(&path, &json).map_err(|e| format!("Failed to write team login: {e}"))?;
     restrict_file_permissions(&path);
     Ok(())

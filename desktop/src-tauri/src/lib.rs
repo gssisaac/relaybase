@@ -3,6 +3,7 @@ mod cloudflare;
 mod notify;
 mod owner_session;
 mod secrets;
+mod team_session;
 mod touch_id;
 mod worker;
 
@@ -41,6 +42,12 @@ use owner_session::{
     owner_set_biometry_enabled, owner_setup_admin as owner_setup_admin_inner,
     owner_unlock as owner_unlock_inner, worker_request as worker_request_inner,
     OwnerSessionStatus, OwnerSetupResult, WorkerRequestInput, WorkerRequestOutput,
+};
+use team_session::{
+    team_login as team_login_inner, team_logout as team_logout_inner,
+    team_session_status, team_set_biometry_enabled as team_set_biometry_enabled_inner,
+    team_unlock as team_unlock_inner, team_worker_request as team_worker_request_inner,
+    TeamSessionStatus, TeamWorkerRequestInput, TeamWorkerRequestOutput,
 };
 use worker::{
     adopt_worker, install_worker, probe_install, reissue_admin_token as reissue_admin_token_inner,
@@ -293,12 +300,14 @@ async fn get_team_login() -> Result<Option<TeamLogin>, String> {
 async fn save_team_login_cmd(
     worker_url: String,
     account_email: String,
-    mobile_password: String,
+    #[allow(unused_variables)] mobile_password: String,
 ) -> Result<TeamLogin, String> {
+    // Identity-only on disk. The password is stored in the OS keyring by
+    // `team_login_cmd` (team_session.rs). Kept for call-site compatibility.
     let login = TeamLogin {
         worker_url: worker_url.trim().trim_end_matches('/').to_string(),
         account_email: account_email.trim().to_lowercase(),
-        mobile_password: mobile_password,
+        mobile_password: String::new(),
     };
     save_team_login(&login)?;
     Ok(login)
@@ -1781,6 +1790,43 @@ async fn worker_request_cmd(input: WorkerRequestInput) -> Result<WorkerRequestOu
     worker_request_inner(input).await
 }
 
+#[tauri::command]
+fn team_session_status_cmd() -> Result<TeamSessionStatus, String> {
+    team_session_status()
+}
+
+#[tauri::command]
+async fn team_login_cmd(
+    worker_url: String,
+    account_email: String,
+    mobile_password: String,
+    biometry_enabled: Option<bool>,
+) -> Result<TeamSessionStatus, String> {
+    team_login_inner(worker_url, account_email, mobile_password, biometry_enabled).await
+}
+
+#[tauri::command]
+async fn team_unlock_cmd() -> Result<TeamSessionStatus, String> {
+    team_unlock_inner().await
+}
+
+#[tauri::command]
+async fn team_logout_cmd() -> Result<(), String> {
+    team_logout_inner().await
+}
+
+#[tauri::command]
+fn team_set_biometry_enabled_cmd(enabled: bool) -> Result<TeamSessionStatus, String> {
+    team_set_biometry_enabled_inner(enabled)
+}
+
+#[tauri::command]
+async fn team_worker_request_cmd(
+    input: TeamWorkerRequestInput,
+) -> Result<TeamWorkerRequestOutput, String> {
+    team_worker_request_inner(input).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -1967,6 +2013,12 @@ pub fn run() {
             owner_setup_admin_cmd,
             owner_reset_admin_cmd,
             worker_request_cmd,
+            team_session_status_cmd,
+            team_login_cmd,
+            team_unlock_cmd,
+            team_logout_cmd,
+            team_set_biometry_enabled_cmd,
+            team_worker_request_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Relaybase desktop");

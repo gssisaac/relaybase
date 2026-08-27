@@ -14,8 +14,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { useAppSession } from "@/lib/desktop/AppSessionContext";
 import {
-  desktopSaveTeamLogin,
+  desktopOwnerSessionStatus,
+  desktopTeamLogin,
   explainDesktopError,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
@@ -41,6 +43,7 @@ export function AddTeamAccountDialog({
 }: AddTeamAccountDialogProps) {
   const router = useRouter();
   const { refresh } = useDesktop();
+  const store = useAppSession();
   const [accountEmail, setAccountEmail] = useState("");
   const [mobilePassword, setMobilePassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -72,26 +75,16 @@ export function AddTeamAccountDialog({
       return;
     }
     try {
-      const res = await fetch(`${url}/mobile/config`, {
-        headers: {
-          "X-Account-Email": email,
-          Authorization: `Bearer ${password}`,
-        },
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        email?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? "Mobile login failed");
-      }
-      // dialog_only scope: replace the active team account (single account).
-      await desktopSaveTeamLogin({
+      // Verifies the password against /mobile/config and stores it in the OS
+      // keyring (identity-only team-login.json on disk). JS never holds the
+      // password after this call.
+      const teamStatus = await desktopTeamLogin({
         workerUrl: url,
         accountEmail: email,
         mobilePassword: password,
       });
+      const ownerStatus = await desktopOwnerSessionStatus();
+      store.setStatuses(ownerStatus, teamStatus);
       await refresh();
       onOpenChange(false);
       router.push(emailAccountHref("inbox", email));

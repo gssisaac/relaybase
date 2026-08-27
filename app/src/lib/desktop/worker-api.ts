@@ -1,7 +1,11 @@
 "use client";
 
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
-import { desktopWorkerRequest, isDesktopRuntime } from "@/lib/desktop/bridge";
+import {
+  desktopTeamWorkerRequest,
+  desktopWorkerRequest,
+  isDesktopRuntime,
+} from "@/lib/desktop/bridge";
 
 /**
  * Call the Worker installed in the user's Cloudflare account.
@@ -85,4 +89,49 @@ export async function workerAdminJson<T>(
     );
   }
   return data;
+}
+
+/**
+ * Call the customer Worker's `/mobile/*` routes as an invited teammate.
+ * Rust `team_worker_request` attaches `Authorization: Bearer <mobilePassword>`
+ * and `X-Account-Email` from the unlocked team session in process memory —
+ * JS never sees the password. The team session must be unlocked first
+ * (`AppSessionStore` team unlock / `team_login`).
+ */
+export async function teamWorkerFetch(
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
+  if (!isDesktopRuntime()) {
+    throw new Error("Team session is only available in the desktop app.");
+  }
+  const headers: Record<string, string> = {};
+  if (init?.headers) {
+    new Headers(init.headers).forEach((value, key) => {
+      headers[key] = value;
+    });
+  }
+  if (init?.body && !headers["Content-Type"] && !headers["content-type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  let body: string | undefined;
+  if (typeof init?.body === "string") {
+    body = init.body;
+  } else if (init?.body) {
+    body = String(init.body);
+  }
+  const result = await desktopTeamWorkerRequest({
+    method: (init?.method ?? "GET").toUpperCase(),
+    path,
+    headers,
+    body,
+  });
+  const resHeaders = new Headers();
+  for (const [k, v] of result.headers) {
+    resHeaders.append(k, v);
+  }
+  return new Response(result.body, {
+    status: result.status,
+    headers: resHeaders,
+  });
 }

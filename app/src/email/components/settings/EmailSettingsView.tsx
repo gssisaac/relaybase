@@ -54,6 +54,7 @@ import {
   desktopAwareFetch,
   readResponseJson,
 } from "@/lib/desktop/api-base";
+import { teamWorkerFetch } from "@/lib/desktop/worker-api";
 import { cn } from "@/lib/utils";
 
 function domainOf(email: string): string {
@@ -145,15 +146,7 @@ export function EmailSettingsView() {
       if (!activeEmail) return;
       if (isTeam && teamLogin) {
         try {
-          const res = await fetch(
-            `${teamLogin.workerUrl.replace(/\/$/, "")}/mobile/profile`,
-            {
-              headers: {
-                "X-Account-Email": activeEmail,
-                Authorization: `Bearer ${teamLogin.mobilePassword}`,
-              },
-            },
-          );
+          const res = await teamWorkerFetch(`/mobile/profile`);
           const data = (await res.json().catch(() => ({}))) as
             | (TeamProfile & { ok?: boolean; error?: string })
             | null;
@@ -204,18 +197,11 @@ export function EmailSettingsView() {
     setError(null);
     try {
       if (isTeam && teamLogin) {
-        const res = await fetch(
-          `${teamLogin.workerUrl.replace(/\/$/, "")}/mobile/profile`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Account-Email": activeEmail,
-              Authorization: `Bearer ${teamLogin.mobilePassword}`,
-            },
-            body: JSON.stringify({ displayName }),
-          },
-        );
+        const res = await teamWorkerFetch(`/mobile/profile`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName }),
+        });
         const data = (await res.json().catch(() => ({}))) as {
           ok?: boolean;
           error?: string;

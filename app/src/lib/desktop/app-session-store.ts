@@ -617,4 +617,31 @@ export class AppSessionStore {
   clearError(): void {
     this.error = null;
   }
+
+  /**
+   * Worker returned 401. Do NOT wipe the worker URL or keyring — the refresh
+   * may simply be stale. Re-fetch keyring status and re-prompt unlock (or
+   * fall back to the secret form if the refresh was revoked). The user stays
+   * in place instead of being bounced to /setup.
+   */
+  async handleWorkerUnauthorized(): Promise<void> {
+    this.prompted = false;
+    try {
+      const [owner, team] = await Promise.all([
+        this.deps.ownerSessionStatus(),
+        this.deps.teamSessionStatus(),
+      ]);
+      runInAction(() => {
+        this.ownerStatus = owner;
+        this.teamStatus = team;
+        this.statusesHydrated = true;
+      });
+      this.reconcileFromStatuses();
+      if (this.phase.kind === "unlock" && this.phase.mode === "prompting") {
+        void this.promptUnlock();
+      }
+    } catch {
+      /* keep current phase */
+    }
+  }
 }

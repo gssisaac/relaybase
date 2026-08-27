@@ -3,7 +3,6 @@
 import * as React from "react";
 
 import {
-  desktopClearCredentials,
   desktopGetAccountScopeId,
   desktopGetCredentials,
   desktopGetTeamLogin,
@@ -20,7 +19,6 @@ import {
   writeDesktopSessionCache,
 } from "@/lib/desktop/desktop-session-cache";
 import { clearAllDashboardClientCache } from "@/lib/dashboard/shared/dashboard-client-cache";
-import { isUnauthorizedGraceActive } from "@/lib/desktop/unauthorized-grace";
 
 type DesktopContextValue = {
   isDesktop: boolean;
@@ -132,33 +130,6 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  // Global 401 handler: when the Worker rejects the admin token, clear
-  // credentials and redirect to /setup so the user can re-connect.
-  React.useEffect(() => {
-    async function onUnauthorized() {
-      if (isUnauthorizedGraceActive()) return;
-      setCredentials(null);
-      applyCredentialGlobals(null);
-      const snap = readDesktopSessionCache();
-      writeDesktopSessionCache({
-        isDesktop: snap?.isDesktop ?? isDesktopRuntime(),
-        ready: true,
-        credentials: null,
-        teamLogin: snap?.teamLogin ?? null,
-      });
-      try {
-        await desktopClearCredentials();
-      } catch {
-        /* best-effort — redirect anyway */
-      }
-      if (typeof window !== "undefined") {
-        window.location.replace("/setup");
-      }
-    }
-    window.addEventListener("relaybase:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("relaybase:unauthorized", onUnauthorized);
-  }, []);
 
   const setCredentialsAndGlobals = React.useCallback(
     (creds: DesktopCredentials | null) => {

@@ -2,6 +2,7 @@
 
 import { Check, Copy, Download, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { downloadBlob } from "@/lib/attachments/download";
@@ -9,35 +10,36 @@ import {
   CF_OAUTH_AUTHORIZE_WAIT_MS,
   desktopOpenExternal,
   desktopRegisterWorkerWithConsole,
-  desktopReissueAdminToken,
   desktopSaveDownloadFile,
   desktopStartCfOAuth,
-  desktopVerifyWorkerConnection,
   explainCfOAuthError,
   explainDesktopError,
   isDesktopRuntime,
   listenCfOAuthResult,
   oauthAuthorizationIncompleteHelp,
   type DesktopErrorHelp,
-  type ReissueAdminResult,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
-import { markAdminTokenJustRotated } from "@/lib/desktop/unauthorized-grace";
+import { useAppSession } from "@/lib/desktop/AppSessionContext";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
+/**
+ * Forgot-passtoken recovery. The deprecated `ADMIN_TOKEN` reissue path is
+ * gone; this now authorizes Cloudflare and calls the Worker's
+ * `/console/reset-admin` (via the store) with the resulting CF access token,
+ * which re-issues the owner passtoken once.
+ */
 export function RecoverAdminPanel() {
-  const { refresh } = useDesktop();
+  const router = useRouter();
+  const { refresh, credentials } = useDesktop();
+  const store = useAppSession();
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
-  const [issuing, setIssuing] = useState(false);
   const [issueError, setIssueError] = useState<DesktopErrorHelp | null>(null);
-  const [done, setDone] = useState<ReissueAdminResult | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const issuingRef = useRef(false);
   const oauthWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearOauthWaitTimer = useCallback(() => {
@@ -67,26 +69,27 @@ export function RecoverAdminPanel() {
     }, CF_OAUTH_AUTHORIZE_WAIT_MS);
   }, [clearOauthWaitTimer]);
 
-  const runReissue = useCallback(async () => {
-    if (issuingRef.current) return;
-    issuingRef.current = true;
-    setIssuing(true);
+  const runReset = useCallback(async () => {
     setIssueError(null);
+    const workerUrl = credentials?.workerUrl?.trim().replace(/\/$/, "") ?? "";
+    const cfAccessToken = credentials?.cfOauthAccessToken?.trim() ?? "";
+    if (!workerUrl || !cfAccessToken) {
+      setIssueError({
+        title: "Cloudflare authorization missing",
+        detail: "Authorize with Cloudflare first, then we can reset your passtoken.",
+        fix: "Click Authorize with Cloudflare and complete the sign-in.",
+      });
+      return;
+    }
     try {
-      const result = await desktopReissueAdminToken();
-      markAdminTokenJustRotated();
-      void desktopRegisterWorkerWithConsole(result.workerUrl).catch(() => {
+      await store.recoverOwner({ workerUrl, cfAccessToken });
+      void desktopRegisterWorkerWithConsole(workerUrl).catch(() => {
         /* best-effort */
       });
-      await refresh();
-      setDone(result);
     } catch (err) {
-      setIssueError(explainDesktopError(err, "Could not reissue admin token"));
-    } finally {
-      issuingRef.current = false;
-      setIssuing(false);
+      setIssueError(explainDesktopError(err, "Could not reset passtoken"));
     }
-  }, [refresh]);
+  }, [credentials, store]);
 
   useEffect(() => {
     return () => {
@@ -103,7 +106,7 @@ export function RecoverAdminPanel() {
         void (async () => {
           await refresh();
           finishOauthWait({ error: null });
-          await runReissue();
+          await runReset();
         })();
       },
       onError: (message) => {
@@ -118,7 +121,7 @@ export function RecoverAdminPanel() {
       active = false;
       unlisten?.();
     };
-  }, [finishOauthWait, refresh, runReissue]);
+  }, [finishOauthWait, refresh, runReset]);
 
   async function handleAuthorize() {
     setOauthBusy(true);
@@ -137,41 +140,27 @@ export function RecoverAdminPanel() {
     finishOauthWait({ error: oauthAuthorizationIncompleteHelp("cancelled") });
   }
 
-  async function retryVerify() {
-    if (!done?.adminToken || verifying) return;
-    setVerifying(true);
-    setIssueError(null);
-    try {
-      await desktopVerifyWorkerConnection(done.workerUrl, done.adminToken);
-      markAdminTokenJustRotated();
-      setDone({ ...done, verified: true });
-    } catch (err) {
-      setIssueError(
-        explainDesktopError(err, "Worker has not accepted the new token yet"),
-      );
-    } finally {
-      setVerifying(false);
-    }
-  }
-
   async function copyToken() {
-    if (!done?.adminToken) return;
-    await navigator.clipboard.writeText(done.adminToken);
+    const token = store.revealedPasstoken?.passtoken;
+    if (!token) return;
+    await navigator.clipboard.writeText(token);
     setCopiedToken(true);
   }
 
   async function downloadToken() {
-    if (!done?.adminToken) return;
+    const revealed = store.revealedPasstoken;
+    if (!revealed) return;
     const content = [
-      "# Relaybase admin token — save this file securely",
-      `# Worker URL: ${done.workerUrl}`,
+      "# Relaybase owner passtoken — save this file securely",
+      `# Worker URL: ${credentials?.workerUrl ?? ""}`,
+      `# Username: ${revealed.username}`,
       `# Generated: ${new Date().toISOString()}`,
       "",
-      `ADMIN_TOKEN=${done.adminToken}`,
+      `PASSTOKEN=${revealed.passtoken}`,
       "",
     ].join("\n");
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const filename = "relaybase-admin-token.txt";
+    const filename = "relaybase-passtoken.txt";
     if (isDesktopRuntime()) {
       const buffer = await blob.arrayBuffer();
       await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
@@ -181,53 +170,44 @@ export function RecoverAdminPanel() {
     setTokenDownloaded(true);
   }
 
+  const revealed = store.revealedPasstoken;
+  const workerUrl = credentials?.workerUrl ?? "";
+
   return (
-    <SetupCenteredPage
-      backHref="/setup/connect"
-      backLabel="Back"
-    >
+    <SetupCenteredPage backHref="/setup/connect" backLabel="Back">
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">
-            Reissue admin token
+            Reset owner passtoken
           </h1>
           <p className="text-xs text-muted-foreground">
             Authorize the Cloudflare account that already has Relaybase. We
-            will generate a new admin token and push it as the Worker{" "}
-            <code className="font-mono">ADMIN_TOKEN</code> secret.
+            will verify the account matches the Worker and re-issue your owner
+            passtoken once. The old passtoken and all sessions are revoked.
           </p>
         </div>
 
-        {done ? (
+        {revealed ? (
           <div className="space-y-3">
-            <p
-              className={
-                done.verified !== false
-                  ? "text-sm font-medium text-emerald-700 dark:text-emerald-400"
-                  : "text-sm font-medium text-amber-700 dark:text-amber-400"
-              }
-            >
-              {done.verified !== false
-                ? "New admin token is on your Worker."
-                : "New admin token is saved — waiting for the Worker to accept it."}
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+              New passtoken issued. Sign in with it once — the app does not
+              store it.
             </p>
             <p className="text-xs text-muted-foreground">
-              Worker URL:{" "}
-              <span className="font-mono">{done.workerUrl}</span>
+              Worker URL: <span className="font-mono">{workerUrl}</span>
             </p>
             <p className="text-xs text-muted-foreground">
-              Copy this token and save it. You can reissue it again from
-              Connect existing Worker if you lose it.
+              Username: <span className="font-mono">{revealed.username}</span>
             </p>
             <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
               <code className="min-w-0 flex-1 break-all font-mono text-[11px]">
-                {done.adminToken}
+                {revealed.passtoken}
               </code>
               <Button
                 type="button"
                 size="icon-sm"
                 variant={copiedToken ? "default" : "outline"}
-                aria-label="Copy admin token"
+                aria-label="Copy passtoken"
                 onClick={() => void copyToken()}
               >
                 {copiedToken ? (
@@ -240,7 +220,7 @@ export function RecoverAdminPanel() {
                 type="button"
                 size="icon-sm"
                 variant={tokenDownloaded ? "default" : "outline"}
-                aria-label="Download admin token"
+                aria-label="Download passtoken"
                 onClick={() => void downloadToken()}
               >
                 {tokenDownloaded ? (
@@ -250,51 +230,23 @@ export function RecoverAdminPanel() {
                 )}
               </Button>
             </div>
-            {done.verified === false ? (
-              <>
-                {issueError ? <DesktopErrorBanner error={issueError} /> : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  disabled={verifying}
-                  onClick={() => void retryVerify()}
-                >
-                  {verifying ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : null}
-                  Retry verify
-                </Button>
-              </>
-            ) : null}
-            {!copiedToken && !tokenDownloaded ? (
-              <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                Copy this token to unlock Go to Mailbox.
-              </p>
-            ) : done.verified === false ? (
-              <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                Wait until the Worker accepts the token, then Go to Mailbox.
-              </p>
-            ) : null}
+            {issueError ? <DesktopErrorBanner error={issueError} /> : null}
             <Button
               type="button"
               className="w-full"
-              disabled={
-                done.verified === false || (!copiedToken && !tokenDownloaded)
-              }
+              disabled={!copiedToken && !tokenDownloaded}
               onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.location.assign("/");
-                }
+                store.consumeRevealedPasstoken();
+                router.replace("/");
               }}
             >
               Go to Mailbox
             </Button>
           </div>
-        ) : issuing ? (
+        ) : store.busy ? (
           <div className="flex flex-col items-center gap-3 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
-            Issuing a new admin token and waiting for the Worker…
+            Verifying the Cloudflare account and re-issuing your passtoken…
           </div>
         ) : (
           <div className="space-y-3">

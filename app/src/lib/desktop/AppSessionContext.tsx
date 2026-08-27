@@ -62,6 +62,18 @@ export function AppSessionProvider({
     desktop.teamLogin,
   ]);
 
+  // Global 401 handler: re-prompt unlock without wiping the worker URL or
+  // keyring. The refresh may simply be stale; the store falls back to the
+  // secret form if it was revoked.
+  React.useEffect(() => {
+    function onUnauthorized() {
+      void store.handleWorkerUnauthorized();
+    }
+    window.addEventListener("relaybase:unauthorized", onUnauthorized);
+    return () =>
+      window.removeEventListener("relaybase:unauthorized", onUnauthorized);
+  }, [store]);
+
   return (
     <AppSessionContext.Provider value={store}>
       {children}

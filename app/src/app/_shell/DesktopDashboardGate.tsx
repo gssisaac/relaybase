@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
@@ -13,16 +13,7 @@ import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
-import { OwnerUnlockPanel } from "@/console/components/setup/OwnerUnlockPanel";
-import {
-  DesktopProvider,
-  useDesktop,
-} from "@/lib/desktop/DesktopContext";
-import {
-  desktopOwnerSessionStatus,
-  isDesktopRuntime,
-} from "@/lib/desktop/bridge";
-import { hasOwnerSession } from "@/lib/desktop/owner-session";
+import { useAppSession } from "@/lib/desktop/AppSessionContext";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -31,19 +22,12 @@ import {
 import { MailAccountsProvider } from "@/email/components/accounts/MailAccountsContext";
 import { EmailMailboxProvider } from "@/email/components/mailbox/EmailMailboxContext";
 import { SenderIconProvider } from "@/email/components/sender/SenderIconContext";
+import { UnlockView } from "@/console/components/setup/UnlockView";
+import { OfferBiometryView } from "@/console/components/setup/OfferBiometryView";
+import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
+import { BootScreen } from "@/console/components/setup/BootScreen";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
-
-function setupPathFor(credentials: {
-  workerUrl?: string;
-} | null): string | null {
-  // Install-first: a Relaybase console account is optional. The gate is a
-  // Worker URL. Desktop then unlocks via Touch ID / Windows Hello (keyring);
-  // browser `pnpm next` uses the in-memory owner session.
-  if (!credentials?.workerUrl) return "/setup";
-  if (!isDesktopRuntime() && !hasOwnerSession()) return "/setup/connect";
-  return null;
-}
 
 function DashboardShell({
   userId,
@@ -55,17 +39,10 @@ function DashboardShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  // Email settings is a fullscreen takeover: it renders its own side area
-  // (with macOS traffic-light inset + back button) and hides the main app
-  // sidebar so it can occupy the whole window.
   const isEmailSettings =
     pathname === "/email/settings" || pathname.startsWith("/email/settings?");
 
   if (teamMode) {
-    // Email-only shell for team users. They get the same Email sidebar as the
-    // admin operator (Add account, Settings, folder tree) but no dashboard
-    // switch — team mode is locked to email. The full /mobile/* routing is
-    // wired in the email views; this shell keeps them out of admin pages.
     return (
       <SessionProvider userId={userId}>
         <DomainProvider>
@@ -137,95 +114,62 @@ function DashboardShell({
   );
 }
 
-function OperatorInner({ children }: { children: ReactNode }) {
+function GateInner({ children }: { children: ReactNode }) {
+  const store = useAppSession();
   const router = useRouter();
-  const { ready, credentials, teamLogin } = useDesktop();
-  const [ownerAccess, setOwnerAccess] = useState<boolean | null>(
-    isDesktopRuntime() ? null : true,
-  );
+  const phase = store.phase;
 
-  useEffect(() => {
-    if (!ready) return;
-    if (teamLogin) return;
-    const path = setupPathFor(credentials);
-    if (path) router.replace(path);
-  }, [ready, credentials, teamLogin, router]);
-
-  useEffect(() => {
-    if (!ready || teamLogin || !isDesktopRuntime()) return;
-    if (!credentials?.workerUrl?.trim()) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const session = await desktopOwnerSessionStatus();
-        if (!cancelled) setOwnerAccess(session.hasAccess);
-      } catch {
-        if (!cancelled) setOwnerAccess(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, teamLogin, credentials?.workerUrl]);
-
-  async function refreshOwnerAccess() {
-    try {
-      const session = await desktopOwnerSessionStatus();
-      setOwnerAccess(session.hasAccess);
-    } catch {
-      setOwnerAccess(false);
+  // When the welcome choice is selected, route to the setup page so the
+  // install flow owns its own chrome. The store stays the source of truth
+  // for "can the dashboard render".
+  if (phase.kind === "choice") {
+    if (typeof window !== "undefined" && window.location.pathname !== "/setup") {
+      // Defer the redirect so we don't navigate during render.
+      queueMicrotask(() => {
+        if (window.location.pathname !== "/setup") router.replace("/setup");
+      });
     }
+    return <BootScreen />;
   }
 
-  if (!ready) {
-    return (
-      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
-  }
-
-  if (teamLogin) {
-    return (
-      <DashboardShell userId={teamLogin.accountEmail} teamMode>
-        {children}
-      </DashboardShell>
-    );
-  }
-
-  const workerUrl = credentials?.workerUrl?.trim() ?? "";
-  if (!workerUrl) {
-    return (
-      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-        Opening setup…
-      </div>
-    );
-  }
-
-  if (isDesktopRuntime() && ownerAccess !== true) {
-    if (ownerAccess === null) {
+  switch (phase.kind) {
+    case "boot":
+      return <BootScreen />;
+    case "invitedLogin":
+      return <TeamLoginView />;
+    case "offerBiometry":
+      return <OfferBiometryView role={phase.role} />;
+    case "unlock":
+      return <UnlockView role={phase.role} mode={phase.mode} />;
+    case "invitedReady":
       return (
-        <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-          Loading…
-        </div>
+        <DashboardShell userId={store.teamStatus?.accountEmail ?? "team"} teamMode>
+          {children}
+        </DashboardShell>
       );
-    }
-    return (
-      <OwnerUnlockPanel
-        workerUrl={workerUrl}
-        onUnlocked={() => void refreshOwnerAccess()}
-      />
-    );
+    case "ownerReady":
+      return (
+        <DashboardShell userId={LOCAL_OPERATOR_USER_ID}>{children}</DashboardShell>
+      );
+    case "install":
+    case "ownerRecover":
+      // Install / recover own their own chrome under /setup; if we land here
+      // outside /setup, bounce there. The setup layout renders the steps.
+      if (typeof window !== "undefined" && window.location.pathname !== "/setup") {
+        queueMicrotask(() => {
+          if (window.location.pathname !== "/setup") router.replace("/setup");
+        });
+      }
+      return <BootScreen />;
+    default:
+      return <BootScreen />;
   }
-
-  return (
-    <DashboardShell userId={LOCAL_OPERATOR_USER_ID}>{children}</DashboardShell>
-  );
 }
 
 /**
- * Single dashboard chrome for every run mode.
- * Credentials come from ~/.relaybase (Tauri) or /api/local-credentials (browser next).
+ * Single dashboard chrome for every run mode. The phase switch is the only
+ * gate — no scattered `hasOwnerSession()` / `ownerAccess` checks. Credentials
+ * come from the root `DesktopProvider` (see `AppProviders`).
  */
 export function DesktopDashboardGate({
   children,
@@ -236,11 +180,9 @@ export function DesktopDashboardGate({
 }) {
   return (
     <DesktopShell>
-      <DesktopProvider>
-        <EnableEmailApiDialogHost>
-          <OperatorInner>{children}</OperatorInner>
-        </EnableEmailApiDialogHost>
-      </DesktopProvider>
+      <EnableEmailApiDialogHost>
+        <GateInner>{children}</GateInner>
+      </EnableEmailApiDialogHost>
     </DesktopShell>
   );
 }

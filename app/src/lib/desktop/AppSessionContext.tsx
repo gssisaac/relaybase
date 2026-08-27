@@ -28,9 +28,7 @@ export function AppSessionProvider({
   children: React.ReactNode;
 }) {
   const desktop = useDesktop();
-  const storeRef = React.useRef<AppSessionStore | null>(null);
-  if (storeRef.current === null) storeRef.current = new AppSessionStore();
-  const store = storeRef.current;
+  const [store] = React.useState(() => new AppSessionStore());
 
   // Boot once: parallel keyring status fetch + immediate prompt.
   React.useEffect(() => {

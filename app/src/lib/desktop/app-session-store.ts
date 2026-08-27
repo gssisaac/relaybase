@@ -2,19 +2,18 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { isUserDismissedBiometry } from "./biometry-dismiss.ts";
 import type {
   DesktopCredentials,
   DesktopTeamLogin,
   OwnerSessionStatus,
   TeamSessionStatus,
-} from "./bridge.ts";
+} from "./bridge";
 
 /** Lazy-load the bridge so this module stays importable in the unit-test
  * runner (which cannot resolve the app's `@/` path alias or Tauri). The
  * production app always injects nothing, so these load on first use. */
 async function bridge() {
-  return await import("./bridge.ts");
+  return await import("./bridge");
 }
 
 function defaultIsDesktop(): boolean {
@@ -29,6 +28,59 @@ function biometryLabel(platform?: string): string {
   if (platform === "windows") return "Windows Hello";
   if (platform === "macos") return "Touch ID";
   return "device password";
+}
+
+/** Inlined `isUserDismissedBiometry` so this module has no runtime relative
+ * imports (which the unit-test runner cannot resolve without extensions). */
+const DISMISSED_BIOMETRY_CODES = new Set([
+  "usercancel",
+  "appcancel",
+  "systemcancel",
+  "userfallback",
+]);
+function normalizeDismissCode(value: string): string {
+  return value.toLowerCase().replace(/[_\s-]/g, "");
+}
+function dismissedCode(value: string): boolean {
+  const code = normalizeDismissCode(value);
+  if (DISMISSED_BIOMETRY_CODES.has(code)) return true;
+  return (
+    code.endsWith("cancel") ||
+    code.endsWith("cancelled") ||
+    code.endsWith("canceled")
+  );
+}
+function isDismissedBiometryMessage(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  const bracket = text.match(/^\[([^\]]+)\]/);
+  if (bracket && dismissedCode(bracket[1])) return true;
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("usercancel") ||
+    lower.includes("appcancel") ||
+    lower.includes("systemcancel")
+  ) {
+    return true;
+  }
+  if (lower.includes("user fallback") || lower.includes("userfallback")) {
+    return true;
+  }
+  return /authentication cancel+ed/.test(lower);
+}
+function isUserDismissedBiometry(err: unknown): boolean {
+  if (err == null) return false;
+  if (typeof err === "object") {
+    const o = err as { errorCode?: unknown; code?: unknown; message?: unknown };
+    const rawCode = o.errorCode ?? o.code;
+    if (typeof rawCode === "string" && dismissedCode(rawCode)) return true;
+    if (typeof o.message === "string" && isDismissedBiometryMessage(o.message)) {
+      return true;
+    }
+  }
+  if (err instanceof Error) return isDismissedBiometryMessage(err.message);
+  if (typeof err === "string") return isDismissedBiometryMessage(err);
+  return false;
 }
 
 /**
@@ -133,7 +185,7 @@ export class AppSessionStore {
     this.deps = {
       isDesktop: defaultIsDesktop,
       authenticateBiometry: (reason) =>
-        bridge().then((b) => b.desktopAuthenticateBiometry(reason)),
+        import("./biometry").then((b) => b.desktopAuthenticateBiometry(reason)),
       ownerSessionStatus: () => bridge().then((b) => b.desktopOwnerSessionStatus()),
       ownerLogin: (input) => bridge().then((b) => b.desktopOwnerLogin(input)),
       ownerUnlock: () => bridge().then((b) => b.desktopOwnerUnlock()),
@@ -148,7 +200,11 @@ export class AppSessionStore {
         bridge().then((b) => b.desktopTeamSetBiometryEnabled(enabled)),
       ...deps,
     };
-    makeAutoObservable(this, { deps: false }, { autoBind: true });
+    makeAutoObservable(
+      this,
+      { deps: false } as unknown as never,
+      { autoBind: true },
+    );
   }
 
   // --- Derived ---
@@ -306,25 +362,23 @@ export class AppSessionStore {
       // If the keyring secret vanished (refresh revoked), fall back to the
       // secret form so the user can re-authenticate.
       try {
-        const status =
-          role === "invited"
-            ? await this.deps.teamSessionStatus()
-            : await this.deps.ownerSessionStatus();
-        runInAction(() => {
-          if (role === "invited") this.teamStatus = status;
-          else this.ownerStatus = status;
-          const hasSecret =
-            role === "invited"
-              ? (status as TeamSessionStatus).hasSecret
-              : (status as OwnerSessionStatus).hasRefresh;
-          if (!hasSecret) {
-            this.phase = {
-              kind: "unlock",
-              role,
-              mode: role === "invited" ? "idle" : "secret",
-            };
-          }
-        });
+        if (role === "invited") {
+          const status = await this.deps.teamSessionStatus();
+          runInAction(() => {
+            this.teamStatus = status;
+            if (!status.hasSecret) {
+              this.phase = { kind: "unlock", role, mode: "idle" };
+            }
+          });
+        } else {
+          const status = await this.deps.ownerSessionStatus();
+          runInAction(() => {
+            this.ownerStatus = status;
+            if (!status.hasRefresh) {
+              this.phase = { kind: "unlock", role, mode: "secret" };
+            }
+          });
+        }
       } catch {
         /* keep idle */
       }
@@ -336,6 +390,23 @@ export class AppSessionStore {
     if (this.phase.kind !== "unlock") return;
     this.phase = { kind: "unlock", role: this.phase.role, mode: "secret" };
     this.error = null;
+  }
+
+  /** Switch the unlock view back to the biometric prompt (or stay secret if
+   * there is no keyring secret to prompt against). */
+  requestPrompt(): void {
+    if (this.phase.kind !== "unlock") return;
+    const role = this.phase.role;
+    const hasKeyringSecret =
+      role === "invited"
+        ? Boolean(this.teamStatus?.hasSecret)
+        : Boolean(this.ownerStatus?.hasRefresh);
+    if (!hasKeyringSecret) {
+      this.phase = { kind: "unlock", role, mode: "secret" };
+      return;
+    }
+    this.error = null;
+    void this.promptUnlock();
   }
 
   /** Owner: exchange username + passtoken for a session. */

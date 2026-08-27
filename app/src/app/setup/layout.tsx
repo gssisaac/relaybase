@@ -6,46 +6,31 @@ import { useEffect, type ReactNode } from "react";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
-import {
-  DesktopProvider,
-  useDesktop,
-} from "@/lib/desktop/DesktopContext";
-import { hasOwnerSession } from "@/lib/desktop/owner-session";
+import { useAppSession } from "@/lib/desktop/AppSessionContext";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 
 function SetupShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { ready, credentials } = useDesktop();
+  const store = useAppSession();
   const { isDesktop, isMacOS } = useDesktopChrome();
 
   useEffect(() => {
-    if (!ready) return;
-    // Leave setup once a Worker is connected. A Relaybase console account is
-    // optional (added later from Settings for license + ADMIN_TOKEN recovery),
-    // so we do not gate the dashboard on relaybaseSession here.
-    // Stay on /setup/progress and /setup/recover-admin so the user can copy
-    // the admin token after install or reissue.
+    // The store is the single source of truth for "can the dashboard show".
+    // Leave setup once an owner or invited session is ready. Stay on the
+    // progress / reveal / recover steps so the user can finish copying the
+    // passtoken or re-issuing it.
     if (
       pathname === "/setup/progress" ||
       pathname === "/setup/recover-admin"
     ) {
       return;
     }
-    if (credentials?.workerUrl && hasOwnerSession()) {
+    if (store.canShowApp) {
       router.replace("/");
     }
-  }, [ready, credentials, router, pathname]);
+  }, [store, store.canShowApp, router, pathname]);
 
-  if (!ready) {
-    return (
-      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
-  }
-
-  // Already-installed is the same Touch ID unlock as the daily gate.
   if (pathname === "/setup/connect") {
     return children;
   }
@@ -71,15 +56,13 @@ function SetupShell({ children }: { children: ReactNode }) {
 }
 
 export default function SetupLayout({ children }: { children: ReactNode }) {
-  // Tauri and browser next both load credentials from ~/.relaybase
-  // (Tauri invoke vs /api/local-credentials).
+  // DesktopProvider + AppSessionProvider live at the root layout now, so
+  // setup and the dashboard shell share one session.
   return (
     <DesktopShell>
-      <DesktopProvider>
-        <EnableEmailApiDialogHost>
-          <SetupShell>{children}</SetupShell>
-        </EnableEmailApiDialogHost>
-      </DesktopProvider>
+      <EnableEmailApiDialogHost>
+        <SetupShell>{children}</SetupShell>
+      </EnableEmailApiDialogHost>
     </DesktopShell>
   );
 }

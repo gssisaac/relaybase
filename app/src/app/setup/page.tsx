@@ -21,7 +21,7 @@ export default function SetupChoicePage() {
 
   function goInvited() {
     setNavigating("invited");
-    router.push("/setup/account");
+    router.push("/login");
   }
 
   function goAlreadyInstalled() {

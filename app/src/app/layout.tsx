@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CloudflarePlanDialogHost } from "@/lib/cloudflare/CloudflarePlanDialog";
 import { ZoomHotkeys } from "@/components/ZoomHotkeys";
+import { AppProviders } from "@/lib/desktop/AppProviders";
 
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 import "./globals.css";
@@ -35,7 +36,9 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <ThemeProvider>
-          <TooltipProvider delay={200}>{children}</TooltipProvider>
+          <AppProviders>
+            <TooltipProvider delay={200}>{children}</TooltipProvider>
+          </AppProviders>
           <Toaster />
           <CloudflarePlanDialogHost />
           <ZoomHotkeys />

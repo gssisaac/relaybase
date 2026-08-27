@@ -31,7 +31,7 @@ Server/worker data (Cloudflare D1 + R2) is separate — that is the remote produ
 ```text
 ~/.relaybase/                          # mode 0700
 ├── credentials.json                   # Cloudflare + Worker + Relaybase console account (0600; session, global)
-├── team-login.json                    # team-user mobile password login (0600; session, global)
+├── team-login.json                    # team-user identity only (workerUrl + accountEmail; 0600; session, global). Mobile password lives in the OS keyring.
 ├── app-icon.png                       # notification identity image (global)
 ├── storage-layout-v2.json            # migration marker (version, migratedAt, scopeId, from)
 └── {scopeId}/                         # opaque s-{16hex} SHA-256 prefix — no raw account id
@@ -148,15 +148,28 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/owner_session.rs`)
 
 Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. The passtoken is never stored. Daily unlock: JS prompts **Touch ID** (Mac) or **Windows Hello** (Windows) with device PIN fallback (`app/src/lib/desktop/biometry.ts`), then Rust `owner_unlock` reads this blob and rotates refresh. Access stays in process memory. Linux has no biometry plugin — fallback is username + passtoken.
 
+### OS keyring (team mobile password)
+
+Mirror of the owner keyring for invited (team) users, implemented in `desktop/src-tauri/src/team_session.rs`:
+
+| Field | Service / account |
+|-------|-------------------|
+| service | `com.relaybase.desktop` |
+| account | `team-session:{lowercased account email}` |
+
+Blob (`camelCase`): `{ workerUrl, accountEmail, mobilePassword, biometryEnabled }`. The mobile password lives **only** in the keyring + process memory — never in `team-login.json`. Daily unlock: Touch ID / Windows Hello → Rust `team_unlock` loads the password into process memory; `team_worker_request` attaches `Authorization: Bearer <mobilePassword>` + `X-Account-Email` so JS never reads the password. First login verifies against `/mobile/config`, stores the password in the keyring, and offers biometry once.
+
+A one-shot `migrate_legacy_team_login()` runs inside `team_session_status`: if an old `team-login.json` still contains a plaintext `mobilePassword`, it is moved into the keyring and the file is rewritten identity-only.
+
 ### `team-login.json`
 
-Team-user login (per-account mobile password; separate from admin credentials). Written by Rust (`secrets.rs`).
+Team-user **identity only** (per-account mobile password; separate from admin credentials). Written by Rust (`secrets.rs`). The mobile password is **not** stored here — it lives in the OS keyring (see above). Kept as an `Option`-ish field so a legacy file with a plaintext password can be read once and migrated.
 
 | Field | Purpose |
 |-------|---------|
 | `workerUrl` | Customer Worker base URL |
 | `accountEmail` | The teammate's account email |
-| `mobilePassword` | Per-account mobile password (same model as the Flutter companion) |
+| `mobilePassword` | **Legacy only.** New writes keep this empty; the password lives in the OS keyring (`team-session:{email}`). `#[serde(default)]` so old files still parse for migration. |
 
 ### `email.json`
 

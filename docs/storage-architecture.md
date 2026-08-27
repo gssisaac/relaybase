@@ -78,6 +78,13 @@ The desktop **god token is retired**. Owner auth is now a **Worker-issued passto
 - Lost passtoken: `POST /console/reset-admin` verifies a Cloudflare access token whose account matches `CF_ACCOUNT_ID`, then re-issues a passtoken once and revokes all sessions. No console email, no central god token.
 - `AUTH_PEPPER` (random, set once at install) replaces the old `ADMIN_TOKEN` wrangler secret. `owner_config.admin_token` and D1 `auth_tokens` (`rb-auth-…`) are dropped (migration `0003_owner_login`; after local `0002_app_settings`).
 
+The desktop **unlock flow** that consumes this model — Touch ID on launch, the
+owner/invited phase machine, the team keyring, and 401 re-prompt — is
+documented in **[desktop-session-machine.md](./desktop-session-machine.md)**.
+Invited (team) mobile passwords live in the OS keyring
+(`team-session:{email}`), mirroring the owner keyring; see
+**[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
+
 Mobile passwords (`/mobile/*`) and product API keys (`/v1/*`, `~/.relaybase/{scopeId}/api-keys.json`) are unchanged and separate from the owner passtoken.
 
 ### What stays in R2 (source of truth for mail atoms)

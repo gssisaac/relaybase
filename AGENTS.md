@@ -13,6 +13,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Settings → Cloudflare OAuth (install token), `kembo/console` OAuth routes, or desktop CF API install | [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) |
 | Owner login (passtoken + sessions), `AUTH_PEPPER`, `/console/login` / `setup-admin` / `reset-admin`, or retiring `ADMIN_TOKEN` | [docs/storage-architecture.md](docs/storage-architecture.md) → *Owner auth* |
+| Desktop owner/invited unlock, Touch ID on launch, `AppSessionStore` phase machine, team keyring (`team-session`), or 401 re-prompt | [docs/desktop-session-machine.md](docs/desktop-session-machine.md) |
 | Email Cmd+K, row context menus, mail action shortcuts, or anything under `app/src/email/commands/` | [docs/email-command-system.md](docs/email-command-system.md) |
 | App entry redirects, sidebar email↔dashboard persistence, last-route restore | [docs/last-route-restore.md](docs/last-route-restore.md) |
 | Tab / focus navigation, `data-allow-tab-focus`, or `DisableAppTabFocus` | [docs/tab-focus-policy.md](docs/tab-focus-policy.md) |

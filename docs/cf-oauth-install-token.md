@@ -84,7 +84,7 @@ Rust (`desktop/src-tauri/src/lib.rs`):
 - Loopback server + `tauri-plugin-deep-link` — complete exchange, emit `cf-oauth-complete` / `cf-oauth-error`
 - `refresh_install_token_if_needed` — if `CF_OAUTH_SESSION` has a fresh access token, use it; otherwise refresh via Cloudflare token endpoint when `cfOauthRefreshToken` is set; no-op if only a legacy disk install token is present
 
-Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `app/src/lib/desktop/bridge/index.ts` — not tied to staying on the Cloudflare settings page.
+Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `app/src/lib/desktop/bridge/oauth.ts` — not tied to staying on the Cloudflare settings page.
 
 ---
 
@@ -124,7 +124,7 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 |------|--------|
 | Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
 | Desktop Rust | `desktop/src-tauri/src/lib.rs`, `secrets.rs`, `auto_install.rs` (`preview_worker_update_target`), `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
-| App bridge + Settings | `app/src/lib/desktop/bridge/index.ts`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx`, `WorkerUpdateBanner.tsx`, `/settings/worker/update`, `/settings/worker/progress` |
+| App bridge + Settings | `app/src/lib/desktop/bridge/`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx`, `WorkerUpdateBanner.tsx`, `/settings/worker/update`, `/settings/worker/progress` |
 | Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx`, `use-enable-email-api-dialog.tsx` (also opened from Domains → Refresh from Cloudflare) |
 | Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
 | Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `POST /console/reset-admin` (CF OAuth account proof) |

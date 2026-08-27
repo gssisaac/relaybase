@@ -3,7 +3,7 @@ import {
   desktopVerifyWorkerConnection,
   mailApiReady,
 } from "@/lib/desktop/bridge";
-import { ensureAccessToken } from "@/lib/desktop/owner-session";
+import { ensureAccessToken } from "@/lib/desktop/auth";
 import {
   D1_APP_DEFAULT,
   D1_MAIL_DEFAULT,

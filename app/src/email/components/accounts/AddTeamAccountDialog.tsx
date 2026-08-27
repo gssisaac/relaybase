@@ -13,15 +13,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
-import { useAppSession } from "@/lib/app-session";
+import { useDesktop } from "@/lib/desktop/shell";
+import { useAppSession } from "@/lib/desktop/app-session";
 import {
   desktopOwnerSessionStatus,
   desktopTeamLogin,
   explainDesktopError,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { emailAccountHref } from "@/email/lib/paths";
 
 type AddTeamAccountDialogProps = {

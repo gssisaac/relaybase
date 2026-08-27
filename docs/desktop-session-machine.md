@@ -1,7 +1,8 @@
 # Desktop session state machine
 
-**Launch unlock is unresolved.** Touch ID still does not appear first — see
-**[desktop-unlock-unresolved.md](./desktop-unlock-unresolved.md)**.
+Daily launch shows `UnlockView` first. The passtoken form is a fallback —
+see **[desktop-unlock-unresolved.md](./desktop-unlock-unresolved.md)** for
+the race that used to skip it.
 
 **Audience:** humans and coding agents changing the desktop app's
 authentication / unlock flow, the owner or invited (team) session, or anything
@@ -25,8 +26,8 @@ waterfall of sequential checks and component mounts ran before the biometric
 prompt.
 
 Everything now flows through one MobX store, **`AppSessionStore`**
-(`app/src/lib/app-session/store.ts`), exposed via
-**`AppSessionProvider`** (`app/src/lib/app-session/context.tsx`). The
+(`app/src/lib/desktop/app-session/store.ts`), exposed via
+**`AppSessionProvider`** (`app/src/lib/desktop/app-session/context.tsx`). The
 store is the single source of truth for the current **phase**; the dashboard
 gate is a pure `switch` over that phase.
 
@@ -72,7 +73,9 @@ boot effect.
 
 `DesktopContext` (credentials, scope id, mail-cache migration) still loads in
 parallel; the store waits for it only to resolve the **non-prompt** branches
-(`choice` / `invitedLogin` / owner secret form), which need `credentials.workerUrl`.
+(`choice` / `invitedLogin` / owner UnlockView), which need `credentials.workerUrl`.
+A worker URL with no keyring secret opens `unlock { mode: "idle" }` — the
+fingerprint surface — not the passtoken form.
 
 ## State diagram
 
@@ -85,7 +88,7 @@ stateDiagram-v2
     boot --> unlock_prompting : team hasSecret (no access)
     boot --> invitedReady : team hasAccess
     boot --> invitedLogin : team identity, no keyring secret
-    boot --> unlock_secret : owner workerUrl, no keyring
+    boot --> unlock_idle : owner workerUrl, no keyring
     boot --> choice : nothing enrolled
     boot --> boot : waiting on DesktopContext.ready
 
@@ -97,6 +100,7 @@ stateDiagram-v2
     unlock_idle --> unlock_prompting : retry Touch ID
     unlock_idle --> unlock_secret : "use secret" fallback
 
+    unlock_secret --> unlock_idle : Back
     unlock_secret --> ownerReady : loginWithPasstoken
     unlock_secret --> invitedReady : loginInvited (no biometry offered)
     unlock_secret --> ownerRecover : "forgot passtoken"
@@ -106,6 +110,7 @@ stateDiagram-v2
     offerBiometry --> invitedReady : accept (enable keyring biometry)
     offerBiometry --> invitedReady : decline (disable, enter this run only)
 
+    ownerRecover --> unlock_idle : Back
     ownerRecover --> install_reveal : recoverOwner (reset-admin)
     install_createOwner --> install_reveal : createOwner (setup-admin)
     install_reveal --> unlock_secret : consumeRevealedPasstoken
@@ -163,10 +168,10 @@ the shell and then back out to Touch ID.
 
 | File | Role |
 |------|------|
-| `app/src/lib/app-session/` | MobX store, phases, provider, 401 listener |
-| `app/src/lib/app-session/store.test.ts` | Transition tests (injected Tauri mock) |
-| `app/src/lib/biometry/` | Touch ID / Windows Hello prompt, label, dismiss detection |
-| `app/src/lib/desktop/AppProviders.tsx` | Root `DesktopProvider` + `AppSessionProvider` |
+| `app/src/lib/desktop/app-session/` | MobX store, phases, provider, 401 listener |
+| `app/src/lib/desktop/app-session/store.test.ts` | Transition tests (injected Tauri mock) |
+| `app/src/lib/desktop/biometry/` | Touch ID / Windows Hello prompt, label, dismiss detection |
+| `app/src/lib/desktop/shell/AppProviders.tsx` | Root `DesktopProvider` + `AppSessionProvider` |
 | `app/src/app/_shell/DesktopDashboardGate.tsx` | Phase `switch` gate |
 | `app/src/console/components/setup/UnlockView.tsx` | Common owner/invited unlock surface |
 | `app/src/console/components/setup/OfferBiometryView.tsx` | One-time invited biometry offer |
@@ -184,4 +189,4 @@ the shell and then back out to Touch ID.
 3. Add a `case` to the gate `switch` and a view that only renders.
 4. If it ships in the Worker, rebuild the bundle (see `AGENTS.md` → *Worker
    bundle*).
-5. Add a transition test in `app/src/lib/app-session/store.test.ts` (inject `AppSessionDeps`).
+5. Add a transition test in `app/src/lib/desktop/app-session/store.test.ts` (inject `AppSessionDeps`).

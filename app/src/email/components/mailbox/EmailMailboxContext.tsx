@@ -10,7 +10,7 @@ import {
 import { reaction } from "mobx";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { useDesktop } from "@/lib/desktop/shell";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { useSenderIconStore } from "@/email/components/sender/SenderIconContext";
 import type { EmailAccountFilter } from "@/email/components/accounts/EmailAccountSelect";

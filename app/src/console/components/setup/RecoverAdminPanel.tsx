@@ -19,9 +19,9 @@ import {
   oauthAuthorizationIncompleteHelp,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
-import { useAppSession } from "@/lib/app-session";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { useDesktop } from "@/lib/desktop/shell";
+import { useAppSession } from "@/lib/desktop/app-session";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
@@ -174,7 +174,12 @@ export function RecoverAdminPanel() {
   const workerUrl = credentials?.workerUrl ?? "";
 
   return (
-    <SetupCenteredPage backHref="/setup/connect" backLabel="Back">
+    <SetupCenteredPage
+      backHref="/"
+      backLabel="Back"
+      backReplace
+      onBack={() => store.leaveRecover()}
+    >
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">

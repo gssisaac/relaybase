@@ -7,8 +7,8 @@ import { memo, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
-import { onDraggableFieldMouseDown } from "@/lib/desktop/window-drag";
+import { useDesktopChrome } from "@/lib/desktop/shell";
+import { onDraggableFieldMouseDown } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 export function EmailListContainer({

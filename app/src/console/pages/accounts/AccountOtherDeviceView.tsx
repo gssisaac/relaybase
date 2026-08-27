@@ -18,14 +18,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { QrCode } from "@/components/ui/qr-code";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
-import { resolveEmailApiBase } from "@/lib/desktop/api-base";
+import { resolveEmailApiBase } from "@/lib/desktop/api";
 import {
   buildConnectDeepLink,
   clearAccountMobilePassword,
   fetchAccountMobileStatus,
   setAccountMobilePassword,
   type AccountMobileStatus,
-} from "@/lib/desktop/mobile-config";
+} from "@/lib/desktop/mobile";
 
 function domainOf(email: string): string {
   return email.split("@")[1]?.toLowerCase() ?? "";

@@ -17,7 +17,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { settingsTabHref, type SettingsTab } from "@/console/lib/paths";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 const TAB_COPY: Record<

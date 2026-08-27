@@ -31,7 +31,7 @@ import {
 } from "@/lib/desktop/bridge";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 import { registerEnableEmailApiPasteBridge } from "@/console/components/setup/use-enable-email-api-dialog";
-import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 
 type HealthBlock = { tone: HealthTone; label: string; detail: string };
 

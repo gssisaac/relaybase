@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { inboxHrefForNotification } from "./notify-open-mail.ts";
+import { inboxHrefForNotification } from "./open-mail.ts";
 
 describe("inboxHrefForNotification", () => {
   it("builds inbox selection from messageId and account", () => {

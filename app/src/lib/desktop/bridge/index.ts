@@ -982,8 +982,17 @@ export async function listenCfOAuthResult(handler: {
       );
     });
     return () => {
-      unOk();
-      unErr();
+      const settle = (unlisten: () => void) => {
+        try {
+          void Promise.resolve(unlisten()).catch(() => {
+            /* already removed — Tauri throws if the event id is gone */
+          });
+        } catch {
+          /* already removed */
+        }
+      };
+      settle(unOk);
+      settle(unErr);
     };
   } catch {
     return () => {
@@ -1403,7 +1412,7 @@ export async function desktopVerifyWorkerConnection(
   workerUrl: string,
   adminToken: string,
 ): Promise<WorkerConnectResult> {
-  const { ensureAccessToken } = await import("@/lib/desktop/owner-session");
+  const { ensureAccessToken } = await import("@/lib/desktop/auth");
   const ownerAccess = await ensureAccessToken();
   const access = ownerAccess || adminToken.trim();
   // Owner access lives in JS memory; Rust verify still expects ADMIN_TOKEN.

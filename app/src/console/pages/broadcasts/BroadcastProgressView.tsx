@@ -12,7 +12,7 @@ import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

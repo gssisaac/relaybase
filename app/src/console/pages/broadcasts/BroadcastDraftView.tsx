@@ -24,7 +24,7 @@ import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 import { Button } from "@/components/ui/button";
 

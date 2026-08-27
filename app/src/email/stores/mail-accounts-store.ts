@@ -20,7 +20,7 @@ import {
   friendlyDesktopFetchError,
   isPackagedApiUnavailableError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 /**
  * Email-side account UX: available addresses (for Add account dialog) +

@@ -42,7 +42,7 @@ import {
 import {
   desktopAwareFetch,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 import {
   CloudflareConfigAlert,

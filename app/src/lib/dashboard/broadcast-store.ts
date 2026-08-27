@@ -13,7 +13,7 @@ import {
   savePersistedBroadcastDrafts,
   type LocalBroadcastDraft,
 } from "@/lib/dashboard/broadcast-drafts-disk";
-import { desktopAwareFetch } from "@/lib/desktop/api-base";
+import { desktopAwareFetch } from "@/lib/desktop/api";
 import { notifyIfCloudflarePlanError } from "@/lib/cloudflare/CloudflarePlanDialog";
 
 function clearBroadcastCaches(productId: string, broadcastId: string) {

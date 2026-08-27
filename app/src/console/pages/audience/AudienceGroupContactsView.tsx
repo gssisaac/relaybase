@@ -14,7 +14,7 @@ import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import {
   DetailView,
   EmailListContainer,

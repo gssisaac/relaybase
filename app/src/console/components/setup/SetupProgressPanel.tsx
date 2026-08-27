@@ -36,8 +36,8 @@ import {
   type WorkerConnectResult,
 } from "@/lib/desktop/bridge";
 import { downloadBlob } from "@/lib/attachments/download";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { useDesktop } from "@/lib/desktop/shell";
 import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
 import {
   InstallWipeConfirmDialog,

@@ -20,7 +20,7 @@ import {
   useDashboardPaths,
   type BroadcastDetailTab,
 } from "@/console/lib/paths";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 export type BroadcastSection =

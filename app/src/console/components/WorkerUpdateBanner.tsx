@@ -11,7 +11,7 @@ import {
   isDesktopRuntime,
   type WorkerUpdateCheck,
 } from "@/lib/desktop/bridge";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { useDesktop } from "@/lib/desktop/shell";
 
 const DISMISS_KEY = "relaybase.worker-update-banner.dismissed";
 

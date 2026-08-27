@@ -3,7 +3,7 @@ import type {
   DesktopTeamLogin,
   OwnerSessionStatus,
   TeamSessionStatus,
-} from "../desktop/bridge";
+} from "../bridge";
 
 export type AppSessionPhase =
   | { kind: "boot" }

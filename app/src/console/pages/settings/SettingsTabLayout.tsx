@@ -8,8 +8,8 @@ import {
   SETTINGS_TABS,
   type SettingsTab,
 } from "@/console/lib/paths";
-import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { ReactNode } from "react";

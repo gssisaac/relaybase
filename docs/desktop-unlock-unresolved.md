@@ -1,26 +1,40 @@
-# Desktop unlock — unresolved (2026-08-27)
+# Desktop unlock — launch Touch ID (2026-08-27)
 
-**Status: not fixed.** Daily launch still does not show Touch ID first.
+**Status: fixed in the session machine.** Daily launch must show `UnlockView`
+(fingerprint) first. The passtoken form is a user fallback only.
 
 ## Expected
 
-Window opens → macOS Touch ID (or Windows Hello) immediately. Passtoken is a fallback only.
+Window opens → `UnlockView` (fingerprint). If a keyring secret exists, macOS
+Touch ID / Windows Hello follows immediately. Passtoken is behind
+"Sign in with passtoken".
 
-## Actual (verified)
+## What was wrong
 
-1. `desktop/ pnpm dev` compiled after the session-machine work, then the window stayed on **Loading…**.
-2. After the `/` + MobX subscription patch, the first screen is the **passtoken form** (username + passtoken). No Touch ID dialog.
-
-## Why the machine still loses
-
-`AppSessionStore.reconcileFromStatuses` maps `workerUrl && !hasRefresh` to `unlock { mode: "secret" }`. Boot often hydrates `hasRefresh: false` even when a keyring session exists:
+`AppSessionStore.reconcileFromStatuses` mapped `workerUrl && !hasRefresh` to
+`unlock { mode: "secret" }`. Boot often hydrated `hasRefresh: false` even when
+a keyring session existed:
 
 - `DesktopContext` is already `ready` from the session cache (`credentials.workerUrl`).
-- `desktopOwnerSessionStatus()` returns a fake empty status when Tauri invoke is not ready yet (no throw).
-- Owner + team status are `Promise.all`'d; a team failure + `catch` writes `EMPTY_OWNER` and never retries.
+- `desktopOwnerSessionStatus()` returns a fake empty status when Tauri invoke
+  is not ready yet (`!isDesktopRuntime()`, no throw).
+- Owner + team status were `Promise.all`'d; a single failure wrote `EMPTY_OWNER`
+  and never retried.
 
-`/` is outside `(shell)`, so the gate never ran on entry. `SessionPhaseScreen` + `useAppSession` reaction were added so the window can leave Loading — they did **not** restore Touch ID first.
+Back on the secret form called `requestPrompt()`, which stayed on `secret`
+when `hasRefresh` was false — so Back did nothing. Recover Back went to
+`/setup/connect` (which bounces to `/`) while the phase was still
+`ownerRecover`, so `SessionPhaseScreen` sent the window back to recover-admin
+and the CF OAuth unlisten crashed.
 
-Do not treat this area as done. Next fix: wait for a real keyring read, default daily unlock to `prompting` + `authenticateBiometry`, and open the passtoken form only as a user fallback.
+## Fix
+
+- Worker URL + no keyring → `unlock { mode: "idle" }` (`UnlockView`), not secret.
+- `AppSessionProvider` waits for the desktop runtime, retries keyring reads,
+  and re-fetches when `desktop.isDesktop` flips true.
+- `requestPrompt()` always leaves the secret form (idle, or Touch ID if a
+  secret exists).
+- Recover Back calls `leaveRecover()` and `replace("/")`.
+- `listenCfOAuthResult` cleanup ignores an already-removed listener.
 
 See [desktop-session-machine.md](./desktop-session-machine.md).

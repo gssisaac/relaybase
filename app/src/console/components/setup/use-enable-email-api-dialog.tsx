@@ -24,7 +24,7 @@ import {
   listenCfOAuthResult,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
-import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 
 export type EnableEmailApiOpenOptions = {
   allowSkip?: boolean;

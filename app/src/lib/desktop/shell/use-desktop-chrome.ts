@@ -6,7 +6,7 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import {
   dragRegionDataAttribute,
   onDragRegionMouseDown,
-} from "@/lib/desktop/window-drag";
+} from "./window-drag";
 import { cn } from "@/lib/utils";
 
 function isMacOSRuntime(): boolean {

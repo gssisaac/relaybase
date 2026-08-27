@@ -11,8 +11,8 @@
 | Mobile password auth | `server/src/lib/mobile-auth.ts`, `server/src/lib/mobile-config.ts` |
 | Console password APIs | `server/src/routes/console/mailbox.ts` (`/console/addresses/mobile-password`) |
 | Desktop Other device tab | `app/src/console/pages/accounts/AccountOtherDeviceView.tsx` |
-| Desktop API helpers / deep link | `app/src/lib/desktop/mobile-config.ts` |
-| Desktop → Worker map | `app/src/lib/desktop/email-api-map.ts` (`/api/email/mobile-password`) |
+| Desktop API helpers / deep link | `app/src/lib/desktop/mobile/mobile-config.ts` |
+| Desktop → Worker map | `app/src/lib/desktop/api/email-api-map.ts` (`/api/email/mobile-password`) |
 | Address `mobileEnabled` | `server/src/lib/catalog-store.ts`, `app/src/lib/dashboard/accounts-store.ts` |
 
 Setup / run notes: **[mobile/README.md](../mobile/README.md)**.  

@@ -1,13 +1,14 @@
 import { isDesktopRuntime, type DesktopCredentials } from "@/lib/desktop/bridge";
+import { isUnauthorizedGraceActive } from "@/lib/desktop/auth";
 import {
   isAnyApiPath,
   isEmailApiPath,
   mapEmailApiToWorker,
-} from "@/lib/desktop/email-api-map";
-import { isUnauthorizedGraceActive } from "@/lib/desktop/unauthorized-grace";
-import { workerFetch } from "@/lib/desktop/worker-api";
+  mapPackagedEmailApiToWorker,
+} from "./email-api-map";
+import { workerFetch } from "./worker-api";
 
-export { mapEmailApiToWorker, mapPackagedEmailApiToWorker } from "@/lib/desktop/email-api-map";
+export { mapEmailApiToWorker, mapPackagedEmailApiToWorker };
 
 /** Global 401 guard — fires once to clear credentials + redirect to /setup. */
 let unauthorizedRedirecting = false;

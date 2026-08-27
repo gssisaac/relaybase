@@ -67,13 +67,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { useDesktop } from "@/lib/desktop/shell";
 import {
   signOutRedirectPath,
   signOutRelaybase,
-} from "@/lib/desktop/sign-out";
+} from "@/lib/desktop/auth";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 import { Settings } from "lucide-react";
 

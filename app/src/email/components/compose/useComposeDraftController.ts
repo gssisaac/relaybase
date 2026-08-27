@@ -14,7 +14,7 @@ import { domainOf } from "@/email/lib/reply/reply-helpers";
 import {
   desktopAwareFetch,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import { parseEmailListStrict } from "@/lib/email/parse-recipients";
 
 const AUTOSAVE_MS = 500;

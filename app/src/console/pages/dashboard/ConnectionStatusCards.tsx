@@ -17,8 +17,8 @@ import {
 } from "@/lib/dashboard/connection-status";
 import { settingsTabHref } from "@/console/lib/paths";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
-import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 function StatusDot({ tone }: { tone: HealthTone }) {

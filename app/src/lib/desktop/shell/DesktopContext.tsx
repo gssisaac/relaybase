@@ -17,7 +17,7 @@ import {
   clearScopeDependentLocalStorage,
   readDesktopSessionCache,
   writeDesktopSessionCache,
-} from "@/lib/desktop/desktop-session-cache";
+} from "./session-cache";
 import { clearAllDashboardClientCache } from "@/lib/dashboard/shared/dashboard-client-cache";
 
 type DesktopContextValue = {

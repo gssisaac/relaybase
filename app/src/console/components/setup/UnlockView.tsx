@@ -8,9 +8,9 @@ import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebar
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAppSession } from "@/lib/app-session";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useAppSession } from "@/lib/desktop/app-session";
+import { useDesktop } from "@/lib/desktop/shell";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 /**

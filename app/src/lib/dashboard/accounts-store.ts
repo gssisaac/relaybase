@@ -23,7 +23,7 @@ import {
   friendlyDesktopFetchError,
   isPackagedApiUnavailableError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
 import type { Address } from "@/email/components/mailbox/types";
 

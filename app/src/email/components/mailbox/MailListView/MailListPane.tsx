@@ -39,7 +39,7 @@ import { formatSenderDisplay, splitRecipients } from "@/lib/email/format-sender"
 import { extractFirstEmail, SenderAvatar } from "@/email/components/sender/SenderAvatar";
 import { SenderHoverCard, SenderHoverLabel } from "@/email/components/sender/SenderHoverCard";
 import type { ListItemStateStore } from "@/email/stores/list-item-state-store";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 import {
   PULL_REFRESH_THRESHOLD,

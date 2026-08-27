@@ -18,7 +18,7 @@ import {
   friendlyDesktopFetchError,
   isPackagedApiUnavailableError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import { useDashboardPaths } from "@/console/lib/paths";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { Badge } from "@/components/ui/badge";

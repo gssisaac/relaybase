@@ -54,7 +54,7 @@ export async function workerFetch(
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
   const headers = new Headers(init?.headers);
   if (!headers.has("Authorization")) {
-    const { ensureAccessToken } = await import("@/lib/desktop/owner-session");
+    const { ensureAccessToken } = await import("@/lib/desktop/auth");
     const access = await ensureAccessToken();
     if (access) {
       headers.set("Authorization", `Bearer ${access}`);
@@ -67,7 +67,7 @@ export async function workerFetch(
   if (res.status !== 401 || headers.has("X-Relaybase-Retried")) {
     return res;
   }
-  const { ownerRefresh } = await import("@/lib/desktop/owner-session");
+  const { ownerRefresh } = await import("@/lib/desktop/auth");
   const next = await ownerRefresh();
   if (!next?.accessToken) return res;
   const retryHeaders = new Headers(headers);

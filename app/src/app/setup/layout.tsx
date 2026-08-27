@@ -6,8 +6,8 @@ import { useEffect, type ReactNode } from "react";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
-import { useAppSession } from "@/lib/app-session";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useAppSession } from "@/lib/desktop/app-session";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 
 function SetupShell({ children }: { children: ReactNode }) {
   const router = useRouter();

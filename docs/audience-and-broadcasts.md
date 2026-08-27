@@ -11,7 +11,7 @@
 | Audience APIs | `server/src/routes/console/audience-groups.ts` → `/console/audience-groups` |
 | Broadcast APIs | `server/src/routes/console/broadcasts.ts` → `/console/broadcasts` |
 | Cron | `server/src/index.ts` `scheduled()` + `server/wrangler.toml` triggers |
-| Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/*` → Worker admin) |
+| Client mapping | `app/src/lib/desktop/api/email-api-map.ts` (`/api/email/*` → Worker admin) |
 | Audience UI | `app/src/console/pages/audience/AudienceGroup*.tsx`, `AudienceGroupsView.tsx`, `AudienceDataSourceGuide.tsx` |
 | Broadcast UI | `app/src/console/pages/broadcasts/Broadcast*.tsx`, `BroadcastsView.tsx` |
 | Routing | `app/src/app/(shell)/` |

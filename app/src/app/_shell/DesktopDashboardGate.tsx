@@ -13,7 +13,7 @@ import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
-import { useAppSession } from "@/lib/app-session";
+import { useAppSession } from "@/lib/desktop/app-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,

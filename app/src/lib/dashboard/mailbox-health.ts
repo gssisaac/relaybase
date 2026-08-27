@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 
 export type MailboxHealthDomain = {

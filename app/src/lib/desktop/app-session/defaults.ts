@@ -4,7 +4,7 @@ import type { AppSessionDeps } from "./types";
  * unit-test runner (no `@/` alias, no Tauri). Production injects nothing
  * and these load on first use. */
 async function bridge() {
-  return await import("../desktop/bridge");
+  return await import("../bridge");
 }
 
 export function defaultIsDesktop(): boolean {

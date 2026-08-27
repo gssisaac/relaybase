@@ -20,7 +20,7 @@ See also: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 | Logs API | `server/src/routes/console/ops-logs.ts` → `/console/ops-logs` |
 | D1 probe helper | `server/src/lib/d1-status.ts` (`probeD1Connection`) |
 | Connect probe (D1 + R2) | `server/src/routes/console/connect.ts` → `/console/connect` |
-| Client mapping | `app/src/lib/desktop/email-api-map.ts` (`/api/email/logs` → `/console/ops-logs`) |
+| Client mapping | `app/src/lib/desktop/api/email-api-map.ts` (`/api/email/logs` → `/console/ops-logs`) |
 | Connection status UI | `app/src/lib/dashboard/connection-status.ts`, `app/src/console/pages/dashboard/ConnectionStatusCards.tsx`, `app/src/console/pages/settings/SettingsTabLayout.tsx` |
 | Dashboard nav | `app/src/console/lib/paths.ts` (Log tab after API Keys) |
 | Dashboard route | `app/src/app/(shell)/logs/page.tsx` |

@@ -17,7 +17,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { useOpenSettings } from "@/lib/navigation/open-settings";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import type { EmailCommandGroup } from "@/email/commands/email-command-defs";
 import { useEmailCommandRuntime } from "@/email/commands/EmailCommandRuntimeContext";
 

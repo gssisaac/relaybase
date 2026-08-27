@@ -13,7 +13,7 @@ import {
   type DesktopErrorHelp,
   type ZoneSummary,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { Button } from "@/components/ui/button";
 import { FieldCheck } from "@/components/ui/field-check";
 import {

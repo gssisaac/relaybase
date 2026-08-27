@@ -7,9 +7,9 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAppSession } from "@/lib/app-session";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
+import { useAppSession } from "@/lib/desktop/app-session";
+import { useDesktop } from "@/lib/desktop/shell";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { explainDesktopError, type DesktopErrorHelp } from "@/lib/desktop/bridge";
 
 /**

@@ -11,7 +11,7 @@ import {
   probeConnectionStatus,
   type ConnectionStatusSnapshot,
 } from "@/lib/dashboard/connection-status";
-import { useOptionalDesktop } from "@/lib/desktop/DesktopContext";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 
 export const CONNECTION_STATUS_CACHE_KEY = "connection-status-v3";
 

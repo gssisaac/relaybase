@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CloudflarePlanDialogHost } from "@/lib/cloudflare/CloudflarePlanDialog";
 import { ZoomHotkeys } from "@/components/ZoomHotkeys";
-import { AppProviders } from "@/lib/desktop/AppProviders";
+import { AppProviders } from "@/lib/desktop/shell";
 
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 import "./globals.css";

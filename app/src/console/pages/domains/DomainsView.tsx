@@ -20,7 +20,7 @@ import { AddDomainDialog } from "@/console/pages/domains/AddDomainDialog";
 import { ImportCloudflareZonesDialog } from "@/console/pages/domains/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

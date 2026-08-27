@@ -26,7 +26,7 @@ import {
   mailApiReady,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 function CreateCustomTokenGuide() {
   return (

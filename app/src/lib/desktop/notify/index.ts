@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
-import { inboxHrefForNotification } from "@/lib/desktop/notify-open-mail";
+import { inboxHrefForNotification } from "./open-mail";
 
 export type NewMailNotifyItem = {
   from: string;

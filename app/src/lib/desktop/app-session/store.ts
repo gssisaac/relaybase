@@ -3,7 +3,7 @@
 import { makeAutoObservable, runInAction } from "mobx";
 
 import { biometryLabel } from "../biometry/label";
-import type { OwnerSessionStatus, TeamSessionStatus } from "../desktop/bridge";
+import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
 import { createDefaultDeps } from "./defaults";
 import { visibleUnlockError } from "./errors";
 import type {
@@ -99,7 +99,7 @@ export class AppSessionStore {
   }
 
   /** Push the latest identity snapshot from DesktopContext. Resolves the
-   * non-prompt branches (choice / invitedLogin / owner secret form). */
+   * non-prompt branches (choice / invitedLogin / owner unlock). */
   setIdentity(snapshot: IdentitySnapshot): void {
     this.identity = snapshot;
     if (snapshot.ready && this.phase.kind === "boot") {
@@ -108,7 +108,6 @@ export class AppSessionStore {
   }
 
   private reconcileFromStatuses(): void {
-    if (!this.statusesHydrated) return;
     const team = this.teamStatus;
     const owner = this.ownerStatus;
 
@@ -144,19 +143,22 @@ export class AppSessionStore {
       return;
     }
 
-    // No keyring secret. Decide between owner secret form and the welcome
-    // choice once identity (credentials.workerUrl) is available.
+    // No confirmed keyring secret. UnlockView (idle) is the daily surface;
+    // the passtoken form is a user fallback only (`showSecretForm`).
     if (!this.identity.ready) {
-      // Stay in boot until identity arrives.
       if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
       return;
     }
     const workerUrl = this.identity.credentials?.workerUrl?.trim() ?? "";
     if (workerUrl) {
-      this.phase = { kind: "unlock", role: "owner", mode: "secret" };
-    } else {
-      this.phase = { kind: "choice" };
+      this.phase = { kind: "unlock", role: "owner", mode: "idle" };
+      return;
     }
+    if (!this.statusesHydrated) {
+      if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
+      return;
+    }
+    this.phase = { kind: "choice" };
   }
 
   private maybeAutoPrompt(): void {
@@ -236,8 +238,9 @@ export class AppSessionStore {
     this.error = null;
   }
 
-  /** Switch the unlock view back to the biometric prompt (or stay secret if
-   * there is no keyring secret to prompt against). */
+  /** Leave the secret form and return to UnlockView. Re-prompt Touch ID
+   * when a keyring secret exists; otherwise stay on the idle fingerprint
+   * surface so Back is never a no-op. */
   requestPrompt(): void {
     if (this.phase.kind !== "unlock") return;
     const role = this.phase.role;
@@ -245,12 +248,12 @@ export class AppSessionStore {
       role === "invited"
         ? Boolean(this.teamStatus?.hasSecret)
         : Boolean(this.ownerStatus?.hasRefresh);
-    if (!hasKeyringSecret) {
-      this.phase = { kind: "unlock", role, mode: "secret" };
+    this.error = null;
+    if (hasKeyringSecret) {
+      void this.promptUnlock();
       return;
     }
-    this.error = null;
-    void this.promptUnlock();
+    this.phase = { kind: "unlock", role, mode: "idle" };
   }
 
   /** Owner: exchange username + passtoken for a session. */
@@ -386,6 +389,12 @@ export class AppSessionStore {
   enterRecover(): void {
     this.phase = { kind: "ownerRecover" };
     this.error = null;
+  }
+
+  /** Leave forgot-passtoken recovery and return to UnlockView. */
+  leaveRecover(): void {
+    this.error = null;
+    this.phase = { kind: "unlock", role: "owner", mode: "idle" };
   }
 
   /** Owner recover: reset the admin passtoken via a CF access token. */

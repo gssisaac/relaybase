@@ -14,7 +14,7 @@ import type { InboundAttachment } from "@/email/components/mailbox/types";
 import {
   desktopAwareFetch,
   isWorkerBacked,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import {
   desktopOpenAttachment,
   isDesktopRuntime,

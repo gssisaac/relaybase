@@ -42,19 +42,19 @@ import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext
 import { ACCOUNT_COLOR_PALETTE } from "@/email/lib/accounts/account-colors";
 import { useEmailPaths } from "@/email/lib/paths";
 import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktop } from "@/lib/desktop/shell";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import {
   signOutRedirectPath,
   signOutRelaybase,
-} from "@/lib/desktop/sign-out";
+} from "@/lib/desktop/auth";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import {
   desktopAwareFetch,
   readResponseJson,
-} from "@/lib/desktop/api-base";
-import { teamWorkerFetch } from "@/lib/desktop/worker-api";
+} from "@/lib/desktop/api";
+import { teamWorkerFetch } from "@/lib/desktop/api";
 import { cn } from "@/lib/utils";
 
 function domainOf(email: string): string {

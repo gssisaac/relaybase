@@ -13,7 +13,7 @@ import {
   desktopAwareFetch,
   isPackagedApiUnavailableError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import {
   EMAIL_SEND_FAILED,
   EMAIL_SEND_STARTED,

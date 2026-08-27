@@ -21,7 +21,7 @@ import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "failed" | "success";

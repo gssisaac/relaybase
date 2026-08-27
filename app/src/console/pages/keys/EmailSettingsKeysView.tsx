@@ -69,13 +69,13 @@ import {
   desktopAwareFetch,
   isApiUnavailableError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import {
   forgetApiKey,
   loadApiKeyVaultEntries,
   mergeKeysWithVault,
   rememberApiKey,
-} from "@/lib/desktop/api-key-vault";
+} from "@/lib/desktop/vault";
 import { cn } from "@/lib/utils";
 
 type StatsRange = "24h" | "7d" | "30d";

@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import type {
   OwnerSessionStatus,
   TeamSessionStatus,
-} from "../desktop/bridge.ts";
+} from "../bridge/index.ts";
 import { AppSessionStore } from "./store.ts";
 
 function ownerStatus(partial: Partial<OwnerSessionStatus>): OwnerSessionStatus {
@@ -116,7 +116,7 @@ describe("AppSessionStore", () => {
     assert.equal(store.phase.kind, "ownerReady");
   });
 
-  it("lands on the secret form when owner has workerUrl but no keyring", () => {
+  it("lands on UnlockView idle when owner has workerUrl but no keyring", () => {
     const store = new AppSessionStore(
       makeDeps({ ownerStatus: ownerStatus({}) }),
     );
@@ -143,7 +143,81 @@ describe("AppSessionStore", () => {
     store.setStatuses(ownerStatus({}), teamStatus({}));
     assert.equal(store.phase.kind, "unlock");
     if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.mode, "idle");
+      assert.equal(store.phase.role, "owner");
+    }
+  });
+
+  it("shows UnlockView from workerUrl before keyring status arrives", () => {
+    const store = new AppSessionStore(makeDeps({}));
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: {
+        accountId: "",
+        installToken: "",
+        workerUrl: "https://relaybase-api.example.workers.dev",
+        adminToken: "",
+        workerScriptName: "",
+        workerVersion: "",
+        relaybaseAccountId: "",
+        relaybaseEmail: "",
+        relaybaseSession: "",
+        cfOauthAccessToken: "",
+        cfOauthRefreshToken: "",
+        cfOauthAccessExpiresAt: "",
+        cfOauthAccountId: "",
+      },
+      teamIdentity: null,
+    });
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.mode, "idle");
+    }
+  });
+
+  it("requestPrompt leaves the secret form even without a keyring secret", () => {
+    const store = new AppSessionStore(makeDeps({}));
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: {
+        accountId: "",
+        installToken: "",
+        workerUrl: "https://relaybase-api.example.workers.dev",
+        adminToken: "",
+        workerScriptName: "",
+        workerVersion: "",
+        relaybaseAccountId: "",
+        relaybaseEmail: "",
+        relaybaseSession: "",
+        cfOauthAccessToken: "",
+        cfOauthRefreshToken: "",
+        cfOauthAccessExpiresAt: "",
+        cfOauthAccountId: "",
+      },
+      teamIdentity: null,
+    });
+    store.setStatuses(ownerStatus({}), teamStatus({}));
+    store.showSecretForm();
+    if (store.phase.kind === "unlock") {
       assert.equal(store.phase.mode, "secret");
+    }
+    store.requestPrompt();
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.mode, "idle");
+    }
+  });
+
+  it("leaveRecover returns to UnlockView idle", () => {
+    const store = new AppSessionStore(makeDeps({}));
+    store.enterRecover();
+    assert.equal(store.phase.kind, "ownerRecover");
+    store.leaveRecover();
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.mode, "idle");
       assert.equal(store.phase.role, "owner");
     }
   });

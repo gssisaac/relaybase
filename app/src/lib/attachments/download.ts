@@ -1,4 +1,4 @@
-import { desktopAwareFetch } from "@/lib/desktop/api-base";
+import { desktopAwareFetch } from "@/lib/desktop/api";
 import {
   desktopSaveDownloadFile,
   isDesktopRuntime,

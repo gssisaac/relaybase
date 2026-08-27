@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CfOauthInstallDetailsSheet } from "@/console/components/setup/CfOauthInstallDetailsSheet";
 import { CF_OAUTH_INSTALL_SCOPES, type DesktopErrorHelp } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 const ACTION_WIDTH = "w-[300px] max-w-full";
 

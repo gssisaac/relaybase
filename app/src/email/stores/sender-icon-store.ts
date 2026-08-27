@@ -2,7 +2,7 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { desktopAwareFetch, readResponseJson } from "@/lib/desktop/api-base";
+import { desktopAwareFetch, readResponseJson } from "@/lib/desktop/api";
 import {
   desktopGetCacheJson,
   desktopSaveCacheJson,

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 type DesktopTitleBarProps = {

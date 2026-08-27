@@ -33,7 +33,7 @@ import {
   friendlyDesktopFetchError,
   isPackagedApiUnavailableError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 import {
   EmailListContainer,
   EmailTableHeader,

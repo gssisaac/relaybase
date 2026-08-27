@@ -10,7 +10,7 @@ import {
   type OwnerSessionStatus,
   type TeamSessionStatus,
 } from "@/lib/desktop/bridge";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { useDesktop } from "@/lib/desktop/shell";
 
 import { AppSessionStore } from "./store";
 import type { AppSessionPhase, SessionRole } from "./types";
@@ -33,6 +33,36 @@ const EMPTY_TEAM: TeamSessionStatus = {
   platform: "macos",
 };
 
+async function waitForDesktopRuntime(timeoutMs: number): Promise<boolean> {
+  if (isDesktopRuntime()) return true;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    if (isDesktopRuntime()) return true;
+  }
+  return isDesktopRuntime();
+}
+
+async function readStatusWithRetry<T>(
+  read: () => Promise<T>,
+  fallback: T,
+  isReal: (value: T) => boolean,
+): Promise<T> {
+  let latest = fallback;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      latest = await read();
+      if (isReal(latest)) return latest;
+    } catch {
+      /* retry — unsigned `tauri dev` / late invoke often throw once */
+    }
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 80 * (attempt + 1)));
+    }
+  }
+  return latest;
+}
+
 const AppSessionContext = React.createContext<AppSessionStore | null>(null);
 
 /**
@@ -49,31 +79,44 @@ export function AppSessionProvider({
   const desktop = useDesktop();
   const [store] = React.useState(() => new AppSessionStore());
 
-  // Boot once: parallel keyring status fetch + immediate prompt.
+  // Fetch owner + team keyring status. Re-runs when the desktop runtime
+  // appears (Tauri injects after first paint). A fake empty status from
+  // `!isDesktopRuntime()` must not be the last word — that was the daily
+  // launch bug that skipped Touch ID and opened the passtoken form.
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
-      try {
-        const [ownerStatus, teamStatus] = await Promise.all([
-          desktopOwnerSessionStatus(),
-          desktopTeamSessionStatus(),
-        ]);
-        if (cancelled) return;
-        store.setStatuses(ownerStatus, teamStatus);
-      } catch {
-        // A keyring read failure must still leave boot, otherwise the window
-        // stays on "Loading…" forever.
-        if (cancelled) return;
+      const desktopNow = isDesktopRuntime();
+      if (!desktopNow && !desktop.isDesktop) {
         store.setStatuses(EMPTY_OWNER, EMPTY_TEAM);
+        return;
       }
+      if (!desktopNow) {
+        const ready = await waitForDesktopRuntime(2_500);
+        if (cancelled) return;
+        if (!ready) {
+          store.setStatuses(EMPTY_OWNER, EMPTY_TEAM);
+          return;
+        }
+      }
+      const [ownerStatus, teamStatus] = await Promise.all([
+        readStatusWithRetry(desktopOwnerSessionStatus, EMPTY_OWNER, (s) =>
+          Boolean(s.hasRefresh || s.hasAccess),
+        ),
+        readStatusWithRetry(desktopTeamSessionStatus, EMPTY_TEAM, (s) =>
+          Boolean(s.hasSecret || s.hasAccess),
+        ),
+      ]);
+      if (cancelled) return;
+      store.setStatuses(ownerStatus, teamStatus);
     })();
     return () => {
       cancelled = true;
     };
-  }, [store]);
+  }, [store, desktop.isDesktop]);
 
   // Mirror DesktopContext identity into the store so non-prompt phases
-  // (choice / invitedLogin / owner secret form) resolve once ready.
+  // (choice / invitedLogin / owner UnlockView) resolve once ready.
   React.useEffect(() => {
     store.setIdentity({
       ready: desktop.ready,

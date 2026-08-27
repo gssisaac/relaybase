@@ -31,8 +31,8 @@ import {
   type DesktopErrorHelp,
   type WorkerUpdateTarget,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { useDesktop } from "@/lib/desktop/shell";
 import { AdminTokenPanel } from "@/console/components/setup/AdminTokenPanel";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";

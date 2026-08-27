@@ -13,8 +13,8 @@ import {
   explainDesktopError,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
-import { useDesktop } from "@/lib/desktop/DesktopContext";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { useDesktop } from "@/lib/desktop/shell";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
 const CONSOLE_URL =

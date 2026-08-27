@@ -12,7 +12,7 @@ import {
   friendlyDesktopFetchError,
   isPackagedApiUnavailableError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 export {
   DEFAULT_ADDRESS_DISPLAY_NAMES,

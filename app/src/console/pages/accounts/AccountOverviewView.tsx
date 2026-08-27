@@ -25,7 +25,7 @@ import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 type StatsRange = "24h" | "7d" | "30d";
 

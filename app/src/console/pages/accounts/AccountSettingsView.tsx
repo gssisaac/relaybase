@@ -16,7 +16,7 @@ import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import {
   desktopAwareFetch,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 function domainOf(email: string): string {
   return email.split("@")[1]?.toLowerCase() ?? "none";

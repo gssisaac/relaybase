@@ -25,7 +25,7 @@ import {
 import {
   desktopAwareFetch,
   readResponseJson,
-} from "@/lib/desktop/api-base";
+} from "@/lib/desktop/api";
 
 const MIN_RETAIN = 100;
 const DRAFT_CAP_WHEN_LIMITING = 5000;

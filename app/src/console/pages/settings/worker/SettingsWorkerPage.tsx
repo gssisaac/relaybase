@@ -7,7 +7,7 @@ import { WorkerVersionSettingsCard } from "@/console/components/WorkerUpdateBann
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DesktopErrorBanner } from "@/lib/desktop/DesktopErrorBanner";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
 import {
   ConnectionCard,

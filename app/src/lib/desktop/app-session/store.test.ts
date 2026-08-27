@@ -31,6 +31,17 @@ function teamStatus(partial: Partial<TeamSessionStatus>): TeamSessionStatus {
   };
 }
 
+async function waitUntil(
+  pred: () => boolean,
+  label: string,
+): Promise<void> {
+  for (let i = 0; i < 30; i += 1) {
+    if (pred()) return;
+    await Promise.resolve();
+  }
+  throw new Error(label);
+}
+
 function makeDeps(overrides: {
   ownerStatus?: OwnerSessionStatus;
   teamStatus?: TeamSessionStatus;
@@ -79,10 +90,18 @@ function makeDeps(overrides: {
 describe("AppSessionStore", () => {
   it("boots to ownerReady when the owner already has access", () => {
     const store = new AppSessionStore(
-      makeDeps({ ownerStatus: ownerStatus({ hasAccess: true }) }),
+      makeDeps({
+        ownerStatus: ownerStatus({
+          hasAccess: true,
+          workerUrl: "https://relaybase-api.example.workers.dev",
+        }),
+      }),
     );
     store.setStatuses(
-      ownerStatus({ hasAccess: true }),
+      ownerStatus({
+        hasAccess: true,
+        workerUrl: "https://relaybase-api.example.workers.dev",
+      }),
       teamStatus({}),
     );
     assert.equal(store.phase.kind, "ownerReady");
@@ -108,12 +127,9 @@ describe("AppSessionStore", () => {
     store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
     assert.equal(store.phase.kind, "unlock");
     assert.equal(store.needsUnlockPrompt, true);
-    // The auto-prompt is fired synchronously after setStatuses.
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitUntil(() => store.phase.kind === "ownerReady", "owner did not unlock");
     assert.equal(prompted, 1);
     assert.equal(unlocked, 1);
-    assert.equal(store.phase.kind, "ownerReady");
   });
 
   it("lands on UnlockView idle when owner has workerUrl but no keyring", () => {
@@ -266,11 +282,12 @@ describe("AppSessionStore", () => {
     );
     assert.equal(store.phase.kind, "unlock");
     if (store.phase.kind === "unlock") assert.equal(store.phase.role, "invited");
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitUntil(
+      () => store.phase.kind === "invitedReady",
+      "invited did not unlock",
+    );
     assert.equal(prompted, 1);
     assert.equal(unlocked, 1);
-    assert.equal(store.phase.kind, "invitedReady");
   });
 
   it("first invited login offers biometry, then accept enters the app", async () => {
@@ -325,6 +342,91 @@ describe("AppSessionStore", () => {
     assert.equal(store.phase.kind, "invitedReady");
   });
 
+  it("does not consume the Touch ID one-shot before the desktop runtime exists", async () => {
+    let prompted = 0;
+    let desktop = false;
+    const store = new AppSessionStore(
+      makeDeps({
+        isDesktop: () => desktop,
+        ownerStatus: ownerStatus({ hasRefresh: true }),
+        authenticateBiometry: () => {
+          prompted += 1;
+          return Promise.resolve();
+        },
+        ownerUnlock: () =>
+          Promise.resolve(ownerStatus({ hasAccess: true })),
+      }),
+    );
+    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
+    await Promise.resolve();
+    assert.equal(prompted, 0);
+    assert.equal(store.phase.kind, "unlock");
+
+    desktop = true;
+    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "ownerReady", "late desktop did not unlock");
+    assert.equal(prompted, 1);
+  });
+
+  it("retries Touch ID once after a launch systemCancel", async () => {
+    let prompted = 0;
+    const store = new AppSessionStore(
+      makeDeps({
+        ownerStatus: ownerStatus({ hasRefresh: true }),
+        authenticateBiometry: () => {
+          prompted += 1;
+          if (prompted === 1) {
+            return Promise.reject(
+              new Error("[systemCancel] - Authentication canceled."),
+            );
+          }
+          return Promise.resolve();
+        },
+        ownerUnlock: () =>
+          Promise.resolve(ownerStatus({ hasAccess: true })),
+      }),
+    );
+    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(prompted, 2);
+    assert.equal(store.phase.kind, "ownerReady");
+  });
+
+  it("keeps ownerReady when a stale empty status arrives after unlock", async () => {
+    const store = new AppSessionStore(
+      makeDeps({
+        ownerStatus: ownerStatus({ hasRefresh: true }),
+        ownerUnlock: () =>
+          Promise.resolve(ownerStatus({ hasRefresh: true, hasAccess: true })),
+      }),
+    );
+    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "ownerReady", "did not unlock");
+    store.setStatuses(ownerStatus({}), teamStatus({}));
+    assert.equal(store.phase.kind, "ownerReady");
+  });
+
+  it("does not open the passtoken form when unlock fails after Touch ID", async () => {
+    const store = new AppSessionStore(
+      makeDeps({
+        ownerStatus: ownerStatus({ hasRefresh: true }),
+        ownerUnlock: () =>
+          Promise.reject(
+            new Error("No saved session. Sign in with your username and passtoken."),
+          ),
+      }),
+    );
+    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
+    await waitUntil(() => {
+      if (store.busy || store.phase.kind !== "unlock") return false;
+      return store.phase.mode === "idle";
+    }, "unlock did not settle on idle");
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.mode, "idle");
+    }
+  });
+
   it("a dismissed biometry prompt falls back to idle, not an error", async () => {
     const store = new AppSessionStore(
       makeDeps({
@@ -344,11 +446,66 @@ describe("AppSessionStore", () => {
     assert.equal(store.error, null);
   });
 
-  it("signOut resets to choice", async () => {
+  it("does not enter the mailbox without a connected Worker URL", () => {
     const store = new AppSessionStore(
       makeDeps({ ownerStatus: ownerStatus({ hasAccess: true }) }),
     );
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: null,
+      teamIdentity: null,
+    });
     store.setStatuses(ownerStatus({ hasAccess: true }), teamStatus({}));
+    assert.equal(store.phase.kind, "choice");
+    assert.equal(store.canShowApp, false);
+  });
+
+  it("enters the mailbox when owner access and Worker URL are both present", () => {
+    const store = new AppSessionStore(
+      makeDeps({ ownerStatus: ownerStatus({ hasAccess: true }) }),
+    );
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: {
+        accountId: "",
+        installToken: "",
+        workerUrl: "https://relaybase-api.example.workers.dev",
+        adminToken: "",
+        workerScriptName: "",
+        workerVersion: "",
+        relaybaseAccountId: "",
+        relaybaseEmail: "",
+        relaybaseSession: "",
+        cfOauthAccessToken: "",
+        cfOauthRefreshToken: "",
+        cfOauthAccessExpiresAt: "",
+        cfOauthAccountId: "",
+      },
+      teamIdentity: null,
+    });
+    store.setStatuses(ownerStatus({ hasAccess: true }), teamStatus({}));
+    assert.equal(store.phase.kind, "ownerReady");
+    assert.equal(store.canShowApp, true);
+  });
+
+  it("signOut resets to choice", async () => {
+    const store = new AppSessionStore(
+      makeDeps({
+        ownerStatus: ownerStatus({
+          hasAccess: true,
+          workerUrl: "https://relaybase-api.example.workers.dev",
+        }),
+      }),
+    );
+    store.setStatuses(
+      ownerStatus({
+        hasAccess: true,
+        workerUrl: "https://relaybase-api.example.workers.dev",
+      }),
+      teamStatus({}),
+    );
     assert.equal(store.phase.kind, "ownerReady");
     await store.signOut();
     assert.equal(store.phase.kind, "choice");

@@ -15,6 +15,21 @@ function dismissedCode(value: string): boolean {
   return code.endsWith("cancel") || code.endsWith("cancelled") || code.endsWith("canceled");
 }
 
+function biometryMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    const o = err as { message?: unknown };
+    if (typeof o.message === "string") return o.message;
+  }
+  return "";
+}
+
+/** macOS cancels LAContext when the window is not yet key (typical at launch). */
+export function isSystemCanceledBiometry(err: unknown): boolean {
+  return /systemcancel/i.test(biometryMessage(err));
+}
+
 /** True when the OS prompt was dismissed — not an error to show in the UI. */
 export function isUserDismissedBiometry(err: unknown): boolean {
   if (err == null) return false;

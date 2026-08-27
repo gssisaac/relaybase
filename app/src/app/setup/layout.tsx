@@ -9,6 +9,21 @@ import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-
 import { useAppSession } from "@/lib/desktop/app-session";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 
+/** Setup routes that must finish even when a keyring session already exists. */
+const SETUP_CONTINUE_PATHS = [
+  "/setup/install",
+  "/setup/account",
+  "/setup/license",
+  "/setup/progress",
+  "/setup/recover-admin",
+] as const;
+
+function isSetupContinuePath(pathname: string): boolean {
+  return SETUP_CONTINUE_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
 function SetupShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -16,14 +31,9 @@ function SetupShell({ children }: { children: ReactNode }) {
   const { isDesktop, isMacOS } = useDesktopChrome();
 
   useEffect(() => {
-    // The store is the single source of truth for "can the dashboard show".
-    // Leave setup once an owner or invited session is ready. Stay on the
-    // progress / reveal / recover steps so the user can finish copying the
-    // passtoken or re-issuing it.
-    if (
-      pathname === "/setup/progress" ||
-      pathname === "/setup/recover-admin"
-    ) {
+    // Leave setup only when the mailbox can actually load (session + Worker).
+    // First-time signup/install must not bounce to an empty inbox mid-flow.
+    if (isSetupContinuePath(pathname)) {
       return;
     }
     if (store.canShowApp) {

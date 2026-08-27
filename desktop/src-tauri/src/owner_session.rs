@@ -280,8 +280,13 @@ async fn refresh_with_blob(blob: &KeyringBlob) -> Result<(), String> {
     )
     .await?;
     if status != 200 {
-        delete_keyring();
-        clear_access();
+        // Only a 401 means the refresh was revoked. 404/5xx/network-shaped
+        // errors must not wipe the keyring — that dumped a successful Touch ID
+        // into the passtoken form on the next status read.
+        if status == 401 {
+            delete_keyring();
+            clear_access();
+        }
         return Err(json_string(&value, "error")
             .unwrap_or("Session expired. Sign in with your passtoken.")
             .to_string());

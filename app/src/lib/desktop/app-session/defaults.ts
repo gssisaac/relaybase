@@ -9,8 +9,11 @@ async function bridge() {
 
 export function defaultIsDesktop(): boolean {
   if (typeof window === "undefined") return false;
-  const w = window as unknown as { __TAURI_INTERNALS__?: unknown };
-  return Boolean(w.__TAURI_INTERNALS__);
+  const w = window as unknown as {
+    __TAURI_INTERNALS__?: { invoke?: unknown };
+    __TAURI__?: { core?: { invoke?: unknown } };
+  };
+  return Boolean(w.__TAURI_INTERNALS__?.invoke ?? w.__TAURI__?.core?.invoke);
 }
 
 export function createDefaultDeps(
@@ -19,9 +22,7 @@ export function createDefaultDeps(
   return {
     isDesktop: defaultIsDesktop,
     authenticateBiometry: (reason) =>
-      import("../biometry/plugin").then((b) =>
-        b.desktopAuthenticateBiometry(reason),
-      ),
+      bridge().then((b) => b.desktopOwnerTouchId(reason)),
     ownerSessionStatus: () =>
       bridge().then((b) => b.desktopOwnerSessionStatus()),
     ownerLogin: (input) => bridge().then((b) => b.desktopOwnerLogin(input)),

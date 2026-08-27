@@ -2,6 +2,7 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
+import { isSystemCanceledBiometry } from "../biometry/dismiss";
 import { biometryLabel } from "../biometry/label";
 import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
 import { createDefaultDeps } from "./defaults";
@@ -70,7 +71,23 @@ export class AppSessionStore {
   }
 
   get canShowApp(): boolean {
-    return this.phase.kind === "ownerReady" || this.phase.kind === "invitedReady";
+    if (this.phase.kind !== "ownerReady" && this.phase.kind !== "invitedReady") {
+      return false;
+    }
+    return this.hasWorkerConnected();
+  }
+
+  /** Worker URL must be wired before the mailbox shell can load live mail. */
+  private hasWorkerConnected(): boolean {
+    const credUrl = this.identity.credentials?.workerUrl?.trim() ?? "";
+    if (credUrl) return true;
+    const ownerUrl = this.ownerStatus?.workerUrl?.trim() ?? "";
+    if (ownerUrl) return true;
+    const teamUrl =
+      this.teamStatus?.workerUrl?.trim() ??
+      this.identity.teamIdentity?.workerUrl?.trim() ??
+      "";
+    return Boolean(teamUrl);
   }
 
   get needsUnlockPrompt(): boolean {
@@ -102,19 +119,61 @@ export class AppSessionStore {
    * non-prompt branches (choice / invitedLogin / owner unlock). */
   setIdentity(snapshot: IdentitySnapshot): void {
     this.identity = snapshot;
-    if (snapshot.ready && this.phase.kind === "boot") {
+    if (
+      snapshot.ready &&
+      (this.phase.kind === "boot" || this.phase.kind === "choice")
+    ) {
       this.reconcileFromStatuses();
     }
+    // Late Tauri inject: statuses already said "prompt" but invoke was missing.
+    this.maybeAutoPrompt();
   }
 
   private reconcileFromStatuses(): void {
     const team = this.teamStatus;
     const owner = this.ownerStatus;
 
+    if (this.phase.kind === "install" || this.phase.kind === "ownerRecover") {
+      return;
+    }
+
+    // A late empty hydrate must not kick an already-unlocked session back
+    // to UnlockView / the passtoken form.
+    if (this.phase.kind === "ownerReady") {
+      if (owner?.hasAccess && this.hasWorkerConnected()) return;
+      if (owner?.hasAccess && this.identity.ready) {
+        this.phase = { kind: "choice" };
+        return;
+      }
+      if (owner?.hasRefresh) {
+        this.phase = { kind: "unlock", role: "owner", mode: "prompting" };
+        this.prompted = false;
+        this.maybeAutoPrompt();
+      }
+      return;
+    }
+    if (this.phase.kind === "invitedReady") {
+      if (team?.hasAccess && this.hasWorkerConnected()) return;
+      if (team?.hasAccess && this.identity.ready) {
+        this.phase = { kind: "invitedLogin" };
+        return;
+      }
+      if (team?.hasSecret) {
+        this.phase = { kind: "unlock", role: "invited", mode: "prompting" };
+        this.prompted = false;
+        this.maybeAutoPrompt();
+      }
+      return;
+    }
+
     // Invited takes precedence — a teammate never holds owner credentials.
     if (this.identity.teamIdentity || (team && team.hasSecret)) {
       if (team?.hasAccess) {
-        this.phase = { kind: "invitedReady" };
+        this.phase = this.hasWorkerConnected()
+          ? { kind: "invitedReady" }
+          : this.identity.ready
+            ? { kind: "invitedLogin" }
+            : this.phase;
         return;
       }
       if (team?.hasSecret) {
@@ -134,7 +193,11 @@ export class AppSessionStore {
     }
 
     if (owner?.hasAccess) {
-      this.phase = { kind: "ownerReady" };
+      if (this.hasWorkerConnected()) {
+        this.phase = { kind: "ownerReady" };
+      } else if (this.identity.ready) {
+        this.phase = { kind: "choice" };
+      }
       return;
     }
     if (owner?.hasRefresh) {
@@ -164,15 +227,30 @@ export class AppSessionStore {
   private maybeAutoPrompt(): void {
     if (this.prompted) return;
     if (this.phase.kind !== "unlock" || this.phase.mode !== "prompting") return;
+    // Don't consume the one-shot before Tauri invoke exists — a late
+    // `__TAURI_INTERNALS__` inject used to skip Touch ID forever.
+    if (!this.deps.isDesktop()) return;
     this.prompted = true;
     void this.promptUnlock();
   }
 
   // --- Actions ---
 
+  private async authenticateBiometry(reason: string): Promise<void> {
+    try {
+      await this.deps.authenticateBiometry(reason);
+    } catch (err) {
+      // Window not key yet → macOS replies systemCancel. Retry once.
+      if (!isSystemCanceledBiometry(err)) throw err;
+      await new Promise((r) => setTimeout(r, 200));
+      await this.deps.authenticateBiometry(reason);
+    }
+  }
+
   /** Trigger Touch ID / Windows Hello, then unlock the active role. */
   async promptUnlock(): Promise<void> {
     if (this.phase.kind !== "unlock") return;
+    if (this.busy) return;
     const role = this.phase.role;
     if (this.phase.mode !== "prompting") {
       runInAction(() => {
@@ -187,47 +265,32 @@ export class AppSessionStore {
           ? "Unlock your Relaybase team session"
           : "Unlock your Relaybase owner session";
       if (this.deps.isDesktop()) {
-        await this.deps.authenticateBiometry(reason);
+        await this.authenticateBiometry(reason);
       }
       if (role === "invited") {
-        await this.deps.teamUnlock();
-      } else {
-        await this.deps.ownerUnlock();
+        const status = await this.deps.teamUnlock();
+        runInAction(() => {
+          this.teamStatus = status;
+          this.phase = { kind: "invitedReady" };
+          this.busy = false;
+        });
+        return;
       }
+      const status = await this.deps.ownerUnlock();
       runInAction(() => {
-        this.phase = { kind: role === "invited" ? "invitedReady" : "ownerReady" };
+        this.ownerStatus = status;
+        this.phase = { kind: "ownerReady" };
         this.busy = false;
       });
     } catch (err) {
       const shown = visibleUnlockError(err);
       runInAction(() => {
         this.error = shown;
+        // Passtoken is a user fallback (`showSecretForm`), never an automatic
+        // redirect after Touch ID. Stay on the fingerprint surface.
         this.phase = { kind: "unlock", role, mode: "idle" };
         this.busy = false;
       });
-      // If the keyring secret vanished (refresh revoked), fall back to the
-      // secret form so the user can re-authenticate.
-      try {
-        if (role === "invited") {
-          const status = await this.deps.teamSessionStatus();
-          runInAction(() => {
-            this.teamStatus = status;
-            if (!status.hasSecret) {
-              this.phase = { kind: "unlock", role, mode: "idle" };
-            }
-          });
-        } else {
-          const status = await this.deps.ownerSessionStatus();
-          runInAction(() => {
-            this.ownerStatus = status;
-            if (!status.hasRefresh) {
-              this.phase = { kind: "unlock", role, mode: "secret" };
-            }
-          });
-        }
-      } catch {
-        /* keep idle */
-      }
     }
   }
 
@@ -489,6 +552,26 @@ export class AppSessionStore {
         this.teamStatus = team;
         this.statusesHydrated = true;
       });
+      if (
+        this.phase.kind === "ownerReady" &&
+        !owner.hasAccess &&
+        !owner.hasRefresh
+      ) {
+        runInAction(() => {
+          this.phase = { kind: "unlock", role: "owner", mode: "idle" };
+        });
+        return;
+      }
+      if (
+        this.phase.kind === "invitedReady" &&
+        !team.hasAccess &&
+        !team.hasSecret
+      ) {
+        runInAction(() => {
+          this.phase = { kind: "unlock", role: "invited", mode: "idle" };
+        });
+        return;
+      }
       this.reconcileFromStatuses();
       if (this.phase.kind === "unlock" && this.phase.mode === "prompting") {
         void this.promptUnlock();

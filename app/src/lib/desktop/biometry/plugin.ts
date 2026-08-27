@@ -1,22 +1,23 @@
 "use client";
 
-import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import {
+  desktopOwnerTouchId,
+  invoke,
+  isDesktopRuntime,
+} from "@/lib/desktop/bridge";
 
 import type { BiometryStatus, BiometryType } from "./types";
 
 /**
- * Touch ID (macOS) / Windows Hello via tauri-plugin-biometry.
+ * Touch ID (macOS) / Windows Hello.
  *
- * Invokes the plugin commands through `@tauri-apps/api` so the dashboard
- * shell can compile without resolving the plugin's JS package (Turbopack
- * treats `import("…-biometry-api")` as a hard compile error).
+ * Daily unlock goes through `owner_touch_id_cmd` (main-thread LAContext) via
+ * the same `__TAURI_INTERNALS__` invoke as every other desktop command.
+ * Do not dynamically import `@tauri-apps/api/core` here — Next/Tauri can
+ * fail or hang loading that chunk, which left UnlockView busy and silent.
  *
  * Production Mac builds must be Developer ID signed or LocalAuthentication /
- * keychain calls fail. Plugin `status` is label-only — daily unlock prompts
- * via `owner_touch_id_cmd` whenever a keyring refresh exists.
- *
- * allowDeviceCredential: if biometry fails, the OS offers the device PIN /
- * password. Both failing → passtoken re-entry.
+ * keychain calls fail. Plugin `status` is label-only.
  */
 
 type PluginStatus = {
@@ -31,7 +32,6 @@ export async function desktopCheckBiometry(): Promise<BiometryStatus> {
     return { isAvailable: false, biometryType: 0, errorCode: "notSupported" };
   }
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
     const status = await invoke<PluginStatus>("plugin:biometry|status");
     return {
       isAvailable: Boolean(status.isAvailable),
@@ -54,6 +54,5 @@ export async function desktopCheckBiometry(): Promise<BiometryStatus> {
 export async function desktopAuthenticateBiometry(
   reason = "Unlock Relaybase",
 ): Promise<void> {
-  const { invoke } = await import("@tauri-apps/api/core");
-  await invoke("owner_touch_id_cmd", { reason });
+  await desktopOwnerTouchId(reason);
 }

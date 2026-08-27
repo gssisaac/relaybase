@@ -131,6 +131,15 @@ export function AppSessionProvider({
     desktop.teamLogin,
   ]);
 
+  // Unlock writes workerUrl to ~/.relaybase; refresh credentials before the
+  // mailbox shell mounts so desktopAwareFetch sees __RELAYBASE_WORKER_URL__.
+  React.useEffect(() => {
+    if (store.phase.kind !== "ownerReady" && store.phase.kind !== "invitedReady") {
+      return;
+    }
+    void desktop.refresh();
+  }, [store.phase.kind, desktop, desktop.refresh]);
+
   // Global 401 handler: re-prompt unlock without wiping the worker URL or
   // keyring. The refresh may simply be stale; the store falls back to the
   // secret form if it was revoked.
@@ -171,6 +180,8 @@ export function useAppSession(): AppSessionStore {
           busy: ctx.busy,
           error: ctx.error,
           canShowApp: ctx.canShowApp,
+          hasRefresh: Boolean(ctx.ownerStatus?.hasRefresh),
+          hasSecret: Boolean(ctx.teamStatus?.hasSecret),
           revealed: ctx.revealedPasstoken?.username ?? "",
           biometryLabel: ctx.biometryLabel,
         }),

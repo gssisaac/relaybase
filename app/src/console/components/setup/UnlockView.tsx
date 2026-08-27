@@ -188,10 +188,19 @@ export function UnlockView({
       <MacDesktopTitlebarSpacer />
       <div
         {...dragRegionProps}
-        className={cn("flex min-h-0 flex-1 flex-col", dragRegionClassName)}
+        className={cn(
+          "flex min-h-0 flex-1 flex-col items-center justify-center px-6 pb-10",
+          dragRegionClassName,
+        )}
       >
-        <div className="flex flex-1 flex-col items-center justify-center px-6">
-          <div className="mb-6 max-w-sm space-y-1 text-center">
+        <div
+          className={cn(
+            "flex w-full max-w-sm flex-col items-center gap-6",
+            noDragClassName,
+          )}
+          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+        >
+          <div className="space-y-1 text-center">
             <h1 className="text-lg font-semibold tracking-tight">
               Unlock Relaybase
             </h1>
@@ -206,48 +215,38 @@ export function UnlockView({
           <Button
             type="button"
             variant="ghost"
-            disabled={busy || !hasKeyringSecret}
+            disabled={busy}
             onClick={() => void store.promptUnlock()}
             aria-label={`Unlock with ${label}`}
-            className={cn(
-              "h-auto flex-col gap-3 px-6 py-4",
-              noDragClassName,
-            )}
-            {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+            className="h-auto flex-col gap-3 px-6 py-4"
           >
             <Fingerprint
               className={cn("size-12 text-foreground", busy && "animate-pulse")}
             />
             <span className="text-base font-medium tracking-tight">{label}</span>
           </Button>
-        </div>
-        <div
-          className={cn(
-            "mx-auto flex w-full max-w-sm flex-col gap-2 px-6 pb-10",
-            noDragClassName,
-          )}
-          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
-        >
-          {store.error ? (
-            <p className="text-center text-xs text-destructive">{store.error}</p>
-          ) : null}
-          <Button
-            size="lg"
-            variant="outline"
-            className="w-full"
-            disabled={busy}
-            onClick={() => store.showSecretForm()}
-          >
-            {role === "invited" ? "Sign in with password" : "Sign in with passtoken"}
-          </Button>
-          <button
-            type="button"
-            className="pt-2 text-center text-[11px] text-muted-foreground hover:underline"
-            disabled={busy}
-            onClick={() => router.push("/setup")}
-          >
-            {role === "invited" ? "Use a different account" : "Install on another Cloudflare account"}
-          </button>
+          <div className="flex w-full flex-col gap-2">
+            {store.error ? (
+              <p className="text-center text-xs text-destructive">{store.error}</p>
+            ) : null}
+            <Button
+              size="lg"
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              onClick={() => store.showSecretForm()}
+            >
+              {role === "invited" ? "Sign in with password" : "Sign in with passtoken"}
+            </Button>
+            <button
+              type="button"
+              className="pt-2 text-center text-[11px] text-muted-foreground hover:underline"
+              disabled={busy}
+              onClick={() => router.push("/setup")}
+            >
+              {role === "invited" ? "Use a different account" : "Install on another Cloudflare account"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

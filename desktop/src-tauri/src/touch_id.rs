@@ -11,7 +11,7 @@ mod macos {
     use objc2_foundation::{NSError, NSString};
     use objc2_local_authentication::{LAContext, LAError, LAPolicy};
     use std::sync::Mutex;
-    use tauri::AppHandle;
+    use tauri::{AppHandle, Manager};
 
     fn error_name(code: LAError) -> &'static str {
         match code {
@@ -72,6 +72,12 @@ mod macos {
     }
 
     pub async fn authenticate(app: AppHandle, reason: String) -> Result<(), String> {
+        // LAContext replies systemCancel unless this window is key.
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_focus();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+
         let (tx, rx) = tokio::sync::oneshot::channel();
         app.run_on_main_thread(move || {
             if let Err(err) = start(reason, tx) {

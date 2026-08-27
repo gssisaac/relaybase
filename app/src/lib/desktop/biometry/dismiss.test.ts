@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { isUserDismissedBiometry } from "./dismiss.ts";
+import {
+  isSystemCanceledBiometry,
+  isUserDismissedBiometry,
+} from "./dismiss.ts";
 
 describe("isUserDismissedBiometry", () => {
   it("treats plugin cancel codes as a normal dismiss", () => {
@@ -16,6 +19,14 @@ describe("isUserDismissedBiometry", () => {
       true,
     );
     assert.equal(isUserDismissedBiometry(new Error("userCancel")), true);
+  });
+
+  it("detects launch-time systemCancel", () => {
+    assert.equal(
+      isSystemCanceledBiometry("[systemCancel] - Authentication canceled."),
+      true,
+    );
+    assert.equal(isSystemCanceledBiometry("userCancel"), false);
   });
 
   it("does not hide real unlock failures", () => {

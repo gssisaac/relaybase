@@ -7,7 +7,7 @@ import { BootScreen } from "@/console/components/setup/BootScreen";
 import { OfferBiometryView } from "@/console/components/setup/OfferBiometryView";
 import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
 import { UnlockView } from "@/console/components/setup/UnlockView";
-import { useAppSession } from "@/lib/desktop/AppSessionContext";
+import { useAppSession } from "@/lib/app-session";
 
 /**
  * Shared phase switch for `/` (outside the shell) and the dashboard gate.

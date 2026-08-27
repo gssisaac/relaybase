@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { DesktopProvider } from "@/lib/desktop/DesktopContext";
-import { AppSessionProvider } from "@/lib/desktop/AppSessionContext";
+import { AppSessionProvider } from "@/lib/app-session";
 
 /**
  * Single root client boundary for desktop + session state.

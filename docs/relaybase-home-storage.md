@@ -146,7 +146,7 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/owner_session.rs`)
 | service | `com.relaybase.desktop` |
 | account | `owner-session` |
 
-Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. The passtoken is never stored. Daily unlock: JS prompts **Touch ID** (Mac) or **Windows Hello** (Windows) with device PIN fallback (`app/src/lib/desktop/biometry.ts`), then Rust `owner_unlock` reads this blob and rotates refresh. Access stays in process memory. Linux has no biometry plugin — fallback is username + passtoken.
+Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. The passtoken is never stored. Daily unlock: JS prompts **Touch ID** (Mac) or **Windows Hello** (Windows) with device PIN fallback (`app/src/lib/biometry/`), then Rust `owner_unlock` reads this blob and rotates refresh. Access stays in process memory. Linux has no biometry plugin — fallback is username + passtoken.
 
 ### OS keyring (team mobile password)
 

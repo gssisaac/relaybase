@@ -4,7 +4,7 @@ import { Fingerprint } from "lucide-react";
 
 import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebarSpacer";
 import { Button } from "@/components/ui/button";
-import { useAppSession } from "@/lib/desktop/AppSessionContext";
+import { useAppSession } from "@/lib/app-session";
 import { useDesktopChrome } from "@/lib/desktop/use-desktop-chrome";
 import { cn } from "@/lib/utils";
 

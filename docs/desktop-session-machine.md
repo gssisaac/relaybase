@@ -25,8 +25,8 @@ waterfall of sequential checks and component mounts ran before the biometric
 prompt.
 
 Everything now flows through one MobX store, **`AppSessionStore`**
-(`app/src/lib/desktop/app-session-store.ts`), exposed via
-**`AppSessionProvider`** (`app/src/lib/desktop/AppSessionContext.tsx`). The
+(`app/src/lib/app-session/store.ts`), exposed via
+**`AppSessionProvider`** (`app/src/lib/app-session/context.tsx`). The
 store is the single source of truth for the current **phase**; the dashboard
 gate is a pure `switch` over that phase.
 
@@ -163,9 +163,9 @@ the shell and then back out to Touch ID.
 
 | File | Role |
 |------|------|
-| `app/src/lib/desktop/app-session-store.ts` | The MobX store + phase + actions |
-| `app/src/lib/desktop/app-session-store.test.ts` | Transition tests (injected Tauri mock) |
-| `app/src/lib/desktop/AppSessionContext.tsx` | Provider: parallel boot fetch + 401 listener |
+| `app/src/lib/app-session/` | MobX store, phases, provider, 401 listener |
+| `app/src/lib/app-session/store.test.ts` | Transition tests (injected Tauri mock) |
+| `app/src/lib/biometry/` | Touch ID / Windows Hello prompt, label, dismiss detection |
 | `app/src/lib/desktop/AppProviders.tsx` | Root `DesktopProvider` + `AppSessionProvider` |
 | `app/src/app/_shell/DesktopDashboardGate.tsx` | Phase `switch` gate |
 | `app/src/console/components/setup/UnlockView.tsx` | Common owner/invited unlock surface |
@@ -184,4 +184,4 @@ the shell and then back out to Touch ID.
 3. Add a `case` to the gate `switch` and a view that only renders.
 4. If it ships in the Worker, rebuild the bundle (see `AGENTS.md` → *Worker
    bundle*).
-5. Add a transition test in `app-session-store.test.ts` (inject `AppSessionDeps`).
+5. Add a transition test in `app/src/lib/app-session/store.test.ts` (inject `AppSessionDeps`).

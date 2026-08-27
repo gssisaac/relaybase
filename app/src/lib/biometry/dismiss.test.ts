@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { isUserDismissedBiometry } from "./biometry-dismiss.ts";
+import { isUserDismissedBiometry } from "./dismiss.ts";
 
 describe("isUserDismissedBiometry", () => {
   it("treats plugin cancel codes as a normal dismiss", () => {

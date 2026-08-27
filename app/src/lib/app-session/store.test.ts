@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { AppSessionStore } from "./app-session-store.ts";
 import type {
   OwnerSessionStatus,
   TeamSessionStatus,
-} from "./bridge.ts";
+} from "../desktop/bridge.ts";
+import { AppSessionStore } from "./store.ts";
 
 function ownerStatus(partial: Partial<OwnerSessionStatus>): OwnerSessionStatus {
   return {

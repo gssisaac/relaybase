@@ -2,6 +2,8 @@
 
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
+import type { BiometryStatus, BiometryType } from "./types";
+
 /**
  * Touch ID (macOS) / Windows Hello via tauri-plugin-biometry.
  *
@@ -17,33 +19,12 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge";
  * password. Both failing → passtoken re-entry.
  */
 
-export type BiometryType = 0 | 1 | 2 | 3 | 4;
-// Plugin enum: 0 None, 1 Auto (Windows Hello), 2 TouchID, 3 FaceID, 4 Iris
-
-export type BiometryStatus = {
-  isAvailable: boolean;
-  biometryType: BiometryType;
-  error?: string;
-  errorCode?: string;
-};
-
 type PluginStatus = {
   isAvailable?: boolean;
   biometryType?: number;
   error?: string;
   errorCode?: string;
 };
-
-export { isUserDismissedBiometry } from "./biometry-dismiss";
-
-export function biometryLabel(type: BiometryType, platform?: string): string {
-  if (type === 2) return "Touch ID";
-  if (type === 3) return "Face ID";
-  if (type === 4) return "Iris";
-  if (type === 1 || platform === "windows") return "Windows Hello";
-  if (platform === "macos") return "Touch ID";
-  return "device password";
-}
 
 export async function desktopCheckBiometry(): Promise<BiometryStatus> {
   if (!isDesktopRuntime()) {

@@ -4,11 +4,6 @@ import * as React from "react";
 import { reaction } from "mobx";
 
 import {
-  AppSessionStore,
-  type AppSessionPhase,
-  type SessionRole,
-} from "@/lib/desktop/app-session-store";
-import {
   desktopOwnerSessionStatus,
   desktopTeamSessionStatus,
   isDesktopRuntime,
@@ -16,6 +11,9 @@ import {
   type TeamSessionStatus,
 } from "@/lib/desktop/bridge";
 import { useDesktop } from "@/lib/desktop/DesktopContext";
+
+import { AppSessionStore } from "./store";
+import type { AppSessionPhase, SessionRole } from "./types";
 
 const EMPTY_OWNER: OwnerSessionStatus = {
   hasRefresh: false,

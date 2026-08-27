@@ -2,86 +2,16 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
+import { biometryLabel } from "../biometry/label";
+import type { OwnerSessionStatus, TeamSessionStatus } from "../desktop/bridge";
+import { createDefaultDeps } from "./defaults";
+import { visibleUnlockError } from "./errors";
 import type {
-  DesktopCredentials,
-  DesktopTeamLogin,
-  OwnerSessionStatus,
-  TeamSessionStatus,
-} from "./bridge";
-
-/** Lazy-load the bridge so this module stays importable in the unit-test
- * runner (which cannot resolve the app's `@/` path alias or Tauri). The
- * production app always injects nothing, so these load on first use. */
-async function bridge() {
-  return await import("./bridge");
-}
-
-function defaultIsDesktop(): boolean {
-  if (typeof window === "undefined") return false;
-  const w = window as unknown as { __TAURI_INTERNALS__?: unknown };
-  return Boolean(w.__TAURI_INTERNALS__);
-}
-
-/** Local copy of `biometryLabel` so this module does not pull in `biometry.ts`
- * (which imports the bridge and would break the unit-test runner). */
-function biometryLabel(platform?: string): string {
-  if (platform === "windows") return "Windows Hello";
-  if (platform === "macos") return "Touch ID";
-  return "device password";
-}
-
-/** Inlined `isUserDismissedBiometry` so this module has no runtime relative
- * imports (which the unit-test runner cannot resolve without extensions). */
-const DISMISSED_BIOMETRY_CODES = new Set([
-  "usercancel",
-  "appcancel",
-  "systemcancel",
-  "userfallback",
-]);
-function normalizeDismissCode(value: string): string {
-  return value.toLowerCase().replace(/[_\s-]/g, "");
-}
-function dismissedCode(value: string): boolean {
-  const code = normalizeDismissCode(value);
-  if (DISMISSED_BIOMETRY_CODES.has(code)) return true;
-  return (
-    code.endsWith("cancel") ||
-    code.endsWith("cancelled") ||
-    code.endsWith("canceled")
-  );
-}
-function isDismissedBiometryMessage(message: string): boolean {
-  const text = message.trim();
-  if (!text) return false;
-  const bracket = text.match(/^\[([^\]]+)\]/);
-  if (bracket && dismissedCode(bracket[1])) return true;
-  const lower = text.toLowerCase();
-  if (
-    lower.includes("usercancel") ||
-    lower.includes("appcancel") ||
-    lower.includes("systemcancel")
-  ) {
-    return true;
-  }
-  if (lower.includes("user fallback") || lower.includes("userfallback")) {
-    return true;
-  }
-  return /authentication cancel+ed/.test(lower);
-}
-function isUserDismissedBiometry(err: unknown): boolean {
-  if (err == null) return false;
-  if (typeof err === "object") {
-    const o = err as { errorCode?: unknown; code?: unknown; message?: unknown };
-    const rawCode = o.errorCode ?? o.code;
-    if (typeof rawCode === "string" && dismissedCode(rawCode)) return true;
-    if (typeof o.message === "string" && isDismissedBiometryMessage(o.message)) {
-      return true;
-    }
-  }
-  if (err instanceof Error) return isDismissedBiometryMessage(err.message);
-  if (typeof err === "string") return isDismissedBiometryMessage(err);
-  return false;
-}
+  AppSessionDeps,
+  AppSessionPhase,
+  IdentitySnapshot,
+  SessionRole,
+} from "./types";
 
 /**
  * Single source of truth for "who can enter the app right now".
@@ -93,75 +23,6 @@ function isUserDismissedBiometry(err: unknown): boolean {
  *     Accept stores the password in the OS keyring; decline leaves nothing
  *     on disk and the next run re-enters the password.
  */
-
-export type AppSessionPhase =
-  | { kind: "boot" }
-  | { kind: "choice" }
-  | {
-      kind: "install";
-      step: "oauth" | "progress" | "createOwner" | "revealPasstoken";
-    }
-  | { kind: "invitedLogin" }
-  | { kind: "offerBiometry"; role: "invited" }
-  | {
-      kind: "unlock";
-      role: "owner" | "invited";
-      mode: "prompting" | "idle" | "secret";
-    }
-  | { kind: "invitedReady" }
-  | { kind: "ownerReady" }
-  | { kind: "ownerRecover" };
-
-export type SessionRole = "none" | "owner" | "invited";
-
-type IdentitySnapshot = {
-  ready: boolean;
-  isDesktop: boolean;
-  credentials: DesktopCredentials | null;
-  teamIdentity: DesktopTeamLogin | null;
-};
-
-/** Injectable bridge surface so the store is testable without Tauri. */
-export type AppSessionDeps = {
-  isDesktop: () => boolean;
-  authenticateBiometry: (reason: string) => Promise<void>;
-  ownerSessionStatus: () => Promise<OwnerSessionStatus>;
-  ownerLogin: (input: {
-    workerUrl: string;
-    username: string;
-    passtoken: string;
-    biometryEnabled?: boolean;
-  }) => Promise<OwnerSessionStatus>;
-  ownerUnlock: () => Promise<OwnerSessionStatus>;
-  ownerLogout: () => Promise<void>;
-  ownerSetupAdmin: (input: {
-    workerUrl: string;
-    username: string;
-    pepper: string;
-  }) => Promise<{ username: string; passtoken: string }>;
-  ownerResetAdmin: (input: {
-    workerUrl: string;
-    cfAccessToken: string;
-    username?: string;
-  }) => Promise<{ username: string; passtoken: string }>;
-  teamSessionStatus: () => Promise<TeamSessionStatus>;
-  teamLogin: (input: {
-    workerUrl: string;
-    accountEmail: string;
-    mobilePassword: string;
-    biometryEnabled?: boolean;
-  }) => Promise<TeamSessionStatus>;
-  teamUnlock: () => Promise<TeamSessionStatus>;
-  teamLogout: () => Promise<void>;
-  teamSetBiometryEnabled: (enabled: boolean) => Promise<TeamSessionStatus>;
-};
-
-function visibleUnlockError(err: unknown): string | null {
-  if (isUserDismissedBiometry(err)) return null;
-  const message = err instanceof Error ? err.message : String(err ?? "");
-  if (!message.trim() || isUserDismissedBiometry(message)) return null;
-  return message;
-}
 
 export class AppSessionStore {
   phase: AppSessionPhase = { kind: "boot" };
@@ -182,24 +43,7 @@ export class AppSessionStore {
   private deps: AppSessionDeps;
 
   constructor(deps?: Partial<AppSessionDeps>) {
-    this.deps = {
-      isDesktop: defaultIsDesktop,
-      authenticateBiometry: (reason) =>
-        import("./biometry").then((b) => b.desktopAuthenticateBiometry(reason)),
-      ownerSessionStatus: () => bridge().then((b) => b.desktopOwnerSessionStatus()),
-      ownerLogin: (input) => bridge().then((b) => b.desktopOwnerLogin(input)),
-      ownerUnlock: () => bridge().then((b) => b.desktopOwnerUnlock()),
-      ownerLogout: () => bridge().then((b) => b.desktopOwnerLogout()),
-      ownerSetupAdmin: (input) => bridge().then((b) => b.desktopOwnerSetupAdmin(input)),
-      ownerResetAdmin: (input) => bridge().then((b) => b.desktopOwnerResetAdmin(input)),
-      teamSessionStatus: () => bridge().then((b) => b.desktopTeamSessionStatus()),
-      teamLogin: (input) => bridge().then((b) => b.desktopTeamLogin(input)),
-      teamUnlock: () => bridge().then((b) => b.desktopTeamUnlock()),
-      teamLogout: () => bridge().then((b) => b.desktopTeamLogout()),
-      teamSetBiometryEnabled: (enabled) =>
-        bridge().then((b) => b.desktopTeamSetBiometryEnabled(enabled)),
-      ...deps,
-    };
+    this.deps = createDefaultDeps(deps);
     makeAutoObservable(
       this,
       { deps: false } as unknown as never,
@@ -240,7 +84,7 @@ export class AppSessionStore {
       this.role === "invited"
         ? (this.teamStatus?.platform ?? "macos")
         : (this.ownerStatus?.platform ?? "macos");
-    return biometryLabel(platform);
+    return biometryLabel(0, platform);
   }
 
   // --- Hydration ---

@@ -16,6 +16,8 @@ export type DesktopErrorHelp = {
   detail: string;
   fix: string;
   links?: DesktopErrorLink[];
+  /** Running Worker version vs hosted latest, when the script is stale. */
+  versions?: { current: string; latest: string };
   /** Cloudflare API token scopes to grant when the error is auth/permission related. */
   permissions?: readonly string[];
 };
@@ -171,6 +173,21 @@ export function explainDesktopError(
     { label: "Download Worker install ZIP", href: WORKER_INSTALL_ZIP_URL },
     { label: "Open install setup", href: "/setup/install" },
   ];
+
+  if (
+    lower.includes("does not support zone listing") ||
+    lower.includes("check for a worker update")
+  ) {
+    return {
+      title: "Worker update required",
+      detail:
+        "This Worker is missing the zone list API. Secrets like CF_ACCOUNT_ID are fine — the running script version does not match the latest.",
+      fix: "Compare versions below, then open Worker update in Settings.",
+      links: [
+        { label: "Open Worker update", href: "/settings/worker/update" },
+      ],
+    };
+  }
 
   if (
     lower.includes("~/.relaybase") ||

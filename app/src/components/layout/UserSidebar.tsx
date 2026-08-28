@@ -333,6 +333,23 @@ function FolderTree({
   );
 }
 
+function EmailModeNavSkeleton({ collapsed }: { collapsed: boolean }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1 px-2 py-2">
+      {Array.from({ length: collapsed ? 4 : 5 }).map((_, index) => (
+        <div
+          key={index}
+          className={cn(
+            "animate-pulse rounded-md bg-muted/70",
+            collapsed ? "mx-auto size-8" : "h-7 w-full",
+          )}
+          aria-hidden
+        />
+      ))}
+    </div>
+  );
+}
+
 function EmailModeNav({
   onAddAccount,
   collapsed,
@@ -343,8 +360,12 @@ function EmailModeNav({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { enabledAddresses, getColor, removeEnabledAccount } = useMailAccounts();
-  const { unreadCount, unreadCountForAccount } = useEmailMailbox();
+  const { enabledAddresses, getColor, removeEnabledAccount, phase: accountsPhase } =
+    useMailAccounts();
+  const { unreadCount, unreadCountForAccount, phase: mailPhase } = useEmailMailbox();
+  const accountsReady = accountsPhase === "done";
+  const mailReady = mailPhase === "done";
+  const showUnread = mailReady;
   const accountParam =
     searchParams.get("account")?.trim() ||
     searchParams.get("from")?.trim() ||
@@ -371,7 +392,9 @@ function EmailModeNav({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
-      {enabledAddresses.length === 0 ? (
+      {!accountsReady ? (
+        <EmailModeNavSkeleton collapsed={collapsed} />
+      ) : enabledAddresses.length === 0 ? (
         <div className="space-y-2 px-2 py-2">
           {!collapsed ? (
             <p className="text-[11px] text-muted-foreground">
@@ -411,8 +434,10 @@ function EmailModeNav({
             getColor={getColor}
             defaultOpen={inInbox}
             collapsed={collapsed}
-            unreadCount={unreadCount}
-            unreadCountForAccount={unreadCountForAccount}
+            unreadCount={showUnread ? unreadCount : 0}
+            unreadCountForAccount={
+              showUnread ? unreadCountForAccount : () => 0
+            }
             onAddAccount={onAddAccount}
             onRemoveAccount={handleRemoveAccount}
           />

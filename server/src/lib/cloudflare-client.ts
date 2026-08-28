@@ -323,6 +323,29 @@ export class CloudflareClient {
     return this.sendStructuredEmail(params);
   }
 
+  async listZones(): Promise<Array<{ id: string; name: string; status: string }>> {
+    const zones: Array<{ id: string; name: string; status: string }> = [];
+    const account = encodeURIComponent(this.accountId);
+    let page = 1;
+    for (;;) {
+      const data = await this.request<
+        Array<{ id?: string; name?: string; status?: string }>
+      >(`/zones?account.id=${account}&per_page=50&page=${page}`);
+      const batch = data.result ?? [];
+      if (batch.length === 0) break;
+      for (const zone of batch) {
+        zones.push({
+          id: zone.id ?? "",
+          name: zone.name ?? "",
+          status: zone.status ?? "",
+        });
+      }
+      if (batch.length < 50) break;
+      page += 1;
+    }
+    return zones;
+  }
+
   async resolveZoneId(domain: string): Promise<string | null> {
     const data = await this.request<Array<{ id: string; name: string }>>(
       `/zones?name=${encodeURIComponent(domain.trim())}`,

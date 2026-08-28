@@ -12,7 +12,10 @@ import { reaction } from "mobx";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDesktop } from "@/lib/desktop/shell";
 import { useEmailPaths } from "@/email/lib/paths";
-import { MailAccountsStore } from "@/email/stores/mail-accounts-store";
+import {
+  MailAccountsStore,
+  type LoadPhase,
+} from "@/email/stores/mail-accounts-store";
 import type { AccountColorMap } from "@/email/lib/accounts/account-colors";
 import type { Address } from "@/email/components/mailbox/types";
 
@@ -27,6 +30,8 @@ type MailAccountsContextValue = {
   getSignature: (email: string) => string;
   setSignature: (email: string, signature: string) => void;
   setAccountColor: (email: string, color: string) => void;
+  phase: LoadPhase;
+  /** @deprecated use `phase !== "done"` */
   loading: boolean;
   error: string | null;
   refreshAddresses: () => Promise<void>;
@@ -88,6 +93,7 @@ export function useMailAccounts(): MailAccountsContextValue {
         enabled: store.enabledAccounts.slice(),
         colors: Object.keys(store.accountColors).length,
         signatures: Object.keys(store.signatures).length,
+        phase: store.phase,
         loading: store.loading,
         error: store.error,
       }),
@@ -106,6 +112,7 @@ export function useMailAccounts(): MailAccountsContextValue {
     getSignature: store.getSignature,
     setSignature: store.setSignature,
     setAccountColor: store.setAccountColor,
+    phase: store.phase,
     loading: store.loading,
     error: store.error,
     refreshAddresses: store.refreshAddresses,

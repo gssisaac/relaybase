@@ -64,6 +64,24 @@ export function DesktopErrorBanner({
           {help.detail}
         </p>
       ) : null}
+      {help.versions ? (
+        <div className="grid grid-cols-2 gap-2 rounded-md border border-border/80 bg-background/60 px-3 py-2">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Running
+            </p>
+            <p className="font-mono text-sm">v{help.versions.current}</p>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              Latest
+            </p>
+            <p className="font-mono text-sm text-amber-700 dark:text-amber-400">
+              v{help.versions.latest}
+            </p>
+          </div>
+        </div>
+      ) : null}
       {help.permissions && help.permissions.length > 0 ? (
         <div className="rounded-md border border-border/80 bg-background/60 px-3 py-2">
           <p className="text-xs font-medium text-foreground">

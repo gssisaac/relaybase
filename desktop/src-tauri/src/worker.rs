@@ -218,25 +218,6 @@ pub struct ReissueAdminResult {
     pub verified: bool,
 }
 
-/// Backoff between connect probes after ADMIN_TOKEN rotation (~30s total).
-/// 401 means the new secret is not live yet — keep retrying.
-const REISSUE_CONNECT_BACKOFF_SECS: &[u64] = &[2, 4, 8, 16];
-
-async fn wait_for_reissue_admin_auth(worker_url: &str, admin_token: &str) -> bool {
-    for attempt in 0..=REISSUE_CONNECT_BACKOFF_SECS.len() {
-        if attempt > 0 {
-            tokio::time::sleep(tokio::time::Duration::from_secs(
-                REISSUE_CONNECT_BACKOFF_SECS[attempt - 1],
-            ))
-            .await;
-        }
-        if admin_auth_ok(worker_url, admin_token).await {
-            return true;
-        }
-    }
-    false
-}
-
 /// Issue a new ADMIN_TOKEN and push it as a Worker secret. Requires an
 /// existing `relaybase-api` script — does not install or re-push other secrets.
 pub async fn reissue_admin_token(

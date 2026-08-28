@@ -63,10 +63,6 @@ fn cancelled_error() -> String {
     INSTALL_CANCELLED.to_string()
 }
 
-pub fn is_cancelled_error(err: &str) -> bool {
-    err == INSTALL_CANCELLED || err.starts_with(INSTALL_CANCELLED)
-}
-
 fn check_cancelled() -> Result<(), String> {
     if install_is_cancelled() {
         Err(cancelled_error())
@@ -1239,15 +1235,6 @@ async fn auto_install_steps(
     wipe_confirmation: Option<&str>,
 ) -> Result<AutoInstallResult, String> {
     check_cancelled()?;
-    let _ = app.emit(
-        "install-log",
-        LogEvent {
-            step: "prepare".into(),
-            level: "info".into(),
-            line: "Skipping KV — product state is D1 + R2; AUTH_PEPPER is a Worker secret."
-                .into(),
-        },
-    );
 
     let client = CfClient {
         account_id: account_id.to_string(),
@@ -1704,22 +1691,6 @@ async fn migrate_worker_db_with_retry(
         }
     }
     Err(last)
-}
-
-/// Refuse `clear=true` when any Relaybase D1 already has user rows, unless
-/// the typed wipe phrase is present.
-pub async fn assert_clear_db_allowed(
-    api_token: String,
-    account_id: Option<String>,
-    wipe_confirmation: Option<&str>,
-) -> Result<(), String> {
-    let probe = probe_install_resources(api_token, account_id).await?;
-    let occupied: Vec<&InstallResourceProbe> = probe
-        .resources
-        .iter()
-        .filter(|r| r.kind == "d1" && r.occupied)
-        .collect();
-    assert_occupied_wipe_allowed(&occupied, wipe_confirmation)
 }
 
 async fn post_schema_endpoint(

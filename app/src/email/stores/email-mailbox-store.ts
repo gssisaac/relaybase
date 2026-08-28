@@ -53,6 +53,7 @@ import {
   type TrashKind,
 } from "@/email/lib/trash/trash-store";
 import { inboundMatchesAccount } from "@/email/lib/threading/conversation-threading";
+import type { LoadPhase } from "@/email/stores/mail-accounts-store";
 import { notifyNewMail } from "@/lib/desktop/notify";
 
 const INBOX_PAGE_SIZE = 50;
@@ -106,7 +107,7 @@ export class EmailMailboxStore {
   trash: TrashEntry[] = [];
   accountFilter: EmailAccountFilter = "all";
   openAccounts: string[] = [];
-  loading = true;
+  phase: LoadPhase = "none";
   refreshing = false;
   error: string | null = null;
 
@@ -143,8 +144,6 @@ export class EmailMailboxStore {
   private bootstrapGeneration = 0;
   private started = false;
   private bound = false;
-  /** True after a successful disk hydrate or network mail fetch this session. */
-  private mailReady = false;
   inboxNextBeforeByDomain: Record<string, string | null> = {};
   inboxHasMoreByDomain: Record<string, boolean> = {};
   inboxLoadingMore = false;
@@ -177,6 +176,11 @@ export class EmailMailboxStore {
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
+  }
+
+  /** @deprecated use `phase !== "done"` */
+  get loading(): boolean {
+    return this.phase !== "done";
   }
 
   get enabledSet(): Set<string> {
@@ -564,7 +568,7 @@ export class EmailMailboxStore {
       this.detailLoadingKey = null;
       this.detailLoadingKeys = [];
       this.detailGenerationByKey.clear();
-      this.mailReady = false;
+      this.phase = "none";
       this.readOverrides = {};
       this.pendingLegacyReadKeys = null;
       this.inboxNextBeforeByDomain = {};
@@ -592,11 +596,27 @@ export class EmailMailboxStore {
   async bootstrap() {
     if (!this.productId) return;
     const generation = ++this.bootstrapGeneration;
+    runInAction(() => {
+      this.phase = "loading";
+    });
     await this.hydrateUiState();
     if (this.bootstrapGeneration !== generation) return;
-    await this.loadPersistedMail();
+    const hadDisk = await this.loadPersistedMail();
     if (this.bootstrapGeneration !== generation) return;
-    await this.refresh(false);
+
+    if (hadDisk) {
+      runInAction(() => {
+        this.phase = "done";
+      });
+      void this.refresh(false);
+    } else {
+      await this.refresh(false, { primary: true });
+      if (this.bootstrapGeneration !== generation) return;
+      runInAction(() => {
+        this.phase = "done";
+      });
+    }
+
     if (this.bootstrapGeneration !== generation) return;
     await this.reconcileLegacyReadState();
   }
@@ -915,11 +935,16 @@ export class EmailMailboxStore {
     }
   }
 
-  async refresh(force = false) {
+  async refresh(force = false, opts?: { primary?: boolean }) {
     if (!this.productId || !this.apiBase) return;
 
     const generation = ++this.refreshGeneration;
-    const hasMail = this.activity.length > 0 || this.sent.length > 0 || this.mailReady;
+    const isBackground = this.phase === "done" && !opts?.primary;
+    const isPrimary = this.phase === "loading" || Boolean(opts?.primary);
+    const hasMail =
+      this.activity.length > 0 ||
+      this.sent.length > 0 ||
+      this.drafts.length > 0;
     // Disk cache from before server-side readAt may omit the field — force a
     // network pull so UI unread matches Worker / dashboard counts.
     const needsReadAtHydrate = this.activity.some(
@@ -927,10 +952,10 @@ export class EmailMailboxStore {
     );
     const skipMailNetwork =
       !force && hasMail && !needsReadAtHydrate && this.inboxCursorsReady();
-    const hasData = this.config !== null || hasMail;
-    if (!hasData) this.loading = true;
     this.refreshing = true;
-    this.error = null;
+    if (isPrimary) {
+      this.error = null;
+    }
 
     const domains = this.domainsKey ? this.domainsKey.split("\0") : [];
 
@@ -1038,7 +1063,7 @@ export class EmailMailboxStore {
         this.inboxHasMoreByDomain = hasMore;
         this.inboxTotalByDomain = inboxTotals;
         this.inboxUnreadByDomain = inboxUnreads;
-        if (inboxFailed && domains.length > 0) {
+        if (inboxFailed && domains.length > 0 && isPrimary) {
           this.error = "Failed to load received mail from Relaybase";
         }
 
@@ -1082,13 +1107,12 @@ export class EmailMailboxStore {
             this.sentTotalByDomain,
           );
         }
-        this.mailReady = true;
         this.pruneConfirmedOverrides();
       });
 
       void this.persistMailLists();
     } catch (e) {
-      if (this.refreshGeneration === generation) {
+      if (this.refreshGeneration === generation && isPrimary) {
         runInAction(() => {
           // Packaged features not yet wired (audience/stats/etc.) should not
           // paint the red Live API banner over cached mail.
@@ -1102,7 +1126,6 @@ export class EmailMailboxStore {
     } finally {
       if (this.refreshGeneration === generation) {
         runInAction(() => {
-          this.loading = false;
           this.refreshing = false;
         });
       }
@@ -1582,15 +1605,17 @@ export class EmailMailboxStore {
     this.searchHasMoreByDomain = {};
   }
 
-  private async loadPersistedMail() {
-    if (!this.productId) return;
+  private async loadPersistedMail(): Promise<boolean> {
+    if (!this.productId) return false;
     const [inbox, sent, drafts] = await Promise.all([
       loadPersistedInbox(this.productId),
       loadPersistedSent(this.productId),
       loadPersistedDrafts(this.productId),
     ]);
+    let hadDisk = false;
     runInAction(() => {
       if (inbox && inbox.messages.length > 0) {
+        hadDisk = true;
         const inboxByKey = new Map<string, RoutingActivityEvent>();
         for (const msg of this.activity) inboxByKey.set(msg.key, msg);
         for (const msg of inbox.messages) inboxByKey.set(msg.key, msg);
@@ -1611,10 +1636,9 @@ export class EmailMailboxStore {
           ...inbox.unreadByDomain,
           ...this.inboxUnreadByDomain,
         };
-        this.mailReady = true;
-        this.loading = false;
       }
       if (sent && sent.sent.length > 0) {
+        hadDisk = true;
         const sentById = new Map<string, SentEmail>();
         for (const msg of this.sent) sentById.set(msg.id, msg);
         for (const msg of sent.sent) sentById.set(msg.id, msg);
@@ -1631,8 +1655,6 @@ export class EmailMailboxStore {
           ...sent.totalByDomain,
           ...this.sentTotalByDomain,
         };
-        this.mailReady = true;
-        this.loading = false;
       }
       if (drafts) {
         // Merge by id — never clobber a newer in-memory draft with a stale disk read.
@@ -1650,11 +1672,11 @@ export class EmailMailboxStore {
           return bAt - aAt;
         });
         if (this.drafts.length > 0) {
-          this.mailReady = true;
-          this.loading = false;
+          hadDisk = true;
         }
       }
     });
+    return hadDisk;
   }
 
   private persistMailLists() {
@@ -1684,7 +1706,6 @@ export class EmailMailboxStore {
     const staleConfig = readEmailStale<EmailConfig>(this.productId, "config");
     if (staleConfig) {
       this.config = staleConfig;
-      this.loading = false;
     }
     this.hydrateInboxSentFromStale();
   }
@@ -1713,14 +1734,12 @@ export class EmailMailboxStore {
       const inboxByKey = new Map<string, RoutingActivityEvent>();
       for (const msg of mergedInbox) inboxByKey.set(msg.key, msg);
       this.activity = [...inboxByKey.values()];
-      this.loading = false;
     }
 
     if (mergedSent.length > 0) {
       const sentById = new Map<string, SentEmail>();
       for (const msg of mergedSent) sentById.set(msg.id, msg);
       this.sent = [...sentById.values()];
-      this.loading = false;
     }
   }
 

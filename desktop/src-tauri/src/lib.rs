@@ -25,7 +25,7 @@ use auto_install::{
     update_installed_worker, worker_urls_match, AutoInstallResult, InitDbResult, InstallDecision,
     InstallProbeResult, WorkerUpdateCheck, WorkerUpdateTarget,
 };
-use cloudflare::{list_zones, resolve_account_id, verify_token, ZoneSummary};
+use cloudflare::{resolve_account_id, verify_token};
 use secrets::{
     clear_cf_oauth_session, clear_credentials, clear_team_login, get_cf_oauth_session,
     load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
@@ -201,17 +201,6 @@ async fn verify_cf_token(
 ) -> Result<cloudflare::TokenVerifyResult, String> {
     let s = scope.as_deref().unwrap_or("install");
     verify_token(account_id.trim(), api_token.trim(), s).await
-}
-
-#[tauri::command]
-async fn list_cf_zones() -> Result<Vec<ZoneSummary>, String> {
-    let install_token = refresh_install_token_if_needed().await?;
-    let creds = load_credentials()?.ok_or("No credentials stored")?;
-    let client = cloudflare::CfClient {
-        account_id: creds.account_id,
-        api_token: install_token,
-    };
-    list_zones(&client).await
 }
 
 #[tauri::command]
@@ -1982,7 +1971,6 @@ pub fn run() {
             get_cache_json,
             save_cache_json,
             verify_cf_token,
-            list_cf_zones,
             probe_routing_worker,
             reissue_admin_token,
             adopt_routing_worker,

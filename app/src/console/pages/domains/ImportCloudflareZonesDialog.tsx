@@ -1,19 +1,25 @@
 "use client";
 
 import { Loader2, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
+import {
+  isEmailApiNotConfiguredError,
+  useOpenEnableEmailApiDialog,
+} from "@/console/components/setup/use-enable-email-api-dialog";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import {
-  desktopListZones,
+  isZoneListNeedsWorkerUpdate,
+  listCloudflareZones,
+  loadWorkerVersionCompare,
+} from "@/lib/dashboard/list-cf-zones";
+import {
   explainDesktopError,
-  isCloudflareAuthExpired,
-  isDesktopRuntime,
   type DesktopErrorHelp,
   type ZoneSummary,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { DesktopErrorBanner, useOptionalDesktop } from "@/lib/desktop/shell";
 import { Button } from "@/components/ui/button";
 import { FieldCheck } from "@/components/ui/field-check";
 import {
@@ -24,9 +30,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+function needsEnableEmailApi(err: unknown): boolean {
+  const message =
+    err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  return isEmailApiNotConfiguredError(message);
+}
+
 /**
- * Desktop-only: list zones from the user's Cloudflare account and queue
- * selected ones for background onboarding.
+ * List zones from the Worker (`CF_API_TOKEN`) and queue selected ones
+ * for background onboarding.
  */
 export function ImportCloudflareZonesDialog({
   open: openProp,
@@ -38,6 +50,8 @@ export function ImportCloudflareZonesDialog({
   showTrigger?: boolean;
 } = {}) {
   const store = useDomain();
+  const router = useRouter();
+  const desktop = useOptionalDesktop();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
@@ -47,15 +61,16 @@ export function ImportCloudflareZonesDialog({
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
-  const [authExpired, setAuthExpired] = useState(false);
+  const [emailApiMissing, setEmailApiMissing] = useState(false);
+  const [needsWorkerUpdate, setNeedsWorkerUpdate] = useState(false);
 
   const loadZones = useCallback(async () => {
-    if (!isDesktopRuntime()) return;
     setLoading(true);
     setError(null);
-    setAuthExpired(false);
+    setEmailApiMissing(false);
+    setNeedsWorkerUpdate(false);
     try {
-      const list = await desktopListZones();
+      const list = await listCloudflareZones();
       const existing = new Set(
         store.domains.map((d) => d.domain.trim().toLowerCase()),
       );
@@ -69,24 +84,29 @@ export function ImportCloudflareZonesDialog({
       }
       setSelected(next);
     } catch (err) {
-      const expired = isCloudflareAuthExpired(err);
-      setAuthExpired(expired);
-      // Expired session is expected after the app restarts — reconnect, don't
-      // treat it as a failure.
-      setError(expired ? null : explainDesktopError(err, "Failed to list zones"));
+      const missing = needsEnableEmailApi(err);
+      const stale = isZoneListNeedsWorkerUpdate(err);
+      setEmailApiMissing(missing);
+      setNeedsWorkerUpdate(stale);
+      const help = explainDesktopError(err, "Failed to list zones");
+      if (stale) {
+        const versions = await loadWorkerVersionCompare(
+          desktop?.credentials?.workerUrl,
+        );
+        if (versions) help.versions = versions;
+      }
+      setError(help);
       setZones([]);
       setSelected({});
     } finally {
       setLoading(false);
     }
-  }, [store.domains]);
+  }, [store.domains, desktop?.credentials?.workerUrl]);
 
   useEffect(() => {
-    if (!open || !isDesktopRuntime()) return;
+    if (!open) return;
     void loadZones();
   }, [open, loadZones]);
-
-  if (!isDesktopRuntime()) return null;
 
   const selectedNames = Object.entries(selected)
     .filter(([, on]) => on)
@@ -98,7 +118,8 @@ export function ImportCloudflareZonesDialog({
     store.queueAddDomains(selectedNames, true);
     setOpen(false);
     setError(null);
-    setAuthExpired(false);
+    setEmailApiMissing(false);
+    setNeedsWorkerUpdate(false);
   }
 
   function handleEnableEmailApi() {
@@ -107,6 +128,11 @@ export function ImportCloudflareZonesDialog({
         void loadZones();
       },
     });
+  }
+
+  function handleOpenWorkerUpdate() {
+    setOpen(false);
+    router.push("/settings/worker/update");
   }
 
   return (
@@ -129,9 +155,10 @@ export function ImportCloudflareZonesDialog({
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" /> Loading zones…
           </p>
-        ) : authExpired ? (
+        ) : emailApiMissing ? (
           <p className="text-sm text-muted-foreground">
-            Reconnect to Cloudflare to list new domains from your account.
+            Add a CF_API_TOKEN on the Worker to list new domains from your
+            account.
           </p>
         ) : error ? (
           <DesktopErrorBanner error={error} />
@@ -154,9 +181,13 @@ export function ImportCloudflareZonesDialog({
             ))}
           </div>
         )}
-        {loading ? null : authExpired ? (
+        {loading ? null : emailApiMissing ? (
           <Button className="w-full" onClick={handleEnableEmailApi}>
             Enable email API
+          </Button>
+        ) : needsWorkerUpdate ? (
+          <Button className="w-full" onClick={handleOpenWorkerUpdate}>
+            Check for Worker update
           </Button>
         ) : error ? (
           <Button className="w-full" onClick={() => void loadZones()}>

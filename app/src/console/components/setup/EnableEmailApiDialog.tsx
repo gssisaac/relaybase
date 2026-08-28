@@ -141,6 +141,11 @@ export function EnableEmailApiDialog({
           "CF_API_TOKEN is set but Cloudflare rejected it. Check permissions (Email Sending Edit, Email Routing Rules Edit, Zone Read) and try again.",
         );
       }
+      if (!result.accountId?.trim()) {
+        throw new Error(
+          "The Worker has no CF_ACCOUNT_ID secret yet. Add it under Runtime variables and secrets, then try again.",
+        );
+      }
       if (!mailApiReady(result)) {
         throw new Error("Cloudflare API is not ready on this Worker.");
       }

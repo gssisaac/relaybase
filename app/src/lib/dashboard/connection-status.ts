@@ -23,8 +23,8 @@ export type HealthStatus = {
 };
 
 export type ConnectionStatusSnapshot = {
-  /** True when the Worker reports a working CF_API_TOKEN secret
-   * (`cfApiTokenSet` + `cfApiTokenValid`). Domain / routing API, not send. */
+  /** True when the Worker reports a working CF_API_TOKEN + CF_ACCOUNT_ID
+   * (`cfApiTokenSet` + `cfApiTokenValid` + accountId). Domain / routing API, not send. */
   cfConnected: boolean;
   /** True when an install token (Workers Scripts Edit) is saved locally.
    * Used only inside Settings; not shown on the dashboard card. */

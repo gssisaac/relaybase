@@ -62,10 +62,6 @@ export async function desktopPushServerToken(serverToken: string): Promise<{
   return invoke("push_server_token", { serverToken: serverToken.trim() });
 }
 
-export async function desktopListZones(): Promise<ZoneSummary[]> {
-  return invoke("list_cf_zones");
-}
-
 const CONSOLE_URL =
   process.env.NEXT_PUBLIC_CONSOLE_URL ?? "https://console.relaybase.xyz";
 

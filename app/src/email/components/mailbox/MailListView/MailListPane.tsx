@@ -130,6 +130,10 @@ export type MailListPaneProps = {
   /** Server search: total matches (null when search is inactive). */
   searchTotal?: number | null;
   searchLoading?: boolean;
+  /** Accounts primary load finished — empty states wait for this. */
+  accountsReady?: boolean;
+  /** Mailbox primary load finished — empty states wait for this. */
+  mailReady?: boolean;
   /**
    * MobX store holding the keyboard-navigation focus anchor for this
    * folder. Updated by row hover and the visible-top fallback; consumed
@@ -178,6 +182,21 @@ function MailRowSkeleton({ style }: { style: React.CSSProperties }) {
         <span className="block h-2.5 w-full rounded bg-muted/70" />
       </div>
       <span className="h-3 w-12 shrink-0 self-center rounded bg-muted" />
+    </div>
+  );
+}
+
+const INITIAL_LOAD_SKELETON_ROWS = 6;
+
+function MailListLoadingSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-busy="true">
+      {Array.from({ length: INITIAL_LOAD_SKELETON_ROWS }).map((_, index) => (
+        <MailRowSkeleton
+          key={index}
+          style={{ height: MAIL_ROW_HEIGHT, width: "100%" }}
+        />
+      ))}
     </div>
   );
 }
@@ -414,8 +433,11 @@ export function MailListPane({
   unreadCount = null,
   searchTotal = null,
   searchLoading = false,
+  accountsReady = false,
+  mailReady = false,
   listItemStateStore,
 }: MailListPaneProps) {
+  const contentReady = accountsReady && mailReady;
   const listRef = useListRef(null);
   const { dragRegionClassName, dragRegionProps } = useDesktopChrome();
   const { pull, onScroll, onWheel } = usePullToRefresh({
@@ -633,7 +655,7 @@ export function MailListPane({
             ) : undefined
           }
         />
-        {items.length > 0 ? (
+        {contentReady && items.length > 0 ? (
           <>
             <EmailTableHeader>
               <span className="flex items-center gap-2">
@@ -668,6 +690,24 @@ export function MailListPane({
               onWheel={onWheel}
               rowProps={rowPropsMemo}
             />
+          </>
+        ) : !contentReady ? (
+          <>
+            <EmailTableHeader>
+              <span className="flex items-center gap-2">
+                <span className="size-7 shrink-0" aria-hidden />
+                <span>
+                  {folder === "sent" || folder === "drafts"
+                    ? "To"
+                    : folder === "trash"
+                      ? "From / To"
+                      : "From"}
+                </span>
+              </span>
+              <span>Subject</span>
+              <span>Date</span>
+            </EmailTableHeader>
+            <MailListLoadingSkeleton />
           </>
         ) : searchLoading ? (
           <EmptyListState

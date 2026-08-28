@@ -107,13 +107,17 @@ export function cloudflareWorkerSettingsUrl(
 }
 
 /** Mail API is ready when the Worker secret exists. A false probe fails; an
- * omitted probe (older Worker) still counts as ready if the secret is set. */
+ * omitted probe (older Worker) still counts as ready if the secret is set.
+ * `accountId` must also be present — domain / routing calls need both
+ * `CF_API_TOKEN` and `CF_ACCOUNT_ID`. */
 export function mailApiReady(result: {
   cfApiTokenSet?: boolean;
   cfApiTokenValid?: boolean;
+  accountId?: string;
 }): boolean {
   if (!result.cfApiTokenSet) return false;
   if (result.cfApiTokenValid === false) return false;
+  if (!result.accountId?.trim()) return false;
   return true;
 }
 

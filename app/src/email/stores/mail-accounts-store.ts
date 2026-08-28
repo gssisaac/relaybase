@@ -22,6 +22,8 @@ import {
   readResponseJson,
 } from "@/lib/desktop/api";
 
+export type LoadPhase = "none" | "loading" | "done";
+
 /**
  * Email-side account UX: available addresses (for Add account dialog) +
  * which addresses are enabled in the mail sidebar. Does not create addresses
@@ -32,7 +34,7 @@ export class MailAccountsStore {
   enabledAccounts: string[] = [];
   accountColors: AccountColorMap = {};
   signatures: Record<string, string> = {};
-  loading = true;
+  phase: LoadPhase = "none";
   error: string | null = null;
 
   private userId = "";
@@ -43,9 +45,15 @@ export class MailAccountsStore {
   private hydrated = false;
   private prefsReady = false;
   private started = false;
+  private primaryGeneration = 0;
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
+  }
+
+  /** @deprecated use `phase !== "done"` */
+  get loading(): boolean {
+    return this.phase !== "done";
   }
 
   get enabledAddresses(): Address[] {
@@ -92,22 +100,48 @@ export class MailAccountsStore {
     this.desktopReady = Boolean(input.desktopReady);
     if (userChanged) {
       this.hydrated = false;
-      void this.hydrateEnabled();
+      this.phase = "none";
+      void this.runPrimaryBootstrap();
     }
     if (
       this.started &&
+      this.phase === "done" &&
       (userChanged || apiChanged || teamChanged || workerChanged || readyChanged)
     ) {
-      void this.refreshAddresses();
+      void this.refreshAddresses({ background: true });
     }
   }
 
   start() {
     if (this.started) return;
     this.started = true;
-    void this.hydrateEnabled();
     void this.loadPrefs();
-    void this.refreshAddresses();
+    void this.runPrimaryBootstrap();
+  }
+
+  private async runPrimaryBootstrap() {
+    if (!this.userId) return;
+    const generation = ++this.primaryGeneration;
+    runInAction(() => {
+      this.phase = "loading";
+      this.error = null;
+    });
+    await this.hydrateEnabled();
+    if (this.primaryGeneration !== generation) return;
+
+    if (this.enabledAccounts.length > 0) {
+      runInAction(() => {
+        this.phase = "done";
+      });
+      void this.refreshAddresses({ background: true });
+      return;
+    }
+
+    await this.refreshAddresses({ primary: true });
+    if (this.primaryGeneration !== generation) return;
+    runInAction(() => {
+      this.phase = "done";
+    });
   }
 
   private async hydrateEnabled() {
@@ -137,15 +171,25 @@ export class MailAccountsStore {
     return getAccountColor(email, this.accountColors);
   }
 
-  async refreshAddresses(): Promise<void> {
+  async refreshAddresses(opts?: {
+    primary?: boolean;
+    background?: boolean;
+  }): Promise<void> {
     if (!this.apiBase) return;
+    if (!this.desktopReady) return;
+
+    const isPrimary = Boolean(opts?.primary) || this.phase === "loading";
+
     if (!this.teamLogin && !this.workerUrl) {
-      runInAction(() => {
-        this.loading = false;
-        this.error = "Worker is not connected. Finish setup to load live mail.";
-      });
+      if (isPrimary) {
+        runInAction(() => {
+          this.error =
+            "Worker is not connected. Finish setup to load live mail.";
+        });
+      }
       return;
     }
+
     // Team mode: the authenticated account is the only one in scope. Seed it
     // directly from teamLogin instead of calling the admin /console/addresses
     // endpoint (team users have no admin token).
@@ -155,16 +199,18 @@ export class MailAccountsStore {
       runInAction(() => {
         this.availableAddresses = [seeded];
         this.enabledAccounts = [email];
-        this.loading = false;
         this.error = null;
       });
       this.ensureColors();
       return;
     }
-    runInAction(() => {
-      this.loading = true;
-      this.error = null;
-    });
+
+    if (isPrimary) {
+      runInAction(() => {
+        this.error = null;
+      });
+    }
+
     try {
       const res = await desktopAwareFetch(`${this.apiBase}/addresses?all=1`, {
         cache: "no-store",
@@ -178,18 +224,20 @@ export class MailAccountsStore {
       }
       runInAction(() => {
         this.availableAddresses = data.addresses ?? [];
-        this.loading = false;
-        this.error = null;
+        if (isPrimary) {
+          this.error = null;
+        }
       });
       this.pruneEnabledToAvailable();
       this.ensureColors();
     } catch (e) {
-      runInAction(() => {
-        this.error = isPackagedApiUnavailableError(e)
-          ? null
-          : friendlyDesktopFetchError(e, "Failed to load addresses");
-        this.loading = false;
-      });
+      if (isPrimary) {
+        runInAction(() => {
+          this.error = isPackagedApiUnavailableError(e)
+            ? null
+            : friendlyDesktopFetchError(e, "Failed to load addresses");
+        });
+      }
     }
   }
 
@@ -245,7 +293,7 @@ export class MailAccountsStore {
   }
 
   private pruneEnabledToAvailable() {
-    if (!this.hydrated || this.loading || this.error) return;
+    if (this.phase !== "done" || this.error) return;
     if (this.availableAddresses.length === 0) return;
     const valid = new Set(
       this.availableAddresses.map((a) => a.email.toLowerCase()),

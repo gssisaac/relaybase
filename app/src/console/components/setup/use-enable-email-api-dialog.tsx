@@ -91,6 +91,7 @@ export function isEmailApiNotConfiguredError(message: string): boolean {
     m.includes("cloudflare api is not configured") ||
     m.includes("add a cf_api_token") ||
     m.includes("cf_api_token secret") ||
+    m.includes("cf_account_id") ||
     (m.includes("could not configure inbox") &&
       (m.includes("not configured") ||
         m.includes("api token") ||

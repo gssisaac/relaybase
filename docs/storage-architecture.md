@@ -99,6 +99,7 @@ The product Worker resolves Cloudflare credentials from wrangler secrets (`CF_AC
 | Route | Purpose |
 |-------|---------|
 | `/console/mailbox`, `/console/domains`, `/console/addresses` | Catalog mailbox CRUD |
+| `/console/zones` | List Cloudflare zones via Worker `CF_API_TOKEN` (Domains → Refresh) |
 | `/console/audience-groups` (+ contacts/sync/progress) | Audience |
 | `/console/broadcasts` (+ send/progress) | Broadcasts |
 | `/console/keys` (+ rotate, PATCH active) | API keys |

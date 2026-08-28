@@ -17,6 +17,7 @@ import type { EmailAccountFilter } from "@/email/components/accounts/EmailAccoun
 import { EmailSendUndoneNavigator } from "@/email/components/compose/EmailSendUndoneNavigator";
 import { useEmailPaths } from "@/email/lib/paths";
 import { EmailMailboxStore } from "@/email/stores/email-mailbox-store";
+import type { LoadPhase } from "@/email/stores/mail-accounts-store";
 import type { TrashEntry, TrashKind } from "@/email/lib/trash/trash-store";
 import type {
   Address,
@@ -47,6 +48,8 @@ export type EmailMailboxContextValue = {
   unreadCountForAccount: (email: string) => number;
   markRead: (key: string) => void;
   markUnread: (key: string) => void;
+  phase: LoadPhase;
+  /** @deprecated use `phase !== "done"` */
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -83,7 +86,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const productId = useProductId();
   const { accountScopeId } = useDesktop();
   const { apiBase } = useEmailPaths();
-  const { enabledAddresses, enabledAccounts, availableAddresses } =
+  const { enabledAddresses, enabledAccounts, availableAddresses, phase: accountsPhase } =
     useMailAccounts();
   const senderIconStore = useSenderIconStore();
   const [store, setStore] = useState(() => new EmailMailboxStore());
@@ -112,6 +115,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   }, [senderIconStore, productId]);
 
   useEffect(() => {
+    if (accountsPhase !== "done") return;
     liveStore.configure({
       productId,
       apiBase,
@@ -122,6 +126,7 @@ export function EmailMailboxProvider({ children }: { children: ReactNode }) {
     });
   }, [
     liveStore,
+    accountsPhase,
     productId,
     apiBase,
     accountScopeId,
@@ -170,6 +175,7 @@ export function useEmailMailbox(): EmailMailboxContextValue {
         trashCount: store.trashCount,
         unreadCount: store.unreadCount,
         readKeys: store.readKeys.slice(),
+        phase: store.phase,
         loading: store.loading,
         refreshing: store.refreshing,
         error: store.error,
@@ -202,6 +208,7 @@ export function useEmailMailbox(): EmailMailboxContextValue {
     unreadCountForAccount: store.unreadCountForAccount,
     markRead: store.markRead,
     markUnread: store.markUnread,
+    phase: store.phase,
     loading: store.loading,
     refreshing: store.refreshing,
     error: store.error,

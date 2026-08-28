@@ -9,6 +9,7 @@ import { MIN_SERVER_SEARCH_LENGTH } from "@/email/stores/email-mailbox-store";
 import { useEmailCommandRuntimeAdapter } from "@/email/commands";
 import type { EmailMailboxSection } from "@/email/components/mailbox/EmailMailboxLayout";
 import { useEmailMailboxStore } from "@/email/components/mailbox/EmailMailboxContext";
+import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { MailDetailPane } from "./MailDetailPane";
 import { MailListPane } from "./MailListPane";
 import { useMailboxNav } from "@/email/components/mailbox/MailboxNavContext";
@@ -39,6 +40,7 @@ export const MailListView = observer(function MailListView({
 }: MailListViewProps) {
   const productId = useProductId();
   const store = useEmailMailboxStore();
+  const { phase: accountsPhase } = useMailAccounts();
   const { compose, inbox, drafts: draftsNav, sent, trash } = useMailboxNav();
   const folderBase =
     folder === "inbox"
@@ -259,6 +261,8 @@ export const MailListView = observer(function MailListView({
             unreadCount={unreadCount}
             searchTotal={serverSearch ? searchTotal : null}
             searchLoading={serverSearch ? searchLoading : false}
+            accountsReady={accountsPhase === "done"}
+            mailReady={store.phase === "done"}
             listItemStateStore={listItemStateStore}
           />
         </div>

@@ -1,12 +1,26 @@
 "use client";
 
-import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+import { useAppSession } from "@/lib/desktop/app-session";
 
 /**
- * Standalone invited (team) login. The same form is rendered inside the
- * dashboard gate when the store is in the `invitedLogin` phase; this page is
- * the entry point from the welcome "I was invited" choice.
+ * "I was invited" entry from the welcome choice. Enter TeamLoginView on `/` via
+ * the shared phase screen — same trampoline pattern as `/setup/connect`.
  */
 export default function TeamLoginPage() {
-  return <TeamLoginView />;
+  const router = useRouter();
+  const store = useAppSession();
+
+  useEffect(() => {
+    store.openInvitedLogin();
+    router.replace("/");
+  }, [router, store]);
+
+  return (
+    <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+      Opening…
+    </div>
+  );
 }

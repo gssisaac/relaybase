@@ -7,7 +7,7 @@
 //! (no rotation): "access" simply means the password is in process memory
 //! for this run.
 
-use crate::secrets::{load_team_login, save_team_login, TeamLogin};
+use crate::secrets::{clear_team_login, load_team_login, save_team_login, TeamLogin};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -276,6 +276,15 @@ pub async fn team_unlock() -> Result<TeamSessionStatus, String> {
 pub async fn team_logout() -> Result<(), String> {
     clear_memory();
     Ok(())
+}
+
+/// Forget the team session entirely: keyring, memory, and identity-only
+/// `team-login.json`. Used when switching back to owner login.
+pub async fn team_forget_session() -> Result<TeamSessionStatus, String> {
+    delete_keyring();
+    clear_memory();
+    clear_team_login()?;
+    team_session_status()
 }
 
 pub fn team_set_biometry_enabled(enabled: bool) -> Result<TeamSessionStatus, String> {

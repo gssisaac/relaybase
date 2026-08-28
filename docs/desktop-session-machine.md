@@ -170,6 +170,16 @@ across the shell. The last-route restore (`app/src/app/page.tsx`) waits for
 `store.canShowApp` before restoring, so the window no longer redirects into
 the shell and then back out to Touch ID.
 
+**Entry trampolines:** `/setup/connect` calls `openAlreadyInstalled()` then
+`router.replace("/")` so UnlockView renders via `SessionPhaseScreen` on `/`.
+`/login` does the same for invited login via `openInvitedLogin()` — the form
+and post-login biometry offer must not render on a standalone route that ignores
+the phase machine.
+
+From invited unlock (`UnlockView` with `role: invited`), **Log in as owner**
+calls `switchToOwnerLogin()` — it drops the team keyring + `team-login.json`
+and enters the owner unlock / passtoken flow without wiping the owner keyring.
+
 ## Files
 
 | File | Role |

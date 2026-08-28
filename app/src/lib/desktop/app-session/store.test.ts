@@ -82,6 +82,7 @@ function makeDeps(
     ownerSessionStatus?: () => Promise<OwnerSessionStatus>;
     teamSetBiometryEnabled?: (enabled: boolean) => Promise<TeamSessionStatus>;
     teamLogout?: () => Promise<void>;
+    teamForgetSession?: () => Promise<TeamSessionStatus>;
     teamSessionStatus?: () => Promise<TeamSessionStatus>;
     isDesktop?: () => boolean;
     refreshIdentity?: () => Promise<void>;
@@ -117,6 +118,8 @@ function makeDeps(
     teamUnlock: overrides.teamUnlock ??
       (() => Promise.resolve(teamStatus({ hasAccess: true }))),
     teamLogout: overrides.teamLogout ?? (() => Promise.resolve()),
+    teamForgetSession:
+      overrides.teamForgetSession ?? (() => Promise.resolve(teamStatus({}))),
     teamSetBiometryEnabled: overrides.teamSetBiometryEnabled ??
       ((enabled: boolean) =>
         Promise.resolve(teamStatus({ hasAccess: true, biometryEnabled: enabled }))),
@@ -1025,6 +1028,125 @@ describe("AppSessionStore", () => {
     assert.equal(store.phase.kind, "unlock");
     if (store.phase.kind === "unlock") {
       assert.equal(store.phase.mode, "secret");
+      assert.equal(store.phase.role, "owner");
+    }
+  });
+
+  it("openInvitedLogin stays on invitedLogin after reconcile with no disk URL", () => {
+    const store = createStore({});
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: null,
+      teamIdentity: null,
+    });
+    store.setStatuses(ownerStatus({}), teamStatus({}));
+    assert.equal(store.phase.kind, "choice");
+    store.openInvitedLogin();
+    assert.equal(store.phase.kind, "invitedLogin");
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: null,
+      teamIdentity: null,
+    });
+    store.setStatuses(ownerStatus({}), teamStatus({}));
+    assert.equal(store.phase.kind, "invitedLogin");
+  });
+
+  it("loginInvited offerBiometry survives late hydrate", async () => {
+    const store = createStore({
+      teamLogin: () =>
+        Promise.resolve(
+          teamStatus({
+            hasAccess: true,
+            hasSecret: true,
+            workerUrl: WORKER_URL,
+            accountEmail: "teammate@example.com",
+            platform: "macos",
+          }),
+        ),
+      refreshIdentity: async () => {
+        store.setIdentity({
+          ready: true,
+          isDesktop: true,
+          credentials: null,
+          teamIdentity: {
+            workerUrl: WORKER_URL,
+            accountEmail: "teammate@example.com",
+            mobilePassword: "",
+          },
+        });
+      },
+    });
+    await store.loginInvited({
+      workerUrl: WORKER_URL,
+      accountEmail: "teammate@example.com",
+      mobilePassword: "pw",
+    });
+    assert.equal(store.phase.kind, "offerBiometry");
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: null,
+      teamIdentity: {
+        workerUrl: WORKER_URL,
+        accountEmail: "teammate@example.com",
+        mobilePassword: "",
+      },
+    });
+    store.setStatuses(
+      ownerStatus({}),
+      teamStatus({
+        hasSecret: true,
+        hasAccess: true,
+        workerUrl: WORKER_URL,
+        accountEmail: "teammate@example.com",
+      }),
+    );
+    assert.equal(store.phase.kind, "offerBiometry");
+  });
+
+  it("switchToOwnerLogin forgets team session and enters owner unlock", async () => {
+    let forgot = 0;
+    const store = createStore({
+      teamForgetSession: () => {
+        forgot += 1;
+        return Promise.resolve(teamStatus({}));
+      },
+      ownerSessionStatus: () =>
+        Promise.resolve(ownerStatus({ hasRefresh: true })),
+      refreshIdentity: async () => {
+        store.setIdentity({
+          ready: true,
+          isDesktop: true,
+          credentials: SAMPLE_CREDENTIALS,
+          teamIdentity: null,
+        });
+      },
+    });
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: SAMPLE_CREDENTIALS,
+      teamIdentity: {
+        workerUrl: WORKER_URL,
+        accountEmail: "teammate@example.com",
+        mobilePassword: "",
+      },
+    });
+    store.setStatuses(
+      ownerStatus({ hasRefresh: true }),
+      teamStatus({ hasSecret: true }),
+    );
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.role, "invited");
+    }
+    await store.switchToOwnerLogin();
+    assert.equal(forgot, 1);
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
       assert.equal(store.phase.role, "owner");
     }
   });

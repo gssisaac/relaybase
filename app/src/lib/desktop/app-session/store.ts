@@ -186,7 +186,26 @@ export class AppSessionStore {
     const team = this.teamStatus;
     const owner = this.ownerStatus;
 
-    if (this.phase.kind === "install" || this.phase.kind === "ownerRecover") {
+    if (
+      this.phase.kind === "install" ||
+      this.phase.kind === "ownerRecover" ||
+      this.phase.kind === "offerBiometry"
+    ) {
+      return;
+    }
+
+    // Explicit invited login from the welcome /login trampoline — keep until
+    // the user verifies or a keyring secret appears.
+    if (this.phase.kind === "invitedLogin") {
+      if (team?.hasAccess) {
+        this.phase = this.hasWorkerConnected()
+          ? { kind: "invitedReady" }
+          : this.phase;
+        return;
+      }
+      if (team?.hasSecret) {
+        this.enterUnlockForRole("invited");
+      }
       return;
     }
 
@@ -266,10 +285,9 @@ export class AppSessionStore {
       if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
       return;
     }
-    // Keep explicit owner unlock (Already installed / secret fallback / recover back).
+    // Keep explicit unlock (Already installed / invited trampoline / secret fallback).
     if (
       this.phase.kind === "unlock" &&
-      this.phase.role === "owner" &&
       (this.phase.mode === "idle" || this.phase.mode === "secret")
     ) {
       return;
@@ -464,21 +482,19 @@ export class AppSessionStore {
       });
       runInAction(() => {
         this.teamStatus = status;
-        this.busy = false;
       });
-      // First login: offer biometry once (desktop with biometry only).
-      if (this.deps.isDesktop() && status.platform !== "linux") {
-        runInAction(() => {
+      await this.deps.refreshIdentity();
+      runInAction(() => {
+        this.busy = false;
+        // First login: offer biometry once (desktop with biometry only).
+        if (this.deps.isDesktop() && status.platform !== "linux") {
           this.phase = { kind: "offerBiometry", role: "invited" };
-        });
-      } else {
-        await this.deps.refreshIdentity();
-        runInAction(() => {
+        } else {
           this.phase = this.hasWorkerConnected()
             ? { kind: "invitedReady" }
             : { kind: "invitedLogin" };
-        });
-      }
+        }
+      });
     } catch (err) {
       const shown = visibleUnlockError(err) ?? "Team login failed.";
       runInAction(() => {
@@ -572,6 +588,64 @@ export class AppSessionStore {
         this.busy = false;
       });
     }
+  }
+
+  /** Invited unlock: forget the team session and enter owner login / unlock. */
+  async switchToOwnerLogin(): Promise<void> {
+    this.busy = true;
+    this.error = null;
+    try {
+      await this.deps.teamForgetSession();
+      await this.deps.refreshIdentity();
+      const [owner, team] = await Promise.all([
+        this.deps.ownerSessionStatus(),
+        this.deps.teamSessionStatus(),
+      ]);
+      runInAction(() => {
+        this.ownerStatus = owner;
+        this.teamStatus = team;
+        this.error = null;
+        this.revealedPasstoken = null;
+        this.prompted = false;
+        this.busy = false;
+        if (owner?.hasRefresh) {
+          this.enterUnlockForRole("owner");
+          return;
+        }
+        this.phase = {
+          kind: "unlock",
+          role: "owner",
+          mode: this.resolvedWorkerUrl("owner")
+            ? this.unlockSurfaceMode("owner")
+            : "secret",
+        };
+      });
+    } catch (err) {
+      const shown =
+        visibleUnlockError(err) ?? "Could not switch to owner login.";
+      runInAction(() => {
+        this.error = shown;
+        this.busy = false;
+      });
+      throw err;
+    }
+  }
+
+  /** "I was invited" from the welcome screen — enter team login or unlock. */
+  openInvitedLogin(): void {
+    this.error = null;
+    if (
+      this.phase.kind === "invitedReady" ||
+      (this.phase.kind === "offerBiometry" && this.phase.role === "invited") ||
+      (this.phase.kind === "unlock" && this.phase.role === "invited")
+    ) {
+      return;
+    }
+    if (this.teamStatus?.hasSecret || this.teamStatus?.hasAccess) {
+      this.enterUnlockForRole("invited");
+      return;
+    }
+    this.phase = { kind: "invitedLogin" };
   }
 
   /** "Already installed" from the welcome screen — enter the unlock flow. */

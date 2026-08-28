@@ -231,6 +231,19 @@ export function UnlockView({
             ? "Use a different account"
             : "Sign in with another Cloudflare account"}
         </button>
+        {role === "invited" ? (
+          <button
+            type="button"
+            className="text-center text-[11px] text-muted-foreground hover:underline"
+            disabled={busy}
+            onClick={() => {
+              store.clearError();
+              void store.switchToOwnerLogin();
+            }}
+          >
+            Log in as owner
+          </button>
+        ) : null}
       </>,
     );
   }
@@ -282,6 +295,19 @@ export function UnlockView({
             ? "Use a different account"
             : "Sign in with another Cloudflare account"}
         </button>
+        {role === "invited" ? (
+          <button
+            type="button"
+            className="text-center text-[11px] text-muted-foreground hover:underline"
+            disabled={busy}
+            onClick={() => {
+              store.clearError();
+              void store.switchToOwnerLogin();
+            }}
+          >
+            Log in as owner
+          </button>
+        ) : null}
       </div>
     </>,
   );

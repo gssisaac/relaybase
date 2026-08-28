@@ -85,6 +85,14 @@ export async function desktopTeamLogout(): Promise<void> {
   await invoke("team_logout_cmd");
 }
 
+export async function desktopTeamForgetSession(): Promise<TeamSessionStatus> {
+  if (isDesktopRuntime()) {
+    return invoke("team_forget_session_cmd");
+  }
+  await desktopClearTeamLogin();
+  return desktopTeamSessionStatus();
+}
+
 export async function desktopTeamSetBiometryEnabled(
   enabled: boolean,
 ): Promise<TeamSessionStatus> {

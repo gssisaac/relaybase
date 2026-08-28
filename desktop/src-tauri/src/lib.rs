@@ -44,6 +44,7 @@ use owner_session::{
     OwnerSessionStatus, OwnerSetupResult, WorkerRequestInput, WorkerRequestOutput,
 };
 use team_session::{
+    team_forget_session as team_forget_session_inner,
     team_login as team_login_inner, team_logout as team_logout_inner,
     team_session_status, team_set_biometry_enabled as team_set_biometry_enabled_inner,
     team_unlock as team_unlock_inner, team_worker_request as team_worker_request_inner,
@@ -1816,6 +1817,11 @@ async fn team_logout_cmd() -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn team_forget_session_cmd() -> Result<TeamSessionStatus, String> {
+    team_forget_session_inner().await
+}
+
+#[tauri::command]
 fn team_set_biometry_enabled_cmd(enabled: bool) -> Result<TeamSessionStatus, String> {
     team_set_biometry_enabled_inner(enabled)
 }
@@ -2017,6 +2023,7 @@ pub fn run() {
             team_login_cmd,
             team_unlock_cmd,
             team_logout_cmd,
+            team_forget_session_cmd,
             team_set_biometry_enabled_cmd,
             team_worker_request_cmd,
         ])

@@ -65,6 +65,7 @@ export type AppSessionDeps = {
   }) => Promise<TeamSessionStatus>;
   teamUnlock: () => Promise<TeamSessionStatus>;
   teamLogout: () => Promise<void>;
+  teamForgetSession: () => Promise<TeamSessionStatus>;
   teamSetBiometryEnabled: (enabled: boolean) => Promise<TeamSessionStatus>;
   /** Reload ~/.relaybase credentials + team identity and mirror into the store. */
   refreshIdentity: () => Promise<void>;

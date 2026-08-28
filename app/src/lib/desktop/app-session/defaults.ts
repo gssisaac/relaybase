@@ -38,6 +38,8 @@ export function createDefaultDeps(
     teamLogin: (input) => bridge().then((b) => b.desktopTeamLogin(input)),
     teamUnlock: () => bridge().then((b) => b.desktopTeamUnlock()),
     teamLogout: () => bridge().then((b) => b.desktopTeamLogout()),
+    teamForgetSession: () =>
+      bridge().then((b) => b.desktopTeamForgetSession()),
     teamSetBiometryEnabled: (enabled) =>
       bridge().then((b) => b.desktopTeamSetBiometryEnabled(enabled)),
     refreshIdentity: overrides?.refreshIdentity ?? (() => Promise.resolve()),

@@ -193,8 +193,8 @@ pub async fn team_login(
     let value = res.json::<serde_json::Value>().await.unwrap_or(serde_json::json!({}));
     if status != 200 {
         return Err(json_string(&value, "error")
-            .unwrap_or("Mobile login failed")
-            .to_string());
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("Worker login failed (HTTP {status})")));
     }
 
     save_keyring(&TeamKeyringBlob {

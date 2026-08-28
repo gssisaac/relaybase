@@ -369,7 +369,7 @@ export class AppSessionStore {
         }
       });
     } catch (err) {
-      const shown = visibleUnlockError(err) ?? "Console sign-in failed.";
+      const shown = visibleUnlockError(err, "owner") ?? "Console sign-in failed.";
       runInAction(() => {
         this.error = shown;
         this.busy = false;
@@ -422,7 +422,7 @@ export class AppSessionStore {
         this.busy = false;
       });
     } catch (err) {
-      const shown = visibleUnlockError(err) ?? "Sign in failed.";
+      const shown = visibleUnlockError(err, "owner") ?? "Sign in failed.";
       runInAction(() => {
         this.error = shown;
         this.busy = false;
@@ -455,7 +455,7 @@ export class AppSessionStore {
         this.busy = false;
       });
     } catch (err) {
-      const shown = visibleUnlockError(err) ?? "Team login failed.";
+      const shown = visibleUnlockError(err, "invited") ?? "Team login failed.";
       runInAction(() => {
         this.error = shown;
         this.busy = false;

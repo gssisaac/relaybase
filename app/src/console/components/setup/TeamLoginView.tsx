@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
+import {
+  isMissingWorkerError,
+  missingWorkerHelp,
+} from "@/lib/desktop/app-session/errors";
 import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
@@ -72,7 +76,11 @@ export function TeamLoginView() {
       });
       rememberWorkerUrl(url);
     } catch (err) {
-      setError(explainDesktopError(err, "Team login failed"));
+      setError(
+        isMissingWorkerError(err)
+          ? missingWorkerHelp("invited")
+          : explainDesktopError(err, "Team login failed"),
+      );
     }
   }
 

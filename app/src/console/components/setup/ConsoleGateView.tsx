@@ -8,13 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebarSpacer";
 import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
+import {
+  isMissingWorkerUnlockMessage,
+  missingWorkerHelp,
+} from "@/lib/desktop/app-session/errors";
 import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { biometryLabel } from "@/lib/desktop/biometry/label";
 import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { normalizePasstokenInput } from "@/lib/desktop/worker-url/normalize-passtoken";
 import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
-import { useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
+import { DesktopErrorBanner, useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,6 +58,7 @@ export function ConsoleGateView() {
   const selectedUrl = normalizeWorkerUrl(workerUrl);
   const canSubmit =
     Boolean(selectedUrl) && Boolean(username.trim()) && Boolean(secret);
+  const missingWorkerError = isMissingWorkerUnlockMessage(store.error, "owner");
 
   async function submitPasstoken(e: React.FormEvent) {
     e.preventDefault();
@@ -118,7 +123,9 @@ export function ConsoleGateView() {
             </Button>
           ) : null}
 
-          {store.error ? (
+          {missingWorkerError ? (
+            <DesktopErrorBanner error={missingWorkerHelp("owner")} />
+          ) : store.error ? (
             <p className="text-center text-xs text-destructive">{store.error}</p>
           ) : null}
 

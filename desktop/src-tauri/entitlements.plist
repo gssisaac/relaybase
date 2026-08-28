@@ -10,8 +10,9 @@
   <true/>
   <key>com.apple.security.automation.apple-events</key>
   <true/>
-  <!-- Touch ID / LocalAuthentication. Unsigned `tauri dev` builds often cannot
-       use the keychain; production must be Developer ID signed. -->
+  <!-- Data-protection keychain (`keyring_store.rs`). Required so launch
+       does not show the login-keychain "Always Allow" dialog. Production
+       must be Developer ID signed; unsigned `tauri dev` falls back. -->
   <key>keychain-access-groups</key>
   <array>
     <string>$(AppIdentifierPrefix)com.relaybase.desktop</string>

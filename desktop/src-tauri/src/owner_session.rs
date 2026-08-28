@@ -3,8 +3,8 @@
 //!
 //! Daily unlock: JS calls Touch ID / Windows Hello (`tauri-plugin-biometry`
 //! with `allowDeviceCredential`), then `owner_unlock` which reads the keyring
-//! and rotates refresh. `tauri dev` unsigned macOS builds often cannot talk
-//! to the keychain / LocalAuthentication — fallback is username + passtoken.
+//! and rotates refresh. macOS uses the data-protection keychain (see
+//! `keyring_store`) so launch does not show the login-keychain ACL dialog.
 
 use crate::secrets::{load_credentials, save_credentials};
 use serde::{Deserialize, Serialize};
@@ -47,38 +47,26 @@ fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
-fn keyring_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-        .map_err(|e| format!("Keyring unavailable: {e}"))
-}
-
 fn load_keyring() -> Result<Option<KeyringBlob>, String> {
-    let entry = keyring_entry()?;
-    match entry.get_password() {
-        Ok(json) => {
-            let blob: KeyringBlob = serde_json::from_str(&json)
-                .map_err(|e| format!("Corrupt keyring session: {e}"))?;
-            if blob.refresh_token.trim().is_empty() || blob.worker_url.trim().is_empty() {
-                return Ok(None);
-            }
-            Ok(Some(blob))
-        }
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(format!("Failed to read keyring: {e}")),
+    let json = match crate::keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)? {
+        Some(json) => json,
+        None => return Ok(None),
+    };
+    let blob: KeyringBlob = serde_json::from_str(&json)
+        .map_err(|e| format!("Corrupt keyring session: {e}"))?;
+    if blob.refresh_token.trim().is_empty() || blob.worker_url.trim().is_empty() {
+        return Ok(None);
     }
+    Ok(Some(blob))
 }
 
 fn save_keyring(blob: &KeyringBlob) -> Result<(), String> {
     let json = serde_json::to_string(blob).map_err(|e| e.to_string())?;
-    keyring_entry()?
-        .set_password(&json)
-        .map_err(|e| format!("Failed to write keyring: {e}"))
+    crate::keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)
 }
 
 fn delete_keyring() {
-    if let Ok(entry) = keyring_entry() {
-        let _ = entry.delete_credential();
-    }
+    crate::keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
 }
 
 fn set_access(worker_url: &str, username: &str, access_token: &str, expires_in: u64) {

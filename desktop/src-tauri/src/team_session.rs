@@ -38,41 +38,29 @@ struct TeamMemory {
 
 static MEMORY: Mutex<Option<TeamMemory>> = Mutex::new(None);
 
-fn keyring_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)
-        .map_err(|e| format!("Keyring unavailable: {e}"))
-}
-
 fn load_keyring() -> Result<Option<TeamKeyringBlob>, String> {
-    let entry = keyring_entry()?;
-    match entry.get_password() {
-        Ok(json) => {
-            let blob: TeamKeyringBlob = serde_json::from_str(&json)
-                .map_err(|e| format!("Corrupt team keyring session: {e}"))?;
-            if blob.mobile_password.trim().is_empty()
-                || blob.worker_url.trim().is_empty()
-                || blob.account_email.trim().is_empty()
-            {
-                return Ok(None);
-            }
-            Ok(Some(blob))
-        }
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(format!("Failed to read team keyring: {e}")),
+    let json = match crate::keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)? {
+        Some(json) => json,
+        None => return Ok(None),
+    };
+    let blob: TeamKeyringBlob = serde_json::from_str(&json)
+        .map_err(|e| format!("Corrupt team keyring session: {e}"))?;
+    if blob.mobile_password.trim().is_empty()
+        || blob.worker_url.trim().is_empty()
+        || blob.account_email.trim().is_empty()
+    {
+        return Ok(None);
     }
+    Ok(Some(blob))
 }
 
 fn save_keyring(blob: &TeamKeyringBlob) -> Result<(), String> {
     let json = serde_json::to_string(blob).map_err(|e| e.to_string())?;
-    keyring_entry()?
-        .set_password(&json)
-        .map_err(|e| format!("Failed to write team keyring: {e}"))
+    crate::keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)
 }
 
 fn delete_keyring() {
-    if let Ok(entry) = keyring_entry() {
-        let _ = entry.delete_credential();
-    }
+    crate::keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
 }
 
 fn set_memory(worker_url: &str, account_email: &str, mobile_password: &str) {

@@ -139,7 +139,7 @@ Load strips any other key (including `installToken`, `serverToken`, `licenseKey`
 
 ### OS keyring (owner refresh)
 
-Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/owner_session.rs`) stores a JSON blob in the OS secret store via the `keyring` crate:
+Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/keyring_store.rs`, called from `owner_session.rs`) stores a JSON blob in the OS secret store. On macOS this is the **data-protection** keychain (`kSecUseDataProtectionKeychain` + `keychain-access-groups`), not the login keychain — so launch does not show the “Always Allow” ACL dialog. Windows / Linux still use the `keyring` crate. Login-keychain items written by older builds are copied over on first read and then deleted.
 
 | Field | Service / account |
 |-------|-------------------|
@@ -150,7 +150,7 @@ Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. **
 
 ### OS keyring (team mobile password)
 
-Mirror of the owner keyring for invited (team) users, implemented in `desktop/src-tauri/src/team_session.rs`:
+Mirror of the owner keyring for invited (team) users (`keyring_store.rs`, called from `team_session.rs`):
 
 | Field | Service / account |
 |-------|-------------------|

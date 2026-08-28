@@ -1,5 +1,6 @@
 mod auto_install;
 mod cloudflare;
+mod keyring_store;
 mod notify;
 mod owner_session;
 mod secrets;

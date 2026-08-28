@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0",
-  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.0.zip",
-  "zipSha256": "41cf2c802873dbb36c5584b6436da59a61cee73bd6f6ee082fe24a27a8e0a04a",
-  "publishedAt": "2026-08-28T10:39:28.265Z",
-  "notes": "# Relaybase Worker 0.1.0\n\n## Highlights\n- First public Worker install ZIP for customer Cloudflare accounts\n- Desktop auto-install deploys D1, R2, and the routing Worker without npm install\n- Inbox, compose, audience, and broadcasts run on the installed Worker\n\n## Changes\n- Initial customer install bundle (`worker.js` + `wrangler.toml`)\n- D1 schema via `POST /console/init-db` (empty) and `POST /console/migrate-db` (existing)\n- Mail atoms in R2 (`inbound|sent {domain}/{id}/`) with D1 `RELAYBASE_MAIL` search index\n- Settings Worker update downloads this ZIP and re-deploys without replacing ADMIN_TOKEN or D1"
+  "version": "0.1.1",
+  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.1.zip",
+  "zipSha256": "bc17123623d07a85eedc02d452cb761e788dcc42e868f4a545088c50adb28ac3",
+  "publishedAt": "2026-08-28T12:39:13.170Z",
+  "notes": "# Relaybase Worker 0.1.1\n\n## Highlights\n- Fixes desktop auto-install failing at migrate-db with 401 Unauthorized\n- Install-time schema endpoints use AUTH_PEPPER bootstrap instead of ADMIN_TOKEN\n\n## Changes\n- `POST /console/init-db`, `/console/migrate-db`, and `/console/setup-admin` accept `X-Auth-Pepper` when no owner is configured yet\n- Owner passtoken + scoped sessions replace the retired ADMIN_TOKEN god token on the product Worker\n- Settings Worker update still reuses existing AUTH_PEPPER and D1 bindings"
 }

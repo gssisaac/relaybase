@@ -234,10 +234,10 @@ export function explainDesktopError(
     lower.includes("(401)")
   ) {
     return {
-      title: "Admin token was rejected",
+      title: "Worker rejected the install request",
       detail:
-        "The Worker URL responded, but the admin token did not match ADMIN_TOKEN on that Worker.",
-      fix: "In the Admin token field above, paste the secret you set with wrangler (or Generate → Copy wrangler command → run it, then Verify with that same token).",
+        "The Worker URL responded, but init-db or migrate-db returned 401 Unauthorized. This usually means the uploaded worker.js is still on the old ADMIN_TOKEN auth model, or an owner is already configured and the install cannot use AUTH_PEPPER bootstrap.",
+      fix: "Deploy the latest Worker install ZIP from relaybase.xyz, then Try again with Skip on existing Worker and D1 (do not Rollback or Reinstall). If you already completed owner setup, sign in with your passtoken or use Setup → I forgot my passtoken.",
       links: installLinks,
     };
   }
@@ -397,7 +397,7 @@ export function explainDesktopError(
 /**
  * Error explainer for the Cloudflare OAuth (install token) flow. Intentionally
  * does NOT attach the legacy manual-install links ("Download Worker install
- * ZIP", "Open install setup") or the "Admin token was rejected" messaging —
+ * ZIP", "Open install setup") or the legacy ADMIN_TOKEN install messaging —
  * those belong to the deprecated paste-a-token flow, not OAuth. Produces a
  * clean, OAuth-specific message.
  */

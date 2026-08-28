@@ -35,7 +35,7 @@ Everything now flows through one MobX store, **`AppSessionStore`**
 | `boot` | Window just opened; keyring status not yet fetched. |
 | `choice` | Nothing enrolled (no worker URL, no keyring secret) → welcome. |
 | `install` | First-time install: `oauth` → `progress` → `createOwner` → `revealPasstoken`. |
-| `invitedLogin` | Invited teammate, no keyring secret yet → enter account email + mobile password. |
+| `invitedLogin` | Invited teammate, no keyring secret yet → `TeamLoginView` (Worker URL + account email + mobile password). |
 | `unlock` | No in-memory mail access yet. `role: owner \| invited`, `mode: secret` only. |
 | `invitedReady` | Invited session unlocked — render the team (mailbox-only) shell. |
 | `ownerReady` | Owner mail session unlocked — render the admin shell (mail routes). |
@@ -113,8 +113,8 @@ Neither handler wipes the worker URL or keyring.
 `app/src/app/_shell/DesktopDashboardGate.tsx` is a `switch` over `store.phase`:
 
 - `boot` / `choice` / `install` / `ownerRecover` → setup chrome / redirects
-- `invitedLogin` → `TeamLoginView`
-- `unlock` → `UnlockView` (secret form only)
+- `invitedLogin` → `TeamLoginView` (sole teammate login; `/login` trampoline; legacy `/setup/account` redirects here)
+- `unlock` → `UnlockView` (secret form only; always shows Worker URL select)
 - `invitedReady` → team (mailbox-only) `DashboardShell`
 - `ownerReady` → admin `DashboardShell` wrapped in `ConsoleRouteGate`
 
@@ -133,6 +133,7 @@ The last-route restore (`app/src/app/page.tsx`) waits for `store.canShowApp`
 | `app/src/lib/desktop/shell/AppProviders.tsx` | Root `DesktopProvider` + `AppSessionProvider` |
 | `app/src/app/_shell/DesktopDashboardGate.tsx` | Phase `switch` gate |
 | `app/src/console/components/setup/UnlockView.tsx` | Owner/invited secret-form unlock |
+| `app/src/console/components/setup/WorkerUrlPicker.tsx` | Worker URL select + enter-URL dialog |
 | `app/src/console/components/setup/TeamLoginView.tsx` | Invited login form |
 | `desktop/src-tauri/src/owner_session.rs` | Dual refresh keyring + split memory |
 | `desktop/src-tauri/src/team_session.rs` | Team keyring (no biometry) |

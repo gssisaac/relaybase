@@ -29,8 +29,8 @@ type WorkerUrlInputDialogProps = {
 };
 
 /**
- * Manual Worker URL entry for unlock / login flows.
- * Default tab builds relaybase-api.{account}.workers.dev; custom tab accepts any https URL.
+ * Worker URL entry dialog for unlock / login flows.
+ * Auto tab builds relaybase-api.{account}.workers.dev; Manual tab accepts any https URL.
  */
 export function WorkerUrlInputDialog({
   open,
@@ -41,7 +41,7 @@ export function WorkerUrlInputDialog({
   const normalizedInitial = normalizeWorkerUrl(initialUrl);
   const initialSubdomain = parseDefaultWorkerSubdomain(normalizedInitial);
 
-  const [tab, setTab] = useState<"subdomain" | "custom">("subdomain");
+  const [tab, setTab] = useState<"auto" | "manual">("auto");
   const [accountName, setAccountName] = useState(initialSubdomain ?? "");
   const [customUrl, setCustomUrl] = useState(
     initialSubdomain ? "" : normalizedInitial,
@@ -51,7 +51,7 @@ export function WorkerUrlInputDialog({
   useEffect(() => {
     if (!open) return;
     const subdomain = parseDefaultWorkerSubdomain(normalizedInitial);
-    setTab("subdomain");
+    setTab("auto");
     setAccountName(subdomain ?? "");
     setCustomUrl(subdomain ? "" : normalizedInitial);
     setError(null);
@@ -61,12 +61,12 @@ export function WorkerUrlInputDialog({
 
   function handleConfirm() {
     const url =
-      tab === "subdomain"
+      tab === "auto"
         ? buildDefaultWorkerUrl(accountName)
         : normalizeWorkerUrl(customUrl);
     if (!url) {
       setError(
-        tab === "subdomain"
+        tab === "auto"
           ? "Enter your Cloudflare account name."
           : "Enter a Worker URL.",
       );
@@ -94,18 +94,18 @@ export function WorkerUrlInputDialog({
 
         <Tabs
           value={tab}
-          defaultValue="subdomain"
+          defaultValue="auto"
           onValueChange={(value) => {
-            setTab(value as "subdomain" | "custom");
+            setTab(value as "auto" | "manual");
             setError(null);
           }}
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="subdomain">Default</TabsTrigger>
-            <TabsTrigger value="custom">Custom</TabsTrigger>
+            <TabsTrigger value="auto">Auto</TabsTrigger>
+            <TabsTrigger value="manual">Manual</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="subdomain" className="space-y-3 pt-2">
+          <TabsContent value="auto" className="space-y-3 pt-2">
             <div className="space-y-1.5">
               <Label htmlFor="worker-account-name">Cloudflare account name</Label>
               <Input
@@ -117,7 +117,7 @@ export function WorkerUrlInputDialog({
                 }}
                 placeholder="gssisaac"
                 autoComplete="off"
-                autoFocus={tab === "subdomain"}
+                autoFocus={tab === "auto"}
               />
               <p className="text-xs text-muted-foreground">
                 Builds{" "}
@@ -129,7 +129,7 @@ export function WorkerUrlInputDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="custom" className="space-y-3 pt-2">
+          <TabsContent value="manual" className="space-y-3 pt-2">
             <div className="space-y-1.5">
               <Label htmlFor="worker-custom-url">Worker URL</Label>
               <Input
@@ -142,7 +142,7 @@ export function WorkerUrlInputDialog({
                 placeholder="https://relaybase-api.<subdomain>.workers.dev"
                 className="font-mono text-xs"
                 autoComplete="off"
-                autoFocus={tab === "custom"}
+                autoFocus={tab === "manual"}
               />
             </div>
           </TabsContent>

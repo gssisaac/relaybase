@@ -44,7 +44,7 @@ export function UnlockView({
       ? teamLogin?.accountEmail ?? ""
       : store.ownerStatus?.username ?? "";
 
-  const [workerUrlDraft, setWorkerUrlDraft] = useState(savedWorkerUrl ?? "");
+  const [workerUrl, setWorkerUrl] = useState(savedWorkerUrl ?? "");
   const [username, setUsername] = useState(savedUsername);
   const [secret, setSecret] = useState("");
 
@@ -63,10 +63,12 @@ export function UnlockView({
   );
 
   const busy = store.busy;
+  const selectedUrl = normalizeWorkerUrl(workerUrl);
+  const canSubmit = Boolean(selectedUrl) && Boolean(username.trim()) && Boolean(secret);
 
   async function submitSecret(e: React.FormEvent) {
     e.preventDefault();
-    const url = normalizeWorkerUrl(savedWorkerUrl || workerUrlDraft);
+    const url = selectedUrl;
     const passtoken = normalizePasstokenInput(secret);
     if (!url || !passtoken) return;
     try {
@@ -123,14 +125,12 @@ export function UnlockView({
             {store.error ? (
               <p className="text-center text-xs text-destructive">{store.error}</p>
             ) : null}
-            {savedWorkerUrl ? null : (
-              <WorkerUrlPicker
-                value={workerUrlDraft}
-                onChange={setWorkerUrlDraft}
-                seedUrls={workerUrlSeeds}
-                disabled={busy}
-              />
-            )}
+            <WorkerUrlPicker
+              value={workerUrl}
+              onChange={setWorkerUrl}
+              seedUrls={workerUrlSeeds}
+              disabled={busy}
+            />
             <div className="space-y-1.5">
               <Label htmlFor="unlock-username">
                 {role === "invited" ? "Account email" : "Username"}
@@ -173,7 +173,12 @@ export function UnlockView({
                 </button>
               ) : null}
             </div>
-            <Button type="submit" className="w-full" size="lg" disabled={busy}>
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={busy || !canSubmit}
+            >
               {busy ? <Loader2 className="size-4 animate-spin" /> : "Sign in"}
             </Button>
           </form>

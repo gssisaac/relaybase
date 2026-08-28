@@ -2,12 +2,16 @@
 
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
+import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
+import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
 import { useDesktop } from "@/lib/desktop/shell";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { explainDesktopError, type DesktopErrorHelp } from "@/lib/desktop/bridge";
@@ -20,21 +24,41 @@ import { explainDesktopError, type DesktopErrorHelp } from "@/lib/desktop/bridge
 export function TeamLoginView() {
   const store = useAppSession();
   const { teamLogin } = useDesktop();
-  const [workerUrl, setWorkerUrl] = useState(teamLogin?.workerUrl ?? "");
+
+  const savedWorkerUrl = resolveWorkerUrl({
+    role: "invited",
+    ownerStatus: store.ownerStatus,
+    teamStatus: store.teamStatus,
+    credentials: null,
+    teamLogin,
+  });
+
+  const workerUrlSeeds = useMemo(
+    () => [teamLogin?.workerUrl, store.teamStatus?.workerUrl],
+    [teamLogin?.workerUrl, store.teamStatus?.workerUrl],
+  );
+
+  const [workerUrl, setWorkerUrl] = useState(savedWorkerUrl ?? "");
   const [accountEmail, setAccountEmail] = useState(teamLogin?.accountEmail ?? "");
   const [mobilePassword, setMobilePassword] = useState("");
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
 
+  const selectedUrl = normalizeWorkerUrl(workerUrl);
+  const canSubmit =
+    Boolean(selectedUrl) &&
+    Boolean(accountEmail.trim()) &&
+    Boolean(mobilePassword);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const url = workerUrl.trim().replace(/\/$/, "");
+    const url = selectedUrl;
     const email = accountEmail.trim().toLowerCase();
     const password = mobilePassword;
     if (!url || !email || !password) {
       setError({
         title: "All fields are required",
         detail:
-          "Enter the Worker URL, your account email, and mobile password.",
+          "Select a Worker URL, enter your account email, and mobile password.",
         fix: "Ask your team admin for the Worker URL and your mobile password.",
       });
       return;
@@ -46,6 +70,7 @@ export function TeamLoginView() {
         accountEmail: email,
         mobilePassword: password,
       });
+      rememberWorkerUrl(url);
     } catch (err) {
       setError(explainDesktopError(err, "Team login failed"));
     }
@@ -64,17 +89,12 @@ export function TeamLoginView() {
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-1.5">
-            <Label htmlFor="worker-url">Worker URL</Label>
-            <Input
-              id="worker-url"
-              value={workerUrl}
-              onChange={(e) => setWorkerUrl(e.target.value)}
-              placeholder="https://relaybase-api.<subdomain>.workers.dev"
-              className="font-mono text-xs"
-              autoComplete="off"
-            />
-          </div>
+          <WorkerUrlPicker
+            value={workerUrl}
+            onChange={setWorkerUrl}
+            seedUrls={workerUrlSeeds}
+            disabled={store.busy}
+          />
           <div className="space-y-1.5">
             <Label htmlFor="account-email">Account email</Label>
             <Input
@@ -99,7 +119,11 @@ export function TeamLoginView() {
             />
           </div>
           <DesktopErrorBanner error={error} />
-          <Button type="submit" className="w-full" disabled={store.busy}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={store.busy || !canSubmit}
+          >
             {store.busy ? <Loader2 className="size-4 animate-spin" /> : null}
             Sign in
           </Button>
@@ -107,7 +131,7 @@ export function TeamLoginView() {
 
         <div className="border-t border-border pt-4 text-xs text-muted-foreground">
           Admin?{" "}
-          <Link href="/setup/account" className="hover:underline">
+          <Link href="/setup" className="hover:underline">
             Set up or log in to your Relaybase account
           </Link>
         </div>

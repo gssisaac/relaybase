@@ -36,7 +36,7 @@ export function ConsoleGateView() {
   });
   const savedUsername = store.ownerStatus?.username ?? "";
 
-  const [workerUrlDraft, setWorkerUrlDraft] = useState(savedWorkerUrl ?? "");
+  const [workerUrl, setWorkerUrl] = useState(savedWorkerUrl ?? "");
   const [username, setUsername] = useState(savedUsername);
   const [secret, setSecret] = useState("");
 
@@ -51,9 +51,13 @@ export function ConsoleGateView() {
     [credentials?.workerUrl, store.ownerStatus?.workerUrl],
   );
 
+  const selectedUrl = normalizeWorkerUrl(workerUrl);
+  const canSubmit =
+    Boolean(selectedUrl) && Boolean(username.trim()) && Boolean(secret);
+
   async function submitPasstoken(e: React.FormEvent) {
     e.preventDefault();
-    const url = normalizeWorkerUrl(savedWorkerUrl || workerUrlDraft);
+    const url = selectedUrl;
     const passtoken = normalizePasstokenInput(secret);
     if (!url || !passtoken) return;
     try {
@@ -123,14 +127,12 @@ export function ConsoleGateView() {
             onSubmit={submitPasstoken}
             data-allow-tab-focus
           >
-            {savedWorkerUrl ? null : (
-              <WorkerUrlPicker
-                value={workerUrlDraft}
-                onChange={setWorkerUrlDraft}
-                seedUrls={workerUrlSeeds}
-                disabled={busy}
-              />
-            )}
+            <WorkerUrlPicker
+              value={workerUrl}
+              onChange={setWorkerUrl}
+              seedUrls={workerUrlSeeds}
+              disabled={busy}
+            />
             <div className="space-y-1.5">
               <Label htmlFor="console-gate-username">Username</Label>
               <Input
@@ -153,7 +155,12 @@ export function ConsoleGateView() {
                 className="font-mono text-xs"
               />
             </div>
-            <Button type="submit" className="w-full" size="lg" disabled={busy}>
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={busy || !canSubmit}
+            >
               {busy ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (

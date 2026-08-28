@@ -1,16 +1,23 @@
 "use client";
 
-import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { WorkerUrlInputDialog } from "@/console/components/setup/WorkerUrlInputDialog";
 import {
   loadRecentWorkerUrls,
   mergeRecentWorkerUrls,
 } from "@/lib/desktop/worker-url/recent-worker-urls";
-import { cn } from "@/lib/utils";
+import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
+
+const ENTER_WORKER_URL = "__enter_worker_url__";
 
 type WorkerUrlPickerProps = {
   value: string;
@@ -20,7 +27,8 @@ type WorkerUrlPickerProps = {
 };
 
 /**
- * Recent Worker URLs plus manual entry (dialog). Used on passtoken / team login forms.
+ * Recent Worker URLs as a select, plus "Enter worker URL" dialog entry.
+ * Used on passtoken / team login forms.
  */
 export function WorkerUrlPicker({
   value,
@@ -29,71 +37,73 @@ export function WorkerUrlPicker({
   disabled = false,
 }: WorkerUrlPickerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogSeeds, setDialogSeeds] = useState<string[]>([]);
 
   const recentUrls = useMemo(
     () => mergeRecentWorkerUrls(...seedUrls, ...loadRecentWorkerUrls()),
     [seedUrls],
   );
 
+  const options = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    const normalizedValue = normalizeWorkerUrl(value);
+    for (const url of [normalizedValue, ...recentUrls, ...dialogSeeds]) {
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      merged.push(url);
+    }
+    return merged;
+  }, [recentUrls, value, dialogSeeds]);
+
+  const selectedUrl = normalizeWorkerUrl(value);
+
+  function handleValueChange(next: string | null) {
+    if (!next || next === ENTER_WORKER_URL) {
+      if (next === ENTER_WORKER_URL) {
+        setDialogOpen(true);
+      }
+      return;
+    }
+    onChange(next);
+  }
+
+  function handleConfirm(url: string) {
+    const normalized = normalizeWorkerUrl(url);
+    if (!normalized) return;
+    setDialogSeeds((prev) =>
+      prev.includes(normalized) ? prev : [normalized, ...prev],
+    );
+    onChange(normalized);
+  }
+
   return (
     <div className="space-y-2">
       <Label>Worker URL</Label>
 
-      {recentUrls.length > 0 ? (
-        <ul className="space-y-1.5" role="listbox" aria-label="Recent Worker URLs">
-          {recentUrls.map((url) => {
-            const selected = value === url;
-            return (
-              <li key={url}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  disabled={disabled}
-                  className={cn(
-                    "w-full rounded-lg border px-3 py-2 text-left font-mono text-xs transition-colors",
-                    selected
-                      ? "border-primary bg-primary/5 text-foreground"
-                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                    disabled && "pointer-events-none opacity-50",
-                  )}
-                  onClick={() => onChange(url)}
-                >
-                  {url}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          No recent Worker URLs yet. Enter one manually below.
-        </p>
-      )}
-
-      {value && !recentUrls.includes(value) ? (
-        <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 font-mono text-xs">
-          {value}
-        </div>
-      ) : null}
-
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-full"
+      <Select
+        value={selectedUrl || null}
+        onValueChange={handleValueChange}
         disabled={disabled}
-        onClick={() => setDialogOpen(true)}
       >
-        <Plus className="size-3.5" />
-        Enter URL manually
-      </Button>
+        <SelectTrigger className="w-full font-mono text-xs">
+          <SelectValue placeholder="Select Worker URL" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ENTER_WORKER_URL}>Enter worker URL</SelectItem>
+          {options.map((url) => (
+            <SelectItem key={url} value={url} className="font-mono text-xs">
+              {url}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <WorkerUrlInputDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        initialUrl={value}
-        onConfirm={onChange}
+        initialUrl={selectedUrl}
+        onConfirm={handleConfirm}
       />
     </div>
   );

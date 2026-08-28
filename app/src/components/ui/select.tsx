@@ -6,7 +6,49 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+type SelectItemRegistration = {
+  value: string
+  label: string
+}
+
+const SelectItemsContext = React.createContext<{
+  register: (item: SelectItemRegistration) => void
+  unregister: (value: string) => void
+} | null>(null)
+
+function Select({
+  items: itemsProp,
+  ...props
+}: SelectPrimitive.Root.Props) {
+  const [registeredItems, setRegisteredItems] = React.useState<
+    SelectItemRegistration[]
+  >([])
+
+  const registry = React.useMemo(
+    () => ({
+      register(item: SelectItemRegistration) {
+        setRegisteredItems((prev) => {
+          const without = prev.filter((entry) => entry.value !== item.value)
+          return [...without, item]
+        })
+      },
+      unregister(value: string) {
+        setRegisteredItems((prev) => prev.filter((entry) => entry.value !== value))
+      },
+    }),
+    [],
+  )
+
+  const items = itemsProp ?? registeredItems
+
+  return (
+    <SelectItemsContext.Provider value={registry}>
+      <SelectPrimitive.Root {...props} items={items}>
+        {props.children}
+      </SelectPrimitive.Root>
+    </SelectItemsContext.Provider>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -111,11 +153,30 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  label: labelProp,
+  value,
   ...props
-}: SelectPrimitive.Item.Props) {
+}: SelectPrimitive.Item.Props & {
+  label?: string
+}) {
+  const registry = React.useContext(SelectItemsContext)
+  const resolvedLabel =
+    labelProp ?? (typeof children === "string" ? children : undefined)
+  const serializedValue = value == null ? "" : String(value)
+
+  React.useLayoutEffect(() => {
+    if (!registry || !serializedValue || resolvedLabel == null) {
+      return undefined
+    }
+    registry.register({ value: serializedValue, label: resolvedLabel })
+    return () => registry.unregister(serializedValue)
+  }, [registry, serializedValue, resolvedLabel])
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      value={value}
+      label={resolvedLabel}
       className={cn(
         "relative flex w-full min-w-0 cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         className

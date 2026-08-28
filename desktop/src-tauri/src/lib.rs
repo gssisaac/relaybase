@@ -38,17 +38,19 @@ use secrets::{
     TeamLogin,
 };
 use owner_session::{
+    owner_boot_mail as owner_boot_mail_inner,
     owner_login as owner_login_inner, owner_logout as owner_logout_inner,
     owner_reset_admin as owner_reset_admin_inner, owner_session_status,
-    owner_set_biometry_enabled, owner_setup_admin as owner_setup_admin_inner,
-    owner_unlock as owner_unlock_inner, worker_request as worker_request_inner,
+    owner_setup_admin as owner_setup_admin_inner,
+    owner_unlock_console as owner_unlock_console_inner,
+    worker_request as worker_request_inner,
     OwnerSessionStatus, OwnerSetupResult, WorkerRequestInput, WorkerRequestOutput,
 };
 use team_session::{
     team_forget_session as team_forget_session_inner,
     team_login as team_login_inner, team_logout as team_logout_inner,
-    team_session_status, team_set_biometry_enabled as team_set_biometry_enabled_inner,
-    team_unlock as team_unlock_inner, team_worker_request as team_worker_request_inner,
+    team_session_status, team_unlock as team_unlock_inner,
+    team_worker_request as team_worker_request_inner,
     TeamSessionStatus, TeamWorkerRequestInput, TeamWorkerRequestOutput,
 };
 use worker::{
@@ -110,7 +112,14 @@ async fn get_credentials() -> Result<Option<StoredCredentials>, String> {
     if disk.is_none() && get_cf_oauth_session().is_none() {
         return Ok(None);
     }
-    Ok(Some(load_credentials_merged()?))
+    let mut creds = load_credentials_merged()?;
+    // Worker URL lives in the owner keyring after login; disk may still be empty.
+    if creds.worker_url.trim().is_empty() {
+        if let Some(url) = crate::owner_session::current_worker_url() {
+            creds.worker_url = url;
+        }
+    }
+    Ok(Some(creds))
 }
 
 #[tauri::command]
@@ -1425,9 +1434,12 @@ async fn verify_worker_connection(
     _admin_token: String,
 ) -> Result<WorkerConnectResult, String> {
     let base = normalize_worker_url(&worker_url)?;
-    let token = crate::owner_session::current_access_token().unwrap_or_default();
+    let token = crate::owner_session::current_console_access_token()
+        .unwrap_or_default();
     if token.is_empty() {
-        return Err("Sign in with your owner username and passtoken first.".into());
+        return Err(
+            "Unlock the console dashboard first (Touch ID or passtoken).".into(),
+        );
     }
 
     let url = format!("{base}/console/connect");
@@ -1744,24 +1756,23 @@ async fn owner_login_cmd(
     worker_url: String,
     username: String,
     passtoken: String,
-    biometry_enabled: Option<bool>,
 ) -> Result<OwnerSessionStatus, String> {
-    owner_login_inner(worker_url, username, passtoken, biometry_enabled).await
+    owner_login_inner(worker_url, username, passtoken).await
 }
 
 #[tauri::command]
-async fn owner_unlock_cmd() -> Result<OwnerSessionStatus, String> {
-    owner_unlock_inner().await
+async fn owner_boot_mail_cmd() -> Result<OwnerSessionStatus, String> {
+    owner_boot_mail_inner().await
+}
+
+#[tauri::command]
+async fn owner_unlock_console_cmd() -> Result<OwnerSessionStatus, String> {
+    owner_unlock_console_inner().await
 }
 
 #[tauri::command]
 async fn owner_logout_cmd() -> Result<(), String> {
     owner_logout_inner().await
-}
-
-#[tauri::command]
-fn owner_set_biometry_enabled_cmd(enabled: bool) -> Result<OwnerSessionStatus, String> {
-    owner_set_biometry_enabled(enabled)
 }
 
 #[tauri::command]
@@ -1802,9 +1813,8 @@ async fn team_login_cmd(
     worker_url: String,
     account_email: String,
     mobile_password: String,
-    biometry_enabled: Option<bool>,
 ) -> Result<TeamSessionStatus, String> {
-    team_login_inner(worker_url, account_email, mobile_password, biometry_enabled).await
+    team_login_inner(worker_url, account_email, mobile_password).await
 }
 
 #[tauri::command]
@@ -1820,11 +1830,6 @@ async fn team_logout_cmd() -> Result<(), String> {
 #[tauri::command]
 async fn team_forget_session_cmd() -> Result<TeamSessionStatus, String> {
     team_forget_session_inner().await
-}
-
-#[tauri::command]
-fn team_set_biometry_enabled_cmd(enabled: bool) -> Result<TeamSessionStatus, String> {
-    team_set_biometry_enabled_inner(enabled)
 }
 
 #[tauri::command]
@@ -2013,9 +2018,9 @@ pub fn run() {
             notify::take_pending_open_mail,
             owner_session_status_cmd,
             owner_login_cmd,
-            owner_unlock_cmd,
+            owner_boot_mail_cmd,
+            owner_unlock_console_cmd,
             owner_logout_cmd,
-            owner_set_biometry_enabled_cmd,
             owner_touch_id_cmd,
             owner_setup_admin_cmd,
             owner_reset_admin_cmd,
@@ -2025,7 +2030,6 @@ pub fn run() {
             team_unlock_cmd,
             team_logout_cmd,
             team_forget_session_cmd,
-            team_set_biometry_enabled_cmd,
             team_worker_request_cmd,
         ])
         .run(tauri::generate_context!())

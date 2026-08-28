@@ -10,15 +10,21 @@ import { workerFetch } from "./worker-api";
 
 export { mapEmailApiToWorker, mapPackagedEmailApiToWorker };
 
-/** Global 401 guard — fires once to clear credentials + redirect to /setup. */
+/** Prevents duplicate 401 dispatches in the same tick. */
 let unauthorizedRedirecting = false;
-function handleWorkerUnauthorized(): void {
+
+/** Dispatch scoped 401 events — mail refresh vs console gate. */
+function dispatchWorkerUnauthorized(workerPath: string): void {
   if (typeof window === "undefined") return;
-  // After ADMIN_TOKEN reissue the new secret can lag; do not latch or wipe.
   if (isUnauthorizedGraceActive()) return;
   if (unauthorizedRedirecting) return;
   unauthorizedRedirecting = true;
-  window.dispatchEvent(new CustomEvent("relaybase:unauthorized"));
+  if (workerPath.startsWith("/console/")) {
+    window.dispatchEvent(new CustomEvent("relaybase:console-unauthorized"));
+  } else if (workerPath.startsWith("/mail/")) {
+    window.dispatchEvent(new CustomEvent("relaybase:unauthorized"));
+  }
+  unauthorizedRedirecting = false;
 }
 
 /**
@@ -238,7 +244,7 @@ export async function desktopAwareFetch(
     try {
       const res = await workerFetch(creds, workerPath, init);
       if (res.status === 401) {
-        handleWorkerUnauthorized();
+        dispatchWorkerUnauthorized(workerPath);
       }
       return res;
     } catch (err) {

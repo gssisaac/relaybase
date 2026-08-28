@@ -7,8 +7,7 @@ import { useAppSession } from "@/lib/desktop/app-session";
 
 /**
  * "Already installed" entry from the welcome choice. Enter UnlockView on `/` —
- * Touch ID when a keyring secret exists, otherwise the fingerprint surface
- * with passtoken as an optional fallback (not the default screen).
+ * passtoken form when no keyring, or silent mail boot when refresh exists.
  */
 export default function SetupConnectPage() {
   const router = useRouter();

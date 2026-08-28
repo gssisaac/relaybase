@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import type { Env } from "../env";
 import { createAppDb } from "../../db/app";
 import { resolveKey } from "./keys";
-import { verifyAccessToken } from "./owner-auth";
+import { verifyAccessToken, type OwnerScope } from "./owner-auth";
 import { getOwnerLoginConfig } from "../../db/app/owner";
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
@@ -12,11 +12,12 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
 }
 
 /**
- * Validate an owner access token (HMAC-signed, self-contained).
+ * Validate an owner access token for the given scope (mail vs console).
  * Returns null on success, or a 401 Response on failure.
  */
 export async function requireOwnerSession(
   c: Context<{ Bindings: Env }>,
+  scope: OwnerScope,
 ): Promise<Response | null> {
   const token = extractBearerToken(c.req.header("Authorization"));
   if (!token) {
@@ -30,7 +31,13 @@ export async function requireOwnerSession(
   if (!payload) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  // Confirm the owner still exists (revoked via passtoken reset).
+  if (payload.scope !== undefined && payload.scope !== scope) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  // Legacy unscoped tokens: allow on console routes only.
+  if (payload.scope === undefined && scope !== "console") {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
   const db = createAppDb(c.env.RELAYBASE_DB);
   if (db) {
     const cfg = await getOwnerLoginConfig(db);
@@ -39,6 +46,18 @@ export async function requireOwnerSession(
     }
   }
   return null;
+}
+
+export function requireConsoleSession(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response | null> {
+  return requireOwnerSession(c, "console");
+}
+
+export function requireMailSession(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response | null> {
+  return requireOwnerSession(c, "mail");
 }
 
 /**

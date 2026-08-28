@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireOwnerSession } from "../../lib/auth";
+import { requireMailSession } from "../../lib/auth";
 import { sendMailMessage, type SendMailBody } from "../../lib/mail/send-message";
 
 const mailSend = new Hono<{ Bindings: Env }>();
@@ -10,7 +10,7 @@ const mailSend = new Hono<{ Bindings: Env }>();
  * domain scoping — from address must still be a real mailbox address.
  */
 mailSend.post("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
 
   let body: SendMailBody;

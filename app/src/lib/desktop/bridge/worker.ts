@@ -172,13 +172,16 @@ export async function desktopVerifyWorkerConnection(
   workerUrl: string,
   adminToken: string,
 ): Promise<WorkerConnectResult> {
+  if (isDesktopRuntime()) {
+    return invoke("verify_worker_connection", {
+      workerUrl,
+      adminToken: adminToken.trim(),
+    });
+  }
+
   const { ensureAccessToken } = await import("@/lib/desktop/auth");
   const ownerAccess = await ensureAccessToken();
   const access = ownerAccess || adminToken.trim();
-  // Owner access lives in JS memory; Rust verify still expects ADMIN_TOKEN.
-  if (isDesktopRuntime() && !ownerAccess && adminToken.trim()) {
-    return invoke("verify_worker_connection", { workerUrl, adminToken });
-  }
   const base = workerUrl.replace(/\/$/, "");
   if (!access) {
     throw new Error("Owner session required. Sign in with your passtoken.");

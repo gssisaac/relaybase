@@ -3,6 +3,7 @@
 import * as React from "react";
 import { reaction } from "mobx";
 
+import { useAppSession } from "@/lib/desktop/app-session";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import {
   DomainStore,
@@ -41,22 +42,31 @@ const DomainStoreContext = React.createContext<DomainStore | null>(null);
 
 export function DomainProvider({ children }: { children: React.ReactNode }) {
   const userId = useProductId();
+  const session = useAppSession();
   const storeRef = React.useRef<DomainStore | null>(null);
   if (!storeRef.current) {
     storeRef.current = new DomainStore();
   }
   const store = storeRef.current;
 
+  const ownerAwaitingConsole =
+    session.phase.kind === "ownerReady" && !session.hasConsoleAccess;
+
   React.useEffect(() => {
+    if (ownerAwaitingConsole) {
+      store.stop();
+      return;
+    }
     void store.start();
     return () => {
       store.stop();
     };
-  }, [store]);
+  }, [store, ownerAwaitingConsole]);
 
   React.useEffect(() => {
+    if (ownerAwaitingConsole) return;
     void store.refresh();
-  }, [store, userId]);
+  }, [store, userId, ownerAwaitingConsole, session.hasConsoleAccess]);
 
   return (
     <DomainStoreContext.Provider value={store}>

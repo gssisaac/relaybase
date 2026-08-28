@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
   "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.0.zip",
-  "zipSha256": "fbbf85a991fb3d6da4717bce7170e44c6b0221a89be6396514285c903bbb344c",
-  "publishedAt": "2026-08-25T22:35:12.512Z",
+  "zipSha256": "41cf2c802873dbb36c5584b6436da59a61cee73bd6f6ee082fe24a27a8e0a04a",
+  "publishedAt": "2026-08-28T10:39:28.265Z",
   "notes": "# Relaybase Worker 0.1.0\n\n## Highlights\n- First public Worker install ZIP for customer Cloudflare accounts\n- Desktop auto-install deploys D1, R2, and the routing Worker without npm install\n- Inbox, compose, audience, and broadcasts run on the installed Worker\n\n## Changes\n- Initial customer install bundle (`worker.js` + `wrangler.toml`)\n- D1 schema via `POST /console/init-db` (empty) and `POST /console/migrate-db` (existing)\n- Mail atoms in R2 (`inbound|sent {domain}/{id}/`) with D1 `RELAYBASE_MAIL` search index\n- Settings Worker update downloads this ZIP and re-deploys without replacing ADMIN_TOKEN or D1"
 }

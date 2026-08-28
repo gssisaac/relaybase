@@ -43,12 +43,9 @@ export type TeamSessionStatus = {
   hasAccess: boolean;
   accountEmail: string;
   workerUrl: string;
-  biometryEnabled: boolean;
-  /** "macos" | "windows" | "linux" | other */
   platform: string;
 };
 
-/** Browser fallback: no keyring, so always "no secret". */
 export async function desktopTeamSessionStatus(): Promise<TeamSessionStatus> {
   if (!isDesktopRuntime()) {
     return {
@@ -56,7 +53,6 @@ export async function desktopTeamSessionStatus(): Promise<TeamSessionStatus> {
       hasAccess: false,
       accountEmail: "",
       workerUrl: "",
-      biometryEnabled: true,
       platform: "other",
     };
   }
@@ -67,13 +63,11 @@ export async function desktopTeamLogin(input: {
   workerUrl: string;
   accountEmail: string;
   mobilePassword: string;
-  biometryEnabled?: boolean;
 }): Promise<TeamSessionStatus> {
   return invoke("team_login_cmd", {
     workerUrl: input.workerUrl,
     accountEmail: input.accountEmail,
     mobilePassword: input.mobilePassword,
-    biometryEnabled: input.biometryEnabled,
   });
 }
 
@@ -91,12 +85,6 @@ export async function desktopTeamForgetSession(): Promise<TeamSessionStatus> {
   }
   await desktopClearTeamLogin();
   return desktopTeamSessionStatus();
-}
-
-export async function desktopTeamSetBiometryEnabled(
-  enabled: boolean,
-): Promise<TeamSessionStatus> {
-  return invoke("team_set_biometry_enabled_cmd", { enabled });
 }
 
 export async function desktopTeamWorkerRequest(input: {

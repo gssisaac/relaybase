@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireOwnerSession } from "../../lib/auth";
+import { requireConsoleSession } from "../../lib/auth";
 import { createAppDb } from "../../../db/app";
 import {
   getOwnerLoginConfig,
@@ -20,7 +20,7 @@ const EMAIL_RE =
  * Body: { accountEmail, workerUrl }
  */
 consoleRegisterOwner.post("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   let body: { accountEmail?: string; workerUrl?: string };
@@ -47,7 +47,7 @@ consoleRegisterOwner.post("/", async (c) => {
 
 /** Returns the owner email (owner session) — used by the desktop to confirm. */
 consoleRegisterOwner.get("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const db = createAppDb(c.env.RELAYBASE_DB);
   const config = await getOwnerLoginConfig(db);

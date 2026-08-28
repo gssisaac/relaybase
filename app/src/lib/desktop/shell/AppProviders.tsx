@@ -14,7 +14,8 @@ import { DesktopProvider } from "./DesktopContext";
  * Lifting it here means every route (including `/` and `/login`) shares one
  * `DesktopContext` and one `AppSessionStore`, and the session-state machine
  * boots the moment the window opens — before any gate or unlock panel
- * mounts. That is what makes Touch ID appear instantly on launch.
+ * mounts. Mail unlock is silent on boot; console Touch ID runs only at
+ * dashboard entry (`ensureConsoleAccess` / `ConsoleGateView`).
  */
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (

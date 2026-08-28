@@ -9,6 +9,7 @@ import {
   normalizeEntryPath,
   resolveEntryPathAsync,
 } from "@/lib/navigation/sidebar-mode";
+import { modeFromPathname } from "@/lib/navigation/sidebar-paths";
 
 /**
  * Client entry gate: restore the last email/dashboard route from ~/.relaybase
@@ -35,9 +36,14 @@ export function RestoreLastRoute({
       if (!cancelled) router.replace(DEFAULT_DASHBOARD_PATH);
     }, 6000);
     void resolveEntryPathAsync(id)
-      .then((path) => {
+      .then(async (path) => {
         if (cancelled) return;
-        router.replace(normalizeEntryPath(path));
+        const normalized = normalizeEntryPath(path);
+        if (modeFromPathname(normalized) === "dashboard") {
+          await store.ensureConsoleAccess();
+        }
+        if (cancelled) return;
+        router.replace(normalized);
       })
       .catch(() => {
         if (!cancelled) router.replace(DEFAULT_DASHBOARD_PATH);

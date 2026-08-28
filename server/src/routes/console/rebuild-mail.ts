@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireOwnerSession } from "../../lib/auth";
+import { requireConsoleSession } from "../../lib/auth";
 import { createAppDb } from "../../../db/app";
 import { createMailDb } from "../../../db/mail";
 import { readMailbox } from "../../lib/catalog-store";
@@ -29,7 +29,7 @@ const consoleRebuildMail = new Hono<{ Bindings: Env }>();
  * retained domain. Returns counts and the deleted keys.
  */
 consoleRebuildMail.post("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const mailDb = createMailDb(c.env.RELAYBASE_MAIL);

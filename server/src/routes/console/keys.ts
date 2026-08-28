@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireOwnerSession } from "../../lib/auth";
+import { requireConsoleSession } from "../../lib/auth";
 import { createAppDb } from "../../../db/app";
 import {
   createKey,
@@ -13,7 +13,7 @@ import {
 const consoleKeys = new Hono<{ Bindings: Env }>();
 
 consoleKeys.post("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   let body: { domain?: string; label?: string };
@@ -50,7 +50,7 @@ consoleKeys.post("/", async (c) => {
 });
 
 consoleKeys.get("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const keys = await listKeys(createAppDb(c.env.RELAYBASE_DB));
@@ -58,7 +58,7 @@ consoleKeys.get("/", async (c) => {
 });
 
 consoleKeys.patch("/:id", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const id = c.req.param("id")?.trim();
@@ -85,7 +85,7 @@ consoleKeys.patch("/:id", async (c) => {
 });
 
 consoleKeys.post("/:id/rotate", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const id = c.req.param("id")?.trim();
@@ -107,7 +107,7 @@ consoleKeys.post("/:id/rotate", async (c) => {
 });
 
 consoleKeys.delete("/:id", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const id = c.req.param("id")?.trim();

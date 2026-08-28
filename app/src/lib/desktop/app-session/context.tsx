@@ -17,11 +17,14 @@ import { AppSessionStore } from "./store";
 import type { AppSessionPhase, SessionRole } from "./types";
 
 const EMPTY_OWNER: OwnerSessionStatus = {
+  hasMailRefresh: false,
+  hasConsoleRefresh: false,
+  hasMailAccess: false,
+  hasConsoleAccess: false,
   hasRefresh: false,
   hasAccess: false,
   username: "",
   workerUrl: "",
-  biometryEnabled: true,
   platform: "macos",
 };
 
@@ -30,7 +33,6 @@ const EMPTY_TEAM: TeamSessionStatus = {
   hasAccess: false,
   accountEmail: "",
   workerUrl: "",
-  biometryEnabled: true,
   platform: "macos",
 };
 
@@ -68,9 +70,7 @@ const AppSessionContext = React.createContext<AppSessionStore | null>(null);
 
 /**
  * Wires `AppSessionStore` to `DesktopContext`. Boot fetches owner + team
- * keyring status in parallel and triggers the biometric prompt the moment a
- * secret is present — before any unlock view mounts. This is the fix for the
- * "Touch ID doesn't appear on launch" waterfall.
+ * keyring status in parallel, then runs silent mail boot unlock (no Touch ID).
  */
 export function AppSessionProvider({
   children,
@@ -127,7 +127,12 @@ export function AppSessionProvider({
       });
       const [ownerStatus, teamStatus] = await Promise.all([
         readStatusWithRetry(desktopOwnerSessionStatus, EMPTY_OWNER, (s) =>
-          Boolean(s.hasRefresh || s.hasAccess),
+          Boolean(
+            s.hasMailRefresh ||
+              s.hasConsoleRefresh ||
+              s.hasRefresh ||
+              s.hasAccess,
+          ),
         ),
         readStatusWithRetry(desktopTeamSessionStatus, EMPTY_TEAM, (s) =>
           Boolean(s.hasSecret || s.hasAccess),
@@ -157,16 +162,26 @@ export function AppSessionProvider({
     desktop.teamLogin,
   ]);
 
-  // Global 401 handler: re-prompt unlock without wiping the worker URL or
-  // keyring. The refresh may simply be stale; the store falls back to the
-  // secret form if it was revoked.
+  // Mail 401 → silent mail refresh; console 401 → dashboard gate.
   React.useEffect(() => {
-    function onUnauthorized() {
+    function onMailUnauthorized() {
       void store.handleWorkerUnauthorized();
     }
-    window.addEventListener("relaybase:unauthorized", onUnauthorized);
-    return () =>
-      window.removeEventListener("relaybase:unauthorized", onUnauthorized);
+    function onConsoleUnauthorized() {
+      void store.handleConsoleUnauthorized();
+    }
+    window.addEventListener("relaybase:unauthorized", onMailUnauthorized);
+    window.addEventListener(
+      "relaybase:console-unauthorized",
+      onConsoleUnauthorized,
+    );
+    return () => {
+      window.removeEventListener("relaybase:unauthorized", onMailUnauthorized);
+      window.removeEventListener(
+        "relaybase:console-unauthorized",
+        onConsoleUnauthorized,
+      );
+    };
   }, [store]);
 
   return (
@@ -191,19 +206,17 @@ export function useAppSession(): AppSessionStore {
       () =>
         JSON.stringify({
           kind: ctx.phase.kind,
-          mode: ctx.phase.kind === "unlock" ? ctx.phase.mode : "",
-          role:
-            ctx.phase.kind === "unlock" || ctx.phase.kind === "offerBiometry"
-              ? ctx.phase.role
-              : "",
+          role: ctx.phase.kind === "unlock" ? ctx.phase.role : "",
           step: ctx.phase.kind === "install" ? ctx.phase.step : "",
           busy: ctx.busy,
           error: ctx.error,
           canShowApp: ctx.canShowApp,
+          consoleGateOpen: ctx.consoleGateOpen,
+          hasConsoleAccess: ctx.hasConsoleAccess,
+          workerUrl: ctx.ownerStatus?.workerUrl ?? "",
           hasRefresh: Boolean(ctx.ownerStatus?.hasRefresh),
           hasSecret: Boolean(ctx.teamStatus?.hasSecret),
           revealed: ctx.revealedPasstoken?.username ?? "",
-          biometryLabel: ctx.biometryLabel,
         }),
       () => setTick((t) => t + 1),
     );

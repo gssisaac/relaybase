@@ -1,8 +1,9 @@
 # Desktop session state machine
 
-Daily launch shows `UnlockView` first. The passtoken form is a fallback —
-see **[desktop-unlock-unresolved.md](./desktop-unlock-unresolved.md)** for
-the race that used to skip it.
+Daily launch unlocks mail **silently** from the OS keyring (no Touch ID).
+The passtoken form is first-login and fallback only. Console dashboard access
+is gated separately via Touch ID at dashboard entry — see `ConsoleGateView` /
+`ensureConsoleAccess()`.
 
 **Audience:** humans and coding agents changing the desktop app's
 authentication / unlock flow, the owner or invited (team) session, or anything
@@ -10,8 +11,9 @@ that decides "who can enter the app right now".
 
 For where the secrets live (keyring, `~/.relaybase`), see
 **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
-For the remote owner auth model (passtoken + sessions, `AUTH_PEPPER`), see
-**[storage-architecture.md](./storage-architecture.md)** → *Owner auth*.
+For the remote owner auth model (passtoken + scoped sessions, `AUTH_PEPPER`), see
+**[storage-architecture.md](./storage-architecture.md)** → *Owner auth* and
+**[authentication.md](./authentication.md)**.
 
 ---
 
@@ -19,17 +21,10 @@ For the remote owner auth model (passtoken + sessions, `AUTH_PEPPER`), see
 
 The desktop app has three entry stories — **owner daily unlock**,
 **invited (team) login/unlock**, and **first-time install** — that used to be
-spread across `DesktopDashboardGate`, `OwnerUnlockPanel`, the setup layout,
-`hasOwnerSession()` checks, and a 401 handler that wiped credentials. The
-result was the reported bug: **Touch ID did not appear on launch** because a
-waterfall of sequential checks and component mounts ran before the biometric
-prompt.
-
+spread across `DesktopDashboardGate`, unlock panels, and a global 401 handler.
 Everything now flows through one MobX store, **`AppSessionStore`**
 (`app/src/lib/desktop/app-session/store.ts`), exposed via
-**`AppSessionProvider`** (`app/src/lib/desktop/app-session/context.tsx`). The
-store is the single source of truth for the current **phase**; the dashboard
-gate is a pure `switch` over that phase.
+**`AppSessionProvider`** (`app/src/lib/desktop/app-session/context.tsx`).
 
 ## The phases
 
@@ -41,18 +36,19 @@ gate is a pure `switch` over that phase.
 | `choice` | Nothing enrolled (no worker URL, no keyring secret) → welcome. |
 | `install` | First-time install: `oauth` → `progress` → `createOwner` → `revealPasstoken`. |
 | `invitedLogin` | Invited teammate, no keyring secret yet → enter account email + mobile password. |
-| `offerBiometry` | Invited teammate just verified; offer to enable Touch ID once. |
-| `unlock` | A keyring secret exists but no in-memory access. `role: owner \| invited`, `mode: prompting \| idle \| secret`. |
+| `unlock` | No in-memory mail access yet. `role: owner \| invited`, `mode: secret` only. |
 | `invitedReady` | Invited session unlocked — render the team (mailbox-only) shell. |
-| `ownerReady` | Owner session unlocked — render the admin shell. |
+| `ownerReady` | Owner mail session unlocked — render the admin shell (mail routes). |
 | `ownerRecover` | Owner forgot passtoken → CF OAuth + `/console/reset-admin`. |
 
-## Boot — why Touch ID is instant
+Console dashboard access is **not** a phase — it is tracked via
+`ownerStatus.hasConsoleAccess` and the `consoleGateOpen` overlay
+(`ConsoleRouteGate` / `ConsoleGateView`).
 
-`AppSessionProvider` mounts at the **root layout** (see `AppProviders` /
-`app/src/app/layout.tsx`), so it runs the moment the window opens — before any
-gate or unlock panel mounts. Its boot effect fetches **owner and team keyring
-status in parallel**:
+## Boot — silent mail unlock
+
+`AppSessionProvider` mounts at the **root layout** and fetches owner + team
+keyring status in parallel:
 
 ```ts
 const [ownerStatus, teamStatus] = await Promise.all([
@@ -62,147 +58,91 @@ const [ownerStatus, teamStatus] = await Promise.all([
 store.setStatuses(ownerStatus, teamStatus);
 ```
 
-`setStatuses` → `reconcileFromStatuses` decides the phase. If a keyring secret
-exists and there is no in-memory access, the phase becomes
-`unlock { mode: "prompting" }` and `maybeAutoPrompt()` fires
-`promptUnlock()` **synchronously** — which calls `desktopAuthenticateBiometry`
-(Touch ID / Windows Hello) and then `owner_unlock` / `team_unlock`. No plugin
-status pre-check, no waiting on `DesktopContext.ready`, no panel mount in
-between. That is the fix: the biometric prompt is triggered directly from the
-boot effect.
+`setStatuses` → `bootFromKeyring()`:
 
-`DesktopContext` (credentials, scope id, mail-cache migration) still loads in
-parallel; the store waits for it only to resolve the **non-prompt** branches
-(`choice` / `invitedLogin` / owner UnlockView), which need a resolved Worker
-URL (`resolveWorkerUrl`: keyring first, then `credentials.json` / `team-login.json`).
-A worker URL with no keyring secret opens `unlock { mode: "idle" }` — the
-fingerprint surface — not the passtoken form. Keyring-only `workerUrl` (no
-`credentials.json`) is enough for idle unlock; the URL field is hidden.
+- **Owner** with `mail_refresh_token` but no mail access → `owner_boot_mail`
+  (silent, no Touch ID) → `ownerReady` when Worker URL is connected.
+- **Invited** with keyring secret but no access → `team_unlock` (silent) →
+  `invitedReady`.
+- No keyring → `unlock { mode: "secret" }` (passtoken / mobile password form).
 
-## State diagram
+Touch ID / Windows Hello runs **only** when entering the dashboard via
+`ensureConsoleAccess()` (sidebar switch, last-route restore to dashboard, or
+`ConsoleRouteGate` on a dashboard pathname).
 
-```mermaid
-stateDiagram-v2
-    [*] --> boot : window opens
+## Owner vs invited — scoped sessions
 
-    boot --> ownerReady : owner hasAccess
-    boot --> unlock_prompting : owner hasRefresh (no access)
-    boot --> unlock_prompting : team hasSecret (no access)
-    boot --> invitedReady : team hasAccess
-    boot --> invitedLogin : team identity, no keyring secret
-    boot --> unlock_idle : owner workerUrl (keyring or disk), no keyring refresh
-    boot --> choice : nothing enrolled
-    boot --> boot : waiting on DesktopContext.ready
+| | Owner mail (boot) | Owner console (dashboard) | Invited daily |
+|---|---|---|---|
+| Keyring account | `owner-session` | same blob, `refresh_token` = console refresh | `team-session:{email}` |
+| Keyring secret | `mail_refresh_token` (long TTL) | `refresh_token` (30 min TTL) | `mobilePassword` |
+| Unlock action | `owner_boot_mail` | `owner_unlock_console` after Touch ID | `team_unlock` (silent) |
+| Worker scope | `/mail/*` mail access JWT | `/console/*` console access JWT | `/mobile/*` mobile password |
+| First-time | install → `setup-admin` → reveal passtoken | same login mints both refreshes | `invitedLogin` → `invitedReady` |
+| Recover | `ownerRecover` → CF OAuth → `/console/reset-admin` | n/a | n/a (admin re-issues mobile password) |
 
-    unlock_prompting --> ownerReady : Touch ID ok + owner_unlock
-    unlock_prompting --> invitedReady : Touch ID ok + team_unlock
-    unlock_prompting --> unlock_idle : user dismisses Touch ID
-    unlock_prompting --> unlock_secret : keyring secret revoked (401)
+Both roles use the same `unlock` phase and the same `UnlockView` for the secret
+form; the store drives the difference via `role`.
 
-    unlock_idle --> unlock_prompting : retry Touch ID
-    unlock_idle --> unlock_secret : "use secret" fallback
+## Console gate
 
-    unlock_secret --> unlock_idle : Back
-    unlock_secret --> ownerReady : loginWithPasstoken
-    unlock_secret --> invitedReady : loginInvited (no biometry offered)
-    unlock_secret --> ownerRecover : "forgot passtoken"
+Dashboard entry points call `store.ensureConsoleAccess()` before navigate:
 
-    invitedLogin --> offerBiometry : loginInvited (desktop, non-Linux)
-    invitedLogin --> invitedReady : loginInvited (Linux / browser)
-    offerBiometry --> invitedReady : accept (enable keyring biometry)
-    offerBiometry --> invitedReady : decline (disable, enter this run only)
+- `UserSidebar.switchMode("dashboard")`
+- `RestoreLastRoute` when the saved path is dashboard
+- `ConsoleRouteGate` blocks dashboard children when `!hasConsoleAccess`
 
-    ownerRecover --> unlock_idle : Back
-    ownerRecover --> install_reveal : recoverOwner (reset-admin)
-    install_createOwner --> install_reveal : createOwner (setup-admin)
-    install_reveal --> unlock_secret : consumeRevealedPasstoken
+Flow:
 
-    ownerReady --> unlock_prompting : signOut (keyring + biometry)
-    ownerReady --> unlock_secret : signOut (keyring, no biometry)
-    ownerReady --> choice : signOut (no keyring)
-    invitedReady --> unlock_prompting : signOut (keyring + biometry)
-    invitedReady --> unlock_secret : signOut (keyring, no biometry)
-    invitedReady --> invitedLogin : signOut (no keyring)
-
-    ownerReady --> unlock_prompting : Worker 401 (re-prompt, keep keyring)
-    invitedReady --> unlock_prompting : Worker 401 (re-prompt, keep keyring)
-```
-
-## Owner vs invited — same machine, different secret
-
-| | Owner daily | Invited daily |
-|---|---|---|
-| Keyring account | `owner-session` | `team-session:{email}` |
-| Keyring secret | `refreshToken` | `mobilePassword` |
-| Unlock action | `owner_unlock` (rotates refresh) | `team_unlock` (loads password to memory) |
-| Worker calls | `desktopWorkerRequest` (admin token in memory) | `team_worker_request` (`Bearer <mobilePassword>` + `X-Account-Email` from memory) |
-| First-time | install → `setup-admin` → reveal passtoken | `invitedLogin` → verify `/mobile/config` → `offerBiometry` |
-| Recover | `ownerRecover` → CF OAuth → `/console/reset-admin` | n/a (admin re-issues mobile password) |
-
-Both roles use the same `unlock` phase and the same `UnlockView`; the store
-drives the difference via `role`.
+1. Console refresh valid → Touch ID → `owner_unlock_console` → dashboard renders.
+2. Console refresh missing/expired → `ConsoleGateView` passtoken re-login.
 
 ## 401 handling
 
-A Worker 401 used to clear credentials and redirect to `/setup`. Now
-`AppSessionProvider` listens for `relaybase:unauthorized` and calls
-`store.handleWorkerUnauthorized()`, which re-fetches keyring status and
-re-prompts unlock — **without wiping the worker URL or keyring**. If the
-refresh was revoked, the store falls back to the secret form so the user can
-re-authenticate in place.
+Scoped by Worker path prefix in `api-base.ts`:
+
+| Path | Event | Store handler |
+|------|-------|---------------|
+| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — silent `owner_boot_mail` retry |
+| `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — open console gate |
+
+Neither handler wipes the worker URL or keyring.
 
 ## Gate
 
-`app/src/app/_shell/DesktopDashboardGate.tsx` is now a `switch` over
-`store.phase`:
+`app/src/app/_shell/DesktopDashboardGate.tsx` is a `switch` over `store.phase`:
 
-- `boot` / `choice` / `install` / `ownerRecover` → `BootScreen` (and a
-  deferred redirect to `/setup` for choice/install/recover, which own their
-  chrome under `app/src/app/setup/`).
+- `boot` / `choice` / `install` / `ownerRecover` → setup chrome / redirects
 - `invitedLogin` → `TeamLoginView`
-- `offerBiometry` → `OfferBiometryView`
-- `unlock` → `UnlockView` (prompting / idle / secret)
+- `unlock` → `UnlockView` (secret form only)
 - `invitedReady` → team (mailbox-only) `DashboardShell`
-- `ownerReady` → admin `DashboardShell`
+- `ownerReady` → admin `DashboardShell` wrapped in `ConsoleRouteGate`
 
-There is no longer a `hasOwnerSession()` / `ownerAccess` check scattered
-across the shell. The last-route restore (`app/src/app/page.tsx`) waits for
-`store.canShowApp` before restoring, so the window no longer redirects into
-the shell and then back out to Touch ID.
-
-**Entry trampolines:** `/setup/connect` calls `openAlreadyInstalled()` then
-`router.replace("/")` so UnlockView renders via `SessionPhaseScreen` on `/`.
-`/login` does the same for invited login via `openInvitedLogin()` — the form
-and post-login biometry offer must not render on a standalone route that ignores
-the phase machine.
-
-From invited unlock (`UnlockView` with `role: invited`), **Log in as owner**
-calls `switchToOwnerLogin()` — it drops the team keyring + `team-login.json`
-and enters the owner unlock / passtoken flow without wiping the owner keyring.
+The last-route restore (`app/src/app/page.tsx`) waits for `store.canShowApp`
+(mail access + Worker URL) before restoring.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `app/src/lib/desktop/app-session/` | MobX store, phases, provider, 401 listener |
+| `app/src/lib/desktop/app-session/` | MobX store, phases, provider, 401 listeners |
 | `app/src/lib/desktop/app-session/store.test.ts` | Transition tests (injected Tauri mock) |
-| `app/src/lib/desktop/biometry/` | Touch ID / Windows Hello prompt, label, dismiss detection |
+| `app/src/console/components/setup/ConsoleGateView.tsx` | Owner console Touch ID + passtoken gate |
+| `app/src/console/components/setup/ConsoleRouteGate.tsx` | Blocks dashboard until console access |
+| `app/src/lib/desktop/biometry/dismiss.ts` | Touch ID dismiss / system-cancel detection |
 | `app/src/lib/desktop/shell/AppProviders.tsx` | Root `DesktopProvider` + `AppSessionProvider` |
 | `app/src/app/_shell/DesktopDashboardGate.tsx` | Phase `switch` gate |
-| `app/src/console/components/setup/UnlockView.tsx` | Common owner/invited unlock surface |
-| `app/src/console/components/setup/OfferBiometryView.tsx` | One-time invited biometry offer |
+| `app/src/console/components/setup/UnlockView.tsx` | Owner/invited secret-form unlock |
 | `app/src/console/components/setup/TeamLoginView.tsx` | Invited login form |
-| `app/src/console/components/setup/RecoverAdminPanel.tsx` | CF OAuth → `/console/reset-admin` |
-| `desktop/src-tauri/src/owner_session.rs` | Owner keyring (`owner-session`) |
-| `desktop/src-tauri/src/team_session.rs` | Team keyring (`team-session:{email}`) + legacy migration |
-| `desktop/src-tauri/src/secrets.rs` | `team-login.json` identity-only writes |
+| `desktop/src-tauri/src/owner_session.rs` | Dual refresh keyring + split memory |
+| `desktop/src-tauri/src/team_session.rs` | Team keyring (no biometry) |
 
 ## Adding to the machine
 
 1. Add the new `kind` to `AppSessionPhase` and the `role` derivation.
-2. Add a transition in `reconcileFromStatuses` or a store action — never mutate
-   `phase` from a view; call an action (e.g. `requestPrompt()`).
+2. Add a transition in `reconcileFromStatuses`, `bootFromKeyring`, or a store
+   action — never mutate `phase` from a view.
 3. Add a `case` to the gate `switch` and a view that only renders.
 4. If it ships in the Worker, rebuild the bundle (see `AGENTS.md` → *Worker
    bundle*).
-5. Add a transition test in `app/src/lib/desktop/app-session/store.test.ts` (inject `AppSessionDeps`).
+5. Add a transition test in `app/src/lib/desktop/app-session/store.test.ts`.

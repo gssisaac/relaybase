@@ -13,6 +13,7 @@ import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
+import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
@@ -25,6 +26,18 @@ import { SenderIconProvider } from "@/email/components/sender/SenderIconContext"
 import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
+
+/** Console-scoped dashboard stores — mount only after the route gate passes. */
+function OwnerConsoleDashboard({ children }: { children: ReactNode }) {
+  return (
+    <AccountsProvider>
+      <BroadcastProvider>
+        <AccountsSyncBridge />
+        {children}
+      </BroadcastProvider>
+    </AccountsProvider>
+  );
+}
 
 function DashboardShell({
   userId,
@@ -75,37 +88,36 @@ function DashboardShell({
   return (
     <SessionProvider userId={userId}>
       <DomainProvider>
-        <AccountsProvider>
-          <BroadcastProvider>
-            <MailAccountsProvider>
-              <AccountsSyncBridge />
-              <SenderIconProvider>
-                <EmailMailboxProvider>
-                  <EmailCommandRuntimeProvider>
-                    <DisableAppTabFocus />
-                    <div className="flex h-svh overflow-hidden bg-background">
-                      {isEmailSettings ? null : (
-                        <Suspense
-                          fallback={
-                            <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                          }
-                        >
-                          <UserSidebar />
-                        </Suspense>
-                      )}
-                      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <MailAccountsProvider>
+          <SenderIconProvider>
+            <EmailMailboxProvider>
+              <EmailCommandRuntimeProvider>
+                <DisableAppTabFocus />
+                <div className="flex h-svh overflow-hidden bg-background">
+                  {isEmailSettings ? null : (
+                    <Suspense
+                      fallback={
+                        <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
+                      }
+                    >
+                      <UserSidebar />
+                    </Suspense>
+                  )}
+                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                    <ConsoleRouteGate>
+                      <OwnerConsoleDashboard>
                         {isEmailSettings ? null : <DomainProgressBanner />}
                         {children}
-                      </main>
-                    </div>
-                    <AppHotkeys />
-                    <GlobalCommandPalette />
-                  </EmailCommandRuntimeProvider>
-                </EmailMailboxProvider>
-              </SenderIconProvider>
-            </MailAccountsProvider>
-          </BroadcastProvider>
-        </AccountsProvider>
+                      </OwnerConsoleDashboard>
+                    </ConsoleRouteGate>
+                  </main>
+                </div>
+                <AppHotkeys />
+                <GlobalCommandPalette />
+              </EmailCommandRuntimeProvider>
+            </EmailMailboxProvider>
+          </SenderIconProvider>
+        </MailAccountsProvider>
       </DomainProvider>
     </SessionProvider>
   );

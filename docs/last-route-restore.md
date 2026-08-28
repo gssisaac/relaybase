@@ -66,7 +66,7 @@ app/src/components/layout/UserSidebar.tsx
 
 | Entry point | Behavior |
 |-------------|----------|
-| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` (uses `resolveEntryPathAsync`) |
+| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` — after `canShowApp`, restores last path; **dashboard** paths call `ensureConsoleAccess()` before navigate |
 | `/email` (`app/src/app/(shell)/email/page.tsx`) | redirect → `/email/inbox` |
 
 Client gate:
@@ -85,8 +85,12 @@ Packaged Tauri only pre-renders section roots (`/email/inbox`, `/accounts`, …)
 
 ```mermaid
 flowchart TD
-  entry["/ entry"] --> restore["RestoreLastRoute"]
+  entry["/ entry"] --> ready["canShowApp mail + Worker URL"]
+  ready --> restore["RestoreLastRoute"]
   restore --> hydrate["hydrateSidebarState desktop"]
   hydrate --> resolve["resolveEntryPath"]
-  resolve --> navigate["router.replace last path"]
+  resolve --> dash{dashboard path?}
+  dash -->|yes| gate["ensureConsoleAccess"]
+  dash -->|no| navigate["router.replace"]
+  gate --> navigate
 ```

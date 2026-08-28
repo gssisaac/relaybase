@@ -17,33 +17,57 @@ import {
 } from "../../db/app/owner";
 import { sha256Hex } from "./crypto";
 import {
-  ACCESS_TTL_SECONDS,
+  CONSOLE_ACCESS_TTL_SECONDS,
+  CONSOLE_REFRESH_TTL_SECONDS,
   generatePasstoken,
   generateRefreshToken,
   hashPasstoken,
   isValidPasstokenFormat,
+  MAIL_ACCESS_TTL_SECONDS,
+  MAIL_REFRESH_TTL_SECONDS,
   passtokenPrefix,
   randomSalt,
+  scopeFromSessionLabel,
+  sessionLabelForScope,
   signAccessToken,
   type AccessPayload,
+  type OwnerScope,
 } from "./owner-tokens";
 
-export { ACCESS_TTL_SECONDS, generatePasstoken, passtokenPrefix, isValidPasstokenFormat, signAccessToken, verifyAccessToken } from "./owner-tokens";
-export type { AccessPayload } from "./owner-tokens";
+export {
+  ACCESS_TTL_SECONDS,
+  CONSOLE_ACCESS_TTL_SECONDS,
+  CONSOLE_REFRESH_TTL_SECONDS,
+  MAIL_ACCESS_TTL_SECONDS,
+  MAIL_REFRESH_TTL_SECONDS,
+  generatePasstoken,
+  passtokenPrefix,
+  isValidPasstokenFormat,
+  signAccessToken,
+  verifyAccessToken,
+} from "./owner-tokens";
+export type { AccessPayload, OwnerScope } from "./owner-tokens";
 
 /** HTTP status codes returned by owner-auth helpers. */
 type AuthStatus = 400 | 401 | 403 | 409 | 429 | 503;
 type AuthError = { error: string; status: AuthStatus };
 
-const REFRESH_TTL_DAYS = 14;
-const REFRESH_TTL_SECONDS = REFRESH_TTL_DAYS * 24 * 60 * 60;
 const LOGIN_LOCK_SECONDS = 5 * 60;
 const MAX_FAILED_ATTEMPTS = 5;
 
-export type OwnerAuthResult = {
+export type OwnerRefreshResult = {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
+  scope: OwnerScope;
+};
+
+/** Passtoken login — mail access immediately; console refresh for later gate. */
+export type OwnerLoginResult = {
+  mailAccessToken: string;
+  mailRefreshToken: string;
+  consoleRefreshToken: string;
+  mailExpiresIn: number;
 };
 
 function normalizeUsername(username: string): string {
@@ -57,6 +81,54 @@ function usernameEquals(a: string, b: string): boolean {
   let diff = 0;
   for (let i = 0; i < na.length; i++) diff |= na.charCodeAt(i) ^ nb.charCodeAt(i);
   return diff === 0;
+}
+
+function accessTtlForScope(scope: OwnerScope): number {
+  return scope === "mail" ? MAIL_ACCESS_TTL_SECONDS : CONSOLE_ACCESS_TTL_SECONDS;
+}
+
+function refreshTtlForScope(scope: OwnerScope): number {
+  return scope === "mail" ? MAIL_REFRESH_TTL_SECONDS : CONSOLE_REFRESH_TTL_SECONDS;
+}
+
+async function mintScopedAccess(
+  pepper: string,
+  username: string,
+  scope: OwnerScope,
+): Promise<{ accessToken: string; expiresIn: number }> {
+  const now = Math.floor(Date.now() / 1000);
+  const expiresIn = accessTtlForScope(scope);
+  const accessPayload: AccessPayload = {
+    sub: username,
+    iat: now,
+    exp: now + expiresIn,
+    jti: crypto.randomUUID(),
+    scope,
+  };
+  const accessToken = await signAccessToken(pepper, accessPayload);
+  return { accessToken, expiresIn };
+}
+
+async function createScopedRefreshSession(
+  db: NonNullable<ReturnType<typeof createAppDb>>,
+  scope: OwnerScope,
+  label: string | null,
+): Promise<string> {
+  const refreshToken = generateRefreshToken();
+  const refreshHash = await sha256Hex(refreshToken);
+  const now = new Date();
+  const expiresAt = new Date(
+    now.getTime() + refreshTtlForScope(scope) * 1000,
+  ).toISOString();
+  const deviceLabel = label?.trim() || "desktop";
+  await createOwnerSession(db, {
+    id: crypto.randomUUID(),
+    tokenHash: refreshHash,
+    family: crypto.randomUUID(),
+    label: sessionLabelForScope(scope, deviceLabel),
+    expiresAt,
+  });
+  return refreshToken;
 }
 
 // ─── setup-admin (first owner) ────────────────────────────────────────────
@@ -110,7 +182,7 @@ export async function setupOwner(
 export async function loginOwner(
   env: Env,
   input: { username: string; passtoken: string; label?: string | null },
-): Promise<{ result: OwnerAuthResult } | AuthError> {
+): Promise<{ result: OwnerLoginResult } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
   const pepper = env.AUTH_PEPPER?.trim() ?? "";
@@ -143,33 +215,25 @@ export async function loginOwner(
 
   await resetFailedLogin(db);
 
-  const family = crypto.randomUUID();
-  const refreshToken = generateRefreshToken();
-  const refreshHash = await sha256Hex(refreshToken);
-  const sessionId = crypto.randomUUID();
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + REFRESH_TTL_SECONDS * 1000).toISOString();
-  await createOwnerSession(db, {
-    id: sessionId,
-    tokenHash: refreshHash,
-    family,
-    label: input.label?.trim() || null,
-    expiresAt,
-  });
-
-  const accessPayload: AccessPayload = {
-    sub: cfg.adminUsername,
-    iat: Math.floor(now.getTime() / 1000),
-    exp: Math.floor(now.getTime() / 1000) + ACCESS_TTL_SECONDS,
-    jti: crypto.randomUUID(),
-  };
-  const accessToken = await signAccessToken(pepper, accessPayload);
+  const mailRefreshToken = await createScopedRefreshSession(
+    db,
+    "mail",
+    input.label ?? null,
+  );
+  const consoleRefreshToken = await createScopedRefreshSession(
+    db,
+    "console",
+    input.label ?? null,
+  );
+  const { accessToken: mailAccessToken, expiresIn: mailExpiresIn } =
+    await mintScopedAccess(pepper, cfg.adminUsername, "mail");
 
   return {
     result: {
-      accessToken,
-      refreshToken,
-      expiresIn: ACCESS_TTL_SECONDS,
+      mailAccessToken,
+      mailRefreshToken,
+      consoleRefreshToken,
+      mailExpiresIn,
     },
   };
 }
@@ -179,7 +243,8 @@ export async function loginOwner(
 export async function refreshOwner(
   env: Env,
   refreshToken: string,
-): Promise<{ result: OwnerAuthResult } | AuthError> {
+  scope: OwnerScope,
+): Promise<{ result: OwnerRefreshResult } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
   const pepper = env.AUTH_PEPPER?.trim() ?? "";
@@ -189,12 +254,15 @@ export async function refreshOwner(
   if (!session) {
     return { error: "Unauthorized", status: 401 };
   }
+  const sessionScope = scopeFromSessionLabel(session.label);
+  if (sessionScope !== null && sessionScope !== scope) {
+    return { error: "Unauthorized", status: 401 };
+  }
   if (Date.parse(session.expiresAt) <= Date.now()) {
     await deleteOwnerSession(db, session.id);
     return { error: "Unauthorized", status: 401 };
   }
 
-  // Rotate: delete the presented refresh, issue a new one in the same family.
   await deleteOwnerSession(db, session.id);
 
   const cfg = await getOwnerLoginConfig(db);
@@ -205,28 +273,33 @@ export async function refreshOwner(
   const newRefresh = generateRefreshToken();
   const newHash = await sha256Hex(newRefresh);
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + REFRESH_TTL_SECONDS * 1000).toISOString();
+  const expiresAt = new Date(
+    now.getTime() + refreshTtlForScope(scope) * 1000,
+  ).toISOString();
+  const label =
+    sessionScope !== null
+      ? session.label
+      : sessionLabelForScope(scope, session.label ?? "desktop");
   await createOwnerSession(db, {
     id: crypto.randomUUID(),
     tokenHash: newHash,
     family: session.family,
-    label: session.label,
+    label,
     expiresAt,
   });
 
-  const accessPayload: AccessPayload = {
-    sub: cfg.adminUsername,
-    iat: Math.floor(now.getTime() / 1000),
-    exp: Math.floor(now.getTime() / 1000) + ACCESS_TTL_SECONDS,
-    jti: crypto.randomUUID(),
-  };
-  const accessToken = await signAccessToken(pepper, accessPayload);
+  const { accessToken, expiresIn } = await mintScopedAccess(
+    pepper,
+    cfg.adminUsername,
+    scope,
+  );
 
   return {
     result: {
       accessToken,
       refreshToken: newRefresh,
-      expiresIn: ACCESS_TTL_SECONDS,
+      expiresIn,
+      scope,
     },
   };
 }
@@ -272,7 +345,6 @@ export async function rotatePasstoken(
     passtokenHash: hash,
     passtokenPrefix: passtokenPrefix(passtoken),
   });
-  // Invalidate every existing session — other devices must log in again.
   await deleteAllOwnerSessions(db);
   return { passtoken, username: cfg.adminUsername };
 }

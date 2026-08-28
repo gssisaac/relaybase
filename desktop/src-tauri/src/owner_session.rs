@@ -1,10 +1,9 @@
-//! Owner session: refresh lives in the OS keyring, access lives in process
-//! memory. The passtoken is never written to disk.
+//! Owner session: mail + console refresh tokens live in the OS keyring;
+//! scoped access tokens live in process memory. The passtoken is never
+//! written to disk.
 //!
-//! Daily unlock: JS calls Touch ID / Windows Hello (`tauri-plugin-biometry`
-//! with `allowDeviceCredential`), then `owner_unlock` which reads the keyring
-//! and rotates refresh. macOS uses the data-protection keychain (see
-//! `keyring_store`) so launch does not show the login-keychain ACL dialog.
+//! Boot: silent mail refresh (`owner_boot_mail`). Console: Touch ID then
+//! console refresh (`owner_unlock_console`).
 
 use crate::secrets::{load_credentials, save_credentials};
 use serde::{Deserialize, Serialize};
@@ -21,14 +20,12 @@ const ACCESS_SKEW_SECS: u64 = 30;
 struct KeyringBlob {
     worker_url: String,
     username: String,
+    /// Console-scoped refresh (30 min TTL on Worker).
+    #[serde(default)]
     refresh_token: String,
-    /// When false, skip the biometric prompt and use the keyring directly.
-    #[serde(default = "default_true")]
-    biometry_enabled: bool,
-}
-
-fn default_true() -> bool {
-    true
+    /// Mail-scoped refresh (long TTL on Worker).
+    #[serde(default)]
+    mail_refresh_token: String,
 }
 
 struct AccessMemory {
@@ -38,13 +35,28 @@ struct AccessMemory {
     username: String,
 }
 
-static ACCESS: Mutex<Option<AccessMemory>> = Mutex::new(None);
+static MAIL_ACCESS: Mutex<Option<AccessMemory>> = Mutex::new(None);
+static CONSOLE_ACCESS: Mutex<Option<AccessMemory>> = Mutex::new(None);
 
 fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+fn normalize_keyring(mut blob: KeyringBlob) -> Option<KeyringBlob> {
+    if blob.worker_url.trim().is_empty() || blob.username.trim().is_empty() {
+        return None;
+    }
+    // Legacy v1: single refresh_token was used for both scopes.
+    if blob.mail_refresh_token.trim().is_empty() && !blob.refresh_token.trim().is_empty() {
+        blob.mail_refresh_token = blob.refresh_token.clone();
+    }
+    if blob.refresh_token.trim().is_empty() && blob.mail_refresh_token.trim().is_empty() {
+        return None;
+    }
+    Some(blob)
 }
 
 fn load_keyring() -> Result<Option<KeyringBlob>, String> {
@@ -54,10 +66,7 @@ fn load_keyring() -> Result<Option<KeyringBlob>, String> {
     };
     let blob: KeyringBlob = serde_json::from_str(&json)
         .map_err(|e| format!("Corrupt keyring session: {e}"))?;
-    if blob.refresh_token.trim().is_empty() || blob.worker_url.trim().is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(blob))
+    Ok(normalize_keyring(blob))
 }
 
 fn save_keyring(blob: &KeyringBlob) -> Result<(), String> {
@@ -69,26 +78,52 @@ fn delete_keyring() {
     crate::keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
 }
 
-fn set_access(worker_url: &str, username: &str, access_token: &str, expires_in: u64) {
-    if let Ok(mut guard) = ACCESS.lock() {
-        *guard = Some(AccessMemory {
-            access_token: access_token.to_string(),
-            expires_at_unix: now_unix() + expires_in.saturating_sub(ACCESS_SKEW_SECS).max(5),
-            worker_url: worker_url.trim().trim_end_matches('/').to_string(),
-            username: username.to_string(),
-        });
+fn set_scoped_access(
+    scope: &str,
+    worker_url: &str,
+    username: &str,
+    access_token: &str,
+    expires_in: u64,
+) {
+    let mem = AccessMemory {
+        access_token: access_token.to_string(),
+        expires_at_unix: now_unix() + expires_in.saturating_sub(ACCESS_SKEW_SECS).max(5),
+        worker_url: worker_url.trim().trim_end_matches('/').to_string(),
+        username: username.to_string(),
+    };
+    let lock = if scope == "mail" {
+        &MAIL_ACCESS
+    } else {
+        &CONSOLE_ACCESS
+    };
+    if let Ok(mut guard) = lock.lock() {
+        *guard = Some(mem);
     }
 }
 
-fn clear_access() {
-    if let Ok(mut guard) = ACCESS.lock() {
+fn clear_scoped_access(scope: &str) {
+    let lock = if scope == "mail" {
+        &MAIL_ACCESS
+    } else {
+        &CONSOLE_ACCESS
+    };
+    if let Ok(mut guard) = lock.lock() {
         *guard = None;
     }
 }
 
-fn access_if_valid() -> Option<AccessMemory> {
-    let guard = ACCESS.lock().ok()?;
-    let mem = guard.as_ref()?;
+fn clear_all_access() {
+    clear_scoped_access("mail");
+    clear_scoped_access("console");
+}
+
+fn access_if_valid(scope: &str) -> Option<AccessMemory> {
+    let lock = if scope == "mail" {
+        MAIL_ACCESS.lock().ok()?
+    } else {
+        CONSOLE_ACCESS.lock().ok()?
+    };
+    let mem = lock.as_ref()?;
     if mem.access_token.is_empty() || mem.expires_at_unix <= now_unix() {
         return None;
     }
@@ -98,6 +133,16 @@ fn access_if_valid() -> Option<AccessMemory> {
         worker_url: mem.worker_url.clone(),
         username: mem.username.clone(),
     })
+}
+
+fn worker_scope_for_path(path: &str) -> &'static str {
+    let p = path.trim();
+    let p = if p.starts_with('/') { p } else { return "console" };
+    if p.starts_with("/mail/") || p == "/mail" {
+        "mail"
+    } else {
+        "console"
+    }
 }
 
 async fn post_json(
@@ -145,7 +190,6 @@ fn normalize_passtoken(raw: &str) -> String {
 fn persist_worker_url(worker_url: &str) -> Result<(), String> {
     let mut creds = load_credentials()?.unwrap_or_default();
     creds.worker_url = worker_url.trim().trim_end_matches('/').to_string();
-    // Never persist owner secrets.
     creds.admin_token.clear();
     save_credentials(&creds)
 }
@@ -153,12 +197,16 @@ fn persist_worker_url(worker_url: &str) -> Result<(), String> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnerSessionStatus {
+    pub has_mail_refresh: bool,
+    pub has_console_refresh: bool,
+    pub has_mail_access: bool,
+    pub has_console_access: bool,
+    /// Back-compat: any keyring refresh present.
     pub has_refresh: bool,
+    /// Back-compat: mail OR console access in memory.
     pub has_access: bool,
     pub username: String,
     pub worker_url: String,
-    pub biometry_enabled: bool,
-    /// "macos" | "windows" | "linux" | other
     pub platform: String,
 }
 
@@ -174,36 +222,124 @@ fn platform_name() -> String {
     }
 }
 
-/// Keyring `Err` is returned to the caller. A missing entry is
-/// `has_refresh: false`, not a read failure.
 pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
     let blob = load_keyring()?;
-    let access = access_if_valid();
+    let mail_access = access_if_valid("mail");
+    let console_access = access_if_valid("console");
+    let has_mail_refresh = blob
+        .as_ref()
+        .map(|b| !b.mail_refresh_token.trim().is_empty())
+        .unwrap_or(false);
+    let has_console_refresh = blob
+        .as_ref()
+        .map(|b| !b.refresh_token.trim().is_empty())
+        .unwrap_or(false);
     Ok(OwnerSessionStatus {
-        has_refresh: blob.is_some(),
-        has_access: access.is_some(),
+        has_mail_refresh,
+        has_console_refresh,
+        has_mail_access: mail_access.is_some(),
+        has_console_access: console_access.is_some(),
+        has_refresh: has_mail_refresh || has_console_refresh,
+        has_access: mail_access.is_some() || console_access.is_some(),
         username: blob
             .as_ref()
             .map(|b| b.username.clone())
-            .or_else(|| access.as_ref().map(|a| a.username.clone()))
+            .or_else(|| {
+                mail_access
+                    .as_ref()
+                    .map(|a| a.username.clone())
+                    .or_else(|| console_access.as_ref().map(|a| a.username.clone()))
+            })
             .unwrap_or_default(),
         worker_url: blob
             .as_ref()
             .map(|b| b.worker_url.clone())
-            .or_else(|| access.as_ref().map(|a| a.worker_url.clone()))
+            .or_else(|| {
+                mail_access
+                    .as_ref()
+                    .map(|a| a.worker_url.clone())
+                    .or_else(|| console_access.as_ref().map(|a| a.worker_url.clone()))
+            })
             .unwrap_or_default(),
-        biometry_enabled: blob.as_ref().map(|b| b.biometry_enabled).unwrap_or(true),
         platform: platform_name(),
     })
 }
 
-/// POST /console/login. Stores refresh in the OS keyring and access in memory.
-/// The passtoken is not retained.
+async fn refresh_scope(blob: &KeyringBlob, scope: &str) -> Result<KeyringBlob, String> {
+    let base = blob.worker_url.trim().trim_end_matches('/');
+    let refresh = if scope == "mail" {
+        blob.mail_refresh_token.trim()
+    } else {
+        blob.refresh_token.trim()
+    };
+    if refresh.is_empty() {
+        return Err(if scope == "mail" {
+            "No saved mail session. Sign in with your username and passtoken.".to_string()
+        } else {
+            "No saved console session. Unlock the dashboard with Touch ID or passtoken."
+                .to_string()
+        });
+    }
+    let url = format!("{base}/console/refresh");
+    let (status, value) = post_json(
+        &url,
+        serde_json::json!({ "refreshToken": refresh, "scope": scope }),
+        &[],
+    )
+    .await?;
+    if status != 200 {
+        if status == 401 {
+            if scope == "mail" {
+                let mut wiped = blob.clone();
+                wiped.mail_refresh_token.clear();
+                if wiped.refresh_token.trim().is_empty() {
+                    delete_keyring();
+                    clear_all_access();
+                } else if let Some(normalized) = normalize_keyring(wiped) {
+                    let _ = save_keyring(&normalized);
+                    clear_scoped_access("mail");
+                }
+            } else {
+                let mut wiped = blob.clone();
+                wiped.refresh_token.clear();
+                if wiped.mail_refresh_token.trim().is_empty() {
+                    delete_keyring();
+                    clear_all_access();
+                } else if let Some(normalized) = normalize_keyring(wiped) {
+                    let _ = save_keyring(&normalized);
+                    clear_scoped_access("console");
+                }
+            }
+        }
+        return Err(json_string(&value, "error")
+            .unwrap_or("Session expired. Sign in with your passtoken.")
+            .to_string());
+    }
+    let access = json_string(&value, "accessToken")
+        .ok_or_else(|| "Worker refresh did not return an access token".to_string())?;
+    let new_refresh = json_string(&value, "refreshToken")
+        .ok_or_else(|| "Worker refresh did not return a refresh token".to_string())?;
+    let expires_in = value
+        .get("expiresIn")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(600);
+    let mut updated = blob.clone();
+    if scope == "mail" {
+        updated.mail_refresh_token = new_refresh.to_string();
+    } else {
+        updated.refresh_token = new_refresh.to_string();
+    }
+    save_keyring(&updated)?;
+    set_scoped_access(scope, base, &updated.username, access, expires_in);
+    persist_worker_url(base)?;
+    Ok(updated)
+}
+
+/// POST /console/login. Stores both refresh tokens; mail access in memory only.
 pub async fn owner_login(
     worker_url: String,
     username: String,
     passtoken: String,
-    biometry_enabled: Option<bool>,
 ) -> Result<OwnerSessionStatus, String> {
     let base = worker_url.trim().trim_end_matches('/');
     let username = username.trim().to_lowercase();
@@ -252,103 +388,68 @@ pub async fn owner_login(
                 }
             }));
     }
-    let access = json_string(&value, "accessToken")
-        .ok_or_else(|| "Worker login did not return an access token".to_string())?;
-    let refresh = json_string(&value, "refreshToken")
-        .ok_or_else(|| "Worker login did not return a refresh token".to_string())?;
+    let mail_access = json_string(&value, "mailAccessToken")
+        .ok_or_else(|| "Worker login did not return a mail access token".to_string())?;
+    let mail_refresh = json_string(&value, "mailRefreshToken")
+        .ok_or_else(|| "Worker login did not return a mail refresh token".to_string())?;
+    let console_refresh = json_string(&value, "consoleRefreshToken")
+        .ok_or_else(|| "Worker login did not return a console refresh token".to_string())?;
     let expires_in = value
-        .get("expiresIn")
+        .get("mailExpiresIn")
         .and_then(|v| v.as_u64())
-        .unwrap_or(600);
+        .unwrap_or(3600);
 
-    let existing = load_keyring().ok().flatten();
-    let biometry = biometry_enabled.unwrap_or_else(|| {
-        existing
-            .map(|b| b.biometry_enabled)
-            .unwrap_or(false)
-    });
     save_keyring(&KeyringBlob {
         worker_url: base.to_string(),
         username: username.clone(),
-        refresh_token: refresh.to_string(),
-        biometry_enabled: biometry,
+        refresh_token: console_refresh.to_string(),
+        mail_refresh_token: mail_refresh.to_string(),
     })?;
-    set_access(base, &username, access, expires_in);
+    set_scoped_access("mail", base, &username, mail_access, expires_in);
+    clear_scoped_access("console");
     persist_worker_url(base)?;
     owner_session_status()
 }
 
-/// Read refresh from the keyring and rotate it. Caller must have already
-/// passed biometric / device-PIN (or opted out of biometry).
-pub async fn owner_unlock() -> Result<OwnerSessionStatus, String> {
-    if access_if_valid().is_some() {
+/// Silent boot mail unlock — no biometry.
+pub async fn owner_boot_mail() -> Result<OwnerSessionStatus, String> {
+    if access_if_valid("mail").is_some() {
         return owner_session_status();
     }
     let blob = load_keyring()?.ok_or_else(|| {
         "No saved session. Sign in with your username and passtoken.".to_string()
     })?;
-    refresh_with_blob(&blob).await?;
-    owner_session_status()
-}
-
-async fn refresh_with_blob(blob: &KeyringBlob) -> Result<(), String> {
-    let base = blob.worker_url.trim().trim_end_matches('/');
-    let url = format!("{base}/console/refresh");
-    let (status, value) = post_json(
-        &url,
-        serde_json::json!({ "refreshToken": blob.refresh_token }),
-        &[],
-    )
-    .await?;
-    if status != 200 {
-        // Only a 401 means the refresh was revoked. 404/5xx/network-shaped
-        // errors must not wipe the keyring — that dumped a successful Touch ID
-        // into the passtoken form on the next status read.
-        if status == 401 {
-            delete_keyring();
-            clear_access();
-        }
-        return Err(json_string(&value, "error")
-            .unwrap_or("Session expired. Sign in with your passtoken.")
-            .to_string());
+    if blob.mail_refresh_token.trim().is_empty() {
+        return Err(
+            "Mail session missing. Sign in with your username and passtoken once.".to_string(),
+        );
     }
-    let access = json_string(&value, "accessToken")
-        .ok_or_else(|| "Worker refresh did not return an access token".to_string())?;
-    let refresh = json_string(&value, "refreshToken")
-        .ok_or_else(|| "Worker refresh did not return a refresh token".to_string())?;
-    let expires_in = value
-        .get("expiresIn")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(600);
-    save_keyring(&KeyringBlob {
-        worker_url: base.to_string(),
-        username: blob.username.clone(),
-        refresh_token: refresh.to_string(),
-        biometry_enabled: blob.biometry_enabled,
-    })?;
-    set_access(base, &blob.username, access, expires_in);
-    persist_worker_url(base)?;
-    Ok(())
-}
-
-/// Lock the owner session: drop in-memory access only. The keyring refresh
-/// (and biometry preference) stay so the next open can Touch ID unlock.
-pub async fn owner_logout() -> Result<(), String> {
-    clear_access();
-    Ok(())
-}
-
-pub fn owner_set_biometry_enabled(enabled: bool) -> Result<OwnerSessionStatus, String> {
-    let mut blob = load_keyring()?.ok_or_else(|| {
-        "No saved session. Sign in first.".to_string()
-    })?;
-    blob.biometry_enabled = enabled;
-    save_keyring(&blob)?;
+    refresh_scope(&blob, "mail").await?;
     owner_session_status()
 }
 
-/// First-time owner setup. Returns the issued passtoken ONCE. The app must
-/// show it and let the user download it — it is not stored.
+/// Console unlock after Touch ID / passtoken at the dashboard gate.
+pub async fn owner_unlock_console() -> Result<OwnerSessionStatus, String> {
+    if access_if_valid("console").is_some() {
+        return owner_session_status();
+    }
+    let blob = load_keyring()?.ok_or_else(|| {
+        "No saved session. Sign in with your username and passtoken.".to_string()
+    })?;
+    if blob.refresh_token.trim().is_empty() {
+        return Err(
+            "Console session expired. Sign in with your passtoken.".to_string(),
+        );
+    }
+    refresh_scope(&blob, "console").await?;
+    owner_session_status()
+}
+
+pub async fn owner_logout() -> Result<(), String> {
+    clear_all_access();
+    Ok(())
+}
+
 pub async fn owner_setup_admin(
     worker_url: String,
     username: String,
@@ -396,8 +497,6 @@ pub struct OwnerSetupResult {
     pub passtoken: String,
 }
 
-/// Forgot-passtoken recovery. The CF access token is held in process memory
-/// (OAuth). Returns a new passtoken ONCE.
 pub async fn owner_reset_admin(
     worker_url: String,
     cf_access_token: String,
@@ -424,20 +523,20 @@ pub async fn owner_reset_admin(
     let passtoken = json_string(&value, "passtoken")
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;
     delete_keyring();
-    clear_access();
+    clear_all_access();
     Ok(OwnerSetupResult {
         username: json_string(&value, "username").unwrap_or("").to_string(),
         passtoken: passtoken.to_string(),
     })
 }
 
-async fn ensure_access() -> Result<AccessMemory, String> {
-    if let Some(mem) = access_if_valid() {
+async fn ensure_access(scope: &str) -> Result<AccessMemory, String> {
+    if let Some(mem) = access_if_valid(scope) {
         return Ok(mem);
     }
     let blob = load_keyring()?.ok_or_else(|| "Not signed in".to_string())?;
-    refresh_with_blob(&blob).await?;
-    access_if_valid().ok_or_else(|| "Not signed in".to_string())
+    refresh_scope(&blob, scope).await?;
+    access_if_valid(scope).ok_or_else(|| "Not signed in".to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -457,15 +556,14 @@ pub struct WorkerRequestOutput {
     pub body: String,
 }
 
-/// Attach the in-memory access token and call the customer Worker.
-/// On 401, refresh once and retry. Tokens are never returned to JS.
 pub async fn worker_request(input: WorkerRequestInput) -> Result<WorkerRequestOutput, String> {
-    let mut access = ensure_access().await?;
     let path = if input.path.starts_with('/') {
         input.path.clone()
     } else {
         format!("/{}", input.path)
     };
+    let scope = worker_scope_for_path(&path);
+    let mut access = ensure_access(scope).await?;
     let url = format!("{}{path}", access.worker_url);
     let method = reqwest::Method::from_bytes(input.method.trim().as_bytes())
         .unwrap_or(reqwest::Method::GET);
@@ -499,8 +597,8 @@ pub async fn worker_request(input: WorkerRequestInput) -> Result<WorkerRequestOu
     let mut res = do_fetch(access.access_token.clone()).await?;
     if res.status().as_u16() == 401 {
         let blob = load_keyring()?.ok_or_else(|| "Not signed in".to_string())?;
-        refresh_with_blob(&blob).await?;
-        access = access_if_valid().ok_or_else(|| "Not signed in".to_string())?;
+        refresh_scope(&blob, scope).await?;
+        access = access_if_valid(scope).ok_or_else(|| "Not signed in".to_string())?;
         res = do_fetch(access.access_token.clone()).await?;
     }
 
@@ -520,13 +618,19 @@ pub async fn worker_request(input: WorkerRequestInput) -> Result<WorkerRequestOu
     })
 }
 
-/// Current access token for Rust-side Worker calls (init-db after login, etc).
 pub fn current_access_token() -> Option<String> {
-    access_if_valid().map(|m| m.access_token)
+    access_if_valid("console")
+        .map(|m| m.access_token)
+        .or_else(|| access_if_valid("mail").map(|m| m.access_token))
+}
+
+pub fn current_console_access_token() -> Option<String> {
+    access_if_valid("console").map(|m| m.access_token)
 }
 
 pub fn current_worker_url() -> Option<String> {
-    access_if_valid()
+    access_if_valid("mail")
         .map(|m| m.worker_url)
+        .or_else(|| access_if_valid("console").map(|m| m.worker_url))
         .or_else(|| load_keyring().ok().flatten().map(|b| b.worker_url))
 }

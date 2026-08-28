@@ -1,3 +1,6 @@
+> **ARCHIVED** — 2026-08-27 launch Touch ID race (fixed by console-only gate).
+> See [README](./README.md).
+
 # Desktop unlock — launch Touch ID (2026-08-27)
 
 **Status: fixed in the session machine.** Daily launch must show `UnlockView`

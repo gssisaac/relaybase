@@ -73,12 +73,41 @@ async function hmacSha256Hex(key: string, message: string): Promise<string> {
   return bytesToHex(new Uint8Array(sig));
 }
 
+export type OwnerScope = "mail" | "console";
+
 export type AccessPayload = {
   sub: string;
   iat: number;
   exp: number;
   jti: string;
+  /** Present on tokens minted after the mail/console split. */
+  scope?: OwnerScope;
 };
+
+export const MAIL_ACCESS_TTL_SECONDS = 60 * 60; // 60 minutes
+export const CONSOLE_ACCESS_TTL_SECONDS = 30 * 60; // 30 minutes
+export const MAIL_REFRESH_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
+export const CONSOLE_REFRESH_TTL_SECONDS = 30 * 60; // 30 minutes
+
+/** @deprecated Use scope-specific TTL constants. */
+export const ACCESS_TTL_SECONDS = CONSOLE_ACCESS_TTL_SECONDS;
+
+export function sessionLabelForScope(
+  scope: OwnerScope,
+  deviceLabel: string,
+): string {
+  const trimmed = deviceLabel.trim() || "desktop";
+  return `${scope}:${trimmed}`;
+}
+
+export function scopeFromSessionLabel(
+  label: string | null | undefined,
+): OwnerScope | null {
+  if (!label) return null;
+  if (label.startsWith("mail:")) return "mail";
+  if (label.startsWith("console:")) return "console";
+  return null;
+}
 
 export async function signAccessToken(
   pepper: string,
@@ -112,6 +141,13 @@ export async function verifyAccessToken(
     ) {
       return null;
     }
+    if (
+      payload.scope !== undefined &&
+      payload.scope !== "mail" &&
+      payload.scope !== "console"
+    ) {
+      return null;
+    }
     if (payload.exp <= Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
@@ -126,4 +162,3 @@ export function generateRefreshToken(): string {
   return bytesToBase64Url(bytes);
 }
 
-export const ACCESS_TTL_SECONDS = 10 * 60; // 10 minutes

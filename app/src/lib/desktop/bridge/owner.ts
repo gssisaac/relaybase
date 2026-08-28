@@ -1,11 +1,15 @@
 import { invoke, isDesktopRuntime } from "./invoke";
 
 export type OwnerSessionStatus = {
+  hasMailRefresh: boolean;
+  hasConsoleRefresh: boolean;
+  hasMailAccess: boolean;
+  hasConsoleAccess: boolean;
+  /** Back-compat shims from Rust. */
   hasRefresh: boolean;
   hasAccess: boolean;
   username: string;
   workerUrl: string;
-  biometryEnabled: boolean;
   platform: string;
 };
 
@@ -14,17 +18,22 @@ export type OwnerSetupResult = {
   passtoken: string;
 };
 
+const EMPTY_OWNER: OwnerSessionStatus = {
+  hasMailRefresh: false,
+  hasConsoleRefresh: false,
+  hasMailAccess: false,
+  hasConsoleAccess: false,
+  hasRefresh: false,
+  hasAccess: false,
+  username: "",
+  workerUrl: "",
+  platform: "other",
+};
+
 /** Throws if the OS keyring cannot be read. Missing session is `hasRefresh: false`. */
 export async function desktopOwnerSessionStatus(): Promise<OwnerSessionStatus> {
   if (!isDesktopRuntime()) {
-    return {
-      hasRefresh: false,
-      hasAccess: false,
-      username: "",
-      workerUrl: "",
-      biometryEnabled: true,
-      platform: "other",
-    };
+    return { ...EMPTY_OWNER };
   }
   return invoke("owner_session_status_cmd");
 }
@@ -33,33 +42,29 @@ export async function desktopOwnerLogin(input: {
   workerUrl: string;
   username: string;
   passtoken: string;
-  biometryEnabled?: boolean;
 }): Promise<OwnerSessionStatus> {
   return invoke("owner_login_cmd", {
     workerUrl: input.workerUrl,
     username: input.username,
     passtoken: input.passtoken,
-    biometryEnabled: input.biometryEnabled,
   });
 }
 
-export async function desktopOwnerUnlock(): Promise<OwnerSessionStatus> {
-  return invoke("owner_unlock_cmd");
+export async function desktopOwnerBootMail(): Promise<OwnerSessionStatus> {
+  return invoke("owner_boot_mail_cmd");
 }
 
-/** Touch ID / Windows Hello. Same invoke path as every other desktop command. */
+export async function desktopOwnerUnlockConsole(): Promise<OwnerSessionStatus> {
+  return invoke("owner_unlock_console_cmd");
+}
+
+/** Touch ID / Windows Hello — console gate only. */
 export async function desktopOwnerTouchId(reason: string): Promise<void> {
   await invoke("owner_touch_id_cmd", { reason });
 }
 
 export async function desktopOwnerLogout(): Promise<void> {
   await invoke("owner_logout_cmd");
-}
-
-export async function desktopOwnerSetBiometryEnabled(
-  enabled: boolean,
-): Promise<OwnerSessionStatus> {
-  return invoke("owner_set_biometry_enabled_cmd", { enabled });
 }
 
 export async function desktopOwnerSetupAdmin(input: {

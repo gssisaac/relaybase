@@ -9,11 +9,14 @@ import { AppSessionStore } from "./store.ts";
 
 function ownerStatus(partial: Partial<OwnerSessionStatus>): OwnerSessionStatus {
   return {
+    hasMailRefresh: false,
+    hasConsoleRefresh: false,
+    hasMailAccess: false,
+    hasConsoleAccess: false,
     hasRefresh: false,
     hasAccess: false,
     username: "",
     workerUrl: "",
-    biometryEnabled: true,
     platform: "macos",
     ...partial,
   };
@@ -25,7 +28,6 @@ function teamStatus(partial: Partial<TeamSessionStatus>): TeamSessionStatus {
     hasAccess: false,
     accountEmail: "",
     workerUrl: "",
-    biometryEnabled: true,
     platform: "macos",
     ...partial,
   };
@@ -65,8 +67,8 @@ function makeDeps(
     ownerStatus?: OwnerSessionStatus;
     teamStatus?: TeamSessionStatus;
     authenticateBiometry?: () => Promise<void>;
-    ownerUnlock?: () => Promise<OwnerSessionStatus>;
-    teamUnlock?: () => Promise<TeamSessionStatus>;
+    ownerBootMail?: () => Promise<OwnerSessionStatus>;
+    ownerUnlockConsole?: () => Promise<OwnerSessionStatus>;
     ownerLogin?: (input: {
       workerUrl: string;
       username: string;
@@ -77,10 +79,9 @@ function makeDeps(
       accountEmail: string;
       mobilePassword: string;
     }) => Promise<TeamSessionStatus>;
-    ownerSetBiometryEnabled?: (enabled: boolean) => Promise<OwnerSessionStatus>;
+    teamUnlock?: () => Promise<TeamSessionStatus>;
     ownerLogout?: () => Promise<void>;
     ownerSessionStatus?: () => Promise<OwnerSessionStatus>;
-    teamSetBiometryEnabled?: (enabled: boolean) => Promise<TeamSessionStatus>;
     teamLogout?: () => Promise<void>;
     teamForgetSession?: () => Promise<TeamSessionStatus>;
     teamSessionStatus?: () => Promise<TeamSessionStatus>;
@@ -98,31 +99,30 @@ function makeDeps(
     ownerSessionStatus:
       overrides.ownerSessionStatus ??
       (() => Promise.resolve(overrides.ownerStatus ?? ownerStatus({}))),
-    ownerLogin: overrides.ownerLogin ??
-      (() => Promise.resolve(ownerStatus({ hasAccess: true }))),
-    ownerUnlock: overrides.ownerUnlock ??
-      (() => Promise.resolve(ownerStatus({ hasAccess: true }))),
+    ownerLogin:
+      overrides.ownerLogin ??
+      (() => Promise.resolve(ownerStatus({ hasMailAccess: true }))),
+    ownerBootMail:
+      overrides.ownerBootMail ??
+      (() => Promise.resolve(ownerStatus({ hasMailAccess: true }))),
+    ownerUnlockConsole:
+      overrides.ownerUnlockConsole ??
+      (() => Promise.resolve(ownerStatus({ hasConsoleAccess: true }))),
     ownerLogout: overrides.ownerLogout ?? (() => Promise.resolve()),
     ownerSetupAdmin: () => Promise.resolve({ username: "owner", passtoken: "p" }),
     ownerResetAdmin: () => Promise.resolve({ username: "owner", passtoken: "p" }),
-    ownerSetBiometryEnabled: overrides.ownerSetBiometryEnabled ??
-      ((enabled: boolean) =>
-        Promise.resolve(
-          ownerStatus({ hasRefresh: true, hasAccess: true, biometryEnabled: enabled }),
-        )),
     teamSessionStatus:
       overrides.teamSessionStatus ??
       (() => Promise.resolve(overrides.teamStatus ?? teamStatus({}))),
-    teamLogin: overrides.teamLogin ??
+    teamLogin:
+      overrides.teamLogin ??
       (() => Promise.resolve(teamStatus({ hasAccess: true }))),
-    teamUnlock: overrides.teamUnlock ??
+    teamUnlock:
+      overrides.teamUnlock ??
       (() => Promise.resolve(teamStatus({ hasAccess: true }))),
     teamLogout: overrides.teamLogout ?? (() => Promise.resolve()),
     teamForgetSession:
       overrides.teamForgetSession ?? (() => Promise.resolve(teamStatus({}))),
-    teamSetBiometryEnabled: overrides.teamSetBiometryEnabled ??
-      ((enabled: boolean) =>
-        Promise.resolve(teamStatus({ hasAccess: true, biometryEnabled: enabled }))),
     refreshIdentity:
       overrides.refreshIdentity ??
       (async () => {
@@ -147,41 +147,95 @@ function createStore(
   return store;
 }
 
+function connectOwner(store: AppSessionStore): void {
+  store.setIdentity({
+    ready: true,
+    isDesktop: true,
+    credentials: SAMPLE_CREDENTIALS,
+    teamIdentity: null,
+  });
+}
+
 describe("AppSessionStore", () => {
-  it("boots to ownerReady when the owner already has access", () => {
+  it("boots to ownerReady when the owner already has mail access", () => {
     const store = createStore({
-      ownerStatus: ownerStatus({ hasAccess: true }),
+      ownerStatus: ownerStatus({ hasMailAccess: true }),
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasMailAccess: true }), teamStatus({}));
+    assert.equal(store.phase.kind, "ownerReady");
+    assert.equal(store.canShowApp, true);
+  });
+
+  it("silently boot-mails when owner has mail refresh but no access", async () => {
+    let booted = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasMailRefresh: true }),
+      ownerBootMail: () => {
+        booted += 1;
+        return Promise.resolve(
+          ownerStatus({ hasMailRefresh: true, hasMailAccess: true }),
+        );
+      },
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasMailRefresh: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "ownerReady", "mail boot");
+    assert.equal(booted, 1);
+  });
+
+  it("does not prompt Touch ID on mail boot", async () => {
+    let prompted = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasMailRefresh: true }),
+      authenticateBiometry: () => {
+        prompted += 1;
+        return Promise.resolve();
+      },
+      ownerBootMail: () =>
+        Promise.resolve(
+          ownerStatus({ hasMailRefresh: true, hasMailAccess: true }),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasMailRefresh: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "ownerReady", "mail boot");
+    assert.equal(prompted, 0);
+  });
+
+  it("silently team-unlocks when invited has keyring secret", async () => {
+    let unlocked = 0;
+    const store = createStore({
+      teamStatus: teamStatus({ hasSecret: true }),
+      teamUnlock: () => {
+        unlocked += 1;
+        return Promise.resolve(teamStatus({ hasSecret: true, hasAccess: true }));
+      },
+      refreshIdentity: async () => {
+        store.setIdentity({
+          ready: true,
+          isDesktop: true,
+          credentials: SAMPLE_CREDENTIALS,
+          teamIdentity: {
+            workerUrl: WORKER_URL,
+            accountEmail: "teammate@example.com",
+            mobilePassword: "",
+          },
+        });
+      },
     });
     store.setIdentity({
       ready: true,
       isDesktop: true,
       credentials: SAMPLE_CREDENTIALS,
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({ hasAccess: true }), teamStatus({}));
-    assert.equal(store.phase.kind, "ownerReady");
-    assert.equal(store.canShowApp, true);
-  });
-
-  it("boots to unlock prompting and fires Touch ID when owner has refresh", async () => {
-    let prompted = 0;
-    let unlocked = 0;
-    const store = createStore({
-      ownerStatus: ownerStatus({ hasRefresh: true }),
-      authenticateBiometry: () => {
-        prompted += 1;
-        return Promise.resolve();
-      },
-      ownerUnlock: () => {
-        unlocked += 1;
-        return Promise.resolve(ownerStatus({ hasAccess: true }));
+      teamIdentity: {
+        workerUrl: WORKER_URL,
+        accountEmail: "teammate@example.com",
+        mobilePassword: "",
       },
     });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    assert.equal(store.phase.kind, "unlock");
-    assert.equal(store.needsUnlockPrompt, true);
-    await waitUntil(() => store.phase.kind === "ownerReady", "owner did not unlock");
-    assert.equal(prompted, 1);
+    store.setStatuses(ownerStatus({}), teamStatus({ hasSecret: true }));
+    await waitUntil(() => store.phase.kind === "invitedReady", "team unlock");
     assert.equal(unlocked, 1);
   });
 
@@ -190,98 +244,10 @@ describe("AppSessionStore", () => {
     store.setIdentity({
       ready: true,
       isDesktop: true,
-      credentials: {
-        accountId: "",
-        installToken: "",
-        workerUrl: "https://relaybase-api.example.workers.dev",
-        adminToken: "",
-        workerScriptName: "",
-        workerVersion: "",
-        relaybaseAccountId: "",
-        relaybaseEmail: "",
-        relaybaseSession: "",
-        cfOauthAccessToken: "",
-        cfOauthRefreshToken: "",
-        cfOauthAccessExpiresAt: "",
-        cfOauthAccountId: "",
-      },
+      credentials: SAMPLE_CREDENTIALS,
       teamIdentity: null,
     });
     store.setStatuses(ownerStatus({}), teamStatus({}));
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-      assert.equal(store.phase.role, "owner");
-    }
-  });
-
-  it("shows UnlockView from workerUrl before keyring status arrives", () => {
-    const store = createStore({});
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: {
-        accountId: "",
-        installToken: "",
-        workerUrl: "https://relaybase-api.example.workers.dev",
-        adminToken: "",
-        workerScriptName: "",
-        workerVersion: "",
-        relaybaseAccountId: "",
-        relaybaseEmail: "",
-        relaybaseSession: "",
-        cfOauthAccessToken: "",
-        cfOauthRefreshToken: "",
-        cfOauthAccessExpiresAt: "",
-        cfOauthAccountId: "",
-      },
-      teamIdentity: null,
-    });
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-    }
-  });
-
-  it("requestPrompt stays on passtoken form without a keyring secret", () => {
-    const store = createStore({});
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: {
-        accountId: "",
-        installToken: "",
-        workerUrl: "https://relaybase-api.example.workers.dev",
-        adminToken: "",
-        workerScriptName: "",
-        workerVersion: "",
-        relaybaseAccountId: "",
-        relaybaseEmail: "",
-        relaybaseSession: "",
-        cfOauthAccessToken: "",
-        cfOauthRefreshToken: "",
-        cfOauthAccessExpiresAt: "",
-        cfOauthAccountId: "",
-      },
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({}), teamStatus({}));
-    store.showSecretForm();
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-    }
-    store.requestPrompt();
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-    }
-  });
-
-  it("leaveRecover returns to passtoken form without keyring", () => {
-    const store = createStore({});
-    store.enterRecover();
-    assert.equal(store.phase.kind, "ownerRecover");
-    store.leaveRecover();
     assert.equal(store.phase.kind, "unlock");
     if (store.phase.kind === "unlock") {
       assert.equal(store.phase.mode, "secret");
@@ -301,810 +267,196 @@ describe("AppSessionStore", () => {
     assert.equal(store.phase.kind, "choice");
   });
 
-  it("invited with a keyring secret unlocks via Touch ID", async () => {
+  it("owner passtoken login enters ownerReady without offerBiometry", async () => {
+    const store = createStore({
+      ownerLogin: () =>
+        Promise.resolve(
+          ownerStatus({ hasMailRefresh: true, hasMailAccess: true }),
+        ),
+    });
+    connectOwner(store);
+    await store.loginWithPasstoken({
+      workerUrl: WORKER_URL,
+      username: "owner",
+      passtoken: "rb_pass_abc123XYZ-_abcdefghij",
+    });
+    assert.equal(store.phase.kind, "ownerReady");
+  });
+
+  it("invited login enters invitedReady without offerBiometry", async () => {
+    const store = createStore({
+      teamLogin: () =>
+        Promise.resolve(teamStatus({ hasSecret: true, hasAccess: true })),
+    });
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: SAMPLE_CREDENTIALS,
+      teamIdentity: {
+        workerUrl: WORKER_URL,
+        accountEmail: "teammate@example.com",
+        mobilePassword: "secret",
+      },
+    });
+    await store.loginInvited({
+      workerUrl: WORKER_URL,
+      accountEmail: "teammate@example.com",
+      mobilePassword: "secret",
+    });
+    assert.equal(store.phase.kind, "invitedReady");
+  });
+
+  it("ensureConsoleAccess returns true when console access already present", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasMailAccess: true, hasConsoleAccess: true }),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailAccess: true, hasConsoleAccess: true }),
+      teamStatus({}),
+    );
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, true);
+    assert.equal(store.consoleGateOpen, false);
+  });
+
+  it("ensureConsoleAccess prompts Touch ID and unlocks console", async () => {
     let prompted = 0;
     let unlocked = 0;
     const store = createStore({
-      teamStatus: teamStatus({ hasSecret: true }),
+      ownerStatus: ownerStatus({
+        hasMailAccess: true,
+        hasConsoleRefresh: true,
+      }),
       authenticateBiometry: () => {
         prompted += 1;
         return Promise.resolve();
       },
-      teamUnlock: () => {
+      ownerUnlockConsole: () => {
         unlocked += 1;
-        return Promise.resolve(teamStatus({ hasAccess: true }));
-      },
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: null,
-          teamIdentity: {
-            workerUrl: WORKER_URL,
-            accountEmail: "teammate@example.com",
-            mobilePassword: "",
-          },
-        });
+        return Promise.resolve(
+          ownerStatus({
+            hasMailAccess: true,
+            hasConsoleRefresh: true,
+            hasConsoleAccess: true,
+          }),
+        );
       },
     });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: {
-        workerUrl: "https://relaybase-api.example.workers.dev",
-        accountEmail: "teammate@example.com",
-        mobilePassword: "",
-      },
-    });
+    connectOwner(store);
     store.setStatuses(
-      ownerStatus({}),
-      teamStatus({ hasSecret: true }),
+      ownerStatus({ hasMailAccess: true, hasConsoleRefresh: true }),
+      teamStatus({}),
     );
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") assert.equal(store.phase.role, "invited");
-    await waitUntil(
-      () => store.phase.kind === "invitedReady",
-      "invited did not unlock",
-    );
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, true);
     assert.equal(prompted, 1);
     assert.equal(unlocked, 1);
+    assert.equal(store.hasConsoleAccess, true);
   });
 
-  it("first owner passtoken login offers biometry, then accept enters the app", async () => {
-    let enableCalls = 0;
+  it("ensureConsoleAccess opens gate when console refresh is missing", async () => {
     const store = createStore({
-      ownerLogin: () =>
-        Promise.resolve(
-          ownerStatus({
-            hasRefresh: true,
-            hasAccess: true,
-            biometryEnabled: false,
-            platform: "macos",
-            workerUrl: WORKER_URL,
-          }),
-        ),
-      ownerSetBiometryEnabled: (enabled: boolean) => {
-        enableCalls += 1;
-        assert.equal(enabled, true);
-        return Promise.resolve(
-          ownerStatus({
-            hasRefresh: true,
-            hasAccess: true,
-            biometryEnabled: true,
-            workerUrl: WORKER_URL,
-          }),
-        );
-      },
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: { ...SAMPLE_CREDENTIALS },
-          teamIdentity: null,
-        });
-      },
+      ownerStatus: ownerStatus({ hasMailAccess: true }),
     });
-    await store.loginWithPasstoken({
-      workerUrl: WORKER_URL,
-      username: "isaac",
-      passtoken: "rb_pass_abc123XYZ-________",
-    });
-    assert.equal(store.phase.kind, "offerBiometry");
-    if (store.phase.kind === "offerBiometry") {
-      assert.equal(store.phase.role, "owner");
-    }
-    await store.acceptBiometry();
-    assert.equal(enableCalls, 1);
-    assert.equal(store.phase.kind, "ownerReady");
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasMailAccess: true }), teamStatus({}));
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, false);
+    assert.equal(store.consoleGateOpen, true);
   });
 
-  it("owner decline biometry enters app and skips auto Touch ID on next launch", async () => {
-    let enableCalls = 0;
+  it("handleConsoleUnauthorized opens the console gate", async () => {
     const store = createStore({
-      ownerLogin: () =>
-        Promise.resolve(
-          ownerStatus({
-            hasRefresh: true,
-            hasAccess: true,
-            biometryEnabled: false,
-            platform: "macos",
-            workerUrl: WORKER_URL,
-          }),
-        ),
-      ownerSetBiometryEnabled: (enabled: boolean) => {
-        enableCalls += 1;
-        assert.equal(enabled, false);
-        return Promise.resolve(
-          ownerStatus({
-            hasRefresh: true,
-            hasAccess: true,
-            biometryEnabled: false,
-            workerUrl: WORKER_URL,
-          }),
-        );
-      },
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: { ...SAMPLE_CREDENTIALS },
-          teamIdentity: null,
-        });
-      },
+      ownerStatus: ownerStatus({ hasMailAccess: true, hasConsoleAccess: false }),
     });
-    await store.loginWithPasstoken({
-      workerUrl: WORKER_URL,
-      username: "isaac",
-      passtoken: "rb_pass_abc123XYZ-________",
-    });
-    await store.declineBiometry();
-    assert.equal(enableCalls, 1);
-    assert.equal(store.phase.kind, "ownerReady");
+    connectOwner(store);
     store.setStatuses(
-      ownerStatus({
-        hasRefresh: true,
-        biometryEnabled: false,
-        workerUrl: WORKER_URL,
-      }),
+      ownerStatus({ hasMailAccess: true, hasConsoleAccess: false }),
       teamStatus({}),
     );
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "idle");
-    }
+    await store.handleConsoleUnauthorized();
+    assert.equal(store.consoleGateOpen, true);
   });
 
-  it("boots to Touch ID idle when owner keyring exists but biometry is off", () => {
+  it("handleWorkerUnauthorized retries silent mail boot", async () => {
+    let booted = 0;
     const store = createStore({
       ownerStatus: ownerStatus({
-        hasRefresh: true,
-        biometryEnabled: false,
-        workerUrl: WORKER_URL,
+        hasMailRefresh: true,
+        hasMailAccess: true,
       }),
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({
-        hasRefresh: true,
-        biometryEnabled: false,
-        workerUrl: WORKER_URL,
-      }),
-      teamStatus({}),
-    );
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "idle");
-    }
-  });
-
-  it("requestPrompt returns to Touch ID idle from passtoken when keyring exists without auto biometry", () => {
-    const store = createStore({
-      ownerStatus: ownerStatus({
-        hasRefresh: true,
-        biometryEnabled: false,
-        workerUrl: WORKER_URL,
-      }),
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({
-        hasRefresh: true,
-        biometryEnabled: false,
-        workerUrl: WORKER_URL,
-      }),
-      teamStatus({}),
-    );
-    store.showSecretForm();
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-    }
-    store.requestPrompt();
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "idle");
-    }
-  });
-
-  it("first invited login offers biometry, then accept enters the app", async () => {
-    let enableCalls = 0;
-    const store = createStore({
-      teamLogin: () =>
-        Promise.resolve(teamStatus({ hasAccess: true, platform: "macos" })),
-      teamSetBiometryEnabled: (enabled: boolean) => {
-        enableCalls += 1;
-        assert.equal(enabled, true);
+      ownerSessionStatus: () =>
+        Promise.resolve(ownerStatus({ hasMailRefresh: true })),
+      ownerBootMail: () => {
+        booted += 1;
         return Promise.resolve(
-          teamStatus({ hasAccess: true, biometryEnabled: true }),
+          ownerStatus({ hasMailRefresh: true, hasMailAccess: true }),
         );
       },
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: null,
-          teamIdentity: {
-            workerUrl: WORKER_URL,
-            accountEmail: "teammate@example.com",
-            mobilePassword: "",
-          },
-        });
-      },
     });
-    await store.loginInvited({
-      workerUrl: "https://relaybase-api.example.workers.dev",
-      accountEmail: "teammate@example.com",
-      mobilePassword: "pw",
-    });
-    assert.equal(store.phase.kind, "offerBiometry");
-    await store.acceptBiometry();
-    assert.equal(enableCalls, 1);
-    assert.equal(store.phase.kind, "invitedReady");
-  });
-
-  it("decline still enters the app and disables biometry", async () => {
-    let enableCalls = 0;
-    const store = createStore({
-      teamLogin: () =>
-        Promise.resolve(teamStatus({ hasAccess: true, platform: "macos" })),
-      teamSetBiometryEnabled: (enabled: boolean) => {
-        enableCalls += 1;
-        assert.equal(enabled, false);
-        return Promise.resolve(
-          teamStatus({ hasAccess: true, biometryEnabled: false }),
-        );
-      },
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: null,
-          teamIdentity: {
-            workerUrl: WORKER_URL,
-            accountEmail: "teammate@example.com",
-            mobilePassword: "",
-          },
-        });
-      },
-    });
-    await store.loginInvited({
-      workerUrl: "https://relaybase-api.example.workers.dev",
-      accountEmail: "teammate@example.com",
-      mobilePassword: "pw",
-    });
-    assert.equal(store.phase.kind, "offerBiometry");
-    await store.declineBiometry();
-    assert.equal(enableCalls, 1);
-    assert.equal(store.phase.kind, "invitedReady");
-  });
-
-  it("does not consume the Touch ID one-shot before the desktop runtime exists", async () => {
-    let prompted = 0;
-    let desktop = false;
-    const store = createStore({
-      isDesktop: () => desktop,
-      ownerStatus: ownerStatus({ hasRefresh: true }),
-      authenticateBiometry: () => {
-        prompted += 1;
-        return Promise.resolve();
-      },
-      ownerUnlock: () => Promise.resolve(ownerStatus({ hasAccess: true })),
-    });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    await Promise.resolve();
-    assert.equal(prompted, 0);
-    assert.equal(store.phase.kind, "unlock");
-
-    desktop = true;
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    await waitUntil(() => store.phase.kind === "ownerReady", "late desktop did not unlock");
-    assert.equal(prompted, 1);
-  });
-
-  it("retries Touch ID once after a launch systemCancel", async () => {
-    let prompted = 0;
-    const store = createStore({
-      ownerStatus: ownerStatus({ hasRefresh: true }),
-      authenticateBiometry: () => {
-        prompted += 1;
-        if (prompted === 1) {
-          return Promise.reject(
-            new Error("[systemCancel] - Authentication canceled."),
-          );
-        }
-        return Promise.resolve();
-      },
-      ownerUnlock: () => Promise.resolve(ownerStatus({ hasAccess: true })),
-    });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    await new Promise((r) => setTimeout(r, 250));
-    assert.equal(prompted, 2);
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailRefresh: true, hasMailAccess: true }),
+      teamStatus({}),
+    );
     assert.equal(store.phase.kind, "ownerReady");
-  });
-
-  it("keeps ownerReady when a stale empty status arrives after unlock", async () => {
-    const store = createStore({
-      ownerStatus: ownerStatus({ hasRefresh: true }),
-      ownerUnlock: () =>
-        Promise.resolve(ownerStatus({ hasRefresh: true, hasAccess: true })),
-    });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    await waitUntil(() => store.phase.kind === "ownerReady", "did not unlock");
-    store.setStatuses(ownerStatus({}), teamStatus({}));
+    await store.handleWorkerUnauthorized();
+    assert.equal(booted, 1);
     assert.equal(store.phase.kind, "ownerReady");
-  });
-
-  it("opens passtoken form when unlock fails with no saved session", async () => {
-    const store = createStore({
-      ownerStatus: ownerStatus({ hasRefresh: true }),
-      ownerUnlock: () =>
-        Promise.reject(
-          new Error("No saved session. Sign in with your username and passtoken."),
-        ),
-    });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    await waitUntil(() => {
-      if (store.busy || store.phase.kind !== "unlock") return false;
-      return store.phase.mode === "secret";
-    }, "unlock did not settle on passtoken form");
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-    }
-    assert.equal(store.error, null);
-  });
-
-  it("a dismissed biometry prompt falls back to idle, not an error", async () => {
-    const store = createStore({
-      ownerStatus: ownerStatus({ hasRefresh: true }),
-      authenticateBiometry: () => Promise.reject(new Error("userCancel")),
-      ownerUnlock: () => Promise.resolve(ownerStatus({ hasAccess: true })),
-    });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    await Promise.resolve();
-    await Promise.resolve();
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "idle");
-    }
-    assert.equal(store.error, null);
   });
 
   it("does not enter the mailbox without a connected Worker URL", () => {
-    const store = createStore({ ownerStatus: ownerStatus({ hasAccess: true }) });
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasMailAccess: true }),
+    });
     store.setIdentity({
       ready: true,
       isDesktop: true,
       credentials: null,
       teamIdentity: null,
     });
-    store.setStatuses(ownerStatus({ hasAccess: true }), teamStatus({}));
+    store.setStatuses(ownerStatus({ hasMailAccess: true }), teamStatus({}));
     assert.equal(store.phase.kind, "choice");
     assert.equal(store.canShowApp, false);
   });
 
-  it("enters the mailbox when owner access and Worker URL are both present", () => {
-    const store = createStore({ ownerStatus: ownerStatus({ hasAccess: true }) });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: {
-        accountId: "",
-        installToken: "",
-        workerUrl: "https://relaybase-api.example.workers.dev",
-        adminToken: "",
-        workerScriptName: "",
-        workerVersion: "",
-        relaybaseAccountId: "",
-        relaybaseEmail: "",
-        relaybaseSession: "",
-        cfOauthAccessToken: "",
-        cfOauthRefreshToken: "",
-        cfOauthAccessExpiresAt: "",
-        cfOauthAccountId: "",
-      },
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({ hasAccess: true }), teamStatus({}));
-    assert.equal(store.phase.kind, "ownerReady");
-    assert.equal(store.canShowApp, true);
-  });
-
-  it("signOut locks to Touch ID idle when owner keyring exists without auto biometry", async () => {
-    let cleared = 0;
-    let loggedOut = 0;
-    const statusAfterLock = ownerStatus({
-      hasRefresh: true,
-      biometryEnabled: false,
-      workerUrl: WORKER_URL,
-    });
+  it("loginConsoleWithPasstoken unlocks console after owner login", async () => {
+    let loggedIn = 0;
+    let unlocked = 0;
     const store = createStore({
-      ownerSessionStatus: () => Promise.resolve(statusAfterLock),
-      ownerLogout: async () => {
-        loggedOut += 1;
-      },
-      clearOwnerDisk: async () => {
-        cleared += 1;
-      },
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: null,
-          teamIdentity: null,
-        });
-      },
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: SAMPLE_CREDENTIALS,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({
-        hasAccess: true,
-        hasRefresh: true,
-        biometryEnabled: false,
-      }),
-      teamStatus({}),
-    );
-    assert.equal(store.phase.kind, "ownerReady");
-    await store.signOut();
-    assert.equal(loggedOut, 1);
-    assert.equal(cleared, 1);
-    assert.equal(store.ownerStatus?.hasRefresh, true);
-    assert.equal(store.ownerStatus?.biometryEnabled, false);
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "idle");
-      assert.equal(store.phase.role, "owner");
-    }
-  });
-
-  it("signOut locks to Touch ID when owner keyring and biometry remain", async () => {
-    let cleared = 0;
-    let loggedOut = 0;
-    let statusAfterLock = ownerStatus({
-      hasRefresh: true,
-      biometryEnabled: true,
-      workerUrl: WORKER_URL,
-    });
-    const store = createStore({
-      ownerSessionStatus: () => Promise.resolve(statusAfterLock),
-      ownerLogout: async () => {
-        loggedOut += 1;
-      },
-      clearOwnerDisk: async () => {
-        cleared += 1;
-      },
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: null,
-          teamIdentity: null,
-        });
-      },
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: SAMPLE_CREDENTIALS,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({ hasAccess: true, hasRefresh: true, biometryEnabled: true }),
-      teamStatus({}),
-    );
-    assert.equal(store.phase.kind, "ownerReady");
-    await store.signOut();
-    assert.equal(loggedOut, 1);
-    assert.equal(cleared, 1);
-    assert.equal(store.ownerStatus?.hasRefresh, true);
-    assert.equal(store.ownerStatus?.biometryEnabled, true);
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "prompting");
-      assert.equal(store.phase.role, "owner");
-    }
-  });
-
-  it("signOut returns to welcome when no keyring session remains", async () => {
-    let cleared = 0;
-    let refreshed = 0;
-    let statusAfterLock = ownerStatus({});
-    const store = createStore({
-      ownerSessionStatus: () => Promise.resolve(statusAfterLock),
-      clearOwnerDisk: async () => {
-        cleared += 1;
-      },
-      refreshIdentity: async () => {
-        refreshed += 1;
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: null,
-          teamIdentity: null,
-        });
-      },
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: SAMPLE_CREDENTIALS,
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({ hasAccess: true }), teamStatus({}));
-    assert.equal(store.phase.kind, "ownerReady");
-    await store.signOut();
-    assert.equal(store.phase.kind, "choice");
-    assert.equal(store.ownerStatus?.hasAccess, false);
-    assert.equal(store.ownerStatus?.hasRefresh, false);
-    assert.equal(cleared, 1);
-    assert.equal(refreshed, 1);
-  });
-
-  it("openAlreadyInstalled enters passtoken form when nothing is on disk", () => {
-    const store = createStore({});
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({}), teamStatus({}));
-    assert.equal(store.phase.kind, "choice");
-    store.openAlreadyInstalled();
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.role, "owner");
-      assert.equal(store.phase.mode, "secret");
-    }
-  });
-
-  it("openAlreadyInstalled stays on passtoken form after reconcile with no disk URL", () => {
-    const store = createStore({});
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({}), teamStatus({}));
-    store.openAlreadyInstalled();
-    store.setStatuses(ownerStatus({}), teamStatus({}));
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-    }
-  });
-
-  it("openAlreadyInstalled prompts Touch ID when the owner keyring has a refresh", async () => {
-    let prompted = 0;
-    const store = createStore({
-      authenticateBiometry: () => {
-        prompted += 1;
-        return Promise.resolve();
-      },
-    });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    store.openAlreadyInstalled();
-    assert.equal(store.phase.kind, "unlock");
-    await waitUntil(() => prompted > 0, "Touch ID did not prompt");
-    assert.equal(prompted, 1);
-  });
-
-  it("awaits refreshIdentity before ownerReady after unlock", async () => {
-    let refreshCalls = 0;
-    const store = createStore({
-      ownerStatus: ownerStatus({ hasRefresh: true }),
-      ownerUnlock: () => Promise.resolve(ownerStatus({ hasAccess: true })),
-      refreshIdentity: async () => {
-        refreshCalls += 1;
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: SAMPLE_CREDENTIALS,
-          teamIdentity: null,
-        });
-      },
-    });
-    store.setStatuses(ownerStatus({ hasRefresh: true }), teamStatus({}));
-    await waitUntil(() => store.phase.kind === "ownerReady", "did not unlock");
-    assert.equal(refreshCalls, 1);
-    assert.equal(store.canShowApp, true);
-  });
-
-  it("keeps ownerReady when credentials are cleared but keyring has workerUrl", () => {
-    const store = createStore({
-      ownerStatus: ownerStatus({ hasAccess: true, workerUrl: WORKER_URL }),
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: SAMPLE_CREDENTIALS,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({ hasAccess: true, workerUrl: WORKER_URL }),
-      teamStatus({}),
-    );
-    assert.equal(store.phase.kind, "ownerReady");
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    assert.equal(store.phase.kind, "ownerReady");
-    assert.equal(store.canShowApp, true);
-  });
-
-  it("downgrades ownerReady to choice when credentials and keyring URL are gone", () => {
-    const store = createStore({ ownerStatus: ownerStatus({ hasAccess: true }) });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: SAMPLE_CREDENTIALS,
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({ hasAccess: true }), teamStatus({}));
-    assert.equal(store.phase.kind, "ownerReady");
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    assert.equal(store.phase.kind, "choice");
-    assert.equal(store.canShowApp, false);
-  });
-
-  it("canShowApp is true when only keyring workerUrl exists", () => {
-    const store = createStore({
-      ownerStatus: ownerStatus({
-        hasAccess: true,
-        workerUrl: WORKER_URL,
-      }),
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({ hasAccess: true, workerUrl: WORKER_URL }),
-      teamStatus({}),
-    );
-    assert.equal(store.phase.kind, "ownerReady");
-    assert.equal(store.canShowApp, true);
-  });
-
-  it("lands on passtoken form from keyring workerUrl without credentials.json", () => {
-    const store = createStore({ ownerStatus: ownerStatus({}) });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({ workerUrl: WORKER_URL }),
-      teamStatus({}),
-    );
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-      assert.equal(store.phase.role, "owner");
-    }
-  });
-
-  it("openAlreadyInstalled uses passtoken form when keyring has workerUrl only", () => {
-    const store = createStore({
-      ownerStatus: ownerStatus({ workerUrl: WORKER_URL }),
-    });
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(
-      ownerStatus({ workerUrl: WORKER_URL }),
-      teamStatus({}),
-    );
-    store.openAlreadyInstalled();
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.mode, "secret");
-      assert.equal(store.phase.role, "owner");
-    }
-  });
-
-  it("openInvitedLogin stays on invitedLogin after reconcile with no disk URL", () => {
-    const store = createStore({});
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({}), teamStatus({}));
-    assert.equal(store.phase.kind, "choice");
-    store.openInvitedLogin();
-    assert.equal(store.phase.kind, "invitedLogin");
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: null,
-    });
-    store.setStatuses(ownerStatus({}), teamStatus({}));
-    assert.equal(store.phase.kind, "invitedLogin");
-  });
-
-  it("loginInvited offerBiometry survives late hydrate", async () => {
-    const store = createStore({
-      teamLogin: () =>
-        Promise.resolve(
-          teamStatus({
-            hasAccess: true,
-            hasSecret: true,
-            workerUrl: WORKER_URL,
-            accountEmail: "teammate@example.com",
-            platform: "macos",
+      ownerLogin: () => {
+        loggedIn += 1;
+        return Promise.resolve(
+          ownerStatus({
+            hasMailRefresh: true,
+            hasConsoleRefresh: true,
+            hasMailAccess: true,
           }),
-        ),
-      refreshIdentity: async () => {
-        store.setIdentity({
-          ready: true,
-          isDesktop: true,
-          credentials: null,
-          teamIdentity: {
-            workerUrl: WORKER_URL,
-            accountEmail: "teammate@example.com",
-            mobilePassword: "",
-          },
-        });
+        );
+      },
+      ownerUnlockConsole: () => {
+        unlocked += 1;
+        return Promise.resolve(
+          ownerStatus({
+            hasMailRefresh: true,
+            hasConsoleRefresh: true,
+            hasMailAccess: true,
+            hasConsoleAccess: true,
+          }),
+        );
       },
     });
-    await store.loginInvited({
+    connectOwner(store);
+    await store.loginConsoleWithPasstoken({
       workerUrl: WORKER_URL,
-      accountEmail: "teammate@example.com",
-      mobilePassword: "pw",
+      username: "owner",
+      passtoken: "rb_pass_abc123XYZ-_abcdefghij",
     });
-    assert.equal(store.phase.kind, "offerBiometry");
-    store.setIdentity({
-      ready: true,
-      isDesktop: true,
-      credentials: null,
-      teamIdentity: {
-        workerUrl: WORKER_URL,
-        accountEmail: "teammate@example.com",
-        mobilePassword: "",
-      },
-    });
-    store.setStatuses(
-      ownerStatus({}),
-      teamStatus({
-        hasSecret: true,
-        hasAccess: true,
-        workerUrl: WORKER_URL,
-        accountEmail: "teammate@example.com",
-      }),
-    );
-    assert.equal(store.phase.kind, "offerBiometry");
+    assert.equal(loggedIn, 1);
+    assert.equal(unlocked, 1);
+    assert.equal(store.hasConsoleAccess, true);
+    assert.equal(store.consoleGateOpen, false);
   });
 
   it("switchToOwnerLogin forgets team session and enters owner unlock", async () => {
@@ -1115,7 +467,7 @@ describe("AppSessionStore", () => {
         return Promise.resolve(teamStatus({}));
       },
       ownerSessionStatus: () =>
-        Promise.resolve(ownerStatus({ hasRefresh: true })),
+        Promise.resolve(ownerStatus({ hasMailRefresh: true })),
       refreshIdentity: async () => {
         store.setIdentity({
           ready: true,
@@ -1136,13 +488,10 @@ describe("AppSessionStore", () => {
       },
     });
     store.setStatuses(
-      ownerStatus({ hasRefresh: true }),
-      teamStatus({ hasSecret: true }),
+      ownerStatus({ hasMailRefresh: true }),
+      teamStatus({ hasSecret: true, hasAccess: true }),
     );
-    assert.equal(store.phase.kind, "unlock");
-    if (store.phase.kind === "unlock") {
-      assert.equal(store.phase.role, "invited");
-    }
+    assert.equal(store.phase.kind, "invitedReady");
     await store.switchToOwnerLogin();
     assert.equal(forgot, 1);
     assert.equal(store.phase.kind, "unlock");

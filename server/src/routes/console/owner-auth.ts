@@ -11,8 +11,8 @@ import {
   setupOwner,
 } from "../../lib/owner-auth";
 import {
+  requireConsoleSession,
   requirePepperBootstrap,
-  requireOwnerSession,
 } from "../../lib/auth";
 
 const consoleOwnerAuth = new Hono<{ Bindings: Env }>();
@@ -57,7 +57,7 @@ consoleOwnerAuth.post("/setup-admin", async (c) => {
  * POST /console/login
  *
  * Public (rate-limited + lockout). Body: { username, passtoken, label? }.
- * Returns { accessToken, refreshToken, expiresIn }.
+ * Returns { mailAccessToken, mailRefreshToken, consoleRefreshToken, mailExpiresIn }.
  */
 consoleOwnerAuth.post("/login", async (c) => {
   let body: { username?: string; passtoken?: string; label?: string };
@@ -80,11 +80,11 @@ consoleOwnerAuth.post("/login", async (c) => {
 /**
  * POST /console/refresh
  *
- * Body: { refreshToken }. Rotates the refresh token; returns a new
- * access + refresh pair.
+ * Body: { refreshToken, scope: "mail" | "console" }. Rotates the refresh token;
+ * returns a scoped access + refresh pair.
  */
 consoleOwnerAuth.post("/refresh", async (c) => {
-  let body: { refreshToken?: string };
+  let body: { refreshToken?: string; scope?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -92,7 +92,11 @@ consoleOwnerAuth.post("/refresh", async (c) => {
   }
   const refreshToken = body.refreshToken?.trim() ?? "";
   if (!refreshToken) return c.json({ error: "refreshToken is required" }, 400);
-  const result = await refreshOwner(c.env, refreshToken);
+  const scopeRaw = body.scope?.trim() ?? "console";
+  if (scopeRaw !== "mail" && scopeRaw !== "console") {
+    return c.json({ error: "scope must be mail or console" }, 400);
+  }
+  const result = await refreshOwner(c.env, refreshToken, scopeRaw);
   if ("error" in result) {
     return c.json({ error: result.error }, result.status);
   }
@@ -105,7 +109,7 @@ consoleOwnerAuth.post("/refresh", async (c) => {
  * Requires an owner session. Body: { refreshToken }.
  */
 consoleOwnerAuth.post("/logout", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   let body: { refreshToken?: string };
   try {
@@ -125,7 +129,7 @@ consoleOwnerAuth.post("/logout", async (c) => {
  * revokes every existing session.
  */
 consoleOwnerAuth.post("/rotate-passtoken", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const result = await rotatePasstoken(c.env);
   if ("error" in result) {

@@ -14,8 +14,8 @@ import { explainDesktopError, type DesktopErrorHelp } from "@/lib/desktop/bridge
 
 /**
  * Invited (team) login form. Verifies the mobile password against the
- * customer Worker via the store, which then stores it in the OS keyring and
- * offers biometry. The standalone `/login` page delegates here.
+ * customer Worker via the store, which then stores it in the OS keyring.
+ * The standalone `/login` page delegates here.
  */
 export function TeamLoginView() {
   const store = useAppSession();

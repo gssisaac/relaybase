@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 
 import { BootScreen } from "@/console/components/setup/BootScreen";
-import { OfferBiometryView } from "@/console/components/setup/OfferBiometryView";
 import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
 import { UnlockView } from "@/console/components/setup/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
@@ -55,10 +54,8 @@ export function SessionPhaseScreen({
       return <BootScreen />;
     case "invitedLogin":
       return <TeamLoginView />;
-    case "offerBiometry":
-      return <OfferBiometryView role={phase.role} />;
     case "unlock":
-      return <UnlockView role={phase.role} mode={phase.mode} />;
+      return <UnlockView role={phase.role} />;
     case "invitedReady":
       return store.canShowApp ? (
         <>{children("invited")}</>

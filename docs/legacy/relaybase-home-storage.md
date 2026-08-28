@@ -1,3 +1,6 @@
+> **ARCHIVED** — keyring blobs included `biometryEnabled`. See
+> [README](./README.md) and [../relaybase-home-storage.md](../relaybase-home-storage.md).
+
 # Desktop storage — `~/.relaybase`
 
 **Audience:** humans and coding agents changing desktop persistence, credentials, mail cache, sidebar UI state, or notifications.
@@ -146,7 +149,7 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/keyring_store.rs`,
 | service | `com.relaybase.desktop` |
 | account | `owner-session` |
 
-Blob (`camelCase`): `{ workerUrl, username, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. **`workerUrl`** is the source of truth for daily unlock — JS resolves it before `credentials.json`. The passtoken is never stored. Mail boot: silent **`owner_boot_mail`** (no Touch ID). Console dashboard: Touch ID via **`owner_unlock_console`** at dashboard entry only. Access tokens stay in split process memory (mail vs console).
+Blob (`camelCase`): `{ workerUrl, username, refreshToken, biometryEnabled }`. **`workerUrl` is the source of truth for daily unlock** — JS resolves it before `credentials.json`. The passtoken is never stored. Daily unlock: JS prompts **Touch ID** (Mac) or **Windows Hello** (Windows) with device PIN fallback (`app/src/lib/desktop/biometry/`), then Rust `owner_unlock` reads this blob and rotates refresh. Access stays in process memory. Linux has no biometry plugin — fallback is username + passtoken.
 
 ### OS keyring (team mobile password)
 
@@ -157,7 +160,7 @@ Mirror of the owner keyring for invited (team) users (`keyring_store.rs`, called
 | service | `com.relaybase.desktop` |
 | account | `team-session:{lowercased account email}` |
 
-Blob (`camelCase`): `{ workerUrl, accountEmail, mobilePassword }`. The mobile password lives **only** in the keyring + process memory — never in `team-login.json`. Daily unlock: silent **`team_unlock`** loads the password into process memory; `team_worker_request` attaches `Authorization: Bearer <mobilePassword>` + `X-Account-Email` so JS never reads the password. First login verifies against `/mobile/config` and stores the password in the keyring.
+Blob (`camelCase`): `{ workerUrl, accountEmail, mobilePassword, biometryEnabled }`. The mobile password lives **only** in the keyring + process memory — never in `team-login.json`. Daily unlock: Touch ID / Windows Hello → Rust `team_unlock` loads the password into process memory; `team_worker_request` attaches `Authorization: Bearer <mobilePassword>` + `X-Account-Email` so JS never reads the password. First login verifies against `/mobile/config`, stores the password in the keyring, and offers biometry once.
 
 A one-shot `migrate_legacy_team_login()` runs inside `team_session_status`: if an old `team-login.json` still contains a plaintext `mobilePassword`, it is moved into the keyring and the file is rewritten identity-only.
 

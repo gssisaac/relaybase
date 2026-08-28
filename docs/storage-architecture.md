@@ -72,15 +72,15 @@ The desktop **god token is retired**. Owner auth is now a **Worker-issued passto
 
 - The owner chooses a username; the Worker issues a **random passtoken** (`rb_pass_…`, API-key-style) once. The plaintext is shown **once** and the user downloads it; the Worker stores only `sha256(AUTH_PEPPER || salt || passtoken)`.
 - The app **never writes the passtoken** (or access/refresh tokens) to `~/.relaybase`, cookies, localStorage, or sessionStorage. The user keeps the downloaded file.
-- Desktop session storage: **refresh** lives in the OS keyring (`com.relaybase.desktop` / `owner-session`; macOS uses the data-protection keychain so launch does not prompt for the login-keychain password); **access** lives in Tauri process memory only. Daily unlock is **Touch ID** (macOS) or **Windows Hello** (Windows) via `tauri-plugin-biometry` with `allowDeviceCredential` (device PIN / password fallback). Linux and unsigned `tauri dev` builds fall back to username + passtoken. The user can opt out of biometry on that device. JS never sees refresh or access — Rust `worker_request` attaches the Bearer.
-- `POST /console/login` (`{ username, passtoken }`) returns a short-lived **access** token (HMAC-signed with `AUTH_PEPPER`, ~10 min) + an opaque **refresh** token (hash-only in D1 `owner_sessions`). Refresh rotates on each use; reuse revokes the session family.
-- All `/console/*` and `/mail/*` routes require an **access Bearer** (`requireOwnerSession`). `POST /console/init-db` / `migrate-db` accept an `AUTH_PEPPER` bootstrap (`X-Auth-Pepper`) only while no owner is configured yet.
+- Desktop session storage: **dual refresh** in the OS keyring (`mailRefreshToken` ~90d, console `refreshToken` ~30m); **split access** in Tauri memory (mail ~60m, console ~30m). Mail boot is **silent** (`owner_boot_mail`); console dashboard requires **Touch ID** at entry (`owner_unlock_console` after `owner_touch_id_cmd`). Teammate desktop unlock is silent from keyring — no biometry. Linux / unsigned `tauri dev` fall back to passtoken for console. JS never sees tokens — Rust `worker_request` picks scope by path prefix.
+- `POST /console/login` returns mail + console refresh tokens and mail access immediately; console access is minted at gate time via scoped refresh.
+- All `/console/*` routes require **console-scoped** access; `/mail/*` require **mail-scoped** access (`requireOwnerSession(c, scope)`).
 - Lost passtoken: `POST /console/reset-admin` verifies a Cloudflare access token whose account matches `CF_ACCOUNT_ID`, then re-issues a passtoken once and revokes all sessions. No console email, no central god token.
 - `AUTH_PEPPER` (random, set once at install) replaces the old `ADMIN_TOKEN` wrangler secret. `owner_config.admin_token` and D1 `auth_tokens` (`rb-auth-…`) are dropped (migration `0003_owner_login`; after local `0002_app_settings`).
 
-The desktop **unlock flow** that consumes this model — Touch ID on launch, the
-owner/invited phase machine, the team keyring, and 401 re-prompt — is
-documented in **[desktop-session-machine.md](./desktop-session-machine.md)**.
+The desktop **unlock flow** — silent mail boot, console-only Touch ID,
+owner/invited phase machine, team keyring, scoped 401 — is documented in
+**[desktop-session-machine.md](./desktop-session-machine.md)**.
 Invited (team) mobile passwords live in the OS keyring
 (`team-session:{email}`), mirroring the owner keyring; see
 **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.

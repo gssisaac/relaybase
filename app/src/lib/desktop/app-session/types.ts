@@ -13,11 +13,10 @@ export type AppSessionPhase =
       step: "oauth" | "progress" | "createOwner" | "revealPasstoken";
     }
   | { kind: "invitedLogin" }
-  | { kind: "offerBiometry"; role: "owner" | "invited" }
   | {
       kind: "unlock";
       role: "owner" | "invited";
-      mode: "prompting" | "idle" | "secret";
+      mode: "secret";
     }
   | { kind: "invitedReady" }
   | { kind: "ownerReady" }
@@ -41,9 +40,9 @@ export type AppSessionDeps = {
     workerUrl: string;
     username: string;
     passtoken: string;
-    biometryEnabled?: boolean;
   }) => Promise<OwnerSessionStatus>;
-  ownerUnlock: () => Promise<OwnerSessionStatus>;
+  ownerBootMail: () => Promise<OwnerSessionStatus>;
+  ownerUnlockConsole: () => Promise<OwnerSessionStatus>;
   ownerLogout: () => Promise<void>;
   ownerSetupAdmin: (input: {
     workerUrl: string;
@@ -55,19 +54,15 @@ export type AppSessionDeps = {
     cfAccessToken: string;
     username?: string;
   }) => Promise<{ username: string; passtoken: string }>;
-  ownerSetBiometryEnabled: (enabled: boolean) => Promise<OwnerSessionStatus>;
   teamSessionStatus: () => Promise<TeamSessionStatus>;
   teamLogin: (input: {
     workerUrl: string;
     accountEmail: string;
     mobilePassword: string;
-    biometryEnabled?: boolean;
   }) => Promise<TeamSessionStatus>;
   teamUnlock: () => Promise<TeamSessionStatus>;
   teamLogout: () => Promise<void>;
   teamForgetSession: () => Promise<TeamSessionStatus>;
-  teamSetBiometryEnabled: (enabled: boolean) => Promise<TeamSessionStatus>;
-  /** Reload ~/.relaybase credentials + team identity and mirror into the store. */
   refreshIdentity: () => Promise<void>;
   clearOwnerDisk: () => Promise<void>;
   clearTeamDisk: () => Promise<void>;

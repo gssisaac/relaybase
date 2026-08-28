@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireOwnerSession } from "../../lib/auth";
+import { requireConsoleSession } from "../../lib/auth";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
 import { createAppDb } from "../../../db/app";
 import {
@@ -13,7 +13,7 @@ import {
 const consoleBranding = new Hono<{ Bindings: Env }>();
 
 consoleBranding.get("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const domain = c.req.query("domain")?.trim();
@@ -41,7 +41,7 @@ consoleBranding.get("/", async (c) => {
 });
 
 consoleBranding.put("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const body = (await c.req.json()) as {
@@ -79,7 +79,7 @@ consoleBranding.put("/", async (c) => {
 });
 
 consoleBranding.post("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const body = (await c.req.json()) as { domain?: string };

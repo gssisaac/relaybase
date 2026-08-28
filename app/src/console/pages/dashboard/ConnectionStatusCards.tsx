@@ -17,6 +17,8 @@ import {
 } from "@/lib/dashboard/connection-status";
 import { settingsTabHref } from "@/console/lib/paths";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
+import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
+import { useAppSession } from "@/lib/desktop/app-session";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
@@ -91,17 +93,26 @@ function CompactConnectionCard({
 export function ConnectionStatusCards() {
   const { isDesktop } = useDesktopChrome();
   const desktop = useOptionalDesktop();
+  const session = useAppSession();
   const { snapshot, loading, refreshing } = useConnectionStatus();
 
   if (!isDesktop) return null;
 
-  const hasWorkerCredentials = Boolean(
-    desktop?.credentials?.workerUrl?.trim() &&
-      desktop?.credentials?.adminToken?.trim(),
-  );
+  const resolvedWorkerUrl =
+    snapshot?.worker?.workerUrl?.trim() ||
+    resolveWorkerUrl({
+      role: "owner",
+      ownerStatus: session.ownerStatus,
+      credentials: desktop?.credentials ?? null,
+      teamLogin: null,
+    });
+  const hasWorkerCredentials = Boolean(resolvedWorkerUrl);
+
+  const awaitingConsole =
+    session.phase.kind === "ownerReady" && !session.hasConsoleAccess;
 
   const health = connectionHealthFromSnapshot(snapshot, {
-    pending: loading || refreshing,
+    pending: loading || refreshing || awaitingConsole,
     hasWorkerCredentials,
   });
 

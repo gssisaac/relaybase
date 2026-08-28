@@ -1,8 +1,5 @@
 import type { AppSessionDeps } from "./types";
 
-/** Lazy-load the desktop bridge so the store stays importable in the
- * unit-test runner (no `@/` alias, no Tauri). Production injects nothing
- * and these load on first use. */
 async function bridge() {
   return await import("../bridge");
 }
@@ -26,22 +23,20 @@ export function createDefaultDeps(
     ownerSessionStatus: () =>
       bridge().then((b) => b.desktopOwnerSessionStatus()),
     ownerLogin: (input) => bridge().then((b) => b.desktopOwnerLogin(input)),
-    ownerUnlock: () => bridge().then((b) => b.desktopOwnerUnlock()),
+    ownerBootMail: () => bridge().then((b) => b.desktopOwnerBootMail()),
+    ownerUnlockConsole: () =>
+      bridge().then((b) => b.desktopOwnerUnlockConsole()),
     ownerLogout: () => bridge().then((b) => b.desktopOwnerLogout()),
     ownerSetupAdmin: (input) =>
       bridge().then((b) => b.desktopOwnerSetupAdmin(input)),
     ownerResetAdmin: (input) =>
       bridge().then((b) => b.desktopOwnerResetAdmin(input)),
-    ownerSetBiometryEnabled: (enabled) =>
-      bridge().then((b) => b.desktopOwnerSetBiometryEnabled(enabled)),
     teamSessionStatus: () => bridge().then((b) => b.desktopTeamSessionStatus()),
     teamLogin: (input) => bridge().then((b) => b.desktopTeamLogin(input)),
     teamUnlock: () => bridge().then((b) => b.desktopTeamUnlock()),
     teamLogout: () => bridge().then((b) => b.desktopTeamLogout()),
     teamForgetSession: () =>
       bridge().then((b) => b.desktopTeamForgetSession()),
-    teamSetBiometryEnabled: (enabled) =>
-      bridge().then((b) => b.desktopTeamSetBiometryEnabled(enabled)),
     refreshIdentity: overrides?.refreshIdentity ?? (() => Promise.resolve()),
     clearOwnerDisk: () =>
       bridge().then((b) =>

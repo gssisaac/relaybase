@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireOwnerSession } from "../../lib/auth";
+import { requireConsoleSession } from "../../lib/auth";
 import { probeD1Connection } from "../../lib/d1-status";
 import { emailBindingConfigured } from "../../lib/email-send";
 import { measureInboundR2Usage } from "../../lib/r2-usage";
@@ -37,7 +37,7 @@ async function checkInboundR2(bucket: R2Bucket): Promise<boolean> {
  * Public GET /health is not sufficient (no admin proof).
  */
 consoleConnect.get("/", async (c) => {
-  const denied = await requireOwnerSession(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
   const r2Configured = await checkInboundR2(c.env.INBOUND);

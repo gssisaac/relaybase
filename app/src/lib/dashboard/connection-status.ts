@@ -1,6 +1,8 @@
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 import {
+  desktopOwnerSessionStatus,
   desktopVerifyWorkerConnection,
+  isDesktopRuntime,
   mailApiReady,
 } from "@/lib/desktop/bridge";
 import { ensureAccessToken } from "@/lib/desktop/auth";
@@ -84,9 +86,66 @@ export function workerStatusFromConnect(
 
 export async function probeConnectionStatus(
   credentials: DesktopCredentials | null | undefined,
+  options?: { hasConsoleAccess?: boolean },
 ): Promise<ConnectionStatusSnapshot> {
   const cfInstallTokenPresentVal = cfInstallTokenPresent(credentials);
-  const url = credentials?.workerUrl?.trim();
+  let url = credentials?.workerUrl?.trim() ?? "";
+
+  if (isDesktopRuntime()) {
+    const owner = await desktopOwnerSessionStatus();
+    if (!url) url = owner.workerUrl?.trim() ?? "";
+    if (!url) {
+      return {
+        cfConnected: false,
+        cfInstallTokenPresent: cfInstallTokenPresentVal,
+        worker: null,
+      };
+    }
+    const hasConsole = options?.hasConsoleAccess ?? owner.hasConsoleAccess;
+    if (!hasConsole) {
+      return {
+        cfConnected: false,
+        cfInstallTokenPresent: cfInstallTokenPresentVal,
+        worker: null,
+      };
+    }
+    try {
+      const result = await desktopVerifyWorkerConnection(url, "");
+      const worker = workerStatusFromConnect(result);
+      // D1 fallback probes need a Bearer token; Rust verify_worker_connection
+      // already probes D1 when /console/connect omits bindings.
+      const cfConnected = worker.ok ? mailApiReady(worker) : false;
+      return {
+        cfConnected,
+        cfInstallTokenPresent: cfInstallTokenPresentVal,
+        worker,
+      };
+    } catch {
+      return {
+        cfConnected: false,
+        cfInstallTokenPresent: cfInstallTokenPresentVal,
+        worker: {
+          ok: false,
+          workerUrl: url,
+          workerScriptName: credentials?.workerScriptName || "relaybase-api",
+          accountId: credentials?.accountId?.trim() ?? "",
+          r2Configured: false,
+          inboundBucketName: "relaybase-mailbox",
+          r2TotalBytes: null,
+          r2ObjectCount: null,
+          r2UsageTruncated: null,
+          cfApiTokenSet: false,
+          cfApiTokenValid: undefined,
+          emailBindingConfigured: false,
+          d1Logs: { ...D1_LOGS_DEFAULT },
+          d1Mail: { ...D1_MAIL_DEFAULT },
+          d1InboxIndex: { ...D1_MAIL_DEFAULT },
+          d1App: { ...D1_APP_DEFAULT },
+        },
+      };
+    }
+  }
+
   const token = credentials?.adminToken?.trim();
   const access = await ensureAccessToken();
 
@@ -188,12 +247,12 @@ export function connectionHealthFromSnapshot(
         ? {
             tone: "ok",
             label: "Healthy",
-            detail: "Worker reachable and admin token accepted.",
+            detail: "Worker reachable and owner session accepted.",
           }
         : {
             tone: "bad",
             label: "Unreachable",
-            detail: "Check URL, admin token, and deploy.",
+            detail: "Check Worker URL, console unlock, and deploy.",
           };
 
   const r2: HealthStatus = !hasWorker

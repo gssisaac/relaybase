@@ -8,9 +8,9 @@ import { resolveEmailApiBase } from "@/lib/desktop/api";
  * The passtoken, access token, and refresh token are NEVER written to disk,
  * cookies, localStorage, or sessionStorage. The user keeps the one-time
  * passtoken download; the app holds the session in memory for the lifetime
- * of the process. On the desktop, refresh lives in the OS keyring and daily
- * unlock is Touch ID / Windows Hello (`desktop/biometry` + Rust `owner_unlock`).
- * This module is the browser `pnpm next` in-memory session; the Tauri
+ * of the process. On desktop, mail refresh lives in the OS keyring and boot
+ * unlock is silent (`owner_boot_mail`). Console dashboard access uses Touch ID
+ * via `owner_unlock_console` / `ConsoleGateView`. This module is the browser `pnpm next` in-memory session; the Tauri
  * webview uses Rust `worker_request` so JS never sees tokens.
  */
 

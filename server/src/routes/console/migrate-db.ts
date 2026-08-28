@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireOwnerSession, requirePepperBootstrap } from "../../lib/auth";
+import { requireConsoleSession, requirePepperBootstrap } from "../../lib/auth";
 import { applyPendingMigrations } from "../../lib/d1-migrations";
 import { ownerIsConfigured } from "../../../db/app/owner";
 import { createAppDb } from "../../../db/app";
@@ -19,7 +19,7 @@ consoleMigrateDb.post("/", async (c) => {
   const db = createAppDb(c.env.RELAYBASE_DB);
   const hasOwner = db ? await ownerIsConfigured(db) : false;
   const denied = hasOwner
-    ? await requireOwnerSession(c)
+    ? await requireConsoleSession(c)
     : await requirePepperBootstrap(c);
   if (denied) return denied;
 

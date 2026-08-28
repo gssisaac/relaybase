@@ -546,8 +546,11 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
     writeSidebarMode(userId, mode);
   }, [mode, pathname, searchParams, userId]);
 
-  function switchMode(next: SidebarMode) {
+  async function switchMode(next: SidebarMode) {
     if (next === mode) return;
+    if (next === "dashboard" && !isTeam) {
+      await session.ensureConsoleAccess();
+    }
     writeSidebarMode(userId, next);
     const target = readLastPath(userId, next);
     router.push(

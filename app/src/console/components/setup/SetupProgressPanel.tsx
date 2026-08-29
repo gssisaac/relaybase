@@ -48,6 +48,9 @@ import {
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
+import { loadPublicWorkerVersionCompare } from "@/lib/dashboard/list-cf-zones";
+import { ownerAuthStatusForWorkerUrl } from "@/lib/desktop/auth/owner-session";
+import Link from "next/link";
 
 type WipeIntent =
   | { kind: "rollback" }
@@ -164,6 +167,15 @@ export function SetupProgressPanel({
   const [confirmedReinstallKeys, setConfirmedReinstallKeys] = useState<
     Set<string>
   >(() => new Set());
+  const [workerOwnerConfigured, setWorkerOwnerConfigured] = useState<
+    boolean | null
+  >(null);
+  const [workerVersions, setWorkerVersions] = useState<{
+    current: string;
+    latest: string;
+    needsUpgrade: boolean;
+  } | null>(null);
+  const [probedWorkerUrl, setProbedWorkerUrl] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
   const [mailApiDone, setMailApiDone] = useState(false);
@@ -295,6 +307,9 @@ export function SetupProgressPanel({
     setExisting([]);
     setLastWipePhrase(null);
     setConfirmedReinstallKeys(new Set());
+    setWorkerOwnerConfigured(null);
+    setWorkerVersions(null);
+    setProbedWorkerUrl(null);
     try {
       if (!(await ensureOauthSession())) {
         return;
@@ -315,6 +330,19 @@ export function SetupProgressPanel({
       setDecisions(
         Object.fromEntries(found.map((r) => [decisionKey(r), "skip" as const])),
       );
+      const workerUrl = probe.workersDevUrl?.trim() || null;
+      setProbedWorkerUrl(workerUrl);
+      if (workerUrl) {
+        const [status, versions] = await Promise.all([
+          ownerAuthStatusForWorkerUrl(workerUrl),
+          loadPublicWorkerVersionCompare(workerUrl),
+        ]);
+        setWorkerOwnerConfigured(status.ownerConfigured);
+        setWorkerVersions(versions);
+      } else {
+        setWorkerOwnerConfigured(null);
+        setWorkerVersions(null);
+      }
     } catch (err) {
       setError(
         explainDesktopError(err, "Could not check existing resources", {
@@ -859,6 +887,93 @@ export function SetupProgressPanel({
                 requires typing DELETE ME.
               </p>
             </div>
+            {workerVersions?.needsUpgrade ? (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-800 dark:text-amber-300">
+                <p className="font-medium">You should upgrade</p>
+                <p className="mt-1 text-muted-foreground">
+                  This Worker is older than the current install package. Skip
+                  all resources, then use{" "}
+                  <Link
+                    href="/setup/connect"
+                    className="underline underline-offset-2"
+                  >
+                    Already installed
+                  </Link>{" "}
+                  to sign in and open Settings → Update Worker. Do not
+                  Reinstall Worker from Setup.
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2 rounded-md border border-amber-500/20 bg-background/40 px-3 py-2">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Running
+                    </p>
+                    <p className="font-mono text-sm">
+                      v{workerVersions.current}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Latest
+                    </p>
+                    <p className="font-mono text-sm">
+                      v{workerVersions.latest}
+                    </p>
+                  </div>
+                </div>
+                {probedWorkerUrl ? (
+                  <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                    {probedWorkerUrl}
+                  </p>
+                ) : null}
+              </div>
+            ) : workerOwnerConfigured ? (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-800 dark:text-amber-300">
+                <p className="font-medium">Owner already configured</p>
+                <p className="mt-1 text-muted-foreground">
+                  This Worker already has an owner passtoken in D1. Setup
+                  Reinstall will fail at migrate-db unless you are signed in.
+                  Skip all resources, then use{" "}
+                  <Link
+                    href="/setup/connect"
+                    className="underline underline-offset-2"
+                  >
+                    Already installed
+                  </Link>{" "}
+                  to sign in with your passtoken, or{" "}
+                  <Link
+                    href="/setup/recover-admin"
+                    className="underline underline-offset-2"
+                  >
+                    I forgot my passtoken
+                  </Link>
+                  , then Settings → Update Worker.
+                </p>
+                {workerVersions ? (
+                  <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                    v{workerVersions.current} · latest v{workerVersions.latest}
+                  </p>
+                ) : null}
+                {probedWorkerUrl ? (
+                  <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+                    {probedWorkerUrl}
+                  </p>
+                ) : null}
+              </div>
+            ) : workerVersions ? (
+              <p className="font-mono text-[11px] text-muted-foreground">
+                Worker v{workerVersions.current} · latest v
+                {workerVersions.latest}
+              </p>
+            ) : null}
+            {Object.entries(decisions).some(
+              ([key, action]) =>
+                action === "reinstall" && key.startsWith("worker:"),
+            ) && workerOwnerConfigured && !workerVersions?.needsUpgrade ? (
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Reinstall Worker is selected while an owner exists — migrate-db
+                will return 401. Choose Skip for the Worker instead.
+              </p>
+            ) : null}
             <ul className="space-y-3">
               {existing.map((r) => {
                 const key = decisionKey(r);
@@ -880,7 +995,20 @@ export function SetupProgressPanel({
                           </span>{" "}
                           <span className="font-medium">{r.name}</span>
                         </p>
-                        {occupancySummary(r) ? (
+                        {r.kind === "worker" && workerVersions ? (
+                          <p
+                            className={
+                              workerVersions.needsUpgrade
+                                ? "text-[11px] text-amber-700 dark:text-amber-400"
+                                : "text-[11px] text-muted-foreground"
+                            }
+                          >
+                            v{workerVersions.current}
+                            {workerVersions.latest
+                              ? ` · latest v${workerVersions.latest}`
+                              : ""}
+                          </p>
+                        ) : occupancySummary(r) ? (
                           <p
                             className={
                               resourceIsOccupied(r)

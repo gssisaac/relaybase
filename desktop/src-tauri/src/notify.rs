@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use serde::Serialize;
 use tauri::AppHandle;
 #[cfg(target_os = "macos")]
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -60,16 +60,7 @@ fn store_and_emit_open_mail(app: &AppHandle, payload: OpenMailPayload) {
         *guard = Some(payload.clone());
     }
     let _ = app.emit("notification-open-mail", &payload);
-    focus_main_window(app);
-}
-
-#[cfg(target_os = "macos")]
-fn focus_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
+    crate::tray::show_main_window(app);
 }
 
 #[cfg(target_os = "macos")]

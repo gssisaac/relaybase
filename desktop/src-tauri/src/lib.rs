@@ -9,6 +9,7 @@ mod owner_session;
 mod secrets;
 mod team_session;
 mod touch_id;
+mod tray;
 mod worker;
 
 /// Relaybase console base URL. The desktop calls console.relaybase.xyz for
@@ -68,6 +69,7 @@ use uuid::Uuid;
 
 use base64::Engine as _;
 use sha2::{Digest, Sha256};
+use tauri::Manager;
 
 // In-flight CF OAuth data, minted in `start_cf_oauth` and consumed in
 // `complete_cf_oauth`. The OAuth client is a PUBLIC PKCE client (no secret),
@@ -1720,6 +1722,13 @@ pub fn run() {
             })
             .build()?;
 
+            if let Some(main) = app.get_webview_window("main") {
+                tray::attach_close_to_hide(&main);
+            }
+            if let Err(e) = tray::setup_tray(app) {
+                log::warn!("tray setup failed: {e}");
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1772,6 +1781,7 @@ pub fn run() {
             reveal_file_in_folder,
             notify::show_notification,
             notify::take_pending_open_mail,
+            tray::set_tray_unread,
             owner_session_status_cmd,
             owner_login_cmd,
             owner_boot_mail_cmd,
@@ -1788,6 +1798,12 @@ pub fn run() {
             team_forget_session_cmd,
             team_worker_request_cmd,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Relaybase desktop");
+        .build(tauri::generate_context!())
+        .expect("error while building Relaybase desktop")
+        .run(|app, event| {
+            // macOS: dock icon click while running (window often hidden after close).
+            if let tauri::RunEvent::Reopen { .. } = event {
+                tray::show_main_window(app);
+            }
+        });
 }

@@ -55,6 +55,7 @@ import {
 import { inboundMatchesAccount } from "@/email/lib/threading/conversation-threading";
 import type { LoadPhase } from "@/email/stores/mail-accounts-store";
 import { notifyNewMail } from "@/lib/desktop/notify";
+import { setTrayUnread } from "@/lib/desktop/tray";
 
 const INBOX_PAGE_SIZE = 50;
 const SENT_PAGE_SIZE = 50;
@@ -309,6 +310,12 @@ export class EmailMailboxStore {
   /** Whole-mailbox unread total across enabled domains, or null before first fetch. */
   get inboxUnreadTotal(): number | null {
     return sumByDomain(this.enabledDomains, this.inboxUnreadByDomain);
+  }
+
+  /** Push tray badge from current `inboxUnreadTotal` (desktop only). */
+  private syncTrayUnreadBadge() {
+    const total = this.inboxUnreadTotal;
+    void setTrayUnread(typeof total === "number" && total > 0);
   }
 
   /** Whole-mailbox sent total across enabled domains, or null before first fetch. */
@@ -583,6 +590,7 @@ export class EmailMailboxStore {
       this.sentLoadingMore = false;
       this.clearSearch();
       this.hydrateFromStale();
+      this.syncTrayUnreadBadge();
     } else if (domainsChanged && nextDomainsKey) {
       this.hydrateInboxSentFromStale();
     }
@@ -1110,6 +1118,7 @@ export class EmailMailboxStore {
         this.pruneConfirmedOverrides();
       });
 
+      this.syncTrayUnreadBadge();
       void this.persistMailLists();
     } catch (e) {
       if (this.refreshGeneration === generation && isPrimary) {
@@ -1286,6 +1295,7 @@ export class EmailMailboxStore {
       this.inboxTotalByDomain = { ...this.inboxTotalByDomain, ...totals };
       this.inboxUnreadByDomain = { ...this.inboxUnreadByDomain, ...unreads };
     });
+    this.syncTrayUnreadBadge();
   }
 
   private async fetchSentPage(
@@ -1676,6 +1686,7 @@ export class EmailMailboxStore {
         }
       }
     });
+    this.syncTrayUnreadBadge();
     return hadDisk;
   }
 

@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import type { Env } from "../env";
 import { createAppDb } from "../../db/app";
 import { resolveKey } from "./keys";
-import { verifyAccessToken, type OwnerScope } from "./owner-auth";
+import { verifyAccessToken, verifyCfTokenAccount, type OwnerScope } from "./owner-auth";
 import { getOwnerLoginConfig } from "../../db/app/owner";
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
@@ -64,7 +64,7 @@ export function requireMailSession(
  * Bootstrap auth for install-time endpoints (init-db, migrate-db, setup-admin).
  * Allowed only when no owner is configured yet AND the body/secret proves
  * knowledge of AUTH_PEPPER. Once an owner exists, these endpoints require a
- * normal owner session.
+ * normal owner session or Cloudflare account proof.
  */
 export async function requirePepperBootstrap(
   c: Context<{ Bindings: Env }>,
@@ -78,6 +78,42 @@ export async function requirePepperBootstrap(
     return c.json({ error: "Unauthorized" }, 401);
   }
   return null;
+}
+
+/**
+ * Cloudflare OAuth access token that can GET this Worker's `CF_ACCOUNT_ID`
+ * account. Same proof as `POST /console/reset-admin`.
+ */
+export async function requireCfAccountProof(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response | null> {
+  const token = c.req.header("X-Cf-Access-Token")?.trim() ?? "";
+  if (!token) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const expected = c.env.CF_ACCOUNT_ID?.trim() ?? "";
+  if (!expected) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const verified = await verifyCfTokenAccount(token, expected);
+  if (!verified.ok) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  return null;
+}
+
+/**
+ * init-db / migrate-db auth: console session, or CF OAuth account proof
+ * (desktop install / upgrade), or AUTH_PEPPER when no owner exists yet.
+ */
+export async function requireSchemaAuth(
+  c: Context<{ Bindings: Env }>,
+  hasOwner: boolean,
+): Promise<Response | null> {
+  if (!(await requireConsoleSession(c))) return null;
+  if (!(await requireCfAccountProof(c))) return null;
+  if (!hasOwner) return requirePepperBootstrap(c);
+  return c.json({ error: "Unauthorized" }, 401);
 }
 
 export async function requireApiKey(

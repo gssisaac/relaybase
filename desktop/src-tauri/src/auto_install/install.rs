@@ -6,7 +6,7 @@ use crate::cloudflare::{
     assert_r2_subscription, count_d1_user_rows, count_r2_objects, create_d1_database,
     delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket,
     enable_workers_dev, ensure_r2_bucket, find_r2_bucket, list_d1_databases,
-    list_worker_bindings, put_worker_schedules, put_worker_secret, resolve_account_id,
+    list_worker_bindings, list_worker_secrets, put_worker_schedules, put_worker_secret,
     upload_worker_script, CfClient, DEFAULT_WORKER_CRON,
 };
 use crate::secrets::load_credentials;
@@ -16,7 +16,9 @@ use super::cancel::{cancelled_error, check_cancelled, install_is_cancelled, rese
 use super::constants::{D1_DATABASES, R2_BUCKET};
 use super::credentials::generate_auth_pepper;
 use super::errors::explain_init_db_failure;
-use super::health::{fetch_worker_version, log_worker_health_shape, wait_for_worker_ready};
+use super::health::{
+    fetch_owner_configured, fetch_worker_version, log_worker_health_shape, wait_for_worker_ready,
+};
 use super::log::emit_log;
 use super::manifest::{fetch_install_manifest, read_staged_version, stage_install_package};
 use super::schema::{init_worker_db_with_retry, migrate_worker_db_with_retry};
@@ -35,29 +37,16 @@ pub async fn auto_install_worker(
     reset_install_cancel();
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
-        return Err("A Cloudflare API token is required.".into());
+        return Err("Authorize with Cloudflare again".into());
     }
     let server_token = server_token
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let account_id = match account_id
+    let account_id = account_id
         .map(|a| a.trim().to_string())
         .filter(|a| !a.is_empty())
-    {
-        Some(id) => id,
-        None => {
-            let _ = app.emit(
-                "install-log",
-                LogEvent {
-                    step: "prepare".into(),
-                    level: "info".into(),
-                    line: "Resolving Cloudflare account id from API token…".into(),
-                },
-            );
-            resolve_account_id(&api_token).await?
-        }
-    };
+        .ok_or_else(|| "Authorize with Cloudflare again".to_string())?;
 
     let manifest = fetch_install_manifest().await?;
     let _ = app.emit(
@@ -104,19 +93,16 @@ pub async fn update_installed_worker(
     reset_install_cancel();
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
-        return Err("A Cloudflare API token is required.".into());
+        return Err("Authorize with Cloudflare again".into());
     }
     let server_token = server_token
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let account_id = match account_id
+    let account_id = account_id
         .map(|a| a.trim().to_string())
         .filter(|a| !a.is_empty())
-    {
-        Some(id) => id,
-        None => resolve_account_id(&api_token).await?,
-    };
+        .ok_or_else(|| "Authorize with Cloudflare again".to_string())?;
 
     let saved = load_credentials()?.unwrap_or_default();
     let expected_url = saved.worker_url.clone();
@@ -198,19 +184,28 @@ async fn auto_install_steps(
     let worker_url =
         deploy_worker(app, &client, work_dir, &d1_ids, staged_version.clone()).await?;
 
-    let auth_pepper = apply_secrets(app, &client, account_id, run_opts, server_token).await?;
+    let auth_pepper = apply_secrets(
+        app,
+        &client,
+        account_id,
+        run_opts,
+        server_token,
+        any_d1_reused,
+    )
+    .await?;
 
     wait_for_worker_ready(app, &worker_url).await?;
     log_worker_health_shape(app, &worker_url).await;
 
-    let access = crate::owner_session::current_access_token();
+    let console_access = crate::owner_session::current_console_access_token();
     let (db_already_initialized, db_applied) = finalize_schema(
         app,
         &worker_url,
         run_opts,
         any_d1_reused,
         &auth_pepper,
-        access.as_deref(),
+        console_access.as_deref(),
+        Some(api_token),
     )
     .await?;
 
@@ -350,7 +345,7 @@ async fn prepare_d1(
     let mut any_d1_reused = false;
 
     for (_binding, db_name) in D1_DATABASES {
-        let db_id = if run_opts.worker_only {
+        let (db_id, log_ready) = if run_opts.worker_only {
             match existing_d1.iter().find(|(n, _)| n == db_name) {
                 Some((_, id)) => {
                     any_d1_reused = true;
@@ -360,7 +355,7 @@ async fn prepare_d1(
                         "info",
                         format!("D1 {db_name} found — reusing (id {id})"),
                     );
-                    id.clone()
+                    (id.clone(), true)
                 }
                 None => {
                     return Err(format!(
@@ -383,27 +378,24 @@ async fn prepare_d1(
                 delete_d1_database(client, id).await?;
             }
             emit_log(app, "d1", "info", format!("Creating D1 {db_name}…"));
-            create_d1_database(client, db_name).await?
+            (create_d1_database(client, db_name).await?, true)
         } else if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
+            // User chose Skip in Setup — reuse silently (no "skipping create" noise).
             any_d1_reused = true;
+            (id.clone(), false)
+        } else {
+            emit_log(app, "d1", "info", format!("Creating D1 {db_name}…"));
+            (create_d1_database(client, db_name).await?, true)
+        };
+        check_cancelled()?;
+        if log_ready {
             emit_log(
                 app,
                 "d1",
                 "info",
-                format!("D1 {db_name} already exists — skipping create (id {id})"),
+                format!("D1 {db_name} ready (id {db_id}) — schema via Worker init-db or migrate-db"),
             );
-            id.clone()
-        } else {
-            emit_log(app, "d1", "info", format!("Creating D1 {db_name}…"));
-            create_d1_database(client, db_name).await?
-        };
-        check_cancelled()?;
-        emit_log(
-            app,
-            "d1",
-            "info",
-            format!("D1 {db_name} ready (id {db_id}) — schema via Worker init-db or migrate-db"),
-        );
+        }
         if db_id.trim().is_empty() {
             return Err(format!(
                 "D1 {db_name} has no database id — cannot bind it to the Worker."
@@ -518,15 +510,23 @@ async fn apply_secrets(
     account_id: &str,
     run_opts: &InstallRunOptions,
     server_token: Option<&str>,
+    any_d1_reused: bool,
 ) -> Result<String, String> {
-    let auth_pepper = if run_opts.skip_auth_pepper {
+    let existing_secrets = list_worker_secrets(client, DEFAULT_SCRIPT)
+        .await
+        .unwrap_or_default();
+    let has_pepper = existing_secrets.iter().any(|n| n == "AUTH_PEPPER");
+    // Reuse D1 / Worker update must not rotate a live pepper. If the secret
+    // is missing, login HMAC is an empty key — always PUT in that case.
+    let skip_pepper = (run_opts.skip_auth_pepper || any_d1_reused) && has_pepper;
+    let auth_pepper = if skip_pepper {
         String::new()
     } else if let Some(existing) = run_opts.existing_auth_pepper.as_ref() {
         existing.clone()
     } else {
         generate_auth_pepper()
     };
-    if !run_opts.skip_auth_pepper {
+    if !skip_pepper {
         put_worker_secret(client, DEFAULT_SCRIPT, "AUTH_PEPPER", &auth_pepper).await?;
         emit_log(app, "secret", "info", "AUTH_PEPPER secret set");
     } else {
@@ -568,7 +568,24 @@ async fn finalize_schema(
     any_d1_reused: bool,
     auth_pepper: &str,
     access_token: Option<&str>,
+    cf_access_token: Option<&str>,
 ) -> Result<(bool, Vec<String>), String> {
+    let owner_configured = fetch_owner_configured(worker_url).await.unwrap_or(false);
+    let console_access = access_token.filter(|t| !t.trim().is_empty());
+    let cf_access = cf_access_token.filter(|t| !t.trim().is_empty());
+    if owner_configured && console_access.is_none() && cf_access.is_none() {
+        emit_log(
+            app,
+            "migrate-db",
+            "stderr",
+            "Owner already configured — migrate-db requires a signed-in console session or Cloudflare OAuth.",
+        );
+        return Err(
+            "OWNER_ALREADY_CONFIGURED: Authorize with Cloudflare again so Setup can finish the upgrade."
+                .into(),
+        );
+    }
+
     let use_migrate = run_opts.worker_only || any_d1_reused;
     let pepper = if auth_pepper.is_empty() {
         None
@@ -576,9 +593,9 @@ async fn finalize_schema(
         Some(auth_pepper)
     };
     let init = if use_migrate {
-        migrate_worker_db_with_retry(app, worker_url, pepper, access_token).await
+        migrate_worker_db_with_retry(app, worker_url, pepper, console_access, cf_access).await
     } else {
-        init_worker_db_with_retry(app, worker_url, pepper, access_token).await
+        init_worker_db_with_retry(app, worker_url, pepper, console_access, cf_access).await
     };
     let step = if use_migrate { "migrate-db" } else { "init-db" };
     match init {
@@ -600,6 +617,17 @@ async fn finalize_schema(
             Ok((use_migrate || r.already_initialized, r.applied))
         }
         Err(e) => {
+            if owner_configured && cf_access.is_some() && is_schema_auth_skip(&e) {
+                emit_log(
+                    app,
+                    step,
+                    "info",
+                    "Owner already configured — Cloudflare OAuth deploy succeeded; \
+                     this Worker build does not accept OAuth for migrate-db. \
+                     Script is updated; sign in later to apply pending migrations.",
+                );
+                return Ok((true, Vec::new()));
+            }
             emit_log(
                 app,
                 step,
@@ -609,4 +637,11 @@ async fn finalize_schema(
             Err(explain_init_db_failure(&e))
         }
     }
+}
+
+fn is_schema_auth_skip(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("401")
+        || lower.contains("unauthorized")
+        || lower.contains("owner already configured")
 }

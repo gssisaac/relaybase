@@ -1,7 +1,7 @@
 {
-  "version": "0.1.1",
-  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.1.zip",
-  "zipSha256": "bc17123623d07a85eedc02d452cb761e788dcc42e868f4a545088c50adb28ac3",
-  "publishedAt": "2026-08-28T12:39:13.170Z",
-  "notes": "# Relaybase Worker 0.1.1\n\n## Highlights\n- Fixes desktop auto-install failing at migrate-db with 401 Unauthorized\n- Install-time schema endpoints use AUTH_PEPPER bootstrap instead of ADMIN_TOKEN\n\n## Changes\n- `POST /console/init-db`, `/console/migrate-db`, and `/console/setup-admin` accept `X-Auth-Pepper` when no owner is configured yet\n- Owner passtoken + scoped sessions replace the retired ADMIN_TOKEN god token on the product Worker\n- Settings Worker update still reuses existing AUTH_PEPPER and D1 bindings"
+  "version": "0.1.2",
+  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.2.zip",
+  "zipSha256": "a83adb33cd5ba5e9f02e08de7596c76911e3b7783ca235381dd29b2173fddda6",
+  "publishedAt": "2026-08-29T09:45:35.003Z",
+  "notes": "# Relaybase Worker 0.1.2\n\n## Highlights\n- Forgot-passtoken reset proves Cloudflare OAuth by `GET /accounts/{CF_ACCOUNT_ID}`\n- Worker upgrade (`migrate-db`) uses the same OAuth account proof when an owner already exists\n\n## Changes\n- `POST /console/reset-admin` accepts a Cloudflare OAuth access token (`cfAccessToken`) and requires `CF_ACCOUNT_ID`\n- `verifyCfTokenAccount` calls `GET /accounts/{CF_ACCOUNT_ID}` (`success === true`)\n- `POST /console/init-db` and `/console/migrate-db` accept `X-Cf-Access-Token` with the same proof"
 }

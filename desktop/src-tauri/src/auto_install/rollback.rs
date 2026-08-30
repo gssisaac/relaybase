@@ -2,7 +2,7 @@ use tauri::AppHandle;
 
 use crate::cloudflare::{
     delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket,
-    list_d1_databases, resolve_account_id, CfClient,
+    list_d1_databases, CfClient,
 };
 use crate::worker::DEFAULT_SCRIPT;
 
@@ -23,7 +23,7 @@ pub async fn rollback_all_install(
 ) -> Result<(), String> {
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
-        return Err("A Cloudflare API token is required.".into());
+        return Err("Authorize with Cloudflare again".into());
     }
     emit_log(
         &app,
@@ -31,21 +31,10 @@ pub async fn rollback_all_install(
         "info",
         "Starting rollback — removing Worker, D1, and R2…",
     );
-    let account_id = match account_id
+    let account_id = account_id
         .map(|a| a.trim().to_string())
         .filter(|a| !a.is_empty())
-    {
-        Some(id) => id,
-        None => {
-            emit_log(
-                &app,
-                "rollback",
-                "info",
-                "Resolving Cloudflare account id from API token…",
-            );
-            resolve_account_id(&api_token).await?
-        }
-    };
+        .ok_or_else(|| "Authorize with Cloudflare again".to_string())?;
     let client = CfClient {
         account_id: account_id.clone(),
         api_token: api_token.clone(),

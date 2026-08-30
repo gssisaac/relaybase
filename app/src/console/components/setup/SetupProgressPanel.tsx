@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   cloudflareInstallDashboardLinks,
   cloudflareR2DashboardUrl,
@@ -17,14 +19,13 @@ import {
   desktopSaveDownloadFile,
   isDesktopRuntime,
   desktopProbeInstall,
-  desktopRefreshInstallToken,
   desktopRollbackInstall,
+  desktopOwnerSetupAdmin,
   desktopRegisterWorkerWithConsole,
   desktopSaveWorkerConnection,
   desktopVerifyWorkerConnection,
   explainDesktopError,
   explainWorkerUpdateTargetError,
-  isCloudflareAuthExpired,
   isInstallCancelledError,
   listenInstallLog,
   stripAnsi,
@@ -37,6 +38,7 @@ import {
 } from "@/lib/desktop/bridge";
 import { downloadBlob } from "@/lib/attachments/download";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { useAppSession } from "@/lib/desktop/app-session";
 import { useDesktop } from "@/lib/desktop/shell";
 import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
 import {
@@ -127,6 +129,7 @@ export function SetupProgressPanel({
   purpose?: InstallFlowPurpose;
 }) {
   const router = useRouter();
+  const store = useAppSession();
   const { refresh, credentials } = useDesktop();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
   const [probing, setProbing] = useState(false);
@@ -145,6 +148,7 @@ export function SetupProgressPanel({
   const [autoDone, setAutoDone] = useState<{
     workerUrl: string;
     adminToken: string;
+    username?: string;
   } | null>(null);
   const [pendingVerify, setPendingVerify] = useState<{
     workerUrl: string;
@@ -178,9 +182,15 @@ export function SetupProgressPanel({
   const [probedWorkerUrl, setProbedWorkerUrl] = useState<string | null>(null);
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
+  const [tokenSaved, setTokenSaved] = useState(false);
+  const [needsOwnerSetup, setNeedsOwnerSetup] = useState(false);
+  const [installPepper, setInstallPepper] = useState<string | null>(null);
+  const [ownerUsername, setOwnerUsername] = useState("");
+  const [creatingOwner, setCreatingOwner] = useState(false);
   const [mailApiDone, setMailApiDone] = useState(false);
   const [mailApiVerified, setMailApiVerified] = useState(false);
   const emailDialogShownRef = useRef(false);
+  const [leavingToMailbox, setLeavingToMailbox] = useState(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
   const [r2DashboardOpened, setR2DashboardOpened] = useState(false);
   const logEndRef = useRef<HTMLDivElement | null>(null);
@@ -229,13 +239,6 @@ export function SetupProgressPanel({
       });
       return false;
     }
-    try {
-      await desktopRefreshInstallToken();
-    } catch (err) {
-      if (isCloudflareAuthExpired(err)) {
-        throw err;
-      }
-    }
     return true;
   }
 
@@ -253,17 +256,26 @@ export function SetupProgressPanel({
 
   useEffect(() => {
     if (purpose === "worker-update") return;
-    if (autoDone && !mailApiDone && !emailDialogShownRef.current) {
-      emailDialogShownRef.current = true;
-      openMailApiDialog(autoDone);
-    }
     if (!autoDone) {
       setTokenDownloaded(false);
+      setTokenSaved(false);
       return;
     }
     setInstallLogExpanded(false);
     fireInstallConfetti();
-  }, [autoDone, mailApiDone, openMailApiDialog]);
+    if (mailApiDone || emailDialogShownRef.current) return;
+    if (needsOwnerSetup) return;
+    if (autoDone.adminToken && !tokenSaved) return;
+    emailDialogShownRef.current = true;
+    openMailApiDialog(autoDone);
+  }, [
+    autoDone,
+    mailApiDone,
+    needsOwnerSetup,
+    openMailApiDialog,
+    purpose,
+    tokenSaved,
+  ]);
 
   useEffect(() => {
     if (!credentials) return;
@@ -310,6 +322,10 @@ export function SetupProgressPanel({
     setWorkerOwnerConfigured(null);
     setWorkerVersions(null);
     setProbedWorkerUrl(null);
+    setNeedsOwnerSetup(false);
+    setInstallPepper(null);
+    setTokenSaved(false);
+    setOwnerUsername("");
     try {
       if (!(await ensureOauthSession())) {
         return;
@@ -362,27 +378,67 @@ export function SetupProgressPanel({
 
   async function finishInstall(
     result: AutoInstallResult,
-    connect: WorkerConnectResult,
+    connect?: WorkerConnectResult,
   ) {
+    const workerUrl = connect?.workerUrl || result.workerUrl;
     await desktopSaveWorkerConnection({
-      workerUrl: connect.workerUrl,
-      adminToken: result.adminToken,
-      workerScriptName: connect.workerScriptName,
-      workerVersion: result.workerVersion || connect.version,
+      workerUrl,
+      adminToken: "",
+      workerScriptName:
+        connect?.workerScriptName || result.workerScriptName || "relaybase-api",
+      workerVersion: result.workerVersion || connect?.version,
     });
-    void desktopRegisterWorkerWithConsole(connect.workerUrl).catch(() => {
+    void desktopRegisterWorkerWithConsole(workerUrl).catch(() => {
       /* best-effort */
     });
     await refresh();
     setPendingVerify(null);
     setVerifyError(null);
-    setAutoDone({
-      workerUrl: connect.workerUrl,
-      adminToken: result.adminToken,
-    });
-    setMessage(`Connected to ${connect.workerUrl}`);
+    setCopiedToken(false);
+    setTokenDownloaded(false);
+    setTokenSaved(false);
+    setMessage(`Connected to ${workerUrl}`);
     if (purpose === "worker-update") {
+      setNeedsOwnerSetup(false);
+      setInstallPepper(null);
+      setAutoDone({ workerUrl, adminToken: "" });
       router.replace("/settings/worker");
+      return;
+    }
+    const pepper = result.authPepper?.trim() ?? "";
+    let ownerConfigured = false;
+    try {
+      ownerConfigured = (await ownerAuthStatusForWorkerUrl(workerUrl))
+        .ownerConfigured;
+    } catch {
+      ownerConfigured = false;
+    }
+    if (ownerConfigured) {
+      setNeedsOwnerSetup(false);
+      setInstallPepper(null);
+      setAutoDone({ workerUrl, adminToken: "" });
+      return;
+    }
+    setNeedsOwnerSetup(true);
+    setInstallPepper(pepper || null);
+    setAutoDone({ workerUrl, adminToken: "" });
+    if (!pepper) {
+      setError({
+        title: "Could not issue a passtoken",
+        detail:
+          "Install finished but AUTH_PEPPER was not available in memory to create the first owner.",
+        fix: "Try again from Setup. If this Worker already has an owner, use I forgot my passtoken.",
+      });
+    }
+  }
+
+  /** OAuth deploy already succeeded. No owner session is the normal upgrade case. */
+  async function completeAfterDeploy(result: AutoInstallResult) {
+    try {
+      const connect = await desktopVerifyWorkerConnection(result.workerUrl, "");
+      await finishInstall(result, connect);
+    } catch {
+      await finishInstall(result);
     }
   }
 
@@ -415,10 +471,20 @@ export function SetupProgressPanel({
         },
         connect,
       );
-    } catch (err) {
-      setVerifyError(
-        explainDesktopError(err, "Worker is not responding yet"),
-      );
+    } catch {
+      await finishInstall({
+        workerUrl: pendingVerify.workerUrl,
+        adminToken: "",
+        workerScriptName: "relaybase-api",
+        r2Bucket: "",
+        d1LogsId: "",
+        d1MailId: "",
+        d1InboxIndexId: "",
+        d1DbId: "",
+        dbAlreadyInitialized: pendingVerify.dbAlreadyInitialized,
+        dbApplied: [],
+        workerVersion: pendingVerify.workerVersion,
+      });
     } finally {
       setVerifying(false);
     }
@@ -469,21 +535,7 @@ export function SetupProgressPanel({
         chosen,
         wipeConfirmation,
       );
-      try {
-        const connect = await desktopVerifyWorkerConnection(
-          result.workerUrl,
-          result.adminToken,
-        );
-        await finishInstall(result, connect);
-      } catch {
-        setPendingVerify({
-          workerUrl: result.workerUrl,
-          adminToken: result.adminToken,
-          workerVersion: result.workerVersion,
-          dbAlreadyInitialized: result.dbAlreadyInitialized,
-        });
-        setError(null);
-      }
+      await completeAfterDeploy(result);
     } catch (err) {
       if (isInstallCancelledError(err)) {
         setStopped(true);
@@ -536,21 +588,7 @@ export function SetupProgressPanel({
         setLogs((prev) => [...prev, event]);
       });
       const result = await desktopUpdateInstalledWorker();
-      try {
-        const connect = await desktopVerifyWorkerConnection(
-          result.workerUrl,
-          result.adminToken,
-        );
-        await finishInstall(result, connect);
-      } catch {
-        setPendingVerify({
-          workerUrl: result.workerUrl,
-          adminToken: result.adminToken,
-          workerVersion: result.workerVersion,
-          dbAlreadyInitialized: result.dbAlreadyInitialized,
-        });
-        setError(null);
-      }
+      await completeAfterDeploy(result);
     } catch (err) {
       if (isInstallCancelledError(err)) {
         setStopped(true);
@@ -625,24 +663,64 @@ export function SetupProgressPanel({
     }
   }
 
+  async function createFirstOwner() {
+    if (!autoDone || creatingOwner) return;
+    const username = ownerUsername.trim();
+    const pepper = installPepper?.trim() ?? "";
+    if (username.length < 3 || !pepper) return;
+    setCreatingOwner(true);
+    setError(null);
+    try {
+      const issued = await desktopOwnerSetupAdmin({
+        workerUrl: autoDone.workerUrl,
+        username,
+        pepper,
+      });
+      setInstallPepper(null);
+      setNeedsOwnerSetup(false);
+      setTokenSaved(false);
+      setTokenDownloaded(false);
+      setCopiedToken(false);
+      setOwnerUsername(issued.username);
+      setAutoDone({
+        workerUrl: autoDone.workerUrl,
+        adminToken: issued.passtoken,
+        username: issued.username,
+      });
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      if (/already configured/i.test(raw)) {
+        setNeedsOwnerSetup(false);
+        setInstallPepper(null);
+        setAutoDone({ workerUrl: autoDone.workerUrl, adminToken: "" });
+        return;
+      }
+      setError(explainDesktopError(err, "Could not create owner"));
+    } finally {
+      setCreatingOwner(false);
+    }
+  }
+
   async function copyAutoToken() {
     if (!autoDone?.adminToken) return;
     await navigator.clipboard.writeText(autoDone.adminToken);
     setCopiedToken(true);
+    setTokenSaved(true);
   }
 
   async function downloadAutoToken() {
     if (!autoDone?.adminToken) return;
     const content = [
-      "# Relaybase admin token — save this file securely",
+      "# Relaybase owner passtoken — save this file securely",
       `# Worker URL: ${autoDone.workerUrl}`,
+      ...(autoDone.username ? [`# Username: ${autoDone.username}`] : []),
       `# Generated: ${new Date().toISOString()}`,
       "",
-      `ADMIN_TOKEN=${autoDone.adminToken}`,
+      `PASSTOKEN=${autoDone.adminToken}`,
       "",
     ].join("\n");
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const filename = "relaybase-admin-token.txt";
+    const filename = "relaybase-passtoken.txt";
     if (isDesktopRuntime()) {
       const buffer = await blob.arrayBuffer();
       await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
@@ -650,6 +728,7 @@ export function SetupProgressPanel({
       downloadBlob(blob, filename);
     }
     setTokenDownloaded(true);
+    setTokenSaved(true);
   }
 
   async function requestClearDb() {
@@ -764,8 +843,8 @@ export function SetupProgressPanel({
         return {
           title: "Rollback this install?",
           description:
-            "This deletes the Relaybase Worker, D1 databases, and R2 mailbox bucket in this Cloudflare account. If this is a live mailbox, mail and product data are gone permanently.",
-          confirmLabel: "Rollback",
+            "This deletes the Relaybase Worker, D1 databases, and R2 mailbox bucket in this Cloudflare account. If this is a live mailbox, mail and product data are gone permanently. Type DELETE ME to confirm.",
+          confirmLabel: "Confirm rollback",
         };
       case "clear-db":
         return {
@@ -851,7 +930,7 @@ export function SetupProgressPanel({
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {autoDone
-              ? "Your Worker is live. Save your admin token before opening the mailbox."
+              ? "Your Worker is live."
               : pendingVerify
               ? "The Worker was uploaded. Confirm it is responding before continuing."
               : existing.length > 0 && !busy && !autoDone
@@ -1198,47 +1277,114 @@ export function SetupProgressPanel({
               <span className="font-mono">{autoDone.workerUrl}</span>
             </p>
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Download and save this admin token — it&apos;s the only way to
-                recover your Worker if you lose this Mac. Relaybase cannot
-                recover it for you.
-              </p>
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
-                <code className="min-w-0 flex-1 break-all font-mono text-[11px]">
-                  {autoDone.adminToken}
-                </code>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label="Copy admin token"
-                  onClick={() => void copyAutoToken()}
-                >
-                  {copiedToken ? (
-                    <Check className="size-3.5" />
+              {autoDone.adminToken ? (
+                <>
+                  <p className="text-xs font-medium">Save your passtoken</p>
+                  <p className="text-xs text-muted-foreground">
+                    Shown once. Copy or download it — you cannot sign in
+                    without it. The app does not store the passtoken.
+                  </p>
+                  {autoDone.username ? (
+                    <p className="text-xs text-muted-foreground">
+                      Username:{" "}
+                      <span className="font-mono">{autoDone.username}</span>
+                    </p>
+                  ) : null}
+                  <div className="rounded-md border border-border bg-muted/30 p-2">
+                    <code className="block break-all font-mono text-[11px]">
+                      {autoDone.adminToken}
+                    </code>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant={copiedToken || tokenSaved ? "default" : "outline"}
+                      className="flex-1"
+                      onClick={() => void copyAutoToken()}
+                    >
+                      {copiedToken ? (
+                        <Check className="size-3.5" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                      Copy passtoken
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={tokenDownloaded ? "default" : "outline"}
+                      className="flex-1"
+                      onClick={() => void downloadAutoToken()}
+                    >
+                      {tokenDownloaded ? (
+                        <Check className="size-3.5" />
+                      ) : (
+                        <Download className="size-3.5" />
+                      )}
+                      Download .txt
+                    </Button>
+                  </div>
+                  {tokenSaved ? (
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                      Passtoken saved. You can continue.
+                    </p>
                   ) : (
-                    <Copy className="size-3.5" />
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                      Copy or download before Go to Mailbox.
+                    </p>
                   )}
-                </Button>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant={tokenDownloaded ? "default" : "outline"}
-                  aria-label="Download admin token"
-                  onClick={() => void downloadAutoToken()}
+                </>
+              ) : needsOwnerSetup ? (
+                <form
+                  className="space-y-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void createFirstOwner();
+                  }}
                 >
-                  {tokenDownloaded ? (
-                    <Check className="size-3.5" />
-                  ) : (
-                    <Download className="size-3.5" />
-                  )}
-                </Button>
-              </div>
-              {!tokenDownloaded ? (
-                <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  Download the token file to unlock Go to Mailbox.
+                  <p className="text-xs font-medium">Create the owner login</p>
+                  <p className="text-xs text-muted-foreground">
+                    Choose a username. We issue a passtoken once — copy or
+                    download it before opening the mailbox.
+                  </p>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="setup-owner-username">Username</Label>
+                    <Input
+                      id="setup-owner-username"
+                      value={ownerUsername}
+                      onChange={(e) => setOwnerUsername(e.target.value)}
+                      autoComplete="username"
+                      minLength={3}
+                      required
+                      disabled={creatingOwner || !installPepper}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={
+                      creatingOwner ||
+                      ownerUsername.trim().length < 3 ||
+                      !installPepper
+                    }
+                  >
+                    {creatingOwner ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : null}
+                    Issue passtoken
+                  </Button>
+                </form>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Sign in with your passtoken to open the mailbox. Use{" "}
+                  <Link
+                    href="/setup/connect"
+                    className="underline underline-offset-2"
+                  >
+                    Already installed
+                  </Link>{" "}
+                  if you are not signed in yet.
                 </p>
-              ) : null}
+              )}
               {!mailApiDone ? (
                 <p className="text-[11px] text-amber-700 dark:text-amber-400">
                   Enable the email API on your Worker to unlock Go to Mailbox.
@@ -1297,14 +1443,41 @@ export function SetupProgressPanel({
             <Button
               type="button"
               className="w-full"
-              disabled={!tokenDownloaded || !mailApiDone}
+              disabled={
+                leavingToMailbox ||
+                needsOwnerSetup ||
+                (Boolean(autoDone.adminToken) && !tokenSaved) ||
+                !mailApiDone
+              }
               onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.location.assign("/");
-                }
+                void (async () => {
+                  setLeavingToMailbox(true);
+                  if (autoDone.adminToken && autoDone.username) {
+                    try {
+                      await store.loginWithPasstoken({
+                        workerUrl: autoDone.workerUrl,
+                        username: autoDone.username,
+                        passtoken: autoDone.adminToken,
+                      });
+                      router.replace("/email/inbox");
+                      return;
+                    } catch {
+                      setLeavingToMailbox(false);
+                      store.openAlreadyInstalled();
+                      router.replace("/setup/connect");
+                      return;
+                    }
+                  }
+                  if (store.canShowApp) {
+                    router.replace("/email/inbox");
+                    return;
+                  }
+                  store.openAlreadyInstalled();
+                  router.replace("/setup/connect");
+                })();
               }}
             >
-              Go to Mailbox
+              {leavingToMailbox ? "Opening…" : "Go to Mailbox"}
             </Button>
           </div>
         ) : stopped ? (
@@ -1501,6 +1674,7 @@ export function SetupProgressPanel({
           confirmLabel={wipeDialogCopy().confirmLabel}
           onConfirm={onWipeConfirm}
           confirming={rollingBack || clearingDb}
+          requirePhrase={wipeIntent?.kind === "rollback"}
         />
 
       </div>

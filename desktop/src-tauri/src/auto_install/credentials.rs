@@ -1,4 +1,4 @@
-use crate::cloudflare::{put_worker_secret, resolve_account_id, CfClient};
+use crate::cloudflare::{put_worker_secret, CfClient};
 use crate::secrets::StoredCredentials;
 
 use super::types::AutoInstallResult;
@@ -44,16 +44,16 @@ pub async fn push_cf_api_token_secret(
         return Err("No deployed Worker script name found.".into());
     }
     if install_token.is_empty() {
-        return Err("Install token (Workers Scripts Edit) is required to push secrets.".into());
+        return Err("Authorize with Cloudflare again".into());
     }
     if server_token.is_empty() {
         return Err("Server token is empty.".into());
     }
-    let account_id = if account_id.trim().is_empty() {
-        resolve_account_id(install_token).await?
-    } else {
-        account_id.trim().to_string()
-    };
+    let account_id = account_id.trim();
+    if account_id.is_empty() {
+        return Err("Authorize with Cloudflare again".into());
+    }
+    let account_id = account_id.to_string();
     let client = CfClient {
         account_id,
         api_token: install_token.to_string(),

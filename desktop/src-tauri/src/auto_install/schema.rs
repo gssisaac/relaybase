@@ -4,6 +4,11 @@ use super::errors::format_worker_http_error;
 use super::log::emit_log;
 use super::types::InitDbResult;
 
+fn is_schema_auth_reject(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("401") || lower.contains("unauthorized")
+}
+
 fn is_transient_schema_error(err: &str) -> bool {
     let lower = err.to_lowercase();
     lower.contains("1042")
@@ -11,8 +16,7 @@ fn is_transient_schema_error(err: &str) -> bool {
         || lower.contains("1101")
         || lower.contains("1104")
         || lower.contains("not found")
-        || lower.contains("401")
-        || lower.contains("unauthorized")
+        || is_schema_auth_reject(&lower)
 }
 
 pub(crate) async fn init_worker_db_with_retry(
@@ -20,15 +24,20 @@ pub(crate) async fn init_worker_db_with_retry(
     worker_url: &str,
     pepper: Option<&str>,
     access_token: Option<&str>,
+    cf_access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
     const ATTEMPTS: u32 = 4;
     let mut last = String::new();
     for attempt in 1..=ATTEMPTS {
-        match init_worker_db(worker_url, pepper, access_token).await {
+        match init_worker_db(worker_url, pepper, access_token, cf_access_token).await {
             Ok(r) => return Ok(r),
             Err(e) => {
                 last = e;
-                if attempt == ATTEMPTS || !is_transient_schema_error(&last) {
+                if attempt == ATTEMPTS
+                    || !is_transient_schema_error(&last)
+                    || (cf_access_token.filter(|s| !s.trim().is_empty()).is_some()
+                        && is_schema_auth_reject(&last))
+                {
                     break;
                 }
                 emit_log(
@@ -49,15 +58,20 @@ pub(crate) async fn migrate_worker_db_with_retry(
     worker_url: &str,
     pepper: Option<&str>,
     access_token: Option<&str>,
+    cf_access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
     const ATTEMPTS: u32 = 4;
     let mut last = String::new();
     for attempt in 1..=ATTEMPTS {
-        match migrate_worker_db(worker_url, pepper, access_token).await {
+        match migrate_worker_db(worker_url, pepper, access_token, cf_access_token).await {
             Ok(r) => return Ok(r),
             Err(e) => {
                 last = e;
-                if attempt == ATTEMPTS || !is_transient_schema_error(&last) {
+                if attempt == ATTEMPTS
+                    || !is_transient_schema_error(&last)
+                    || (cf_access_token.filter(|s| !s.trim().is_empty()).is_some()
+                        && is_schema_auth_reject(&last))
+                {
                     break;
                 }
                 emit_log(
@@ -77,6 +91,7 @@ async fn post_schema_endpoint(
     worker_url: &str,
     pepper: Option<&str>,
     access_token: Option<&str>,
+    cf_access_token: Option<&str>,
     path: &str,
     step: &str,
 ) -> Result<InitDbResult, String> {
@@ -90,12 +105,23 @@ async fn post_schema_endpoint(
         .post(&url)
         .header("Content-Type", "application/json")
         .json(&serde_json::json!({}));
+    let mut authorized = false;
     if let Some(token) = access_token.filter(|s| !s.trim().is_empty()) {
         req = req.header("Authorization", format!("Bearer {}", token.trim()));
-    } else if let Some(p) = pepper.filter(|s| !s.trim().is_empty()) {
+        authorized = true;
+    }
+    if let Some(cf) = cf_access_token.filter(|s| !s.trim().is_empty()) {
+        req = req.header("X-Cf-Access-Token", cf.trim());
+        authorized = true;
+    }
+    if let Some(p) = pepper.filter(|s| !s.trim().is_empty()) {
         req = req.header("X-Auth-Pepper", p.trim());
-    } else {
-        return Err(format!("{step} requires an owner session or AUTH_PEPPER"));
+        authorized = true;
+    }
+    if !authorized {
+        return Err(format!(
+            "{step} requires an owner session, Cloudflare OAuth, or AUTH_PEPPER"
+        ));
     }
     let res = req
         .send()
@@ -116,8 +142,17 @@ pub async fn init_worker_db(
     worker_url: &str,
     pepper: Option<&str>,
     access_token: Option<&str>,
+    cf_access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
-    post_schema_endpoint(worker_url, pepper, access_token, "/console/init-db", "init-db").await
+    post_schema_endpoint(
+        worker_url,
+        pepper,
+        access_token,
+        cf_access_token,
+        "/console/init-db",
+        "init-db",
+    )
+    .await
 }
 
 /// Pending migrations only. Never drops tables.
@@ -125,6 +160,15 @@ pub async fn migrate_worker_db(
     worker_url: &str,
     pepper: Option<&str>,
     access_token: Option<&str>,
+    cf_access_token: Option<&str>,
 ) -> Result<InitDbResult, String> {
-    post_schema_endpoint(worker_url, pepper, access_token, "/console/migrate-db", "migrate-db").await
+    post_schema_endpoint(
+        worker_url,
+        pepper,
+        access_token,
+        cf_access_token,
+        "/console/migrate-db",
+        "migrate-db",
+    )
+    .await
 }

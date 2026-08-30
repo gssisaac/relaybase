@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -12,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
@@ -71,6 +71,7 @@ export function InstallWipeConfirmDialog({
   confirmLabel,
   onConfirm,
   confirming = false,
+  requirePhrase = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -80,17 +81,28 @@ export function InstallWipeConfirmDialog({
   confirmLabel: string;
   onConfirm: (phrase: string | null) => void;
   confirming?: boolean;
+  /** Always type DELETE ME — used for rollback so an empty probe cannot one-click wipe. */
+  requirePhrase?: boolean;
 }) {
   const [phrase, setPhrase] = useState("");
+  const [armed, setArmed] = useState(false);
   const occupied = targets.filter(resourceIsOccupied);
-  const needsPhrase = occupied.length > 0;
+  const needsPhrase = requirePhrase || occupied.length > 0;
   const acceptedNames = [
     ...new Set([...occupied.map((r) => r.name), WIPE_PROJECT_NAME]),
   ];
-  const canConfirm = !needsPhrase || wipePhraseIsValid(phrase, acceptedNames);
+  const canConfirm =
+    armed && (!needsPhrase || wipePhraseIsValid(phrase, acceptedNames));
 
   useEffect(() => {
-    if (open) setPhrase("");
+    if (!open) {
+      setArmed(false);
+      return;
+    }
+    setPhrase("");
+    setArmed(false);
+    const t = window.setTimeout(() => setArmed(true), 400);
+    return () => window.clearTimeout(t);
   }, [open]);
 
   return (
@@ -154,20 +166,21 @@ export function InstallWipeConfirmDialog({
               onChange={(e) => setPhrase(e.target.value)}
               placeholder={WIPE_PHRASE_DELETE_ME}
               autoComplete="off"
+              autoFocus
               disabled={confirming}
             />
           </div>
         ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={confirming}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
+          <Button
+            type="button"
+            variant="destructive"
             disabled={!canConfirm || confirming}
-            onClick={() =>
-              onConfirm(needsPhrase ? phrase.trim() : null)
-            }
+            onClick={() => onConfirm(needsPhrase ? phrase.trim() : null)}
           >
             {confirmLabel}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

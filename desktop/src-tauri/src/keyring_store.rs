@@ -8,6 +8,9 @@
 //! rebuilds and often across signed updates. Boot also reads owner + team
 //! in parallel, so the same dialog appears twice.
 //!
+//! Debug builds delegate to `crate::dev::keyring_store` (tmp files) instead —
+//! see `src/dev/`.
+//!
 //! This module uses the modern `SecItem` API:
 //! 1. Data-protection keychain when the app is signed with
 //!    `keychain-access-groups` (production).
@@ -46,7 +49,16 @@ pub fn get_password(service: &str, account: &str) -> Result<Option<String>, Stri
     if let Some(hit) = cache.get(&key) {
         return Ok(hit.clone());
     }
-    let value = platform_get(service, account)?;
+    let value = {
+        #[cfg(debug_assertions)]
+        {
+            crate::dev::get_password(service, account)?
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            platform_get(service, account)?
+        }
+    };
     cache.insert(key, value.clone());
     Ok(value)
 }
@@ -54,7 +66,12 @@ pub fn get_password(service: &str, account: &str) -> Result<Option<String>, Stri
 pub fn set_password(service: &str, account: &str, password: &str) -> Result<(), String> {
     let key = cache_key(service, account);
     let mut cache = cache_lock();
-    platform_set(service, account, password)?;
+    {
+        #[cfg(debug_assertions)]
+        crate::dev::set_password(service, account, password)?;
+        #[cfg(not(debug_assertions))]
+        platform_set(service, account, password)?;
+    }
     cache.insert(key, Some(password.to_string()));
     Ok(())
 }
@@ -62,7 +79,12 @@ pub fn set_password(service: &str, account: &str, password: &str) -> Result<(), 
 pub fn delete_password(service: &str, account: &str) {
     let key = cache_key(service, account);
     let mut cache = cache_lock();
-    platform_delete(service, account);
+    {
+        #[cfg(debug_assertions)]
+        crate::dev::delete_password(service, account);
+        #[cfg(not(debug_assertions))]
+        platform_delete(service, account);
+    }
     cache.insert(key, None);
 }
 

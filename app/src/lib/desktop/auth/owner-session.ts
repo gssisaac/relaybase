@@ -213,8 +213,8 @@ export async function ownerRotatePasstoken(): Promise<{
 
 /**
  * POST /console/reset-admin — forgot-passtoken recovery. The caller supplies a
- * Cloudflare access token (from the install OAuth flow); the Worker verifies
- * its account matches CF_ACCOUNT_ID and re-issues a passtoken ONCE.
+ * Cloudflare OAuth access token; the Worker proves it can GET
+ * /accounts/{CF_ACCOUNT_ID} and re-issues a passtoken ONCE.
  */
 export async function ownerResetAdmin(input: {
   cfAccessToken: string;
@@ -270,6 +270,14 @@ export async function ownerAuthStatus(): Promise<{
   ownerConfigured: boolean;
 }> {
   const base = workerBase();
+  return ownerAuthStatusForWorkerUrl(base);
+}
+
+/** Same as ownerAuthStatus but for an explicit Worker URL (Setup probe). */
+export async function ownerAuthStatusForWorkerUrl(
+  workerUrl: string,
+): Promise<{ ownerConfigured: boolean }> {
+  const base = workerUrl.trim().replace(/\/$/, "");
   if (!base) return { ownerConfigured: false };
   try {
     const res = await fetch(`${base}/console/auth-status`);

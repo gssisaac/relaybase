@@ -94,6 +94,9 @@ impl InstallResourceProbe {
 #[serde(rename_all = "camelCase")]
 pub struct InstallProbeResult {
     pub account_id: String,
+    /// workers.dev URL for the routing Worker when the script already exists.
+    #[serde(default)]
+    pub workers_dev_url: Option<String>,
     pub resources: Vec<InstallResourceProbe>,
 }
 

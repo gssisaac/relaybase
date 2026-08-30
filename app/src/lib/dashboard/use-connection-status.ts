@@ -40,7 +40,7 @@ export function useConnectionStatus() {
       } else {
         setSnapshot({
           cfConnected: false,
-          cfInstallTokenPresent: Boolean(credentials?.installToken?.trim()),
+          cfInstallTokenPresent: Boolean(credentials?.cfOauthAccessToken?.trim()),
           worker: null,
         });
       }
@@ -65,7 +65,7 @@ export function useConnectionStatus() {
       } catch {
         const fallback: ConnectionStatusSnapshot = {
           cfConnected: false,
-          cfInstallTokenPresent: Boolean(credentials?.installToken?.trim()),
+          cfInstallTokenPresent: Boolean(credentials?.cfOauthAccessToken?.trim()),
           worker: null,
         };
         setSnapshot((prev) => prev ?? fallback);

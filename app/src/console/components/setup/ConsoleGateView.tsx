@@ -1,6 +1,7 @@
 "use client";
 
 import { Fingerprint, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils";
  * dashboard mode without a valid console access token.
  */
 export function ConsoleGateView() {
+  const router = useRouter();
   const store = useAppSession();
   const { credentials } = useDesktop();
   const { dragRegionClassName, dragRegionProps, noDragClassName, isDesktop } =
@@ -161,6 +163,19 @@ export function ConsoleGateView() {
                 required
                 className="font-mono text-xs"
               />
+              <button
+                type="button"
+                className="text-left text-xs text-muted-foreground hover:underline"
+                disabled={busy}
+                onClick={() => {
+                  store.clearError();
+                  store.closeConsoleGate();
+                  store.enterRecover();
+                  router.push("/setup/recover-admin");
+                }}
+              >
+                I forgot my passtoken
+              </button>
             </div>
             <Button
               type="submit"
@@ -188,6 +203,19 @@ export function ConsoleGateView() {
           >
             Back to mailbox
           </Button>
+
+          <button
+            type="button"
+            className="text-center text-[11px] text-muted-foreground hover:underline"
+            disabled={busy}
+            onClick={() => {
+              store.clearError();
+              store.closeConsoleGate();
+              router.push("/setup");
+            }}
+          >
+            Back to setup
+          </button>
         </div>
       </div>
     </div>

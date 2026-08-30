@@ -65,6 +65,8 @@ export type InstallResourceProbe = {
 
 export type InstallProbeResult = {
   accountId: string;
+  /** workers.dev URL when the routing Worker script already exists. */
+  workersDevUrl?: string | null;
   resources: InstallResourceProbe[];
 };
 
@@ -151,7 +153,7 @@ export async function desktopPreviewWorkerUpdateTarget(): Promise<WorkerUpdateTa
   return invoke("preview_worker_update_target_cmd");
 }
 
-/** Download latest install ZIP and re-deploy the Worker (keeps ADMIN_TOKEN + D1). */
+/** Download latest install ZIP and re-deploy the Worker (keeps D1). */
 export async function desktopUpdateInstalledWorker(
   serverToken?: string,
 ): Promise<AutoInstallResult> {

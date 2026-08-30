@@ -278,7 +278,7 @@ Plaintext keys live in `~/.relaybase/{scopeId}/api-keys.json`; Worker stores has
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /console/reset-admin` | Forgot passtoken — CF access token must match Worker's `CF_ACCOUNT_ID` |
+| `POST /console/reset-admin` | Forgot passtoken — Cloudflare OAuth access token can GET `/accounts/{CF_ACCOUNT_ID}` |
 
 ---
 
@@ -499,11 +499,10 @@ sequenceDiagram
   participant CF as Cloudflare API
   participant Worker as Product Worker
 
-  User->>UI: CF OAuth (install-scoped token)
+  User->>UI: CF OAuth
   UI->>Tauri: owner_reset_admin_cmd(cfAccessToken)
-  Tauri->>CF: Verify token + list accounts
   Tauri->>Worker: POST /console/reset-admin
-  Worker->>CF: Verify account id == CF_ACCOUNT_ID
+  Worker->>CF: GET /accounts/{CF_ACCOUNT_ID}
   Worker->>Worker: New passtoken, revoke all sessions
   Worker-->>Tauri: passtoken once
   UI->>UI: revealPasstoken → user copies → login (O2)

@@ -1,6 +1,6 @@
 use crate::cloudflare::{
-    assert_r2_subscription, count_d1_user_rows, count_r2_objects, find_r2_bucket,
-    list_d1_databases, resolve_account_id, worker_script_exists, CfClient,
+    account_workers_dev_url, assert_r2_subscription, count_d1_user_rows, count_r2_objects,
+    find_r2_bucket, list_d1_databases, worker_script_exists, CfClient,
 };
 use crate::worker::DEFAULT_SCRIPT;
 
@@ -13,15 +13,12 @@ pub async fn probe_install_resources(
 ) -> Result<InstallProbeResult, String> {
     let api_token = api_token.trim().to_string();
     if api_token.is_empty() {
-        return Err("A Cloudflare API token is required.".into());
+        return Err("Authorize with Cloudflare again".into());
     }
-    let account_id = match account_id
+    let account_id = account_id
         .map(|a| a.trim().to_string())
         .filter(|a| !a.is_empty())
-    {
-        Some(id) => id,
-        None => resolve_account_id(&api_token).await?,
-    };
+        .ok_or_else(|| "Authorize with Cloudflare again".to_string())?;
     let client = CfClient {
         account_id: account_id.clone(),
         api_token: api_token.clone(),
@@ -66,8 +63,18 @@ pub async fn probe_install_resources(
         }
         resources.push(d1);
     }
+    let workers_dev_url = if worker_present {
+        account_workers_dev_url(&client, DEFAULT_SCRIPT)
+            .await
+            .ok()
+            .filter(|u| !u.trim().is_empty())
+    } else {
+        None
+    };
+
     Ok(InstallProbeResult {
         account_id,
+        workers_dev_url,
         resources,
     })
 }

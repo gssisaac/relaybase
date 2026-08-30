@@ -138,9 +138,8 @@ export async function listenCfOAuthResult(handler: {
   }
 }
 
-/** Force a refresh of the OAuth access token (rarely needed; the Rust side
- * refreshes automatically before wrangler/CF-API calls). Returns the updated
- * credentials. */
+/** Re-read credentials after `require_cf_oauth` (expiry display). CF commands
+ * already go through the Rust gateway. */
 export async function desktopRefreshInstallToken(): Promise<DesktopCredentials> {
   return invoke("refresh_install_token");
 }

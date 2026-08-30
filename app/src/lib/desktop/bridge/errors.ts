@@ -228,16 +228,15 @@ export function explainDesktopError(
   }
 
   if (
-    lower.includes("admin token was rejected") ||
-    lower.includes("unauthorized") ||
-    lower.includes("status: 401") ||
-    lower.includes("(401)")
+    lower.includes("owner_already_configured") ||
+    lower.includes("owner already configured")
   ) {
     return {
-      title: "Worker rejected the install request",
+      title: "Owner already configured on this Worker",
       detail:
-        "The Worker URL responded, but init-db or migrate-db returned 401 Unauthorized. This usually means the uploaded worker.js is still on the old ADMIN_TOKEN auth model, or an owner is already configured and the install cannot use AUTH_PEPPER bootstrap.",
-      fix: "Deploy the latest Worker install ZIP from relaybase.xyz, then Try again with Skip on existing Worker and D1 (do not Rollback or Reinstall). If you already completed owner setup, sign in with your passtoken or use Setup → I forgot my passtoken.",
+        "D1 already has an owner passtoken, and this request had no Cloudflare OAuth token or console session for migrate-db.",
+      fix:
+        "Authorize with Cloudflare again and Try again. OAuth upgrade can run migrate-db without signing in. If you need the mailbox, use Setup → I forgot my passtoken, then Already installed.",
       links: installLinks,
     };
   }
@@ -389,7 +388,7 @@ export function explainDesktopError(
       cleaned && cleaned.length < 220
         ? cleaned
         : "Something unexpected happened while connecting to your Worker.",
-    fix: "Check the Worker URL and admin token from your Wrangler deploy, then try again.",
+    fix: "Check the Worker URL, then try again.",
     links: installLinks,
   };
 }
@@ -489,5 +488,43 @@ export function explainCfOAuthError(
         ? cleaned
         : "Something went wrong while connecting to Cloudflare.",
     fix: "Click Connect with Cloudflare again. If it keeps happening, try reconnecting from a clean state.",
+  };
+}
+
+/**
+ * Forgot-passtoken reset. Never tells the user to sign in with a passtoken —
+ * they are on this screen because they do not have one.
+ */
+export function explainPasstokenResetError(err: unknown): DesktopErrorHelp {
+  const raw = formatDesktopError(err);
+  const lower = raw.toLowerCase();
+  if (
+    lower.includes("authorize with cloudflare again") ||
+    lower.includes("cloudflare_auth_expired")
+  ) {
+    return {
+      title: "Authorize with Cloudflare again",
+      detail:
+        "Reset needs a Cloudflare OAuth session. Authorize, then we re-issue the passtoken.",
+      fix: "Click Authorize with Cloudflare.",
+    };
+  }
+  if (
+    lower.includes("could not reach") ||
+    lower.includes("error sending request") ||
+    lower.includes("timed out")
+  ) {
+    return {
+      title: "Could not reach your Worker",
+      detail: "The Worker URL did not respond while resetting the passtoken.",
+      fix: "Check that the Worker is live, then Authorize with Cloudflare again.",
+    };
+  }
+  return {
+    title: "Could not reset passtoken",
+    detail:
+      stripRawApiNoise(raw) ||
+      "Cloudflare authorization did not finish resetting the passtoken.",
+    fix: "Click Authorize with Cloudflare again.",
   };
 }

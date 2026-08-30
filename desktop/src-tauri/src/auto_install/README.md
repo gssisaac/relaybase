@@ -1,6 +1,6 @@
 # auto_install — Desktop Worker install module
 
-Rust module for background auto-install of the Relaybase routing Worker into the user's Cloudflare account. Uses a pre-built install ZIP from `relaybase.xyz/downloads` and the Cloudflare HTTP API. Auth is the in-memory CF OAuth access token (or legacy disk install token); it is never sent to the Relaybase console or product Worker.
+Rust module for background auto-install of the Relaybase routing Worker into the user's Cloudflare account. Uses a pre-built install ZIP from `relaybase.xyz/downloads` and the Cloudflare HTTP API. Auth is `require_cf_oauth()` (in-memory CF OAuth session). The access token is not sent to the Relaybase console. Schema calls may send it to the product Worker as `X-Cf-Access-Token`.
 
 ## Install flow
 
@@ -11,9 +11,19 @@ Each step streams `install-log` Tauri events to the frontend (`step`, `level`, `
 2. **R2** — Ensure bucket `relaybase-mailbox` (or reuse on Worker-only update).
 3. **D1** — Create or reuse `relaybase-logs`, `relaybase-mail`, `relaybase-db` (schema applied later).
 4. **Deploy** — Upload `worker.js` with bindings, set cron, enable workers.dev.
-5. **Secrets** — PUT `AUTH_PEPPER`, `CF_ACCOUNT_ID`, optional `CF_API_TOKEN`.
+5. **Secrets** — PUT `AUTH_PEPPER` (skipped when reusing D1 or Worker-only update), `CF_ACCOUNT_ID`, optional `CF_API_TOKEN`.
 6. **Warmup** — Poll `GET /health` (~30s backoff).
-7. **Schema** — Empty D1s: `POST /console/init-db`. Reused D1 or Worker update: `POST /console/migrate-db`.
+7. **Schema** — Probe `GET /console/auth-status`. Empty D1s: `POST /console/init-db`. Reused D1: `POST /console/migrate-db`. Auth is console session, Cloudflare OAuth (`X-Cf-Access-Token` that can GET `/accounts/{CF_ACCOUNT_ID}`), or pepper bootstrap when no owner exists. OAuth upgrade must not fail when an owner already exists.
+
+## Recovering a stuck install (`ownerConfigured: true`)
+
+Cloudflare OAuth install / upgrade may call migrate-db with `X-Cf-Access-Token` (GET `/accounts/{CF_ACCOUNT_ID}`). An existing owner must not fail that path.
+
+If you lost the passtoken and need to sign in:
+
+1. **Do not** Rollback from Setup (that deletes D1 / R2).
+2. **Setup → I forgot my passtoken** (`/setup/recover-admin`) — Cloudflare OAuth re-issues a passtoken for the current Worker secret.
+3. Sign in via **Already installed** (`/setup/connect`).
 
 Rollback (`rollback_all_install`) deletes Worker, D1s, and R2 in reverse; occupied resources require wipe confirmation.
 
@@ -30,7 +40,7 @@ Rollback (`rollback_all_install`) deletes Worker, D1s, and R2 in reverse; occupi
 | `url.rs` | Worker URL host match; update-target preview vs OAuth account |
 | `wipe.rs` | `DELETE ME` / resource-name confirmation; `InstallPlan` from UI decisions |
 | `manifest.rs` | Manifest fetch, update check, ZIP download/stage, staged version |
-| `health.rs` | `/health` warmup, version fetch, post-deploy shape logging |
+| `health.rs` | `/health` warmup, `/console/auth-status`, version fetch, post-deploy shape logging |
 | `probe.rs` | `probe_install_resources` |
 | `rollback.rs` | `rollback_all_install` |
 | `schema.rs` | `init_worker_db`, `migrate_worker_db` (+ retry) |
@@ -54,7 +64,7 @@ Functions and types consumed by `lib.rs` Tauri commands:
 - Leaf modules (`cancel`, `log`, `constants`, `types`, `errors`) have no `install` dependency.
 - Mid modules (`url`, `wipe`, `manifest`, `health`, `schema`, `probe`, `rollback`, `credentials`) must not import `install.rs`.
 - `install.rs` is the orchestrator; it calls all phase helpers.
-- External crate boundaries: `cloudflare`, `secrets`, `worker`, `owner_session` (crate root modules).
+- External crate boundaries: `cloudflare`, `secrets`, `worker`, `owner_session`, `cf_oauth` (crate root modules). Commands obtain `{ access_token, account_id }` from `require_cf_oauth()` before calling this module.
 
 ```
 cancel, log, constants, types, errors
@@ -75,8 +85,8 @@ mod.rs (re-exports) → lib.rs Tauri commands
 | `prepare_r2` | Worker-only URL guard; R2 subscription; reinstall or ensure bucket |
 | `prepare_d1` | D1 lookup / create / reuse → `(d1_ids, any_d1_reused)` |
 | `deploy_worker` | Upload script, verify bindings, cron, workers.dev URL |
-| `apply_secrets` | `AUTH_PEPPER`, `CF_ACCOUNT_ID`, optional `CF_API_TOKEN` |
-| `finalize_schema` | Warmup already done by caller; init-db or migrate-db with retry |
+| `apply_secrets` | `AUTH_PEPPER` (skip when D1 reused or worker-only), `CF_ACCOUNT_ID`, optional `CF_API_TOKEN` |
+| `finalize_schema` | auth-status gate; init-db or migrate-db with console session or Cloudflare OAuth |
 
 ## Tauri command mapping (`lib.rs`)
 

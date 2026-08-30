@@ -10,8 +10,9 @@
 //!   5. PUT `worker.js` with bindings; enable workers.dev.
 //!   6. Empty D1s: POST /console/init-db. Reused or Worker-update: POST /console/migrate-db.
 //!
-//! Auth is the in-memory CF OAuth access token (or a legacy disk install
-//! token). It is never sent to the Relaybase console or product Worker.
+//! Auth is `require_cf_oauth()` (in-memory CF OAuth session). The access
+//! token is not sent to the Relaybase console. Schema calls may send it to
+//! the product Worker as `X-Cf-Access-Token`.
 
 mod cancel;
 mod constants;

@@ -11,9 +11,11 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 
 /** Setup routes that must finish even when a keyring session already exists. */
 const SETUP_CONTINUE_PATHS = [
+  "/setup",
   "/setup/install",
   "/setup/license",
   "/setup/progress",
+  "/setup/connect",
   "/setup/recover-admin",
 ] as const;
 

@@ -172,8 +172,7 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
   const cfInstallTokenAvailable = Boolean(
     settingsPaste?.cfInstallTokenAvailable ||
       credentials?.cfOauthRefreshToken?.trim() ||
-      credentials?.cfOauthAccessToken?.trim() ||
-      credentials?.installToken?.trim(),
+      credentials?.cfOauthAccessToken?.trim(),
   );
 
   async function startHostOauth() {
@@ -218,8 +217,7 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
   async function handleDefaultPaste(token: string): Promise<boolean> {
     const hasSession = Boolean(
       credentials?.cfOauthRefreshToken?.trim() ||
-        credentials?.cfOauthAccessToken?.trim() ||
-        credentials?.installToken?.trim(),
+        credentials?.cfOauthAccessToken?.trim(),
     );
     if (!hasSession) {
       pendingPasteTokenRef.current = token;

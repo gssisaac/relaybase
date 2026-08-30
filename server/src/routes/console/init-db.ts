@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { requireConsoleSession, requirePepperBootstrap } from "../../lib/auth";
+import { requireSchemaAuth } from "../../lib/auth";
 import { ownerIsConfigured } from "../../../db/app/owner";
 import { createAppDb } from "../../../db/app";
 import {
@@ -18,16 +18,13 @@ const consoleInitDb = new Hono<{ Bindings: Env }>();
  * use POST /console/migrate-db. To wipe, delete the D1s in Cloudflare and
  * create empty ones, then call this again.
  *
- * Auth: before an owner exists, the caller proves knowledge of AUTH_PEPPER
- * (X-Auth-Pepper header, held in desktop memory only during install). Once
- * an owner exists, a normal owner access token is required.
+ * Auth: owner access token, Cloudflare OAuth account proof (install /
+ * upgrade), or AUTH_PEPPER when no owner exists yet.
  */
 consoleInitDb.post("/", async (c) => {
   const db = createAppDb(c.env.RELAYBASE_DB);
   const hasOwner = db ? await ownerIsConfigured(db) : false;
-  const denied = hasOwner
-    ? await requireConsoleSession(c)
-    : await requirePepperBootstrap(c);
+  const denied = await requireSchemaAuth(c, hasOwner);
   if (denied) return denied;
 
   const probe = await anyProbeTableExists(c.env);

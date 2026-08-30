@@ -418,6 +418,7 @@ pub async fn upload_worker_script(
     let metadata = json!({
         "main_module": "worker.js",
         "bindings": bindings,
+        "keep_bindings": ["secret_text"],
         "compatibility_date": "2025-06-01",
         "triggers": { "crons": [DEFAULT_WORKER_CRON] }
     });
@@ -468,6 +469,29 @@ pub async fn list_worker_bindings(
             let kind = b.get("type").and_then(|v| v.as_str()).unwrap_or("?");
             let name = b.get("name").and_then(|v| v.as_str()).unwrap_or("?");
             out.push((kind.to_string(), name.to_string()));
+        }
+    }
+    Ok(out)
+}
+
+/// Secret binding names on the script (`AUTH_PEPPER`, `CF_ACCOUNT_ID`, …).
+pub async fn list_worker_secrets(
+    client: &CfClient,
+    script_name: &str,
+) -> Result<Vec<String>, String> {
+    let path = format!(
+        "/accounts/{}/workers/scripts/{script_name}/secrets",
+        client.account_id
+    );
+    let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
+    let mut out = Vec::new();
+    if let Some(arr) = value.get("result").and_then(|v| v.as_array()) {
+        for b in arr {
+            if let Some(name) = b.get("name").and_then(|v| v.as_str()) {
+                if !name.is_empty() {
+                    out.push(name.to_string());
+                }
+            }
         }
     }
     Ok(out)

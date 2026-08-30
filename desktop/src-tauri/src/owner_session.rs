@@ -497,6 +497,8 @@ pub struct OwnerSetupResult {
     pub passtoken: String,
 }
 
+/// Re-issue owner passtoken. `cf_access_token` is the Cloudflare OAuth
+/// access token only.
 pub async fn owner_reset_admin(
     worker_url: String,
     cf_access_token: String,
@@ -506,8 +508,12 @@ pub async fn owner_reset_admin(
     if base.is_empty() {
         return Err("Worker URL is required".into());
     }
+    let token = cf_access_token.trim();
+    if token.is_empty() {
+        return Err("Authorize with Cloudflare again".into());
+    }
     let url = format!("{base}/console/reset-admin");
-    let mut body = serde_json::json!({ "cfAccessToken": cf_access_token.trim() });
+    let mut body = serde_json::json!({ "cfAccessToken": token });
     if let Some(name) = username {
         let name = name.trim().to_lowercase();
         if !name.is_empty() {

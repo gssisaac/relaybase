@@ -3,7 +3,7 @@ import { loadLocalCredentialsFile } from "./credentials-local";
 
 export type DesktopCredentials = {
   accountId: string;
-  /** Cloudflare OAuth access token (memory overlay). Never persisted. */
+  /** Unused IPC leftover. OAuth is `cfOauthAccessToken` only. */
   installToken: string;
   workerUrl: string;
   adminToken: string;
@@ -15,10 +15,7 @@ export type DesktopCredentials = {
   relaybaseEmail: string;
   /** Signed session token, stored locally only. */
   relaybaseSession: string;
-  // --- Cloudflare OAuth (install token) ---
-  // Short-lived access token; kept in sync with `installToken` so existing
-  // wrangler/CF-API call sites work unchanged. Populated from Tauri process
-  // memory only — never persisted to ~/.relaybase.
+  /** Memory overlay of the OAuth access token. Never persisted. */
   cfOauthAccessToken: string;
   // Long-lived refresh token; process memory only (Tauri desktop).
   cfOauthRefreshToken: string;

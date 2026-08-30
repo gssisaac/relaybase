@@ -54,7 +54,7 @@ struct DiskCredentials {
 #[serde(rename_all = "camelCase", default)]
 pub struct StoredCredentials {
     pub account_id: String,
-    /// IPC overlay only — OAuth access token (or a leftover legacy field).
+    /// Unused IPC leftover. OAuth is `cf_oauth_access_token` only.
     /// Never written to `credentials.json`.
     #[serde(alias = "apiToken", alias = "api_token")]
     pub install_token: String,
@@ -94,21 +94,41 @@ static CF_OAUTH_SESSION: Mutex<Option<CfOAuthSession>> = Mutex::new(None);
 
 pub fn set_cf_oauth_session(session: CfOAuthSession) {
     if let Ok(mut guard) = CF_OAUTH_SESSION.lock() {
-        *guard = Some(session);
+        *guard = Some(session.clone());
     }
+    #[cfg(debug_assertions)]
+    crate::dev::save_cf_oauth_cache(&session);
 }
 
 pub fn get_cf_oauth_session() -> Option<CfOAuthSession> {
-    CF_OAUTH_SESSION
+    let cached = CF_OAUTH_SESSION
         .lock()
         .ok()
-        .and_then(|guard| guard.clone())
+        .and_then(|guard| guard.clone());
+    if cached.is_some() {
+        return cached;
+    }
+    #[cfg(debug_assertions)]
+    {
+        let loaded = crate::dev::load_cf_oauth_cache()?;
+        set_cf_oauth_session(loaded.clone());
+        return Some(loaded);
+    }
+    #[cfg(not(debug_assertions))]
+    None
 }
 
 pub fn clear_cf_oauth_session() {
     if let Ok(mut guard) = CF_OAUTH_SESSION.lock() {
         *guard = None;
     }
+    #[cfg(debug_assertions)]
+    crate::dev::clear_cf_oauth_cache();
+}
+
+#[cfg(debug_assertions)]
+pub fn hydrate_cf_oauth_session_dev_cache() {
+    crate::dev::hydrate(&CF_OAUTH_SESSION);
 }
 
 /// Overlay the in-memory OAuth session onto credentials for UI / IPC responses.
@@ -120,7 +140,6 @@ pub fn apply_cf_oauth_session(creds: &mut StoredCredentials) {
     creds.cf_oauth_refresh_token = session.refresh_token.clone();
     creds.cf_oauth_access_expires_at = session.access_expires_at.clone();
     creds.cf_oauth_account_id = session.account_id.clone();
-    creds.install_token = session.access_token.clone();
     if !session.account_id.is_empty() {
         creds.account_id = session.account_id.clone();
     }

@@ -9,7 +9,11 @@ The **Worker owns D1 schema**. The desktop installer creates empty D1 databases 
 | **`POST /console/init-db`** | Empty D1 only (first install, or after D1s were deleted and recreated) | Apply all pending migrations. If any probe table already exists, **409 `DB_ALREADY_INITIALIZED`** and **no writes**. `clear: true` does **not** drop tables. |
 | **`POST /console/migrate-db`** | Existing D1 (install reuse + Settings Worker update) | Apply pending only. Never drops. Reconciles a missing ledger on an existing schema (see **Policy**). |
 
-Both require owner auth. Before an owner is configured (first install), they accept an **`AUTH_PEPPER` bootstrap** — the caller passes the pepper in the `X-Auth-Pepper` header (held in desktop process memory only during install). Once an owner exists, a normal owner **access Bearer** is required (same as `/console/connect`).
+Auth (any one is enough):
+
+- Owner **console access Bearer** (signed-in Settings → Update Worker)
+- **Cloudflare OAuth** — `X-Cf-Access-Token` that can GET this Worker's `CF_ACCOUNT_ID` account (same proof as `POST /console/reset-admin`). Desktop install / upgrade already holds this token; an existing owner must not fail the upgrade.
+- **`AUTH_PEPPER` bootstrap** (`X-Auth-Pepper`) — only while no owner exists yet
 
 ---
 
@@ -102,7 +106,7 @@ curl -X POST "https://<worker-url>/console/init-db" \
   -d '{}'
 ```
 
-> After an owner is configured, use `Authorization: Bearer <owner access token>` instead of `X-Auth-Pepper`.
+> After an owner is configured, use `Authorization: Bearer <owner access token>` or `X-Cf-Access-Token: <Cloudflare OAuth access token>` instead of `X-Auth-Pepper`.
 
 ---
 
@@ -120,7 +124,7 @@ curl -X POST "https://<worker-url>/console/migrate-db" \
   -d '{}'
 ```
 
-> On first install (no owner yet), use `X-Auth-Pepper: <AUTH_PEPPER>` instead.
+> On first install (no owner yet), use `X-Auth-Pepper: <AUTH_PEPPER>`. Desktop OAuth upgrade sends `X-Cf-Access-Token` even when an owner already exists.
 
 Desktop: `desktopMigrateWorkerDb` / `migrate_worker_db_cmd`. After Worker deploy, the installer waits for `/health`, then retries migrate-db on transient 401 / 1104 / 404 (secret not on the isolate yet).
 
@@ -132,7 +136,7 @@ Desktop: `desktopMigrateWorkerDb` / `migrate_worker_db_cmd`. After Worker deploy
 2. **Confirm** — if resources exist, user picks **Skip** (reuse) or **Reinstall** (delete + recreate) per item. Default: Skip. Reinstall of D1 is how you wipe — not `init-db` `clear`.
 3. **Create** — R2 + D1 via Cloudflare HTTP API (no migrations). Skip reuses existing IDs.
 4. **Deploy** — PUT `worker.js` with bindings, set `AUTH_PEPPER` / `CF_ACCOUNT_ID` secrets, enable workers.dev.
-5. **Schema** — empty D1s (just created): `POST /console/init-db` (X-Auth-Pepper bootstrap). Reused D1s: `POST /console/migrate-db` (owner access token).
+5. **Schema** — empty D1s (just created): `POST /console/init-db`. Reused D1s: `POST /console/migrate-db`. Auth is pepper (no owner), owner Bearer, or Cloudflare OAuth (`X-Cf-Access-Token`).
 6. **Owner setup** — `POST /console/setup-admin` (username → issued passtoken, shown once + downloaded), then `POST /console/login` → owner access + refresh.
 7. **Connect** — `GET /console/connect`, save non-secret connection info.
 

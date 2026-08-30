@@ -1,5 +1,8 @@
 mod auto_install;
+mod cf_oauth;
 mod cloudflare;
+#[cfg(debug_assertions)]
+mod dev;
 mod keyring_store;
 mod notify;
 mod owner_session;
@@ -11,7 +14,7 @@ mod worker;
 /// Relaybase console base URL. The desktop calls console.relaybase.xyz for
 /// account/session, license, recovery, and CF OAuth (install-token) flows.
 /// Override with the RELAYBASE_CONSOLE_URL env var for dev/staging.
-fn console_base_url() -> String {
+pub(crate) fn console_base_url() -> String {
     std::env::var("RELAYBASE_CONSOLE_URL")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -25,9 +28,10 @@ use auto_install::{
     update_installed_worker, worker_urls_match, AutoInstallResult, InitDbResult, InstallDecision,
     InstallProbeResult, WorkerUpdateCheck, WorkerUpdateTarget,
 };
+use cf_oauth::{cf_oauth_if_present, new_iso_expires, require_cf_oauth};
 use cloudflare::{resolve_account_id, verify_token};
 use secrets::{
-    clear_cf_oauth_session, clear_credentials, clear_team_login, get_cf_oauth_session,
+    clear_credentials, clear_team_login, get_cf_oauth_session,
     load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
     load_credentials_merged, load_email_prefs, load_mail_json as read_mail_json, load_team_login,
     migrate_mail_to_desktop_user, migrate_storage_layout_v2, current_scope_id,
@@ -205,64 +209,45 @@ async fn verify_cf_token(
 
 #[tauri::command]
 async fn probe_routing_worker() -> Result<ProbeResult, String> {
-    let install_token = refresh_install_token_if_needed().await?;
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    if creds.account_id.is_empty() || install_token.is_empty() {
-        return Err("Connect Cloudflare first".into());
-    }
-    probe_install(&creds.account_id, &install_token).await
+    let oauth = require_cf_oauth().await?;
+    probe_install(&oauth.account_id, &oauth.access_token).await
 }
 
 #[tauri::command]
 async fn reissue_admin_token() -> Result<ReissueAdminResult, String> {
-    if get_cf_oauth_session().is_none() {
-        return Err("Authorize with Cloudflare first.".into());
-    }
-    let install_token = refresh_install_token_if_needed().await?;
+    let oauth = require_cf_oauth().await?;
     let creds = load_credentials()?.unwrap_or_default();
-    let account_id = get_cf_oauth_session()
-        .map(|s| s.account_id)
-        .filter(|id| !id.trim().is_empty())
-        .or_else(|| {
-            let id = creds.account_id.trim().to_string();
-            (!id.is_empty()).then_some(id)
-        })
-        .ok_or_else(|| {
-            "Could not resolve Cloudflare account. Authorize again.".to_string()
-        })?;
     let (result, next) =
-        reissue_admin_token_inner(&account_id, &install_token, &creds).await?;
+        reissue_admin_token_inner(&oauth.account_id, &oauth.access_token, &creds).await?;
     save_credentials(&next)?;
     Ok(result)
 }
 
 #[tauri::command]
 async fn adopt_routing_worker() -> Result<InstallResult, String> {
-    let install_token = refresh_install_token_if_needed().await?;
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    let (result, next) = adopt_worker(&creds.account_id, &install_token, &creds).await?;
+    let oauth = require_cf_oauth().await?;
+    let creds = load_credentials()?.unwrap_or_default();
+    let (result, next) = adopt_worker(&oauth.account_id, &oauth.access_token, &creds).await?;
     save_credentials(&next)?;
     Ok(result)
 }
 
 #[tauri::command]
 async fn install_routing_worker(worker_js: Option<String>) -> Result<InstallResult, String> {
-    let install_token = refresh_install_token_if_needed().await?;
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
+    let oauth = require_cf_oauth().await?;
+    let creds = load_credentials()?.unwrap_or_default();
     let (result, next) =
-        install_worker(&creds.account_id, &install_token, worker_js, &creds).await?;
+        install_worker(&oauth.account_id, &oauth.access_token, worker_js, &creds).await?;
     save_credentials(&next)?;
     Ok(result)
 }
 
 #[tauri::command]
 async fn update_routing_worker(worker_js: Option<String>) -> Result<InstallResult, String> {
-    let install_token = refresh_install_token_if_needed().await?;
-    let creds = load_credentials()?.ok_or("Connect Cloudflare first")?;
-    // update_worker reads creds.install_token internally; sync it first so a
-    // freshly-refreshed OAuth token is used.
+    let oauth = require_cf_oauth().await?;
+    let creds = load_credentials()?.unwrap_or_default();
     let mut next = creds;
-    next.install_token = install_token;
+    next.install_token = oauth.access_token;
     let result = update_worker(&next, worker_js).await?;
     Ok(result)
 }
@@ -324,8 +309,12 @@ async fn clear_team_login_cmd() -> Result<(), String> {
 async fn probe_auto_install(
     account_id: Option<String>,
 ) -> Result<InstallProbeResult, String> {
-    let token = refresh_install_token_if_needed().await?;
-    probe_install_resources(token, account_id).await
+    let oauth = require_cf_oauth().await?;
+    let id = account_id
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(oauth.account_id);
+    probe_install_resources(oauth.access_token, Some(id)).await
 }
 
 #[tauri::command]
@@ -339,18 +328,22 @@ async fn auto_install_routing_worker(
     let server = server_token
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let token = refresh_install_token_if_needed().await?;
+    let oauth = require_cf_oauth().await?;
+    let id = account_id
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| oauth.account_id.clone());
     let result = auto_install_worker(
         app,
-        token,
-        account_id.clone(),
+        oauth.access_token,
+        Some(id.clone()),
         server.clone(),
         decisions.unwrap_or_default(),
         wipe_confirmation,
     )
     .await?;
     let existing = load_credentials()?.unwrap_or_default();
-    let next = merge_into_credentials(&existing, &result, account_id);
+    let next = merge_into_credentials(&existing, &result, Some(id));
     save_credentials(&next)?;
     Ok(result)
 }
@@ -379,30 +372,17 @@ async fn preview_worker_update_target_cmd() -> Result<WorkerUpdateTarget, String
     if creds.worker_url.trim().is_empty() {
         return Err("No Worker URL saved. Complete install first.".into());
     }
-    let token = refresh_install_token_if_needed().await?;
-    let mut account_id = creds.account_id.trim().to_string();
-    if account_id.is_empty() {
-        account_id = get_cf_oauth_session()
-            .map(|s| s.account_id.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .unwrap_or_default();
-    }
-    if account_id.is_empty() {
-        if token.trim().is_empty() {
-            return Err("Authorize with Cloudflare first.".into());
-        }
-        account_id = resolve_account_id(&token).await?;
-    }
+    let oauth = require_cf_oauth().await?;
     preview_worker_update_target(
-        &token,
-        &account_id,
+        &oauth.access_token,
+        &oauth.account_id,
         &creds.worker_url,
         &creds.worker_script_name,
     )
     .await
 }
 
-/// Download the latest install ZIP and re-deploy the Worker (keeps ADMIN_TOKEN + D1).
+/// Download the latest install ZIP and re-deploy the Worker (keeps D1).
 #[tauri::command]
 async fn update_installed_worker_cmd(
     app: tauri::AppHandle,
@@ -412,22 +392,14 @@ async fn update_installed_worker_cmd(
     if creds.worker_url.trim().is_empty() {
         return Err("No Worker URL saved. Complete install first.".into());
     }
-    if crate::owner_session::current_access_token().is_none() {
-        return Err("Sign in with your owner session before updating the Worker.".into());
-    }
-    let token = refresh_install_token_if_needed().await?;
-    let account_id = if creds.account_id.trim().is_empty() {
-        None
-    } else {
-        Some(creds.account_id.clone())
-    };
+    let oauth = require_cf_oauth().await?;
     let server = server_token
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
     let mut result = update_installed_worker(
         app,
-        token,
-        account_id.clone(),
+        oauth.access_token,
+        Some(oauth.account_id.clone()),
         server,
     )
     .await?;
@@ -438,7 +410,7 @@ async fn update_installed_worker_cmd(
         result.worker_url = creds.worker_url.trim().trim_end_matches('/').to_string();
     }
     let existing = load_credentials()?.unwrap_or_default();
-    let next = merge_into_credentials(&existing, &result, account_id);
+    let next = merge_into_credentials(&existing, &result, Some(oauth.account_id));
     save_credentials(&next)?;
     Ok(result)
 }
@@ -457,8 +429,12 @@ async fn rollback_auto_install(
     account_id: Option<String>,
     wipe_confirmation: Option<String>,
 ) -> Result<(), String> {
-    let token = refresh_install_token_if_needed().await?;
-    rollback_all_install(app, token, account_id, wipe_confirmation).await?;
+    let oauth = require_cf_oauth().await?;
+    let id = account_id
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(oauth.account_id);
+    rollback_all_install(app, oauth.access_token, Some(id), wipe_confirmation).await?;
     if let Ok(Some(mut creds)) = load_credentials() {
         creds.worker_url.clear();
         creds.admin_token.clear();
@@ -485,10 +461,12 @@ async fn init_worker_db_cmd(
                 .into(),
         );
     }
+    let cf = cf_oauth_if_present().await?;
     init_worker_db(
         &worker_url,
         None,
-        crate::owner_session::current_access_token().as_deref(),
+        crate::owner_session::current_console_access_token().as_deref(),
+        cf.as_ref().map(|o| o.access_token.as_str()),
     )
     .await
 }
@@ -499,10 +477,12 @@ async fn migrate_worker_db_cmd(
     worker_url: String,
     _admin_token: String,
 ) -> Result<InitDbResult, String> {
+    let cf = cf_oauth_if_present().await?;
     migrate_worker_db(
         &worker_url,
         None,
-        crate::owner_session::current_access_token().as_deref(),
+        crate::owner_session::current_console_access_token().as_deref(),
+        cf.as_ref().map(|o| o.access_token.as_str()),
     )
     .await
 }
@@ -516,19 +496,16 @@ async fn push_server_token(server_token: String) -> Result<serde_json::Value, St
     if server.is_empty() {
         return Err("Server token is empty.".into());
     }
-    let install_token = refresh_install_token_if_needed().await?;
+    let oauth = require_cf_oauth().await?;
     let creds = load_credentials_merged()?;
-    if creds.account_id.is_empty() || install_token.is_empty() {
-        return Err("Authorize with Cloudflare first to push the server token".into());
-    }
     if creds.worker_script_name.is_empty() {
         return Err("No deployed Worker found. Install the routing Worker first.".into());
     }
 
     let pushed_at = auto_install::push_cf_api_token_secret(
-        &creds.account_id,
+        &oauth.account_id,
         &creds.worker_script_name,
-        &install_token,
+        &oauth.access_token,
         &server,
     )
     .await?;
@@ -536,13 +513,11 @@ async fn push_server_token(server_token: String) -> Result<serde_json::Value, St
     Ok(serde_json::json!({ "ok": true, "message": "Server token pushed to Worker as CF_API_TOKEN.", "pushedAt": pushed_at }))
 }
 
-// --- Cloudflare OAuth (install token) ---
+// --- Cloudflare OAuth ---
 //
-// The install token (Workers Scripts / R2 / D1 / Secrets Store) is obtained
-// via Cloudflare OAuth. Tokens live in process memory only — never on disk.
-// `install_token` in API responses is overlaid from the in-memory session so
-// existing CF-API call sites work unchanged. Legacy manual install tokens
-// may still be stored on disk when no OAuth session is active.
+// Access/refresh live in process memory only. CF API and Worker schema
+// commands read the session through `require_cf_oauth` (or
+// `cf_oauth_if_present` when pepper / console session can stand in).
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -891,222 +866,11 @@ async fn accept_oauth_loopback<R: tauri::Runtime>(
     }
 }
 
-/// ISO-8601 timestamp `expires_in` seconds from now.
-fn new_iso_expires(expires_in: u64) -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-        .saturating_add(expires_in);
-    // Format as YYYY-MM-DDTHH:MM:SSZ (UTC). Simple manual formatting to avoid
-    // pulling a datetime crate.
-    let days = secs / 86400;
-    let rem = secs % 86400;
-    let h = rem / 3600;
-    let m = (rem % 3600) / 60;
-    let s = rem % 60;
-    let (y, mo, dd) = days_to_ymd(days as i64);
-    format!("{y:04}-{mo:02}-{dd:02}T{h:02}:{m:02}:{s:02}Z")
-}
-
-/// Convert days-since-epoch (1970-01-01) to (year, month, day). Civil-from-days
-/// algorithm (Howard Hinnant). Returns 1-indexed month/day.
-fn days_to_ymd(days: i64) -> (i64, i64, i64) {
-    let z = days + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    (y, m, d)
-}
-
-/// Ensure a fresh CF OAuth access token before any Cloudflare API call.
-/// No-op when there is no OAuth refresh token (legacy manual install token
-/// still in use). Refreshes directly with Cloudflare (public PKCE client —
-/// no client secret; only `client_id` + `refresh_token` are needed) when the
-/// access token is missing or expiring within 60s. Persists the refreshed
-/// tokens and keeps `install_token` in sync. Returns the current install
-/// token (fresh if refreshed).
-pub const CLOUDFLARE_AUTH_EXPIRED: &str = "CLOUDFLARE_AUTH_EXPIRED";
-
-async fn refresh_install_token_if_needed() -> Result<String, String> {
-    let Some(mut session) = get_cf_oauth_session() else {
-        let creds = load_credentials()?.unwrap_or_default();
-        if creds.install_token.trim().is_empty() {
-            return Err(format!(
-                "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
-                 Authorize with Cloudflare again."
-            ));
-        }
-        return Ok(creds.install_token);
-    };
-
-    let now_secs = now_unix_secs();
-    let expires_at_secs = parse_iso_to_secs(&session.access_expires_at);
-    let fresh = session.access_expires_at.is_empty()
-        || expires_at_secs.saturating_sub(now_secs) >= 60;
-    if fresh {
-        return Ok(session.access_token);
-    }
-
-    if session.refresh_token.trim().is_empty() {
-        return Err(format!(
-            "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
-             Authorize with Cloudflare again."
-        ));
-    }
-
-    // Public PKCE client: refresh needs only client_id (no secret). Fetch it
-    // from the console's public /config endpoint.
-    let client_id = fetch_oauth_client_id().await?;
-    let http = reqwest::Client::new();
-    let refresh_body = url::form_urlencoded::Serializer::new(String::new())
-        .append_pair("grant_type", "refresh_token")
-        .append_pair("refresh_token", &session.refresh_token)
-        .append_pair("client_id", &client_id)
-        .finish();
-    let res = http
-        .post("https://dash.cloudflare.com/oauth2/token")
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(refresh_body)
-        .send()
-        .await
-        .map_err(|e| format!("Token refresh request failed: {e}"))?;
-    let status = res.status();
-    let body = res.text().await.unwrap_or_default();
-    if !status.is_success() {
-        let lower = body.to_lowercase();
-        if status.as_u16() == 400 || lower.contains("invalid_grant") || lower.contains("invalid") {
-            clear_cf_oauth_session();
-            return Err(format!(
-                "{CLOUDFLARE_AUTH_EXPIRED}: Cloudflare authorization expired. \
-                 Authorize with Cloudflare again."
-            ));
-        }
-        return Err(format!("Token refresh failed (HTTP {status}): {body}"));
-    }
-    let tokens: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|_| "Token endpoint returned a non-JSON refresh response".to_string())?;
-    let access_token = tokens
-        .get("access_token")
-        .and_then(|v| v.as_str())
-        .ok_or("Token refresh did not return an access_token")?
-        .to_string();
-    let expires_in = tokens.get("expires_in").and_then(|v| v.as_u64()).unwrap_or(3600);
-    let next_refresh = tokens
-        .get("refresh_token")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| session.refresh_token.clone());
-
-    session.access_token = access_token.clone();
-    session.refresh_token = next_refresh;
-    session.access_expires_at = new_iso_expires(expires_in);
-    set_cf_oauth_session(session);
-    Ok(access_token)
-}
-
-/// Fetch the public OAuth client_id from the console's /config endpoint.
-async fn fetch_oauth_client_id() -> Result<String, String> {
-    let url = format!(
-        "{}/api/v1/oauth/config",
-        console_base_url().trim_end_matches('/')
-    );
-    let res = reqwest::Client::new()
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Could not reach Relaybase console for OAuth config: {e}"))?;
-    let status = res.status();
-    let body = res.text().await.unwrap_or_default();
-    if !status.is_success() {
-        return Err(format!("Console rejected OAuth config (HTTP {status}): {body}"));
-    }
-    let value: serde_json::Value = serde_json::from_str(&body)
-        .map_err(|_| "Console returned a non-JSON OAuth config response".to_string())?;
-    value
-        .get("clientId")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .ok_or_else(|| "Console did not return a clientId".to_string())
-}
-
-/// Force a refresh of the CF OAuth access token (or no-op for legacy manual
-/// install tokens). Returns the updated credentials. The Rust side also
-/// refreshes automatically before Cloudflare API calls, so this is mainly
-/// for the UI to update the "expires in" display on demand.
+/// Overlay credentials after ensuring the in-memory OAuth session is usable.
 #[tauri::command]
 async fn refresh_install_token() -> Result<StoredCredentials, String> {
-    refresh_install_token_if_needed().await?;
+    require_cf_oauth().await?;
     load_credentials_merged()
-}
-
-fn now_unix_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
-
-/// Best-effort ISO-8601 → unix seconds. Returns 0 on parse failure (which
-/// forces a refresh, which is the safe fallback).
-fn parse_iso_to_secs(iso: &str) -> u64 {
-    if iso.is_empty() {
-        return 0;
-    }
-    // Accept "YYYY-MM-DDTHH:MM:SS(.sss)Z" — parse the fixed fields.
-    let bytes = iso.as_bytes();
-    if bytes.len() < 19 {
-        return 0;
-    }
-    let to_i = |a: usize, b: usize| -> Option<u64> {
-        std::str::from_utf8(&bytes[a..b]).ok().and_then(|s| s.parse::<u64>().ok())
-    };
-    let y = match to_i(0, 4) {
-        Some(v) => v,
-        None => return 0,
-    };
-    let mo = match to_i(5, 7) {
-        Some(v) => v,
-        None => return 0,
-    };
-    let d = match to_i(8, 10) {
-        Some(v) => v,
-        None => return 0,
-    };
-    let h = match to_i(11, 13) {
-        Some(v) => v,
-        None => return 0,
-    };
-    let mi = match to_i(14, 16) {
-        Some(v) => v,
-        None => return 0,
-    };
-    let s = match to_i(17, 19) {
-        Some(v) => v,
-        None => return 0,
-    };
-    if y < 1970 || mo == 0 || mo > 12 || d == 0 || d > 31 || h > 23 || mi > 59 || s > 59 {
-        return 0;
-    }
-    let days = days_from_civil(y as i64, mo as i64, d as i64);
-    (days as u64) * 86_400 + h * 3600 + mi * 60 + s
-}
-
-/// Howard Hinnant's days_from_civil — converts a Gregorian date to days
-/// since 1970-01-01 (unix epoch). Returns a signed count.
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = (y - era * 400) as i64;
-    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146097 + doe - 719468
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -1398,8 +1162,7 @@ async fn fetch_connect_with_retry(
         let status = res.status();
         if status.as_u16() == 401 || status.as_u16() == 403 {
             return Err(
-                "Admin token was rejected by the Worker. Use the same ADMIN_TOKEN that was set during install."
-                    .into(),
+                "Unlock the console dashboard first (Touch ID or passtoken).".into(),
             );
         }
         if status.is_success() {
@@ -1784,7 +1547,9 @@ async fn owner_reset_admin_cmd(
     cf_access_token: String,
     username: Option<String>,
 ) -> Result<OwnerSetupResult, String> {
-    owner_reset_admin_inner(worker_url, cf_access_token, username).await
+    let _ = cf_access_token;
+    let oauth = require_cf_oauth().await?;
+    owner_reset_admin_inner(worker_url, oauth.access_token, username).await
 }
 
 #[tauri::command]
@@ -1848,6 +1613,8 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+                // DEV-MODE TESTING ONLY: restore CF OAuth from ~/.relaybase/tmp/
+                secrets::hydrate_cf_oauth_session_dev_cache();
             }
             // Seed ~/.relaybase/icon.png for notification identity image.
             if let Err(e) = notify::ensure_notification_icon() {

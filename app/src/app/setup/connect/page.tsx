@@ -3,11 +3,12 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { UnlockView } from "@/console/components/setup/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
 
 /**
- * "Already installed" entry from the welcome choice. Enter UnlockView on `/` —
- * passtoken form when no keyring, or silent mail boot when refresh exists.
+ * Already-installed / post-setup sign-in. Shows the passtoken form here.
+ * After unlock, leave setup for the mailbox.
  */
 export default function SetupConnectPage() {
   const router = useRouter();
@@ -15,12 +16,21 @@ export default function SetupConnectPage() {
 
   useEffect(() => {
     store.openAlreadyInstalled();
-    router.replace("/");
-  }, [router, store]);
+  }, [store]);
 
-  return (
-    <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-      Opening…
-    </div>
-  );
+  useEffect(() => {
+    if (store.canShowApp) {
+      router.replace("/email/inbox");
+    }
+  }, [store.canShowApp, router]);
+
+  if (store.canShowApp) {
+    return (
+      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+        Opening mailbox…
+      </div>
+    );
+  }
+
+  return <UnlockView role="owner" />;
 }

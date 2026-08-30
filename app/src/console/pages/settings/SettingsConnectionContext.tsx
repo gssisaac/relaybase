@@ -161,14 +161,10 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   // closes over mount-time state) can read the latest typed value.
   const serverTokenRef = useRef("");
 
-  // CF OAuth (install token) derived state. An install token is available
-  // when an OAuth session is in memory (access or refresh token present) or
-  // a legacy manual install token is on disk. Used to gate the server-token
-  // push and to trigger the authorize-then-push flow.
+  // OAuth session in memory (access or refresh). Gates server-token push.
   const cfInstallTokenAvailable = Boolean(
     credentials?.cfOauthRefreshToken?.trim() ||
-      credentials?.cfOauthAccessToken?.trim() ||
-      credentials?.installToken?.trim(),
+      credentials?.cfOauthAccessToken?.trim(),
   );
 
   function resetCfDraft() {

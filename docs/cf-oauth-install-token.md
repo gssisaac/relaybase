@@ -12,7 +12,7 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 |-------|------|
 | **Cloudflare OAuth client** | One public PKCE client on the operator’s CF account. Grant types: `authorization_code` + **`refresh_token`**. Token auth: **None (PKCE)**. Redirect URI: `https://console.relaybase.xyz/oauth/callback`. |
 | **`console.relaybase.xyz`** | Public `/api/v1/oauth/config` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `kembo-ops`. |
-| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION` static mutex — never written to disk). Overlays the access token into `installToken` for CF API call sites. App restart clears the session. Auto-install uses this memory token only — it does not call wrangler or require Node. |
+| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION`). All Cloudflare API / Worker `X-Cf-Access-Token` calls go through `require_cf_oauth()` in `desktop/src-tauri/src/cf_oauth.rs` — memory if the access token has ≥60s left, otherwise the Cloudflare token endpoint. App restart clears the session. |
 | **`~/.relaybase`** | Stores only the resolved CF account id (from the OAuth response). OAuth access/refresh tokens are **not** persisted — they live in Tauri memory only. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
 
 No KV, no D1, and no Relaybase console **session** is required to connect Cloudflare.
@@ -78,11 +78,11 @@ Cloudflare redirects the browser to `console.relaybase.xyz/oauth/callback`. That
 
 Only one Relaybase process can bind `127.0.0.1:32831`. If **Applications/Relaybase.app** is running while you use `tauri:dev`, the browser callback hits the installed app and the dev window waits forever. `start_cf_oauth` now fails immediately with a “quit Relaybase.app” error when the port is taken; retry Authorize after quitting the other window.
 
-Rust (`desktop/src-tauri/src/lib.rs`):
+Rust:
 
-- `start_cf_oauth` — fetch config, PKCE verifier/challenge, open authorize URL
+- `start_cf_oauth` / `complete_cf_oauth` (`desktop/src-tauri/src/lib.rs`) — PKCE authorize + token exchange; writes `CF_OAUTH_SESSION`
 - Loopback server + `tauri-plugin-deep-link` — complete exchange, emit `cf-oauth-complete` / `cf-oauth-error`
-- `refresh_install_token_if_needed` — if `CF_OAUTH_SESSION` has a fresh access token, use it; otherwise refresh via Cloudflare token endpoint when `cfOauthRefreshToken` is set; no-op if only a legacy disk install token is present
+- `require_cf_oauth` (`desktop/src-tauri/src/cf_oauth.rs`) — only reader for CF commands. Returns `{ access_token, account_id }` from memory, or refreshes when the access token expires within 60s. No session → “Authorize with Cloudflare again”.
 
 Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `app/src/lib/desktop/bridge/oauth.ts` — not tied to staying on the Cloudflare settings page.
 
@@ -103,7 +103,7 @@ The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secret
 ## Settings + setup UX
 
 - **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + owner passtoken copy). No separate install button.
-- **Lost passtoken** — **Unlock → Sign in with passtoken → I forgot my passtoken** (`/setup/recover-admin`). Same Cloudflare OAuth as install; after authorization the app calls `POST /console/reset-admin` with the CF access token, and the Worker re-issues a passtoken once (account must match `CF_ACCOUNT_ID`). No console email recovery, no `ADMIN_TOKEN` re-push.
+- **Lost passtoken** — **Unlock → Sign in with passtoken → I forgot my passtoken** (`/setup/recover-admin`). Same Cloudflare OAuth as install; after authorization the app calls `POST /console/reset-admin` with the in-memory OAuth access token. The Worker proves that token can GET `/accounts/{CF_ACCOUNT_ID}` and re-issues a passtoken once. No console email recovery.
 - **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe).
 - **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). The token is not written to disk.
 - **Settings → Cloudflare** — dashboard-first Enable email API dialog. OAuth is only requested if the user chooses paste & push and there is no install token in memory.
@@ -112,9 +112,9 @@ The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secret
 - **Manual install** — Worker URL + username + passtoken inline on the install page; the same Enable email API dialog follows Worker URL verify.
 - **Sending** — the Worker `EMAIL` send_email binding, attached at deploy. `CF_API_TOKEN` is for domain / inbox routing / DNS API, not for send. `GET /console/connect` reports `emailBindingConfigured`.
 - **Server token source of truth** — the Worker's `CF_API_TOKEN` secret (`cfApiTokenSet` + `cfApiTokenValid`). The desktop does not persist that token.
-- Do **not** ask the user to paste a Workers Scripts / R2 API token. That legacy field is replaced by OAuth. Install does not create KV.
+- Do **not** ask the user to paste a Workers Scripts / R2 API token. Install uses OAuth. Install does not create KV.
 
-Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected” / install ZIP messaging.
+Errors use `explainCfOAuthError()`.
 
 ---
 
@@ -123,12 +123,12 @@ Errors use `explainCfOAuthError()` — not the legacy “Admin token rejected”
 | Area | Files |
 |------|--------|
 | Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
-| Desktop Rust | `desktop/src-tauri/src/lib.rs`, `secrets.rs`, `auto_install.rs` (`preview_worker_update_target`), `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
+| Desktop Rust | `desktop/src-tauri/src/cf_oauth.rs` (`require_cf_oauth`), `lib.rs`, `secrets.rs`, `auto_install/`, `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge/`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx`, `WorkerUpdateBanner.tsx`, `/settings/worker/update`, `/settings/worker/progress` |
 | Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx`, `use-enable-email-api-dialog.tsx` (also opened from Domains → Refresh from Cloudflare when `GET /console/zones` reports the Worker token missing) |
 | Zone list (Refresh from Cloudflare) | `GET /console/zones` (`server/src/routes/console/zones.ts`) via `listCloudflareZones` — Worker `CF_API_TOKEN`, not desktop OAuth |
 | Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
-| Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `POST /console/reset-admin` (CF OAuth account proof) |
+| Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `POST /console/reset-admin` (OAuth `GET /accounts/{CF_ACCOUNT_ID}`) |
 
 ---
 

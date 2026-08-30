@@ -167,6 +167,10 @@ Neither path wipes Worker URL or keyring. Implemented in `api-base.ts` +
 
 While no owner exists: `setup-admin`, `init-db`, `migrate-db`.
 
+### Cloudflare OAuth account proof (`X-Cf-Access-Token`)
+
+`init-db` and `migrate-db` also accept a Cloudflare OAuth access token that can GET this Worker's `CF_ACCOUNT_ID` account (same proof as `POST /console/reset-admin`). Desktop install and Worker upgrade already hold this token — an existing owner must not block migrate-db.
+
 ### Owner session (scoped Bearer)
 
 | Route group | Scope |

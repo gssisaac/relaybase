@@ -91,6 +91,17 @@ function refreshTtlForScope(scope: OwnerScope): number {
   return scope === "mail" ? MAIL_REFRESH_TTL_SECONDS : CONSOLE_REFRESH_TTL_SECONDS;
 }
 
+function requirePepper(env: Env): string | AuthError {
+  const pepper = env.AUTH_PEPPER?.trim() ?? "";
+  if (!pepper) {
+    return {
+      error: "Worker is missing AUTH_PEPPER. Re-run Setup so the install can set it.",
+      status: 503,
+    };
+  }
+  return pepper;
+}
+
 async function mintScopedAccess(
   pepper: string,
   username: string,
@@ -151,8 +162,10 @@ export async function setupOwner(
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
 
-  const pepper = env.AUTH_PEPPER?.trim() ?? "";
-  if (!pepper || pepper !== input.pepper.trim()) {
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
+  if (pepper !== input.pepper.trim()) {
     return { error: "Unauthorized", status: 401 };
   }
 
@@ -185,7 +198,9 @@ export async function loginOwner(
 ): Promise<{ result: OwnerLoginResult } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
-  const pepper = env.AUTH_PEPPER?.trim() ?? "";
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
 
   const cfg = await getOwnerLoginConfig(db);
   if (!cfg || !cfg.adminUsername || !cfg.passtokenHash || !cfg.passtokenSalt) {
@@ -247,7 +262,9 @@ export async function refreshOwner(
 ): Promise<{ result: OwnerRefreshResult } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
-  const pepper = env.AUTH_PEPPER?.trim() ?? "";
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
 
   const hash = await sha256Hex(refreshToken.trim());
   const session = await findOwnerSessionByHash(db, hash);
@@ -332,7 +349,9 @@ export async function rotatePasstoken(
 ): Promise<{ passtoken: string; username: string } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
-  const pepper = env.AUTH_PEPPER?.trim() ?? "";
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
   const cfg = await getOwnerLoginConfig(db);
   if (!cfg?.adminUsername) return { error: "Unauthorized", status: 401 };
 
@@ -357,14 +376,19 @@ export async function resetOwner(
 ): Promise<{ passtoken: string; username: string } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
-  const pepper = env.AUTH_PEPPER?.trim() ?? "";
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
   const expectedAccount = env.CF_ACCOUNT_ID?.trim() ?? "";
-
-  const verified = await verifyCfTokenAccount(input.cfAccessToken);
-  if (!verified.ok) return { error: "Unauthorized", status: 401 };
-  if (!expectedAccount || verified.accountId !== expectedAccount) {
-    return { error: "Unauthorized", status: 401 };
+  if (!expectedAccount) {
+    return { error: "Worker is missing CF_ACCOUNT_ID", status: 503 };
   }
+
+  const verified = await verifyCfTokenAccount(
+    input.cfAccessToken,
+    expectedAccount,
+  );
+  if (!verified.ok) return { error: "Unauthorized", status: 401 };
 
   const cfg = await getOwnerLoginConfig(db);
   const username = normalizeUsername(input.username ?? cfg?.adminUsername ?? "");
@@ -385,30 +409,26 @@ export async function resetOwner(
   return { passtoken, username };
 }
 
-async function verifyCfTokenAccount(
+/** Prove a Cloudflare OAuth access token can see `expectedAccount`. */
+export async function verifyCfTokenAccount(
   token: string,
+  expectedAccount: string,
 ): Promise<{ ok: boolean; accountId?: string }> {
+  const bearer = token.trim();
+  const expected = expectedAccount.trim();
+  if (!bearer || !expected) return { ok: false };
   try {
-    const res = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
-      headers: { Authorization: `Bearer ${token.trim()}` },
-    });
-    const data = (await res.json()) as {
-      success?: boolean;
-      result?: { id?: string; status?: string };
-    };
-    if (!data.success || data.result?.status !== "active") {
-      return { ok: false };
-    }
-    const accRes = await fetch("https://api.cloudflare.com/client/v4/accounts", {
-      headers: { Authorization: `Bearer ${token.trim()}` },
-    });
+    const accRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(expected)}`,
+      { headers: { Authorization: `Bearer ${bearer}` } },
+    );
     const accData = (await accRes.json()) as {
       success?: boolean;
-      result?: Array<{ id: string }>;
+      result?: { id?: string };
     };
-    if (!accData.success || !accData.result?.length) return { ok: false };
-    const accountId = accData.result[0].id;
-    return { ok: true, accountId };
+    const id = accData.result?.id?.trim() ?? "";
+    if (!accData.success || id !== expected) return { ok: false };
+    return { ok: true, accountId: expected };
   } catch {
     return { ok: false };
   }

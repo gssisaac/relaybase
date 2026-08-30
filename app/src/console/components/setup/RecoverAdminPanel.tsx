@@ -13,7 +13,7 @@ import {
   desktopSaveDownloadFile,
   desktopStartCfOAuth,
   explainCfOAuthError,
-  explainDesktopError,
+  explainPasstokenResetError,
   isDesktopRuntime,
   listenCfOAuthResult,
   oauthAuthorizationIncompleteHelp,
@@ -27,10 +27,9 @@ import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCl
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
 /**
- * Forgot-passtoken recovery. The deprecated `ADMIN_TOKEN` reissue path is
- * gone; this now authorizes Cloudflare and calls the Worker's
- * `/console/reset-admin` (via the store) with the resulting CF access token,
- * which re-issues the owner passtoken once.
+ * Forgot-passtoken recovery. Authorizes Cloudflare, then calls
+ * `/console/reset-admin` with the in-memory OAuth access token. The Worker
+ * re-issues the owner passtoken once.
  */
 export function RecoverAdminPanel() {
   const router = useRouter();
@@ -81,24 +80,26 @@ export function RecoverAdminPanel() {
   const runReset = useCallback(async () => {
     setIssueError(null);
     const workerUrl = resolvedWorkerUrl;
-    const cfAccessToken = credentials?.cfOauthAccessToken?.trim() ?? "";
-    if (!workerUrl || !cfAccessToken) {
+    if (!workerUrl) {
       setIssueError({
-        title: "Cloudflare authorization missing",
-        detail: "Authorize with Cloudflare first, then we can reset your passtoken.",
-        fix: "Click Authorize with Cloudflare and complete the sign-in.",
+        title: "Worker URL missing",
+        detail: "We need the product Worker URL before resetting your passtoken.",
+        fix: "Finish setup or sign in once so the Worker URL is known, then try again.",
       });
       return;
     }
     try {
-      await store.recoverOwner({ workerUrl, cfAccessToken });
+      await store.recoverOwner({
+        workerUrl,
+        cfAccessToken: "",
+      });
       void desktopRegisterWorkerWithConsole(workerUrl).catch(() => {
         /* best-effort */
       });
     } catch (err) {
-      setIssueError(explainDesktopError(err, "Could not reset passtoken"));
+      setIssueError(explainPasstokenResetError(err));
     }
-  }, [credentials, resolvedWorkerUrl, store]);
+  }, [resolvedWorkerUrl, store]);
 
   useEffect(() => {
     return () => {

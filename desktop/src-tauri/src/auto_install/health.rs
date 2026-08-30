@@ -125,6 +125,30 @@ pub(crate) async fn wait_for_worker_ready(app: &AppHandle, worker_url: &str) -> 
     Ok(())
 }
 
+/// Public probe: is an owner passtoken configured on this Worker?
+pub(crate) async fn fetch_owner_configured(worker_url: &str) -> Result<bool, String> {
+    let base = worker_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err("Worker URL is empty".into());
+    }
+    let client = reqwest::Client::new();
+    let res = client
+        .get(format!("{base}/console/auth-status"))
+        .send()
+        .await
+        .map_err(|e| format!("auth-status request failed: {e}"))?;
+    if !res.status().is_success() {
+        return Err(format!("auth-status HTTP {}", res.status()));
+    }
+    let body = res.text().await.unwrap_or_default();
+    let value: serde_json::Value =
+        serde_json::from_str(&body).map_err(|e| format!("auth-status parse failed: {e}"))?;
+    Ok(value
+        .get("ownerConfigured")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
+}
+
 pub(crate) async fn fetch_worker_version(worker_url: &str) -> Option<String> {
     let base = worker_url.trim().trim_end_matches('/');
     if base.is_empty() {

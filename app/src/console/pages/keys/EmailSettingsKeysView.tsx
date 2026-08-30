@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import {
+  Activity,
   Check,
   Copy,
+  KeyRound,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -13,14 +15,15 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { SparklineChart } from "@/components/dashboard/SparklineChart";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { useDashboardPaths } from "@/console/lib/paths";
+import { KeysStatusPanel } from "@/console/pages/keys/KeysStatusPanel";
 import {
   dashboardCacheNeedsRefresh,
   loadApiKeysCache,
   saveApiKeysCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
+import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -69,7 +72,9 @@ import {
   desktopAwareFetch,
   isApiUnavailableError,
   readResponseJson,
+  resolveEmailApiBase,
 } from "@/lib/desktop/api";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import {
   forgetApiKey,
   loadApiKeyVaultEntries,
@@ -77,8 +82,6 @@ import {
   rememberApiKey,
 } from "@/lib/desktop/vault";
 import { cn } from "@/lib/utils";
-
-type StatsRange = "24h" | "7d" | "30d";
 
 type ProductEmailKeyRow = {
   id: string;
@@ -89,36 +92,25 @@ type ProductEmailKeyRow = {
   createdAt: string;
 };
 
-type KeysStats = {
-  totals: {
-    requests: number;
-    errors: number;
-    emails: number;
-  };
-  series: {
-    requests: { value: number; label: string }[];
-  };
-};
-
 type ApiKeysCacheData = {
   keys: ProductEmailKeyRow[];
-  stats: KeysStats | null;
-  workerUrl: string | null;
   workerConnected: boolean;
 };
 
 type ExampleLang = "curl" | "javascript" | "python";
+type KeysPageTab = "keys" | "status";
 
-const RANGE_OPTIONS: { value: StatsRange; label: string }[] = [
-  { value: "24h", label: "24h" },
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-];
+const KEYS_CACHE_KEY = "list";
 
 const EXAMPLE_LANGS: { value: ExampleLang; label: string }[] = [
   { value: "curl", label: "cURL" },
   { value: "javascript", label: "JavaScript" },
   { value: "python", label: "Python" },
+];
+
+const PAGE_TABS: { id: KeysPageTab; label: string; icon: typeof KeyRound }[] = [
+  { id: "keys", label: "API Keys", icon: KeyRound },
+  { id: "status", label: "Status", icon: Activity },
 ];
 
 function buildSendExamples(params: {
@@ -182,17 +174,20 @@ print(res.json()["messageId"])`,
 export function EmailSettingsKeysView() {
   const { apiBase, domains: domainsHref } = useDashboardPaths();
   const { domains } = useDomain();
+  const accounts = useAccounts();
+  const { noDragClassName, isDesktop } = useDesktopChrome();
   const readyDomains = useMemo(
     () =>
       domains.filter((d) => !d.onboarding || d.onboarding.status === "ready"),
     [domains],
   );
 
+  const [tab, setTab] = useState<KeysPageTab>("keys");
+  const [statusVisited, setStatusVisited] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [keys, setKeys] = useState<ProductEmailKeyRow[]>([]);
-  const [stats, setStats] = useState<KeysStats | null>(null);
-  const [workerUrl, setWorkerUrl] = useState<string | null>(null);
   const [workerConnected, setWorkerConnected] = useState<boolean | null>(null);
-  const [range, setRange] = useState<StatsRange>("7d");
+  const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
   const [exampleLang, setExampleLang] = useState<ExampleLang>("curl");
   const [exampleCopied, setExampleCopied] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -213,8 +208,6 @@ export function EmailSettingsKeysView() {
 
   const applyCacheData = useCallback((data: ApiKeysCacheData) => {
     setKeys(data.keys);
-    setStats(data.stats);
-    setWorkerUrl(data.workerUrl);
     setWorkerConnected(data.workerConnected);
   }, []);
 
@@ -222,15 +215,12 @@ export function EmailSettingsKeysView() {
     async (force?: boolean) => {
       setKeysError(null);
 
-      const cached = await loadApiKeysCache<ApiKeysCacheData>(range);
-      // Never re-apply stale cache on force refresh (e.g. after revoke).
+      const cached = await loadApiKeysCache<ApiKeysCacheData>(KEYS_CACHE_KEY);
       if (cached && !force) {
         applyCacheData(cached.data);
         setLoadingKeys(false);
       } else if (!cached && !force) {
-        // Don't flash another range's keys while the first fetch runs.
         setKeys([]);
-        setStats(null);
       }
 
       const needsNetwork =
@@ -240,19 +230,15 @@ export function EmailSettingsKeysView() {
 
       if (!needsNetwork) return;
 
-      // Keep cached rows on screen; only spin the refresh control.
       if (cached) setRefreshing(true);
       else setLoadingKeys(true);
 
       try {
-        const res = await desktopAwareFetch(
-          `${apiBase}/keys?range=${encodeURIComponent(range)}`,
-          { cache: "no-store" },
-        );
+        const res = await desktopAwareFetch(`${apiBase}/keys`, {
+          cache: "no-store",
+        });
         const data = await readResponseJson<{
           keys?: ProductEmailKeyRow[];
-          stats?: KeysStats;
-          workerUrl?: string | null;
           workerConnected?: boolean;
           error?: string;
         }>(res);
@@ -267,12 +253,10 @@ export function EmailSettingsKeysView() {
         );
         const next: ApiKeysCacheData = {
           keys: merged,
-          stats: data.stats ?? null,
-          workerUrl: data.workerUrl ?? null,
           workerConnected: data.workerConnected ?? true,
         };
         applyCacheData(next);
-        await saveApiKeysCache(range, next);
+        await saveApiKeysCache(KEYS_CACHE_KEY, next);
       } catch (e) {
         if (!isApiUnavailableError(e)) {
           setKeysError(e instanceof Error ? e.message : "Failed to load keys");
@@ -282,7 +266,7 @@ export function EmailSettingsKeysView() {
         setRefreshing(false);
       }
     },
-    [apiBase, applyCacheData, range],
+    [apiBase, applyCacheData],
   );
 
   useEffect(() => {
@@ -290,14 +274,40 @@ export function EmailSettingsKeysView() {
   }, [refreshKeys]);
 
   useEffect(() => {
+    if (tab === "status") setStatusVisited(true);
+  }, [tab]);
+
+  useEffect(() => {
     if (!addOpen) return;
     setIssueDomain((current) => {
       if (current && readyDomains.some((d) => d.domain === current)) {
         return current;
       }
+      const selected = keys.find((key) => key.id === selectedKeyId);
+      if (
+        selected?.domain &&
+        readyDomains.some((d) => d.domain === selected.domain)
+      ) {
+        return selected.domain;
+      }
       return readyDomains[0]?.domain ?? null;
     });
-  }, [addOpen, readyDomains]);
+  }, [addOpen, keys, readyDomains, selectedKeyId]);
+
+  useEffect(() => {
+    setSelectedKeyId((current) => {
+      if (current && keys.some((key) => key.id === current)) return current;
+      return keys.find((key) => key.active)?.id ?? keys[0]?.id ?? null;
+    });
+  }, [keys]);
+
+  const selectedKey = keys.find((key) => key.id === selectedKeyId) ?? null;
+  const selectedDomain = selectedKey?.domain ?? null;
+
+  useEffect(() => {
+    if (!selectedDomain) return;
+    void accounts.refresh(selectedDomain);
+  }, [accounts, selectedDomain]);
 
   async function copyKey(id: string, value: string) {
     await navigator.clipboard.writeText(value);
@@ -344,6 +354,7 @@ export function EmailSettingsKeysView() {
       );
       setLabel("");
       setAddOpen(false);
+      if (data.id) setSelectedKeyId(data.id);
       await refreshKeys(true);
     } catch (e) {
       setKeysError(e instanceof Error ? e.message : "Create failed");
@@ -368,6 +379,7 @@ export function EmailSettingsKeysView() {
       );
       if (!res.ok) throw new Error(data.error ?? "Activate failed");
       setKeysMessage(data.message ?? `Using key for ${key.domain}`);
+      setSelectedKeyId(key.id);
       await refreshKeys(true);
     } catch (e) {
       setKeysError(e instanceof Error ? e.message : "Activate failed");
@@ -404,6 +416,7 @@ export function EmailSettingsKeysView() {
           `${data.message ?? "Key rotated"} — new secret copied to clipboard`,
         );
       }
+      setSelectedKeyId(key.id);
       await refreshKeys(true);
     } catch (e) {
       setKeysError(e instanceof Error ? e.message : "Rotate failed");
@@ -429,10 +442,8 @@ export function EmailSettingsKeysView() {
 
       const nextKeys = keys.filter((entry) => entry.id !== key.id);
       setKeys(nextKeys);
-      await saveApiKeysCache(range, {
+      await saveApiKeysCache(KEYS_CACHE_KEY, {
         keys: nextKeys,
-        stats,
-        workerUrl,
         workerConnected: workerConnected === true,
       });
       setKeysMessage(`Revoked key for ${key.domain}`);
@@ -445,19 +456,23 @@ export function EmailSettingsKeysView() {
     }
   }
 
+  function refreshPage() {
+    setRefreshNonce((n) => n + 1);
+    void refreshKeys(true);
+  }
+
   const showWorkerUnavailable = workerConnected === false && !loadingKeys;
   const canIssue = readyDomains.length > 0 && workerConnected === true;
-  const requestSeries = stats?.series?.requests?.map((b) => b.value) ?? [];
-  const requestTotal = stats?.totals?.requests ?? 0;
-  const errorTotal = stats?.totals?.errors ?? 0;
 
-  const exampleKey =
-    keys.find((key) => key.active && key.apiKey) ??
-    keys.find((key) => key.apiKey) ??
-    null;
-  const exampleApiKey = exampleKey?.apiKey ?? "YOUR_API_KEY";
-  const exampleBaseUrl = workerUrl ?? "https://relaybase-api.gssisaac.worker.dev";
-  const exampleFrom = "youraccount@yourdomain.com";
+  const exampleApiKey = selectedKey?.apiKey ?? "YOUR_API_KEY";
+  const exampleBaseUrl =
+    resolveEmailApiBase() || "https://relaybase-api.gssisaac.worker.dev";
+  const domainAddresses = selectedDomain
+    ? accounts.addressesFor(selectedDomain)
+    : [];
+  const exampleFrom =
+    domainAddresses[0]?.email ??
+    (selectedDomain ? `hello@${selectedDomain}` : "youraccount@yourdomain.com");
   const examples = buildSendExamples({
     baseUrl: exampleBaseUrl,
     apiKey: exampleApiKey,
@@ -483,10 +498,25 @@ export function EmailSettingsKeysView() {
           }
         }}
       >
-        <DesktopTitleBar
-          className="px-4 py-3"
-          end={
-            <>
+        <DesktopTitleBar className="flex-col items-stretch gap-0 px-0">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-semibold tracking-tight">
+                API Keys
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {tab === "status"
+                  ? "Request volume and recent send activity."
+                  : "Issue and manage send keys across your domains."}
+              </p>
+            </div>
+            <div
+              className={cn(
+                "flex shrink-0 items-center gap-2",
+                noDragClassName,
+              )}
+              {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+            >
               <DialogTrigger
                 render={<Button size="sm" disabled={!canIssue} />}
               >
@@ -496,22 +526,45 @@ export function EmailSettingsKeysView() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => void refreshKeys(true)}
+                aria-label="Refresh API keys"
+                onClick={() => refreshPage()}
                 disabled={refreshing}
               >
                 <RefreshCw
                   className={cn("size-4", refreshing && "animate-spin")}
                 />
               </Button>
-            </>
-          }
-        >
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight">API Keys</h1>
-            <p className="text-sm text-muted-foreground">
-              Issue and manage send keys across your domains.
-            </p>
+            </div>
           </div>
+          <nav
+            className={cn(
+              "flex gap-1 overflow-x-auto border-t border-border px-4 pb-2 pt-2",
+              noDragClassName,
+            )}
+            aria-label="API keys"
+            {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+          >
+            {PAGE_TABS.map((item) => {
+              const Icon = item.icon;
+              const active = item.id === tab;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setTab(item.id)}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                    active
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-3.5" aria-hidden />
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
         </DesktopTitleBar>
 
         <DialogContent className="sm:max-w-md">
@@ -573,273 +626,263 @@ export function EmailSettingsKeysView() {
         </DialogContent>
       </Dialog>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <EmailAlerts error={keysError} message={keysMessage} />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+          <EmailAlerts error={keysError} message={keysMessage} />
 
-        {showWorkerUnavailable ? (
-          <Alert>
-            <AlertTitle>Relaybase worker unavailable</AlertTitle>
-            <AlertDescription>
-              Could not reach the Relaybase worker. Check that{" "}
-              <span className="font-mono">RELAYBASE_URL</span> and the admin
-              service token are configured, then refresh.
-            </AlertDescription>
-          </Alert>
-        ) : null}
+          {showWorkerUnavailable ? (
+            <Alert>
+              <AlertTitle>Relaybase worker unavailable</AlertTitle>
+              <AlertDescription>
+                Could not reach the Relaybase worker. Check that{" "}
+                <span className="font-mono">RELAYBASE_URL</span> and the admin
+                service token are configured, then refresh.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-        {!readyDomains.length && !loadingKeys ? (
-          <Alert>
-            <AlertTitle>Domain required</AlertTitle>
-            <AlertDescription>
-              Add a sending domain on the{" "}
-              <Link href={domainsHref} className="underline">
-                Domains
-              </Link>{" "}
-              page before issuing keys.
-            </AlertDescription>
-          </Alert>
-        ) : null}
+          {!readyDomains.length && !loadingKeys ? (
+            <Alert>
+              <AlertTitle>Domain required</AlertTitle>
+              <AlertDescription>
+                Add a sending domain on the{" "}
+                <Link href={domainsHref} className="underline">
+                  Domains
+                </Link>{" "}
+                page before issuing keys.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-        {workerConnected !== false ? (
-          <>
-            <Card>
-              <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
-                <div>
-                  <CardDescription>Send API requests</CardDescription>
-                  <CardTitle className="text-2xl tabular-nums">
-                    {requestTotal.toLocaleString()}
-                  </CardTitle>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {errorTotal > 0 ? (
-                      <span className="text-destructive">
-                        {errorTotal.toLocaleString()} errors
-                      </span>
-                    ) : (
-                      "No errors"
-                    )}
-                    {" · "}
-                    {range}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {RANGE_OPTIONS.map((option) => (
-                    <Button
-                      key={option.value}
-                      size="sm"
-                      variant={range === option.value ? "default" : "outline"}
-                      onClick={() => setRange(option.value)}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <SparklineChart
-                  data={requestSeries}
-                  color="#22c55e"
-                  className="h-28"
-                  height={112}
-                />
-              </CardContent>
-            </Card>
+          {workerConnected !== false && statusVisited ? (
+            <div className={tab === "status" ? undefined : "hidden"}>
+              <KeysStatusPanel apiBase={apiBase} refreshNonce={refreshNonce} />
+            </div>
+          ) : null}
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">API keys</CardTitle>
-                <CardDescription>
-                  {keys.length
-                    ? `${keys.length} key${keys.length === 1 ? "" : "s"}`
-                    : "No keys yet"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingKeys && !keys.length ? (
-                  <p className="text-sm text-muted-foreground">Loading keys…</p>
-                ) : !keys.length ? (
-                  <div className="space-y-3 py-2">
+          {workerConnected !== false && tab === "keys" ? (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">API keys</CardTitle>
+                  <CardDescription>
+                    {keys.length
+                      ? `${keys.length} key${keys.length === 1 ? "" : "s"}`
+                      : "No keys yet"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingKeys && !keys.length ? (
                     <p className="text-sm text-muted-foreground">
-                      Issue a key to enable sending for a domain.
+                      Loading keys…
                     </p>
+                  ) : !keys.length ? (
+                    <div className="space-y-3 py-2">
+                      <p className="text-sm text-muted-foreground">
+                        Issue a key to enable sending for a domain.
+                      </p>
+                      <Button
+                        size="sm"
+                        disabled={!canIssue}
+                        onClick={() => setAddOpen(true)}
+                      >
+                        <Plus className="mr-1.5 size-3.5" />
+                        Issue key
+                      </Button>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Domain</TableHead>
+                          <TableHead>Label</TableHead>
+                          <TableHead>API key</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {keys.map((key) => {
+                          const selected = key.id === selectedKeyId;
+                          return (
+                            <TableRow
+                              key={key.id}
+                              className={cn(
+                                "cursor-pointer",
+                                selected && "bg-muted/50",
+                              )}
+                              onClick={() => setSelectedKeyId(key.id)}
+                            >
+                              <TableCell className="font-mono text-xs">
+                                {key.domain}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {key.label ?? "—"}
+                              </TableCell>
+                              <TableCell
+                                className="min-w-[220px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {key.apiKey ? (
+                                  <div className="flex items-center gap-1">
+                                    <CredentialInput
+                                      readOnly
+                                      value={key.apiKey}
+                                      className="h-8 font-mono text-xs"
+                                      aria-label={`API key for ${key.domain}`}
+                                    />
+                                    <Button
+                                      size="icon-sm"
+                                      variant="outline"
+                                      aria-label="Copy API key"
+                                      onClick={() =>
+                                        void copyKey(key.id, key.apiKey!)
+                                      }
+                                    >
+                                      {copiedId === key.id ? (
+                                        <Check className="size-3.5" />
+                                      ) : (
+                                        <Copy className="size-3.5" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">
+                                    Not stored locally
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={key.active ? "default" : "secondary"}
+                                >
+                                  {key.active ? "Active" : "Inactive"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+                                {new Date(key.createdAt).toLocaleString()}
+                              </TableCell>
+                              <TableCell
+                                className="text-right"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    render={
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        disabled={
+                                          rotatingId === key.id ||
+                                          activatingId === key.id ||
+                                          (revoking &&
+                                            revokeTarget?.id === key.id)
+                                        }
+                                        aria-label={`More actions for ${key.label || key.domain}`}
+                                      />
+                                    }
+                                  >
+                                    <MoreHorizontal className="size-3.5" />
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    {!key.active ? (
+                                      <DropdownMenuItem
+                                        disabled={
+                                          !key.apiKey ||
+                                          activatingId === key.id
+                                        }
+                                        onClick={() => void activateKey(key)}
+                                      >
+                                        Use key
+                                      </DropdownMenuItem>
+                                    ) : null}
+                                    <DropdownMenuItem
+                                      disabled={rotatingId === key.id}
+                                      onClick={() => void rotateKey(key)}
+                                    >
+                                      <RotateCw className="size-3.5" />
+                                      Rotate
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      variant="destructive"
+                                      onClick={() => setRevokeTarget(key)}
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                      Revoke
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">How to send email</CardTitle>
+                  <CardDescription>
+                    Call <span className="font-mono">POST /v1/send</span> with
+                    your API key. <span className="font-mono">from</span> must
+                    be an address on{" "}
+                    <span className="font-mono">
+                      {selectedDomain ?? "your domain"}
+                    </span>{" "}
+                    (e.g. <span className="font-mono">{exampleFrom}</span>).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-1">
+                      {EXAMPLE_LANGS.map((option) => (
+                        <Button
+                          key={option.value}
+                          size="sm"
+                          variant={
+                            exampleLang === option.value ? "default" : "outline"
+                          }
+                          onClick={() => setExampleLang(option.value)}
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
                     <Button
                       size="sm"
-                      disabled={!canIssue}
-                      onClick={() => setAddOpen(true)}
+                      variant="outline"
+                      onClick={() => void copyExample()}
                     >
-                      <Plus className="mr-1.5 size-3.5" />
-                      Issue key
+                      {exampleCopied ? (
+                        <Check className="mr-1 size-3.5" />
+                      ) : (
+                        <Copy className="mr-1 size-3.5" />
+                      )}
+                      {exampleCopied ? "Copied" : "Copy"}
                     </Button>
                   </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Domain</TableHead>
-                        <TableHead>Label</TableHead>
-                        <TableHead>API key</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {keys.map((key) => (
-                        <TableRow key={key.id}>
-                          <TableCell className="font-mono text-xs">
-                            {key.domain}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {key.label ?? "—"}
-                          </TableCell>
-                          <TableCell className="min-w-[220px]">
-                            {key.apiKey ? (
-                              <div className="flex items-center gap-1">
-                                <CredentialInput
-                                  readOnly
-                                  value={key.apiKey}
-                                  className="h-8 font-mono text-xs"
-                                  aria-label={`API key for ${key.domain}`}
-                                />
-                                <Button
-                                  size="icon-sm"
-                                  variant="outline"
-                                  aria-label="Copy API key"
-                                  onClick={() =>
-                                    void copyKey(key.id, key.apiKey!)
-                                  }
-                                >
-                                  {copiedId === key.id ? (
-                                    <Check className="size-3.5" />
-                                  ) : (
-                                    <Copy className="size-3.5" />
-                                  )}
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                Not stored locally
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={key.active ? "default" : "secondary"}
-                            >
-                              {key.active ? "Active" : "Inactive"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
-                            {new Date(key.createdAt).toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger
-                                render={
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    disabled={
-                                      rotatingId === key.id ||
-                                      activatingId === key.id ||
-                                      (revoking &&
-                                        revokeTarget?.id === key.id)
-                                    }
-                                    aria-label={`More actions for ${key.label || key.domain}`}
-                                  />
-                                }
-                              >
-                                <MoreHorizontal className="size-3.5" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {!key.active ? (
-                                  <DropdownMenuItem
-                                    disabled={!key.apiKey || activatingId === key.id}
-                                    onClick={() => void activateKey(key)}
-                                  >
-                                    Use key
-                                  </DropdownMenuItem>
-                                ) : null}
-                                <DropdownMenuItem
-                                  disabled={rotatingId === key.id}
-                                  onClick={() => void rotateKey(key)}
-                                >
-                                  <RotateCw className="size-3.5" />
-                                  Rotate
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onClick={() => setRevokeTarget(key)}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                  Revoke
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">How to send email</CardTitle>
-                <CardDescription>
-                  Call <span className="font-mono">POST /v1/send</span> with
-                  your API key. <span className="font-mono">from</span> must be
-                  an address on your domain (e.g.{" "}
-                  <span className="font-mono">{exampleFrom}</span>).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap gap-1">
-                    {EXAMPLE_LANGS.map((option) => (
-                      <Button
-                        key={option.value}
-                        size="sm"
-                        variant={
-                          exampleLang === option.value ? "default" : "outline"
-                        }
-                        onClick={() => setExampleLang(option.value)}
-                      >
-                        {option.label}
-                      </Button>
-                    ))}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void copyExample()}
-                  >
-                    {exampleCopied ? (
-                      <Check className="mr-1 size-3.5" />
-                    ) : (
-                      <Copy className="mr-1 size-3.5" />
-                    )}
-                    {exampleCopied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                <pre className="overflow-x-auto rounded-lg border border-border/60 bg-muted/30 p-3 font-mono text-xs leading-relaxed whitespace-pre text-foreground dark:bg-black/40">
-                  {exampleCode}
-                </pre>
-                <p className="text-xs text-muted-foreground">
-                  Endpoint:{" "}
-                  <span className="font-mono">
-                    {exampleBaseUrl}/v1/send
-                  </span>
-                  {exampleApiKey === "YOUR_API_KEY"
-                    ? " · Replace YOUR_API_KEY with a key from the list above."
-                    : " · Example uses your active key secret."}
-                </p>
-              </CardContent>
-            </Card>
-          </>
-        ) : null}
+                  <pre className="overflow-x-auto rounded-lg border border-border/60 bg-muted/30 p-3 font-mono text-xs leading-relaxed whitespace-pre text-foreground dark:bg-black/40">
+                    {exampleCode}
+                  </pre>
+                  <p className="text-xs text-muted-foreground">
+                    Endpoint:{" "}
+                    <span className="font-mono">{exampleBaseUrl}/v1/send</span>
+                    {exampleApiKey === "YOUR_API_KEY"
+                      ? selectedDomain
+                        ? ` · Issue a key for ${selectedDomain} to fill in the secret.`
+                        : " · Replace YOUR_API_KEY with a key from the list above."
+                      : ` · Example uses the ${selectedDomain ?? "selected"} key secret.`}
+                  </p>
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <Dialog

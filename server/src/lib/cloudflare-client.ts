@@ -85,6 +85,13 @@ export type CfEmailRoutingRule = {
   actions: CfEmailRoutingAction[];
 };
 
+export type CfSendingSubdomain = {
+  enabled: boolean;
+  name: string;
+  tag?: string;
+  return_path_domain?: string;
+};
+
 export type CloudflareClientCredentials = {
   accountId: string;
   apiToken: string;
@@ -118,7 +125,12 @@ export class CloudflareClient {
       ...init,
       headers: { ...this.tokenHeaders(), ...init?.headers },
     });
-    const raw = (await res.json()) as CfLooseErrorBody;
+    let raw: CfLooseErrorBody;
+    try {
+      raw = (await res.json()) as CfLooseErrorBody;
+    } catch {
+      raw = { error: `HTTP ${res.status}` };
+    }
     const data = normalizeCfResponse<T>(raw);
     return { res, data };
   }
@@ -524,5 +536,69 @@ export class CloudflareClient {
       `/zones/${zoneId}/email/routing/rules/${ruleId}`,
       { method: "DELETE" },
     );
+  }
+
+  async listSendingSubdomains(zoneId: string): Promise<CfSendingSubdomain[]> {
+    const data = await this.request<CfSendingSubdomain[]>(
+      `/zones/${zoneId}/email/sending/subdomains`,
+    );
+    return data.result ?? [];
+  }
+
+  /**
+   * Onboard or create an Email Sending domain. Official docs only describe
+   * the dashboard flow; this POST is the documented-adjacent list sibling.
+   * Callers must treat 404/405 as "API not available — use the dashboard".
+   */
+  async createSendingSubdomain(
+    zoneId: string,
+    name: string,
+  ): Promise<CfSendingSubdomain> {
+    const path = `/zones/${zoneId}/email/sending/subdomains`;
+    const { res, data } = await this.requestOnce<CfSendingSubdomain>(path, {
+      method: "POST",
+      body: JSON.stringify({ name, enabled: true }),
+    });
+    if (res.status === 404 || res.status === 405) {
+      throw new SendingOnboardApiMissingError(res.status);
+    }
+    if (res.ok && data.success) return data.result;
+    throw this.formatCfError(res, data, path, "POST");
+  }
+
+  async updateSendingSubdomain(
+    zoneId: string,
+    name: string,
+    patch: { enabled: boolean },
+  ): Promise<CfSendingSubdomain> {
+    const path = `/zones/${zoneId}/email/sending/subdomains`;
+    const { res, data } = await this.requestOnce<CfSendingSubdomain>(path, {
+      method: "PATCH",
+      body: JSON.stringify({ name, enabled: patch.enabled }),
+    });
+    if (res.status === 404 || res.status === 405) {
+      throw new SendingOnboardApiMissingError(res.status);
+    }
+    if (res.ok && data.success) return data.result;
+    throw this.formatCfError(res, data, path, "PATCH");
+  }
+
+  /** Email Sending bounce MX on `cf-bounce.{domain}` — apex onboard signal. */
+  async hasSendingBounceMx(zoneId: string, domain: string): Promise<boolean> {
+    const name = `cf-bounce.${domain.trim().toLowerCase()}`;
+    const records = await this.listDnsRecords(zoneId, { type: "MX", name });
+    return records.some((record) => record.type === "MX");
+  }
+}
+
+export class SendingOnboardApiMissingError extends Error {
+  status: number;
+
+  constructor(status: number) {
+    super(
+      `Cloudflare Email Sending onboard API is not available (HTTP ${status}). Open Cloudflare → Email Service → Email Sending → Onboard Domain, then Recheck.`,
+    );
+    this.name = "SendingOnboardApiMissingError";
+    this.status = status;
   }
 }

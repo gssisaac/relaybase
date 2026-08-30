@@ -15,8 +15,15 @@ import {
   useDomain,
   type DomainOnboardingSummary,
 } from "@/lib/dashboard/DomainContext";
+import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useMailboxHealth, lastInboundForDomain } from "@/lib/dashboard/mailbox-health";
+import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
+import {
+  isSendingWarningStatus,
+  sendingBadgeLabel,
+} from "@/lib/dashboard/sending-health";
 import { AddDomainDialog } from "@/console/pages/domains/AddDomainDialog";
+import { FixSendingDialog } from "@/console/pages/domains/FixSendingDialog";
 import { ImportCloudflareZonesDialog } from "@/console/pages/domains/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
@@ -62,21 +69,8 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-function onboardingBadgeVariant(
-  onboarding: DomainOnboardingSummary | null,
-): "default" | "secondary" | "destructive" | "outline" {
-  switch (onboarding?.status) {
-    case "ready":
-      return "default";
-    case "failed":
-      return "destructive";
-    case "waiting":
-      return "outline";
-    case "running":
-      return "secondary";
-    default:
-      return "outline";
-  }
+function domainBadgeClass(problem: boolean): string {
+  return cn("text-[10px]", problem && "text-destructive");
 }
 
 function onboardingLabel(onboarding: DomainOnboardingSummary | null): string {
@@ -245,8 +239,10 @@ export function DomainsView() {
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [mxConflictDomain, setMxConflictDomain] = useState<string | null>(null);
   const [mxResolving, setMxResolving] = useState(false);
+  const [fixDomain, setFixDomain] = useState<string | null>(null);
   const { isDesktop: desktop } = useDesktopChrome();
   const mailboxHealth = useMailboxHealth();
+  const sendingHealth = useSendingHealth();
 
   const mxConflictEntry = mxConflictDomain
     ? domains.find((d) => d.domain === mxConflictDomain)
@@ -317,11 +313,19 @@ export function DomainsView() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void refresh()}
-              disabled={loading}
+              onClick={() => {
+                void refresh();
+                sendingHealth.refresh();
+              }}
+              disabled={loading || sendingHealth.refreshing}
               aria-label="Refresh domain list"
             >
-              <RefreshCw className={cn("size-4", loading && "animate-spin")} />
+              <RefreshCw
+                className={cn(
+                  "size-4",
+                  (loading || sendingHealth.refreshing) && "animate-spin",
+                )}
+              />
             </Button>
           </>
         }
@@ -339,7 +343,7 @@ export function DomainsView() {
       <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
       <EmailAlerts
-        error={error ?? localError}
+        error={error ?? localError ?? sendingHealth.error}
         message={message}
         onDismissError={() => {
           setLocalError(null);
@@ -363,6 +367,7 @@ export function DomainsView() {
                 <TableRow>
                   <TableHead>Domain</TableHead>
                   <TableHead>Onboarding</TableHead>
+                  <TableHead>Sending</TableHead>
                   <TableHead>Senders</TableHead>
                   <TableHead>Audience</TableHead>
                   <TableHead>Inbound R2</TableHead>
@@ -386,8 +391,10 @@ export function DomainsView() {
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Badge
-                            variant={onboardingBadgeVariant(onboarding)}
-                            className="text-[10px]"
+                            variant="outline"
+                            className={domainBadgeClass(
+                              onboarding?.status === "failed",
+                            )}
                           >
                             {onboardingLabel(onboarding)}
                           </Badge>
@@ -409,15 +416,51 @@ export function DomainsView() {
                           ) : null}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const sending = sendingHealth.statusForDomain(
+                            entry.domain,
+                          );
+                          if (!sending) {
+                            return (
+                              <span className="text-xs text-muted-foreground">
+                                {sendingHealth.loading ? "Checking…" : "—"}
+                              </span>
+                            );
+                          }
+                          return (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <Badge
+                                variant="outline"
+                                className={domainBadgeClass(
+                                  isSendingWarningStatus(sending.status),
+                                )}
+                              >
+                                {sendingBadgeLabel(sending.status)}
+                              </Badge>
+                              <SendingWarningIcon entry={sending} />
+                              {isSendingWarningStatus(sending.status) ? (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px]"
+                                  onClick={() => setFixDomain(entry.domain)}
+                                >
+                                  Fix issue
+                                </Button>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell>{entry.addressCount}</TableCell>
                       <TableCell>{entry.audienceCount}</TableCell>
                       <TableCell>
                         {entry.r2Provisioned ? (
                           <div className="space-y-1">
                             <Badge
-                              variant={
-                                entry.r2WorkerReady ? "default" : "secondary"
-                              }
+                              variant="outline"
                               className="text-[10px]"
                             >
                               {entry.r2WorkerReady
@@ -557,6 +600,25 @@ export function DomainsView() {
           )}
         </CardContent>
       </Card>
+
+      <FixSendingDialog
+        open={Boolean(fixDomain)}
+        domain={fixDomain}
+        entry={
+          fixDomain ? sendingHealth.statusForDomain(fixDomain) : null
+        }
+        onOpenChange={(open) => {
+          if (!open) setFixDomain(null);
+        }}
+        onImportZones={() => {
+          setFixDomain(null);
+          setRefreshOpen(true);
+        }}
+        onFixed={() => {
+          setFixDomain(null);
+          sendingHealth.refresh();
+        }}
+      />
 
       <Dialog
         open={Boolean(removeTarget)}

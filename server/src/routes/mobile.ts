@@ -23,6 +23,11 @@ import { MIN_SEARCH_QUERY_LENGTH } from "../lib/inbound-search";
 import { serializeInboundListItem } from "../lib/inbound-serialize";
 import { sendMailMessage, type SendMailBody } from "../lib/mail/send-message";
 import { listMailboxPage } from "../../db/mail/messages";
+import { createCloudflareClient } from "../lib/cloudflare-config";
+import {
+  collectSendingHealth,
+  UNKNOWN_ERROR,
+} from "../lib/sending-health";
 
 const mobile = new Hono<{
   Bindings: Env;
@@ -55,6 +60,33 @@ mobile.use("*", async (c, next) => {
   c.set("mobileAddresses", addresses);
   c.set("mobileDomains", domains);
   await next();
+});
+
+/**
+ * Same Email Sending probe as GET /mail/sending-health, scoped to this
+ * teammate's domain. Cloudflare dashboard URLs are stripped — teammates
+ * cannot fix onboarding; they should ask the owner.
+ */
+mobile.get("/sending-health", async (c) => {
+  const domains = c.get("mobileDomains");
+  let cf = null;
+  let probeError: string | undefined;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    probeError = error instanceof Error ? error.message : UNKNOWN_ERROR;
+  }
+  const snapshot = await collectSendingHealth(domains, cf, {
+    accountId: c.env.CF_ACCOUNT_ID,
+    probeError,
+  });
+  return c.json({
+    ...snapshot,
+    domains: snapshot.domains.map((domain) => ({
+      ...domain,
+      cloudflareSendingUrl: null,
+    })),
+  });
 });
 
 /** Validate that the mobile session can connect. */

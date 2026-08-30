@@ -45,6 +45,10 @@ import {
 } from "@/console/components/setup/use-enable-email-api-dialog";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isConsoleUnlockRequiredError } from "@/lib/desktop/app-session/errors";
+import {
+  isWorkerRouteMissingMessage,
+  rewriteBareWorkerError,
+} from "@/lib/dashboard/worker-api-error";
 import { biometryLabel } from "@/lib/desktop/biometry/label";
 export { PageLoadingOverlay } from "@/components/ui/page-loading-overlay";
 
@@ -518,7 +522,14 @@ export function EmailAlerts({
     error && isConsoleUnlockRequiredError(error),
   );
   const shownError =
-    needsConsoleUnlock && store.hasConsoleAccess ? null : error;
+    needsConsoleUnlock && store.hasConsoleAccess
+      ? null
+      : error
+        ? rewriteBareWorkerError(error)
+        : null;
+  const needsWorkerUpdate = Boolean(
+    shownError && isWorkerRouteMissingMessage(shownError),
+  );
   const unlockLabel = store.ownerStatus?.hasPasstoken
     ? `Unlock with ${biometryLabel(0, store.ownerStatus.platform)}`
     : "Unlock dashboard";
@@ -528,7 +539,9 @@ export function EmailAlerts({
       {shownError ? (
         <Alert variant="destructive" className="relative pr-10">
           <AlertCircle className="size-4" />
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>
+            {needsWorkerUpdate ? "Worker update required" : "Error"}
+          </AlertTitle>
           <AlertDescription>
             <FormattedErrorText text={shownError} />
             {needsConsoleUnlock ? (
@@ -542,6 +555,16 @@ export function EmailAlerts({
               >
                 <Fingerprint className="size-3.5" />
                 {unlockLabel}
+              </Button>
+            ) : needsWorkerUpdate ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                nativeButton={false}
+                render={<Link href="/settings/worker/update" />}
+              >
+                Open Worker update
               </Button>
             ) : isEmailApiNotConfiguredError(shownError) ? (
               <Button

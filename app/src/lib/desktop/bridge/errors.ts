@@ -176,13 +176,15 @@ export function explainDesktopError(
 
   if (
     lower.includes("does not support zone listing") ||
+    lower.includes("does not have this api yet") ||
+    lower.includes("worker versions may not match") ||
     lower.includes("check for a worker update")
   ) {
     return {
       title: "Worker update required",
       detail:
-        "This Worker is missing the zone list API. Secrets like CF_ACCOUNT_ID are fine — the running script version does not match the latest.",
-      fix: "Compare versions below, then open Worker update in Settings.",
+        "The running Worker is missing an API this app version needs. Secrets like CF_ACCOUNT_ID are fine — the script version does not match.",
+      fix: "Open Worker update in Settings, then retry.",
       links: [
         { label: "Open Worker update", href: "/settings/worker/update" },
       ],

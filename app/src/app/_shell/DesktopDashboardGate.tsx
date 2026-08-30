@@ -11,6 +11,7 @@ import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
 import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
+import { SendingHealthProvider } from "@/lib/dashboard/SendingHealthContext";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
 import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
@@ -56,6 +57,7 @@ function DashboardShell({
     return (
       <SessionProvider userId={userId}>
         <DomainProvider>
+          <SendingHealthProvider>
           <MailAccountsProvider>
             <SenderIconProvider>
               <EmailMailboxProvider>
@@ -81,6 +83,7 @@ function DashboardShell({
               </EmailMailboxProvider>
             </SenderIconProvider>
           </MailAccountsProvider>
+          </SendingHealthProvider>
         </DomainProvider>
       </SessionProvider>
     );
@@ -88,6 +91,7 @@ function DashboardShell({
   return (
     <SessionProvider userId={userId}>
       <DomainProvider>
+        <SendingHealthProvider>
         <MailAccountsProvider>
           <SenderIconProvider>
             <EmailMailboxProvider>
@@ -118,6 +122,7 @@ function DashboardShell({
             </EmailMailboxProvider>
           </SenderIconProvider>
         </MailAccountsProvider>
+        </SendingHealthProvider>
       </DomainProvider>
     </SessionProvider>
   );

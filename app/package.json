@@ -9,7 +9,7 @@
     "build:desktop": "node scripts/build-desktop.mjs",
     "start": "next start -p 32830",
     "lint": "eslint",
-    "test:unit": "node --import ./scripts/ts-relative-loader.mjs --experimental-strip-types --test src/email/lib/reply/reply-quote-body.test.ts src/email/lib/html/plain-text-to-email-html.test.ts src/email/lib/drafts/draft-thread-rows.test.ts src/lib/navigation/sidebar-mode.test.ts src/lib/dashboard/accounts-sync.test.ts src/lib/dashboard/worker-version.test.ts src/lib/desktop/api/email-api-map.test.ts src/lib/desktop/auth/unauthorized-grace.test.ts src/lib/desktop/biometry/dismiss.test.ts src/lib/desktop/app-session/errors.test.ts src/lib/desktop/app-session/store.test.ts src/lib/email/format-sender.test.ts"
+    "test:unit": "node --import ./scripts/ts-relative-loader.mjs --experimental-strip-types --test src/email/lib/reply/reply-quote-body.test.ts src/email/lib/html/plain-text-to-email-html.test.ts src/email/lib/drafts/draft-thread-rows.test.ts src/lib/navigation/sidebar-mode.test.ts src/lib/dashboard/accounts-sync.test.ts src/lib/dashboard/sending-health.test.ts src/lib/dashboard/worker-version.test.ts src/lib/desktop/api/email-api-map.test.ts src/lib/desktop/auth/unauthorized-grace.test.ts src/lib/desktop/biometry/dismiss.test.ts src/lib/desktop/app-session/errors.test.ts src/lib/desktop/app-session/store.test.ts src/lib/email/format-sender.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

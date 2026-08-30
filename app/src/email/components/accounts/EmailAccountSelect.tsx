@@ -1,5 +1,7 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
+
 import {
   Select,
   SelectContent,
@@ -9,6 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import type { Address } from "@/email/components/mailbox/types";
+import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 
 export type EmailAccountFilter = "all" | (string & {});
 
@@ -27,6 +30,7 @@ export function EmailAccountSelect({
   disabled,
   className,
 }: EmailAccountSelectProps) {
+  const sendingHealth = useSendingHealth();
   return (
     <Select
       value={value}
@@ -38,11 +42,24 @@ export function EmailAccountSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="all">All</SelectItem>
-        {addresses.map((address) => (
-          <SelectItem key={address.email} value={address.email}>
-            {address.email}
-          </SelectItem>
-        ))}
+        {addresses.map((address) => {
+          const sending = sendingHealth.statusForEmail(address.email);
+          return (
+            <SelectItem key={address.email} value={address.email}>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate">{address.email}</span>
+                {sending &&
+                (sending.status === "restricted" ||
+                  sending.status === "no_zone") ? (
+                  <AlertTriangle
+                    className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
+                    aria-label="Sending restriction"
+                  />
+                ) : null}
+              </span>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeftRight,
   ChevronDown,
   FilePen,
@@ -77,8 +78,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 import { useDesktop } from "@/lib/desktop/shell";
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
@@ -292,8 +295,12 @@ function FolderTree({
   const parentActive =
     (pathname === parentPath || pathname.startsWith(`${parentPath}/`)) &&
     !accountParam;
+  const sendingHealth = useSendingHealth();
   const showUnread = folder === "inbox";
   const inboxMenus = folder === "inbox";
+  const folderHasSendingWarning = accounts.some((account) =>
+    sendingHealth.hasWarningForEmail(account.email),
+  );
 
   const parentRow = (
     <div className="flex items-center gap-0.5">
@@ -312,14 +319,30 @@ function FolderTree({
         {!collapsed ? (
           <>
             <span className="min-w-0 flex-1 truncate">{label}</span>
+            {folderHasSendingWarning ? (
+              <AlertTriangle
+                className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
+                aria-label="An account has a sending restriction"
+              />
+            ) : null}
             {showUnread ? <UnreadCountBadge count={unreadCount} /> : null}
           </>
-        ) : showUnread && unreadCount > 0 ? (
-          <span
-            className="absolute right-1 top-1 size-1.5 rounded-full bg-primary"
-            aria-label={`${unreadCount} unread`}
-          />
-        ) : null}
+        ) : (
+          <>
+            {folderHasSendingWarning ? (
+              <span
+                className="absolute right-1 bottom-1 size-1.5 rounded-full bg-amber-500"
+                aria-label="An account has a sending restriction"
+              />
+            ) : null}
+            {showUnread && unreadCount > 0 ? (
+              <span
+                className="absolute right-1 top-1 size-1.5 rounded-full bg-primary"
+                aria-label={`${unreadCount} unread`}
+              />
+            ) : null}
+          </>
+        )}
       </Link>
       {!collapsed && accounts.length > 0 ? (
         <button
@@ -371,29 +394,35 @@ function FolderTree({
               ? (unreadCountForAccount?.(account.email) ?? 0)
               : 0;
             const accountLink = (
-              <Link
-                href={href}
-                title={account.email}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-                )}
-              >
-                <span
-                  className="size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: getColor(account.email) }}
-                  aria-hidden
-                />
-                <span className="min-w-0 flex-1 truncate">{account.email}</span>
-                {accountUnread > 0 ? (
+              <div className="flex items-center gap-0.5">
+                <Link
+                  href={href}
+                  title={account.email}
+                  className={cn(
+                    "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+                    active
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                  )}
+                >
                   <span
-                    className="size-2 shrink-0 rounded-full bg-primary"
-                    aria-label={`${accountUnread} unread`}
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: getColor(account.email) }}
+                    aria-hidden
                   />
-                ) : null}
-              </Link>
+                  <span className="min-w-0 flex-1 truncate">{account.email}</span>
+                  {accountUnread > 0 ? (
+                    <span
+                      className="size-2 shrink-0 rounded-full bg-primary"
+                      aria-label={`${accountUnread} unread`}
+                    />
+                  ) : null}
+                </Link>
+                <SendingWarningIcon
+                  size="sm"
+                  entry={sendingHealth.statusForEmail(account.email)}
+                />
+              </div>
             );
             if (!inboxMenus || !onRemoveAccount) {
               return (

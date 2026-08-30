@@ -35,6 +35,12 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/zones" || rest.startsWith("/zones")) {
     return `/console/zones${search}`;
   }
+  if (rest === "/sending-onboard" || rest.startsWith("/sending-onboard/")) {
+    return `/console/sending-onboard${search}`;
+  }
+  if (rest === "/sending-health" || rest.startsWith("/sending-health/")) {
+    return `/mail/sending-health${search}`;
+  }
   if (rest === "/domains" || rest.startsWith("/domains")) {
     // Onboarding is just POST /console/domains — no separate onboard pipeline.
     if (rest.startsWith("/domains/onboard")) {

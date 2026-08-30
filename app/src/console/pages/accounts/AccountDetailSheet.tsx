@@ -22,7 +22,9 @@ import { AccountOverviewView } from "@/console/pages/accounts/AccountOverviewVie
 import { AccountSettingsView } from "@/console/pages/accounts/AccountSettingsView";
 import { AccountTeammateLoginView } from "@/console/pages/accounts/AccountTeammateLoginView";
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
+import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
+import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 import { cn } from "@/lib/utils";
 
 function domainOf(email: string): string {
@@ -70,6 +72,7 @@ export function AccountDetailSheet({
 }: AccountDetailSheetProps) {
   const { setAccountFilter, unreadCountForAccount } = useEmailMailbox();
   const accountsStore = useAccounts();
+  const sendingHealth = useSendingHealth();
 
   const emailKey = email.trim().toLowerCase();
   const domainKey = domainOf(emailKey);
@@ -100,6 +103,10 @@ export function AccountDetailSheet({
           <SheetTitle className="truncate">{title}</SheetTitle>
           <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="truncate font-mono text-xs">{emailKey}</span>
+            <SendingWarningIcon
+              size="sm"
+              entry={sendingHealth.statusForEmail(emailKey)}
+            />
             {unread > 0 ? (
               <span
                 className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground"

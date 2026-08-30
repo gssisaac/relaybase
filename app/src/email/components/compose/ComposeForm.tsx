@@ -2,6 +2,8 @@
 
 import * as React from "react";
 
+import { AlertTriangle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -13,6 +15,8 @@ import {
 import { joinQuotedBody, splitQuotedBody } from "@/email/lib/reply/reply-quote-body";
 import { QuotedReplyBlock } from "@/email/components/reply/QuotedReplyBlock";
 import type { Address } from "@/email/components/mailbox/types";
+import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
+import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 
 const COMPACT_BODY_MIN_PX = 140;
 
@@ -60,6 +64,7 @@ export function ComposeForm({
   /** Focus the body textarea on mount (reply composer). */
   autoFocusBody?: boolean;
 }) {
+  const sendingHealth = useSendingHealth();
   const selected = addresses.find((a) => a.email === sendFrom);
   const displayName = selected?.displayName?.trim();
   const fromLabel = displayName
@@ -152,7 +157,17 @@ export function ComposeForm({
                   const name = address.displayName?.trim();
                   return (
                     <SelectItem key={address.email} value={address.email}>
-                      {name ? `${name} <${address.email}>` : address.email}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate">
+                          {name ? `${name} <${address.email}>` : address.email}
+                        </span>
+                        {sendingHealth.hasWarningForEmail(address.email) ? (
+                          <AlertTriangle
+                            className="size-3 shrink-0 text-amber-600 dark:text-amber-400"
+                            aria-label="Sending restriction"
+                          />
+                        ) : null}
+                      </span>
                     </SelectItem>
                   );
                 })}
@@ -163,6 +178,11 @@ export function ComposeForm({
               {fromLabel}
             </span>
           )}
+          <SendingWarningIcon
+            size="sm"
+            className="ml-1"
+            entry={sendingHealth.statusForEmail(sendFrom)}
+          />
         </div>
 
         <div className="flex shrink-0 items-center py-1">

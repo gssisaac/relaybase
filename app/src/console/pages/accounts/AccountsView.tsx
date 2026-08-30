@@ -30,7 +30,9 @@ import { toast } from "sonner";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
+import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useMailboxHealth, lastInboundForDomain } from "@/lib/dashboard/mailbox-health";
+import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 import { notifyAddressesChanged } from "@/lib/dashboard/accounts-sync";
 import {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
@@ -180,6 +182,7 @@ export function AccountsView() {
   const { domains, loading: domainsLoading } = useDomain();
   const accountsStore = useAccounts();
   const mailboxHealth = useMailboxHealth();
+  const sendingHealth = useSendingHealth();
 
   const readyDomains = useMemo(
     () =>
@@ -640,6 +643,9 @@ export function AccountsView() {
                               aria-hidden
                             />
                             <span className="truncate">{entry.domain}</span>
+                            <SendingWarningIcon
+                              entry={sendingHealth.statusForDomain(entry.domain)}
+                            />
                             {domainUnread > 0 ? (
                               <span
                                 className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-none text-primary-foreground tabular-nums"
@@ -725,8 +731,16 @@ export function AccountsView() {
                                       }
                                     >
                                       <TableCell className="w-[42%] max-w-0 px-4 py-3 font-medium">
-                                        <span className="block truncate">
-                                          {address.email}
+                                        <span className="flex min-w-0 items-center gap-1.5">
+                                          <span className="truncate">
+                                            {address.email}
+                                          </span>
+                                          <SendingWarningIcon
+                                            size="sm"
+                                            entry={sendingHealth.statusForEmail(
+                                              address.email,
+                                            )}
+                                          />
                                         </span>
                                       </TableCell>
                                       <TableCell className="w-[22%] max-w-0 px-4 py-3 text-muted-foreground">

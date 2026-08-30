@@ -103,7 +103,9 @@ export function useSettingsConnection() {
 export function SettingsConnectionProvider({ children }: { children: ReactNode }) {
   const desktop = useOptionalDesktop();
   const credentials = desktop?.credentials ?? null;
-  const refreshCredentials = desktop?.refresh ?? (async () => undefined);
+  const refreshCredentials = async (): Promise<void> => {
+    await desktop?.refresh?.();
+  };
   const {
     snapshot,
     loading: statusLoading,

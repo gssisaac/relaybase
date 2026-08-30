@@ -19,7 +19,7 @@ const SelectItemsContext = React.createContext<{
 function Select({
   items: itemsProp,
   ...props
-}: SelectPrimitive.Root.Props) {
+}: SelectPrimitive.Root.Props<string>) {
   const [registeredItems, setRegisteredItems] = React.useState<
     SelectItemRegistration[]
   >([])

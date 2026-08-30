@@ -62,6 +62,8 @@ export function emailComposeHref(
     base?: string;
     /** Skip standalone draft resume (`shift+c` / Compose new). */
     forceNew?: boolean;
+    to?: string | null;
+    subject?: string | null;
   },
 ) {
   const rawBase = options?.base ?? "/email/compose";
@@ -71,6 +73,10 @@ export function emailComposeHref(
     qIndex >= 0 ? rawBase.slice(qIndex + 1) : "",
   );
   if (from && from !== "all") params.set("from", from);
+  const to = options?.to?.trim();
+  if (to) params.set("to", to);
+  const subject = options?.subject?.trim();
+  if (subject) params.set("subject", subject);
   if (options?.forceNew) {
     params.set("new", "1");
     params.delete("draft");

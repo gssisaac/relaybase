@@ -11,6 +11,7 @@ import {
   Loader2,
   LogOut,
   Mails,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
@@ -40,7 +41,11 @@ import {
   writeSidebarMode,
   type SidebarMode,
 } from "@/lib/navigation/sidebar-mode";
-import { composeNewHref } from "@/email/lib/compose/compose-open";
+import {
+  composeFeedbackHref,
+  composeNewHref,
+  FEEDBACK_TO_EMAIL,
+} from "@/email/lib/compose/compose-open";
 import { emailFolderHref, useEmailPaths, type EmailFolder } from "@/email/lib/paths";
 import {
   AlertDialog,
@@ -565,6 +570,42 @@ function EmailModeNav({
   );
 }
 
+function SendFeedbackButton({
+  collapsed,
+  account,
+}: {
+  collapsed: boolean;
+  account?: string | null;
+}) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const href = composeFeedbackHref(account);
+  const to = searchParams.get("to")?.trim().toLowerCase();
+  const inCompose =
+    pathname === "/email/compose" || pathname.startsWith("/email/compose/");
+  const active = inCompose && to === FEEDBACK_TO_EMAIL;
+
+  return (
+    <Link
+      href={href}
+      title={collapsed ? "Send feedback" : undefined}
+      aria-label="Send feedback"
+      className={cn(
+        "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+        collapsed ? "justify-center gap-0" : "gap-2",
+      )}
+    >
+      <MessageSquare className="size-3.5 shrink-0" aria-hidden />
+      {!collapsed ? (
+        <span className="min-w-0 flex-1 truncate">Send feedback</span>
+      ) : null}
+    </Link>
+  );
+}
+
 function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const { tabs, domains, settingsBase } = useDashboardPaths();
@@ -865,6 +906,20 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
       {!isTeam && mode === "dashboard" && !collapsed ? (
         <WorkerUpdateBanner />
       ) : null}
+
+      <div
+        className={cn("shrink-0 border-t border-sidebar-border p-2", noDragClassName)}
+        {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+      >
+        <SendFeedbackButton
+          collapsed={collapsed}
+          account={
+            searchParams.get("account")?.trim() ||
+            searchParams.get("from")?.trim() ||
+            null
+          }
+        />
+      </div>
 
       {isTeam && teamLogin ? (
         <AddTeamAccountDialog

@@ -112,6 +112,7 @@ Callers must **not** call `emailComposeHref`, `forceNew`, or `findResumableCompo
 | `useStandaloneComposeOpener()` | `openCompose` / `openComposeNew` / `composeNewHref` / `hasResumableDraft` |
 | `useThreadComposeOpener()` | URL reply/forward + `resumeOrNewDraftId` for inline keyboard |
 | `composeNewHref(account?)` | Sidebar / account nav Link hrefs (always new) |
+| `composeFeedbackHref(account?)` | Sidebar **Send feedback** — always new, `to` is `beta@relaybase.xyz` |
 | `exactDraftComposeHref(id)` | Open a specific standalone draft |
 | `resolveReplyOpenDraftId(...)` | `?reply=` / Unsend panel restore |
 

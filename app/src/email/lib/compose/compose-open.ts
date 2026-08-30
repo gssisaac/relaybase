@@ -106,6 +106,17 @@ export function composeNewHref(account?: string | null): string {
   return emailComposeHref(account, { forceNew: true });
 }
 
+/** Inbox that receives product feedback during beta. */
+export const FEEDBACK_TO_EMAIL = "beta@relaybase.xyz";
+
+/** Fresh compose addressed to Relaybase — sidebar Send feedback. */
+export function composeFeedbackHref(account?: string | null): string {
+  return emailComposeHref(account, {
+    forceNew: true,
+    to: FEEDBACK_TO_EMAIL,
+  });
+}
+
 /** Open an existing standalone draft in the compose view. */
 export function exactDraftComposeHref(
   draftId: string,

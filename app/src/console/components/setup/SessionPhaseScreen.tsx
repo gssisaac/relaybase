@@ -11,7 +11,7 @@ import { useAppSession } from "@/lib/desktop/app-session";
 /**
  * Shared phase switch for `/` (outside the shell) and the dashboard gate.
  * `/` used to render BootScreen for every non-ready phase, so unlock / choice
- * never appeared and the window stayed on "Loading…".
+ * never appeared and the window stayed on the shared loading screen.
  */
 export function SessionPhaseScreen({
   children,

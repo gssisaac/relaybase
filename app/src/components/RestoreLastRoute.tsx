@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
   DEFAULT_EMAIL_PATH,
@@ -49,9 +50,5 @@ export function RestoreLastRoute({
     };
   }, [router, userId, fallbackUserId, store.canShowApp]);
 
-  return (
-    <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-      Loading…
-    </div>
-  );
+  return <AppLoadingScreen />;
 }

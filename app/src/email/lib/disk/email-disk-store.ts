@@ -64,10 +64,14 @@ function writeLocalJson(relativePath: string, value: unknown) {
 
 async function readJson<T>(relativePath: string): Promise<T | null> {
   if (isDesktopRuntime()) {
-    const remote = await desktopGetMailJson(relativePath);
-    if (remote != null) {
-      writeLocalJson(relativePath, remote);
-      return remote as T;
+    try {
+      const remote = await desktopGetMailJson(relativePath);
+      if (remote != null) {
+        writeLocalJson(relativePath, remote);
+        return remote as T;
+      }
+    } catch {
+      // Empty / corrupt disk file — treat as miss.
     }
     // Disk miss: allow one-time migrate from legacy localhost localStorage.
     return readLocalJson<T>(relativePath);

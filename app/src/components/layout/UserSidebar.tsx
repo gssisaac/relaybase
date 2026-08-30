@@ -52,6 +52,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -80,6 +81,37 @@ import { Settings } from "lucide-react";
 
 /** Matches the product mail mark (orange), as a Lucide stroke. */
 const MAILBOX_TITLE_ICON_COLOR = "#D8663B";
+
+function OfflineSidebarBadge({ collapsed }: { collapsed: boolean }) {
+  const session = useAppSession();
+  const [browserOffline, setBrowserOffline] = useState(
+    () => typeof navigator !== "undefined" && navigator.onLine === false,
+  );
+
+  useEffect(() => {
+    function sync() {
+      setBrowserOffline(navigator.onLine === false);
+    }
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+
+  if (!session.workerUnreachable && !browserOffline) return null;
+  return (
+    <Badge
+      variant="outline"
+      className="max-w-full"
+      aria-label="Offline"
+      title="No connection to your Worker"
+    >
+      {collapsed ? "Off" : "Offline"}
+    </Badge>
+  );
+}
 
 function TitleIcon({ mode }: { mode: SidebarMode }) {
   if (mode === "email") {
@@ -649,6 +681,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
             )}
             data-tauri-drag-region="false"
           >
+            <OfflineSidebarBadge collapsed />
             <Button
               type="button"
               variant="ghost"
@@ -719,6 +752,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
               className={cn("space-y-2 px-3 py-3", noDragClassName)}
               {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
             >
+              <OfflineSidebarBadge collapsed={false} />
               <div className="flex items-center justify-between gap-1">
                 <DropdownMenu>
                   <DropdownMenuTrigger

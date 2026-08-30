@@ -199,7 +199,9 @@ flowchart TB
   Boot[App boot] --> Status[setStatuses]
   Status --> MailBoot[owner_boot_mail / team_unlock silent]
   MailBoot --> MailReady[ownerReady / invitedReady]
+  MailBoot -->|Worker unreachable| OfflineMail[ownerReady / invitedReady + Offline badge]
   MailReady --> MailRoutes[Mail shell OK]
+  OfflineMail --> MailRoutes
 
   DashEntry[Dashboard entry] --> Ensure[ensureConsoleAccess]
   Ensure -->|console refresh valid| ConsoleUnlock[owner_unlock_console silent]
@@ -210,6 +212,10 @@ flowchart TB
   Bio -->|fail or cancel| Typed[ConsoleGateView typed passtoken]
   Ensure -->|no keyring passtoken| Typed
 ```
+
+Enrolled owner and teammate users who cannot reach the Worker stay in the
+mailbox (`workerUnreachable` + sidebar Offline badge). `UnlockView` is
+first-login / bio-declined only — not an offline screen.
 
 **Dashboard entry points** (call `ensureConsoleAccess()`):
 
@@ -226,7 +232,7 @@ that cannot be repaired with `owner_boot_mail` uses the same gate.
 
 | Worker path | DOM event | Store action |
 |-------------|-----------|--------------|
-| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — retry `owner_boot_mail`; if that cannot repair, Touch ID → keyring passtoken → login |
+| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — retry `owner_boot_mail`; Worker unreachable stays in the mailbox; if refresh is truly expired, Touch ID → keyring passtoken → login |
 | `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
 
 Neither path wipes Worker URL or keyring (`owner-session` / `owner-passtoken`).

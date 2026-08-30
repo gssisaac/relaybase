@@ -82,6 +82,12 @@ settles. `UnlockView` is the secret form only — never the auto-login check.
   `invitedReady`.
 - No keyring secret at all → `unlock { mode: "secret" }` (first-login typed
   form).
+- **Worker unreachable / offline** (enrolled owner or teammate) → same
+  `ownerReady` / `invitedReady` with `workerUnreachable`. Cached mailbox.
+  `UnlockView` is not an offline screen — typing a passtoken or mobile
+  password cannot succeed. Sidebar shows a pinned **Offline** badge.
+  Real 401 / expired refresh still uses silent retry, then the typed form.
+  `window` `online` retries silent boot.
 
 App boot restores the last email path. It does not prompt Touch ID when mail
 refresh can unlock silently.
@@ -122,7 +128,7 @@ Scoped by Worker path prefix in `api-base.ts`:
 
 | Path | Event | Store handler |
 |------|-------|---------------|
-| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — silent `owner_boot_mail` retry; if that cannot repair, Touch ID → keyring passtoken → login |
+| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — silent `owner_boot_mail` retry; Worker unreachable stays in the mailbox; if that cannot repair, Touch ID → keyring passtoken → login |
 | `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
 
 Neither handler wipes the worker URL or keyring (`owner-session` / `owner-passtoken`).

@@ -276,7 +276,7 @@ UI / store
 ```
 
 1. **Write (desktop):** must succeed on `~/.relaybase`. Failure must surface — do not pretend success after only writing `localStorage`.
-2. **Read (desktop):** prefer disk. Use `localStorage` only as a warm cache or one-time migration source.
+2. **Read (desktop):** prefer disk. Use `localStorage` only as a warm cache or one-time migration source. Empty or corrupt rebuildable JSON (`mail/**`, `cache/**`) is treated as a miss — do not throw (`sidebar.json` can be empty after an interrupted write).
 3. **Browser `pnpm next`:** credentials via `/api/local-credentials` → same `~/.relaybase/credentials.json`; API calls go to the Worker through `desktopAwareFetch`.
 
 Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in `ui/sidebar.json`).

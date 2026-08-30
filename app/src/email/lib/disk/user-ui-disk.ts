@@ -52,10 +52,14 @@ export async function readUiJson<T>(
 ): Promise<T | null> {
   const relativePath = uiPath(userId, file);
   if (isDesktopRuntime()) {
-    const remote = await desktopGetMailJson(relativePath);
-    if (remote != null) {
-      writeLocalJson(relativePath, remote);
-      return remote as T;
+    try {
+      const remote = await desktopGetMailJson(relativePath);
+      if (remote != null) {
+        writeLocalJson(relativePath, remote);
+        return remote as T;
+      }
+    } catch {
+      // Empty / corrupt disk file — treat as miss.
     }
     // Disk miss: allow one-time migrate from legacy localhost localStorage.
     return readLocalJson<T>(relativePath);

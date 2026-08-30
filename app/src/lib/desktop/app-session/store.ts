@@ -2,9 +2,10 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
+import { isUserDismissedBiometry } from "../biometry/dismiss";
 import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
 import { createDefaultDeps } from "./defaults";
-import { isStayOnMailConsoleUnlockError, visibleUnlockError } from "./errors";
+import { isWorkerUnreachableError, visibleUnlockError } from "./errors";
 import { resolveWorkerUrl } from "./resolve-worker-url";
 import {
   isValidPasstokenFormat,
@@ -34,6 +35,8 @@ export class AppSessionStore {
   revealedPasstoken: { username: string; passtoken: string } | null = null;
   busy = false;
   consoleGateOpen = false;
+  /** Last Worker call failed because the network / Worker was unreachable. */
+  workerUnreachable = false;
 
   private identity: IdentitySnapshot = {
     ready: false,
@@ -78,10 +81,10 @@ export class AppSessionStore {
 
   get canShowApp(): boolean {
     if (this.phase.kind === "ownerReady") {
-      return this.hasOwnerMailAccess() && this.hasWorkerConnected();
+      return this.hasOwnerWorkerUrl() && this.ownerCanEnterMailbox();
     }
     if (this.phase.kind === "invitedReady") {
-      return Boolean(this.teamStatus?.hasAccess) && this.hasWorkerConnected();
+      return this.hasInvitedWorkerUrl() && this.invitedCanEnterMailbox();
     }
     return false;
   }
@@ -130,6 +133,44 @@ export class AppSessionStore {
 
   private hasOwnerPasstoken(): boolean {
     return Boolean(this.ownerStatus?.hasPasstoken);
+  }
+
+  private hasOwnerWorkerUrl(): boolean {
+    return Boolean(this.resolvedWorkerUrl("owner"));
+  }
+
+  private hasInvitedWorkerUrl(): boolean {
+    return Boolean(this.resolvedWorkerUrl("invited"));
+  }
+
+  private enrolledAsInvited(): boolean {
+    return Boolean(this.identity.teamIdentity || this.teamStatus?.hasSecret);
+  }
+
+  private enrolledAsOwner(): boolean {
+    return this.hasOwnerMailRefresh() || this.hasOwnerPasstoken();
+  }
+
+  private ownerCanEnterMailbox(): boolean {
+    return (
+      this.hasOwnerMailAccess() ||
+      (this.workerUnreachable && this.enrolledAsOwner())
+    );
+  }
+
+  private invitedCanEnterMailbox(): boolean {
+    return (
+      Boolean(this.teamStatus?.hasAccess) ||
+      (this.workerUnreachable && this.enrolledAsInvited())
+    );
+  }
+
+  private markWorkerReachable(): void {
+    this.workerUnreachable = false;
+  }
+
+  private markWorkerUnreachable(): void {
+    this.workerUnreachable = true;
   }
 
   // --- Hydration ---
@@ -182,11 +223,12 @@ export class AppSessionStore {
     const owner = this.ownerStatus;
 
     try {
-      if (this.identity.teamIdentity || (team && team.hasSecret)) {
+      if (this.enrolledAsInvited()) {
         if (team?.hasSecret && !team.hasAccess) {
           const status = await this.deps.teamUnlock();
           runInAction(() => {
             this.teamStatus = status;
+            this.markWorkerReachable();
           });
           await this.deps.refreshIdentity();
         }
@@ -195,14 +237,22 @@ export class AppSessionStore {
           const status = await this.deps.ownerBootMail();
           runInAction(() => {
             this.ownerStatus = status;
+            this.markWorkerReachable();
           });
           await this.deps.refreshIdentity();
         } else if (this.hasOwnerPasstoken()) {
           await this.loginFromKeyringPasstoken("Unlock Relaybase");
         }
       }
-    } catch {
-      /* reconcile falls back to the secret form */
+    } catch (err) {
+      runInAction(() => {
+        if (
+          isWorkerUnreachableError(err) &&
+          (this.enrolledAsInvited() || this.enrolledAsOwner())
+        ) {
+          this.markWorkerUnreachable();
+        }
+      });
     }
 
     runInAction(() => {
@@ -222,13 +272,11 @@ export class AppSessionStore {
     }
 
     if (this.phase.kind === "invitedLogin") {
-      if (team?.hasAccess) {
-        this.phase = this.hasWorkerConnected()
-          ? { kind: "invitedReady" }
-          : this.phase;
+      if (this.invitedCanEnterMailbox() && this.hasInvitedWorkerUrl()) {
+        this.phase = { kind: "invitedReady" };
         return;
       }
-      if (team?.hasSecret && !team.hasAccess) {
+      if (team?.hasSecret && !team.hasAccess && !this.workerUnreachable) {
         this.phase = { kind: "unlock", role: "invited", mode: "secret" };
       }
       return;
@@ -241,50 +289,50 @@ export class AppSessionStore {
     }
 
     if (this.phase.kind === "ownerReady") {
-      if (this.hasOwnerMailAccess() && this.hasWorkerConnected()) return;
-      if (this.hasOwnerMailAccess() && this.identity.ready) {
+      if (this.ownerCanEnterMailbox() && this.hasOwnerWorkerUrl()) return;
+      if (this.ownerCanEnterMailbox() && this.identity.ready) {
         this.phase = { kind: "choice" };
         return;
       }
-      if (this.hasOwnerMailRefresh()) {
+      if (this.enrolledAsOwner() && !this.workerUnreachable) {
         this.phase = { kind: "unlock", role: "owner", mode: "secret" };
       }
       return;
     }
 
     if (this.phase.kind === "invitedReady") {
-      if (team?.hasAccess && this.hasWorkerConnected()) return;
-      if (team?.hasAccess && this.identity.ready) {
+      if (this.invitedCanEnterMailbox() && this.hasInvitedWorkerUrl()) return;
+      if (this.invitedCanEnterMailbox() && this.identity.ready) {
         this.phase = { kind: "invitedLogin" };
         return;
       }
-      if (team?.hasSecret) {
+      if (team?.hasSecret && !this.workerUnreachable) {
         this.phase = { kind: "unlock", role: "invited", mode: "secret" };
       }
       return;
     }
 
-    if (this.identity.teamIdentity || (team && team.hasSecret)) {
-      if (team?.hasAccess) {
-        this.phase = this.hasWorkerConnected()
-          ? { kind: "invitedReady" }
-          : this.identity.ready
-            ? { kind: "invitedLogin" }
-            : this.phase;
+    if (this.enrolledAsInvited()) {
+      if (this.invitedCanEnterMailbox() && this.hasInvitedWorkerUrl()) {
+        this.phase = { kind: "invitedReady" };
         return;
       }
-      if (team?.hasSecret) {
+      if (this.invitedCanEnterMailbox() && this.identity.ready) {
+        this.phase = { kind: "invitedLogin" };
+        return;
+      }
+      if (team?.hasSecret && !this.workerUnreachable) {
         this.phase = { kind: "unlock", role: "invited", mode: "secret" };
         return;
       }
-      if (this.identity.ready) {
+      if (this.identity.ready && !team?.hasSecret) {
         this.phase = { kind: "invitedLogin" };
       }
       return;
     }
 
-    if (this.hasOwnerMailAccess()) {
-      if (this.hasWorkerConnected()) {
+    if (this.ownerCanEnterMailbox()) {
+      if (this.hasOwnerWorkerUrl()) {
         this.phase = { kind: "ownerReady" };
       } else if (this.identity.ready) {
         this.phase = { kind: "choice" };
@@ -292,7 +340,7 @@ export class AppSessionStore {
       return;
     }
 
-    if (this.hasOwnerMailRefresh()) {
+    if (this.hasOwnerMailRefresh() && !this.workerUnreachable) {
       this.phase = { kind: "unlock", role: "owner", mode: "secret" };
       return;
     }
@@ -324,6 +372,7 @@ export class AppSessionStore {
     const status = await this.deps.ownerLoginFromKeyring(reason);
     runInAction(() => {
       this.ownerStatus = status;
+      this.markWorkerReachable();
     });
     try {
       await this.deps.refreshIdentity();
@@ -339,6 +388,7 @@ export class AppSessionStore {
       this.ownerStatus = status;
       this.consoleGateOpen = false;
       this.busy = false;
+      this.markWorkerReachable();
     });
     try {
       await this.deps.refreshIdentity();
@@ -360,8 +410,9 @@ export class AppSessionStore {
       } catch (err) {
         runInAction(() => {
           this.busy = false;
+          if (isWorkerUnreachableError(err)) this.markWorkerUnreachable();
         });
-        if (isStayOnMailConsoleUnlockError(err)) {
+        if (isUserDismissedBiometry(err) || isWorkerUnreachableError(err)) {
           return false;
         }
       }
@@ -383,8 +434,9 @@ export class AppSessionStore {
       } catch (err) {
         runInAction(() => {
           this.busy = false;
+          if (isWorkerUnreachableError(err)) this.markWorkerUnreachable();
         });
-        if (isStayOnMailConsoleUnlockError(err)) {
+        if (isUserDismissedBiometry(err) || isWorkerUnreachableError(err)) {
           return false;
         }
       }
@@ -423,6 +475,7 @@ export class AppSessionStore {
       });
       runInAction(() => {
         this.ownerStatus = loginStatus;
+        this.markWorkerReachable();
       });
       await this.deps.refreshIdentity();
       const consoleStatus = await this.deps.ownerUnlockConsole();
@@ -482,6 +535,7 @@ export class AppSessionStore {
       });
       runInAction(() => {
         this.ownerStatus = status;
+        this.markWorkerReachable();
       });
       await this.deps.refreshIdentity();
       runInAction(() => {
@@ -516,6 +570,7 @@ export class AppSessionStore {
       });
       runInAction(() => {
         this.teamStatus = status;
+        this.markWorkerReachable();
       });
       await this.deps.refreshIdentity();
       runInAction(() => {
@@ -626,6 +681,7 @@ export class AppSessionStore {
       this.error = null;
       this.revealedPasstoken = null;
       this.consoleGateOpen = false;
+      this.workerUnreachable = false;
       this.busy = false;
 
       if (invited) {
@@ -789,8 +845,13 @@ export class AppSessionStore {
             });
             return;
           }
-        } catch {
-          /* fall through to secret form */
+        } catch (err) {
+          if (isWorkerUnreachableError(err)) {
+            runInAction(() => {
+              this.markWorkerUnreachable();
+            });
+            return;
+          }
         }
       }
 
@@ -807,15 +868,21 @@ export class AppSessionStore {
             });
             return;
           }
-        } catch {
-          /* fall through to secret form */
+        } catch (err) {
+          if (isWorkerUnreachableError(err)) {
+            runInAction(() => {
+              this.markWorkerUnreachable();
+            });
+            return;
+          }
         }
       }
 
       if (
         this.phase.kind === "ownerReady" &&
         !this.hasOwnerMailAccess() &&
-        !this.hasOwnerMailRefresh()
+        !this.hasOwnerMailRefresh() &&
+        !this.workerUnreachable
       ) {
         runInAction(() => {
           this.phase = { kind: "unlock", role: "owner", mode: "secret" };
@@ -826,7 +893,8 @@ export class AppSessionStore {
       if (
         this.phase.kind === "invitedReady" &&
         !team.hasAccess &&
-        !team.hasSecret
+        !team.hasSecret &&
+        !this.workerUnreachable
       ) {
         runInAction(() => {
           this.phase = { kind: "unlock", role: "invited", mode: "secret" };
@@ -837,9 +905,29 @@ export class AppSessionStore {
       runInAction(() => {
         this.reconcileFromStatuses();
       });
-    } catch {
-      /* keep current phase */
+    } catch (err) {
+      if (isWorkerUnreachableError(err)) {
+        runInAction(() => {
+          this.markWorkerUnreachable();
+        });
+      }
     }
+  }
+
+  /** Browser came back online — retry silent boot and drop the Offline badge. */
+  async handleNetworkOnline(): Promise<void> {
+    if (!this.workerUnreachable) return;
+    runInAction(() => {
+      this.workerUnreachable = false;
+    });
+    if (this.needsSilentBoot()) {
+      this.silentBootPending = true;
+      await this.bootFromKeyring();
+      return;
+    }
+    runInAction(() => {
+      this.reconcileFromStatuses();
+    });
   }
 
   /** Console Worker returned 401 — silent refresh, else keyring passtoken, else typed gate. */

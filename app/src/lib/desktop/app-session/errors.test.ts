@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import {
   isMissingWorkerError,
   isMissingWorkerUnlockMessage,
-  isStayOnMailConsoleUnlockError,
+  isWorkerUnreachableError,
   missingWorkerHelp,
   missingWorkerSummary,
   visibleUnlockError,
@@ -68,31 +68,31 @@ describe("visibleUnlockError", () => {
   });
 });
 
-describe("isStayOnMailConsoleUnlockError", () => {
-  it("treats dismissed Touch ID and Worker-unreachable as stay-on-mail", () => {
+describe("isWorkerUnreachableError", () => {
+  it("detects Worker-unreachable / offline transport errors", () => {
     assert.equal(
-      isStayOnMailConsoleUnlockError(
-        new Error("[UserCancel] - The user cancelled the authentication"),
-      ),
-      true,
-    );
-    assert.equal(
-      isStayOnMailConsoleUnlockError(
+      isWorkerUnreachableError(
         new Error("Worker request failed: error sending request"),
       ),
       true,
     );
   });
 
-  it("does not treat expired console refresh as stay-on-mail", () => {
+  it("does not treat dismissed Touch ID or expired refresh as unreachable", () => {
     assert.equal(
-      isStayOnMailConsoleUnlockError(
+      isWorkerUnreachableError(
+        new Error("[UserCancel] - The user cancelled the authentication"),
+      ),
+      false,
+    );
+    assert.equal(
+      isWorkerUnreachableError(
         new Error("Session expired. Sign in with your passtoken."),
       ),
       false,
     );
     assert.equal(
-      isStayOnMailConsoleUnlockError(
+      isWorkerUnreachableError(
         new Error("Console session expired. Sign in with your passtoken."),
       ),
       false,

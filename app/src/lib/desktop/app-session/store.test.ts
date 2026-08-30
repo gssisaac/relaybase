@@ -304,6 +304,89 @@ describe("AppSessionStore", () => {
     assert.equal(unlocked, 1);
   });
 
+  it("enters the mailbox when owner mail boot is unreachable", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasMailRefresh: true, workerUrl: WORKER_URL }),
+      ownerBootMail: () =>
+        Promise.reject(
+          new Error("Worker request failed: error sending request"),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailRefresh: true, workerUrl: WORKER_URL }),
+      teamStatus({}),
+    );
+    await waitUntil(() => store.phase.kind === "ownerReady", "offline mail");
+    assert.equal(store.canShowApp, true);
+    assert.equal(store.workerUnreachable, true);
+    assert.equal(store.phase.kind, "ownerReady");
+  });
+
+  it("enters the mailbox when invited unlock is unreachable", async () => {
+    const store = createStore({
+      teamUnlock: () =>
+        Promise.reject(
+          new Error("Worker request failed: error sending request"),
+        ),
+    });
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: SAMPLE_CREDENTIALS,
+      teamIdentity: {
+        workerUrl: WORKER_URL,
+        accountEmail: "teammate@example.com",
+        mobilePassword: "",
+      },
+    });
+    store.setStatuses(
+      ownerStatus({}),
+      teamStatus({ hasSecret: true, workerUrl: WORKER_URL }),
+    );
+    await waitUntil(() => store.phase.kind === "invitedReady", "offline team");
+    assert.equal(store.canShowApp, true);
+    assert.equal(store.workerUnreachable, true);
+    assert.equal(store.phase.kind, "invitedReady");
+  });
+
+  it("opens the typed form when mail refresh is expired, not offline", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasMailRefresh: true }),
+      ownerBootMail: () =>
+        Promise.reject(
+          new Error("Session expired. Sign in with your passtoken."),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasMailRefresh: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "unlock", "expired refresh");
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.role, "owner");
+    }
+    assert.equal(store.workerUnreachable, false);
+    assert.equal(store.canShowApp, false);
+  });
+
+  it("opens the typed form when Touch ID is dismissed on keyring boot", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasPasstoken: true }),
+      ownerLoginFromKeyring: () =>
+        Promise.reject(
+          new Error("[UserCancel] - The user cancelled the authentication"),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasPasstoken: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "unlock", "bio dismiss");
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.role, "owner");
+    }
+    assert.equal(store.workerUnreachable, false);
+  });
+
   it("boots via keyring passtoken when mail refresh is gone", async () => {
     let keyringLogins = 0;
     const store = createStore({
@@ -617,6 +700,31 @@ describe("AppSessionStore", () => {
     await store.handleWorkerUnauthorized();
     assert.equal(booted, 1);
     assert.equal(store.phase.kind, "ownerReady");
+  });
+
+  it("handleWorkerUnauthorized stays in the mailbox when the Worker is unreachable", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailRefresh: true,
+        hasMailAccess: true,
+      }),
+      ownerSessionStatus: () =>
+        Promise.resolve(ownerStatus({ hasMailRefresh: true })),
+      ownerBootMail: () =>
+        Promise.reject(
+          new Error("Worker request failed: error sending request"),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailRefresh: true, hasMailAccess: true }),
+      teamStatus({}),
+    );
+    assert.equal(store.phase.kind, "ownerReady");
+    await store.handleWorkerUnauthorized();
+    assert.equal(store.phase.kind, "ownerReady");
+    assert.equal(store.workerUnreachable, true);
+    assert.equal(store.canShowApp, true);
   });
 
   it("handleWorkerUnauthorized uses keyring passtoken when mail refresh is gone", async () => {

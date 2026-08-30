@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 #[cfg(unix)]
@@ -639,6 +639,25 @@ pub fn load_email_prefs() -> Result<Option<EmailPrefs>, String> {
     Ok(Some(prefs))
 }
 
+/// Mail/cache JSON is rebuildable. Empty or corrupt files (interrupted
+/// `fs::write` truncate) are treated as missing so hydrate can fall back.
+fn parse_rebuildable_json(json: &str) -> Option<serde_json::Value> {
+    let trimmed = json.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    serde_json::from_str(trimmed).ok()
+}
+
+fn write_json_atomic(path: &Path, json: &str) -> Result<(), String> {
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    restrict_file_permissions(&tmp);
+    fs::rename(&tmp, path).map_err(|e| e.to_string())?;
+    restrict_file_permissions(&path.to_path_buf());
+    Ok(())
+}
+
 /// Persist opaque JSON under `~/.relaybase/{scopeId}/mail/{relative_path}`.
 /// `relative_path` must be a safe relative path (no `..`, absolute, or empty segments).
 fn mail_file_path(relative_path: &str) -> Result<PathBuf, String> {
@@ -680,10 +699,9 @@ pub fn save_mail_json(relative_path: &str, value: &serde_json::Value) -> Result<
         }
     }
     let json = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
-    fs::write(&path, &json).map_err(|e| {
+    write_json_atomic(&path, &json).map_err(|e| {
         format!("Failed to write mail file {}: {e}", path.display())
     })?;
-    restrict_file_permissions(&path);
     Ok(())
 }
 
@@ -695,10 +713,7 @@ pub fn load_mail_json(relative_path: &str) -> Result<Option<serde_json::Value>, 
     let json = fs::read_to_string(&path).map_err(|e| {
         format!("Failed to read mail file {}: {e}", path.display())
     })?;
-    let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
-        format!("Invalid mail file {}: {e}", path.display())
-    })?;
-    Ok(Some(value))
+    Ok(parse_rebuildable_json(&json))
 }
 
 /// Persist opaque JSON under `~/.relaybase/{scopeId}/cache/{relative_path}`.
@@ -744,10 +759,9 @@ pub fn save_cache_json(relative_path: &str, value: &serde_json::Value) -> Result
         }
     }
     let json = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
-    fs::write(&path, &json).map_err(|e| {
+    write_json_atomic(&path, &json).map_err(|e| {
         format!("Failed to write cache file {}: {e}", path.display())
     })?;
-    restrict_file_permissions(&path);
     Ok(())
 }
 
@@ -759,10 +773,7 @@ pub fn load_cache_json(relative_path: &str) -> Result<Option<serde_json::Value>,
     let json = fs::read_to_string(&path).map_err(|e| {
         format!("Failed to read cache file {}: {e}", path.display())
     })?;
-    let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
-        format!("Invalid cache file {}: {e}", path.display())
-    })?;
-    Ok(Some(value))
+    Ok(parse_rebuildable_json(&json))
 }
 
 pub fn load_api_key_vault() -> Result<ApiKeyVault, String> {

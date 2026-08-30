@@ -171,17 +171,22 @@ export function AppSessionProvider({
     function onConsoleUnauthorized() {
       void store.handleConsoleUnauthorized();
     }
+    function onOnline() {
+      void store.handleNetworkOnline();
+    }
     window.addEventListener("relaybase:unauthorized", onMailUnauthorized);
     window.addEventListener(
       "relaybase:console-unauthorized",
       onConsoleUnauthorized,
     );
+    window.addEventListener("online", onOnline);
     return () => {
       window.removeEventListener("relaybase:unauthorized", onMailUnauthorized);
       window.removeEventListener(
         "relaybase:console-unauthorized",
         onConsoleUnauthorized,
       );
+      window.removeEventListener("online", onOnline);
     };
   }, [store]);
 
@@ -214,6 +219,7 @@ export function useAppSession(): AppSessionStore {
           canShowApp: ctx.canShowApp,
           consoleGateOpen: ctx.consoleGateOpen,
           hasConsoleAccess: ctx.hasConsoleAccess,
+          workerUnreachable: ctx.workerUnreachable,
           workerUrl: ctx.ownerStatus?.workerUrl ?? "",
           hasRefresh: Boolean(ctx.ownerStatus?.hasRefresh),
           hasSecret: Boolean(ctx.teamStatus?.hasSecret),

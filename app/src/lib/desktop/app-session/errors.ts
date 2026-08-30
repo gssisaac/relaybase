@@ -67,16 +67,13 @@ export function visibleUnlockError(
 }
 
 /**
- * After a failed console unlock, stay on mail (do not open the passtoken
- * overlay). Covers dismissed Touch ID and Worker-unreachable / offline.
- * Expired console refresh with no keyring passtoken still opens ConsoleGateView.
+ * Worker never answered (offline / DNS / timeout). Not a 401 and not a
+ * dismissed Touch ID — enrolled users should stay in the mailbox.
  */
-export function isStayOnMailConsoleUnlockError(err: unknown): boolean {
-  if (isUserDismissedBiometry(err)) return true;
+export function isWorkerUnreachableError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err ?? "");
   const lower = message.trim().toLowerCase();
   if (!lower) return false;
-  if (isUserDismissedBiometry(message)) return true;
   return (
     lower.includes("worker request failed") ||
     lower.includes("error sending request") ||
@@ -87,4 +84,9 @@ export function isStayOnMailConsoleUnlockError(err: unknown): boolean {
     lower.includes("network unreachable") ||
     lower.includes("failed to connect")
   );
+}
+
+/** @deprecated Use isWorkerUnreachableError or isUserDismissedBiometry */
+export function isStayOnMailConsoleUnlockError(err: unknown): boolean {
+  return isUserDismissedBiometry(err) || isWorkerUnreachableError(err);
 }

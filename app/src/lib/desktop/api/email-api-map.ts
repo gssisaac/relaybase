@@ -44,6 +44,13 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
     return `/console/domains${search}`;
   }
   if (rest === "/addresses" || rest.startsWith("/addresses")) {
+    const params = new URLSearchParams(
+      search.startsWith("?") ? search.slice(1) : search,
+    );
+    // Mail sidebar catalog — mail-scoped so daily boot does not need Touch ID.
+    if (rest === "/addresses" && params.get("all") === "1") {
+      return "/mail/addresses";
+    }
     return `/console/addresses${search}`;
   }
   if (rest === "/send" || rest.startsWith("/send/")) {

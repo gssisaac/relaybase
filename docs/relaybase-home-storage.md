@@ -54,6 +54,7 @@ Server/worker data (Cloudflare D1 + R2) is separate — that is the remote produ
             │   └── {messageKey}.json
             └── ui/
                 ├── enabled-accounts.json
+                ├── available-addresses.json
                 ├── sidebar.json
                 ├── accounts.json
                 ├── read.json
@@ -181,6 +182,35 @@ Path: `~/.relaybase/{scopeId}/email.json`
 | `accountColors` | `{ [email]: "#RRGGBB" }` |
 
 TS: `app/src/email/lib/prefs/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`.
+
+### `mail/desktop/ui/enabled-accounts.json`
+
+Path: `~/.relaybase/{scopeId}/mail/desktop/ui/enabled-accounts.json`
+
+Which addresses the user turned on in the mail sidebar (not the full Worker catalog).
+
+| Field | Purpose |
+|-------|---------|
+| `emails` | Enabled address strings |
+
+TS: `app/src/email/lib/accounts/enabled-accounts.ts` → `readUiJson` / `writeUiJson`.
+
+### `mail/desktop/ui/available-addresses.json`
+
+Path: `~/.relaybase/{scopeId}/mail/desktop/ui/available-addresses.json`
+
+Last-known Worker address catalog for the mail sidebar. Hydrated on boot so
+offline / 401 / network errors do not empty the account list. A successful
+fetch (including an empty list) overwrites the file; failures do not.
+
+| Field | Purpose |
+|-------|---------|
+| `version` | `1` |
+| `addresses` | `{ email, domain, displayName?, … }` from `GET /mail/addresses` |
+
+TS: `app/src/email/lib/accounts/available-addresses.ts` → `readUiJson` / `writeUiJson`.
+Missing file is not the same as empty: on first upgrade, the enable-list in
+`enabled-accounts.json` is seeded into this cache once.
 
 ### `mail/desktop/ui/accounts.json`
 

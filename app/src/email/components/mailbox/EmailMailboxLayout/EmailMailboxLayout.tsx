@@ -36,14 +36,14 @@ export function EmailMailboxLayout({
   useEffect(() => {
     if (
       accountFromUrl &&
-      enabledAddresses.some((a) => a.email === accountFromUrl)
+      enabledAddresses.some(
+        (a) => a.email.toLowerCase() === accountFromUrl.toLowerCase(),
+      )
     ) {
       setAccountFilter(accountFromUrl);
       return;
     }
-    if (!accountFromUrl) {
-      setAccountFilter("all");
-    }
+    setAccountFilter("all");
   }, [accountFromUrl, enabledAddresses, setAccountFilter]);
 
   return (

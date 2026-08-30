@@ -13,6 +13,12 @@ import {
   sortAddressesByLocalPart,
   writeEnabledAccounts,
 } from "@/email/lib/accounts/enabled-accounts";
+import {
+  addressesFromEmails,
+  hydrateAvailableAddresses,
+  normalizeAddresses,
+  writeAvailableAddresses,
+} from "@/email/lib/accounts/available-addresses";
 import type { Address } from "@/email/components/mailbox/types";
 import type { DesktopTeamLogin } from "@/lib/desktop/bridge";
 import {
@@ -126,10 +132,10 @@ export class MailAccountsStore {
       this.phase = "loading";
       this.error = null;
     });
-    await this.hydrateEnabled();
+    const hadCatalog = await this.hydrateCatalog();
     if (this.primaryGeneration !== generation) return;
 
-    if (this.enabledAccounts.length > 0) {
+    if (hadCatalog) {
       runInAction(() => {
         this.phase = "done";
       });
@@ -144,22 +150,35 @@ export class MailAccountsStore {
     });
   }
 
-  private async hydrateEnabled() {
+  /** Disk catalog + enable-list. Seeds catalog from enable-list on first upgrade. */
+  private async hydrateCatalog(): Promise<boolean> {
     const userId = this.userId;
-    if (!userId) return;
+    if (!userId) return false;
     try {
-      const emails = await hydrateEnabledAccounts(userId);
-      if (this.userId !== userId) return;
+      const [emails, catalog] = await Promise.all([
+        hydrateEnabledAccounts(userId),
+        hydrateAvailableAddresses(userId),
+      ]);
+      if (this.userId !== userId) return false;
+      let addresses = catalog.addresses;
+      let found = catalog.found;
+      if (!found && emails.length > 0) {
+        addresses = addressesFromEmails(emails);
+        found = true;
+        writeAvailableAddresses(userId, addresses);
+      }
       runInAction(() => {
         this.enabledAccounts = emails;
+        this.availableAddresses = addresses;
         this.hydrated = true;
       });
-      this.pruneEnabledToAvailable();
       this.ensureColors();
+      return found;
     } catch {
       runInAction(() => {
         this.hydrated = true;
       });
+      return false;
     }
   }
 
@@ -201,6 +220,8 @@ export class MailAccountsStore {
         this.enabledAccounts = [email];
         this.error = null;
       });
+      writeEnabledAccounts(this.userId, [email]);
+      writeAvailableAddresses(this.userId, [seeded]);
       this.ensureColors();
       return;
     }
@@ -222,15 +243,16 @@ export class MailAccountsStore {
       if (!res.ok) {
         throw new Error(data.error || "Failed to load addresses");
       }
+      const next = normalizeAddresses(data.addresses ?? []);
       runInAction(() => {
-        this.availableAddresses = data.addresses ?? [];
-        if (isPrimary) {
-          this.error = null;
-        }
+        this.availableAddresses = next;
+        this.error = null;
       });
+      writeAvailableAddresses(this.userId, next);
       this.pruneEnabledToAvailable();
       this.ensureColors();
     } catch (e) {
+      // Keep the disk/memory catalog. Offline and 401 must not wipe accounts.
       if (isPrimary) {
         runInAction(() => {
           this.error = isPackagedApiUnavailableError(e)
@@ -292,9 +314,8 @@ export class MailAccountsStore {
     });
   }
 
+  /** Only after a successful network fetch (including authoritative empty). */
   private pruneEnabledToAvailable() {
-    if (this.phase !== "done" || this.error) return;
-    if (this.availableAddresses.length === 0) return;
     const valid = new Set(
       this.availableAddresses.map((a) => a.email.toLowerCase()),
     );

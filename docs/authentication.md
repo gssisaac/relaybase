@@ -34,7 +34,7 @@ Login mints **two refresh tokens** and two in-memory access tokens:
 
 | Scope | Refresh TTL | Access TTL | Worker routes | Desktop command |
 |-------|-------------|------------|---------------|-------------------|
-| `mail` | 90 days | 60 min | `/mail/*` | `owner_boot_mail_cmd` (silent, no bio) |
+| `mail` | 90 days | 60 min | `/mail/*` (inbox, sent, send, favicon, **GET `/mail/addresses`**) | `owner_boot_mail_cmd` (silent, no bio) |
 | `console` | 30 min | 30 min | `/console/*` | `owner_unlock_console_cmd` (after Touch ID) |
 
 D1 `owner_sessions.label` uses `mail:` / `console:` prefixes.
@@ -176,7 +176,7 @@ While no owner exists: `setup-admin`, `init-db`, `migrate-db`.
 | Route group | Scope |
 |-------------|-------|
 | `/console/*` | `console` access JWT |
-| `/mail/*` | `mail` access JWT |
+| `/mail/*` | `mail` access JWT (includes read-only `GET /mail/addresses`) |
 
 Handlers: `server/src/routes/console/owner-auth.ts`.
 

@@ -185,13 +185,13 @@ export class EmailMailboxStore {
   }
 
   get enabledSet(): Set<string> {
-    return new Set(this.enabledAccounts.map((e) => e.toLowerCase()));
+    return new Set(
+      this.enabledAddresses.map((a) => a.email.toLowerCase()),
+    );
   }
 
   get visibleAddresses(): Address[] {
-    if (this.enabledAddresses.length > 0) return this.enabledAddresses;
-    const set = this.enabledSet;
-    return this.addresses.filter((a) => set.has(a.email.toLowerCase()));
+    return this.enabledAddresses;
   }
 
   get trashKeys(): Set<string> {
@@ -560,8 +560,8 @@ export class EmailMailboxStore {
 
     if (
       this.accountFilter !== "all" &&
-      !input.enabledAccounts.some(
-        (email) => email.toLowerCase() === this.accountFilter.toLowerCase(),
+      !input.enabledAddresses.some(
+        (a) => a.email.toLowerCase() === this.accountFilter.toLowerCase(),
       )
     ) {
       this.accountFilter = "all";

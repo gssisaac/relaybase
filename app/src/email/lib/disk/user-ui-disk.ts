@@ -80,6 +80,7 @@ export async function writeUiJson(
 
 export const UI_FILES = {
   enabledAccounts: "enabled-accounts.json",
+  availableAddresses: "available-addresses.json",
   sidebar: "sidebar.json",
   accounts: "accounts.json",
   read: "read.json",

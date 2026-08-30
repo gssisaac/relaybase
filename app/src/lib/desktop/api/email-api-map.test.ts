@@ -15,7 +15,11 @@ describe("mapEmailApiToWorker", () => {
     );
     assert.equal(
       mapEmailApiToWorker("/api/email/addresses?all=1"),
-      "/console/addresses?all=1",
+      "/mail/addresses",
+    );
+    assert.equal(
+      mapEmailApiToWorker("/api/email/addresses?domain=a.com"),
+      "/console/addresses?domain=a.com",
     );
     assert.equal(
       mapEmailApiToWorker("/api/email/domains"),

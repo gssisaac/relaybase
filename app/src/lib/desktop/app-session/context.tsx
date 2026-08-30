@@ -24,7 +24,6 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasRefresh: false,
   hasAccess: false,
   hasPasstoken: false,
-  username: "",
   workerUrl: "",
   platform: "macos",
 };
@@ -223,7 +222,7 @@ export function useAppSession(): AppSessionStore {
           workerUrl: ctx.ownerStatus?.workerUrl ?? "",
           hasRefresh: Boolean(ctx.ownerStatus?.hasRefresh),
           hasSecret: Boolean(ctx.teamStatus?.hasSecret),
-          revealed: ctx.revealedPasstoken?.username ?? "",
+          revealed: ctx.revealedPasstoken?.passtoken ?? "",
         }),
       () => setTick((t) => t + 1),
     );

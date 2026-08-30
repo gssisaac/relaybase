@@ -32,7 +32,7 @@ export class AppSessionStore {
   ownerStatus: OwnerSessionStatus | null = null;
   teamStatus: TeamSessionStatus | null = null;
   error: string | null = null;
-  revealedPasstoken: { username: string; passtoken: string } | null = null;
+  revealedPasstoken: { passtoken: string } | null = null;
   busy = false;
   consoleGateOpen = false;
   /** Last Worker call failed because the network / Worker was unreachable. */
@@ -451,11 +451,9 @@ export class AppSessionStore {
   /** Passtoken login for the console gate overlay. */
   async loginConsoleWithPasstoken(input: {
     workerUrl: string;
-    username: string;
     passtoken: string;
   }): Promise<void> {
     const passtoken = normalizePasstokenInput(input.passtoken);
-    const username = input.username.trim();
     const workerUrl = input.workerUrl.trim().replace(/\/$/, "");
     if (!isValidPasstokenFormat(passtoken)) {
       const hint = passtokenFormatHint();
@@ -470,7 +468,6 @@ export class AppSessionStore {
     try {
       const loginStatus = await this.deps.ownerLogin({
         workerUrl,
-        username,
         passtoken,
       });
       runInAction(() => {
@@ -511,11 +508,9 @@ export class AppSessionStore {
 
   async loginWithPasstoken(input: {
     workerUrl: string;
-    username: string;
     passtoken: string;
   }): Promise<void> {
     const passtoken = normalizePasstokenInput(input.passtoken);
-    const username = input.username.trim();
     const workerUrl = input.workerUrl.trim().replace(/\/$/, "");
     if (!isValidPasstokenFormat(passtoken)) {
       const hint = passtokenFormatHint();
@@ -530,7 +525,6 @@ export class AppSessionStore {
     try {
       const status = await this.deps.ownerLogin({
         workerUrl,
-        username,
         passtoken,
       });
       runInAction(() => {
@@ -713,7 +707,6 @@ export class AppSessionStore {
   async recoverOwner(input: {
     workerUrl: string;
     cfAccessToken: string;
-    username?: string;
   }): Promise<void> {
     this.busy = true;
     this.error = null;
@@ -721,11 +714,9 @@ export class AppSessionStore {
       const result = await this.deps.ownerResetAdmin({
         workerUrl: input.workerUrl,
         cfAccessToken: input.cfAccessToken,
-        username: input.username,
       });
       runInAction(() => {
         this.revealedPasstoken = {
-          username: result.username,
           passtoken: result.passtoken,
         };
         this.phase = { kind: "install", step: "revealPasstoken" };
@@ -742,7 +733,6 @@ export class AppSessionStore {
 
   async createOwner(input: {
     workerUrl: string;
-    username: string;
     pepper: string;
   }): Promise<void> {
     this.busy = true;
@@ -750,12 +740,10 @@ export class AppSessionStore {
     try {
       const result = await this.deps.ownerSetupAdmin({
         workerUrl: input.workerUrl,
-        username: input.username,
         pepper: input.pepper,
       });
       runInAction(() => {
         this.revealedPasstoken = {
-          username: result.username,
           passtoken: result.passtoken,
         };
         this.phase = { kind: "install", step: "revealPasstoken" };
@@ -780,7 +768,6 @@ export class AppSessionStore {
     if (revealed && workerUrl) {
       await this.loginWithPasstoken({
         workerUrl,
-        username: revealed.username,
         passtoken: revealed.passtoken,
       });
       return;

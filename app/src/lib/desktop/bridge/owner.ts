@@ -10,13 +10,11 @@ export type OwnerSessionStatus = {
   hasAccess: boolean;
   /** OS keyring `owner-passtoken` exists (secret is never returned). */
   hasPasstoken: boolean;
-  username: string;
   workerUrl: string;
   platform: string;
 };
 
 export type OwnerSetupResult = {
-  username: string;
   passtoken: string;
 };
 
@@ -28,7 +26,6 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasRefresh: false,
   hasAccess: false,
   hasPasstoken: false,
-  username: "",
   workerUrl: "",
   platform: "other",
 };
@@ -43,12 +40,10 @@ export async function desktopOwnerSessionStatus(): Promise<OwnerSessionStatus> {
 
 export async function desktopOwnerLogin(input: {
   workerUrl: string;
-  username: string;
   passtoken: string;
 }): Promise<OwnerSessionStatus> {
   return invoke("owner_login_cmd", {
     workerUrl: input.workerUrl,
-    username: input.username,
     passtoken: input.passtoken,
   });
 }
@@ -79,12 +74,10 @@ export async function desktopOwnerLogout(): Promise<void> {
 
 export async function desktopOwnerSetupAdmin(input: {
   workerUrl: string;
-  username: string;
   pepper: string;
 }): Promise<OwnerSetupResult> {
   return invoke("owner_setup_admin_cmd", {
     workerUrl: input.workerUrl,
-    username: input.username,
     pepper: input.pepper,
   });
 }
@@ -92,11 +85,9 @@ export async function desktopOwnerSetupAdmin(input: {
 export async function desktopOwnerResetAdmin(input: {
   workerUrl: string;
   cfAccessToken: string;
-  username?: string;
 }): Promise<OwnerSetupResult> {
   return invoke("owner_reset_admin_cmd", {
     workerUrl: input.workerUrl,
     cfAccessToken: input.cfAccessToken,
-    username: input.username,
   });
 }

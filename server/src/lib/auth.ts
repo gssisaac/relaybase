@@ -41,7 +41,7 @@ export async function requireOwnerSession(
   const db = createAppDb(c.env.RELAYBASE_DB);
   if (db) {
     const cfg = await getOwnerLoginConfig(db);
-    if (!cfg?.adminUsername) {
+    if (!cfg?.passtokenHash) {
       return c.json({ error: "Unauthorized" }, 401);
     }
   }

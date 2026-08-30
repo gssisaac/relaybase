@@ -137,7 +137,7 @@ Desktop: `desktopMigrateWorkerDb` / `migrate_worker_db_cmd`. After Worker deploy
 3. **Create** — R2 + D1 via Cloudflare HTTP API (no migrations). Skip reuses existing IDs.
 4. **Deploy** — PUT `worker.js` with bindings, set `AUTH_PEPPER` / `CF_ACCOUNT_ID` secrets, enable workers.dev.
 5. **Schema** — empty D1s (just created): `POST /console/init-db`. Reused D1s: `POST /console/migrate-db`. Auth is pepper (no owner), owner Bearer, or Cloudflare OAuth (`X-Cf-Access-Token`).
-6. **Owner setup** — `POST /console/setup-admin` (username → issued passtoken, shown once + downloaded + written to OS keyring `owner-passtoken`), then `POST /console/login` → owner access + refresh.
+6. **Owner setup** — `POST /console/setup-admin` (issued passtoken, shown once + downloaded + written to OS keyring `owner-passtoken`), then `POST /console/login` → owner access + refresh.
 7. **Connect** — `GET /console/connect`, save non-secret connection info.
 
 Rollback deletes Worker + D1 + R2 from the account; it does not call `init-db`.

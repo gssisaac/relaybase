@@ -16,7 +16,6 @@ function ownerStatus(partial: Partial<OwnerSessionStatus>): OwnerSessionStatus {
     hasRefresh: false,
     hasAccess: false,
     hasPasstoken: false,
-    username: "",
     workerUrl: "",
     platform: "macos",
     ...partial,
@@ -73,7 +72,6 @@ function makeDeps(
     ownerLoginFromKeyring?: (reason: string) => Promise<OwnerSessionStatus>;
     ownerLogin?: (input: {
       workerUrl: string;
-      username: string;
       passtoken: string;
     }) => Promise<OwnerSessionStatus>;
     teamLogin?: (input: {
@@ -114,8 +112,8 @@ function makeDeps(
       overrides.ownerLoginFromKeyring ??
       (() => Promise.resolve(ownerStatus({ hasMailAccess: true, hasPasstoken: true }))),
     ownerLogout: overrides.ownerLogout ?? (() => Promise.resolve()),
-    ownerSetupAdmin: () => Promise.resolve({ username: "owner", passtoken: "p" }),
-    ownerResetAdmin: () => Promise.resolve({ username: "owner", passtoken: "p" }),
+    ownerSetupAdmin: () => Promise.resolve({ passtoken: "p" }),
+    ownerResetAdmin: () => Promise.resolve({ passtoken: "p" }),
     teamSessionStatus:
       overrides.teamSessionStatus ??
       (() => Promise.resolve(overrides.teamStatus ?? teamStatus({}))),
@@ -446,7 +444,6 @@ describe("AppSessionStore", () => {
     connectOwner(store);
     await store.loginWithPasstoken({
       workerUrl: WORKER_URL,
-      username: "owner",
       passtoken: "rb_pass_abc123XYZ-_abcdefghij",
     });
     assert.equal(store.phase.kind, "ownerReady");
@@ -802,7 +799,6 @@ describe("AppSessionStore", () => {
     connectOwner(store);
     await store.loginConsoleWithPasstoken({
       workerUrl: WORKER_URL,
-      username: "owner",
       passtoken: "rb_pass_abc123XYZ-_abcdefghij",
     });
     assert.equal(loggedIn, 1);

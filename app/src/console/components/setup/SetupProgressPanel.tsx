@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   cloudflareInstallDashboardLinks,
   cloudflareR2DashboardUrl,
@@ -148,7 +146,6 @@ export function SetupProgressPanel({
   const [autoDone, setAutoDone] = useState<{
     workerUrl: string;
     adminToken: string;
-    username?: string;
   } | null>(null);
   const [pendingVerify, setPendingVerify] = useState<{
     workerUrl: string;
@@ -185,7 +182,6 @@ export function SetupProgressPanel({
   const [tokenSaved, setTokenSaved] = useState(false);
   const [needsOwnerSetup, setNeedsOwnerSetup] = useState(false);
   const [installPepper, setInstallPepper] = useState<string | null>(null);
-  const [ownerUsername, setOwnerUsername] = useState("");
   const [creatingOwner, setCreatingOwner] = useState(false);
   const [mailApiDone, setMailApiDone] = useState(false);
   const [mailApiVerified, setMailApiVerified] = useState(false);
@@ -665,15 +661,13 @@ export function SetupProgressPanel({
 
   async function createFirstOwner() {
     if (!autoDone || creatingOwner) return;
-    const username = ownerUsername.trim();
     const pepper = installPepper?.trim() ?? "";
-    if (username.length < 3 || !pepper) return;
+    if (!pepper) return;
     setCreatingOwner(true);
     setError(null);
     try {
       const issued = await desktopOwnerSetupAdmin({
         workerUrl: autoDone.workerUrl,
-        username,
         pepper,
       });
       setInstallPepper(null);
@@ -681,11 +675,9 @@ export function SetupProgressPanel({
       setTokenSaved(false);
       setTokenDownloaded(false);
       setCopiedToken(false);
-      setOwnerUsername(issued.username);
       setAutoDone({
         workerUrl: autoDone.workerUrl,
         adminToken: issued.passtoken,
-        username: issued.username,
       });
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
@@ -713,7 +705,6 @@ export function SetupProgressPanel({
     const content = [
       "# Relaybase owner passtoken — save this file securely",
       `# Worker URL: ${autoDone.workerUrl}`,
-      ...(autoDone.username ? [`# Username: ${autoDone.username}`] : []),
       `# Generated: ${new Date().toISOString()}`,
       "",
       `PASSTOKEN=${autoDone.adminToken}`,
@@ -1284,12 +1275,6 @@ export function SetupProgressPanel({
                     Shown once. Copy or download a backup — this Mac also
                     stores it in the keyring, and Touch ID reads it later.
                   </p>
-                  {autoDone.username ? (
-                    <p className="text-xs text-muted-foreground">
-                      Username:{" "}
-                      <span className="font-mono">{autoDone.username}</span>
-                    </p>
-                  ) : null}
                   <div className="rounded-md border border-border bg-muted/30 p-2">
                     <code className="block break-all font-mono text-[11px]">
                       {autoDone.adminToken}
@@ -1343,29 +1328,13 @@ export function SetupProgressPanel({
                 >
                   <p className="text-xs font-medium">Create the owner login</p>
                   <p className="text-xs text-muted-foreground">
-                    Choose a username. We issue a passtoken once — copy or
-                    download it before opening the mailbox.
+                    We issue a passtoken once — copy or download it before
+                    opening the mailbox.
                   </p>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="setup-owner-username">Username</Label>
-                    <Input
-                      id="setup-owner-username"
-                      value={ownerUsername}
-                      onChange={(e) => setOwnerUsername(e.target.value)}
-                      autoComplete="username"
-                      minLength={3}
-                      required
-                      disabled={creatingOwner || !installPepper}
-                    />
-                  </div>
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={
-                      creatingOwner ||
-                      ownerUsername.trim().length < 3 ||
-                      !installPepper
-                    }
+                    disabled={creatingOwner || !installPepper}
                   >
                     {creatingOwner ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -1452,11 +1421,10 @@ export function SetupProgressPanel({
               onClick={() => {
                 void (async () => {
                   setLeavingToMailbox(true);
-                  if (autoDone.adminToken && autoDone.username) {
+                  if (autoDone.adminToken) {
                     try {
                       await store.loginWithPasstoken({
                         workerUrl: autoDone.workerUrl,
-                        username: autoDone.username,
                         passtoken: autoDone.adminToken,
                       });
                       router.replace("/email/inbox");

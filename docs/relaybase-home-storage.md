@@ -147,7 +147,7 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/keyring_store.rs`,
 | service | `com.relaybase.desktop` |
 | account | `owner-session` |
 
-Blob (`camelCase`): `{ workerUrl, username, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. **`workerUrl`** is the source of truth for daily unlock — JS resolves it before `credentials.json`. This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
+Blob (`camelCase`): `{ workerUrl, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. **`workerUrl`** is the source of truth for daily unlock — JS resolves it before `credentials.json`. This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
 
 ### OS keyring (owner passtoken)
 

@@ -20,7 +20,6 @@ const ACCESS_SKEW_SECS: u64 = 30;
 #[serde(rename_all = "camelCase")]
 struct KeyringBlob {
     worker_url: String,
-    username: String,
     /// Console-scoped refresh (30 min TTL on Worker).
     #[serde(default)]
     refresh_token: String,
@@ -33,7 +32,6 @@ struct AccessMemory {
     access_token: String,
     expires_at_unix: u64,
     worker_url: String,
-    username: String,
 }
 
 static MAIL_ACCESS: Mutex<Option<AccessMemory>> = Mutex::new(None);
@@ -47,7 +45,7 @@ fn now_unix() -> u64 {
 }
 
 fn normalize_keyring(mut blob: KeyringBlob) -> Option<KeyringBlob> {
-    if blob.worker_url.trim().is_empty() || blob.username.trim().is_empty() {
+    if blob.worker_url.trim().is_empty() {
         return None;
     }
     // Legacy v1: single refresh_token was used for both scopes.
@@ -82,7 +80,6 @@ fn delete_keyring() {
 fn set_scoped_access(
     scope: &str,
     worker_url: &str,
-    username: &str,
     access_token: &str,
     expires_in: u64,
 ) {
@@ -90,7 +87,6 @@ fn set_scoped_access(
         access_token: access_token.to_string(),
         expires_at_unix: now_unix() + expires_in.saturating_sub(ACCESS_SKEW_SECS).max(5),
         worker_url: worker_url.trim().trim_end_matches('/').to_string(),
-        username: username.to_string(),
     };
     let lock = if scope == "mail" {
         &MAIL_ACCESS
@@ -132,7 +128,6 @@ fn access_if_valid(scope: &str) -> Option<AccessMemory> {
         access_token: mem.access_token.clone(),
         expires_at_unix: mem.expires_at_unix,
         worker_url: mem.worker_url.clone(),
-        username: mem.username.clone(),
     })
 }
 
@@ -208,7 +203,6 @@ pub struct OwnerSessionStatus {
     pub has_access: bool,
     /// Keyring `owner-passtoken` exists (secret is not returned).
     pub has_passtoken: bool,
-    pub username: String,
     pub worker_url: String,
     pub platform: String,
 }
@@ -245,16 +239,6 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         has_refresh: has_mail_refresh || has_console_refresh,
         has_access: mail_access.is_some() || console_access.is_some(),
         has_passtoken: crate::owner_passtoken::exists(),
-        username: blob
-            .as_ref()
-            .map(|b| b.username.clone())
-            .or_else(|| {
-                mail_access
-                    .as_ref()
-                    .map(|a| a.username.clone())
-                    .or_else(|| console_access.as_ref().map(|a| a.username.clone()))
-            })
-            .unwrap_or_default(),
         worker_url: blob
             .as_ref()
             .map(|b| b.worker_url.clone())
@@ -278,7 +262,7 @@ async fn refresh_scope(blob: &KeyringBlob, scope: &str) -> Result<KeyringBlob, S
     };
     if refresh.is_empty() {
         return Err(if scope == "mail" {
-            "No saved mail session. Sign in with your username and passtoken.".to_string()
+            "No saved mail session. Sign in with your passtoken.".to_string()
         } else {
             "No saved console session. Unlock the dashboard with Touch ID or passtoken."
                 .to_string()
@@ -334,7 +318,7 @@ async fn refresh_scope(blob: &KeyringBlob, scope: &str) -> Result<KeyringBlob, S
         updated.refresh_token = new_refresh.to_string();
     }
     save_keyring(&updated)?;
-    set_scoped_access(scope, base, &updated.username, access, expires_in);
+    set_scoped_access(scope, base, access, expires_in);
     persist_worker_url(base)?;
     Ok(updated)
 }
@@ -342,17 +326,12 @@ async fn refresh_scope(blob: &KeyringBlob, scope: &str) -> Result<KeyringBlob, S
 /// POST /console/login. Stores both refresh tokens; mail access in memory only.
 pub async fn owner_login(
     worker_url: String,
-    username: String,
     passtoken: String,
 ) -> Result<OwnerSessionStatus, String> {
     let base = worker_url.trim().trim_end_matches('/');
-    let username = username.trim().to_lowercase();
     let passtoken = normalize_passtoken(&passtoken);
     if base.is_empty() {
         return Err("Worker URL is required".into());
-    }
-    if username.len() < 3 {
-        return Err("Username must be at least 3 characters".into());
     }
     if passtoken.is_empty() {
         return Err("Passtoken is required".into());
@@ -368,7 +347,6 @@ pub async fn owner_login(
     let (status, value) = post_json(
         &url,
         serde_json::json!({
-            "username": username,
             "passtoken": passtoken,
             "label": format!("desktop-{}", platform_name()),
         }),
@@ -385,7 +363,7 @@ pub async fn owner_login(
             .map(str::to_string)
             .unwrap_or_else(|| {
                 if status == 401 {
-                    "Invalid credentials. Check username and passtoken (paste only the rb_pass_… token)."
+                    "Invalid credentials. Check the passtoken (paste only the rb_pass_… token)."
                         .to_string()
                 } else {
                     format!("Worker login failed (HTTP {status})")
@@ -405,14 +383,13 @@ pub async fn owner_login(
 
     save_keyring(&KeyringBlob {
         worker_url: base.to_string(),
-        username: username.clone(),
         refresh_token: console_refresh.to_string(),
         mail_refresh_token: mail_refresh.to_string(),
     })?;
-    set_scoped_access("mail", base, &username, mail_access, expires_in);
+    set_scoped_access("mail", base, mail_access, expires_in);
     clear_scoped_access("console");
     persist_worker_url(base)?;
-    crate::owner_passtoken::store(&passtoken, &username, base)?;
+    crate::owner_passtoken::store(&passtoken, base)?;
     owner_session_status()
 }
 
@@ -422,11 +399,11 @@ pub async fn owner_boot_mail() -> Result<OwnerSessionStatus, String> {
         return owner_session_status();
     }
     let blob = load_keyring()?.ok_or_else(|| {
-        "No saved session. Sign in with your username and passtoken.".to_string()
+        "No saved session. Sign in with your passtoken.".to_string()
     })?;
     if blob.mail_refresh_token.trim().is_empty() {
         return Err(
-            "Mail session missing. Sign in with your username and passtoken once.".to_string(),
+            "Mail session missing. Sign in with your passtoken once.".to_string(),
         );
     }
     refresh_scope(&blob, "mail").await?;
@@ -439,7 +416,7 @@ pub async fn owner_unlock_console() -> Result<OwnerSessionStatus, String> {
         return owner_session_status();
     }
     let blob = load_keyring()?.ok_or_else(|| {
-        "No saved session. Sign in with your username and passtoken.".to_string()
+        "No saved session. Sign in with your passtoken.".to_string()
     })?;
     if blob.refresh_token.trim().is_empty() {
         return Err(
@@ -457,17 +434,12 @@ pub async fn owner_logout() -> Result<(), String> {
 
 pub async fn owner_setup_admin(
     worker_url: String,
-    username: String,
     pepper: String,
 ) -> Result<OwnerSetupResult, String> {
     let base = worker_url.trim().trim_end_matches('/');
-    let username = username.trim().to_lowercase();
     let pepper = pepper.trim();
     if base.is_empty() {
         return Err("Worker URL is required".into());
-    }
-    if username.len() < 3 {
-        return Err("Username must be at least 3 characters".into());
     }
     if pepper.is_empty() {
         return Err("Install pepper is missing. Re-run install.".into());
@@ -475,7 +447,7 @@ pub async fn owner_setup_admin(
     let url = format!("{base}/console/setup-admin");
     let (status, value) = post_json(
         &url,
-        serde_json::json!({ "username": username }),
+        serde_json::json!({}),
         &[("X-Auth-Pepper", pepper)],
     )
     .await?;
@@ -487,12 +459,8 @@ pub async fn owner_setup_admin(
     let passtoken = json_string(&value, "passtoken")
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;
     persist_worker_url(base)?;
-    let issued_username = json_string(&value, "username")
-        .unwrap_or(&username)
-        .to_string();
-    crate::owner_passtoken::store(passtoken, &issued_username, base)?;
+    crate::owner_passtoken::store(passtoken, base)?;
     Ok(OwnerSetupResult {
-        username: issued_username,
         passtoken: passtoken.to_string(),
     })
 }
@@ -500,7 +468,6 @@ pub async fn owner_setup_admin(
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OwnerSetupResult {
-    pub username: String,
     pub passtoken: String,
 }
 
@@ -509,7 +476,6 @@ pub struct OwnerSetupResult {
 pub async fn owner_reset_admin(
     worker_url: String,
     cf_access_token: String,
-    username: Option<String>,
 ) -> Result<OwnerSetupResult, String> {
     let base = worker_url.trim().trim_end_matches('/');
     if base.is_empty() {
@@ -520,13 +486,7 @@ pub async fn owner_reset_admin(
         return Err("Authorize with Cloudflare again".into());
     }
     let url = format!("{base}/console/reset-admin");
-    let mut body = serde_json::json!({ "cfAccessToken": token });
-    if let Some(name) = username {
-        let name = name.trim().to_lowercase();
-        if !name.is_empty() {
-            body["username"] = serde_json::Value::String(name);
-        }
-    }
+    let body = serde_json::json!({ "cfAccessToken": token });
     let (status, value) = post_json(&url, body, &[]).await?;
     if status != 200 {
         return Err(json_string(&value, "error")
@@ -538,10 +498,8 @@ pub async fn owner_reset_admin(
     delete_keyring();
     clear_all_access();
     crate::owner_passtoken::delete();
-    let issued_username = json_string(&value, "username").unwrap_or("").to_string();
-    crate::owner_passtoken::store(passtoken, &issued_username, base)?;
+    crate::owner_passtoken::store(passtoken, base)?;
     Ok(OwnerSetupResult {
-        username: issued_username,
         passtoken: passtoken.to_string(),
     })
 }
@@ -580,17 +538,10 @@ pub async fn owner_login_from_keyring(
             })
             .unwrap_or_default()
     };
-    let username = if !record.username.trim().is_empty() {
-        record.username.clone()
-    } else if let Some(blob) = session.as_ref() {
-        blob.username.clone()
-    } else {
-        String::new()
-    };
     if worker_url.is_empty() {
         return Err("Worker URL is required".into());
     }
-    owner_login(worker_url, username, record.passtoken).await
+    owner_login(worker_url, record.passtoken).await
 }
 
 async fn ensure_access(scope: &str) -> Result<AccessMemory, String> {

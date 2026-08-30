@@ -38,7 +38,6 @@ export type AppSessionDeps = {
   ownerSessionStatus: () => Promise<OwnerSessionStatus>;
   ownerLogin: (input: {
     workerUrl: string;
-    username: string;
     passtoken: string;
   }) => Promise<OwnerSessionStatus>;
   ownerBootMail: () => Promise<OwnerSessionStatus>;
@@ -47,14 +46,12 @@ export type AppSessionDeps = {
   ownerLogout: () => Promise<void>;
   ownerSetupAdmin: (input: {
     workerUrl: string;
-    username: string;
     pepper: string;
-  }) => Promise<{ username: string; passtoken: string }>;
+  }) => Promise<{ passtoken: string }>;
   ownerResetAdmin: (input: {
     workerUrl: string;
     cfAccessToken: string;
-    username?: string;
-  }) => Promise<{ username: string; passtoken: string }>;
+  }) => Promise<{ passtoken: string }>;
   teamSessionStatus: () => Promise<TeamSessionStatus>;
   teamLogin: (input: {
     workerUrl: string;

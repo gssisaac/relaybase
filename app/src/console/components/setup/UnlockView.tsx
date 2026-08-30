@@ -43,13 +43,10 @@ export function UnlockView({
     credentials,
     teamLogin,
   });
-  const savedUsername =
-    role === "invited"
-      ? teamLogin?.accountEmail ?? ""
-      : store.ownerStatus?.username ?? "";
+  const savedAccountEmail = teamLogin?.accountEmail ?? "";
 
   const [workerUrl, setWorkerUrl] = useState(savedWorkerUrl ?? "");
-  const [username, setUsername] = useState(savedUsername);
+  const [accountEmail, setAccountEmail] = useState(savedAccountEmail);
   const [secret, setSecret] = useState("");
 
   const workerUrlSeeds = useMemo(
@@ -68,7 +65,10 @@ export function UnlockView({
 
   const busy = store.busy;
   const selectedUrl = normalizeWorkerUrl(workerUrl);
-  const canSubmit = Boolean(selectedUrl) && Boolean(username.trim()) && Boolean(secret);
+  const canSubmit =
+    Boolean(selectedUrl) &&
+    Boolean(secret) &&
+    (role === "invited" ? Boolean(accountEmail.trim()) : true);
   const missingWorkerError = isMissingWorkerUnlockMessage(store.error, role);
 
   async function submitSecret(e: React.FormEvent) {
@@ -80,13 +80,12 @@ export function UnlockView({
       if (role === "invited") {
         await store.loginInvited({
           workerUrl: url,
-          accountEmail: username.trim(),
+          accountEmail: accountEmail.trim(),
           mobilePassword: secret,
         });
       } else {
         await store.loginWithPasstoken({
           workerUrl: url,
-          username: username.trim(),
           passtoken,
         });
       }
@@ -118,7 +117,7 @@ export function UnlockView({
             <p className="text-xs text-muted-foreground">
               {role === "invited"
                 ? "Sign in with your account email and the password your admin set up in Accounts → Teammate login."
-                : "Sign in with your username and passtoken. After this, Touch ID reads it from the keyring."}
+                : "Sign in with your passtoken. After this, Touch ID reads it from the keyring."}
             </p>
           </div>
 
@@ -138,19 +137,19 @@ export function UnlockView({
               seedUrls={workerUrlSeeds}
               disabled={busy}
             />
-            <div className="space-y-1.5">
-              <Label htmlFor="unlock-username">
-                {role === "invited" ? "Account email" : "Username"}
-              </Label>
-              <Input
-                id="unlock-username"
-                type={role === "invited" ? "email" : "text"}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete={role === "invited" ? "email" : "username"}
-                required
-              />
-            </div>
+            {role === "invited" ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="unlock-account-email">Account email</Label>
+                <Input
+                  id="unlock-account-email"
+                  type="email"
+                  value={accountEmail}
+                  onChange={(e) => setAccountEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            ) : null}
             <div className="space-y-1.5">
               <Label htmlFor="unlock-secret">
                 {role === "invited" ? "Password" : "Passtoken"}

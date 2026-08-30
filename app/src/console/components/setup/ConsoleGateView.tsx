@@ -43,10 +43,7 @@ export function ConsoleGateView() {
     credentials,
     teamLogin: null,
   });
-  const savedUsername = store.ownerStatus?.username ?? "";
-
   const [workerUrl, setWorkerUrl] = useState(savedWorkerUrl ?? "");
-  const [username, setUsername] = useState(savedUsername);
   const [secret, setSecret] = useState("");
 
   const label = biometryLabel(0, store.ownerStatus?.platform ?? "macos");
@@ -59,8 +56,7 @@ export function ConsoleGateView() {
   );
 
   const selectedUrl = normalizeWorkerUrl(workerUrl);
-  const canSubmit =
-    Boolean(selectedUrl) && Boolean(username.trim()) && Boolean(secret);
+  const canSubmit = Boolean(selectedUrl) && Boolean(secret);
   const missingWorkerError = isMissingWorkerUnlockMessage(store.error, "owner");
 
   async function submitPasstoken(e: React.FormEvent) {
@@ -71,7 +67,6 @@ export function ConsoleGateView() {
     try {
       await store.loginConsoleWithPasstoken({
         workerUrl: url,
-        username: username.trim(),
         passtoken,
       });
       rememberWorkerUrl(url);
@@ -143,16 +138,6 @@ export function ConsoleGateView() {
               seedUrls={workerUrlSeeds}
               disabled={busy}
             />
-            <div className="space-y-1.5">
-              <Label htmlFor="console-gate-username">Username</Label>
-              <Input
-                id="console-gate-username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                required
-              />
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="console-gate-passtoken">Passtoken</Label>
               <Input

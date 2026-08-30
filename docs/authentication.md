@@ -19,7 +19,7 @@ Four auth surfaces on the product Worker, plus **Cloudflare OAuth** for install
 
 | Actor | Credential | Worker routes | Desktop unlock |
 |-------|------------|---------------|----------------|
-| **Owner** | Username + **passtoken** → scoped mail + console sessions | `/console/*`, `/mail/*` | Mail: silent boot from mail refresh. When a **new login** is needed: Touch ID reads the keyring passtoken. Typed form only if bio fails / is declined or the keyring item is missing |
+| **Owner** | **Passtoken** → scoped mail + console sessions | `/console/*`, `/mail/*` | Mail: silent boot from mail refresh. When a **new login** is needed: Touch ID reads the keyring passtoken. Typed form only if bio fails / is declined or the keyring item is missing |
 | **Invited teammate** | Per-account **mobile password** | `/mobile/*` (one email) | Silent `team_unlock` from keyring (no biometry) |
 | **Flutter mobile** | Same mobile password | `/mobile/*` | Secure storage per launch |
 | **API integrator** | Product API key (`rb-…`) | `/v1/*` | N/A |
@@ -63,7 +63,7 @@ passtoken in **different** keyring accounts:
 
 | Keyring account | Contents | Read gate |
 |-----------------|----------|-----------|
-| `owner-session` | `workerUrl`, `username`, `refreshToken`, `mailRefreshToken` | Silent |
+| `owner-session` | `workerUrl`, `refreshToken`, `mailRefreshToken` | Silent |
 | `owner-passtoken` | passtoken plaintext | Touch ID / Windows Hello |
 
 Service for both: `com.relaybase.desktop`. Prefer an OS user-presence /
@@ -248,7 +248,7 @@ Implemented in `api-base.ts` + `context.tsx`.
 |----------|---------|
 | `GET /health` | Health probe |
 | `GET /console/auth-status` | `{ ownerConfigured }` |
-| `POST /console/login` | Username + passtoken |
+| `POST /console/login` | Passtoken |
 
 ### Pepper bootstrap (`X-Auth-Pepper`)
 

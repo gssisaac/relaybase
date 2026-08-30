@@ -5,7 +5,6 @@ import { ownerConfig } from "./schema";
 export type OwnerLoginConfig = {
   ownerEmail: string | null;
   workerUrl: string | null;
-  adminUsername: string | null;
   passtokenSalt: string | null;
   passtokenHash: string | null;
   passtokenPrefix: string | null;
@@ -24,7 +23,6 @@ export async function getOwnerLoginConfig(
     return {
       ownerEmail: row.ownerEmail ?? null,
       workerUrl: row.workerUrl ?? null,
-      adminUsername: row.adminUsername ?? null,
       passtokenSalt: row.passtokenSalt ?? null,
       passtokenHash: row.passtokenHash ?? null,
       passtokenPrefix: row.passtokenPrefix ?? null,
@@ -42,13 +40,12 @@ export async function getOwnerLoginConfig(
 /** True when an owner passtoken has been issued (login is possible). */
 export async function ownerIsConfigured(db: AppDb): Promise<boolean> {
   const cfg = await getOwnerLoginConfig(db);
-  return Boolean(cfg?.passtokenHash && cfg?.adminUsername);
+  return Boolean(cfg?.passtokenHash);
 }
 
 export async function setOwnerLogin(
   db: AppDb,
   input: {
-    adminUsername: string;
     passtokenSalt: string;
     passtokenHash: string;
     passtokenPrefix: string;
@@ -60,7 +57,6 @@ export async function setOwnerLogin(
     .insert(ownerConfig)
     .values({
       id: 1,
-      adminUsername: input.adminUsername,
       passtokenSalt: input.passtokenSalt,
       passtokenHash: input.passtokenHash,
       passtokenPrefix: input.passtokenPrefix,
@@ -71,7 +67,6 @@ export async function setOwnerLogin(
     .onConflictDoUpdate({
       target: ownerConfig.id,
       set: {
-        adminUsername: input.adminUsername,
         passtokenSalt: input.passtokenSalt,
         passtokenHash: input.passtokenHash,
         passtokenPrefix: input.passtokenPrefix,

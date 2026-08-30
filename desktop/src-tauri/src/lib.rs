@@ -1511,10 +1511,9 @@ fn owner_session_status_cmd() -> Result<OwnerSessionStatus, String> {
 #[tauri::command]
 async fn owner_login_cmd(
     worker_url: String,
-    username: String,
     passtoken: String,
 ) -> Result<OwnerSessionStatus, String> {
-    owner_login_inner(worker_url, username, passtoken).await
+    owner_login_inner(worker_url, passtoken).await
 }
 
 #[tauri::command]
@@ -1548,21 +1547,19 @@ async fn owner_touch_id_cmd(app: tauri::AppHandle, reason: String) -> Result<(),
 #[tauri::command]
 async fn owner_setup_admin_cmd(
     worker_url: String,
-    username: String,
     pepper: String,
 ) -> Result<OwnerSetupResult, String> {
-    owner_setup_admin_inner(worker_url, username, pepper).await
+    owner_setup_admin_inner(worker_url, pepper).await
 }
 
 #[tauri::command]
 async fn owner_reset_admin_cmd(
     worker_url: String,
     cf_access_token: String,
-    username: Option<String>,
 ) -> Result<OwnerSetupResult, String> {
     let _ = cf_access_token;
     let oauth = require_cf_oauth().await?;
-    owner_reset_admin_inner(worker_url, oauth.access_token, username).await
+    owner_reset_admin_inner(worker_url, oauth.access_token).await
 }
 
 #[tauri::command]

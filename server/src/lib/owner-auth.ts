@@ -70,18 +70,7 @@ export type OwnerLoginResult = {
   mailExpiresIn: number;
 };
 
-function normalizeUsername(username: string): string {
-  return username.trim().toLowerCase().slice(0, 64);
-}
-
-function usernameEquals(a: string, b: string): boolean {
-  const na = normalizeUsername(a);
-  const nb = normalizeUsername(b);
-  if (na.length !== nb.length) return false;
-  let diff = 0;
-  for (let i = 0; i < na.length; i++) diff |= na.charCodeAt(i) ^ nb.charCodeAt(i);
-  return diff === 0;
-}
+const OWNER_SUB = "owner";
 
 function accessTtlForScope(scope: OwnerScope): number {
   return scope === "mail" ? MAIL_ACCESS_TTL_SECONDS : CONSOLE_ACCESS_TTL_SECONDS;
@@ -104,13 +93,12 @@ function requirePepper(env: Env): string | AuthError {
 
 async function mintScopedAccess(
   pepper: string,
-  username: string,
   scope: OwnerScope,
 ): Promise<{ accessToken: string; expiresIn: number }> {
   const now = Math.floor(Date.now() / 1000);
   const expiresIn = accessTtlForScope(scope);
   const accessPayload: AccessPayload = {
-    sub: username,
+    sub: OWNER_SUB,
     iat: now,
     exp: now + expiresIn,
     jti: crypto.randomUUID(),
@@ -145,13 +133,11 @@ async function createScopedRefreshSession(
 // ─── setup-admin (first owner) ────────────────────────────────────────────
 
 export type SetupAdminInput = {
-  username: string;
   pepper: string;
 };
 
 export type SetupAdminResult = {
   passtoken: string;
-  username: string;
 };
 
 /** Issues the first owner passtoken. Only allowed when no owner exists yet. */
@@ -173,28 +159,22 @@ export async function setupOwner(
     return { error: "Owner already configured", status: 409 };
   }
 
-  const username = normalizeUsername(input.username);
-  if (username.length < 3) {
-    return { error: "Username must be at least 3 characters", status: 400 };
-  }
-
   const salt = randomSalt();
   const passtoken = generatePasstoken();
   const hash = await hashPasstoken(pepper, salt, passtoken);
   await setOwnerLogin(db, {
-    adminUsername: username,
     passtokenSalt: salt,
     passtokenHash: hash,
     passtokenPrefix: passtokenPrefix(passtoken),
   });
-  return { result: { passtoken, username } };
+  return { result: { passtoken } };
 }
 
 // ─── login ────────────────────────────────────────────────────────────────
 
 export async function loginOwner(
   env: Env,
-  input: { username: string; passtoken: string; label?: string | null },
+  input: { passtoken: string; label?: string | null },
 ): Promise<{ result: OwnerLoginResult } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
@@ -203,7 +183,7 @@ export async function loginOwner(
   const pepper = pepperOrErr;
 
   const cfg = await getOwnerLoginConfig(db);
-  if (!cfg || !cfg.adminUsername || !cfg.passtokenHash || !cfg.passtokenSalt) {
+  if (!cfg || !cfg.passtokenHash || !cfg.passtokenSalt) {
     return { error: "Invalid credentials", status: 401 };
   }
 
@@ -214,13 +194,12 @@ export async function loginOwner(
     }
   }
 
-  const usernameOk = usernameEquals(input.username, cfg.adminUsername);
   const passtokenOk =
     isValidPasstokenFormat(input.passtoken) &&
     (await hashPasstoken(pepper, cfg.passtokenSalt, input.passtoken)) ===
       cfg.passtokenHash;
 
-  if (!usernameOk || !passtokenOk) {
+  if (!passtokenOk) {
     const { failedAttempts } = await incrementFailedLogin(db, LOGIN_LOCK_SECONDS);
     if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
       return { error: "Too many attempts. Try again later.", status: 429 };
@@ -241,7 +220,7 @@ export async function loginOwner(
     input.label ?? null,
   );
   const { accessToken: mailAccessToken, expiresIn: mailExpiresIn } =
-    await mintScopedAccess(pepper, cfg.adminUsername, "mail");
+    await mintScopedAccess(pepper, "mail");
 
   return {
     result: {
@@ -283,7 +262,7 @@ export async function refreshOwner(
   await deleteOwnerSession(db, session.id);
 
   const cfg = await getOwnerLoginConfig(db);
-  if (!cfg?.adminUsername) {
+  if (!cfg?.passtokenHash) {
     return { error: "Unauthorized", status: 401 };
   }
 
@@ -305,11 +284,7 @@ export async function refreshOwner(
     expiresAt,
   });
 
-  const { accessToken, expiresIn } = await mintScopedAccess(
-    pepper,
-    cfg.adminUsername,
-    scope,
-  );
+  const { accessToken, expiresIn } = await mintScopedAccess(pepper, scope);
 
   return {
     result: {
@@ -346,34 +321,33 @@ export async function logoutOwner(env: Env, refreshToken: string): Promise<void>
 
 export async function rotatePasstoken(
   env: Env,
-): Promise<{ passtoken: string; username: string } | AuthError> {
+): Promise<{ passtoken: string } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
   const pepperOrErr = requirePepper(env);
   if (typeof pepperOrErr !== "string") return pepperOrErr;
   const pepper = pepperOrErr;
   const cfg = await getOwnerLoginConfig(db);
-  if (!cfg?.adminUsername) return { error: "Unauthorized", status: 401 };
+  if (!cfg?.passtokenHash) return { error: "Unauthorized", status: 401 };
 
   const salt = randomSalt();
   const passtoken = generatePasstoken();
   const hash = await hashPasstoken(pepper, salt, passtoken);
   await setOwnerLogin(db, {
-    adminUsername: cfg.adminUsername,
     passtokenSalt: salt,
     passtokenHash: hash,
     passtokenPrefix: passtokenPrefix(passtoken),
   });
   await deleteAllOwnerSessions(db);
-  return { passtoken, username: cfg.adminUsername };
+  return { passtoken };
 }
 
 // ─── reset-admin (forgot passtoken, CF OAuth proof) ─────────────────────
 
 export async function resetOwner(
   env: Env,
-  input: { cfAccessToken: string; username?: string },
-): Promise<{ passtoken: string; username: string } | AuthError> {
+  input: { cfAccessToken: string },
+): Promise<{ passtoken: string } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
   const pepperOrErr = requirePepper(env);
@@ -390,23 +364,16 @@ export async function resetOwner(
   );
   if (!verified.ok) return { error: "Unauthorized", status: 401 };
 
-  const cfg = await getOwnerLoginConfig(db);
-  const username = normalizeUsername(input.username ?? cfg?.adminUsername ?? "");
-  if (username.length < 3) {
-    return { error: "Username must be at least 3 characters", status: 400 };
-  }
-
   const salt = randomSalt();
   const passtoken = generatePasstoken();
   const hash = await hashPasstoken(pepper, salt, passtoken);
   await setOwnerLogin(db, {
-    adminUsername: username,
     passtokenSalt: salt,
     passtokenHash: hash,
     passtokenPrefix: passtokenPrefix(passtoken),
   });
   await deleteAllOwnerSessions(db);
-  return { passtoken, username };
+  return { passtoken };
 }
 
 /** Prove a Cloudflare OAuth access token can see `expectedAccount`. */

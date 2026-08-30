@@ -28,15 +28,13 @@ consoleOwnerAuth.post("/setup-admin", async (c) => {
   const denied = await requirePepperBootstrap(c);
   if (denied) return denied;
 
-  let body: { username?: string; pepper?: string };
   try {
-    body = await c.req.json();
+    await c.req.json();
   } catch {
     return c.json({ error: "Invalid JSON" }, 400);
   }
 
   const result = await setupOwner(c.env, {
-    username: body.username ?? "",
     pepper: c.req.header("X-Auth-Pepper") ?? "",
   });
   if ("error" in result) {
@@ -45,7 +43,6 @@ consoleOwnerAuth.post("/setup-admin", async (c) => {
   return c.json(
     {
       ok: true,
-      username: result.result.username,
       passtoken: result.result.passtoken,
       message: "Copy this passtoken now. It will not be shown again.",
     },
@@ -56,18 +53,17 @@ consoleOwnerAuth.post("/setup-admin", async (c) => {
 /**
  * POST /console/login
  *
- * Public (rate-limited + lockout). Body: { username, passtoken, label? }.
+ * Public (rate-limited + lockout). Body: { passtoken, label? }.
  * Returns { mailAccessToken, mailRefreshToken, consoleRefreshToken, mailExpiresIn }.
  */
 consoleOwnerAuth.post("/login", async (c) => {
-  let body: { username?: string; passtoken?: string; label?: string };
+  let body: { passtoken?: string; label?: string };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: "Invalid JSON" }, 400);
   }
   const result = await loginOwner(c.env, {
-    username: body.username ?? "",
     passtoken: body.passtoken ?? "",
     label: body.label,
   });
@@ -137,7 +133,6 @@ consoleOwnerAuth.post("/rotate-passtoken", async (c) => {
   }
   return c.json({
     ok: true,
-    username: result.username,
     passtoken: result.passtoken,
     message: "Copy this passtoken now. It will not be shown again.",
   });
@@ -152,7 +147,7 @@ consoleOwnerAuth.post("/rotate-passtoken", async (c) => {
  * revokes every existing session.
  */
 consoleOwnerAuth.post("/reset-admin", async (c) => {
-  let body: { cfAccessToken?: string; username?: string };
+  let body: { cfAccessToken?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -162,14 +157,12 @@ consoleOwnerAuth.post("/reset-admin", async (c) => {
   if (!cfAccessToken) return c.json({ error: "cfAccessToken is required" }, 400);
   const result = await resetOwner(c.env, {
     cfAccessToken,
-    username: body.username,
   });
   if ("error" in result) {
     return c.json({ error: result.error }, result.status);
   }
   return c.json({
     ok: true,
-    username: result.username,
     passtoken: result.passtoken,
     message: "Copy this passtoken now. It will not be shown again.",
   });

@@ -163,7 +163,6 @@ export function RecoverAdminPanel() {
     const content = [
       "# Relaybase owner passtoken — save this file securely",
       `# Worker URL: ${resolvedWorkerUrl}`,
-      `# Username: ${revealed.username}`,
       `# Generated: ${new Date().toISOString()}`,
       "",
       `PASSTOKEN=${revealed.passtoken}`,
@@ -210,9 +209,6 @@ export function RecoverAdminPanel() {
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL: <span className="font-mono">{workerUrl}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Username: <span className="font-mono">{revealed.username}</span>
             </p>
             <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
               <code className="min-w-0 flex-1 break-all font-mono text-[11px]">

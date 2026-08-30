@@ -14,8 +14,6 @@ const KEYRING_USER: &str = "owner-passtoken";
 pub struct PasstokenRecord {
     pub passtoken: String,
     #[serde(default)]
-    pub username: String,
-    #[serde(default)]
     pub worker_url: String,
 }
 
@@ -33,7 +31,6 @@ fn parse_record(raw: &str) -> Option<PasstokenRecord> {
     if trimmed.starts_with("rb_pass_") {
         return Some(PasstokenRecord {
             passtoken: trimmed.to_string(),
-            username: String::new(),
             worker_url: String::new(),
         });
     }
@@ -45,14 +42,13 @@ pub fn exists() -> bool {
     crate::keyring_store::has_password(KEYRING_SERVICE, KEYRING_USER).unwrap_or(false)
 }
 
-pub fn store(passtoken: &str, username: &str, worker_url: &str) -> Result<(), String> {
+pub fn store(passtoken: &str, worker_url: &str) -> Result<(), String> {
     let passtoken = passtoken.trim();
     if passtoken.is_empty() {
         return Err("Passtoken is required".into());
     }
     let record = PasstokenRecord {
         passtoken: passtoken.to_string(),
-        username: username.trim().to_lowercase(),
         worker_url: worker_url.trim().trim_end_matches('/').to_string(),
     };
     let json = serde_json::to_string(&record).map_err(|e| e.to_string())?;

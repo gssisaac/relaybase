@@ -235,6 +235,8 @@ CREATE INDEX \`owner_sessions_family_idx\` ON \`owner_sessions\` (\`family\`);
 --> statement-breakpoint
 DROP TABLE IF EXISTS \`auth_tokens\`;`;
 
+const APP_0004 = `ALTER TABLE \`owner_config\` DROP COLUMN \`admin_username\`;`;
+
 const LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
   id TEXT PRIMARY KEY,
   at TEXT NOT NULL,
@@ -311,6 +313,7 @@ export const MIGRATIONS: Migration[] = [
   { target: "app", name: "0001_owner_admin_token", sql: APP_0001 },
   { target: "app", name: "0002_app_settings", sql: APP_0002 },
   { target: "app", name: "0003_owner_login", sql: APP_0003 },
+  { target: "app", name: "0004_drop_admin_username", sql: APP_0004 },
   { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
   { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 },
 ];

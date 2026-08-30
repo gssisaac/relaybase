@@ -23,7 +23,7 @@ describe("isMissingWorkerError", () => {
 
   it("ignores unrelated auth and resource errors", () => {
     assert.equal(
-      isMissingWorkerError(new Error("Invalid credentials. Check username and passtoken")),
+      isMissingWorkerError(new Error("Invalid credentials. Check the passtoken")),
       false,
     );
     assert.equal(isMissingWorkerError(new Error("Account not found")), false);

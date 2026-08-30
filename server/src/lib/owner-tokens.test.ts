@@ -31,7 +31,7 @@ describe("owner-auth passtoken", () => {
 describe("owner-auth access token", () => {
   it("round-trips a signed access token", async () => {
     const now = Math.floor(Date.now() / 1000);
-    const payload = { sub: "alice", iat: now, exp: now + 60, jti: "jti-1", scope: "mail" as const };
+    const payload = { sub: "owner", iat: now, exp: now + 60, jti: "jti-1", scope: "mail" as const };
     const token = await signAccessToken(TEST_PEPPER, payload);
     const verified = await verifyAccessToken(TEST_PEPPER, token);
     assert.deepEqual(verified, payload);
@@ -40,7 +40,7 @@ describe("owner-auth access token", () => {
   it("rejects a token signed with a different pepper", async () => {
     const now = Math.floor(Date.now() / 1000);
     const token = await signAccessToken(TEST_PEPPER, {
-      sub: "alice",
+      sub: "owner",
       iat: now,
       exp: now + 60,
       jti: "jti-2",
@@ -52,7 +52,7 @@ describe("owner-auth access token", () => {
   it("rejects an expired token", async () => {
     const now = Math.floor(Date.now() / 1000);
     const token = await signAccessToken(TEST_PEPPER, {
-      sub: "alice",
+      sub: "owner",
       iat: now - 120,
       exp: now - 60,
       jti: "jti-3",
@@ -64,7 +64,7 @@ describe("owner-auth access token", () => {
   it("rejects a tampered token", async () => {
     const now = Math.floor(Date.now() / 1000);
     const token = await signAccessToken(TEST_PEPPER, {
-      sub: "alice",
+      sub: "owner",
       iat: now,
       exp: now + 60,
       jti: "jti-4",

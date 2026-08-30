@@ -191,8 +191,6 @@ export const ownerConfig = sqliteTable("owner_config", {
   id: integer("id").primaryKey(),
   ownerEmail: text("owner_email"),
   workerUrl: text("worker_url"),
-  /** Owner login name (user-chosen). Paired with the issued passtoken. */
-  adminUsername: text("admin_username"),
   /** Salt for the passtoken hash. */
   passtokenSalt: text("passtoken_salt"),
   /** sha256(pepper || salt || passtoken). Plaintext is shown once at issue. */

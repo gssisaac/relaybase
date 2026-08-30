@@ -87,16 +87,14 @@ async function readJson<T>(res: Response): Promise<T & { error?: string }> {
 }
 
 /**
- * POST /console/login — exchange username + passtoken for an access + refresh
+ * POST /console/login — exchange passtoken for an access + refresh
  * pair. The passtoken is consumed here and not retained.
  */
 export async function ownerLogin(input: {
-  username: string;
   passtoken: string;
   label?: string;
 }): Promise<OwnerSession> {
   const res = await postJson("/console/login", {
-    username: input.username.trim(),
     passtoken: input.passtoken.trim(),
     label: input.label ?? "desktop",
   });
@@ -175,19 +173,18 @@ export async function ownerLogout(): Promise<void> {
  * passtoken ONCE; the caller must show it once and let the user download it.
  */
 export async function ownerSetupAdmin(input: {
-  username: string;
   pepper: string;
-}): Promise<{ passtoken: string; username: string }> {
+}): Promise<{ passtoken: string }> {
   const res = await postJson(
     "/console/setup-admin",
-    { username: input.username.trim() },
+    {},
     { "X-Auth-Pepper": input.pepper },
   );
-  const data = await readJson<{ passtoken?: string; username?: string }>(res);
+  const data = await readJson<{ passtoken?: string }>(res);
   if (!res.ok || !data.passtoken) {
     throw new Error(data.error || `Setup failed (${res.status})`);
   }
-  return { passtoken: data.passtoken, username: data.username ?? input.username };
+  return { passtoken: data.passtoken };
 }
 
 /**
@@ -196,19 +193,18 @@ export async function ownerSetupAdmin(input: {
  */
 export async function ownerRotatePasstoken(): Promise<{
   passtoken: string;
-  username: string;
 }> {
   if (!session?.accessToken) throw new Error("Not logged in.");
   const res = await postJson("/console/rotate-passtoken", null, {
     Authorization: `Bearer ${session.accessToken}`,
   });
-  const data = await readJson<{ passtoken?: string; username?: string }>(res);
+  const data = await readJson<{ passtoken?: string }>(res);
   if (!res.ok || !data.passtoken) {
     throw new Error(data.error || `Rotate failed (${res.status})`);
   }
   // Rotation revokes all sessions including ours — force re-login.
   clearOwnerSession();
-  return { passtoken: data.passtoken, username: data.username ?? "" };
+  return { passtoken: data.passtoken };
 }
 
 /**
@@ -218,18 +214,16 @@ export async function ownerRotatePasstoken(): Promise<{
  */
 export async function ownerResetAdmin(input: {
   cfAccessToken: string;
-  username?: string;
-}): Promise<{ passtoken: string; username: string }> {
+}): Promise<{ passtoken: string }> {
   const res = await postJson("/console/reset-admin", {
     cfAccessToken: input.cfAccessToken,
-    username: input.username?.trim() || undefined,
   });
-  const data = await readJson<{ passtoken?: string; username?: string }>(res);
+  const data = await readJson<{ passtoken?: string }>(res);
   if (!res.ok || !data.passtoken) {
     throw new Error(data.error || `Reset failed (${res.status})`);
   }
   clearOwnerSession();
-  return { passtoken: data.passtoken, username: data.username ?? "" };
+  return { passtoken: data.passtoken };
 }
 
 /** GET /console/connect — owner-session probe (same shape as desktop verify). */

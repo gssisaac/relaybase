@@ -58,7 +58,12 @@ const [ownerStatus, teamStatus] = await Promise.all([
 store.setStatuses(ownerStatus, teamStatus);
 ```
 
-`setStatuses` → `bootFromKeyring()`:
+**Boot gate:** `SessionPhaseScreen` keeps `phase: boot` (spinner / `BootScreen`)
+until keyring statuses are hydrated **and** any silent unlock attempt finishes.
+Identity alone (e.g. a saved Worker URL) must not flash `UnlockView` before that
+settles. `UnlockView` is the secret form only — never the auto-login check.
+
+`setStatuses` → `bootFromKeyring()` when a silent attempt is needed:
 
 - **Owner** with `mail_refresh_token` but no mail access → `owner_boot_mail`
   (silent, no Touch ID) → `ownerReady` when Worker URL is connected.

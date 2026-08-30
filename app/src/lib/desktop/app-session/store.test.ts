@@ -167,6 +167,12 @@ describe("AppSessionStore", () => {
     assert.equal(store.canShowApp, true);
   });
 
+  it("stays on boot when identity is ready before keyring status", () => {
+    const store = createStore({});
+    connectOwner(store);
+    assert.equal(store.phase.kind, "boot");
+  });
+
   it("silently boot-mails when owner has mail refresh but no access", async () => {
     let booted = 0;
     const store = createStore({
@@ -182,6 +188,60 @@ describe("AppSessionStore", () => {
     store.setStatuses(ownerStatus({ hasMailRefresh: true }), teamStatus({}));
     await waitUntil(() => store.phase.kind === "ownerReady", "mail boot");
     assert.equal(booted, 1);
+  });
+
+  it("holds boot while owner silent mail unlock is in flight", async () => {
+    let release!: (status: OwnerSessionStatus) => void;
+    const pending = new Promise<OwnerSessionStatus>((resolve) => {
+      release = resolve;
+    });
+    const store = createStore({
+      ownerBootMail: () => pending,
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasMailRefresh: true }), teamStatus({}));
+    assert.equal(store.phase.kind, "boot");
+    release(ownerStatus({ hasMailRefresh: true, hasMailAccess: true }));
+    await waitUntil(() => store.phase.kind === "ownerReady", "mail boot settle");
+  });
+
+  it("holds boot while invited silent unlock is in flight", async () => {
+    let release!: (status: TeamSessionStatus) => void;
+    const pending = new Promise<TeamSessionStatus>((resolve) => {
+      release = resolve;
+    });
+    const store = createStore({
+      teamUnlock: () => pending,
+      refreshIdentity: async () => {
+        store.setIdentity({
+          ready: true,
+          isDesktop: true,
+          credentials: SAMPLE_CREDENTIALS,
+          teamIdentity: {
+            workerUrl: WORKER_URL,
+            accountEmail: "teammate@example.com",
+            mobilePassword: "",
+          },
+        });
+      },
+    });
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: SAMPLE_CREDENTIALS,
+      teamIdentity: {
+        workerUrl: WORKER_URL,
+        accountEmail: "teammate@example.com",
+        mobilePassword: "",
+      },
+    });
+    store.setStatuses(ownerStatus({}), teamStatus({ hasSecret: true }));
+    assert.equal(store.phase.kind, "boot");
+    release(teamStatus({ hasSecret: true, hasAccess: true }));
+    await waitUntil(
+      () => store.phase.kind === "invitedReady",
+      "team unlock settle",
+    );
   });
 
   it("does not prompt Touch ID on mail boot", async () => {

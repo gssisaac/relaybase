@@ -44,6 +44,8 @@ export class AppSessionStore {
     teamIdentity: null,
   };
   private statusesHydrated = false;
+  /** True while the first silent keyring unlock attempt is in flight. */
+  private silentBootPending = false;
   private deps: AppSessionDeps;
 
   constructor(deps?: Partial<AppSessionDeps>) {
@@ -135,7 +137,20 @@ export class AppSessionStore {
     this.ownerStatus = owner;
     this.teamStatus = team;
     this.statusesHydrated = true;
-    void this.bootFromKeyring();
+    if (this.needsSilentBoot()) {
+      this.silentBootPending = true;
+      if (
+        this.phase.kind !== "install" &&
+        this.phase.kind !== "ownerRecover" &&
+        this.phase.kind !== "invitedLogin"
+      ) {
+        this.phase = { kind: "boot" };
+      }
+      void this.bootFromKeyring();
+      return;
+    }
+    this.silentBootPending = false;
+    this.reconcileFromStatuses();
   }
 
   /** Push the latest identity snapshot from DesktopContext. */
@@ -144,6 +159,17 @@ export class AppSessionStore {
     if (snapshot.ready) {
       this.reconcileFromStatuses();
     }
+  }
+
+  private needsSilentBoot(): boolean {
+    const team = this.teamStatus;
+    if (this.identity.teamIdentity || (team && team.hasSecret)) {
+      return Boolean(team?.hasSecret && !team.hasAccess);
+    }
+    const owner = this.ownerStatus;
+    return Boolean(
+      owner && this.hasOwnerMailRefresh() && !this.hasOwnerMailAccess(),
+    );
   }
 
   /** Silent keyring boot: mail for owner, password for invited. */
@@ -176,6 +202,7 @@ export class AppSessionStore {
     }
 
     runInAction(() => {
+      this.silentBootPending = false;
       this.reconcileFromStatuses();
     });
   }
@@ -200,6 +227,12 @@ export class AppSessionStore {
       if (team?.hasSecret && !team.hasAccess) {
         this.phase = { kind: "unlock", role: "invited", mode: "secret" };
       }
+      return;
+    }
+
+    // Hold BootScreen until keyring status + silent unlock attempt finish.
+    if (!this.statusesHydrated || this.silentBootPending) {
+      if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
       return;
     }
 
@@ -267,11 +300,6 @@ export class AppSessionStore {
 
     if (this.resolvedWorkerUrl("owner")) {
       this.phase = { kind: "unlock", role: "owner", mode: "secret" };
-      return;
-    }
-
-    if (!this.statusesHydrated) {
-      if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
       return;
     }
 

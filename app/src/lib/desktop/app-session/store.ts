@@ -5,7 +5,7 @@ import { makeAutoObservable, runInAction } from "mobx";
 import { isSystemCanceledBiometry } from "../biometry/dismiss";
 import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
 import { createDefaultDeps } from "./defaults";
-import { visibleUnlockError } from "./errors";
+import { isStayOnMailConsoleUnlockError, visibleUnlockError } from "./errors";
 import { resolveWorkerUrl } from "./resolve-worker-url";
 import {
   isValidPasstokenFormat,
@@ -339,12 +339,19 @@ export class AppSessionStore {
           this.consoleGateOpen = false;
           this.busy = false;
         });
-        await this.deps.refreshIdentity();
-        return status.hasConsoleAccess;
-      } catch {
+        try {
+          await this.deps.refreshIdentity();
+        } catch {
+          // Unlock already succeeded; identity refresh is best-effort.
+        }
+        return this.hasConsoleAccess;
+      } catch (err) {
         runInAction(() => {
           this.busy = false;
         });
+        if (isStayOnMailConsoleUnlockError(err)) {
+          return false;
+        }
       }
     }
 

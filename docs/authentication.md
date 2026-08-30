@@ -128,13 +128,12 @@ flowchart TB
   Ensure -->|console refresh valid| Bio[Touch ID]
   Bio --> ConsoleUnlock[owner_unlock_console]
   ConsoleUnlock --> DashReady[Dashboard + /console/* API]
-  Ensure -->|no console refresh| Passtoken[ConsoleGateView passtoken]
+  Ensure -->|no / expired console refresh| Passtoken[ConsoleGateView passtoken]
 ```
 
-**Dashboard entry points** (all call `ensureConsoleAccess()`):
+**Dashboard entry points** (call `ensureConsoleAccess()`):
 
-- `UserSidebar.switchMode("dashboard")`
-- `RestoreLastRoute` when saved path is dashboard
+- `UserSidebar.switchMode("dashboard")` — stays on mail if Touch ID is dismissed or the Worker is unreachable
 - `ConsoleRouteGate` on dashboard pathname
 
 Touch ID is invoked only from `ensureConsoleAccess()` → `desktopOwnerTouchId`.

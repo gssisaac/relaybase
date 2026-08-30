@@ -8,9 +8,9 @@
 
 ## Purpose
 
-Relaybase remembers the user’s last **sidebar mode** (`email` | `dashboard`) and the last URL within each mode, then restores that location when they re-enter the app.
+Relaybase remembers the last URL **per sidebar mode** (`email` | `dashboard`). App boot always enters the last **email** path. The last dashboard path is restored only when the user switches to Dashboard (after console Touch ID).
 
-Without entry restore, every open hard-redirected to `/dashboard`, which also overwrote the stored mode once `UserSidebar` mounted.
+Without entry restore, every open hard-redirected to `/dashboard`, which opened Unlock console when the console token was missing (offline or expired).
 
 ---
 
@@ -44,7 +44,7 @@ Defaults when nothing is stored:
 | `readSidebarMode` / `writeSidebarMode` | Persist active mode |
 | `readLastPath` / `writeLastPath` | Persist per-mode path (validated) |
 | `isRestorablePath(path, mode)` | Reject `/`, auth/setup/api, and cross-mode paths |
-| `resolveEntryPath(userId)` | Mode + last path for app entry (after hydrate) |
+| `resolveEntryPath(userId)` | Last **email** path for app entry (ignores `mode` / dashboard last path) |
 | `resolveEntryPathAsync(userId)` | Hydrate from `~/.relaybase` then resolve |
 | `hydrateSidebarState(userId)` | Disk ↔ localStorage migrate/hydrate |
 
@@ -66,7 +66,7 @@ app/src/components/layout/UserSidebar.tsx
 
 | Entry point | Behavior |
 |-------------|----------|
-| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` — after `canShowApp`, restores last path; **dashboard** paths call `ensureConsoleAccess()` before navigate |
+| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` — after `canShowApp`, restores last **email** path only. No console Touch ID on this path. Fail-safe is `/email/inbox`. |
 | `/email` (`app/src/app/(shell)/email/page.tsx`) | redirect → `/email/inbox` |
 
 Client gate:
@@ -88,9 +88,8 @@ flowchart TD
   entry["/ entry"] --> ready["canShowApp mail + Worker URL"]
   ready --> restore["RestoreLastRoute"]
   restore --> hydrate["hydrateSidebarState desktop"]
-  hydrate --> resolve["resolveEntryPath"]
-  resolve --> dash{dashboard path?}
-  dash -->|yes| gate["ensureConsoleAccess"]
-  dash -->|no| navigate["router.replace"]
-  gate --> navigate
+  hydrate --> resolve["resolveEntryPath last email only"]
+  resolve --> navigate["router.replace email path"]
 ```
+
+Dashboard last path is not used at boot. `UserSidebar.switchMode("dashboard")` calls `ensureConsoleAccess()` and then `readLastPath(..., "dashboard")` when unlocked or when the console gate opens for passtoken. Cancelled Touch ID and offline stay on mail.

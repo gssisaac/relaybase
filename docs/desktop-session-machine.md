@@ -72,8 +72,8 @@ settles. `UnlockView` is the secret form only — never the auto-login check.
 - No keyring → `unlock { mode: "secret" }` (passtoken / mobile password form).
 
 Touch ID / Windows Hello runs **only** when entering the dashboard via
-`ensureConsoleAccess()` (sidebar switch, last-route restore to dashboard, or
-`ConsoleRouteGate` on a dashboard pathname).
+`ensureConsoleAccess()` (sidebar switch, or `ConsoleRouteGate` on a dashboard
+pathname). App boot restores the last email path and does not prompt.
 
 ## Owner vs invited — scoped sessions
 
@@ -93,9 +93,10 @@ form; the store drives the difference via `role`.
 
 Dashboard entry points call `store.ensureConsoleAccess()` before navigate:
 
-- `UserSidebar.switchMode("dashboard")`
-- `RestoreLastRoute` when the saved path is dashboard
+- `UserSidebar.switchMode("dashboard")` — navigate when unlocked, or when the console gate opens (expired refresh → passtoken). Stay on mail only if Touch ID was dismissed or the Worker is unreachable.
 - `ConsoleRouteGate` blocks dashboard children when `!hasConsoleAccess`
+
+App boot (`RestoreLastRoute`) always restores the last **email** path. It does not call `ensureConsoleAccess`. `ConsoleGateView` “Back to mailbox” replaces to that email path.
 
 Flow:
 

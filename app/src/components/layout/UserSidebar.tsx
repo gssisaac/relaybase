@@ -574,7 +574,8 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   async function switchMode(next: SidebarMode) {
     if (next === mode) return;
     if (next === "dashboard" && !isTeam) {
-      await session.ensureConsoleAccess();
+      const unlocked = await session.ensureConsoleAccess();
+      if (!unlocked && !session.consoleGateOpen) return;
     }
     writeSidebarMode(userId, next);
     const target = readLastPath(userId, next);

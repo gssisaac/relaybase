@@ -124,3 +124,11 @@ describe("normalizeEntryPath", () => {
     );
   });
 });
+
+describe("app entry path policy", () => {
+  it("defaults the email entry to /email/inbox", () => {
+    assert.equal(DEFAULT_EMAIL_PATH, "/email/inbox");
+    assert.equal(isRestorablePath(DEFAULT_EMAIL_PATH, "email"), true);
+    assert.equal(isRestorablePath(DEFAULT_DASHBOARD_PATH, "email"), false);
+  });
+});

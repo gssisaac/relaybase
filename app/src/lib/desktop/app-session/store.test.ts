@@ -415,6 +415,94 @@ describe("AppSessionStore", () => {
     assert.equal(store.hasConsoleAccess, true);
   });
 
+  it("ensureConsoleAccess still returns true when identity refresh fails after unlock", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailAccess: true,
+        hasConsoleRefresh: true,
+      }),
+      ownerUnlockConsole: () =>
+        Promise.resolve(
+          ownerStatus({
+            hasMailAccess: true,
+            hasConsoleRefresh: true,
+            hasConsoleAccess: true,
+          }),
+        ),
+      refreshIdentity: () => Promise.reject(new Error("identity refresh failed")),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailAccess: true, hasConsoleRefresh: true }),
+      teamStatus({}),
+    );
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, true);
+    assert.equal(store.hasConsoleAccess, true);
+    assert.equal(store.consoleGateOpen, false);
+  });
+
+  it("ensureConsoleAccess stays on mail when Touch ID is dismissed", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailAccess: true,
+        hasConsoleRefresh: true,
+      }),
+      authenticateBiometry: () =>
+        Promise.reject(new Error("[UserCancel] - The user cancelled the authentication")),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailAccess: true, hasConsoleRefresh: true }),
+      teamStatus({}),
+    );
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, false);
+    assert.equal(store.consoleGateOpen, false);
+  });
+
+  it("ensureConsoleAccess stays on mail when the Worker is unreachable", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailAccess: true,
+        hasConsoleRefresh: true,
+      }),
+      ownerUnlockConsole: () =>
+        Promise.reject(
+          new Error("Worker request failed: error sending request"),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailAccess: true, hasConsoleRefresh: true }),
+      teamStatus({}),
+    );
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, false);
+    assert.equal(store.consoleGateOpen, false);
+  });
+
+  it("ensureConsoleAccess opens gate when console refresh is expired", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailAccess: true,
+        hasConsoleRefresh: true,
+      }),
+      ownerUnlockConsole: () =>
+        Promise.reject(
+          new Error("Session expired. Sign in with your passtoken."),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailAccess: true, hasConsoleRefresh: true }),
+      teamStatus({}),
+    );
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, false);
+    assert.equal(store.consoleGateOpen, true);
+  });
+
   it("ensureConsoleAccess opens gate when console refresh is missing", async () => {
     const store = createStore({
       ownerStatus: ownerStatus({ hasMailAccess: true }),

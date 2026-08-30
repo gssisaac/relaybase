@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   isMissingWorkerError,
   isMissingWorkerUnlockMessage,
+  isStayOnMailConsoleUnlockError,
   missingWorkerHelp,
   missingWorkerSummary,
   visibleUnlockError,
@@ -63,6 +64,38 @@ describe("visibleUnlockError", () => {
     assert.equal(
       visibleUnlockError(new Error("Invalid credentials"), "owner"),
       "Invalid credentials",
+    );
+  });
+});
+
+describe("isStayOnMailConsoleUnlockError", () => {
+  it("treats dismissed Touch ID and Worker-unreachable as stay-on-mail", () => {
+    assert.equal(
+      isStayOnMailConsoleUnlockError(
+        new Error("[UserCancel] - The user cancelled the authentication"),
+      ),
+      true,
+    );
+    assert.equal(
+      isStayOnMailConsoleUnlockError(
+        new Error("Worker request failed: error sending request"),
+      ),
+      true,
+    );
+  });
+
+  it("does not treat expired console refresh as stay-on-mail", () => {
+    assert.equal(
+      isStayOnMailConsoleUnlockError(
+        new Error("Session expired. Sign in with your passtoken."),
+      ),
+      false,
+    );
+    assert.equal(
+      isStayOnMailConsoleUnlockError(
+        new Error("Console session expired. Sign in with your passtoken."),
+      ),
+      false,
     );
   });
 });

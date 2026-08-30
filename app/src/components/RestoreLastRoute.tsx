@@ -5,16 +5,16 @@ import { useRouter } from "next/navigation";
 
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
-  DEFAULT_DASHBOARD_PATH,
+  DEFAULT_EMAIL_PATH,
   normalizeEntryPath,
   resolveEntryPathAsync,
 } from "@/lib/navigation/sidebar-mode";
-import { modeFromPathname } from "@/lib/navigation/sidebar-paths";
 
 /**
- * Client entry gate: restore the last email/dashboard route from ~/.relaybase
+ * Client entry gate: restore the last email route from ~/.relaybase
  * (desktop) with localStorage as a mirror.
  * Used on `/` (and desktop static home) so server redirects never wipe memory.
+ * Dashboard last path is not used here — console opens only via sidebar switch.
  */
 export function RestoreLastRoute({
   userId,
@@ -33,20 +33,15 @@ export function RestoreLastRoute({
     const id = userId?.trim() || fallbackUserId;
     let cancelled = false;
     const failSafe = window.setTimeout(() => {
-      if (!cancelled) router.replace(DEFAULT_DASHBOARD_PATH);
+      if (!cancelled) router.replace(DEFAULT_EMAIL_PATH);
     }, 6000);
     void resolveEntryPathAsync(id)
-      .then(async (path) => {
+      .then((path) => {
         if (cancelled) return;
-        const normalized = normalizeEntryPath(path);
-        if (modeFromPathname(normalized) === "dashboard") {
-          await store.ensureConsoleAccess();
-        }
-        if (cancelled) return;
-        router.replace(normalized);
+        router.replace(normalizeEntryPath(path));
       })
       .catch(() => {
-        if (!cancelled) router.replace(DEFAULT_DASHBOARD_PATH);
+        if (!cancelled) router.replace(DEFAULT_EMAIL_PATH);
       });
     return () => {
       cancelled = true;

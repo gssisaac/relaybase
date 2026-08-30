@@ -197,10 +197,9 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
   return migrated;
 }
 
-/** Last sidebar mode + path for app entry (home / post-login). */
+/** App entry is always the last mail path. Dashboard last path is sidebar-only. */
 export function resolveEntryPath(userId: string): string {
-  const mode = readSidebarMode(userId) ?? "dashboard";
-  return readLastPath(userId, mode);
+  return readLastPath(userId, "email");
 }
 
 export async function resolveEntryPathAsync(userId: string): Promise<string> {

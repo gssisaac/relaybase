@@ -20,7 +20,10 @@ import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { normalizePasstokenInput } from "@/lib/desktop/worker-url/normalize-passtoken";
 import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
 import { DesktopErrorBanner, useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
+import { readLastPath, writeSidebarMode } from "@/lib/navigation/sidebar-mode";
 import { cn } from "@/lib/utils";
+
+const LOCAL_OPERATOR_USER_ID = "desktop";
 
 /**
  * Owner console gate — the only Touch ID surface. Shown when entering
@@ -199,6 +202,8 @@ export function ConsoleGateView() {
             onClick={() => {
               store.clearError();
               store.closeConsoleGate();
+              writeSidebarMode(LOCAL_OPERATOR_USER_ID, "email");
+              router.replace(readLastPath(LOCAL_OPERATOR_USER_ID, "email"));
             }}
           >
             Back to mailbox

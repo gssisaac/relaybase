@@ -12,16 +12,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +56,11 @@ export function AccountTeammateLoginView({ email }: { email: string }) {
     return () => {
       cancelled = true;
     };
+  }, [emailKey]);
+
+  // Leaving the account or switching tabs cancels a pending confirm.
+  useEffect(() => {
+    setConfirmAction(null);
   }, [emailKey]);
 
   const hasPassword = status?.hasPassword ?? false;
@@ -193,64 +188,78 @@ export function AccountTeammateLoginView({ email }: { email: string }) {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy}
-            onClick={requestGenerate}
+        {confirmAction ? (
+          <div
+            className="space-y-2 rounded-md border border-border bg-muted/40 p-3"
+            role="alertdialog"
+            aria-labelledby="teammate-password-confirm-title"
+            aria-describedby="teammate-password-confirm-desc"
           >
-            <RefreshCw className="size-3.5" />
-            {hasPassword ? "Regenerate password" : "Generate password"}
-          </Button>
-          {hasPassword ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={requestClear}
+            <p
+              id="teammate-password-confirm-title"
+              className="text-sm font-medium"
             >
-              Clear password
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      <AlertDialog
-        open={confirmAction !== null}
-        onOpenChange={(open) => {
-          if (!open && !busy) setConfirmAction(null);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
               {confirmAction === "clear"
                 ? "Clear teammate password?"
                 : "Regenerate teammate password?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
+            </p>
+            <p
+              id="teammate-password-confirm-desc"
+              className="text-xs text-muted-foreground"
+            >
               {confirmAction === "clear"
                 ? "Teammates signed in with this password will lose access immediately."
                 : "The current password stops working immediately. Teammates will need the new password."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setConfirmAction(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={confirmAction === "clear" ? "destructive" : "default"}
+                disabled={busy}
+                onClick={() => {
+                  if (confirmAction === "clear") void handleClear();
+                  else void handleGenerate();
+                }}
+              >
+                {confirmAction === "clear" ? "Clear password" : "Regenerate"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
               disabled={busy}
-              onClick={(e) => {
-                e.preventDefault();
-                if (confirmAction === "clear") void handleClear();
-                else void handleGenerate();
-              }}
+              onClick={requestGenerate}
             >
-              {confirmAction === "clear" ? "Clear password" : "Regenerate"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <RefreshCw className="size-3.5" />
+              {hasPassword ? "Regenerate password" : "Generate password"}
+            </Button>
+            {hasPassword ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={requestClear}
+              >
+                Clear password
+              </Button>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

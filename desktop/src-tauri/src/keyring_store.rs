@@ -27,7 +27,7 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 const ERR_SEC_ITEM_NOT_FOUND: i32 = -25300;
 
 static CACHE: OnceLock<Mutex<HashMap<(String, String), Option<String>>>> = OnceLock::new();
@@ -88,10 +88,14 @@ pub fn delete_password(service: &str, account: &str) {
     cache.insert(key, None);
 }
 
+// Release-only OS keyring path. `tauri dev` (debug) uses
+// `crate::dev::keyring_store` so these helpers are not compiled there.
+#[cfg(not(debug_assertions))]
 fn legacy_entry(service: &str, account: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(service, account).map_err(|e| format!("Keyring unavailable: {e}"))
 }
 
+#[cfg(not(debug_assertions))]
 fn legacy_get(service: &str, account: &str) -> Result<Option<String>, String> {
     match legacy_entry(service, account)?.get_password() {
         Ok(password) => Ok(Some(password)),
@@ -100,35 +104,36 @@ fn legacy_get(service: &str, account: &str) -> Result<Option<String>, String> {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(debug_assertions), not(target_os = "macos")))]
 fn legacy_set(service: &str, account: &str, password: &str) -> Result<(), String> {
     legacy_entry(service, account)?
         .set_password(password)
         .map_err(|e| format!("Failed to write keyring: {e}"))
 }
 
+#[cfg(not(debug_assertions))]
 fn legacy_delete(service: &str, account: &str) {
     if let Ok(entry) = legacy_entry(service, account) {
         let _ = entry.delete_credential();
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(debug_assertions), not(target_os = "macos")))]
 fn platform_get(service: &str, account: &str) -> Result<Option<String>, String> {
     legacy_get(service, account)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(debug_assertions), not(target_os = "macos")))]
 fn platform_set(service: &str, account: &str, password: &str) -> Result<(), String> {
     legacy_set(service, account, password)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(not(debug_assertions), not(target_os = "macos")))]
 fn platform_delete(service: &str, account: &str) {
     legacy_delete(service, account);
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn macos_query_options(
     service: &str,
     account: &str,
@@ -142,7 +147,7 @@ fn macos_query_options(
     options
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn macos_write_options(
     service: &str,
     account: &str,
@@ -153,7 +158,7 @@ fn macos_write_options(
     options
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn macos_secitem_get(
     service: &str,
     account: &str,
@@ -169,7 +174,7 @@ fn macos_secitem_get(
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn macos_secitem_set(
     service: &str,
     account: &str,
@@ -184,7 +189,7 @@ fn macos_secitem_set(
     .map_err(|e| format!("Failed to write keyring: {e}"))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn macos_secitem_delete(service: &str, account: &str, protected: bool) {
     use security_framework::passwords::delete_generic_password_options;
     let _ = delete_generic_password_options(macos_query_options(service, account, protected));
@@ -196,7 +201,7 @@ fn macos_secitem_delete(service: &str, account: &str, protected: bool) {
 /// ACL-bound `keyring` item instead of `SecItemUpdate`-ing it (which
 /// would keep the “Always Allow” ACL). Do not call the `keyring` crate
 /// delete here — it uses `find_generic_password` and prompts again.
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn macos_write_preferred(service: &str, account: &str, password: &str) -> Result<(), String> {
     match macos_secitem_set(service, account, password, true) {
         Ok(()) => {
@@ -216,7 +221,7 @@ fn macos_write_preferred(service: &str, account: &str, password: &str) -> Result
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn platform_get(service: &str, account: &str) -> Result<Option<String>, String> {
     match macos_secitem_get(service, account, true) {
         Ok(Some(password)) => return Ok(Some(password)),
@@ -248,12 +253,12 @@ fn platform_get(service: &str, account: &str) -> Result<Option<String>, String> 
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn platform_set(service: &str, account: &str, password: &str) -> Result<(), String> {
     macos_write_preferred(service, account, password)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn platform_delete(service: &str, account: &str) {
     macos_secitem_delete(service, account, true);
     macos_secitem_delete(service, account, false);

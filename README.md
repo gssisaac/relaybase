@@ -5,7 +5,7 @@ Monorepo for **Relaybase** — domain-scoped transactional email (send + receive
 The repo is split into two service sets:
 
 - **End-user product** (shipped to customers): `app/`, `desktop/`, `mobile/`, `server/`.
-- **Kembo operations** (internal, ours): `kembo/admin/`, `kembo/console/`, `kembo/website/`. All Cloudflare resources for this set use the `kembo-*` worker name and the `KEMBO_OPS` KV binding (operator config only — `workerUrl` + `adminToken`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in `KEMBO_OPS` — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `auth_tokens`, and plaintext keys locally in `~/.relaybase`.
+- **Kembo operations** (internal, ours): `kembo/admin/`, `kembo/console/`, `kembo/website/`. Cloudflare resources for this set use the `strum-relaybase-*` worker names and D1 `strum-relaybase-ops` (binding `DB`; operator config only — `workerUrl` + `adminToken`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in that D1 — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `owner_sessions`, and plaintext keys locally in `~/.relaybase`.
 
 | Set | Package | Path | Port | Role |
 |-----|---------|------|------|------|
@@ -13,9 +13,9 @@ The repo is split into two service sets:
 | End-user | **User app** | `app/` | 32830 | Email UI — `next dev` for HMR; static export for Tauri |
 | End-user | **Desktop** | `desktop/` | Tauri | Mac app shell (`devUrl` → `:32830`, prod → `app/out`) |
 | End-user | **Mobile** | `mobile/` | Flutter | Teammate inbox companion (per-account mobile password) |
-| Kembo | **Admin** | `kembo/admin/` | 32829 | Operator dashboard (licenses, logs, settings; worker `kembo-admin` at `admin.relaybase.xyz`) |
-| Kembo | **Console** | `kembo/console/` | 32830 | Account / license / billing / recovery (worker `kembo-console` at `console.relaybase.xyz`) |
-| Kembo | **Website** | `kembo/website/` | 32828 | Marketing site (worker `kembo-website` at `relaybase.xyz`; BYO-CF / $39 one-time positioning) |
+| Kembo | **Admin** | `kembo/admin/` | 32829 | Operator dashboard (licenses, logs, settings; worker `strum-relaybase-admin` at `admin.relaybase.xyz`) |
+| Kembo | **Console** | `kembo/console/` | 32830 | Account / license / billing / recovery (worker `strum-relaybase-console` at `console.relaybase.xyz`) |
+| Kembo | **Website** | `kembo/website/` | 32828 | Marketing site (worker `strum-relaybase-website` at `relaybase.xyz`; BYO-CF / $39 one-time positioning) |
 
 **Product pivot:** Relaybase is a one-time Mac app that installs the Worker into the **user's** Cloudflare account. See `docs/pivot-byo-cloudflare.md` and `PRODUCT.md`.
 
@@ -153,9 +153,9 @@ relaybase/
 ├── desktop/                # End-user Tauri Mac shell
 ├── mobile/                 # End-user Flutter companion
 ├── kembo/                  # Kembo operations (internal, ours)
-│   ├── admin/              # Operator Next.js dashboard (worker: kembo-admin)
-│   ├── console/            # Account / license / billing (worker: kembo-console)
-│   └── website/            # Marketing Next.js (static export, worker: kembo-website)
+│   ├── admin/              # Operator Next.js dashboard (worker: strum-relaybase-admin)
+│   ├── console/            # Account / license / billing (worker: strum-relaybase-console)
+│   └── website/            # Marketing Next.js (static export, worker: strum-relaybase-website)
 ├── data/
 │   ├── users.json          # User registry (shared with admin Users)
 │   ├── users/<id>.json     # Per-user domain/email data (dev)
@@ -185,7 +185,7 @@ npx wrangler secret put ADMIN_TOKEN
 npm run deploy    # wrangler deploy
 ```
 
-Kembo operations workers (`kembo-admin`, `kembo-console`, `kembo-website`) deploy separately from `kembo/admin`, `kembo/console`, `kembo/website` via `pnpm run deploy:cf` in each package. The admin worker binds `KEMBO_OPS` (operator config only) and `RELAYBASE_APP_DOGFOOD` (admin's own dogfood user data); it never stores end-user tokens or plaintext API keys.
+Kembo operations workers (`strum-relaybase-admin`, `strum-relaybase-console`, `strum-relaybase-website`) deploy separately from `kembo/admin`, `kembo/console`, `kembo/website` via `pnpm run deploy:cf` in each package. They share D1 `strum-relaybase-ops` (binding `DB`) on account `3adf03d991843094a7343eebc0a98007`. The admin worker never stores end-user tokens or plaintext API keys.
 
 Bindings in `server/wrangler.toml`:
 

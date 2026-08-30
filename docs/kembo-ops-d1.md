@@ -6,7 +6,7 @@
 
 | Area | Paths |
 |------|------|
-| D1 binding | `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` → `DB` / database `kembo-ops` |
+| D1 binding | `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` → `DB` / database `strum-relaybase-ops` |
 | Drizzle schema (all 7 tables) | `kembo/console/src/db/schema.ts` |
 | Drizzle schema (admin subset) | `kembo/admin/src/db/schema.ts` (`product_settings` + `beta_invites` + `licenses`) |
 | Clients | `kembo/console/src/db/client.ts`, `kembo/admin/src/db/client.ts` |
@@ -29,10 +29,10 @@ Kembo used to split state across two KV namespaces and one D1:
 |--------------|---------------|-------------|
 | KV `KEMBO_OPS` | `product:{serviceId}:{filename}` (operator settings JSON) | `product_settings` |
 | KV `KEMBO_LICENSES` | 4 keys per license (`srv:license:id:`, `:key:`, `:email:`, `:customer:`) | `licenses` |
-| D1 `kembo-accounts` | `waitlist`, `accounts`, `account_workers`, `account_recovery` | same table names in `kembo-ops` |
+| D1 `kembo-accounts` | `waitlist`, `accounts`, `account_workers`, `account_recovery` | same table names in `strum-relaybase-ops` |
 | KV `RELAYBASE_APP_DOGFOOD` | leftover dogfood userdata | **dropped** — filesystem fallback only in admin |
 
-Admin (`admin.relaybase.xyz`) and console (`console.relaybase.xyz`) now share one D1 `kembo-ops` (binding `DB`) on the Kembo Cloudflare account. Drizzle is the schema source of truth. Do **not** re-add those KV/D1 bindings.
+Admin (`admin.relaybase.xyz`) and console (`console.relaybase.xyz`) now share one D1 `strum-relaybase-ops` (binding `DB`) on the Strum Cloudflare account (`3adf03d991843094a7343eebc0a98007`). Workers: `strum-relaybase-admin`, `strum-relaybase-console`, `strum-relaybase-website`. Drizzle is the schema source of truth. Do **not** re-add those KV/D1 bindings.
 
 Product Worker catalog state is a different database (`RELAYBASE_DB` on the customer Worker). Do not put mailbox/audience/broadcasts here.
 
@@ -48,7 +48,7 @@ Public marketing signup (`POST /api/v1/waitlist`). Unique `email`. `source` + `u
 
 ### `beta_invites`
 
-Public marketing beta signup (`POST /api/beta` on `kembo-website`). PK `uuid` is the download token at `relaybase.xyz/downloads/{uuid}`. Unique `email` reuses the same invite. `data` is the invite JSON as one blob: `email`, `createdAt`, `locale` (country/city/region/timezone), `browser`, `os`, `userAgent`, `downloads` (`{ at }` timestamps). Website Worker uses raw SQL; do not add a second schema copy.
+Public marketing beta signup (`POST /api/beta` on `strum-relaybase-website`). PK `uuid` is the download token at `relaybase.xyz/downloads/{uuid}`. Unique `email` reuses the same invite. `data` is the invite JSON as one blob: `email`, `createdAt`, `locale` (country/city/region/timezone), `browser`, `os`, `userAgent`, `downloads` (`{ at }` timestamps). Website Worker uses raw SQL; do not add a second schema copy.
 
 The website no longer calls `POST /api/v1/waitlist`. The `waitlist` table stays for existing rows.
 
@@ -100,9 +100,9 @@ Console Next routes live under `/api/v1/…`. `next.config.ts` rewrites `/v1/:pa
 | `/api/v1/billing/*` | session / Stripe signature | `accounts` + `licenses` |
 | `GET/POST/DELETE /api/licenses` on `admin.relaybase.xyz` | admin (direct D1) | `licenses` |
 
-Admin Licenses page fetches `/api/licenses`, which queries `kembo-ops.licenses` directly (no console hop). Desktop activate still uses `POST /v1/license/verify` on console. Nested App Router files are required for console `/v1/license/admin` — a single `license/route.ts` does **not** match `/license/admin`.
+Admin Licenses page fetches `/api/licenses`, which queries `strum-relaybase-ops.licenses` directly (no console hop). Desktop activate still uses `POST /v1/license/verify` on console. Nested App Router files are required for console `/v1/license/admin` — a single `license/route.ts` does **not** match `/license/admin`.
 
-Admin Beta page fetches `/api/beta`, which queries `kembo-ops.beta_invites` directly (no console hop). Invite-email status is joined from the product Worker send logs (`/api/relaybase/logs`, `from: beta@relaybase.xyz`).
+Admin Beta page fetches `/api/beta`, which queries `strum-relaybase-ops.beta_invites` directly (no console hop). Invite-email status is joined from the product Worker send logs (`/api/relaybase/logs`, `from: beta@relaybase.xyz`).
 
 Do not put `export const runtime = "edge"` on these OpenNext routes. Edge chunks are not bundled into the Worker and the handlers 500.
 
@@ -115,10 +115,10 @@ Do not put `export const runtime = "edge"` on these OpenNext routes. Edge chunks
 ```bash
 cd kembo/console
 npx drizzle-kit generate
-# Apply to remote kembo-ops (new account):
-CLOUDFLARE_ACCOUNT_ID=<kembo-account> wrangler d1 migrations apply kembo-ops --remote
+# Apply to remote strum-relaybase-ops:
+CLOUDFLARE_ACCOUNT_ID=3adf03d991843094a7343eebc0a98007 wrangler d1 migrations apply strum-relaybase-ops --remote
 # Or execute the generated SQL:
-CLOUDFLARE_ACCOUNT_ID=<kembo-account> wrangler d1 execute kembo-ops --remote --file migrations/0000_secret_wong.sql
+CLOUDFLARE_ACCOUNT_ID=3adf03d991843094a7343eebc0a98007 wrangler d1 execute strum-relaybase-ops --remote --file migrations/0000_secret_wong.sql
 ```
 
 One-shot KV copy from the old account (does not delete source):
@@ -133,8 +133,8 @@ Old-account `kembo-accounts` / `KEMBO_OPS` / `KEMBO_LICENSES` are left in place 
 
 ## Forbidden
 
-- Re-binding `KEMBO_OPS`, `KEMBO_LICENSES`, `KEMBO_ACCOUNTS`, or `RELAYBASE_APP_DOGFOOD` on `kembo-admin` / `kembo-console`
+- Re-binding `KEMBO_OPS`, `KEMBO_LICENSES`, `KEMBO_ACCOUNTS`, or `RELAYBASE_APP_DOGFOOD` on `strum-relaybase-admin` / `strum-relaybase-console`
 - Dual-write to those KV namespaces
-- Putting product mailbox/audience/broadcast catalog in `kembo-ops` — that is `RELAYBASE_DB` on the customer Worker
+- Putting product mailbox/audience/broadcast catalog in `strum-relaybase-ops` — that is `RELAYBASE_DB` on the customer Worker
 - Storing CF API tokens or plaintext API keys in `product_settings`
 - License/account/billing routes on the product Worker

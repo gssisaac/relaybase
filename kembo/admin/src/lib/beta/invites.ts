@@ -84,7 +84,7 @@ export async function listBetaInvites(): Promise<ListBetaInvitesResult> {
       invites: [],
       available: false,
       message:
-        "D1 is not available in this environment. Deployed admin reads kembo-ops.",
+        "D1 is not available in this environment. Deployed admin reads strum-relaybase-ops.",
     };
   }
 
@@ -100,7 +100,7 @@ export async function listBetaInvites(): Promise<ListBetaInvitesResult> {
       invites: [],
       available: false,
       message:
-        "Could not read beta_invites from kembo-ops. Local Next may not have the table; deployed admin reads remote D1.",
+        "Could not read beta_invites from strum-relaybase-ops. Local Next may not have the table; deployed admin reads remote D1.",
     };
   }
 }

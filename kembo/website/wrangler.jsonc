@@ -1,10 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "kembo-website",
-  "account_id": "674a35f00d9800eec7d6bc42fe55726e",
+  "name": "strum-relaybase-website",
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "workers_dev": true,
   "compatibility_date": "2026-06-03",
-  // Apex/www already have DNS records, so use zone routes (not custom_domain).
-  // Subdomains api/app/admin use custom_domain in their own wrangler configs.
   "routes": [
     { "pattern": "relaybase.xyz/*", "zone_name": "relaybase.xyz" },
     { "pattern": "www.relaybase.xyz/*", "zone_name": "relaybase.xyz" }
@@ -19,8 +18,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "kembo-ops",
-      "database_id": "e759ebf2-f43d-423c-b5e9-163a40432319"
+      "database_name": "strum-relaybase-ops",
+      "database_id": "80aa8f9b-f83a-48b9-a7bd-7f3b8e100e28"
     }
   ]
 }

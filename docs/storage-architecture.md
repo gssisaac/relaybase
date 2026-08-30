@@ -10,7 +10,7 @@
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
 | **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `server/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
-| **Remote** | D1 `kembo-ops` (binding `DB` on `kembo-admin` + `kembo-console` + `kembo-website`) | Shared Kembo store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[kembo-ops-d1.md](./kembo-ops-d1.md)**. |
+| **Remote** | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared Kembo store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[kembo-ops-d1.md](./kembo-ops-d1.md)**. |
 | **Local** | `~/.relaybase` | Credentials, API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login |
 
 Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
@@ -38,7 +38,7 @@ flowchart TB
     D1Mail["D1 RELAYBASE_MAIL\nmailbox_messages + mailbox_fts"]
   end
   subgraph console [console.relaybase.xyz + admin.relaybase.xyz]
-    KemboD1["D1 kembo-ops\nproduct_settings, licenses,\naccounts, workers, recovery,\nwaitlist, beta_invites"]
+    KemboD1["D1 strum-relaybase-ops\nproduct_settings, licenses,\naccounts, workers, recovery,\nwaitlist, beta_invites"]
   end
   UI --> Fetch
   Fetch -->|"admin Bearer"| worker
@@ -154,8 +154,8 @@ Full design (schema, query safety, sync model, backfill, freshness): **[mailbox-
 ### Forbidden (do not reintroduce)
 
 - Cloudflare KV binding on the product Worker for app data
-- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in Kembo ops — the Worker reads them from wrangler secrets; D1 `kembo-ops` `product_settings` holds only `workerUrl` + `adminToken` (operator config)
-- End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `kembo-ops` — owner sessions live in the product Worker's D1 `owner_sessions` (hash-only); plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`
+- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in Kembo ops — the Worker reads them from wrangler secrets; D1 `strum-relaybase-ops` `product_settings` holds only `workerUrl` + `adminToken` (operator config)
+- End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `strum-relaybase-ops` — owner sessions live in the product Worker's D1 `owner_sessions` (hash-only); plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`
 - Global mobile password (no per-account row) — use the per-account row in D1 `mobile_passwords` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
 - Hosted OpenNext `app.relaybase.xyz` as a product API (removed)
@@ -165,9 +165,9 @@ Customer install template: three D1 databases (`relaybase-db`, `relaybase-logs`,
 
 ---
 
-## Remote — D1 `kembo-ops` (console + admin)
+## Remote — D1 `strum-relaybase-ops` (console + admin)
 
-Binding: `DB` on `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` (database `kembo-ops`). Drizzle schema: `kembo/console/src/db/schema.ts`. Full rules: **[kembo-ops-d1.md](./kembo-ops-d1.md)**.
+Binding: `DB` on `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` (database `strum-relaybase-ops`). Drizzle schema: `kembo/console/src/db/schema.ts`. Full rules: **[kembo-ops-d1.md](./kembo-ops-d1.md)**.
 
 Operator config lives in `product_settings` (`service_id=relaybase`, `filename=settings.json`):
 
@@ -242,9 +242,9 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Owner config / passtoken hash | D1 `RELAYBASE_DB` (`owner_config`) | — |
 | Product options (inbound retain) | D1 `RELAYBASE_DB` (`app_settings`) | — |
 | Pending inbound events | D1 `RELAYBASE_DB` (`inbound_events`, `expires_at`) | — |
-| Waitlist | D1 `kembo-ops` (`waitlist`) | — |
-| Beta invites | D1 `kembo-ops` (`beta_invites`) | — |
-| Console accounts / licenses | D1 `kembo-ops` (`accounts`, `licenses`, …) | — |
+| Waitlist | D1 `strum-relaybase-ops` (`waitlist`) | — |
+| Beta invites | D1 `strum-relaybase-ops` (`beta_invites`) | — |
+| Console accounts / licenses | D1 `strum-relaybase-ops` (`accounts`, `licenses`, …) | — |
 
 ---
 

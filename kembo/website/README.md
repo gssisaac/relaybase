@@ -24,7 +24,7 @@ pnpm preview:cf
 ## Deploy on Cloudflare
 
 Static export (`out/`) plus a Worker (`src/worker/index.ts`) via Wrangler.
-The Worker binds D1 `kembo-ops` (same database as console/admin) for
+The Worker binds D1 `strum-relaybase-ops` (same database as console/admin) for
 `beta_invites`.
 
 In the Cloudflare project (root directory: `website`):
@@ -42,7 +42,7 @@ In the Cloudflare project (root directory: `website`):
    `/mail/send` accepts `from`.
 
 4. **D1:** apply `kembo/console` migrations so `beta_invites` exists on remote
-   `kembo-ops` before the first signup.
+   `strum-relaybase-ops` before the first signup.
 
 5. **Build command:** `pnpm run build:cf`
 
@@ -64,6 +64,6 @@ flow (`cd desktop && pnpm run build:macos`).
 
 - Next.js 16 (static export)
 - Tailwind CSS 4 + shadcn/ui
-- Cloudflare Workers static assets + Worker (`kembo-website`)
-- D1 `kembo-ops.beta_invites` for beta download tokens
+- Cloudflare Workers static assets + Worker (`strum-relaybase-website`)
+- D1 `strum-relaybase-ops.beta_invites` for beta download tokens
 - pnpm (`packageManager`: `pnpm@9.12.0`)

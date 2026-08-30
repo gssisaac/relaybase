@@ -1,10 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "kembo-admin",
+  "name": "strum-relaybase-admin",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-12",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "account_id": "674a35f00d9800eec7d6bc42fe55726e",
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "workers_dev": true,
   "routes": [
     { "pattern": "admin.relaybase.xyz", "custom_domain": true }
   ],
@@ -15,14 +16,14 @@
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
-      "service": "kembo-admin"
+      "service": "strum-relaybase-admin"
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "kembo-ops",
-      "database_id": "e759ebf2-f43d-423c-b5e9-163a40432319"
+      "database_name": "strum-relaybase-ops",
+      "database_id": "80aa8f9b-f83a-48b9-a7bd-7f3b8e100e28"
     }
   ]
 }

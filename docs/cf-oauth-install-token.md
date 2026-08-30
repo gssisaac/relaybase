@@ -11,7 +11,7 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 | Piece | Role |
 |-------|------|
 | **Cloudflare OAuth client** | One public PKCE client on the operator’s CF account. Grant types: `authorization_code` + **`refresh_token`**. Token auth: **None (PKCE)**. Redirect URI: `https://console.relaybase.xyz/oauth/callback`. |
-| **`console.relaybase.xyz`** | Public `/api/v1/oauth/config` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `kembo-ops`. |
+| **`console.relaybase.xyz`** | Public `/api/v1/oauth/config` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `strum-relaybase-ops`. |
 | **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION`). All Cloudflare API / Worker `X-Cf-Access-Token` calls go through `require_cf_oauth()` in `desktop/src-tauri/src/cf_oauth.rs` — memory if the access token has ≥60s left, otherwise the Cloudflare token endpoint. App restart clears the session. |
 | **`~/.relaybase`** | Stores only the resolved CF account id (from the OAuth response). OAuth access/refresh tokens are **not** persisted — they live in Tauri memory only. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
 
@@ -58,7 +58,7 @@ Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query.
 }
 ```
 
-After changing the client id, redeploy `kembo-console`. No `CF_OAUTH_CLIENT_SECRET` — PKCE public client.
+After changing the client id, redeploy `strum-relaybase-console`. No `CF_OAUTH_CLIENT_SECRET` — PKCE public client.
 
 **Routes:**
 

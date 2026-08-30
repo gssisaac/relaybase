@@ -4,7 +4,7 @@ import { apiError } from "@/lib/api/api-error";
 import { createLicense, listLicenses, revokeLicense } from "@/lib/licenses";
 
 /**
- * Operator license admin. Reads/writes kembo-ops.licenses directly — same D1
+ * Operator license admin. Reads/writes strum-relaybase-ops.licenses directly — same D1
  * as console verify + Stripe. Does not hop through console.relaybase.xyz.
  */
 export async function GET() {

@@ -30,7 +30,7 @@ export type ListLicensesResult = {
 type StoredLicense = LicenseRecord & { keyHash: string };
 
 const D1_UNAVAILABLE =
-  "D1 is not available in this environment. Deployed admin reads kembo-ops.";
+  "D1 is not available in this environment. Deployed admin reads strum-relaybase-ops.";
 
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
@@ -96,7 +96,7 @@ export async function listLicenses(): Promise<ListLicensesResult> {
       licenses: [],
       available: false,
       message:
-        "Could not read licenses from kembo-ops. Local Next may not have the table; deployed admin reads remote D1.",
+        "Could not read licenses from strum-relaybase-ops. Local Next may not have the table; deployed admin reads remote D1.",
     };
   }
 }

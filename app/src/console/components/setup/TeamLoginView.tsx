@@ -62,8 +62,8 @@ export function TeamLoginView() {
       setError({
         title: "All fields are required",
         detail:
-          "Select a Worker URL, enter your account email, and mobile password.",
-        fix: "Ask your team admin for the Worker URL and your mobile password.",
+          "Select a Worker URL, enter your account email, and password.",
+        fix: "Ask your team admin for the Worker URL and your account password (Accounts → Teammate login).",
       });
       return;
     }
@@ -90,9 +90,9 @@ export function TeamLoginView() {
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Team login</h1>
           <p className="text-xs text-muted-foreground">
-            For teammates. Sign in with your account email and the mobile
-            password your admin set up in Accounts → Other device. You only get
-            inbox access — no management console.
+            For teammates. Sign in with your account email and the password
+            your admin set up in Accounts → Teammate login. You only get inbox
+            access — no management console.
           </p>
         </div>
 
@@ -116,7 +116,7 @@ export function TeamLoginView() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="mobile-password">Mobile password</Label>
+            <Label htmlFor="mobile-password">Password</Label>
             <Input
               id="mobile-password"
               type="password"

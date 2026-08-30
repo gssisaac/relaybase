@@ -10,8 +10,8 @@ type QrCodeProps = {
 };
 
 /**
- * Renders a QR code as an inline SVG. Used by the desktop Other device tab
- * to pair the Flutter app via a `relaybase://connect?...` deep link.
+ * Renders a QR code as an inline SVG. Used by the parked mobile pairing
+ * UI (`AccountMobilePairingQr`) for Flutter `relaybase://connect` deep links.
  */
 export function QrCode({ value, size = 192, className }: QrCodeProps) {
   const [svg, setSvg] = useState<string | null>(null);

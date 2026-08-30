@@ -68,8 +68,8 @@ export function AddTeamAccountDialog({
     if (!email || !password) {
       setError({
         title: "All fields are required",
-        detail: "Enter your account email and mobile password.",
-        fix: "Ask your team admin for your mobile password (Accounts → Other device).",
+        detail: "Enter your account email and password.",
+        fix: "Ask your team admin for your account password (Accounts → Teammate login).",
       });
       setBusy(false);
       return;
@@ -103,8 +103,8 @@ export function AddTeamAccountDialog({
         </DialogHeader>
         <form className="space-y-3" onSubmit={handleSubmit}>
           <p className="text-sm text-muted-foreground">
-            Sign in with your account email and the mobile password your admin
-            set up in Accounts → Other device.
+            Sign in with your account email and the password your admin set up
+            in Accounts → Teammate login.
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="team-account-email">Account email</Label>
@@ -120,7 +120,7 @@ export function AddTeamAccountDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="team-mobile-password">Mobile password</Label>
+            <Label htmlFor="team-mobile-password">Password</Label>
             <Input
               id="team-mobile-password"
               type="password"

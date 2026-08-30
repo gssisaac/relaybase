@@ -117,7 +117,7 @@ export function UnlockView({
             </h1>
             <p className="text-xs text-muted-foreground">
               {role === "invited"
-                ? "Sign in with your account email and the mobile password your admin set up."
+                ? "Sign in with your account email and the password your admin set up in Accounts → Teammate login."
                 : "Sign in with your username and the passtoken you downloaded. The app does not store the passtoken."}
             </p>
           </div>
@@ -153,7 +153,7 @@ export function UnlockView({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="unlock-secret">
-                {role === "invited" ? "Mobile password" : "Passtoken"}
+                {role === "invited" ? "Password" : "Passtoken"}
               </Label>
               <Input
                 id="unlock-secret"

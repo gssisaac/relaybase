@@ -96,7 +96,11 @@ export function settingsTabFromSegment(segment?: string): SettingsTab {
   return "cloudflare";
 }
 
-export type AccountDetailTab = "overview" | "logs" | "settings" | "other-device";
+export type AccountDetailTab =
+  | "overview"
+  | "logs"
+  | "settings"
+  | "teammate-login";
 
 export type AudienceDetailTab = "contacts" | "history" | "settings";
 
@@ -126,10 +130,13 @@ export function accountDetailFromSearch(searchParams: {
   const email = searchParams.get("email")?.trim().toLowerCase() ?? "";
   if (!email.includes("@")) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
+  // Legacy `other-device` deep links map to teammate-login.
   const tab: AccountDetailTab =
-    raw === "logs" || raw === "settings" || raw === "other-device"
+    raw === "logs" || raw === "settings" || raw === "teammate-login"
       ? raw
-      : "overview";
+      : raw === "other-device"
+        ? "teammate-login"
+        : "overview";
   return { email, tab };
 }
 

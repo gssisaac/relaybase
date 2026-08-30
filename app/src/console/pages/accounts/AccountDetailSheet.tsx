@@ -5,7 +5,7 @@ import {
   LayoutDashboard,
   ScrollText,
   Settings,
-  Smartphone,
+  Users,
 } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 
@@ -18,9 +18,9 @@ import {
 } from "@/components/ui/sheet";
 import type { AccountDetailTab } from "@/console/lib/paths";
 import { AccountLogsView } from "@/console/pages/accounts/AccountLogsView";
-import { AccountOtherDeviceView } from "@/console/pages/accounts/AccountOtherDeviceView";
 import { AccountOverviewView } from "@/console/pages/accounts/AccountOverviewView";
 import { AccountSettingsView } from "@/console/pages/accounts/AccountSettingsView";
+import { AccountTeammateLoginView } from "@/console/pages/accounts/AccountTeammateLoginView";
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ const NAV: {
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "logs", label: "Logs", icon: ScrollText },
   { id: "settings", label: "Settings", icon: Settings },
-  { id: "other-device", label: "Other device", icon: Smartphone },
+  { id: "teammate-login", label: "Teammate login", icon: Users },
 ];
 
 type AccountDetailSheetProps = {
@@ -57,7 +57,7 @@ function AccountDetailBody({
 }): ReactNode {
   if (tab === "logs") return <AccountLogsView email={email} />;
   if (tab === "settings") return <AccountSettingsView email={email} />;
-  if (tab === "other-device") return <AccountOtherDeviceView email={email} />;
+  if (tab === "teammate-login") return <AccountTeammateLoginView email={email} />;
   return <AccountOverviewView email={email} />;
 }
 

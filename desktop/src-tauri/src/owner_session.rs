@@ -1,9 +1,10 @@
-//! Owner session: mail + console refresh tokens live in the OS keyring;
-//! scoped access tokens live in process memory. The passtoken is never
-//! written to disk.
+//! Owner session: mail + console refresh tokens live in OS keyring
+//! `owner-session`; scoped access tokens live in process memory. The
+//! passtoken lives in a **separate** `owner-passtoken` item (Touch ID to
+//! read). Never written to `~/.relaybase`.
 //!
-//! Boot: silent mail refresh (`owner_boot_mail`). Console: Touch ID then
-//! console refresh (`owner_unlock_console`).
+//! Boot: silent mail refresh (`owner_boot_mail`). Expired refresh: Touch ID
+//! then `owner_login_from_keyring`. Valid console refresh unlocks silently.
 
 use crate::secrets::{load_credentials, save_credentials};
 use serde::{Deserialize, Serialize};
@@ -205,6 +206,8 @@ pub struct OwnerSessionStatus {
     pub has_refresh: bool,
     /// Back-compat: mail OR console access in memory.
     pub has_access: bool,
+    /// Keyring `owner-passtoken` exists (secret is not returned).
+    pub has_passtoken: bool,
     pub username: String,
     pub worker_url: String,
     pub platform: String,
@@ -241,6 +244,7 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         has_console_access: console_access.is_some(),
         has_refresh: has_mail_refresh || has_console_refresh,
         has_access: mail_access.is_some() || console_access.is_some(),
+        has_passtoken: crate::owner_passtoken::exists(),
         username: blob
             .as_ref()
             .map(|b| b.username.clone())
@@ -408,6 +412,7 @@ pub async fn owner_login(
     set_scoped_access("mail", base, &username, mail_access, expires_in);
     clear_scoped_access("console");
     persist_worker_url(base)?;
+    crate::owner_passtoken::store(&passtoken, &username, base)?;
     owner_session_status()
 }
 
@@ -428,7 +433,7 @@ pub async fn owner_boot_mail() -> Result<OwnerSessionStatus, String> {
     owner_session_status()
 }
 
-/// Console unlock after Touch ID / passtoken at the dashboard gate.
+/// Console unlock from a valid console refresh — no biometry.
 pub async fn owner_unlock_console() -> Result<OwnerSessionStatus, String> {
     if access_if_valid("console").is_some() {
         return owner_session_status();
@@ -482,10 +487,12 @@ pub async fn owner_setup_admin(
     let passtoken = json_string(&value, "passtoken")
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;
     persist_worker_url(base)?;
+    let issued_username = json_string(&value, "username")
+        .unwrap_or(&username)
+        .to_string();
+    crate::owner_passtoken::store(passtoken, &issued_username, base)?;
     Ok(OwnerSetupResult {
-        username: json_string(&value, "username")
-            .unwrap_or(&username)
-            .to_string(),
+        username: issued_username,
         passtoken: passtoken.to_string(),
     })
 }
@@ -530,10 +537,60 @@ pub async fn owner_reset_admin(
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;
     delete_keyring();
     clear_all_access();
+    crate::owner_passtoken::delete();
+    let issued_username = json_string(&value, "username").unwrap_or("").to_string();
+    crate::owner_passtoken::store(passtoken, &issued_username, base)?;
     Ok(OwnerSetupResult {
-        username: json_string(&value, "username").unwrap_or("").to_string(),
+        username: issued_username,
         passtoken: passtoken.to_string(),
     })
+}
+
+/// Touch ID (macOS / Windows) then read `owner-passtoken` and POST `/console/login`.
+/// Linux / no-biometry platforms read the item without a prompt.
+/// The passtoken is never returned to JS.
+pub async fn owner_login_from_keyring(
+    app: tauri::AppHandle,
+    reason: String,
+) -> Result<OwnerSessionStatus, String> {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        crate::touch_id::authenticate(app, reason).await?;
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = (app, reason);
+    }
+    let record = crate::owner_passtoken::load_after_auth()?
+        .ok_or_else(|| "No stored passtoken.".to_string())?;
+    let session = load_keyring()?;
+    let worker_url = if !record.worker_url.trim().is_empty() {
+        record.worker_url.clone()
+    } else if let Some(blob) = session.as_ref() {
+        blob.worker_url.clone()
+    } else {
+        load_credentials()?
+            .and_then(|c| {
+                let url = c.worker_url.trim().trim_end_matches('/').to_string();
+                if url.is_empty() {
+                    None
+                } else {
+                    Some(url)
+                }
+            })
+            .unwrap_or_default()
+    };
+    let username = if !record.username.trim().is_empty() {
+        record.username.clone()
+    } else if let Some(blob) = session.as_ref() {
+        blob.username.clone()
+    } else {
+        String::new()
+    };
+    if worker_url.is_empty() {
+        return Err("Worker URL is required".into());
+    }
+    owner_login(worker_url, username, record.passtoken).await
 }
 
 async fn ensure_access(scope: &str) -> Result<AccessMemory, String> {

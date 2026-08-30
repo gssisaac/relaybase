@@ -121,7 +121,7 @@ paths under the new `{scopeId}/`).
 
 ### `credentials.json`
 
-> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. **Daily unlock** resolves the Worker URL from the OS keyring first (`owner-session` blob `workerUrl`); `credentials.json` `workerUrl` is an optional disk mirror for install scope, CF linkage, and browser `pnpm next`. The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** is stored in the OS keyring (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Daily unlock uses Touch ID or Windows Hello (`tauri-plugin-biometry`, device PIN fallback), then Rust reads the keyring. Login/unlock forms always show a **Worker URL select** (`WorkerUrlPicker`): the last saved URL (keyring or disk) is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
+> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. **Daily unlock** resolves the Worker URL from the OS keyring first (`owner-session` blob `workerUrl`); `credentials.json` `workerUrl` is an optional disk mirror for install scope, CF linkage, and browser `pnpm next`. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms always show a **Worker URL select** (`WorkerUrlPicker`): the last saved URL (keyring or disk) is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
 
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
@@ -134,7 +134,7 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `relaybaseAccountId` | Relaybase console account id — written only when non-empty |
 | `relaybaseEmail` | Relaybase console account email — written only when non-empty |
 | `relaybaseSession` | Signed console session token (local only; Bearer to console APIs) — written only when non-empty |
-| ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext only in the user's download). |
+| ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext in OS keyring `owner-passtoken` + the user's one-time download). |
 
 Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. CF OAuth access/refresh tokens live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 
@@ -147,7 +147,20 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/keyring_store.rs`,
 | service | `com.relaybase.desktop` |
 | account | `owner-session` |
 
-Blob (`camelCase`): `{ workerUrl, username, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. **`workerUrl`** is the source of truth for daily unlock — JS resolves it before `credentials.json`. The passtoken is never stored. Mail boot: silent **`owner_boot_mail`** (no Touch ID). Console dashboard: Touch ID via **`owner_unlock_console`** at dashboard entry only. Access tokens stay in split process memory (mail vs console).
+Blob (`camelCase`): `{ workerUrl, username, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. **`workerUrl`** is the source of truth for daily unlock — JS resolves it before `credentials.json`. This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
+
+### OS keyring (owner passtoken)
+
+Same service, **different account**, so silent mail boot cannot load the passtoken.
+
+| Field | Service / account |
+|-------|-------------------|
+| service | `com.relaybase.desktop` |
+| account | `owner-passtoken` |
+
+Contents: the owner passtoken plaintext. **Write** at first login, `setup-admin` reveal, rotate, `reset-admin`, and typed fallback — no Touch ID (the user just created or typed it). **Read** only after Touch ID / Windows Hello succeeds (or on platforms with no biometry, if the item exists). Fail or cancel → do not read; show the typed form.
+
+Prefer an OS user-presence / biometry ACL on this item so the platform itself refuses the read without bio. JS never sees the value. Ordinary sign-out does **not** delete this item. Policy: **[authentication.md](./authentication.md)** → *Owner passtoken in the keyring*.
 
 ### OS keyring (team mobile password)
 

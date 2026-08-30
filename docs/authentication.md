@@ -6,7 +6,7 @@ login, Worker auth middleware, desktop unlock, or mobile companion auth.
 **Related docs:**
 
 - Phase machine + console gate: **[desktop-session-machine.md](./desktop-session-machine.md)**
-- Local secrets: **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*
+- Local secrets: **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring* (`owner-session` + `owner-passtoken`)
 - Remote owner model: **[storage-architecture.md](./storage-architecture.md)** → *Owner auth*
 - Archived pre–console-gate docs: **[legacy/](./legacy/)**
 
@@ -15,16 +15,91 @@ login, Worker auth middleware, desktop unlock, or mobile companion auth.
 ## Summary
 
 Four auth surfaces on the product Worker, plus **Cloudflare OAuth** for install
-/recovery only (not daily mail).
+/ recovery only (not daily mail).
 
 | Actor | Credential | Worker routes | Desktop unlock |
 |-------|------------|---------------|----------------|
-| **Owner** | Username + **passtoken** → scoped mail + console sessions | `/console/*`, `/mail/*` | Mail: silent boot (`owner_boot_mail`). Console: Touch ID at **dashboard entry only** |
+| **Owner** | Username + **passtoken** → scoped mail + console sessions | `/console/*`, `/mail/*` | Mail: silent boot from mail refresh. When a **new login** is needed: Touch ID reads the keyring passtoken. Typed form only if bio fails / is declined or the keyring item is missing |
 | **Invited teammate** | Per-account **mobile password** | `/mobile/*` (one email) | Silent `team_unlock` from keyring (no biometry) |
 | **Flutter mobile** | Same mobile password | `/mobile/*` | Secure storage per launch |
 | **API integrator** | Product API key (`rb-…`) | `/v1/*` | N/A |
 
 Desktop entry is unified in **`AppSessionStore`** + **`DesktopDashboardGate`**.
+
+---
+
+## Owner passtoken in the keyring
+
+**Rule:** After first enrollment on a machine, the owner passtoken plaintext
+lives in the OS keyring. The user types it at first install / first login, and
+only again if biometry fails or is declined, or the keyring item is missing.
+Daily use **must not** ask for the passtoken.
+
+The one-time download still exists (backup / another Mac). It is not the daily
+credential surface.
+
+### What Touch ID does
+
+Touch ID / Windows Hello has **one** job: decide whether the app may **read**
+the stored passtoken from the keyring.
+
+| Biometry result | What happens |
+|-----------------|--------------|
+| Success | Rust reads `owner-passtoken` (JS never sees it) → `POST /console/login` → mint mail + console sessions |
+| Fail or user cancel | The keyring item is **not** read. Show the typed passtoken form. |
+| No biometry (Linux / unsigned `tauri dev`) | Read the keyring item without a prompt if it exists; otherwise typed form. |
+
+Touch ID does **not** unlock refresh tokens, does **not** run on silent mail
+boot, and is **not** a separate “console privilege” check. If a scoped refresh
+can still mint access, do that silently — no Touch ID, no passtoken.
+
+A failed or cancelled bio **must not** proceed to a keyring passtoken read.
+Rust never returns the passtoken to JS.
+
+### Why a separate keyring item
+
+Silent mail boot must not load the passtoken. Put refresh tokens and the
+passtoken in **different** keyring accounts:
+
+| Keyring account | Contents | Read gate |
+|-----------------|----------|-----------|
+| `owner-session` | `workerUrl`, `username`, `refreshToken`, `mailRefreshToken` | Silent |
+| `owner-passtoken` | passtoken plaintext | Touch ID / Windows Hello |
+
+Service for both: `com.relaybase.desktop`. Prefer an OS user-presence /
+biometry ACL on `owner-passtoken` so the platform itself refuses the read
+without bio.
+
+Still never: `~/.relaybase`, cookies, localStorage, sessionStorage. The Worker
+stores only `sha256(AUTH_PEPPER || salt || passtoken)`.
+
+### Write vs read
+
+| Direction | When | Touch ID? |
+|-----------|------|-----------|
+| **Write** | `setup-admin` reveal, first `/console/login`, rotate, `reset-admin`, typed fallback | No — the user just created or typed the secret |
+| **Read** | Any later login that needs the passtoken (console refresh expired, mail refresh expired or failed, re-login after logout cleared refreshes) | Yes |
+
+Successful typed entry **writes** `owner-passtoken` so the next time is Touch
+ID, not typing.
+
+### When the typed form is allowed
+
+- First enrollment on this Mac (no `owner-passtoken` item yet)
+- Biometry failed or declined
+- Keyring item missing or corrupt
+- After `rotate-passtoken` / `reset-admin`, until the new token is written back
+
+Those are the **only** times. Expired console refresh (30 min) or expired mail
+refresh (90 days) is **not** a reason to type — Touch ID reads the stored
+passtoken and logs in again.
+
+### Sign out
+
+Logout clears in-memory access and may clear refresh tokens.
+**`owner-passtoken` stays.** Next launch can Touch ID instead of typing.
+Clearing the passtoken item is an explicit “remove this Mac” action, not
+ordinary sign-out.
 
 ---
 
@@ -35,7 +110,7 @@ Login mints **two refresh tokens** and two in-memory access tokens:
 | Scope | Refresh TTL | Access TTL | Worker routes | Desktop command |
 |-------|-------------|------------|---------------|-------------------|
 | `mail` | 90 days | 60 min | `/mail/*` (inbox, sent, send, favicon, **GET `/mail/addresses`**) | `owner_boot_mail_cmd` (silent, no bio) |
-| `console` | 30 min | 30 min | `/console/*` | `owner_unlock_console_cmd` (after Touch ID) |
+| `console` | 30 min | 30 min | `/console/*` | `owner_unlock_console_cmd` when console refresh is still valid (silent). If expired: Touch ID → keyring passtoken → `/console/login` |
 
 D1 `owner_sessions.label` uses `mail:` / `console:` prefixes.
 `POST /console/refresh` body: `{ refreshToken, scope: "mail" | "console" }`.
@@ -86,8 +161,10 @@ flowchart TB
   Auth --> D1
 ```
 
-**Rule:** On desktop, JS never sees owner tokens or teammate mobile passwords.
-Rust attaches Bearer headers in `worker_request` / `team_worker_request`.
+**Rule:** On desktop, JS never sees owner tokens, the keyring passtoken, or
+teammate mobile passwords. Rust attaches Bearer headers in `worker_request` /
+`team_worker_request`. The typed passtoken field is handed to Rust immediately
+and is not kept in JS after submit.
 
 ---
 
@@ -97,9 +174,9 @@ Rust attaches Bearer headers in `worker_request` / `team_worker_request`.
 
 | Secret | Where |
 |--------|-------|
-| Passtoken plaintext | User download only |
+| Passtoken plaintext | OS keyring `owner-passtoken` (Touch ID to **read**). Also the one-time user download. Never `~/.relaybase` |
 | Passtoken hash | D1 `owner_config` |
-| `mailRefreshToken` + console `refreshToken` | OS keyring `owner-session` JSON |
+| `mailRefreshToken` + console `refreshToken` | OS keyring `owner-session` JSON (silent read) |
 | Mail / console access JWT | Tauri process memory (split) |
 | `AUTH_PEPPER` | Worker wrangler secret |
 | Worker URL | Keyring first, `credentials.json` mirror |
@@ -125,18 +202,23 @@ flowchart TB
   MailReady --> MailRoutes[Mail shell OK]
 
   DashEntry[Dashboard entry] --> Ensure[ensureConsoleAccess]
-  Ensure -->|console refresh valid| Bio[Touch ID]
-  Bio --> ConsoleUnlock[owner_unlock_console]
+  Ensure -->|console refresh valid| ConsoleUnlock[owner_unlock_console silent]
   ConsoleUnlock --> DashReady[Dashboard + /console/* API]
-  Ensure -->|no / expired console refresh| Passtoken[ConsoleGateView passtoken]
+  Ensure -->|refresh expired + keyring passtoken| Bio[Touch ID]
+  Bio -->|ok| KeyringLogin[read owner-passtoken then /console/login]
+  KeyringLogin --> DashReady
+  Bio -->|fail or cancel| Typed[ConsoleGateView typed passtoken]
+  Ensure -->|no keyring passtoken| Typed
 ```
 
 **Dashboard entry points** (call `ensureConsoleAccess()`):
 
-- `UserSidebar.switchMode("dashboard")` — stays on mail if Touch ID is dismissed or the Worker is unreachable
+- `UserSidebar.switchMode("dashboard")` — stays on mail if Touch ID is dismissed (cannot read keyring passtoken) or the Worker is unreachable
 - `ConsoleRouteGate` on dashboard pathname
 
-Touch ID is invoked only from `ensureConsoleAccess()` → `desktopOwnerTouchId`.
+Touch ID is invoked **only** to authorize a read of `owner-passtoken`.
+`ensureConsoleAccess()` is the usual call site; mail refresh expiry / 401
+that cannot be repaired with `owner_boot_mail` uses the same gate.
 
 ---
 
@@ -144,11 +226,11 @@ Touch ID is invoked only from `ensureConsoleAccess()` → `desktopOwnerTouchId`.
 
 | Worker path | DOM event | Store action |
 |-------------|-----------|--------------|
-| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — retry `owner_boot_mail` |
-| `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — open console gate |
+| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — retry `owner_boot_mail`; if that cannot repair, Touch ID → keyring passtoken → login |
+| `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
 
-Neither path wipes Worker URL or keyring. Implemented in `api-base.ts` +
-`context.tsx`.
+Neither path wipes Worker URL or keyring (`owner-session` / `owner-passtoken`).
+Implemented in `api-base.ts` + `context.tsx`.
 
 ---
 
@@ -194,15 +276,15 @@ Handlers: `server/src/routes/console/owner-auth.ts`.
 | ID | Use case | Mechanism |
 |----|----------|-----------|
 | O1 | Owner first install | CF OAuth + pepper + setup-admin |
-| O2 | Owner first login | `/console/login` → dual refresh in keyring → `ownerReady` |
+| O2 | Owner first login | `/console/login` → write `owner-passtoken` + dual refresh → `ownerReady` |
 | O3 | Owner mail boot | Silent `owner_boot_mail` → `ownerReady` |
-| O3b | Owner console gate | Touch ID → `owner_unlock_console` or `ConsoleGateView` |
-| O4 | Owner passtoken fallback | `UnlockView` secret form |
-| O5 | Owner sign out | Logout + clear memory; keyring may remain |
+| O3b | Owner console gate | Valid console refresh → silent unlock. Else Touch ID → keyring passtoken → login |
+| O4 | Owner passtoken fallback | Typed form **only** if no keyring item or bio fail / decline |
+| O5 | Owner sign out | Logout + clear memory / refreshes; **`owner-passtoken` stays** |
 | O6 | Owner mail 401 | Silent mail refresh retry |
 | O6b | Owner console 401 | Console gate overlay |
-| O7 | Rotate passtoken | Logged-in owner; revokes all sessions |
-| O8 | Forgot passtoken | CF OAuth → `/console/reset-admin` |
+| O7 | Rotate passtoken | Logged-in owner; revokes all sessions; write new `owner-passtoken` |
+| O8 | Forgot passtoken | CF OAuth → `/console/reset-admin` → write new `owner-passtoken` |
 | T1 | Provision mobile password | Owner → `/console/addresses/mobile-password` |
 | T2 | Teammate first login | `/mobile/config` → keyring → `invitedReady` |
 | T3 | Teammate daily boot | Silent `team_unlock` → `invitedReady` |
@@ -232,7 +314,8 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 
 | File | Role |
 |------|------|
-| `owner_session.rs` | Dual keyring refresh, split memory, boot/unlock/logout, scoped `worker_request` |
+| `owner_session.rs` | Dual keyring refresh, `owner_login_from_keyring`, split memory, boot/unlock/logout, scoped `worker_request` |
+| `owner_passtoken.rs` | `owner-passtoken` exists/store/load-after-auth |
 | `team_session.rs` | Team keyring, silent unlock, `team_worker_request` |
 | `keyring_store.rs` | OS secret store |
 | `secrets.rs` | `credentials.json`, `team-login.json` |
@@ -243,11 +326,11 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 |------|------|
 | `lib/desktop/app-session/store.ts` | Phase machine, `bootFromKeyring`, `ensureConsoleAccess` |
 | `lib/desktop/app-session/context.tsx` | Boot hydrate, scoped 401 listeners |
-| `lib/desktop/bridge/owner.ts` | `desktopOwnerBootMail`, `desktopOwnerUnlockConsole`, `desktopOwnerTouchId` |
+| `lib/desktop/bridge/owner.ts` | `desktopOwnerBootMail`, `desktopOwnerUnlockConsole`, `desktopOwnerLoginFromKeyring`, `desktopOwnerTouchId` |
 | `lib/desktop/api/api-base.ts` | Scoped 401 dispatch |
-| `console/components/setup/ConsoleGateView.tsx` | Console Touch ID + passtoken |
+| `console/components/setup/ConsoleGateView.tsx` | Touch ID (read keyring passtoken) + typed fallback |
 | `console/components/setup/ConsoleRouteGate.tsx` | Dashboard route blocker |
-| `console/components/setup/UnlockView.tsx` | Secret-form unlock (no bio) |
+| `console/components/setup/UnlockView.tsx` | First-login / bio-declined typed form |
 
 After Worker auth changes: **`cd server && pnpm run build:bundle`** (see **AGENTS.md**).
 
@@ -256,8 +339,9 @@ After Worker auth changes: **`cd server && pnpm run build:bundle`** (see **AGENT
 ## Agent checklist
 
 1. Read this doc + **desktop-session-machine.md** before changing unlock flow.
-2. Never persist passtoken, access, refresh, or mobile password outside keyring / memory rules.
+2. Persist owner passtoken plaintext **only** in OS keyring `owner-passtoken`. Never `~/.relaybase`, cookies, localStorage, or sessionStorage. JS never reads it from the keyring.
 3. `/console/*` → console scope; `/mail/*` → mail scope.
-4. Touch ID only in `ensureConsoleAccess` — not on mail boot or teammate flows.
-5. New desktop entry paths → `AppSessionStore` actions, not bypass routes.
-6. Rebuild Worker bundle after `server/` auth changes.
+4. Touch ID **only** authorizes a read of `owner-passtoken`. Not on silent mail boot, not on teammate flows, not as a generic console privilege check.
+5. After first enrollment, do not show the typed passtoken form unless bio failed / was declined or the keyring item is missing.
+6. New desktop entry paths → `AppSessionStore` actions, not bypass routes.
+7. Rebuild Worker bundle after `server/` auth changes.

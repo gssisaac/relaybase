@@ -71,16 +71,18 @@ This is the **sole source of truth** for product catalog state. No KV binding on
 The desktop **god token is retired**. Owner auth is now a **Worker-issued passtoken + session** model — the customer `worker.js` is the authentication authority for its own resources.
 
 - The owner chooses a username; the Worker issues a **random passtoken** (`rb_pass_…`, API-key-style) once. The plaintext is shown **once** and the user downloads it; the Worker stores only `sha256(AUTH_PEPPER || salt || passtoken)`.
-- The app **never writes the passtoken** (or access/refresh tokens) to `~/.relaybase`, cookies, localStorage, or sessionStorage. The user keeps the downloaded file.
-- Desktop session storage: **dual refresh** in the OS keyring (`mailRefreshToken` ~90d, console `refreshToken` ~30m); **split access** in Tauri memory (mail ~60m, console ~30m). Mail boot is **silent** (`owner_boot_mail`); console dashboard requires **Touch ID** at entry (`owner_unlock_console` after `owner_touch_id_cmd`). Teammate desktop unlock is silent from keyring — no biometry. Linux / unsigned `tauri dev` fall back to passtoken for console. JS never sees tokens — Rust `worker_request` picks scope by path prefix.
+- After first enrollment the desktop **stores the passtoken in the OS keyring** (`owner-passtoken`). The app **never writes** the passtoken, access, or refresh tokens to `~/.relaybase`, cookies, localStorage, or sessionStorage. The download is a backup / other-Mac copy — not the daily input surface.
+- Desktop session storage: **dual refresh** in OS keyring `owner-session` (`mailRefreshToken` ~90d, console `refreshToken` ~30m); **passtoken** in a **separate** `owner-passtoken` item; **split access** in Tauri memory (mail ~60m, console ~30m). Mail boot is **silent** (`owner_boot_mail`). Touch ID / Windows Hello **only** decides whether Rust may **read** `owner-passtoken` for a new `/console/login`. Valid scoped refresh unlocks silently — no Touch ID. Typed passtoken is first-login and bio-fail / decline only. Teammate desktop unlock is silent from keyring — no biometry. Linux / unsigned `tauri dev` read `owner-passtoken` without a prompt if the item exists. JS never sees tokens — Rust `worker_request` picks scope by path prefix.
 - `POST /console/login` returns mail + console refresh tokens and mail access immediately; console access is minted at gate time via scoped refresh.
 - All `/console/*` routes require **console-scoped** access; `/mail/*` require **mail-scoped** access (`requireOwnerSession(c, scope)`).
-- Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can GET `/accounts/{CF_ACCOUNT_ID}`, then re-issues a passtoken once and revokes all sessions. No console email, no central god token.
+- Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can GET `/accounts/{CF_ACCOUNT_ID}`, then re-issues a passtoken once (download + write `owner-passtoken`) and revokes all sessions. No console email, no central god token.
 - `AUTH_PEPPER` (random, set once at install) replaces the old `ADMIN_TOKEN` wrangler secret. `owner_config.admin_token` and D1 `auth_tokens` (`rb-auth-…`) are dropped (migration `0003_owner_login`; after local `0002_app_settings`).
 
-The desktop **unlock flow** — silent mail boot, console-only Touch ID,
-owner/invited phase machine, team keyring, scoped 401 — is documented in
-**[desktop-session-machine.md](./desktop-session-machine.md)**.
+The desktop **unlock flow** — silent mail boot, keyring passtoken + Touch ID
+as the read-gate, owner/invited phase machine, team keyring, scoped 401 — is
+documented in **[desktop-session-machine.md](./desktop-session-machine.md)**
+and **[authentication.md](./authentication.md)** → *Owner passtoken in the
+keyring*.
 Invited (team) mobile passwords live in the OS keyring
 (`team-session:{email}`), mirroring the owner keyring; see
 **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
@@ -236,9 +238,10 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | Mail list / search / counts | D1 `RELAYBASE_MAIL` (`mailbox_messages`, `mailbox_fts`) | `mail/desktop/inbox.json` |
 | API key existence | D1 `RELAYBASE_DB` (`api_keys`) | `cache/dashboard/api-keys-*` |
 | API key plaintext | `~/.relaybase/api-keys.json` | — |
-| Owner sessions | D1 `RELAYBASE_DB` (`owner_sessions`, refresh hash-only) | — |
+| Owner sessions | D1 `RELAYBASE_DB` (`owner_sessions`, refresh hash-only) | OS keyring `owner-session` (refresh plaintext) |
+| Owner passtoken plaintext | OS keyring `owner-passtoken` (Touch ID to read) | one-time user download (backup) |
 | Webhooks | D1 `RELAYBASE_DB` (`webhooks`, `webhook_secrets`, `webhook_fails`) | — |
-| Mobile passwords | D1 `RELAYBASE_DB` (`mobile_passwords`) | — |
+| Mobile passwords | D1 `RELAYBASE_DB` (`mobile_passwords`) | OS keyring `team-session:{email}` (desktop teammate) |
 | Owner config / passtoken hash | D1 `RELAYBASE_DB` (`owner_config`) | — |
 | Product options (inbound retain) | D1 `RELAYBASE_DB` (`app_settings`) | — |
 | Pending inbound events | D1 `RELAYBASE_DB` (`inbound_events`, `expires_at`) | — |

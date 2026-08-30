@@ -43,6 +43,7 @@ export type AppSessionDeps = {
   }) => Promise<OwnerSessionStatus>;
   ownerBootMail: () => Promise<OwnerSessionStatus>;
   ownerUnlockConsole: () => Promise<OwnerSessionStatus>;
+  ownerLoginFromKeyring: (reason: string) => Promise<OwnerSessionStatus>;
   ownerLogout: () => Promise<void>;
   ownerSetupAdmin: (input: {
     workerUrl: string;

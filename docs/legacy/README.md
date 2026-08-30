@@ -2,7 +2,9 @@
 
 Archived docs describe **pre–console-only bio gate** behavior (Touch ID on
 launch, `offerBiometry`, `unlock { mode: prompting | idle }`, single refresh
-token). Do not implement from these files.
+token). Current policy stores the owner passtoken in the keyring and uses
+Touch ID only as the **read-gate** for that item — do not implement from
+these files.
 
 **Current docs** (use these instead):
 

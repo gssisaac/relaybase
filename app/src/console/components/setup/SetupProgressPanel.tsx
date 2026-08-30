@@ -1281,8 +1281,8 @@ export function SetupProgressPanel({
                 <>
                   <p className="text-xs font-medium">Save your passtoken</p>
                   <p className="text-xs text-muted-foreground">
-                    Shown once. Copy or download it — you cannot sign in
-                    without it. The app does not store the passtoken.
+                    Shown once. Copy or download a backup — this Mac also
+                    stores it in the keyring, and Touch ID reads it later.
                   </p>
                   {autoDone.username ? (
                     <p className="text-xs text-muted-foreground">

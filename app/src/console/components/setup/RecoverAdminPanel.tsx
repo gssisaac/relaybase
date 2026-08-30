@@ -205,8 +205,8 @@ export function RecoverAdminPanel() {
         {revealed ? (
           <div className="space-y-3">
             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-              New passtoken issued. Sign in with it once — the app does not
-              store it.
+              New passtoken issued. Copy or download a backup — this Mac
+              stores it in the keyring, and Touch ID reads it later.
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL: <span className="font-mono">{workerUrl}</span>
@@ -251,8 +251,14 @@ export function RecoverAdminPanel() {
               className="w-full"
               disabled={!copiedToken && !tokenDownloaded}
               onClick={() => {
-                store.consumeRevealedPasstoken();
-                router.replace("/");
+                void (async () => {
+                  try {
+                    await store.consumeRevealedPasstoken();
+                    router.replace("/");
+                  } catch {
+                    /* store.error */
+                  }
+                })();
               }}
             >
               Go to Mailbox

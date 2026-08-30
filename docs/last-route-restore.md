@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Relaybase remembers the last URL **per sidebar mode** (`email` | `dashboard`). App boot always enters the last **email** path. The last dashboard path is restored only when the user switches to Dashboard (after console Touch ID).
+Relaybase remembers the last URL **per sidebar mode** (`email` | `dashboard`). App boot always enters the last **email** path. The last dashboard path is restored only when the user switches to Dashboard (after `ensureConsoleAccess` — silent console refresh, or Touch ID to read the keyring passtoken).
 
 Without entry restore, every open hard-redirected to `/dashboard`, which opened Unlock console when the console token was missing (offline or expired).
 
@@ -66,7 +66,7 @@ app/src/components/layout/UserSidebar.tsx
 
 | Entry point | Behavior |
 |-------------|----------|
-| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` — after `canShowApp`, restores last **email** path only. No console Touch ID on this path. Fail-safe is `/email/inbox`. |
+| `/` (`app/src/app/page.tsx`) | `<RestoreLastRoute userId="desktop" />` — after `canShowApp`, restores last **email** path only. No console unlock / Touch ID on this path. Fail-safe is `/email/inbox`. |
 | `/email` (`app/src/app/(shell)/email/page.tsx`) | redirect → `/email/inbox` |
 
 Client gate:
@@ -74,6 +74,8 @@ Client gate:
 ```text
 app/src/components/RestoreLastRoute.tsx
 ```
+
+While resolving, it renders **`AppLoadingScreen`** (same icon + spinner as `BootScreen`) so the boot → restore handoff does not flicker. Do not put a different "Loading…" layout here — [docs/app-loading-screen.md](./app-loading-screen.md).
 
 `RestoreLastRoute` resolves `userId` as: prop → `fallbackUserId` (`"desktop"`). Cookie login is removed.
 
@@ -92,4 +94,4 @@ flowchart TD
   resolve --> navigate["router.replace email path"]
 ```
 
-Dashboard last path is not used at boot. `UserSidebar.switchMode("dashboard")` calls `ensureConsoleAccess()` and then `readLastPath(..., "dashboard")` when unlocked or when the console gate opens for passtoken. Cancelled Touch ID and offline stay on mail.
+Dashboard last path is not used at boot. `UserSidebar.switchMode("dashboard")` calls `ensureConsoleAccess()` and then `readLastPath(..., "dashboard")` when unlocked or when the console gate opens for a **typed** passtoken fallback. Cancelled Touch ID (keyring passtoken not read) and offline stay on mail.

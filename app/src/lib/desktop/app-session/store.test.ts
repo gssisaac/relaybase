@@ -15,6 +15,7 @@ function ownerStatus(partial: Partial<OwnerSessionStatus>): OwnerSessionStatus {
     hasConsoleAccess: false,
     hasRefresh: false,
     hasAccess: false,
+    hasPasstoken: false,
     username: "",
     workerUrl: "",
     platform: "macos",
@@ -69,6 +70,7 @@ function makeDeps(
     authenticateBiometry?: () => Promise<void>;
     ownerBootMail?: () => Promise<OwnerSessionStatus>;
     ownerUnlockConsole?: () => Promise<OwnerSessionStatus>;
+    ownerLoginFromKeyring?: (reason: string) => Promise<OwnerSessionStatus>;
     ownerLogin?: (input: {
       workerUrl: string;
       username: string;
@@ -108,6 +110,9 @@ function makeDeps(
     ownerUnlockConsole:
       overrides.ownerUnlockConsole ??
       (() => Promise.resolve(ownerStatus({ hasConsoleAccess: true }))),
+    ownerLoginFromKeyring:
+      overrides.ownerLoginFromKeyring ??
+      (() => Promise.resolve(ownerStatus({ hasMailAccess: true, hasPasstoken: true }))),
     ownerLogout: overrides.ownerLogout ?? (() => Promise.resolve()),
     ownerSetupAdmin: () => Promise.resolve({ username: "owner", passtoken: "p" }),
     ownerResetAdmin: () => Promise.resolve({ username: "owner", passtoken: "p" }),
@@ -299,6 +304,27 @@ describe("AppSessionStore", () => {
     assert.equal(unlocked, 1);
   });
 
+  it("boots via keyring passtoken when mail refresh is gone", async () => {
+    let keyringLogins = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasPasstoken: true }),
+      ownerLoginFromKeyring: () => {
+        keyringLogins += 1;
+        return Promise.resolve(
+          ownerStatus({
+            hasPasstoken: true,
+            hasMailRefresh: true,
+            hasMailAccess: true,
+          }),
+        );
+      },
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasPasstoken: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "ownerReady", "keyring boot");
+    assert.equal(keyringLogins, 1);
+  });
+
   it("lands on passtoken form when owner has workerUrl but no keyring", () => {
     const store = createStore({ ownerStatus: ownerStatus({}) });
     store.setIdentity({
@@ -380,7 +406,7 @@ describe("AppSessionStore", () => {
     assert.equal(store.consoleGateOpen, false);
   });
 
-  it("ensureConsoleAccess prompts Touch ID and unlocks console", async () => {
+  it("ensureConsoleAccess silently unlocks console when refresh is valid", async () => {
     let prompted = 0;
     let unlocked = 0;
     const store = createStore({
@@ -410,7 +436,7 @@ describe("AppSessionStore", () => {
     );
     const ok = await store.ensureConsoleAccess();
     assert.equal(ok, true);
-    assert.equal(prompted, 1);
+    assert.equal(prompted, 0);
     assert.equal(unlocked, 1);
     assert.equal(store.hasConsoleAccess, true);
   });
@@ -446,14 +472,14 @@ describe("AppSessionStore", () => {
     const store = createStore({
       ownerStatus: ownerStatus({
         hasMailAccess: true,
-        hasConsoleRefresh: true,
+        hasPasstoken: true,
       }),
-      authenticateBiometry: () =>
+      ownerLoginFromKeyring: () =>
         Promise.reject(new Error("[UserCancel] - The user cancelled the authentication")),
     });
     connectOwner(store);
     store.setStatuses(
-      ownerStatus({ hasMailAccess: true, hasConsoleRefresh: true }),
+      ownerStatus({ hasMailAccess: true, hasPasstoken: true }),
       teamStatus({}),
     );
     const ok = await store.ensureConsoleAccess();
@@ -482,7 +508,46 @@ describe("AppSessionStore", () => {
     assert.equal(store.consoleGateOpen, false);
   });
 
-  it("ensureConsoleAccess opens gate when console refresh is expired", async () => {
+  it("ensureConsoleAccess uses keyring passtoken when console refresh is expired", async () => {
+    let keyringLogins = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailAccess: true,
+        hasConsoleRefresh: true,
+        hasPasstoken: true,
+      }),
+      ownerUnlockConsole: () =>
+        Promise.reject(
+          new Error("Session expired. Sign in with your passtoken."),
+        ),
+      ownerLoginFromKeyring: () => {
+        keyringLogins += 1;
+        return Promise.resolve(
+          ownerStatus({
+            hasMailAccess: true,
+            hasConsoleRefresh: true,
+            hasConsoleAccess: true,
+            hasPasstoken: true,
+          }),
+        );
+      },
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({
+        hasMailAccess: true,
+        hasConsoleRefresh: true,
+        hasPasstoken: true,
+      }),
+      teamStatus({}),
+    );
+    const ok = await store.ensureConsoleAccess();
+    assert.equal(ok, true);
+    assert.equal(keyringLogins, 1);
+    assert.equal(store.consoleGateOpen, false);
+  });
+
+  it("ensureConsoleAccess opens gate when console refresh is expired and no passtoken", async () => {
     const store = createStore({
       ownerStatus: ownerStatus({
         hasMailAccess: true,
@@ -551,6 +616,37 @@ describe("AppSessionStore", () => {
     assert.equal(store.phase.kind, "ownerReady");
     await store.handleWorkerUnauthorized();
     assert.equal(booted, 1);
+    assert.equal(store.phase.kind, "ownerReady");
+  });
+
+  it("handleWorkerUnauthorized uses keyring passtoken when mail refresh is gone", async () => {
+    let keyringLogins = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailAccess: true,
+        hasPasstoken: true,
+      }),
+      ownerSessionStatus: () =>
+        Promise.resolve(ownerStatus({ hasPasstoken: true })),
+      ownerLoginFromKeyring: () => {
+        keyringLogins += 1;
+        return Promise.resolve(
+          ownerStatus({
+            hasPasstoken: true,
+            hasMailRefresh: true,
+            hasMailAccess: true,
+          }),
+        );
+      },
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({ hasMailAccess: true, hasPasstoken: true }),
+      teamStatus({}),
+    );
+    assert.equal(store.phase.kind, "ownerReady");
+    await store.handleWorkerUnauthorized();
+    assert.equal(keyringLogins, 1);
     assert.equal(store.phase.kind, "ownerReady");
   });
 

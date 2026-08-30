@@ -118,7 +118,7 @@ export function UnlockView({
             <p className="text-xs text-muted-foreground">
               {role === "invited"
                 ? "Sign in with your account email and the password your admin set up in Accounts → Teammate login."
-                : "Sign in with your username and the passtoken you downloaded. The app does not store the passtoken."}
+                : "Sign in with your username and passtoken. After this, Touch ID reads it from the keyring."}
             </p>
           </div>
 

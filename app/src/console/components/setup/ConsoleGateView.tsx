@@ -26,8 +26,8 @@ import { cn } from "@/lib/utils";
 const LOCAL_OPERATOR_USER_ID = "desktop";
 
 /**
- * Owner console gate — the only Touch ID surface. Shown when entering
- * dashboard mode without a valid console access token.
+ * Owner console gate — typed passtoken fallback, plus Touch ID retry
+ * to read the stored keyring passtoken.
  */
 export function ConsoleGateView() {
   const router = useRouter();
@@ -51,9 +51,7 @@ export function ConsoleGateView() {
 
   const label = biometryLabel(0, store.ownerStatus?.platform ?? "macos");
   const busy = store.busy;
-  const canTryBio = Boolean(
-    store.ownerStatus?.hasConsoleRefresh || store.ownerStatus?.hasRefresh,
-  );
+  const canTryBio = Boolean(store.ownerStatus?.hasPasstoken);
 
   const workerUrlSeeds = useMemo(
     () => [credentials?.workerUrl, store.ownerStatus?.workerUrl],
@@ -102,8 +100,8 @@ export function ConsoleGateView() {
               Unlock console
             </h1>
             <p className="text-xs text-muted-foreground">
-              Dashboard access requires {label} or your passtoken every 30
-              minutes.
+              Use {label} to read your stored passtoken, or type it if
+              biometry fails or is declined.
             </p>
           </div>
 

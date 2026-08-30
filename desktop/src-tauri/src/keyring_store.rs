@@ -88,6 +88,42 @@ pub fn delete_password(service: &str, account: &str) {
     cache.insert(key, None);
 }
 
+/// Existence check that does not cache the secret. Used for `owner-passtoken`.
+pub fn has_password(service: &str, account: &str) -> Result<bool, String> {
+    let key = cache_key(service, account);
+    {
+        let cache = cache_lock();
+        if let Some(hit) = cache.get(&key) {
+            return Ok(hit.as_ref().is_some_and(|s| !s.is_empty()));
+        }
+    }
+    #[cfg(debug_assertions)]
+    {
+        return crate::dev::has_password(service, account);
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        let value = platform_get(service, account)?;
+        Ok(value.as_ref().is_some_and(|s| !s.is_empty()))
+    }
+}
+
+/// Read without the in-process cache so a prior write cannot skip Touch ID.
+pub fn get_password_uncached(service: &str, account: &str) -> Result<Option<String>, String> {
+    #[cfg(debug_assertions)]
+    {
+        crate::dev::get_password(service, account)
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        platform_get(service, account)
+    }
+}
+
+pub fn forget_cached_password(service: &str, account: &str) {
+    cache_lock().remove(&cache_key(service, account));
+}
+
 // Release-only OS keyring path. `tauri dev` (debug) uses
 // `crate::dev::keyring_store` so these helpers are not compiled there.
 #[cfg(not(debug_assertions))]

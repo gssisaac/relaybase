@@ -8,6 +8,8 @@ export type OwnerSessionStatus = {
   /** Back-compat shims from Rust. */
   hasRefresh: boolean;
   hasAccess: boolean;
+  /** OS keyring `owner-passtoken` exists (secret is never returned). */
+  hasPasstoken: boolean;
   username: string;
   workerUrl: string;
   platform: string;
@@ -25,6 +27,7 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasConsoleAccess: false,
   hasRefresh: false,
   hasAccess: false,
+  hasPasstoken: false,
   username: "",
   workerUrl: "",
   platform: "other",
@@ -61,6 +64,13 @@ export async function desktopOwnerUnlockConsole(): Promise<OwnerSessionStatus> {
 /** Touch ID / Windows Hello — console gate only. */
 export async function desktopOwnerTouchId(reason: string): Promise<void> {
   await invoke("owner_touch_id_cmd", { reason });
+}
+
+/** Touch ID then read keyring passtoken and login. Secret never returns to JS. */
+export async function desktopOwnerLoginFromKeyring(
+  reason: string,
+): Promise<OwnerSessionStatus> {
+  return invoke("owner_login_from_keyring_cmd", { reason });
 }
 
 export async function desktopOwnerLogout(): Promise<void> {

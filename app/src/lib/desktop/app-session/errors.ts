@@ -69,7 +69,7 @@ export function visibleUnlockError(
 /**
  * After a failed console unlock, stay on mail (do not open the passtoken
  * overlay). Covers dismissed Touch ID and Worker-unreachable / offline.
- * Expired console refresh is *not* this — that still needs ConsoleGateView.
+ * Expired console refresh with no keyring passtoken still opens ConsoleGateView.
  */
 export function isStayOnMailConsoleUnlockError(err: unknown): boolean {
   if (isUserDismissedBiometry(err)) return true;

@@ -23,6 +23,7 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasConsoleAccess: false,
   hasRefresh: false,
   hasAccess: false,
+  hasPasstoken: false,
   username: "",
   workerUrl: "",
   platform: "macos",

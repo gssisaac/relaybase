@@ -26,6 +26,8 @@ export function createDefaultDeps(
     ownerBootMail: () => bridge().then((b) => b.desktopOwnerBootMail()),
     ownerUnlockConsole: () =>
       bridge().then((b) => b.desktopOwnerUnlockConsole()),
+    ownerLoginFromKeyring: (reason) =>
+      bridge().then((b) => b.desktopOwnerLoginFromKeyring(reason)),
     ownerLogout: () => bridge().then((b) => b.desktopOwnerLogout()),
     ownerSetupAdmin: (input) =>
       bridge().then((b) => b.desktopOwnerSetupAdmin(input)),

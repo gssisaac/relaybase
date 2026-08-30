@@ -5,6 +5,7 @@ mod cloudflare;
 mod dev;
 mod keyring_store;
 mod notify;
+mod owner_passtoken;
 mod owner_session;
 mod secrets;
 mod team_session;
@@ -44,7 +45,9 @@ use secrets::{
 };
 use owner_session::{
     owner_boot_mail as owner_boot_mail_inner,
-    owner_login as owner_login_inner, owner_logout as owner_logout_inner,
+    owner_login as owner_login_inner,
+    owner_login_from_keyring as owner_login_from_keyring_inner,
+    owner_logout as owner_logout_inner,
     owner_reset_admin as owner_reset_admin_inner, owner_session_status,
     owner_setup_admin as owner_setup_admin_inner,
     owner_unlock_console as owner_unlock_console_inner,
@@ -1530,6 +1533,14 @@ async fn owner_logout_cmd() -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn owner_login_from_keyring_cmd(
+    app: tauri::AppHandle,
+    reason: String,
+) -> Result<OwnerSessionStatus, String> {
+    owner_login_from_keyring_inner(app, reason).await
+}
+
+#[tauri::command]
 async fn owner_touch_id_cmd(app: tauri::AppHandle, reason: String) -> Result<(), String> {
     crate::touch_id::authenticate(app, reason).await
 }
@@ -1787,6 +1798,7 @@ pub fn run() {
             owner_boot_mail_cmd,
             owner_unlock_console_cmd,
             owner_logout_cmd,
+            owner_login_from_keyring_cmd,
             owner_touch_id_cmd,
             owner_setup_admin_cmd,
             owner_reset_admin_cmd,

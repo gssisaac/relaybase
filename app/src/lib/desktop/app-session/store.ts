@@ -2,7 +2,6 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { isSystemCanceledBiometry } from "../biometry/dismiss";
 import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
 import { createDefaultDeps } from "./defaults";
 import { isStayOnMailConsoleUnlockError, visibleUnlockError } from "./errors";
@@ -23,9 +22,8 @@ import type {
  * Single source of truth for "who can enter the app right now".
  *
  * Mail unlock is silent on boot (keyring refresh → owner_boot_mail /
- * team_unlock). The passtoken / mobile-password form is first-login and
- * fallback only. Console dashboard access is gated separately via Touch ID
- * (`ensureConsoleAccess` / `ConsoleGateView`).
+ * team_unlock). When a new login is needed, Touch ID reads the keyring
+ * passtoken. The typed form is first-login and bio-fail / decline only.
  */
 
 export class AppSessionStore {
@@ -130,6 +128,10 @@ export class AppSessionStore {
     return owner.hasConsoleRefresh || owner.hasRefresh;
   }
 
+  private hasOwnerPasstoken(): boolean {
+    return Boolean(this.ownerStatus?.hasPasstoken);
+  }
+
   // --- Hydration ---
 
   /** Push the latest owner/team keyring status and run silent boot unlock. */
@@ -168,7 +170,9 @@ export class AppSessionStore {
     }
     const owner = this.ownerStatus;
     return Boolean(
-      owner && this.hasOwnerMailRefresh() && !this.hasOwnerMailAccess(),
+      owner &&
+        !this.hasOwnerMailAccess() &&
+        (this.hasOwnerMailRefresh() || this.hasOwnerPasstoken()),
     );
   }
 
@@ -186,16 +190,16 @@ export class AppSessionStore {
           });
           await this.deps.refreshIdentity();
         }
-      } else if (
-        owner &&
-        this.hasOwnerMailRefresh() &&
-        !this.hasOwnerMailAccess()
-      ) {
-        const status = await this.deps.ownerBootMail();
-        runInAction(() => {
-          this.ownerStatus = status;
-        });
-        await this.deps.refreshIdentity();
+      } else if (owner && !this.hasOwnerMailAccess()) {
+        if (this.hasOwnerMailRefresh()) {
+          const status = await this.deps.ownerBootMail();
+          runInAction(() => {
+            this.ownerStatus = status;
+          });
+          await this.deps.refreshIdentity();
+        } else if (this.hasOwnerPasstoken()) {
+          await this.loginFromKeyringPasstoken("Unlock Relaybase");
+        }
       }
     } catch {
       /* reconcile falls back to the secret form */
@@ -312,17 +316,39 @@ export class AppSessionStore {
 
   // --- Console gate ---
 
-  private async authenticateBiometry(reason: string): Promise<void> {
+  /**
+   * Touch ID then read `owner-passtoken` and login. Used by boot, console
+   * gate, and mail 401 — JS never sees the secret.
+   */
+  async loginFromKeyringPasstoken(reason: string): Promise<OwnerSessionStatus> {
+    const status = await this.deps.ownerLoginFromKeyring(reason);
+    runInAction(() => {
+      this.ownerStatus = status;
+    });
     try {
-      await this.deps.authenticateBiometry(reason);
-    } catch (err) {
-      if (!isSystemCanceledBiometry(err)) throw err;
-      await new Promise((r) => setTimeout(r, 200));
-      await this.deps.authenticateBiometry(reason);
+      await this.deps.refreshIdentity();
+    } catch {
+      /* login already succeeded */
     }
+    return status;
   }
 
-  /** Touch ID / Windows Hello for console only. Returns true when unlocked. */
+  private async unlockConsoleSilent(): Promise<boolean> {
+    const status = await this.deps.ownerUnlockConsole();
+    runInAction(() => {
+      this.ownerStatus = status;
+      this.consoleGateOpen = false;
+      this.busy = false;
+    });
+    try {
+      await this.deps.refreshIdentity();
+    } catch {
+      /* unlock already succeeded */
+    }
+    return this.hasConsoleAccess;
+  }
+
+  /** Grant console access: silent refresh, else Touch ID → keyring passtoken. */
   async ensureConsoleAccess(): Promise<boolean> {
     if (this.hasConsoleAccess) return true;
 
@@ -330,20 +356,29 @@ export class AppSessionStore {
       this.busy = true;
       this.error = null;
       try {
-        if (this.deps.isDesktop()) {
-          await this.authenticateBiometry("Unlock Relaybase console");
-        }
-        const status = await this.deps.ownerUnlockConsole();
+        return await this.unlockConsoleSilent();
+      } catch (err) {
         runInAction(() => {
-          this.ownerStatus = status;
+          this.busy = false;
+        });
+        if (isStayOnMailConsoleUnlockError(err)) {
+          return false;
+        }
+      }
+    }
+
+    if (this.hasOwnerPasstoken()) {
+      this.busy = true;
+      this.error = null;
+      try {
+        await this.loginFromKeyringPasstoken("Unlock Relaybase");
+        if (!this.hasConsoleAccess && this.hasOwnerConsoleRefresh()) {
+          return await this.unlockConsoleSilent();
+        }
+        runInAction(() => {
           this.consoleGateOpen = false;
           this.busy = false;
         });
-        try {
-          await this.deps.refreshIdentity();
-        } catch {
-          // Unlock already succeeded; identity refresh is best-effort.
-        }
         return this.hasConsoleAccess;
       } catch (err) {
         runInAction(() => {
@@ -679,8 +714,34 @@ export class AppSessionStore {
     }
   }
 
-  consumeRevealedPasstoken(): void {
+  async consumeRevealedPasstoken(): Promise<void> {
+    const revealed = this.revealedPasstoken;
+    const workerUrl =
+      this.resolvedWorkerUrl("owner") ||
+      this.identity.credentials?.workerUrl?.trim() ||
+      "";
     this.revealedPasstoken = null;
+    if (revealed && workerUrl) {
+      await this.loginWithPasstoken({
+        workerUrl,
+        username: revealed.username,
+        passtoken: revealed.passtoken,
+      });
+      return;
+    }
+    if (this.hasOwnerPasstoken()) {
+      try {
+        await this.loginFromKeyringPasstoken("Unlock Relaybase");
+        runInAction(() => {
+          if (this.hasOwnerMailAccess() && this.hasWorkerConnected()) {
+            this.phase = { kind: "ownerReady" };
+          }
+        });
+        return;
+      } catch {
+        /* fall through to typed form */
+      }
+    }
     runInAction(() => {
       this.phase = { kind: "unlock", role: "owner", mode: "secret" };
     });
@@ -736,6 +797,24 @@ export class AppSessionStore {
       if (
         this.phase.kind === "ownerReady" &&
         !this.hasOwnerMailAccess() &&
+        this.hasOwnerPasstoken()
+      ) {
+        try {
+          await this.loginFromKeyringPasstoken("Unlock Relaybase");
+          if (this.hasOwnerMailAccess()) {
+            runInAction(() => {
+              this.reconcileFromStatuses();
+            });
+            return;
+          }
+        } catch {
+          /* fall through to secret form */
+        }
+      }
+
+      if (
+        this.phase.kind === "ownerReady" &&
+        !this.hasOwnerMailAccess() &&
         !this.hasOwnerMailRefresh()
       ) {
         runInAction(() => {
@@ -763,10 +842,15 @@ export class AppSessionStore {
     }
   }
 
-  /** Console Worker returned 401 — open the console gate overlay. */
+  /** Console Worker returned 401 — silent refresh, else keyring passtoken, else typed gate. */
   async handleConsoleUnauthorized(): Promise<void> {
     runInAction(() => {
-      this.consoleGateOpen = true;
+      if (this.ownerStatus) {
+        this.ownerStatus = {
+          ...this.ownerStatus,
+          hasConsoleAccess: false,
+        };
+      }
     });
     try {
       const owner = await this.deps.ownerSessionStatus();
@@ -774,14 +858,8 @@ export class AppSessionStore {
         this.ownerStatus = owner;
       });
     } catch {
-      runInAction(() => {
-        if (this.ownerStatus) {
-          this.ownerStatus = {
-            ...this.ownerStatus,
-            hasConsoleAccess: false,
-          };
-        }
-      });
+      /* keep last known status with access cleared */
     }
+    await this.ensureConsoleAccess();
   }
 }

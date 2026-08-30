@@ -55,6 +55,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -131,6 +137,53 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
       height={16}
       className="size-4 shrink-0"
     />
+  );
+}
+
+function sidebarTitleForMode(mode: SidebarMode) {
+  return mode === "email" ? "Mailbox" : "Relaybase console";
+}
+
+function ModeSwitchButton({
+  mode,
+  collapsed,
+  onClick,
+}: {
+  mode: SidebarMode;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  const nextMode: SidebarMode = mode === "email" ? "dashboard" : "email";
+  const nextLabel = sidebarTitleForMode(nextMode);
+
+  return (
+    <TooltipProvider delay={0}>
+      <Tooltip>
+        <TooltipTrigger
+          delay={0}
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size={collapsed ? "icon" : "icon-sm"}
+              className="shrink-0"
+              aria-label={`Switch to ${nextLabel}`}
+              onClick={onClick}
+            />
+          }
+        >
+          <ArrowLeftRight className={collapsed ? undefined : "size-3.5"} />
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          className="animate-none data-open:animate-none data-[state=delayed-open]:animate-none"
+        >
+          <TitleIcon mode={nextMode} />
+          {nextLabel}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -649,9 +702,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
     router.push(href);
   }
 
-  const titleLabel = mode === "email" ? "Mailbox" : "Relaybase console";
-  const modeToggleLabel =
-    mode === "email" ? "Switch to dashboard" : "Switch to mailbox";
+  const titleLabel = sidebarTitleForMode(mode);
   const switchModeTarget = () =>
     switchMode(mode === "email" ? "dashboard" : "email");
 
@@ -693,18 +744,13 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
             >
               <PanelLeftOpen />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="shrink-0"
-              aria-label={modeToggleLabel}
-              title={modeToggleLabel}
-              onClick={switchModeTarget}
-              hidden={isTeam}
-            >
-              <ArrowLeftRight />
-            </Button>
+            {isTeam ? null : (
+              <ModeSwitchButton
+                mode={mode}
+                collapsed
+                onClick={switchModeTarget}
+              />
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -785,17 +831,13 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={modeToggleLabel}
-                  title={modeToggleLabel}
-                  onClick={switchModeTarget}
-                  hidden={isTeam}
-                >
-                  <ArrowLeftRight className="size-3.5" />
-                </Button>
+                {isTeam ? null : (
+                  <ModeSwitchButton
+                    mode={mode}
+                    collapsed={false}
+                    onClick={switchModeTarget}
+                  />
+                )}
               </div>
             </div>
           </>

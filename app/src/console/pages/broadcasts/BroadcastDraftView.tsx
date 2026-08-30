@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { BroadcastBetaNotice } from "@/console/pages/broadcasts/BroadcastBetaNotice";
 import { BroadcastComposeForm } from "@/console/pages/broadcasts/BroadcastComposeForm";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useBroadcast } from "@/lib/dashboard/BroadcastContext";
@@ -267,6 +268,14 @@ export function BroadcastDraftView() {
           message={null}
           onDismissError={() => setError(null)}
         />
+        <div className="mb-3 shrink-0">
+          <BroadcastBetaNotice
+            recipientCount={
+              selectedGroups.reduce((sum, g) => sum + g.contactCount, 0) ||
+              detail.recipientCount
+            }
+          />
+        </div>
         {domainAddresses.length === 0 && selectedGroups.length > 0 ? (
           <p className="mb-3 text-xs text-muted-foreground">
             No sender accounts on{" "}

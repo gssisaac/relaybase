@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { BroadcastBetaNotice } from "@/console/pages/broadcasts/BroadcastBetaNotice";
 import { BroadcastDetailProvider } from "@/console/pages/broadcasts/BroadcastDetailContext";
 import { BroadcastDetailSwitch } from "@/console/pages/broadcasts/BroadcastDetailSwitch";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
@@ -386,6 +387,7 @@ function BroadcastsViewInner() {
             message={null}
             onDismissError={() => setError(null)}
           />
+          <BroadcastBetaNotice />
 
           <EmailListContainer>
             <ListToolbar

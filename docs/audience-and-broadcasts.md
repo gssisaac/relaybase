@@ -39,6 +39,8 @@ Legacy flat contacts without `groupId` are migrated into a per-domain **“Manua
 
 Broadcasts target one or more audience groups (`groupIds`). Recipients are the de-duplicated union of contacts across those groups.
 
+**Experimental beta:** send still runs in one Worker request with no pause/resume. The list and draft pages show a notice — do not send to more than **50** contacts (`BROADCAST_BETA_MAX_RECIPIENTS` in `BroadcastBetaNotice.tsx`).
+
 Lifecycle:
 
 1. **draft** — created from audience picker; editable compose UI  

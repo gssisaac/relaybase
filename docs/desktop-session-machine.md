@@ -129,7 +129,9 @@ Scoped by Worker path prefix in `api-base.ts`:
 | Path | Event | Store handler |
 |------|-------|---------------|
 | `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — silent `owner_boot_mail` retry; Worker unreachable stays in the mailbox; if that cannot repair, Touch ID → keyring passtoken → login |
-| `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
+| `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — Worker 401 **or** a local “no saved console session” error from `worker_request` (refresh token empty, request never sent). Same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
+
+Dashboard `EmailAlerts` also shows an **Unlock** button for those local console-session errors, so a stale page banner is never the only action.
 
 Neither handler wipes the worker URL or keyring (`owner-session` / `owner-passtoken`).
 

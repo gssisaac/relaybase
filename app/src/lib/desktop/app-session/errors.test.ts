@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  isConsoleAuthMissingError,
+  isConsoleUnlockRequiredError,
   isMissingWorkerError,
   isMissingWorkerUnlockMessage,
   isWorkerUnreachableError,
@@ -95,6 +97,42 @@ describe("isWorkerUnreachableError", () => {
       isWorkerUnreachableError(
         new Error("Console session expired. Sign in with your passtoken."),
       ),
+      false,
+    );
+  });
+});
+
+describe("isConsoleUnlockRequiredError", () => {
+  it("detects the desktop no-console-session messages", () => {
+    assert.equal(
+      isConsoleUnlockRequiredError(
+        new Error(
+          "No saved console session. Unlock the dashboard with Touch ID or passtoken.",
+        ),
+      ),
+      true,
+    );
+    assert.equal(
+      isConsoleUnlockRequiredError(
+        "Console session expired. Sign in with your passtoken.",
+      ),
+      true,
+    );
+    assert.equal(
+      isConsoleUnlockRequiredError(new Error("Invalid credentials")),
+      false,
+    );
+  });
+});
+
+describe("isConsoleAuthMissingError", () => {
+  it("treats unsigned console-scope errors as needing the gate", () => {
+    assert.equal(
+      isConsoleAuthMissingError(new Error("Not signed in"), "/console/domains"),
+      true,
+    );
+    assert.equal(
+      isConsoleAuthMissingError(new Error("Not signed in"), "/mail/inbox"),
       false,
     );
   });

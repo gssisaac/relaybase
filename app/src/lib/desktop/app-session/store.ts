@@ -37,6 +37,7 @@ export class AppSessionStore {
   consoleGateOpen = false;
   /** Last Worker call failed because the network / Worker was unreachable. */
   workerUnreachable = false;
+  private consoleUnauthorizedInFlight = false;
 
   private identity: IdentitySnapshot = {
     ready: false,
@@ -53,7 +54,7 @@ export class AppSessionStore {
     this.deps = createDefaultDeps(deps);
     makeAutoObservable(
       this,
-      { deps: false } as unknown as never,
+      { deps: false, consoleUnauthorizedInFlight: false } as unknown as never,
       { autoBind: true },
     );
   }
@@ -919,22 +920,28 @@ export class AppSessionStore {
 
   /** Console Worker returned 401 — silent refresh, else keyring passtoken, else typed gate. */
   async handleConsoleUnauthorized(): Promise<void> {
-    runInAction(() => {
-      if (this.ownerStatus) {
-        this.ownerStatus = {
-          ...this.ownerStatus,
-          hasConsoleAccess: false,
-        };
-      }
-    });
+    if (this.consoleGateOpen || this.consoleUnauthorizedInFlight) return;
+    this.consoleUnauthorizedInFlight = true;
     try {
-      const owner = await this.deps.ownerSessionStatus();
       runInAction(() => {
-        this.ownerStatus = owner;
+        if (this.ownerStatus) {
+          this.ownerStatus = {
+            ...this.ownerStatus,
+            hasConsoleAccess: false,
+          };
+        }
       });
-    } catch {
-      /* keep last known status with access cleared */
+      try {
+        const owner = await this.deps.ownerSessionStatus();
+        runInAction(() => {
+          this.ownerStatus = owner;
+        });
+      } catch {
+        /* keep last known status with access cleared */
+      }
+      await this.ensureConsoleAccess();
+    } finally {
+      this.consoleUnauthorizedInFlight = false;
     }
-    await this.ensureConsoleAccess();
   }
 }

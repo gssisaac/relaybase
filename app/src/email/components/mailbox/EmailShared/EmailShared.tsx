@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 
-import { AlertCircle, Check, Download, Paperclip, X } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Download,
+  Fingerprint,
+  Paperclip,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -36,6 +43,9 @@ import {
   isEmailApiNotConfiguredError,
   openEnableEmailApiDialog,
 } from "@/console/components/setup/use-enable-email-api-dialog";
+import { useAppSession } from "@/lib/desktop/app-session";
+import { isConsoleUnlockRequiredError } from "@/lib/desktop/app-session/errors";
+import { biometryLabel } from "@/lib/desktop/biometry/label";
 export { PageLoadingOverlay } from "@/components/ui/page-loading-overlay";
 
 /** Relative Next path (mapped to Worker in the packaged shell). */
@@ -503,15 +513,37 @@ export function EmailAlerts({
   onDismissError?: () => void;
   onDismissMessage?: () => void;
 }) {
+  const store = useAppSession();
+  const needsConsoleUnlock = Boolean(
+    error && isConsoleUnlockRequiredError(error),
+  );
+  const shownError =
+    needsConsoleUnlock && store.hasConsoleAccess ? null : error;
+  const unlockLabel = store.ownerStatus?.hasPasstoken
+    ? `Unlock with ${biometryLabel(0, store.ownerStatus.platform)}`
+    : "Unlock dashboard";
+
   return (
     <>
-      {error ? (
+      {shownError ? (
         <Alert variant="destructive" className="relative pr-10">
           <AlertCircle className="size-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
-            <FormattedErrorText text={error} />
-            {isEmailApiNotConfiguredError(error) ? (
+            <FormattedErrorText text={shownError} />
+            {needsConsoleUnlock ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                disabled={store.busy}
+                onClick={() => void store.ensureConsoleAccess()}
+              >
+                <Fingerprint className="size-3.5" />
+                {unlockLabel}
+              </Button>
+            ) : isEmailApiNotConfiguredError(shownError) ? (
               <Button
                 type="button"
                 size="sm"

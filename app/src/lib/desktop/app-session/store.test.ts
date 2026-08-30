@@ -672,6 +672,24 @@ describe("AppSessionStore", () => {
     assert.equal(store.consoleGateOpen, true);
   });
 
+  it("handleConsoleUnauthorized does not re-enter while the gate is open", async () => {
+    let statusReads = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasMailAccess: true }),
+      ownerSessionStatus: () => {
+        statusReads += 1;
+        return Promise.resolve(ownerStatus({ hasMailAccess: true }));
+      },
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasMailAccess: true }), teamStatus({}));
+    await store.handleConsoleUnauthorized();
+    assert.equal(store.consoleGateOpen, true);
+    const readsAfterFirst = statusReads;
+    await store.handleConsoleUnauthorized();
+    assert.equal(statusReads, readsAfterFirst);
+  });
+
   it("handleWorkerUnauthorized retries silent mail boot", async () => {
     let booted = 0;
     const store = createStore({

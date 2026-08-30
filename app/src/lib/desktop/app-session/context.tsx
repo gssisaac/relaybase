@@ -218,6 +218,7 @@ export function useAppSession(): AppSessionStore {
           canShowApp: ctx.canShowApp,
           consoleGateOpen: ctx.consoleGateOpen,
           hasConsoleAccess: ctx.hasConsoleAccess,
+          hasPasstoken: Boolean(ctx.ownerStatus?.hasPasstoken),
           workerUnreachable: ctx.workerUnreachable,
           workerUrl: ctx.ownerStatus?.workerUrl ?? "",
           hasRefresh: Boolean(ctx.ownerStatus?.hasRefresh),

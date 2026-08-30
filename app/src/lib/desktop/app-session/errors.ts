@@ -90,3 +90,39 @@ export function isWorkerUnreachableError(err: unknown): boolean {
 export function isStayOnMailConsoleUnlockError(err: unknown): boolean {
   return isUserDismissedBiometry(err) || isWorkerUnreachableError(err);
 }
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err ?? "");
+}
+
+/**
+ * Rust `worker_request` / `refresh_scope` refused a `/console/*` call
+ * because there is no in-memory console access and no console refresh.
+ * This is not a Worker 401 — the HTTP request never left the desktop —
+ * but it needs the same unlock CTA / console-gate flow.
+ */
+export function isConsoleUnlockRequiredError(err: unknown): boolean {
+  const lower = errorMessage(err).trim().toLowerCase();
+  if (!lower) return false;
+  return (
+    lower.includes("no saved console session") ||
+    lower.includes("console session expired") ||
+    lower.includes("unlock the dashboard")
+  );
+}
+
+/** Auth-missing errors on `/console/*` that should open the console gate. */
+export function isConsoleAuthMissingError(
+  err: unknown,
+  workerPath: string,
+): boolean {
+  if (isConsoleUnlockRequiredError(err)) return true;
+  if (!workerPath.startsWith("/console/")) return false;
+  const lower = errorMessage(err).trim().toLowerCase();
+  return (
+    lower === "not signed in" ||
+    lower.includes("no saved session") ||
+    lower.includes("sign in with your passtoken")
+  );
+}

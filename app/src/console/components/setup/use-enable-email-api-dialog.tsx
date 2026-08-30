@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 
 import { EnableEmailApiDialog } from "@/console/components/setup/EnableEmailApiDialog";
+import { isConsoleUnlockRequiredError } from "@/lib/desktop/app-session/errors";
 import {
   desktopGetCredentials,
   desktopOpenExternal,
@@ -100,6 +101,22 @@ export function isEmailApiNotConfiguredError(message: string): boolean {
 }
 
 export function toastEmailApiAwareError(message: string) {
+  if (isConsoleUnlockRequiredError(message)) {
+    toast.error(message, {
+      duration: Infinity,
+      closeButton: true,
+      action: {
+        label: "Unlock dashboard",
+        onClick: () => {
+          if (typeof window === "undefined") return;
+          window.dispatchEvent(
+            new CustomEvent("relaybase:console-unauthorized"),
+          );
+        },
+      },
+    });
+    return;
+  }
   if (isEmailApiNotConfiguredError(message)) {
     toast.error(message, {
       duration: Infinity,

@@ -1,5 +1,6 @@
 import { isDesktopRuntime, type DesktopCredentials } from "@/lib/desktop/bridge";
 import { isUnauthorizedGraceActive } from "@/lib/desktop/auth";
+import { isConsoleAuthMissingError } from "@/lib/desktop/app-session/errors";
 import {
   isAnyApiPath,
   isEmailApiPath,
@@ -248,6 +249,9 @@ export async function desktopAwareFetch(
       }
       return res;
     } catch (err) {
+      if (isConsoleAuthMissingError(err, workerPath)) {
+        dispatchWorkerUnauthorized(workerPath);
+      }
       throw new Error(friendlyDesktopFetchError(err, "Worker request failed"));
     }
   }

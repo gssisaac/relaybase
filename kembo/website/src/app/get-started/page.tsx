@@ -22,14 +22,14 @@ import { pageSocialMeta, siteConfig } from "@/lib/site-config";
 export const metadata: Metadata = {
   title: `Join the ${siteConfig.name} beta`,
   description:
-    "Join the Relaybase beta. We will email you a download link for the Mac app — a Worker you install on your own Cloudflare account.",
+    "Join the Relaybase beta. The Mac app (Universal) is available now. Windows is coming soon.",
   alternates: {
     canonical: siteConfig.getStartedPath,
   },
   ...pageSocialMeta({
     title: `Join the ${siteConfig.name} beta`,
     description:
-      "Leave your email and we will send a personal download link for the Mac app. You deploy the Worker into your Cloudflare account.",
+      "Leave your email and we will send a personal Mac download link. Windows is coming soon.",
     path: siteConfig.getStartedPath,
   }),
 };
@@ -42,8 +42,8 @@ const promises = [
   },
   {
     icon: MonitorSmartphone,
-    title: "Mac app + Worker",
-    desc: "A fast native inbox over a routing Worker you install — send API and inbound in your account.",
+    title: "Mac app now, Windows next",
+    desc: "The Mac app is available now as a Universal build. Windows is coming soon — we will ship it to the same beta list.",
   },
   {
     icon: Cloud,
@@ -77,9 +77,9 @@ export default function GetStartedPage() {
               </h1>
 
               <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-                Leave your email and we will send a personal download link for
-                the Mac app. You get a license for your own Cloudflare account
-                — not a hosted mailbox we operate.
+                Leave your email and we will send a personal download link.
+                The Mac app (Universal) is available now. Windows is coming
+                soon.
               </p>
             </div>
 
@@ -119,13 +119,14 @@ export default function GetStartedPage() {
               <Card className="border-2 border-brand/20 bg-white shadow-md">
                 <CardHeader className="pb-2 text-center">
                   <Badge variant="teal" className="mx-auto w-fit">
-                    Mac app download
+                    Mac now · Windows soon
                   </Badge>
                   <CardTitle className="mt-3 text-2xl">
                     Join the beta
                   </CardTitle>
                   <CardDescription>
-                    We will email a welcome note and a personal download link
+                    We will email a welcome note and a Mac download link.
+                    Windows is coming soon.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-2">

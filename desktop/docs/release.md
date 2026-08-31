@@ -1,7 +1,8 @@
 # Relaybase desktop release guide
 
-Signed, notarized macOS release. Binaries live on **Cloudflare R2**
-(`download.relaybase.xyz`); small metadata lives on `relaybase.xyz/release`.
+Signed, notarized **Universal** macOS release (Apple Silicon + Intel in one
+`.app`). Binaries live on **Cloudflare R2** (`download.relaybase.xyz`); small
+metadata lives on `relaybase.xyz/release`.
 
 Desktop and Worker versions are **independent**. Both start at **0.1.0**. Later
 updates bump the **patch** only (`0.1.1`, `0.1.2`, …). There is no separate
@@ -13,11 +14,42 @@ Pattern mirrors sibling `../kloy/app/docs/release.md`.
 
 ---
 
+## macOS target (Universal only)
+
+`pnpm run build:macos` always builds a fat binary. Host-arch-only and
+per-arch DMGs are not a release.
+
+```text
+tauri build --target universal-apple-darwin --bundles app,dmg
+```
+
+- Rust targets (the script installs them): `aarch64-apple-darwin` and
+  `x86_64-apple-darwin`.
+- Bundle output:
+  `desktop/src-tauri/target/universal-apple-darwin/release/bundle/{dmg,macos}/`
+  — not `target/release/bundle`.
+- Public names stay `Relaybase.<version>.dmg` and
+  `Relaybase.<version>.app.tar.gz` (no arch suffix).
+- `latest.json` writes the **same** URL + signature under `darwin-universal`,
+  `darwin-aarch64`, and `darwin-x86_64` so Intel and Apple Silicon updaters
+  both resolve.
+- Size: frontend is stored once; only the Rust binary is duplicated. Expect
+  roughly +6–7 MiB vs an Apple Silicon-only DMG.
+
+Verify after build: `lipo -info` on `Relaybase.app/Contents/MacOS/Relaybase`
+must list `x86_64` and `arm64`.
+
+Do not overwrite an already-shipped version on R2. Versioned objects use
+`Cache-Control: immutable` (1 year). Bump the patch and upload new keys.
+
+---
+
 ## Architecture
 
 ```text
 pnpm run build:macos
-  ├─ tauri build --bundles app,dmg  (sign + notarize)
+  ├─ rustup target add aarch64-apple-darwin x86_64-apple-darwin
+  ├─ tauri build --target universal-apple-darwin --bundles app,dmg
   ├─ sync-release-artifacts.mjs  → kembo/website/public/release/
   └─ upload-release-r2.sh        → R2 bucket relaybase-releases
 ```

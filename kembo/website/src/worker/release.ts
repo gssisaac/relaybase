@@ -8,22 +8,47 @@ type LatestJson = {
   version?: string;
 };
 
-export async function resolveDmgUrl(env: WorkerEnv): Promise<string | null> {
-  const artifacts = await readJson<ArtifactsJson>(env, "/release/artifacts.json");
-  if (artifacts) {
-    const dmg = Object.entries(artifacts).find(([name]) =>
-      name.endsWith(".dmg"),
-    );
-    if (dmg) {
-      return `${CDN}/${dmg[0]}`;
-    }
-  }
+export type ReleaseInfo = {
+  version: string | null;
+  dmgUrl: string | null;
+};
 
+export async function resolveRelease(env: WorkerEnv): Promise<ReleaseInfo> {
+  const artifacts = await readJson<ArtifactsJson>(env, "/release/artifacts.json");
   const latest = await readJson<LatestJson>(env, "/release/latest.json");
-  if (latest?.version) {
-    return `${CDN}/Relaybase.${latest.version}.dmg`;
-  }
-  return null;
+
+  const versionedName = latest?.version?.trim()
+    ? `Relaybase.${latest.version.trim()}.dmg`
+    : null;
+  const versionedDmg =
+    versionedName && artifacts?.[versionedName]
+      ? ([versionedName, artifacts[versionedName]] as const)
+      : undefined;
+  const artifactDmg =
+    versionedDmg ??
+    (artifacts
+      ? Object.entries(artifacts).find(([name]) => name.endsWith(".dmg"))
+      : undefined);
+
+  const version =
+    latest?.version?.trim() ||
+    artifactDmg?.[1]?.version?.trim() ||
+    versionFromDmgName(artifactDmg?.[0]) ||
+    null;
+
+  const dmgUrl = version
+    ? `${CDN}/Relaybase.${version}.dmg`
+    : artifactDmg
+      ? `${CDN}/${artifactDmg[0]}`
+      : null;
+
+  return { version, dmgUrl };
+}
+
+function versionFromDmgName(name: string | undefined): string | null {
+  if (!name) return null;
+  const match = name.match(/^Relaybase\.(\d+\.\d+\.\d+)\.dmg$/i);
+  return match?.[1] ?? null;
 }
 
 async function readJson<T>(env: WorkerEnv, path: string): Promise<T | null> {

@@ -5,7 +5,7 @@ import {
   getInviteByUuid,
   insertInvite,
 } from "./invites";
-import { resolveDmgUrl } from "./release";
+import { resolveRelease } from "./release";
 import { sendBetaSignupEmails } from "./send";
 import type { IncomingCf, InviteData, WorkerEnv } from "./types";
 import { parseUserAgent } from "./ua";
@@ -139,19 +139,20 @@ async function handleDownload(
     return renderNotFound();
   }
 
-  const dmgUrl = await resolveDmgUrl(env);
+  const release = await resolveRelease(env);
 
   if (file) {
-    if (!dmgUrl) {
+    if (!release.dmgUrl) {
       return new Response("Installer unavailable", { status: 503 });
     }
     await appendDownload(env, uuid, new Date().toISOString());
-    return Response.redirect(dmgUrl, 302);
+    return Response.redirect(release.dmgUrl, 302);
   }
 
   return renderDownloadPage({
-    dmgUrl,
+    dmgUrl: release.dmgUrl,
     filePath: `/downloads/${uuid}/file`,
+    version: release.version,
   });
 }
 

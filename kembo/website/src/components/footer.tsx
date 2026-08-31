@@ -23,8 +23,8 @@ export function Footer() {
           </div>
 
           <p className="max-w-md text-sm text-muted-foreground">
-            The inbox for your Cloudflare domains. Now in beta — join and we
-            will email you a download link for the Mac app.
+            The inbox for your Cloudflare domains. Now in beta — Mac
+            (Universal) is available now. Windows is coming soon.
           </p>
 
           <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">

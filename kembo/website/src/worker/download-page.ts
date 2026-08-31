@@ -1,8 +1,22 @@
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 export function renderDownloadPage(opts: {
   dmgUrl: string | null;
   filePath: string;
+  version: string | null;
 }): Response {
   const href = opts.dmgUrl ? opts.filePath : null;
+  const versionLabel = opts.version ? escapeHtml(opts.version) : null;
+  const macButton = versionLabel
+    ? `Download Mac app ${versionLabel} (Universal)`
+    : "Download Mac app (Universal)";
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,11 +26,12 @@ export function renderDownloadPage(opts: {
   <link rel="icon" href="/icon.png" />
   <style>
     :root {
-      --fg: #171717;
-      --muted: #737373;
-      --brand: #2563eb;
-      --border: #e5e5e5;
-      --bg: #fafafa;
+      --fg: #0f172a;
+      --muted: #64748b;
+      --brand: #e85d2a;
+      --border: #e2e8f0;
+      --bg: #f8fafc;
+      --well: #f1f5f9;
     }
     * { box-sizing: border-box; }
     body {
@@ -53,19 +68,41 @@ export function renderDownloadPage(opts: {
       background: #ccfbf1;
     }
     h1 { margin: 0.85rem 0 0; font-size: 1.5rem; letter-spacing: -0.02em; }
-    p { margin: 0.6rem 0 0; color: var(--muted); line-height: 1.5; font-size: 0.95rem; }
+    .lead { margin: 0.6rem 0 0; color: var(--muted); line-height: 1.5; font-size: 0.95rem; }
+    .platforms { margin-top: 1.5rem; display: grid; gap: 0.75rem; text-align: left; }
+    .row {
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 0.9rem 1rem;
+      background: #fff;
+    }
+    .row.soon { background: var(--well); }
+    .os {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
     a.btn {
       display: inline-block;
-      margin-top: 1.5rem;
+      margin-top: 0.65rem;
       padding: 0.7rem 1.15rem;
       border-radius: 0.6rem;
       background: var(--brand);
       color: #fff;
       text-decoration: none;
       font-weight: 600;
+      font-size: 0.95rem;
     }
     a.btn:hover { filter: brightness(0.95); }
-    .missing { margin-top: 1.5rem; color: #b91c1c; }
+    .soon-label {
+      margin-top: 0.45rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .missing { margin-top: 0.65rem; color: #b91c1c; font-size: 0.9rem; }
   </style>
 </head>
 <body>
@@ -73,12 +110,21 @@ export function renderDownloadPage(opts: {
     <img src="/icon.png" alt="" />
     <div class="badge">Beta</div>
     <h1>Download Relaybase</h1>
-    <p>macOS app for your Cloudflare domains. Apple Silicon.</p>
-    ${
-      href
-        ? `<a class="btn" href="${href}">Download for Mac</a>`
-        : `<p class="missing">The installer is not available yet. Try again shortly.</p>`
-    }
+    <p class="lead">Mac is available now as a Universal build. Windows is coming soon.</p>
+    <div class="platforms">
+      <div class="row">
+        <div class="os">Mac</div>
+        ${
+          href
+            ? `<a class="btn" href="${href}">${macButton}</a>`
+            : `<p class="missing">The installer is not available yet. Try again shortly.</p>`
+        }
+      </div>
+      <div class="row soon">
+        <div class="os">Windows</div>
+        <p class="soon-label">Coming soon</p>
+      </div>
+    </div>
   </div>
 </body>
 </html>`;

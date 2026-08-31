@@ -48,7 +48,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
-            Join the beta
+            {siteConfig.beta.cta}
             <ArrowRight data-icon="inline-end" />
           </Button>
         </div>

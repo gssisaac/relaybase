@@ -96,7 +96,7 @@ export function BetaForm() {
           </>
         ) : (
           <>
-            Join the beta
+            {siteConfig.beta.cta}
             <ArrowRight data-icon="inline-end" />
           </>
         )}

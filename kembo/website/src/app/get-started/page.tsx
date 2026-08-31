@@ -20,14 +20,14 @@ import {
 import { pageSocialMeta, siteConfig } from "@/lib/site-config";
 
 export const metadata: Metadata = {
-  title: `Join the ${siteConfig.name} beta`,
+  title: siteConfig.beta.cta,
   description:
-    "Join the Relaybase beta. The Mac app (Universal) is available now. Windows is coming soon.",
+    "Download the Relaybase app. The Mac app (Universal) is available now. Windows is coming soon.",
   alternates: {
     canonical: siteConfig.getStartedPath,
   },
   ...pageSocialMeta({
-    title: `Join the ${siteConfig.name} beta`,
+    title: siteConfig.beta.cta,
     description:
       "Leave your email and we will send a personal Mac download link. Windows is coming soon.",
     path: siteConfig.getStartedPath,
@@ -72,8 +72,7 @@ export default function GetStartedPage() {
               </Badge>
 
               <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl">
-                Join the{" "}
-                <span className="text-brand">{siteConfig.name}</span> beta
+                {siteConfig.beta.cta}
               </h1>
 
               <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
@@ -122,7 +121,7 @@ export default function GetStartedPage() {
                     Mac now · Windows soon
                   </Badge>
                   <CardTitle className="mt-3 text-2xl">
-                    Join the beta
+                    {siteConfig.beta.cta}
                   </CardTitle>
                   <CardDescription>
                     We will email a welcome note and a Mac download link.

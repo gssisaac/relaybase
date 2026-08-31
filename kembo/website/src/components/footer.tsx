@@ -28,7 +28,7 @@ export function Footer() {
           </p>
 
           <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-            Join the beta
+            {siteConfig.beta.cta}
           </Button>
 
           <div className="flex flex-wrap justify-center gap-4 text-sm">

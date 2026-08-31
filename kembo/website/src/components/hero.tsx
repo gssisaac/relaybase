@@ -40,7 +40,7 @@ export function Hero() {
 
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-              Join the beta
+              {siteConfig.beta.cta}
               <ArrowRight data-icon="inline-end" />
             </Button>
           </div>

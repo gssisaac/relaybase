@@ -152,12 +152,12 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                     Ready to ship your own billing@ and support@?
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Join the beta and we will email you a personal download
-                    link for the Mac app.
+                    Download the app and we will email you a personal
+                    download link for the Mac app.
                   </p>
                 </div>
                 <Button size="lg" render={<Link href={siteConfig.getStartedPath} />}>
-                  Join the beta
+                  {siteConfig.beta.cta}
                 </Button>
               </div>
             </div>

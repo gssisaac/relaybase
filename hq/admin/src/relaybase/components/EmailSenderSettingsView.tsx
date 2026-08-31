@@ -211,7 +211,6 @@ export function EmailSenderSettingsView() {
               }
               placeholder={field.placeholder}
               description={field.description}
-              secret={field.secret}
               disabled={saving}
             />
           ))}

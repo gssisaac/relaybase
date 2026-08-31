@@ -33,13 +33,6 @@ async function emailSenderFetch<T>(
   throw new Error(HQ_WORKER_RETIRED);
 }
 
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) {
-    throw new Error(data.error ?? `Relaybase request failed (${res.status})`);
-  }
-  return data;
-}
-
 export type EmailSenderHealth = {
   ok: boolean;
   inbound?: {

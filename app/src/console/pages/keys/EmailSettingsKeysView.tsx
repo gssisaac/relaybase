@@ -346,7 +346,6 @@ export function EmailSettingsKeysView() {
           label: data.label,
           apiKey: data.apiKey,
         });
-        await copyKey(data.id, data.apiKey);
       }
       setKeysMessage(
         data.message ??
@@ -411,10 +410,6 @@ export function EmailSettingsKeysView() {
           label: key.label,
           apiKey: data.apiKey,
         });
-        await copyKey(data.id, data.apiKey);
-        setKeysMessage(
-          `${data.message ?? "Key rotated"} — new secret copied to clipboard`,
-        );
       }
       setSelectedKeyId(key.id);
       await refreshKeys(true);

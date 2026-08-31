@@ -51,13 +51,102 @@ Do not overwrite an already-shipped version on R2. Versioned objects use
 
 ---
 
+## Build cautions
+
+Read this before changing signing entitlements, running release builds from an
+agent/automation, or debugging “The application Relaybase can't be opened.”
+
+### Universal target only (arm64-only is not a release)
+
+On Apple Silicon, `tauri build` without `--target universal-apple-darwin` writes
+to `target/release/bundle/` and produces an **arm64-only** `.app` / DMG. It can
+look signed and notarized but is **not** what ships. Always use
+`pnpm run build:macos`; the script fails if `lipo -info` does not list both
+`x86_64` and `arm64`.
+
+### Do **not** add `keychain-access-groups` to Developer ID entitlements
+
+`desktop/src-tauri/entitlements.plist` must **not** include
+`keychain-access-groups` for the public Developer ID DMG.
+
+On **macOS 26 (Tahoe)** and recent releases, AMFI rejects the app at launch
+(**error 163**, `Launchd job spawn failed`, generic Finder “can't be opened”)
+even when `codesign --verify`, `spctl`, and notarization all pass. The
+entitlement requires a matching **provisioning profile**, which Developer ID
+distribution builds do not carry.
+
+Owner/team secrets use the **login keychain** via `SecItem` in
+`keyring_store.rs` instead. Do not reintroduce the data-protection keychain
+entitlement to “fix” keychain prompts without testing a full signed release on
+macOS 26.
+
+Incident: **0.1.1** shipped with the entitlement and failed to launch on Tahoe;
+**0.1.2** removed it.
+
+### Codesign needs a real terminal + network
+
+Release builds call Apple's timestamp server during `codesign`. Automated or
+sandboxed runs can fail mid-bundle with:
+
+```text
+A timestamp was expected but was not found.
+failed to bundle project: failed codesign application
+```
+
+Run from a normal shell on the release Mac:
+
+```bash
+cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos
+```
+
+Do not treat a failed codesign bundle as shippable.
+
+### Install and smoke-test from the DMG
+
+For local verification, open the **notarized DMG** and drag `Relaybase.app` to
+`/Applications`. Avoid testing copies made with `ditto` / automation — they can
+pick up `com.apple.macl` extended attributes and confuse Gatekeeper debugging.
+
+Quick checks after install:
+
+```bash
+lipo -info /Applications/Relaybase.app/Contents/MacOS/Relaybase   # x86_64 arm64
+codesign --verify --deep --strict /Applications/Relaybase.app
+spctl -a -vv /Applications/Relaybase.app                          # Notarized Developer ID
+codesign -d --entitlements - --xml /Applications/Relaybase.app/Contents/MacOS/Relaybase \
+  | rg keychain-access-groups                                     # must be empty
+open -a Relaybase
+```
+
+### R2 upload account
+
+`upload-release-r2.sh` uses the **website** Cloudflare account from
+`hq/website/wrangler.jsonc` (or `RELAYBASE_RELEASE_CF_ACCOUNT_ID`). A wrong
+`CLOUDFLARE_ACCOUNT_ID` in `desktop/.env` uploads to a different account and
+returns 403 or invisible objects.
+
+### Website release metadata path
+
+Sync/upload scripts resolve `hq/website/public/release/` as **`desktop/../hq`**
+(repo root). Using `desktop/../../hq` writes to a sibling `productions/hq/` tree
+outside the repo — R2 upload still works but git never sees updated
+`latest.json`.
+
+After every release build, confirm:
+
+```bash
+git diff hq/website/public/release/latest.json   # version should match tauri.conf.json
+```
+
+---
+
 ## Architecture
 
 ```text
 pnpm run build:macos
   ├─ rustup target add aarch64-apple-darwin x86_64-apple-darwin
   ├─ tauri build --target universal-apple-darwin --bundles app,dmg
-  ├─ sync-release-artifacts.mjs  → hq/website/public/release/
+  ├─ sync-release-artifacts.mjs  → hq/website/public/release/ (desktop/../hq)
   └─ upload-release-r2.sh        → R2 bucket relaybase-releases
 ```
 

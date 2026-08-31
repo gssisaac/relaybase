@@ -10,12 +10,10 @@
   <true/>
   <key>com.apple.security.automation.apple-events</key>
   <true/>
-  <!-- Data-protection keychain (`keyring_store.rs`). Required so launch
-       does not show the login-keychain "Always Allow" dialog. Production
-       must be Developer ID signed; unsigned `tauri dev` falls back. -->
-  <key>keychain-access-groups</key>
-  <array>
-    <string>$(AppIdentifierPrefix)com.relaybase.desktop</string>
-  </array>
+  <!-- Do NOT add keychain-access-groups here. Developer ID builds cannot
+       ship that entitlement without a matching provisioning profile; macOS
+       26 (Tahoe) AMFI rejects the app at launch (error 163) even when
+       Gatekeeper/notarization pass. Owner/team secrets use login-keychain
+       SecItem instead — see keyring_store.rs. -->
 </dict>
 </plist>

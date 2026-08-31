@@ -1,19 +1,19 @@
 {
-  "version": "0.1.1",
-  "notes": "# Relaybase 0.1.1\n\n## Highlights\n- macOS installer is now a Universal binary (Apple Silicon and Intel)\n\n## Changes\n- One signed DMG / updater archive for both Mac architectures",
-  "pub_date": "2026-08-31T03:51:17.000Z",
+  "version": "0.1.2",
+  "notes": "# Relaybase 0.1.2\n\n## Highlights\n- Fix macOS launch failure on macOS 26 (Tahoe) and recent releases\n\n## Changes\n- Remove `keychain-access-groups` from the Developer ID build (AMFI blocked launch with error 163 even when notarization passed)\n- Owner and team secrets continue to use the login keychain via SecItem",
+  "pub_date": "2026-08-31T12:08:07.080Z",
   "platforms": {
     "darwin-universal": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVCWGtCckZGU000anliRmsrMWx1a0IxM2xsZUNaZGgxbmRKQTFxS05oeFNEUVdQdGVlaVFJeXIyUmR3QXczMU1MM2NkVWNKTk1DTm44WFR3dG9JN0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTQ4Mjc5CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKa1hWNGJPQ244emp6YmZLRG5RNURPMnhtUkltTy9WT01JaTZDYThkNnZhaTFOZHE4TWlmT0dBelVHbXYxb2NQeDNWQWdNVEFEMlM2VTE0SmFDWGFkQXc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.2.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlhyQmlld2haQUM3R0kxcHY5VGpSdjV6dkZ0cmNqRE9WaXNPTHhySzMwZDluOUdXMHFBQVU1Zkx3eldia3Z0YVAxK3RDOUFWdlRMVHBMS3VKMU9yVkFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTc2ODkzCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKQzV6MTJPY1cwN1c2ZzN3Tjh5VHk1c0tpMkg4YU9jbHI1Q2wvTXZRYkR5aklZa1BoVlhhNWJMcDBQQll5QWdEbUFZbjNWRklXRWF2UnRPcmluMGtnRHc9PQo="
     },
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVCWGtCckZGU000anliRmsrMWx1a0IxM2xsZUNaZGgxbmRKQTFxS05oeFNEUVdQdGVlaVFJeXIyUmR3QXczMU1MM2NkVWNKTk1DTm44WFR3dG9JN0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTQ4Mjc5CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKa1hWNGJPQ244emp6YmZLRG5RNURPMnhtUkltTy9WT01JaTZDYThkNnZhaTFOZHE4TWlmT0dBelVHbXYxb2NQeDNWQWdNVEFEMlM2VTE0SmFDWGFkQXc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.2.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlhyQmlld2haQUM3R0kxcHY5VGpSdjV6dkZ0cmNqRE9WaXNPTHhySzMwZDluOUdXMHFBQVU1Zkx3eldia3Z0YVAxK3RDOUFWdlRMVHBMS3VKMU9yVkFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTc2ODkzCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKQzV6MTJPY1cwN1c2ZzN3Tjh5VHk1c0tpMkg4YU9jbHI1Q2wvTXZRYkR5aklZa1BoVlhhNWJMcDBQQll5QWdEbUFZbjNWRklXRWF2UnRPcmluMGtnRHc9PQo="
     },
     "darwin-x86_64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVCWGtCckZGU000anliRmsrMWx1a0IxM2xsZUNaZGgxbmRKQTFxS05oeFNEUVdQdGVlaVFJeXIyUmR3QXczMU1MM2NkVWNKTk1DTm44WFR3dG9JN0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTQ4Mjc5CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKa1hWNGJPQ244emp6YmZLRG5RNURPMnhtUkltTy9WT01JaTZDYThkNnZhaTFOZHE4TWlmT0dBelVHbXYxb2NQeDNWQWdNVEFEMlM2VTE0SmFDWGFkQXc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.2.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlhyQmlld2haQUM3R0kxcHY5VGpSdjV6dkZ0cmNqRE9WaXNPTHhySzMwZDluOUdXMHFBQVU1Zkx3eldia3Z0YVAxK3RDOUFWdlRMVHBMS3VKMU9yVkFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTc2ODkzCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKQzV6MTJPY1cwN1c2ZzN3Tjh5VHk1c0tpMkg4YU9jbHI1Q2wvTXZRYkR5aklZa1BoVlhhNWJMcDBQQll5QWdEbUFZbjNWRklXRWF2UnRPcmluMGtnRHc9PQo="
     }
   }
 }

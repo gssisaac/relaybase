@@ -133,7 +133,7 @@ fi
 echo "→ Syncing DMG and updater artifacts to website/public/release"
 node "$ROOT/scripts/sync-release-artifacts.mjs"
 
-LATEST_JSON="$ROOT/../../hq/website/public/release/latest.json"
+LATEST_JSON="$ROOT/../hq/website/public/release/latest.json"
 if [[ ! -f "$LATEST_JSON" ]]; then
   echo "✗ hq/website/public/release/latest.json was not created."
   echo "  Updater bundles (.app.tar.gz + .sig) are required for in-app auto-update."

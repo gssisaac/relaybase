@@ -11,14 +11,12 @@
 //! Debug builds delegate to `crate::dev::keyring_store` (tmp files) instead —
 //! see `src/dev/`.
 //!
-//! This module uses the modern `SecItem` API:
-//! 1. Data-protection keychain when the app is signed with
-//!    `keychain-access-groups` (production).
-//! 2. `SecItem` on the login keychain without the legacy
-//!    `SecKeychainFindGenericPassword` path — that is the API that
-//!    shows “Always Allow”, and it does not persist across launches.
-//! 3. One-shot read of old `keyring` crate items, then rewrite via (1)
-//!    or (2) and delete the ACL-bound copy.
+//! This module uses the modern `SecItem` API on the login keychain (no
+//! `keychain-access-groups` entitlement — Developer ID builds cannot use
+//! that on macOS 26 without a provisioning profile). Avoids the legacy
+//! `SecKeychainFindGenericPassword` path that shows “Always Allow” and does
+//! not persist across launches. One-shot read of old `keyring` crate items,
+//! then rewrite via SecItem and delete the ACL-bound copy.
 //!
 //! Windows / Linux keep using the `keyring` crate. All platforms share an
 //! in-process cache so status + unlock + refresh do not re-hit the OS
@@ -231,39 +229,18 @@ fn macos_secitem_delete(service: &str, account: &str, protected: bool) {
     let _ = delete_generic_password_options(macos_query_options(service, account, protected));
 }
 
-/// Prefer the data-protection keychain; if that store is unavailable
-/// (unsigned `tauri dev`), use modern `SecItem` on the login keychain.
-/// Login-keychain writes delete-then-add so we replace the old
-/// ACL-bound `keyring` item instead of `SecItemUpdate`-ing it (which
-/// would keep the “Always Allow” ACL). Do not call the `keyring` crate
-/// delete here — it uses `find_generic_password` and prompts again.
+/// Write via login-keychain SecItem. Deletes first so we replace the old
+/// ACL-bound `keyring` item instead of `SecItemUpdate`-ing it (which would
+/// keep the “Always Allow” ACL). Do not call the `keyring` crate delete
+/// here — it uses `find_generic_password` and prompts again.
 #[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn macos_write_preferred(service: &str, account: &str, password: &str) -> Result<(), String> {
-    match macos_secitem_set(service, account, password, true) {
-        Ok(()) => {
-            macos_secitem_delete(service, account, false);
-            Ok(())
-        }
-        Err(dp_err) => {
-            macos_secitem_delete(service, account, false);
-            match macos_secitem_set(service, account, password, false) {
-                Ok(()) => Ok(()),
-                Err(login_err) => {
-                    log::warn!("{dp_err}; {login_err}");
-                    Err(login_err)
-                }
-            }
-        },
-    }
+    macos_secitem_delete(service, account, false);
+    macos_secitem_set(service, account, password, false)
 }
 
 #[cfg(all(not(debug_assertions), target_os = "macos"))]
 fn platform_get(service: &str, account: &str) -> Result<Option<String>, String> {
-    match macos_secitem_get(service, account, true) {
-        Ok(Some(password)) => return Ok(Some(password)),
-        Ok(None) => {}
-        Err(err) => log::warn!("{err}; trying login keychain SecItem"),
-    }
     match macos_secitem_get(service, account, false) {
         Ok(Some(password)) => {
             if macos_write_preferred(service, account, &password).is_ok() {

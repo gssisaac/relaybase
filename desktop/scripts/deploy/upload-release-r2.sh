@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-RELEASE_DIR="$ROOT/../../hq/website/public/release"
+RELEASE_DIR="$ROOT/../hq/website/public/release"
 BUCKET="${RELAYBASE_RELEASE_R2_BUCKET:-relaybase-releases}"
 META_PATH="$RELEASE_DIR/artifacts.json"
 IMMUTABLE_CACHE_CONTROL="public, max-age=31536000, immutable"
@@ -52,7 +52,7 @@ DMG="$(stage_or_release "Relaybase.${VERSION}.dmg" "$RELEASE_DIR/Relaybase.${VER
 TGZ="$(stage_or_release "Relaybase.${VERSION}.app.tar.gz" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz" "$BUNDLE/macos/Relaybase.app.tar.gz")"
 SIG="$(stage_or_release "Relaybase.${VERSION}.app.tar.gz.sig" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz.sig" "$BUNDLE/macos/Relaybase.app.tar.gz.sig")"
 
-WEBSITE_DIR="$(cd "$ROOT/../../hq/website" && pwd)"
+WEBSITE_DIR="$(cd "$ROOT/../hq/website" && pwd)"
 # Prefer website wrangler if present; otherwise use desktop's pnpm dlx.
 if [[ -f "$WEBSITE_DIR/package.json" ]]; then
   WRANGLER=(pnpm --dir "$WEBSITE_DIR" dlx wrangler@4)

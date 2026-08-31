@@ -14,5 +14,13 @@
   "Relaybase.0.1.1.app.tar.gz": {
     "sizeBytes": 20034883,
     "version": "0.1.1"
+  },
+  "Relaybase.0.1.2.dmg": {
+    "sizeBytes": 20512781,
+    "version": "0.1.2"
+  },
+  "Relaybase.0.1.2.app.tar.gz": {
+    "sizeBytes": 20006857,
+    "version": "0.1.2"
   }
 }

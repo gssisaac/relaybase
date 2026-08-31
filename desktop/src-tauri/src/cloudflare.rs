@@ -174,6 +174,66 @@ pub async fn resolve_account_id(api_token: &str) -> Result<String, String> {
     Ok(id.to_string())
 }
 
+/// Pick an account the recover OAuth token (`secrets-store.write`) can list.
+pub async fn resolve_account_id_for_recover(api_token: &str) -> Result<String, String> {
+    resolve_account_id_for_recover_with_hint(api_token, None).await
+}
+
+/// Recover OAuth tokens may return an empty `/accounts` list. When a Worker
+/// hint (`GET /console/auth-status` → `cfAccountId`) is available, prove the
+/// token against Secrets Store on that account first.
+pub async fn resolve_account_id_for_recover_with_hint(
+    api_token: &str,
+    hint: Option<&str>,
+) -> Result<String, String> {
+    if let Some(id) = hint.map(str::trim).filter(|s| !s.is_empty()) {
+        if secrets_store_accessible(api_token, id).await {
+            return Ok(id.to_string());
+        }
+    }
+
+    let client = CfClient {
+        account_id: String::new(),
+        api_token: api_token.to_string(),
+    };
+    let value = cf_request(&client, reqwest::Method::GET, "/accounts?per_page=50", None).await
+        .map_err(|e| format!("Could not list Cloudflare accounts: {e}"))?;
+    let results = value
+        .get("result")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    for row in results {
+        let id = row
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if id.is_empty() {
+            continue;
+        }
+        if secrets_store_accessible(api_token, id).await {
+            return Ok(id.to_string());
+        }
+    }
+    Err("No Cloudflare account accepts this recover OAuth token.".into())
+}
+
+pub async fn secrets_store_accessible(api_token: &str, account_id: &str) -> bool {
+    let client = CfClient {
+        account_id: account_id.to_string(),
+        api_token: api_token.to_string(),
+    };
+    let path = format!("/accounts/{account_id}/secrets_store/stores?per_page=1");
+    match cf_request(&client, reqwest::Method::GET, &path, None).await {
+        Ok(v) => v
+            .get("success")
+            .and_then(|b| b.as_bool())
+            .unwrap_or(false),
+        Err(_) => false,
+    }
+}
+
 pub async fn list_zones(client: &CfClient) -> Result<Vec<ZoneSummary>, String> {
     let mut zones = Vec::new();
     let mut page = 1u32;

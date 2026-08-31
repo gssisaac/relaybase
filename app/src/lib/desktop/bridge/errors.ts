@@ -512,6 +512,25 @@ export function explainPasstokenResetError(err: unknown): DesktopErrorHelp {
     };
   }
   if (
+    lower.includes("cloudflare account id is unknown") ||
+    lower.includes("accountid in ~/.relaybase")
+  ) {
+    return {
+      title: "Cloudflare account id missing locally",
+      detail:
+        "Relaybase needs the CF account id from your first install to reset the passtoken.",
+      fix: "Finish Setup once on this Mac, or add accountId to ~/.relaybase/credentials.json, then try again.",
+    };
+  }
+  if (lower.includes("worker is missing cf_account_id")) {
+    return {
+      title: "Worker CF account id not available",
+      detail:
+        "The Worker could not read CF_ACCOUNT_ID at runtime. Reset sends cfAccountId from this Mac instead.",
+      fix: "Ensure accountId is in ~/.relaybase/credentials.json, deploy the latest Worker, then Authorize again.",
+    };
+  }
+  if (
     lower.includes("could not reach") ||
     lower.includes("error sending request") ||
     lower.includes("timed out")

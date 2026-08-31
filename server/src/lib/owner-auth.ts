@@ -10,10 +10,9 @@ import {
 } from "../../db/app/owner-sessions";
 import {
   getOwnerLoginConfig,
-  incrementFailedLogin,
   ownerIsConfigured,
-  resetFailedLogin,
   setOwnerLogin,
+  setOwnerCfAccountId,
 } from "../../db/app/owner";
 import { sha256Hex } from "./crypto";
 import {
@@ -49,11 +48,8 @@ export {
 export type { AccessPayload, OwnerScope } from "./owner-tokens";
 
 /** HTTP status codes returned by owner-auth helpers. */
-type AuthStatus = 400 | 401 | 403 | 409 | 429 | 503;
+type AuthStatus = 400 | 401 | 403 | 409 | 503;
 type AuthError = { error: string; status: AuthStatus };
-
-const LOGIN_LOCK_SECONDS = 5 * 60;
-const MAX_FAILED_ATTEMPTS = 5;
 
 export type OwnerRefreshResult = {
   accessToken: string;
@@ -187,27 +183,14 @@ export async function loginOwner(
     return { error: "Invalid credentials", status: 401 };
   }
 
-  if (cfg.lockedUntil) {
-    const lockedUntilMs = Date.parse(cfg.lockedUntil);
-    if (Number.isFinite(lockedUntilMs) && lockedUntilMs > Date.now()) {
-      return { error: "Too many attempts. Try again later.", status: 429 };
-    }
-  }
-
   const passtokenOk =
     isValidPasstokenFormat(input.passtoken) &&
     (await hashPasstoken(pepper, cfg.passtokenSalt, input.passtoken)) ===
       cfg.passtokenHash;
 
   if (!passtokenOk) {
-    const { failedAttempts } = await incrementFailedLogin(db, LOGIN_LOCK_SECONDS);
-    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-      return { error: "Too many attempts. Try again later.", status: 429 };
-    }
     return { error: "Invalid credentials", status: 401 };
   }
-
-  await resetFailedLogin(db);
 
   const mailRefreshToken = await createScopedRefreshSession(
     db,
@@ -342,20 +325,41 @@ export async function rotatePasstoken(
   return { passtoken };
 }
 
+/** Cloudflare account ids are 32-char hex. Ignore binding placeholders / garbage. */
+export function normalizeCfAccountId(
+  raw: string | null | undefined,
+): string | null {
+  const id = raw?.trim() ?? "";
+  if (!/^[a-f0-9]{32}$/i.test(id)) return null;
+  return id.toLowerCase();
+}
+
 // ─── reset-admin (forgot passtoken, CF OAuth proof) ─────────────────────
 
 export async function resetOwner(
   env: Env,
-  input: { cfAccessToken: string },
+  input: { cfAccessToken: string; cfAccountId?: string },
 ): Promise<{ passtoken: string } | AuthError> {
   const db = createAppDb(env.RELAYBASE_DB);
   if (!db) return { error: "Database not configured", status: 503 };
   const pepperOrErr = requirePepper(env);
   if (typeof pepperOrErr !== "string") return pepperOrErr;
   const pepper = pepperOrErr;
-  const expectedAccount = env.CF_ACCOUNT_ID?.trim() ?? "";
+  const fromEnv = normalizeCfAccountId(env.CF_ACCOUNT_ID) ?? "";
+  const fromBody = normalizeCfAccountId(input.cfAccountId) ?? "";
+  if (fromEnv && fromBody && fromEnv !== fromBody) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  let expectedAccount = fromEnv || fromBody;
   if (!expectedAccount) {
-    return { error: "Worker is missing CF_ACCOUNT_ID", status: 503 };
+    expectedAccount = (await discoverRecoverAccount(input.cfAccessToken)) ?? "";
+  }
+  if (!expectedAccount) {
+    return {
+      error:
+        "Could not verify which Cloudflare account authorized this token. Try Authorize again.",
+      status: 401,
+    };
   }
 
   const verified = await verifyCfTokenForReset(
@@ -372,6 +376,11 @@ export async function resetOwner(
     passtokenHash: hash,
     passtokenPrefix: passtokenPrefix(passtoken),
   });
+  try {
+    await setOwnerCfAccountId(db, expectedAccount);
+  } catch (err) {
+    console.warn("Could not persist cf_account_id on owner_config", err);
+  }
   await deleteAllOwnerSessions(db);
   return { passtoken };
 }
@@ -437,4 +446,32 @@ export async function verifyCfTokenForReset(
   const store = await verifyCfTokenSecretsStore(token, expectedAccount);
   if (store.ok) return store;
   return verifyCfTokenAccount(token, expectedAccount);
+}
+
+/** List accessible accounts and pick one the recover token can use for Secrets Store. */
+export async function discoverRecoverAccount(
+  token: string,
+): Promise<string | null> {
+  const bearer = token.trim();
+  if (!bearer) return null;
+  try {
+    const res = await fetch(
+      "https://api.cloudflare.com/client/v4/accounts?per_page=50",
+      { headers: { Authorization: `Bearer ${bearer}` } },
+    );
+    const data = (await res.json()) as {
+      success?: boolean;
+      result?: Array<{ id?: string }>;
+    };
+    if (!data.success || !Array.isArray(data.result)) return null;
+    for (const row of data.result) {
+      const id = row.id?.trim() ?? "";
+      if (!id) continue;
+      const ok = await verifyCfTokenSecretsStore(bearer, id);
+      if (ok.ok) return id;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }

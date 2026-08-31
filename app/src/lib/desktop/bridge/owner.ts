@@ -8,8 +8,10 @@ export type OwnerSessionStatus = {
   /** Back-compat shims from Rust. */
   hasRefresh: boolean;
   hasAccess: boolean;
-  /** OS keyring `owner-passtoken` exists (secret is never returned). */
+  /** OS keyring `owner-passtoken` with valid format (secret is never returned). */
   hasPasstoken: boolean;
+  /** First 10 chars after `rb_pass_` from keyring (empty when none). */
+  keyringPasstokenPrefix: string;
   workerUrl: string;
   platform: string;
 };
@@ -26,6 +28,7 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasRefresh: false,
   hasAccess: false,
   hasPasstoken: false,
+  keyringPasstokenPrefix: "",
   workerUrl: "",
   platform: "other",
 };
@@ -56,6 +59,33 @@ export async function desktopOwnerUnlockConsole(): Promise<OwnerSessionStatus> {
   return invoke("owner_unlock_console_cmd");
 }
 
+/** GET /console/auth-status for an explicit Worker URL (Setup / unlock probe). */
+export async function desktopOwnerAuthStatus(workerUrl: string): Promise<{
+  ownerConfigured: boolean;
+  passtokenPrefix: string | null;
+}> {
+  const base = workerUrl.trim().replace(/\/$/, "");
+  if (!base) return { ownerConfigured: false, passtokenPrefix: null };
+  try {
+    const res = await fetch(`${base}/console/auth-status`);
+    if (!res.ok) return { ownerConfigured: false, passtokenPrefix: null };
+    const data = (await res.json()) as {
+      ownerConfigured?: boolean;
+      passtokenPrefix?: string | null;
+    };
+    const prefix =
+      typeof data.passtokenPrefix === "string" && data.passtokenPrefix.trim()
+        ? data.passtokenPrefix.trim()
+        : null;
+    return {
+      ownerConfigured: Boolean(data.ownerConfigured),
+      passtokenPrefix: prefix,
+    };
+  } catch {
+    return { ownerConfigured: false, passtokenPrefix: null };
+  }
+}
+
 /** Touch ID / Windows Hello — console gate only. */
 export async function desktopOwnerTouchId(reason: string): Promise<void> {
   await invoke("owner_touch_id_cmd", { reason });
@@ -64,8 +94,12 @@ export async function desktopOwnerTouchId(reason: string): Promise<void> {
 /** Touch ID then read keyring passtoken and login. Secret never returns to JS. */
 export async function desktopOwnerLoginFromKeyring(
   reason: string,
+  workerUrl?: string,
 ): Promise<OwnerSessionStatus> {
-  return invoke("owner_login_from_keyring_cmd", { reason });
+  return invoke("owner_login_from_keyring_cmd", {
+    reason,
+    workerUrl: workerUrl?.trim() || null,
+  });
 }
 
 export async function desktopOwnerLogout(): Promise<void> {

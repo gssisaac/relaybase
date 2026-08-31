@@ -40,7 +40,7 @@ Public clients need a `cloudflare_oauth_client_publisher=…` TXT on the `client
 | `workers-r2.write` | R2 buckets |
 | `d1.write` | D1 create + bindings on deploy |
 
-**Recover scopes:** `secrets-store.write` only. The Worker proves the token can `GET /accounts/{CF_ACCOUNT_ID}/secrets_store/stores`. Worker secrets still go through `PUT /workers/scripts/{name}/secrets` (`workers-scripts.write`) — recover does not write Cloudflare secrets.
+**Recover scopes:** `secrets-store.write` only. The Worker proves the token can `GET /accounts/{CF_ACCOUNT_ID}/secrets_store/stores` (or accepts `cfAccountId` in the reset body when the Worker secret is empty at runtime). Worker runtime secrets use `workers-scripts.write` on the **install** client only — recover does not request that scope.
 
 Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query. Cloudflare adds `offline_access` itself when the client has the `refresh_token` grant; requesting unregistered scopes makes dash.cloudflare.com show “Relaybase authorization failed”.
 
@@ -84,7 +84,7 @@ Rust:
 
 - `start_cf_oauth(purpose)` / `complete_cf_oauth` (`desktop/src-tauri/src/lib.rs`) — PKCE authorize + token exchange; writes `CF_OAUTH_SESSION` (includes the client id used, so refresh stays on that client)
 - Loopback server + `tauri-plugin-deep-link` — complete exchange, emit `cf-oauth-complete` / `cf-oauth-error`
-- `require_cf_oauth` (`desktop/src-tauri/src/cf_oauth.rs`) — only reader for CF commands. Returns `{ access_token, account_id }` from memory, or refreshes when the access token expires within 60s. No session → “Authorize with Cloudflare again”.
+- `require_cf_oauth` (`desktop/src-tauri/src/cf_oauth.rs`) — only reader for CF commands. Returns `{ access_token, account_id }` from memory, or refreshes when the access token expires within 60s. No session → “Authorize with Cloudflare again”. Forgot-passtoken reset uses `require_cf_oauth_access_token()` instead — the recover client has `secrets-store.write` only, so the desktop cannot resolve `account_id` via `/accounts`; the Worker verifies the token against `CF_ACCOUNT_ID`.
 
 Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `app/src/lib/desktop/bridge/oauth.ts` — not tied to staying on the Cloudflare settings page.
 
@@ -139,6 +139,7 @@ Errors use `explainCfOAuthError()`.
 | Symptom | Likely cause |
 |---------|----------------|
 | `invalid_scope` or Cloudflare “authorization failed” | Scope strings in `/config` don’t match that purpose’s OAuth client (install must not request `secrets-store.write`; recover must request only `secrets-store.write`). Do not request `offline_access` or KV. |
+| `Worker is missing CF_ACCOUNT_ID` after Authorize | Deploy the latest Worker (accepts `cfAccountId` in reset body) and ensure `accountId` is in `~/.relaybase/credentials.json`. |
 | Browser “Finishing connection…” but app stays **Not connected** | `tauri dev` without loopback listener — restart desktop after pulling; ensure port **32831** is free. |
 | `Token endpoint did not return a refresh_token` | Missing `refresh_token` grant or `offline_access` on authorize — fixed in code (connection succeeds with access token only); enable **Refresh Token** grant on the client for auto-refresh. |
 | `relaybase://` does nothing | Expected in dev; loopback should succeed. In production, install the bundled `.app` so the URL scheme is registered. |

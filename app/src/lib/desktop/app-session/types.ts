@@ -42,7 +42,10 @@ export type AppSessionDeps = {
   }) => Promise<OwnerSessionStatus>;
   ownerBootMail: () => Promise<OwnerSessionStatus>;
   ownerUnlockConsole: () => Promise<OwnerSessionStatus>;
-  ownerLoginFromKeyring: (reason: string) => Promise<OwnerSessionStatus>;
+  ownerLoginFromKeyring: (
+    reason: string,
+    workerUrl?: string,
+  ) => Promise<OwnerSessionStatus>;
   ownerLogout: () => Promise<void>;
   ownerSetupAdmin: (input: {
     workerUrl: string;
@@ -61,6 +64,9 @@ export type AppSessionDeps = {
   teamUnlock: () => Promise<TeamSessionStatus>;
   teamLogout: () => Promise<void>;
   teamForgetSession: () => Promise<TeamSessionStatus>;
+  fetchWorkerPasstokenPrefix: (
+    workerUrl: string,
+  ) => Promise<string | null>;
   refreshIdentity: () => Promise<void>;
   clearOwnerDisk: () => Promise<void>;
   clearTeamDisk: () => Promise<void>;

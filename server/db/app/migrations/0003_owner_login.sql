@@ -13,10 +13,6 @@ ALTER TABLE `owner_config` ADD `passtoken_prefix` text;
 --> statement-breakpoint
 ALTER TABLE `owner_config` ADD `passtoken_updated_at` text;
 --> statement-breakpoint
-ALTER TABLE `owner_config` ADD `failed_attempts` integer DEFAULT 0 NOT NULL;
---> statement-breakpoint
-ALTER TABLE `owner_config` ADD `locked_until` text;
---> statement-breakpoint
 CREATE TABLE `owner_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`token_hash` text NOT NULL,

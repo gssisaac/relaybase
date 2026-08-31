@@ -9,8 +9,7 @@ export type OwnerLoginConfig = {
   passtokenHash: string | null;
   passtokenPrefix: string | null;
   passtokenUpdatedAt: string | null;
-  failedAttempts: number;
-  lockedUntil: string | null;
+  cfAccountId: string | null;
 };
 
 export async function getOwnerLoginConfig(
@@ -27,8 +26,7 @@ export async function getOwnerLoginConfig(
       passtokenHash: row.passtokenHash ?? null,
       passtokenPrefix: row.passtokenPrefix ?? null,
       passtokenUpdatedAt: row.passtokenUpdatedAt ?? null,
-      failedAttempts: row.failedAttempts ?? 0,
-      lockedUntil: row.lockedUntil ?? null,
+      cfAccountId: row.cfAccountId ?? null,
     };
   } catch {
     // Pre-0003_owner_login D1s do not have passtoken columns yet. Treat as
@@ -61,8 +59,6 @@ export async function setOwnerLogin(
       passtokenHash: input.passtokenHash,
       passtokenPrefix: input.passtokenPrefix,
       passtokenUpdatedAt: now,
-      failedAttempts: 0,
-      lockedUntil: null,
     })
     .onConflictDoUpdate({
       target: ownerConfig.id,
@@ -71,8 +67,6 @@ export async function setOwnerLogin(
         passtokenHash: input.passtokenHash,
         passtokenPrefix: input.passtokenPrefix,
         passtokenUpdatedAt: now,
-        failedAttempts: 0,
-        lockedUntil: null,
       },
     })
     .run();
@@ -100,28 +94,19 @@ export async function setOwnerConfig(
     .run();
 }
 
-export async function incrementFailedLogin(
+export async function setOwnerCfAccountId(
   db: AppDb,
-  lockSeconds: number,
-): Promise<{ failedAttempts: number; lockedUntil: string | null }> {
-  if (!db) return { failedAttempts: 0, lockedUntil: null };
-  const row = await db.select().from(ownerConfig).where(eq(ownerConfig.id, 1)).get();
-  const next = (row?.failedAttempts ?? 0) + 1;
-  const lockedUntil =
-    next >= 5 ? new Date(Date.now() + lockSeconds * 1000).toISOString() : null;
-  await db
-    .update(ownerConfig)
-    .set({ failedAttempts: next, lockedUntil })
-    .where(eq(ownerConfig.id, 1))
-    .run();
-  return { failedAttempts: next, lockedUntil };
-}
-
-export async function resetFailedLogin(db: AppDb): Promise<void> {
+  cfAccountId: string,
+): Promise<void> {
   if (!db) return;
+  const id = cfAccountId.trim();
+  if (!id) return;
   await db
-    .update(ownerConfig)
-    .set({ failedAttempts: 0, lockedUntil: null })
-    .where(eq(ownerConfig.id, 1))
+    .insert(ownerConfig)
+    .values({ id: 1, cfAccountId: id })
+    .onConflictDoUpdate({
+      target: ownerConfig.id,
+      set: { cfAccountId: id },
+    })
     .run();
 }

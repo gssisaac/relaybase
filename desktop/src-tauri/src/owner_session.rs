@@ -6,7 +6,10 @@
 //! Boot: silent mail refresh (`owner_boot_mail`). Expired refresh: Touch ID
 //! then `owner_login_from_keyring`. Valid console refresh unlocks silently.
 
-use crate::secrets::{load_credentials, save_credentials};
+use crate::cloudflare::{
+    resolve_account_id, resolve_account_id_for_recover_with_hint, secrets_store_accessible,
+};
+use crate::secrets::{get_cf_oauth_session, load_credentials, save_credentials};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -200,8 +203,10 @@ pub struct OwnerSessionStatus {
     pub has_refresh: bool,
     /// Back-compat: mail OR console access in memory.
     pub has_access: bool,
-    /// Keyring `owner-passtoken` exists (secret is not returned).
+    /// Keyring `owner-passtoken` exists with valid format (secret is not returned).
     pub has_passtoken: bool,
+    /// First 10 chars after `rb_pass_` from the keyring record (empty when none).
+    pub keyring_passtoken_prefix: String,
     pub worker_url: String,
     pub platform: String,
 }
@@ -237,7 +242,8 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         has_console_access: console_access.is_some(),
         has_refresh: has_mail_refresh || has_console_refresh,
         has_access: mail_access.is_some() || console_access.is_some(),
-        has_passtoken: crate::owner_passtoken::exists(),
+        has_passtoken: crate::owner_passtoken::is_stored(),
+        keyring_passtoken_prefix: crate::owner_passtoken::stored_prefix(),
         worker_url: blob
             .as_ref()
             .map(|b| b.worker_url.clone())
@@ -352,11 +358,6 @@ pub async fn owner_login(
         &[],
     )
     .await?;
-    if status == 429 {
-        return Err(json_string(&value, "error")
-            .unwrap_or("Too many attempts. Try again later.")
-            .to_string());
-    }
     if status != 200 {
         return Err(json_string(&value, "error")
             .map(str::to_string)
@@ -470,6 +471,66 @@ pub struct OwnerSetupResult {
     pub passtoken: String,
 }
 
+async fn get_json(url: &str) -> Result<(u16, serde_json::Value), String> {
+    let client = reqwest::Client::new();
+    let res = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("Worker request failed: {e}"))?;
+    let status = res.status().as_u16();
+    let value = res
+        .json::<serde_json::Value>()
+        .await
+        .unwrap_or(serde_json::json!({}));
+    Ok((status, value))
+}
+
+fn is_cf_account_id(value: &str) -> bool {
+    let id = value.trim();
+    id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+async fn worker_cf_account_hint(worker_url: &str) -> Option<String> {
+    let url = format!(
+        "{}/console/auth-status",
+        worker_url.trim().trim_end_matches('/')
+    );
+    let (status, value) = get_json(&url).await.ok()?;
+    if status != 200 {
+        return None;
+    }
+    json_string(&value, "cfAccountId").and_then(|s| {
+        if is_cf_account_id(s) {
+            Some(s.to_string())
+        } else {
+            None
+        }
+    })
+}
+
+async fn resolve_reset_cf_account_id(token: &str, worker_url: &str) -> Option<String> {
+    let creds = load_credentials().ok().flatten().unwrap_or_default();
+    let from_disk = creds.account_id.trim();
+    if !from_disk.is_empty() {
+        return Some(from_disk.to_string());
+    }
+    if let Some(session) = get_cf_oauth_session() {
+        let from_session = session.account_id.trim();
+        if !from_session.is_empty() {
+            return Some(from_session.to_string());
+        }
+    }
+    if let Some(hint) = worker_cf_account_hint(worker_url).await {
+        if secrets_store_accessible(token, &hint).await {
+            return Some(hint);
+        }
+    }
+    resolve_account_id_for_recover_with_hint(token, None)
+        .await
+        .ok()
+}
+
 /// Re-issue owner passtoken. `cf_access_token` is the Cloudflare OAuth
 /// access token only.
 pub async fn owner_reset_admin(
@@ -484,8 +545,20 @@ pub async fn owner_reset_admin(
     if token.is_empty() {
         return Err("Authorize with Cloudflare again".into());
     }
+    let account_id = resolve_reset_cf_account_id(token, base).await;
+    if let Some(ref id) = account_id {
+        let creds = load_credentials()?.unwrap_or_default();
+        if creds.account_id.trim().is_empty() {
+            let mut next = creds;
+            next.account_id = id.clone();
+            save_credentials(&next)?;
+        }
+    }
     let url = format!("{base}/console/reset-admin");
-    let body = serde_json::json!({ "cfAccessToken": token });
+    let mut body = serde_json::json!({ "cfAccessToken": token });
+    if let Some(id) = account_id {
+        body["cfAccountId"] = serde_json::Value::String(id);
+    }
     let (status, value) = post_json(&url, body, &[]).await?;
     if status != 200 {
         return Err(json_string(&value, "error")
@@ -509,6 +582,7 @@ pub async fn owner_reset_admin(
 pub async fn owner_login_from_keyring(
     app: tauri::AppHandle,
     reason: String,
+    worker_url_override: Option<String>,
 ) -> Result<OwnerSessionStatus, String> {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
@@ -521,26 +595,55 @@ pub async fn owner_login_from_keyring(
     let record = crate::owner_passtoken::load_after_auth()?
         .ok_or_else(|| "No stored passtoken.".to_string())?;
     let session = load_keyring()?;
-    let worker_url = if !record.worker_url.trim().is_empty() {
-        record.worker_url.clone()
-    } else if let Some(blob) = session.as_ref() {
-        blob.worker_url.clone()
-    } else {
-        load_credentials()?
-            .and_then(|c| {
-                let url = c.worker_url.trim().trim_end_matches('/').to_string();
+    let worker_url = worker_url_override
+        .map(|url| url.trim().trim_end_matches('/').to_string())
+        .filter(|url| !url.is_empty())
+        .or_else(|| {
+            let url = record.worker_url.trim().trim_end_matches('/').to_string();
+            if url.is_empty() {
+                None
+            } else {
+                Some(url)
+            }
+        })
+        .or_else(|| {
+            session.as_ref().and_then(|blob| {
+                let url = blob.worker_url.trim().trim_end_matches('/').to_string();
                 if url.is_empty() {
                     None
                 } else {
                     Some(url)
                 }
             })
-            .unwrap_or_default()
-    };
+        })
+        .or_else(|| {
+            load_credentials()
+                .ok()
+                .flatten()
+                .and_then(|c| {
+                    let url = c.worker_url.trim().trim_end_matches('/').to_string();
+                    if url.is_empty() {
+                        None
+                    } else {
+                        Some(url)
+                    }
+                })
+        })
+        .unwrap_or_default();
     if worker_url.is_empty() {
         return Err("Worker URL is required".into());
     }
-    owner_login(worker_url, record.passtoken).await
+    match owner_login(worker_url, record.passtoken).await {
+        Ok(status) => Ok(status),
+        Err(err) if err.contains("Invalid credentials") => {
+            crate::owner_passtoken::delete();
+            Err(
+                "Stored passtoken didn't match this Worker. Paste your current passtoken."
+                    .into(),
+            )
+        }
+        Err(err) => Err(err),
+    }
 }
 
 async fn ensure_access(scope: &str) -> Result<AccessMemory, String> {

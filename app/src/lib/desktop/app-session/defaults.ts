@@ -26,8 +26,8 @@ export function createDefaultDeps(
     ownerBootMail: () => bridge().then((b) => b.desktopOwnerBootMail()),
     ownerUnlockConsole: () =>
       bridge().then((b) => b.desktopOwnerUnlockConsole()),
-    ownerLoginFromKeyring: (reason) =>
-      bridge().then((b) => b.desktopOwnerLoginFromKeyring(reason)),
+    ownerLoginFromKeyring: (reason, workerUrl) =>
+      bridge().then((b) => b.desktopOwnerLoginFromKeyring(reason, workerUrl)),
     ownerLogout: () => bridge().then((b) => b.desktopOwnerLogout()),
     ownerSetupAdmin: (input) =>
       bridge().then((b) => b.desktopOwnerSetupAdmin(input)),
@@ -39,6 +39,11 @@ export function createDefaultDeps(
     teamLogout: () => bridge().then((b) => b.desktopTeamLogout()),
     teamForgetSession: () =>
       bridge().then((b) => b.desktopTeamForgetSession()),
+    fetchWorkerPasstokenPrefix: (workerUrl) =>
+      bridge().then(async (b) => {
+        const status = await b.desktopOwnerAuthStatus(workerUrl);
+        return status.passtokenPrefix;
+      }),
     refreshIdentity: overrides?.refreshIdentity ?? (() => Promise.resolve()),
     clearOwnerDisk: () =>
       bridge().then((b) =>

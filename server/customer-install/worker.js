@@ -6895,10 +6895,7 @@ var init_schema = __esm({
       /** sha256(pepper || salt || passtoken). Plaintext is shown once at issue. */
       passtokenHash: text("passtoken_hash"),
       passtokenPrefix: text("passtoken_prefix"),
-      passtokenUpdatedAt: text("passtoken_updated_at"),
-      /** Brute-force lockout for POST /console/login. */
-      failedAttempts: integer("failed_attempts").notNull().default(0),
-      lockedUntil: text("locked_until")
+      passtokenUpdatedAt: text("passtoken_updated_at")
     });
     ownerSessions = sqliteTable(
       "owner_sessions",
@@ -11981,9 +11978,7 @@ async function getOwnerLoginConfig(db) {
       passtokenSalt: row.passtokenSalt ?? null,
       passtokenHash: row.passtokenHash ?? null,
       passtokenPrefix: row.passtokenPrefix ?? null,
-      passtokenUpdatedAt: row.passtokenUpdatedAt ?? null,
-      failedAttempts: row.failedAttempts ?? 0,
-      lockedUntil: row.lockedUntil ?? null
+      passtokenUpdatedAt: row.passtokenUpdatedAt ?? null
     };
   } catch {
     return null;
@@ -12003,18 +11998,14 @@ async function setOwnerLogin(db, input) {
     passtokenSalt: input.passtokenSalt,
     passtokenHash: input.passtokenHash,
     passtokenPrefix: input.passtokenPrefix,
-    passtokenUpdatedAt: now,
-    failedAttempts: 0,
-    lockedUntil: null
+    passtokenUpdatedAt: now
   }).onConflictDoUpdate({
     target: ownerConfig.id,
     set: {
       passtokenSalt: input.passtokenSalt,
       passtokenHash: input.passtokenHash,
       passtokenPrefix: input.passtokenPrefix,
-      passtokenUpdatedAt: now,
-      failedAttempts: 0,
-      lockedUntil: null
+      passtokenUpdatedAt: now
     }
   }).run();
 }
@@ -12034,20 +12025,6 @@ async function setOwnerConfig(db, input) {
   }).run();
 }
 __name(setOwnerConfig, "setOwnerConfig");
-async function incrementFailedLogin(db, lockSeconds) {
-  if (!db) return { failedAttempts: 0, lockedUntil: null };
-  const row = await db.select().from(ownerConfig).where(eq(ownerConfig.id, 1)).get();
-  const next = (row?.failedAttempts ?? 0) + 1;
-  const lockedUntil = next >= 5 ? new Date(Date.now() + lockSeconds * 1e3).toISOString() : null;
-  await db.update(ownerConfig).set({ failedAttempts: next, lockedUntil }).where(eq(ownerConfig.id, 1)).run();
-  return { failedAttempts: next, lockedUntil };
-}
-__name(incrementFailedLogin, "incrementFailedLogin");
-async function resetFailedLogin(db) {
-  if (!db) return;
-  await db.update(ownerConfig).set({ failedAttempts: 0, lockedUntil: null }).where(eq(ownerConfig.id, 1)).run();
-}
-__name(resetFailedLogin, "resetFailedLogin");
 
 // src/lib/owner-tokens.ts
 var PASSTOKEN_PREFIX = "rb_pass_";
@@ -12165,8 +12142,6 @@ function generateRefreshToken() {
 __name(generateRefreshToken, "generateRefreshToken");
 
 // src/lib/owner-auth.ts
-var LOGIN_LOCK_SECONDS = 5 * 60;
-var MAX_FAILED_ATTEMPTS = 5;
 var OWNER_SUB = "owner";
 function accessTtlForScope(scope) {
   return scope === "mail" ? MAIL_ACCESS_TTL_SECONDS : CONSOLE_ACCESS_TTL_SECONDS;
@@ -12252,21 +12227,10 @@ async function loginOwner(env, input) {
   if (!cfg || !cfg.passtokenHash || !cfg.passtokenSalt) {
     return { error: "Invalid credentials", status: 401 };
   }
-  if (cfg.lockedUntil) {
-    const lockedUntilMs = Date.parse(cfg.lockedUntil);
-    if (Number.isFinite(lockedUntilMs) && lockedUntilMs > Date.now()) {
-      return { error: "Too many attempts. Try again later.", status: 429 };
-    }
-  }
   const passtokenOk = isValidPasstokenFormat(input.passtoken) && await hashPasstoken(pepper, cfg.passtokenSalt, input.passtoken) === cfg.passtokenHash;
   if (!passtokenOk) {
-    const { failedAttempts } = await incrementFailedLogin(db, LOGIN_LOCK_SECONDS);
-    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-      return { error: "Too many attempts. Try again later.", status: 429 };
-    }
     return { error: "Invalid credentials", status: 401 };
   }
-  await resetFailedLogin(db);
   const mailRefreshToken = await createScopedRefreshSession(
     db,
     "mail",
@@ -12839,8 +12803,13 @@ consoleOwnerAuth.post("/reset-admin", async (c) => {
 });
 consoleOwnerAuth.get("/auth-status", async (c) => {
   const db = createAppDb(c.env.RELAYBASE_DB);
-  const configured = db ? await ownerIsConfigured(db) : false;
-  return c.json({ ok: true, ownerConfigured: configured });
+  const cfg = db ? await getOwnerLoginConfig(db) : null;
+  const configured = Boolean(cfg?.passtokenHash);
+  return c.json({
+    ok: true,
+    ownerConfigured: configured,
+    passtokenPrefix: cfg?.passtokenPrefix ?? null
+  });
 });
 
 // src/routes/console/rebuild-mail.ts
@@ -18512,10 +18481,6 @@ ALTER TABLE \`owner_config\` ADD \`passtoken_prefix\` text;
 --> statement-breakpoint
 ALTER TABLE \`owner_config\` ADD \`passtoken_updated_at\` text;
 --> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`failed_attempts\` integer DEFAULT 0 NOT NULL;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`locked_until\` text;
---> statement-breakpoint
 CREATE TABLE \`owner_sessions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`token_hash\` text NOT NULL,
@@ -18531,6 +18496,9 @@ CREATE INDEX \`owner_sessions_family_idx\` ON \`owner_sessions\` (\`family\`);
 --> statement-breakpoint
 DROP TABLE IF EXISTS \`auth_tokens\`;`;
 var APP_0004 = `ALTER TABLE \`owner_config\` DROP COLUMN \`admin_username\`;`;
+var APP_0005 = `ALTER TABLE \`owner_config\` DROP COLUMN \`failed_attempts\`;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` DROP COLUMN \`locked_until\`;`;
 var LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
   id TEXT PRIMARY KEY,
   at TEXT NOT NULL,
@@ -18606,6 +18574,7 @@ var MIGRATIONS = [
   { target: "app", name: "0002_app_settings", sql: APP_0002 },
   { target: "app", name: "0003_owner_login", sql: APP_0003 },
   { target: "app", name: "0004_drop_admin_username", sql: APP_0004 },
+  { target: "app", name: "0005_drop_login_lockout", sql: APP_0005 },
   { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
   { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 }
 ];

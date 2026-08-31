@@ -247,7 +247,7 @@ Implemented in `api-base.ts` + `context.tsx`.
 | Endpoint | Purpose |
 |----------|---------|
 | `GET /health` | Health probe |
-| `GET /console/auth-status` | `{ ownerConfigured }` |
+| `GET /console/auth-status` | `{ ownerConfigured, passtokenPrefix? }` |
 | `POST /console/login` | Passtoken |
 
 ### Pepper bootstrap (`X-Auth-Pepper`)

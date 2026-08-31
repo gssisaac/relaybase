@@ -216,10 +216,6 @@ ALTER TABLE \`owner_config\` ADD \`passtoken_prefix\` text;
 --> statement-breakpoint
 ALTER TABLE \`owner_config\` ADD \`passtoken_updated_at\` text;
 --> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`failed_attempts\` integer DEFAULT 0 NOT NULL;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`locked_until\` text;
---> statement-breakpoint
 CREATE TABLE \`owner_sessions\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`token_hash\` text NOT NULL,
@@ -236,6 +232,12 @@ CREATE INDEX \`owner_sessions_family_idx\` ON \`owner_sessions\` (\`family\`);
 DROP TABLE IF EXISTS \`auth_tokens\`;`;
 
 const APP_0004 = `ALTER TABLE \`owner_config\` DROP COLUMN \`admin_username\`;`;
+
+const APP_0005 = `ALTER TABLE \`owner_config\` DROP COLUMN \`failed_attempts\`;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` DROP COLUMN \`locked_until\`;`;
+
+const APP_0006 = `ALTER TABLE \`owner_config\` ADD \`cf_account_id\` text;`;
 
 const LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
   id TEXT PRIMARY KEY,
@@ -314,6 +316,8 @@ export const MIGRATIONS: Migration[] = [
   { target: "app", name: "0002_app_settings", sql: APP_0002 },
   { target: "app", name: "0003_owner_login", sql: APP_0003 },
   { target: "app", name: "0004_drop_admin_username", sql: APP_0004 },
+  { target: "app", name: "0005_drop_login_lockout", sql: APP_0005 },
+  { target: "app", name: "0006_owner_cf_account_id", sql: APP_0006 },
   { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
   { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 },
 ];

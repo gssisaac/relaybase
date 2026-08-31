@@ -229,7 +229,7 @@ See **[mobile-email-companion.md](./mobile-email-companion.md)** for provisionin
 |----------|---------|
 | `GET /health` | Health probe |
 | `GET /console/auth-status` | `{ ownerConfigured }` — setup vs login UI |
-| `POST /console/login` | Username + passtoken → session (rate-limited) |
+| `POST /console/login` | Passtoken → session |
 
 ### Pepper bootstrap (`X-Auth-Pepper` header = wrangler `AUTH_PEPPER`)
 
@@ -658,7 +658,7 @@ Both share **`UnlockView`**, **`offerBiometry`**, and the same **`unlock`** phas
 ## D1 schema (auth tables)
 
 ```text
-owner_config          — singleton: adminUsername, passtokenSalt, passtokenHash, passtokenPrefix, failedAttempts, lockedUntil
+owner_config          — singleton: passtokenSalt, passtokenHash, passtokenPrefix
 owner_sessions        — refresh token SHA-256 hash, family id, label, expiresAt
 mobile_passwords      — per account email: salt, passwordHash, mobileEnabled flag on catalog row
 ```

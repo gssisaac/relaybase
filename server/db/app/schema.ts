@@ -197,9 +197,8 @@ export const ownerConfig = sqliteTable("owner_config", {
   passtokenHash: text("passtoken_hash"),
   passtokenPrefix: text("passtoken_prefix"),
   passtokenUpdatedAt: text("passtoken_updated_at"),
-  /** Brute-force lockout for POST /console/login. */
-  failedAttempts: integer("failed_attempts").notNull().default(0),
-  lockedUntil: text("locked_until"),
+  /** Cloudflare account id for forgot-passtoken recover (public hint). */
+  cfAccountId: text("cf_account_id"),
 });
 
 // ─── owner sessions (refresh tokens, hash-only) ──────────────────────────

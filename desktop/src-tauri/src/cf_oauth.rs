@@ -21,6 +21,30 @@ pub struct CfOAuthCreds {
 
 /// Memory OAuth session only. No disk `install_token` fallback.
 pub async fn require_cf_oauth() -> Result<CfOAuthCreds, String> {
+    let session = require_cf_oauth_session().await?;
+    let access_token = session.access_token.trim().to_string();
+    let account_id = account_id_from_memory(&session)?;
+    Ok(CfOAuthCreds {
+        access_token,
+        account_id,
+    })
+}
+
+/// Same session/refresh rules as [`require_cf_oauth`], but only the access
+/// token — no CF account id. Used by forgot-passtoken reset: the recover
+/// OAuth client has `secrets-store.write` only, so we cannot list `/accounts`
+/// to resolve an account id on the desktop; the Worker verifies the token.
+pub async fn require_cf_oauth_access_token() -> Result<String, String> {
+    let session = require_cf_oauth_session().await?;
+    let access_token = session.access_token.trim().to_string();
+    if access_token.is_empty() {
+        return Err(expired(AUTH_AGAIN));
+    }
+    Ok(access_token)
+}
+
+async fn require_cf_oauth_session(
+) -> Result<crate::secrets::CfOAuthSession, String> {
     let Some(mut session) = get_cf_oauth_session() else {
         return Err(expired(AUTH_AGAIN));
     };
@@ -36,15 +60,7 @@ pub async fn require_cf_oauth() -> Result<CfOAuthCreds, String> {
         session = refresh_oauth_session(session).await?;
     }
 
-    let access_token = session.access_token.trim().to_string();
-    if access_token.is_empty() {
-        return Err(expired(AUTH_AGAIN));
-    }
-    let account_id = account_id_from_memory(&session)?;
-    Ok(CfOAuthCreds {
-        access_token,
-        account_id,
-    })
+    Ok(session)
 }
 
 /// Refresh if a session exists and is expiring; `Ok(None)` when the user has

@@ -96,5 +96,5 @@ pub fn delete_password(service: &str, account: &str) {
 }
 
 pub fn has_password(service: &str, account: &str) -> Result<bool, String> {
-    Ok(cache_path(service, account)?.exists())
+    Ok(get_password(service, account)?.is_some())
 }

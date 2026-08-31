@@ -24,6 +24,7 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasRefresh: false,
   hasAccess: false,
   hasPasstoken: false,
+  keyringPasstokenPrefix: "",
   workerUrl: "",
   platform: "macos",
 };

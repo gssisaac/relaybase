@@ -16,6 +16,7 @@ function ownerStatus(partial: Partial<OwnerSessionStatus>): OwnerSessionStatus {
     hasRefresh: false,
     hasAccess: false,
     hasPasstoken: false,
+    keyringPasstokenPrefix: "",
     workerUrl: "",
     platform: "macos",
     ...partial,
@@ -68,7 +69,10 @@ function makeDeps(
     authenticateBiometry?: () => Promise<void>;
     ownerBootMail?: () => Promise<OwnerSessionStatus>;
     ownerUnlockConsole?: () => Promise<OwnerSessionStatus>;
-    ownerLoginFromKeyring?: (reason: string) => Promise<OwnerSessionStatus>;
+    ownerLoginFromKeyring?: (
+      reason: string,
+      workerUrl?: string,
+    ) => Promise<OwnerSessionStatus>;
     ownerLogin?: (input: {
       workerUrl: string;
       passtoken: string;
@@ -84,6 +88,7 @@ function makeDeps(
     teamLogout?: () => Promise<void>;
     teamForgetSession?: () => Promise<TeamSessionStatus>;
     teamSessionStatus?: () => Promise<TeamSessionStatus>;
+    fetchWorkerPasstokenPrefix?: (workerUrl: string) => Promise<string | null>;
     isDesktop?: () => boolean;
     refreshIdentity?: () => Promise<void>;
     clearOwnerDisk?: () => Promise<void>;
@@ -125,6 +130,8 @@ function makeDeps(
     teamLogout: overrides.teamLogout ?? (() => Promise.resolve()),
     teamForgetSession:
       overrides.teamForgetSession ?? (() => Promise.resolve(teamStatus({}))),
+    fetchWorkerPasstokenPrefix:
+      overrides.fetchWorkerPasstokenPrefix ?? (() => Promise.resolve(null)),
     refreshIdentity:
       overrides.refreshIdentity ??
       (async () => {
@@ -432,6 +439,52 @@ describe("AppSessionStore", () => {
     assert.equal(store.phase.kind, "ownerReady");
     assert.equal(store.ownerStatus?.hasMailAccess, true);
     assert.equal(attempts, 2);
+  });
+
+  it("canTryOwnerBio is false when keyring prefix mismatches worker", () => {
+    const store = createStore({});
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({
+        hasPasstoken: true,
+        keyringPasstokenPrefix: "aaaa-bbbb",
+      }),
+      teamStatus({}),
+    );
+    store.workerPasstokenPrefix = "zzzz-yyyy";
+    assert.equal(store.canTryOwnerBio, false);
+    assert.equal(store.ownerBioPrefixMismatch, true);
+  });
+
+  it("surfaces boot keyring login failures on unlock", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasPasstoken: true,
+        keyringPasstokenPrefix: "match-prefix",
+        workerUrl: WORKER_URL,
+      }),
+      ownerLoginFromKeyring: () =>
+        Promise.reject(new Error("Invalid credentials. Check the passtoken")),
+      fetchWorkerPasstokenPrefix: () => Promise.resolve("match-prefix"),
+    });
+    connectOwner(store);
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: SAMPLE_CREDENTIALS,
+      teamIdentity: null,
+    });
+    store.workerPasstokenPrefix = "match-prefix";
+    store.setStatuses(
+      ownerStatus({
+        hasPasstoken: true,
+        keyringPasstokenPrefix: "match-prefix",
+        workerUrl: WORKER_URL,
+      }),
+      teamStatus({}),
+    );
+    await waitUntil(() => store.phase.kind === "unlock", "boot login fail");
+    assert.match(store.error ?? "", /Passtoken didn't match/i);
   });
 
   it("lands on passtoken form when owner has workerUrl but no keyring", () => {

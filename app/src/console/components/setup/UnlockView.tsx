@@ -2,7 +2,7 @@
 
 import { Fingerprint, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,19 +66,26 @@ export function UnlockView({
 
   const busy = store.busy;
   const bioLabel = biometryLabel(0, store.ownerStatus?.platform ?? "macos");
-  const canTryBio = role === "owner" && Boolean(store.ownerStatus?.hasPasstoken);
   const selectedUrl = normalizeWorkerUrl(workerUrl);
+  const canTryBio = role === "owner" && store.canTryOwnerBio;
+  const prefixMismatch = role === "owner" && store.ownerBioPrefixMismatch;
   const canSubmit =
     Boolean(selectedUrl) &&
     Boolean(secret) &&
     (role === "invited" ? Boolean(accountEmail.trim()) : true);
   const missingWorkerError = isMissingWorkerUnlockMessage(store.error, role);
 
+  useEffect(() => {
+    if (role !== "owner" || !selectedUrl) return;
+    void store.refreshWorkerPasstokenPrefix(selectedUrl);
+  }, [role, selectedUrl, store]);
+
   async function submitSecret(e: React.FormEvent) {
     e.preventDefault();
     const url = selectedUrl;
     const passtoken = normalizePasstokenInput(secret);
     if (!url || !passtoken) return;
+    store.clearBioDismissed();
     try {
       if (role === "invited") {
         await store.loginInvited({
@@ -122,7 +129,9 @@ export function UnlockView({
                 ? "Sign in with your account email and the password your admin set up in Accounts → Teammate login."
                 : canTryBio
                   ? `Use ${bioLabel} to read your stored passtoken, or type it if biometry fails or is declined.`
-                  : "Sign in with your passtoken. After this, Touch ID reads it from the keyring."}
+                  : prefixMismatch
+                    ? "Stored passtoken doesn't match this Worker. Paste your current passtoken."
+                    : "Sign in with your passtoken. After this, Touch ID reads it from the keyring."}
             </p>
           </div>
 
@@ -131,7 +140,10 @@ export function UnlockView({
               type="button"
               variant="ghost"
               disabled={busy}
-              onClick={() => void store.loginOwnerFromKeyring()}
+              onClick={() => {
+                store.clearBioDismissed();
+                void store.loginOwnerFromKeyring(selectedUrl ?? undefined);
+              }}
               aria-label={`Sign in with ${bioLabel}`}
               className="h-auto flex-col gap-3 self-center px-6 py-4"
             >
@@ -145,6 +157,12 @@ export function UnlockView({
                 {bioLabel}
               </span>
             </Button>
+          ) : null}
+
+          {store.bioDismissed && role === "owner" ? (
+            <p className="text-center text-[11px] text-muted-foreground">
+              {bioLabel} cancelled — try again or paste passtoken below.
+            </p>
           ) : null}
 
           <form

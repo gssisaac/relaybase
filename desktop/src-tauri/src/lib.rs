@@ -30,8 +30,10 @@ use auto_install::{
     update_installed_worker, worker_urls_match, AutoInstallResult, InitDbResult, InstallDecision,
     InstallProbeResult, WorkerUpdateCheck, WorkerUpdateTarget,
 };
-use cf_oauth::{cf_oauth_if_present, new_iso_expires, require_cf_oauth};
-use cloudflare::{resolve_account_id, verify_token};
+use cf_oauth::{
+    cf_oauth_if_present, new_iso_expires, require_cf_oauth, require_cf_oauth_access_token,
+};
+use cloudflare::{resolve_account_id, resolve_account_id_for_recover, verify_token};
 use secrets::{
     clear_credentials, clear_team_login, get_cf_oauth_session,
     load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
@@ -704,6 +706,34 @@ async fn complete_cf_oauth_inner(
         .filter(|s| !s.is_empty());
     if account_id.is_none() {
         account_id = resolve_account_id(&access_token).await.ok();
+    }
+    if account_id.is_none() {
+        account_id = resolve_account_id_for_recover(&access_token).await.ok();
+    }
+    if account_id.is_none() {
+        if let Ok(Some(creds)) = load_credentials() {
+            let worker_url = creds.worker_url.trim().trim_end_matches('/');
+            if !worker_url.is_empty() {
+                let url = format!("{worker_url}/console/auth-status");
+                if let Ok(res) = reqwest::Client::new().get(&url).send().await {
+                    if res.status().is_success() {
+                        if let Ok(json) = res.json::<serde_json::Value>().await {
+                            let hint = json
+                                .get("cfAccountId")
+                                .and_then(|v| v.as_str())
+                                .map(str::trim)
+                                .filter(|s| !s.is_empty());
+                            account_id = crate::cloudflare::resolve_account_id_for_recover_with_hint(
+                                &access_token,
+                                hint,
+                            )
+                            .await
+                            .ok();
+                        }
+                    }
+                }
+            }
+        }
     }
     let expires_at = new_iso_expires(expires_in);
 
@@ -1533,8 +1563,9 @@ async fn owner_logout_cmd() -> Result<(), String> {
 async fn owner_login_from_keyring_cmd(
     app: tauri::AppHandle,
     reason: String,
+    worker_url: Option<String>,
 ) -> Result<OwnerSessionStatus, String> {
-    owner_login_from_keyring_inner(app, reason).await
+    owner_login_from_keyring_inner(app, reason, worker_url).await
 }
 
 #[tauri::command]
@@ -1556,8 +1587,8 @@ async fn owner_reset_admin_cmd(
     cf_access_token: String,
 ) -> Result<OwnerSetupResult, String> {
     let _ = cf_access_token;
-    let oauth = require_cf_oauth().await?;
-    owner_reset_admin_inner(worker_url, oauth.access_token).await
+    let access_token = require_cf_oauth_access_token().await?;
+    owner_reset_admin_inner(worker_url, access_token).await
 }
 
 #[tauri::command]

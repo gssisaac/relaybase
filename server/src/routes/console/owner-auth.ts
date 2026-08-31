@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { createAppDb } from "../../../db/app";
-import { ownerIsConfigured } from "../../../db/app/owner";
+import { getOwnerLoginConfig } from "../../../db/app/owner";
 import {
   loginOwner,
   logoutOwner,
+  normalizeCfAccountId,
   refreshOwner,
   resetOwner,
   rotatePasstoken,
@@ -53,7 +54,7 @@ consoleOwnerAuth.post("/setup-admin", async (c) => {
 /**
  * POST /console/login
  *
- * Public (rate-limited + lockout). Body: { passtoken, label? }.
+ * Public. Body: { passtoken, label? }.
  * Returns { mailAccessToken, mailRefreshToken, consoleRefreshToken, mailExpiresIn }.
  */
 consoleOwnerAuth.post("/login", async (c) => {
@@ -143,12 +144,12 @@ consoleOwnerAuth.post("/rotate-passtoken", async (c) => {
  *
  * Forgot-passtoken recovery. Unauthenticated by design; security comes from
  * a Cloudflare OAuth access token (`cfAccessToken`) that can list Secrets
- * Store on this Worker's CF_ACCOUNT_ID (passtoken-updater client), or GET
- * that account (install client fallback). Issues a new passtoken (shown
- * once) and revokes every existing session.
+ * Store on this Worker's CF account (`CF_ACCOUNT_ID` secret or optional
+ * `cfAccountId` body field). GET that account is an install-client fallback.
+ * Issues a new passtoken (shown once) and revokes every existing session.
  */
 consoleOwnerAuth.post("/reset-admin", async (c) => {
-  let body: { cfAccessToken?: string };
+  let body: { cfAccessToken?: string; cfAccountId?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -158,6 +159,7 @@ consoleOwnerAuth.post("/reset-admin", async (c) => {
   if (!cfAccessToken) return c.json({ error: "cfAccessToken is required" }, 400);
   const result = await resetOwner(c.env, {
     cfAccessToken,
+    cfAccountId: body.cfAccountId?.trim(),
   });
   if ("error" in result) {
     return c.json({ error: result.error }, result.status);
@@ -176,8 +178,16 @@ consoleOwnerAuth.post("/reset-admin", async (c) => {
  */
 consoleOwnerAuth.get("/auth-status", async (c) => {
   const db = createAppDb(c.env.RELAYBASE_DB);
-  const configured = db ? await ownerIsConfigured(db) : false;
-  return c.json({ ok: true, ownerConfigured: configured });
+  const cfg = db ? await getOwnerLoginConfig(db) : null;
+  const configured = Boolean(cfg?.passtokenHash);
+  const fromEnv = normalizeCfAccountId(c.env.CF_ACCOUNT_ID);
+  const fromDb = normalizeCfAccountId(cfg?.cfAccountId);
+  return c.json({
+    ok: true,
+    ownerConfigured: configured,
+    passtokenPrefix: cfg?.passtokenPrefix ?? null,
+    cfAccountId: fromEnv ?? fromDb ?? null,
+  });
 });
 
 export { consoleOwnerAuth };

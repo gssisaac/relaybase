@@ -262,6 +262,7 @@ export async function ownerConnectProbe(): Promise<{
 /** GET /console/auth-status — public probe: is an owner configured yet? */
 export async function ownerAuthStatus(): Promise<{
   ownerConfigured: boolean;
+  passtokenPrefix: string | null;
 }> {
   const base = workerBase();
   return ownerAuthStatusForWorkerUrl(base);
@@ -270,14 +271,7 @@ export async function ownerAuthStatus(): Promise<{
 /** Same as ownerAuthStatus but for an explicit Worker URL (Setup probe). */
 export async function ownerAuthStatusForWorkerUrl(
   workerUrl: string,
-): Promise<{ ownerConfigured: boolean }> {
-  const base = workerUrl.trim().replace(/\/$/, "");
-  if (!base) return { ownerConfigured: false };
-  try {
-    const res = await fetch(`${base}/console/auth-status`);
-    const data = await readJson<{ ownerConfigured?: boolean }>(res);
-    return { ownerConfigured: Boolean(data.ownerConfigured) };
-  } catch {
-    return { ownerConfigured: false };
-  }
+): Promise<{ ownerConfigured: boolean; passtokenPrefix: string | null }> {
+  const { desktopOwnerAuthStatus } = await import("../bridge/owner");
+  return desktopOwnerAuthStatus(workerUrl);
 }

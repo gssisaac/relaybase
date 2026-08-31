@@ -65,7 +65,19 @@ describe("visibleUnlockError", () => {
   it("passes through other errors unchanged", () => {
     assert.equal(
       visibleUnlockError(new Error("Invalid credentials"), "owner"),
-      "Invalid credentials",
+      "Passtoken didn't match this Worker. Check the token or use I forgot my passtoken.",
+    );
+  });
+
+  it("maps stored keyring mismatch verbatim", () => {
+    assert.equal(
+      visibleUnlockError(
+        new Error(
+          "Stored passtoken didn't match this Worker. Paste your current passtoken.",
+        ),
+        "owner",
+      ),
+      "Stored passtoken didn't match this Worker. Paste your current passtoken.",
     );
   });
 });

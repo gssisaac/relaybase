@@ -2,7 +2,7 @@
 
 import { Fingerprint, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,22 +48,29 @@ export function ConsoleGateView() {
 
   const label = biometryLabel(0, store.ownerStatus?.platform ?? "macos");
   const busy = store.busy;
-  const canTryBio = Boolean(store.ownerStatus?.hasPasstoken);
+  const selectedUrl = normalizeWorkerUrl(workerUrl);
+  const canTryBio = store.canTryOwnerBio;
+  const prefixMismatch = store.ownerBioPrefixMismatch;
 
   const workerUrlSeeds = useMemo(
     () => [credentials?.workerUrl, store.ownerStatus?.workerUrl],
     [credentials?.workerUrl, store.ownerStatus?.workerUrl],
   );
 
-  const selectedUrl = normalizeWorkerUrl(workerUrl);
   const canSubmit = Boolean(selectedUrl) && Boolean(secret);
   const missingWorkerError = isMissingWorkerUnlockMessage(store.error, "owner");
+
+  useEffect(() => {
+    if (!selectedUrl) return;
+    void store.refreshWorkerPasstokenPrefix(selectedUrl);
+  }, [selectedUrl, store]);
 
   async function submitPasstoken(e: React.FormEvent) {
     e.preventDefault();
     const url = selectedUrl;
     const passtoken = normalizePasstokenInput(secret);
     if (!url || !passtoken) return;
+    store.clearBioDismissed();
     try {
       await store.loginConsoleWithPasstoken({
         workerUrl: url,
@@ -95,8 +102,11 @@ export function ConsoleGateView() {
               Unlock console
             </h1>
             <p className="text-xs text-muted-foreground">
-              Use {label} to read your stored passtoken, or type it if
-              biometry fails or is declined.
+              {canTryBio
+                ? `Use ${label} to read your stored passtoken, or type it if biometry fails or is declined.`
+                : prefixMismatch
+                  ? "Stored passtoken doesn't match this Worker. Paste your current passtoken."
+                  : "Sign in with your passtoken to unlock the console."}
             </p>
           </div>
 
@@ -105,7 +115,10 @@ export function ConsoleGateView() {
               type="button"
               variant="ghost"
               disabled={busy}
-              onClick={() => void store.ensureConsoleAccess()}
+              onClick={() => {
+                store.clearBioDismissed();
+                void store.ensureConsoleAccess(selectedUrl ?? undefined);
+              }}
               aria-label={`Unlock console with ${label}`}
               className="h-auto flex-col gap-3 self-center px-6 py-4"
             >
@@ -119,6 +132,12 @@ export function ConsoleGateView() {
                 {label}
               </span>
             </Button>
+          ) : null}
+
+          {store.bioDismissed ? (
+            <p className="text-center text-[11px] text-muted-foreground">
+              {label} cancelled — try again or paste passtoken below.
+            </p>
           ) : null}
 
           {missingWorkerError ? (

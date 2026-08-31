@@ -63,7 +63,21 @@ export function visibleUnlockError(
   if (role && isMissingWorkerError(err)) {
     return missingWorkerSummary(role);
   }
+  if (role === "owner") {
+    return normalizeOwnerLoginError(message);
+  }
   return message;
+}
+
+function normalizeOwnerLoginError(message: string): string {
+  const lower = message.trim().toLowerCase();
+  if (lower.includes("stored passtoken didn't match")) {
+    return message.trim();
+  }
+  if (lower.includes("invalid credentials")) {
+    return "Passtoken didn't match this Worker. Check the token or use I forgot my passtoken.";
+  }
+  return message.trim();
 }
 
 /**

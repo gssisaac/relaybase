@@ -37,6 +37,10 @@ export class AppSessionStore {
   consoleGateOpen = false;
   /** Last Worker call failed because the network / Worker was unreachable. */
   workerUnreachable = false;
+  /** Worker D1 passtoken prefix from GET /console/auth-status (non-secret). */
+  workerPasstokenPrefix: string | null = null;
+  /** Set when the user dismissed Touch ID on the unlock form. */
+  bioDismissed = false;
   private consoleUnauthorizedInFlight = false;
 
   private identity: IdentitySnapshot = {
@@ -88,6 +92,22 @@ export class AppSessionStore {
       return this.hasInvitedWorkerUrl() && this.invitedCanEnterMailbox();
     }
     return false;
+  }
+
+  get canTryOwnerBio(): boolean {
+    if (!this.ownerStatus?.hasPasstoken) return false;
+    return !this.ownerBioPrefixMismatch;
+  }
+
+  get ownerBioPrefixMismatch(): boolean {
+    const keyringPrefix = this.ownerStatus?.keyringPasstokenPrefix?.trim();
+    const workerPrefix = this.workerPasstokenPrefix?.trim();
+    return Boolean(
+      this.ownerStatus?.hasPasstoken &&
+        keyringPrefix &&
+        workerPrefix &&
+        keyringPrefix !== workerPrefix,
+    );
   }
 
   /** Worker URL: keyring first, then disk identity files. */
@@ -242,7 +262,19 @@ export class AppSessionStore {
           });
           await this.deps.refreshIdentity();
         } else if (this.hasOwnerPasstoken()) {
-          await this.loginFromKeyringPasstoken("Unlock Relaybase");
+          const workerUrl =
+            owner.workerUrl.trim() ||
+            this.identity.credentials?.workerUrl?.trim() ||
+            "";
+          if (workerUrl) {
+            await this.refreshWorkerPasstokenPrefix(workerUrl);
+          }
+          if (this.canTryOwnerBio) {
+            await this.loginFromKeyringPasstoken(
+              "Unlock Relaybase",
+              workerUrl || undefined,
+            );
+          }
         }
       }
     } catch (err) {
@@ -252,6 +284,12 @@ export class AppSessionStore {
           (this.enrolledAsInvited() || this.enrolledAsOwner())
         ) {
           this.markWorkerUnreachable();
+        }
+        if (isUserDismissedBiometry(err)) {
+          this.bioDismissed = true;
+        } else {
+          const shown = visibleUnlockError(err, "owner");
+          if (shown) this.error = shown;
         }
       });
     }
@@ -365,14 +403,36 @@ export class AppSessionStore {
 
   // --- Console gate ---
 
+  async refreshWorkerPasstokenPrefix(workerUrl?: string): Promise<void> {
+    const url = (workerUrl ?? this.resolvedWorkerUrl("owner")).trim();
+    if (!url) {
+      runInAction(() => {
+        this.workerPasstokenPrefix = null;
+      });
+      return;
+    }
+    const status = await this.deps.fetchWorkerPasstokenPrefix(url);
+    runInAction(() => {
+      this.workerPasstokenPrefix = status;
+    });
+  }
+
+  clearBioDismissed(): void {
+    this.bioDismissed = false;
+  }
+
   /**
    * Touch ID then read `owner-passtoken` and login. Used by boot, console
    * gate, and mail 401 — JS never sees the secret.
    */
-  async loginFromKeyringPasstoken(reason: string): Promise<OwnerSessionStatus> {
-    const status = await this.deps.ownerLoginFromKeyring(reason);
+  async loginFromKeyringPasstoken(
+    reason: string,
+    workerUrl?: string,
+  ): Promise<OwnerSessionStatus> {
+    const status = await this.deps.ownerLoginFromKeyring(reason, workerUrl);
     runInAction(() => {
       this.ownerStatus = status;
+      this.bioDismissed = false;
       this.markWorkerReachable();
     });
     try {
@@ -400,8 +460,13 @@ export class AppSessionStore {
   }
 
   /** Grant console access: silent refresh, else Touch ID → keyring passtoken. */
-  async ensureConsoleAccess(): Promise<boolean> {
+  async ensureConsoleAccess(workerUrl?: string): Promise<boolean> {
     if (this.hasConsoleAccess) return true;
+
+    const resolvedUrl =
+      workerUrl?.trim().replace(/\/$/, "") ||
+      this.resolvedWorkerUrl("owner") ||
+      undefined;
 
     if (this.hasOwnerConsoleRefresh()) {
       this.busy = true;
@@ -419,11 +484,23 @@ export class AppSessionStore {
       }
     }
 
-    if (this.hasOwnerPasstoken()) {
+    if (this.canTryOwnerBio) {
       this.busy = true;
       this.error = null;
       try {
-        await this.loginFromKeyringPasstoken("Unlock Relaybase");
+        if (resolvedUrl) {
+          await this.refreshWorkerPasstokenPrefix(resolvedUrl);
+        }
+        if (!this.canTryOwnerBio) {
+          runInAction(() => {
+            this.busy = false;
+          });
+          runInAction(() => {
+            this.consoleGateOpen = true;
+          });
+          return false;
+        }
+        await this.loginFromKeyringPasstoken("Unlock Relaybase", resolvedUrl);
         if (!this.hasConsoleAccess && this.hasOwnerConsoleRefresh()) {
           return await this.unlockConsoleSilent();
         }
@@ -435,10 +512,24 @@ export class AppSessionStore {
       } catch (err) {
         runInAction(() => {
           this.busy = false;
-          if (isWorkerUnreachableError(err)) this.markWorkerUnreachable();
+          if (isUserDismissedBiometry(err)) {
+            this.bioDismissed = true;
+          } else if (isWorkerUnreachableError(err)) {
+            this.markWorkerUnreachable();
+          }
+          const shown = visibleUnlockError(err, "owner");
+          if (shown) this.error = shown;
         });
         if (isUserDismissedBiometry(err) || isWorkerUnreachableError(err)) {
           return false;
+        }
+        try {
+          const status = await this.deps.ownerSessionStatus();
+          runInAction(() => {
+            this.ownerStatus = status;
+          });
+        } catch {
+          /* keep prior status */
         }
       }
     }
@@ -508,12 +599,13 @@ export class AppSessionStore {
   }
 
   /** Touch ID then read keyring passtoken — UnlockView retry after boot decline. */
-  async loginOwnerFromKeyring(): Promise<void> {
-    if (!this.hasOwnerPasstoken()) return;
+  async loginOwnerFromKeyring(workerUrl?: string): Promise<void> {
+    if (!this.canTryOwnerBio) return;
     this.busy = true;
     this.error = null;
+    this.bioDismissed = false;
     try {
-      await this.loginFromKeyringPasstoken("Unlock Relaybase");
+      await this.loginFromKeyringPasstoken("Unlock Relaybase", workerUrl);
       runInAction(() => {
         if (this.hasOwnerMailAccess() && this.hasWorkerConnected()) {
           this.phase = { kind: "ownerReady" };
@@ -523,10 +615,22 @@ export class AppSessionStore {
     } catch (err) {
       runInAction(() => {
         this.busy = false;
-        if (isWorkerUnreachableError(err)) this.markWorkerUnreachable();
+        if (isUserDismissedBiometry(err)) {
+          this.bioDismissed = true;
+        } else if (isWorkerUnreachableError(err)) {
+          this.markWorkerUnreachable();
+        }
         const shown = visibleUnlockError(err, "owner");
         if (shown) this.error = shown;
       });
+      try {
+        const status = await this.deps.ownerSessionStatus();
+        runInAction(() => {
+          this.ownerStatus = status;
+        });
+      } catch {
+        /* keep prior status */
+      }
       throw err;
     }
   }

@@ -457,7 +457,7 @@ export function WorkerInstallPanel({
                 : "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
               : purpose === "worker-update"
                 ? "Copy the update command, deploy the Worker, then come back. Schema uses your owner session."
-                : "Copy the install command, run it in a terminal, then come back. The Worker issues your passtoken once."}
+                : "If you do not have Wrangler, start with step 1. Worker overwrite is fine. Be careful with existing D1 and R2. Verify is optional."}
           </p>
 
           <div className="mt-2 flex min-h-0 flex-1 flex-col">
@@ -484,6 +484,8 @@ export function WorkerInstallPanel({
                 <ManualInstallScriptPanel
                   onPepperChange={setInstallPepper}
                   cfAccountId={cfOAuthAccountId}
+                  workerUrl={workerUrl}
+                  onWorkerUrlChange={setWorkerUrl}
                   variant={
                     purpose === "worker-update" ? "worker-update" : "install"
                   }

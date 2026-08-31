@@ -1,14 +1,35 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Download, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import { Label } from "@/components/ui/label";
+import {
+  desktopSaveDownloadFile,
+  isDesktopRuntime,
   WORKER_INSTALL_MANIFEST_URL,
   WORKER_INSTALL_ZIP_URL,
   type WorkerInstallManifest,
 } from "@/lib/desktop/bridge";
+import { parseDefaultWorkerSubdomain } from "@/lib/desktop/worker-url/worker-url";
+import { cn } from "@/lib/utils";
+
+import {
+  buildStorageInitCommand,
+  buildVerifyCommand,
+  buildWorkerInstallCommand,
+  buildWranglerInstallCommand,
+  resolveManualWorkerUrl,
+  workerUpdateCommand,
+} from "./manual-install-command";
 
 /** Install-only AUTH_PEPPER. Not the owner passtoken. Never persist. */
 function generateAuthPepper(): string {
@@ -17,53 +38,68 @@ function generateAuthPepper(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function workerUpdateCommand(zipUrl: string): string {
-  return [
-    `curl -L -o relaybase-worker-install.zip '${zipUrl}'`,
-    `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
-    `cd relaybase-worker-install/relaybase-worker-install || cd relaybase-worker-install`,
-    `npx wrangler deploy`,
-  ].join("\n");
-}
-
-function fullInstallCommand(
-  pepper: string,
-  zipUrl: string,
-  cf?: { accountId: string },
-): string {
-  const escaped = pepper.replace(/'/g, `'\\''`);
-  const lines = [
-    `curl -L -o relaybase-worker-install.zip '${zipUrl}'`,
-    `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
-    `cd relaybase-worker-install/relaybase-worker-install || cd relaybase-worker-install`,
-    `npx wrangler r2 bucket create relaybase-mailbox`,
-    `npx wrangler d1 create relaybase-logs`,
-    `npx wrangler d1 create relaybase-mail`,
-    `npx wrangler d1 create relaybase-db`,
-    `# paste each database_id into wrangler.toml (REPLACE_WITH_* placeholders)`,
-    `printf '%s' '${escaped}' | npx wrangler secret put AUTH_PEPPER`,
-  ];
-  if (cf?.accountId.trim()) {
-    const acct = cf.accountId.replace(/'/g, `'\\''`);
-    lines.push(`printf '%s' '${acct}' | npx wrangler secret put CF_ACCOUNT_ID`);
-  } else {
-    lines.push(`# Optional: CF_ACCOUNT_ID for domain API`);
-    lines.push(
-      `# printf '%s' '<account-id>' | npx wrangler secret put CF_ACCOUNT_ID`,
-    );
-  }
-  lines.push(
-    `# Add CF_API_TOKEN (Email Sending / Routing / Zone Read) in the Cloudflare dashboard — do not paste it here.`,
-  );
-  lines.push(`npx wrangler deploy`);
-  lines.push(
-    `curl -X POST https://relaybase-api.<subdomain>.workers.dev/console/init-db -H 'X-Auth-Pepper: ${escaped}' -H 'Content-Type: application/json' -d '{}'`,
-  );
-  return lines.join("\n");
-}
-
 async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
+function CommandBlock({
+  title,
+  titleClassName,
+  command,
+  canCopy,
+  copyLabel,
+}: {
+  title: string;
+  titleClassName?: string;
+  command: string;
+  canCopy: boolean;
+  copyLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className={cn("text-xs font-medium text-foreground", titleClassName)}>
+          {title}
+        </p>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="outline"
+          aria-label={copyLabel}
+          disabled={!canCopy}
+          onClick={() => {
+            void copyText(command).then(() => setCopied(true));
+          }}
+        >
+          {copied ? (
+            <Check className="size-3.5" />
+          ) : (
+            <Copy className="size-3.5" />
+          )}
+        </Button>
+      </div>
+      <pre className="overflow-x-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300">
+        {command}
+      </pre>
+    </div>
+  );
 }
 
 /**
@@ -73,15 +109,23 @@ async function copyText(value: string): Promise<void> {
 export function ManualInstallScriptPanel({
   onPepperChange,
   cfAccountId,
+  workerUrl = "",
+  onWorkerUrlChange,
   variant = "install",
 }: {
   onPepperChange?: (pepper: string) => void;
   cfAccountId?: string;
+  workerUrl?: string;
+  onWorkerUrlChange?: (workerUrl: string) => void;
   variant?: "install" | "worker-update";
 }) {
-  const [copied, setCopied] = useState(false);
   const [zipUrl, setZipUrl] = useState(WORKER_INSTALL_ZIP_URL);
   const [pepper, setPepper] = useState("");
+  const [copiedPepper, setCopiedPepper] = useState(false);
+  const [downloadedPepper, setDownloadedPepper] = useState(false);
+  const [subdomain, setSubdomain] = useState(
+    () => parseDefaultWorkerSubdomain(workerUrl) ?? "",
+  );
 
   useEffect(() => {
     let active = true;
@@ -100,88 +144,255 @@ export function ManualInstallScriptPanel({
     };
   }, []);
 
-  useEffect(() => {
-    if (variant !== "install") return;
-    const next = generateAuthPepper();
+  function applyPepper(next: string) {
     setPepper(next);
     onPepperChange?.(next);
+    setCopiedPepper(false);
+    setDownloadedPepper(false);
+  }
+
+  useEffect(() => {
+    if (variant !== "install") return;
+    applyPepper(generateAuthPepper());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant]);
 
   useEffect(() => {
-    if (!copied) return;
-    const t = window.setTimeout(() => setCopied(false), 2000);
+    if (!copiedPepper) return;
+    const t = window.setTimeout(() => setCopiedPepper(false), 2000);
     return () => window.clearTimeout(t);
-  }, [copied]);
+  }, [copiedPepper]);
 
-  const commandPreview =
-    variant === "worker-update"
-      ? workerUpdateCommand(zipUrl)
-      : pepper
-        ? fullInstallCommand(pepper, zipUrl, {
-            accountId: cfAccountId ?? "",
-          })
-        : "Preparing install command…";
+  useEffect(() => {
+    const fromUrl = parseDefaultWorkerSubdomain(workerUrl);
+    if (fromUrl && fromUrl !== subdomain) {
+      setSubdomain(fromUrl);
+    }
+    // Seed from parent once; avoid fighting local typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workerUrl]);
 
-  async function copyCommand() {
-    if (variant === "install" && !pepper) return;
-    await copyText(commandPreview);
-    setCopied(true);
+  if (variant === "worker-update") {
+    return (
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-medium">Worker update command</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Copy the command, deploy, then come back. Schema updates use your
+            owner session — do not put a token in the script.
+          </p>
+        </div>
+        <div className="space-y-2 rounded-md border border-border/80 bg-muted/30 p-3">
+          <CommandBlock
+            title="Worker update command"
+            command={workerUpdateCommand(zipUrl)}
+            canCopy
+            copyLabel="Copy worker update command"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Pre-built bundle — no <span className="font-mono">npm install</span>.
+            After <span className="font-mono">wrangler deploy</span>, come back
+            and tap “I&apos;m done”. Use Settings → Update Worker (Recommended)
+            to apply schema.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const resolvedUrl = resolveManualWorkerUrl(subdomain);
+  const workerReady = Boolean(resolvedUrl);
+  const installCommand = pepper
+    ? buildWorkerInstallCommand({
+        pepper,
+        zipUrl,
+        accountId: cfAccountId,
+      })
+    : "Preparing install command…";
+  const storageCommand = pepper
+    ? buildStorageInitCommand({
+        pepper,
+        workerUrl: subdomain,
+      })
+    : "Preparing D1 / R2 command…";
+  const verifyCommand = buildVerifyCommand(subdomain);
+
+  function handleSubdomainChange(next: string) {
+    setSubdomain(next);
+    onWorkerUrlChange?.(resolveManualWorkerUrl(next));
+  }
+
+  async function copyPepper() {
+    if (!pepper) return;
+    await copyText(pepper);
+    setCopiedPepper(true);
+  }
+
+  async function downloadPepper() {
+    if (!pepper) return;
+    const content = [
+      "# Relaybase AUTH_PEPPER — save this file securely",
+      `# Worker URL: ${resolvedUrl || "https://relaybase-api.<subdomain>.workers.dev"}`,
+      `# Generated: ${new Date().toISOString()}`,
+      "",
+      `AUTH_PEPPER=${pepper}`,
+      "",
+    ].join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const filename = "relaybase-auth-pepper.txt";
+    if (isDesktopRuntime()) {
+      const buffer = await blob.arrayBuffer();
+      await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
+    } else {
+      downloadBlob(blob, filename);
+    }
+    setDownloadedPepper(true);
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
-        <p className="text-sm font-medium">
-          {variant === "worker-update"
-            ? "Worker update command"
-            : "Full install command"}
-        </p>
+        <p className="text-sm font-medium">Manual install</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {variant === "worker-update"
-            ? "Copy the command, deploy, then come back. Schema updates use your owner session — do not put a token in the script."
-            : "Copy the command and run it in a terminal. After deploy, the app issues an owner passtoken — that is what you keep, not a wrangler secret."}
+          If Wrangler is not installed, start with step 1. Confirm{" "}
+          <span className="font-mono">whoami</span> is the account you want.
+          Worker overwrite is fine.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="manual-worker-subdomain">
+          workers.dev subdomain{" "}
+          <span className="font-normal text-muted-foreground">(for D1 init)</span>
+        </Label>
+        <Input
+          id="manual-worker-subdomain"
+          value={subdomain}
+          onChange={(e) => handleSubdomainChange(e.target.value)}
+          placeholder="your-subdomain"
+          className="font-mono text-xs"
+          autoComplete="off"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Completes{" "}
+          <span className="font-mono break-all">
+            {resolvedUrl ||
+              "https://relaybase-api.<subdomain>.workers.dev"}
+          </span>
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="manual-passtoken">Passtoken</Label>
+        <InputGroup>
+          <InputGroupInput
+            id="manual-passtoken"
+            value={pepper}
+            readOnly
+            className="font-mono text-xs"
+            autoComplete="off"
+          />
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              size="icon-xs"
+              aria-label="Rotate passtoken"
+              disabled={!pepper}
+              onClick={() => applyPepper(generateAuthPepper())}
+            >
+              <RefreshCw className="size-3.5" />
+            </InputGroupButton>
+            <InputGroupButton
+              size="icon-xs"
+              aria-label="Copy passtoken"
+              disabled={!pepper}
+              onClick={() => void copyPepper()}
+            >
+              {copiedPepper ? (
+                <Check className="size-3.5" />
+              ) : (
+                <Copy className="size-3.5" />
+              )}
+            </InputGroupButton>
+            <InputGroupButton
+              size="icon-xs"
+              aria-label="Download passtoken"
+              disabled={!pepper}
+              variant={downloadedPepper ? "default" : "ghost"}
+              onClick={() => void downloadPepper()}
+            >
+              {downloadedPepper ? (
+                <Check className="size-3.5" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+        <p className="text-[11px] text-muted-foreground">
+          Save a copy. Rotating updates the commands below. The Worker issues
+          your owner login after verify.
         </p>
       </div>
 
       <div className="space-y-2 rounded-md border border-border/80 bg-muted/30 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-foreground">
-            {variant === "worker-update"
-              ? "Worker update command"
-              : "Full install command"}
-          </p>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            aria-label="Copy full install command"
-            disabled={variant === "install" && !pepper}
-            onClick={() => void copyCommand()}
-          >
-            {copied ? (
-              <Check className="size-3.5" />
-            ) : (
-              <Copy className="size-3.5" />
-            )}
-          </Button>
-        </div>
-        <pre className="overflow-x-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300">
-          {commandPreview}
-        </pre>
+        <CommandBlock
+          title="1. Install Wrangler"
+          command={buildWranglerInstallCommand()}
+          canCopy
+          copyLabel="Copy Wrangler install command"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Needs Node.js 20+. Skip this step if{" "}
+          <span className="font-mono">npx wrangler</span> already works.
+        </p>
+      </div>
+
+      <div className="space-y-2 rounded-md border border-border/80 bg-muted/30 p-3">
+        <CommandBlock
+          title="2. Worker install"
+          command={installCommand}
+          canCopy={Boolean(pepper)}
+          copyLabel="Copy worker install command"
+        />
         <p className="text-[11px] text-muted-foreground">
           Pre-built bundle — no <span className="font-mono">npm install</span>.
-          After <span className="font-mono">wrangler deploy</span>
-          {variant === "worker-update" ? (
-            ", come back and tap “I'm done”. Use Settings → Update Worker (Recommended) to apply schema."
-          ) : (
-            <>
-              {" "}
-              prints your <span className="font-mono">*.workers.dev</span> URL,
-              come back and tap &ldquo;I&apos;m done&rdquo;. The Worker then
-              issues your passtoken once.
-            </>
-          )}
+          Deploy overwrites Worker{" "}
+          <span className="font-mono">relaybase-api</span> on the logged-in
+          account. If <span className="font-mono">wrangler.toml</span> still has{" "}
+          <span className="font-mono">REPLACE_WITH_*</span> D1 ids, finish step 3
+          and deploy again.
+        </p>
+      </div>
+
+      <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+        <CommandBlock
+          title="3. D1 & R2 — Be careful if you already have these"
+          titleClassName="text-amber-800 dark:text-amber-300"
+          command={storageCommand}
+          canCopy={Boolean(pepper) && workerReady}
+          copyLabel="Copy D1 and R2 command"
+        />
+        <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90">
+          If <span className="font-mono">relaybase-mailbox</span> or{" "}
+          <span className="font-mono">relaybase-*</span> D1 already exist, skip{" "}
+          <span className="font-mono">create</span> and paste those ids. Do not
+          delete. Then deploy so bindings apply.{" "}
+          <span className="font-mono">init-db</span> is for empty D1 only (409
+          means tables already exist — leave them).
+        </p>
+      </div>
+
+      <div className="space-y-2 rounded-md border border-border/80 bg-muted/30 p-3">
+        <CommandBlock
+          title="4. Verify (optional)"
+          command={verifyCommand}
+          canCopy={workerReady}
+          copyLabel="Copy verify command"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          After deploy is live,{" "}
+          <span className="font-mono">/health</span> should succeed. Then tap
+          “I&apos;m done” if you want the app to issue your owner login.
         </p>
       </div>
     </div>

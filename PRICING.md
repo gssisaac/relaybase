@@ -25,7 +25,7 @@ Private beta is email-apply → personal download link. Until official paid laun
 
 **Grandfathering and exact prices are named only on the first checkout**, after we have reaction data — not on the marketing site during beta.
 
-When this draft is promoted to public (paid launch), flip this status line and then keep site copy in sync. Until then, `kembo/website` must not present these SKUs as live.
+When this draft is promoted to public (paid launch), flip this status line and then keep site copy in sync. Until then, `hq/website` must not present these SKUs as live.
 
 ---
 
@@ -82,6 +82,6 @@ These are the figures other **internal** docs should use *while this draft lasts
 
 ## 5. Where this is implemented
 
-- Draft numbers still exist in `kembo/website` `siteConfig.pricing` and the components that read it. That is leftover scaffolding, **not** authorization to keep a public price table during private beta. Until paid launch, site/invite copy follows §0, not the $35/$69 cards.
+- Draft numbers still exist in `hq/website` `siteConfig.pricing` and the components that read it. That is leftover scaffolding, **not** authorization to keep a public price table during private beta. Until paid launch, site/invite copy follows §0, not the $35/$69 cards.
 - License records currently have no free/pro/renewal fields (`server/src/lib/licenses.ts` — `LicenseRecord` is just email + key + active/revoked). Adding a `tier: "free" | "pro"` and `renewalExpiresAt` field is required before Pro/renewal billing can be enforced; not done yet — and not needed to run private beta.
 - Stripe checkout for Pro + renewal is not implemented yet — `/get-started` only collects waitlist / beta-apply emails.

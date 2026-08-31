@@ -50,7 +50,7 @@ Do not overwrite an already-shipped version on R2. Versioned objects use
 pnpm run build:macos
   ├─ rustup target add aarch64-apple-darwin x86_64-apple-darwin
   ├─ tauri build --target universal-apple-darwin --bundles app,dmg
-  ├─ sync-release-artifacts.mjs  → kembo/website/public/release/
+  ├─ sync-release-artifacts.mjs  → hq/website/public/release/
   └─ upload-release-r2.sh        → R2 bucket relaybase-releases
 ```
 
@@ -76,7 +76,7 @@ release-<semver>    # e.g. release-0.1.1
 3. All release work on that branch
 4. Push branch, tag `vX.Y.Z`
 5. Merge into `main`, push `main` + tag
-6. Deploy `kembo/website` so `latest.json` is live
+6. Deploy `hq/website` so `latest.json` is live
 7. Keep `release-X.Y.Z` on the remote
 
 ---
@@ -133,7 +133,7 @@ The custom domain must use zone `relaybase.xyz` on the Strum account
 Cloudflare 522 even though R2 lists the domain as connected.
 
 ```bash
-cd kembo/website
+cd hq/website
 pnpm dlx wrangler@4 r2 bucket domain add relaybase-releases \
   --domain download.relaybase.xyz \
   --zone-id 1474b7eaef3a2527c2bdc83d666143f5 \
@@ -148,14 +148,14 @@ bash scripts/deploy/upload-release-r2.sh
 
 ### 4. Commit what belongs in git
 
-**Do commit:** version bumps, release notes, `kembo/website/public/release/latest.json`, `artifacts.json`, `.sig`.
+**Do commit:** version bumps, release notes, `hq/website/public/release/latest.json`, `artifacts.json`, `.sig`.
 
 **Do not commit:** `Relaybase.*.dmg`, `Relaybase.*.app.tar.gz`, `desktop/.env`, `updater.key`.
 
 ### 5. Deploy the website
 
 ```bash
-cd kembo/website
+cd hq/website
 pnpm run deploy:cf
 ```
 

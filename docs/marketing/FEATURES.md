@@ -126,7 +126,7 @@ Draft Pro: unlimited domains and addresses on that Worker, Audience / Broadcasts
 |------|-----|
 | Team / Studio seat SKUs | Modeled in `STRATEGY.md` / `PRICING.md`; not shipped. Do not publish. |
 | BIMI / VMC / “logo in Gmail” | Do not build — `docs/bimi-vmc-do-not-build.md`. |
-| Operator console (`kembo/admin`, licenses) | Internal. Not an end-user feature. |
+| Operator console (`hq/admin`, licenses) | Internal. Not an end-user feature. |
 | Stars, labels, archive (Gmail extras) | Not shipped. Do not imply them. |
 
 ---

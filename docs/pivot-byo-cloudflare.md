@@ -24,10 +24,10 @@ This structurally removes:
 | Deployable | URL / artifact | Role |
 |---|---|---|
 | Product Worker | customer `*.workers.dev` + isaac dogfood `relaybase-api.gssisaac.worker.dev` | mail/console/mobile/v1 product routes only (no license/account/billing) |
-| Console (kembo) | `console.relaybase.xyz` (Next.js, OpenNext, worker `strum-relaybase-console`) | account, auth, license, Stripe billing, recovery-token issuance. Durable state in D1 `strum-relaybase-ops` |
-| Website (kembo) | `relaybase.xyz` (static, worker `strum-relaybase-website`) | marketing; login/signup/account links → `console.relaybase.xyz` |
-| Admin (kembo) | `admin.relaybase.xyz` (OpenNext, worker `strum-relaybase-admin`) | internal ops; license + beta admin read `strum-relaybase-ops` D1 directly. Shares D1 `strum-relaybase-ops` (`product_settings` + `beta_invites` + `licenses`) — never end-user tokens or plaintext API keys. See **[kembo-ops-d1.md](./kembo-ops-d1.md)** |
-| Customer install template | `server/customer-install/` (packed to `kembo/website/public/downloads/relaybase-worker-install.zip`) | sanitized Worker template for customer accounts |
+| Console (hq) | `console.relaybase.xyz` (Next.js, OpenNext, worker `strum-relaybase-console`) | account, auth, license, Stripe billing, recovery-token issuance. Durable state in D1 `strum-relaybase-ops` |
+| Website (hq) | `relaybase.xyz` (static, worker `strum-relaybase-website`) | marketing; login/signup/account links → `console.relaybase.xyz` |
+| Admin (hq) | `admin.relaybase.xyz` (OpenNext, worker `strum-relaybase-admin`) | internal ops; license + beta admin read `strum-relaybase-ops` D1 directly. Shares D1 `strum-relaybase-ops` (`product_settings` + `beta_invites` + `licenses`) — never end-user tokens or plaintext API keys. See **[hq-ops-d1.md](./hq-ops-d1.md)** |
+| Customer install template | `server/customer-install/` (packed to `hq/website/public/downloads/relaybase-worker-install.zip`) | sanitized Worker template for customer accounts |
 
 The old `api.relaybase.xyz` custom domain was removed; isaac's dogfood Worker runs on its default `relaybase-api.gssisaac.worker.dev` URL.
 

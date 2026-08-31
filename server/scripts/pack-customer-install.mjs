@@ -7,7 +7,7 @@
  *   2. Stage worker.js + generated wrangler.toml + README + VERSION
  *   3. ZIP as relaybase-worker-install-{version}.zip
  *   4. Write worker-install-manifest.json (version, zipUrl, sha256, notes)
- *   5. Copy to kembo/website/public/downloads/ and drop older versioned ZIPs
+ *   5. Copy to hq/website/public/downloads/ and drop older versioned ZIPs
  */
 import {
   cpSync,
@@ -27,7 +27,7 @@ import { createHash } from "node:crypto";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const serverRoot = join(__dirname, "..");
 const repoRoot = join(serverRoot, "..");
-const downloadsDir = join(repoRoot, "kembo", "website", "public", "downloads");
+const downloadsDir = join(repoRoot, "hq", "website", "public", "downloads");
 const DOWNLOAD_BASE = "https://relaybase.xyz/downloads";
 
 const pkg = JSON.parse(readFileSync(join(serverRoot, "package.json"), "utf8"));

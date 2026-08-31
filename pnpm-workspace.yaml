@@ -1,6 +1,6 @@
 packages:
-  - kembo/admin
+  - hq/admin
   - app
-  - kembo/console
+  - hq/console
   - desktop
-  - kembo/website
+  - hq/website

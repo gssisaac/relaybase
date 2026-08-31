@@ -463,6 +463,6 @@ Cloudflare Email Sending GA를 프라이빗 베타의 전제조건으로 삼지 
 2. 8.5의 유료 launch 게이트(자체 실사용 + 소규모 코호트)를 넘기고
 3. 그때의 숫자·캡·포함 기능을 `PRICING.md`에 확정으로 승격한 뒤
 
-첫 결제 화면·확인 메일·약관에만 그랜드파더와 금액을 적는다. 그 전까지 `kembo/website`의 `siteConfig.pricing` 카드는 살아 있어도 **공개 오퍼가 아니다** — 베타 기간에는 끄거나 “Pricing at launch”로 둔다.
+첫 결제 화면·확인 메일·약관에만 그랜드파더와 금액을 적는다. 그 전까지 `hq/website`의 `siteConfig.pricing` 카드는 살아 있어도 **공개 오퍼가 아니다** — 베타 기간에는 끄거나 “Pricing at launch”로 둔다.
 
 스펙 초안의 단일 위치: `PRICING.md` (상단 Status: DRAFT).

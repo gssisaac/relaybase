@@ -78,7 +78,7 @@ migrations_dir = "db/mail/migrations"           # RELAYBASE_MAIL
 
 Embedded migration strings for the Worker live in **`server/db/migrations.ts`**. Shared apply helper: **`server/src/lib/d1-migrations.ts`**. Keep `migrations.ts` in sync when adding `.sql` files so `init-db` / `migrate-db` and manual `wrangler d1 migrations apply` stay equivalent.
 
-**Rebuild after `server/` changes.** Desktop update uploads the hosted install ZIP, not live TypeScript and not a local overlay. `pnpm pack:worker-install` then deploy `kembo/website`. Until that runs, `/console/migrate-db` 404s on the old script. See **AGENTS.md → Worker bundle**.
+**Rebuild after `server/` changes.** Desktop update uploads the hosted install ZIP, not live TypeScript and not a local overlay. `pnpm pack:worker-install` then deploy `hq/website`. Until that runs, `/console/migrate-db` 404s on the old script. See **AGENTS.md → Worker bundle**.
 
 ---
 

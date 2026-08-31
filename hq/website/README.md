@@ -5,7 +5,7 @@ English marketing site for [Relaybase](https://relaybase.xyz) — product email 
 ## Getting started
 
 ```bash
-cd kembo/website
+cd hq/website
 corepack enable
 pnpm install
 pnpm dev
@@ -42,7 +42,7 @@ In the Cloudflare project (root directory: `website`):
 3. **Mailbox:** `beta@relaybase.xyz` must exist on the product Worker so
    `/v1/send` accepts `from`.
 
-4. **D1:** apply `kembo/console` migrations so `beta_invites` exists on remote
+4. **D1:** apply `hq/console` migrations so `beta_invites` exists on remote
    `strum-relaybase-ops` before the first signup.
 
 5. **Build command:** `pnpm run build:cf`

@@ -24,7 +24,7 @@ release-worker-<semver>    # e.g. release-worker-0.1.1
 3. All release work on that branch
 4. Push branch
 5. Merge into `main`, push `main`
-6. Deploy `kembo/website` so `downloads/*` is live
+6. Deploy `hq/website` so `downloads/*` is live
 7. Keep `release-worker-X.Y.Z` on the remote
 
 ---
@@ -65,11 +65,11 @@ pnpm pack:worker-install
 
 Pack runs `build:bundle`, writes the versioned ZIP, a stable alias, and
 `worker-install-manifest.json` (includes `notes`). Older versioned ZIPs under
-`kembo/website/public/downloads/` are removed.
+`hq/website/public/downloads/` are removed.
 
 ### 4. Commit
 
-Commit artifacts under `kembo/website/public/downloads/`:
+Commit artifacts under `hq/website/public/downloads/`:
 
 - `relaybase-worker-install-{version}.zip`
 - `relaybase-worker-install.zip` (stable alias → latest)
@@ -78,7 +78,7 @@ Commit artifacts under `kembo/website/public/downloads/`:
 ### 5. Deploy the website
 
 ```bash
-cd kembo/website
+cd hq/website
 pnpm run deploy:cf
 ```
 

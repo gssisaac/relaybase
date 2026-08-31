@@ -6,8 +6,8 @@ import { apiError } from "@/lib/api/api-error";
 
 /**
  * Sent-mail list now reads from the product worker's R2 send-log store
- * via `/console/send-logs`. The legacy local `sentEmails` cache in the
- * operations KV has been removed.
+ * via `/console/send-logs`. The legacy local `sentEmails` cache has been
+ * removed.
  */
 export async function GET(request: Request) {
   try {

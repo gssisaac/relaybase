@@ -38,7 +38,7 @@ Sources live outside this repo: `../../workspace/relaybase/feature-screenshots/f
 
 ```bash
 SRC=../../workspace/relaybase/feature-screenshots/feature01.mp4
-OUT=kembo/website/public/video/features/01-mail-in-your-account.mp4
+OUT=hq/website/public/video/features/01-mail-in-your-account.mp4
 VF="scale=1520:998:force_original_aspect_ratio=increase:flags=lanczos,crop=1520:998:(iw-1520)/2:0"
 
 ffmpeg -y -i "$SRC" \

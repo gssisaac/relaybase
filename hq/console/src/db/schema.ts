@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 
-// --- Existing tables (migrated from kembo-accounts D1) ---
+// --- Accounts / recovery ---
 
 export const waitlist = sqliteTable("waitlist", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -41,7 +41,7 @@ export const accountRecovery = sqliteTable("account_recovery", {
   accountIdx: index("account_recovery_account_idx").on(t.accountId),
 }));
 
-// --- New tables (replacing KV namespaces) ---
+// --- Settings / invites / licenses ---
 
 export const productSettings = sqliteTable("product_settings", {
   serviceId: text("service_id").notNull(),

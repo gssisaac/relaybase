@@ -117,7 +117,7 @@ importers:
         specifier: ^2.11.4
         version: 2.11.4
 
-  kembo/admin:
+  hq/admin:
     dependencies:
       '@base-ui/react':
         specifier: ^1.5.0
@@ -190,7 +190,7 @@ importers:
         specifier: ^4.110.0
         version: 4.120.0
 
-  kembo/console:
+  hq/console:
     dependencies:
       '@opennextjs/cloudflare':
         specifier: ^1.20.1
@@ -254,7 +254,7 @@ importers:
         specifier: ^4.110.0
         version: 4.120.0
 
-  kembo/website:
+  hq/website:
     dependencies:
       '@base-ui/react':
         specifier: ^1.5.0

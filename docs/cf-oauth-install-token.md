@@ -1,6 +1,6 @@
 # Cloudflare OAuth — install token (Settings → Cloudflare)
 
-**Audience:** humans and coding agents changing Settings → Cloudflare, desktop Cloudflare API install, or `kembo/console` OAuth routes.
+**Audience:** humans and coding agents changing Settings → Cloudflare, desktop Cloudflare API install, or `hq/console` OAuth routes.
 
 The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudflare HTTP API for deploy and Worker secrets) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit / Email Routing / Zone Read → Worker `CF_API_TOKEN`) is added by the user in the Cloudflare dashboard after install (optional paste-and-push remains). Sending uses the Worker `EMAIL` binding, not this token.
 
@@ -50,7 +50,7 @@ Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query.
 
 ## Console deployment
 
-`kembo/console/wrangler.jsonc` **vars** (public — safe to commit):
+`hq/console/wrangler.jsonc` **vars** (public — safe to commit):
 
 ```jsonc
 "vars": {
@@ -124,7 +124,7 @@ Errors use `explainCfOAuthError()`.
 
 | Area | Files |
 |------|--------|
-| Console config + callback | `kembo/console/src/app/api/v1/oauth/config/route.ts`, `kembo/console/src/app/oauth/callback/route.ts`, `kembo/console/wrangler.jsonc` |
+| Console config + callback | `hq/console/src/app/api/v1/oauth/config/route.ts`, `hq/console/src/app/oauth/callback/route.ts`, `hq/console/wrangler.jsonc` |
 | Desktop Rust | `desktop/src-tauri/src/cf_oauth.rs` (`require_cf_oauth`), `lib.rs`, `secrets.rs`, `auto_install/`, `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge/`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx`, `WorkerUpdateBanner.tsx`, `/settings/worker/update`, `/settings/worker/progress` |
 | Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx`, `use-enable-email-api-dialog.tsx` (also opened from Domains → Refresh from Cloudflare when `GET /console/zones` reports the Worker token missing) |

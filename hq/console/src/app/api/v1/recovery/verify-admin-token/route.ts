@@ -17,7 +17,7 @@ function fail(message: string, status = 400): Response {
  *   1. the recovery token is valid + unused + purpose 'admin_token'
  *   2. it belongs to the account with that email
  *   3. that account has registered this workerUrl
- * On success the customer Worker may overwrite its KV admin token.
+ * On success the customer Worker may overwrite its `ADMIN_TOKEN` secret.
  */
 export async function POST(req: Request) {
   const env = await getEnv();

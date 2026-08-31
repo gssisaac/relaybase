@@ -5,7 +5,7 @@ Monorepo for **Relaybase** — domain-scoped transactional email (send + receive
 The repo is split into two service sets:
 
 - **End-user product** (shipped to customers): `app/`, `desktop/`, `mobile/`, `server/`.
-- **Kembo operations** (internal, ours): `kembo/admin/`, `kembo/console/`, `kembo/website/`. Cloudflare resources for this set use the `strum-relaybase-*` worker names and D1 `strum-relaybase-ops` (binding `DB`; operator config only — `workerUrl` + `adminToken`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in that D1 — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `owner_sessions`, and plaintext keys locally in `~/.relaybase`.
+- **HQ operations** (internal, ours): `hq/admin/`, `hq/console/`, `hq/website/`. Cloudflare resources for this set use the `strum-relaybase-*` worker names and D1 `strum-relaybase-ops` (binding `DB`; operator config only — `workerUrl` + `adminToken`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in that D1 — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `owner_sessions`, and plaintext keys locally in `~/.relaybase`.
 
 | Set | Package | Path | Port | Role |
 |-----|---------|------|------|------|
@@ -13,9 +13,9 @@ The repo is split into two service sets:
 | End-user | **User app** | `app/` | 32830 | Email UI — `next dev` for HMR; static export for Tauri |
 | End-user | **Desktop** | `desktop/` | Tauri | Mac app shell (`devUrl` → `:32830`, prod → `app/out`) |
 | End-user | **Mobile** | `mobile/` | Flutter | Teammate inbox companion (per-account mobile password) |
-| Kembo | **Admin** | `kembo/admin/` | 32829 | Operator dashboard (licenses, logs, settings; worker `strum-relaybase-admin` at `admin.relaybase.xyz`) |
-| Kembo | **Console** | `kembo/console/` | 32830 | Account / license / billing / recovery (worker `strum-relaybase-console` at `console.relaybase.xyz`) |
-| Kembo | **Website** | `kembo/website/` | 32828 | Marketing site (worker `strum-relaybase-website` at `relaybase.xyz`; BYO-CF / $39 one-time positioning) |
+| HQ | **Admin** | `hq/admin/` | 32829 | Operator dashboard (licenses, logs, settings; worker `strum-relaybase-admin` at `admin.relaybase.xyz`) |
+| HQ | **Console** | `hq/console/` | 32830 | Account / license / billing / recovery (worker `strum-relaybase-console` at `console.relaybase.xyz`) |
+| HQ | **Website** | `hq/website/` | 32828 | Marketing site (worker `strum-relaybase-website` at `relaybase.xyz`; BYO-CF / $39 one-time positioning) |
 
 **Product pivot:** Relaybase is a one-time Mac app that installs the Worker into the **user's** Cloudflare account. See `docs/pivot-byo-cloudflare.md` and `PRODUCT.md`.
 
@@ -36,12 +36,12 @@ For product positioning and marketer copy, see **[PRODUCT.md](./PRODUCT.md)**.
          ┌───────────────────────────────────────────┼───────────────────────────┐
          │                                           │                           │
          ▼                                           ▼                           ▼
-  CF Email Sending API                         Workers KV                    R2 bucket
-  (outbound)                                   (keys, logs, events)          (inbound mail)
+  CF Email Sending API                         D1 (RELAYBASE_*)              R2 mailbox
+  (outbound)                                   (keys, logs, mail index)      (inbound / sent)
 
 Inbound path:
 
-  Sender ──MX──▶ Cloudflare Email Routing ──email()──▶ Worker ──▶ R2 + KV events ──▶ webhooks / poll
+  Sender ──MX──▶ Cloudflare Email Routing ──email()──▶ Worker ──▶ R2 + D1 ──▶ webhooks / poll
 ```
 
 **Admin** and **user app** are Next.js 16 dashboards. In production they call the Worker and Cloudflare APIs; in local dev they use stub APIs and JSON files under `data/`.
@@ -75,7 +75,7 @@ From the repo root you can also run `npm run dev` (delegates to `server/`).
 ### 2. Admin dashboard
 
 ```bash
-cd kembo/admin && npm install
+cd hq/admin && npm install
 cp .env.example .env.local
 # Set RELAYBASE_URL to your Worker URL (local or deployed)
 
@@ -116,7 +116,7 @@ cd app && pnpm run build:desktop   # → app/out
 ### 5. Marketing site
 
 ```bash
-cd kembo/website && pnpm install && pnpm dev   # http://localhost:32828
+cd hq/website && pnpm install && pnpm dev   # http://localhost:32828
 ```
 
 From the repo root you can also run:
@@ -133,7 +133,7 @@ npm run website:dev
 node scripts/diagnose-relaybase.mjs
 ```
 
-Reads `kembo/admin/.env.local` and `data/products/relaybase/settings.json`, tests Cloudflare token, R2, and Worker connectivity without printing secrets.
+Reads `hq/admin/.env.local` and `data/products/relaybase/settings.json`, tests Cloudflare token, R2, and Worker connectivity without printing secrets.
 
 ---
 
@@ -152,14 +152,14 @@ relaybase/
 ├── app/                    # End-user Next.js email UI (relaybase-email)
 ├── desktop/                # End-user Tauri Mac shell
 ├── mobile/                 # End-user Flutter companion
-├── kembo/                  # Kembo operations (internal, ours)
+├── hq/                  # HQ operations (internal, ours)
 │   ├── admin/              # Operator Next.js dashboard (worker: strum-relaybase-admin)
 │   ├── console/            # Account / license / billing (worker: strum-relaybase-console)
 │   └── website/            # Marketing Next.js (static export, worker: strum-relaybase-website)
 ├── data/
 │   ├── users.json          # User registry (shared with admin Users)
 │   ├── users/<id>.json     # Per-user domain/email data (dev)
-│   └── products/relaybase/ # Admin operator settings (KEMBO_OPS local fallback; dev)
+│   └── products/relaybase/ # Admin operator settings (local fallback; dev)
 └── scripts/                # diagnose-relaybase
 ```
 
@@ -172,11 +172,6 @@ The product Worker (`server/`) deploys into the **customer's** Cloudflare accoun
 ```bash
 cd server
 
-# Create KV namespace (once)
-npx wrangler kv namespace create KEYS
-npx wrangler kv namespace create KEYS --preview
-# Update server/wrangler.toml with id and preview_id
-
 # Secrets
 npx wrangler secret put CF_ACCOUNT_ID
 npx wrangler secret put CF_API_TOKEN
@@ -185,7 +180,7 @@ npx wrangler secret put ADMIN_TOKEN
 npm run deploy    # wrangler deploy
 ```
 
-Kembo operations workers (`strum-relaybase-admin`, `strum-relaybase-console`, `strum-relaybase-website`) deploy separately from `kembo/admin`, `kembo/console`, `kembo/website` via `pnpm run deploy:cf` in each package. They share D1 `strum-relaybase-ops` (binding `DB`) on account `3adf03d991843094a7343eebc0a98007`. The admin worker never stores end-user tokens or plaintext API keys.
+HQ operations workers (`strum-relaybase-admin`, `strum-relaybase-console`, `strum-relaybase-website`) deploy separately from `hq/admin`, `hq/console`, `hq/website` via `pnpm run deploy:cf` in each package. They share D1 `strum-relaybase-ops` (binding `DB`) on account `3adf03d991843094a7343eebc0a98007`. The admin worker never stores end-user tokens or plaintext API keys.
 
 Bindings in `server/wrangler.toml`:
 
@@ -210,7 +205,7 @@ Bindings in `server/wrangler.toml`:
 | `WORKER_SCRIPT_NAME` | var | Worker name for routing helpers |
 | `INBOUND_BUCKET_NAME` | var | R2 bucket name label |
 
-### Admin (`kembo/admin/.env.local`)
+### Admin (`hq/admin/.env.local`)
 
 | Variable | Description |
 |----------|-------------|
@@ -230,7 +225,7 @@ Cloudflare credentials live on the product Worker as wrangler secrets (`CF_ACCOU
 
 ## Admin dashboard
 
-Routes under `kembo/admin/src/relaybase/`:
+Routes under `hq/admin/src/relaybase/`:
 
 | Section | Path | Purpose |
 |---------|------|---------|
@@ -241,7 +236,7 @@ Routes under `kembo/admin/src/relaybase/`:
 | Branding | `/branding` | Domain display names |
 | Settings | `/settings` | Worker URL + admin token (Cloudflare credentials live on the Worker as wrangler secrets) |
 
-Admin API routes proxy to the Worker (`kembo/admin/src/app/api/relaybase/*`) using `ADMIN_TOKEN` from product settings.
+Admin API routes proxy to the Worker (`hq/admin/src/app/api/relaybase/*`) using `ADMIN_TOKEN` from product settings.
 
 ---
 
@@ -380,10 +375,10 @@ Typical flow: webhook or poll → `GET /v1/inbox/messages/:id` → your app logi
 
 ## Website deploy (Cloudflare)
 
-`kembo/website/` is a pnpm workspace package. See `kembo/website/README.md`.
+`hq/website/` is a pnpm workspace package. See `hq/website/README.md`.
 
 ```bash
-cd kembo/website
+cd hq/website
 pnpm install
 pnpm run build:cf
 pnpm run deploy:cf
@@ -391,7 +386,7 @@ pnpm run deploy:cf
 
 Cloudflare project settings:
 
-- Root directory: `kembo/website`
+- Root directory: `hq/website`
 - `SKIP_DEPENDENCY_INSTALL=1`
 - Build: `npm run build:cf`
 - Optional: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`
@@ -412,7 +407,7 @@ Cloudflare project settings:
 - Issue one API key per service/domain pair; rotate by re-issuing and updating env.
 - `ADMIN_TOKEN` is operator-only — not for customer apps.
 - Webhook secrets are shown once at registration; verify signatures in production.
-- **Kembo operations KV (`KEMBO_OPS`) holds operator config only** — product Worker URL + service admin token (`workerUrl`, `adminToken`). Cloudflare credentials, end-user dashboard auth tokens (`rb-auth-…`), and plaintext API keys are **never** stored in `KEMBO_OPS`: CF credentials come from the product Worker's wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), tokens and catalog state live in the product Worker's D1 `RELAYBASE_DB`, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault.
+- **HQ operations D1 (`strum-relaybase-ops`) holds operator config only** — product Worker URL + service admin token (`workerUrl`, `adminToken` in `product_settings`). Cloudflare credentials, end-user dashboard auth tokens (`rb-auth-…`), and plaintext API keys are **never** stored there: CF credentials come from the product Worker's wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), tokens and catalog state live in the product Worker's D1 `RELAYBASE_DB`, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault.
 
 ---
 
@@ -422,4 +417,4 @@ Cloudflare project settings:
 npm run typecheck    # Worker TypeScript
 ```
 
-Frontend apps: `npm run lint` in each of `kembo/admin/`, `app/`, `kembo/website/`.
+Frontend apps: `npm run lint` in each of `hq/admin/`, `app/`, `hq/website/`.

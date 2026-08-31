@@ -191,7 +191,7 @@ See **[mobile-email-companion.md](./mobile-email-companion.md)** for provisionin
 | File | Role |
 |------|------|
 | `docs/cf-oauth-install-token.md` | CF OAuth for Worker deploy / install token |
-| `kembo/console/src/app/oauth/callback/route.ts` | OAuth callback relay to desktop |
+| `hq/console/src/app/oauth/callback/route.ts` | OAuth callback relay to desktop |
 | `app/src/lib/desktop/bridge/oauth.ts` | Desktop PKCE OAuth |
 
 ---

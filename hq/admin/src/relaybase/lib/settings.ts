@@ -208,4 +208,4 @@ export type RelaybaseDashboardAdminTokenView = RelaybaseDashboardAuthTokenView;
 
 // Dashboard auth-token issuance, listing, revocation, and verification now live
 // in the product Worker (`/console/auth-tokens`) so end-user credentials are not
-// stored in the operations KV. See `./auth-token-client.ts` for the Worker wrapper.
+// stored in HQ ops D1. See `./auth-token-client.ts` for the Worker wrapper.

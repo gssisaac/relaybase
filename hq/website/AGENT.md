@@ -1,4 +1,4 @@
-# Agent guide — marketing site (`kembo/website`)
+# Agent guide — marketing site (`hq/website`)
 
 Read the linked doc **before** changing the area it covers.
 

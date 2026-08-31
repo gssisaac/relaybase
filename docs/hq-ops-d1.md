@@ -1,38 +1,28 @@
-# Kembo ops (D1) — console + admin
+# HQ ops (D1) — console + admin
 
-**Audience:** humans and coding agents changing `kembo/console`, `kembo/admin`, license/account/waitlist/billing storage, or the operator settings store.
+**Audience:** humans and coding agents changing `hq/console`, `hq/admin`, license/account/waitlist/billing storage, or the operator settings store.
 
 **Primary code:**
 
 | Area | Paths |
 |------|------|
-| D1 binding | `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` → `DB` / database `strum-relaybase-ops` |
-| Drizzle schema (all 7 tables) | `kembo/console/src/db/schema.ts` |
-| Drizzle schema (admin subset) | `kembo/admin/src/db/schema.ts` (`product_settings` + `beta_invites` + `licenses`) |
-| Clients | `kembo/console/src/db/client.ts`, `kembo/admin/src/db/client.ts` |
-| Kit config + SQL | `kembo/console/drizzle.config.ts`, `kembo/console/migrations/` |
-| Accounts / recovery / sessions | `kembo/console/src/lib/accounts.ts` |
-| Licenses | `kembo/console/src/lib/licenses.ts` (verify + Stripe); `kembo/admin/src/lib/licenses.ts` (list / issue / revoke) |
-| License admin gate | `kembo/console/src/lib/license-admin.ts` (console `/v1/license/admin` only) |
-| Operator settings | `kembo/admin/src/lib/config/product-store.ts`, `kembo/admin/src/relaybase/lib/settings.ts` |
-| KV → D1 one-shot | `kembo/console/scripts/migrate-kv-to-d1.mjs` |
+| D1 binding | `hq/console/wrangler.jsonc`, `hq/admin/wrangler.jsonc`, and `hq/website/wrangler.jsonc` → `DB` / database `strum-relaybase-ops` |
+| Drizzle schema (all 7 tables) | `hq/console/src/db/schema.ts` |
+| Drizzle schema (admin subset) | `hq/admin/src/db/schema.ts` (`product_settings` + `beta_invites` + `licenses`) |
+| Clients | `hq/console/src/db/client.ts`, `hq/admin/src/db/client.ts` |
+| Kit config + SQL | `hq/console/drizzle.config.ts`, `hq/console/migrations/` |
+| Accounts / recovery / sessions | `hq/console/src/lib/accounts.ts` |
+| Licenses | `hq/console/src/lib/licenses.ts` (verify + Stripe); `hq/admin/src/lib/licenses.ts` (list / issue / revoke) |
+| License admin gate | `hq/console/src/lib/license-admin.ts` (console `/v1/license/admin` only) |
+| Operator settings | `hq/admin/src/lib/config/product-store.ts`, `hq/admin/src/relaybase/lib/settings.ts` |
 
-Read this before adding a console/admin durable field, touching license keys, or reintroducing `KEMBO_OPS` / `KEMBO_LICENSES` / `KEMBO_ACCOUNTS` bindings.
+Read this before adding a console/admin durable field or touching license keys.
 
 ---
 
 ## Why one D1
 
-Kembo used to split state across two KV namespaces and one D1:
-
-| Legacy store | Keys / tables | Replaced by |
-|--------------|---------------|-------------|
-| KV `KEMBO_OPS` | `product:{serviceId}:{filename}` (operator settings JSON) | `product_settings` |
-| KV `KEMBO_LICENSES` | 4 keys per license (`srv:license:id:`, `:key:`, `:email:`, `:customer:`) | `licenses` |
-| D1 `kembo-accounts` | `waitlist`, `accounts`, `account_workers`, `account_recovery` | same table names in `strum-relaybase-ops` |
-| KV `RELAYBASE_APP_DOGFOOD` | leftover dogfood userdata | **dropped** — filesystem fallback only in admin |
-
-Admin (`admin.relaybase.xyz`) and console (`console.relaybase.xyz`) now share one D1 `strum-relaybase-ops` (binding `DB`) on the Strum Cloudflare account (`3adf03d991843094a7343eebc0a98007`). Workers: `strum-relaybase-admin`, `strum-relaybase-console`, `strum-relaybase-website`. Drizzle is the schema source of truth. Do **not** re-add those KV/D1 bindings.
+Admin (`admin.relaybase.xyz`), console (`console.relaybase.xyz`), and the marketing site share one D1 `strum-relaybase-ops` (binding `DB`) on the Strum Cloudflare account (`3adf03d991843094a7343eebc0a98007`). Workers: `strum-relaybase-admin`, `strum-relaybase-console`, `strum-relaybase-website`. Drizzle is the schema source of truth.
 
 Product Worker catalog state is a different database (`RELAYBASE_DB` on the customer Worker). Do not put mailbox/audience/broadcasts here.
 
@@ -40,7 +30,7 @@ Product Worker catalog state is a different database (`RELAYBASE_DB` on the cust
 
 ## Schema (7 tables)
 
-Generated SQL: `kembo/console/migrations/0000_secret_wong.sql` (initial) and `kembo/console/migrations/0001_bizarre_smasher.sql` (`beta_invites`).
+Generated SQL: `hq/console/migrations/0000_secret_wong.sql` (initial) and `hq/console/migrations/0001_bizarre_smasher.sql` (`beta_invites`).
 
 ### `waitlist`
 
@@ -66,7 +56,7 @@ One-time token hashes for password reset and `admin_token` recovery. Tokens them
 
 ### `product_settings`
 
-Replaces `KEMBO_OPS`. Composite PK `(service_id, filename)`. Current row:
+Composite PK `(service_id, filename)`. Current row:
 
 | service_id | filename | `data` JSON |
 |------------|----------|-------------|
@@ -78,7 +68,7 @@ Replaces `KEMBO_OPS`. Composite PK `(service_id, filename)`. Current row:
 
 ### `licenses`
 
-One row per Mac license. KV's four duplicate keys collapse to unique `key_hash` plus indexes on `email` and `stripe_customer_id`. `active` is `0|1`. Status: `active` | `past_due` | `canceled` | `revoked`.
+One row per Mac license. Unique `key_hash` plus indexes on `email` and `stripe_customer_id`. `active` is `0|1`. Status: `active` | `past_due` | `canceled` | `revoked`.
 
 ---
 
@@ -113,7 +103,7 @@ Do not put `export const runtime = "edge"` on these OpenNext routes. Edge chunks
 ## Migrations
 
 ```bash
-cd kembo/console
+cd hq/console
 npx drizzle-kit generate
 # Apply to remote strum-relaybase-ops:
 CLOUDFLARE_ACCOUNT_ID=3adf03d991843094a7343eebc0a98007 wrangler d1 migrations apply strum-relaybase-ops --remote
@@ -121,20 +111,11 @@ CLOUDFLARE_ACCOUNT_ID=3adf03d991843094a7343eebc0a98007 wrangler d1 migrations ap
 CLOUDFLARE_ACCOUNT_ID=3adf03d991843094a7343eebc0a98007 wrangler d1 execute strum-relaybase-ops --remote --file migrations/0000_secret_wong.sql
 ```
 
-One-shot KV copy from the old account (does not delete source):
-
-```bash
-CLOUDFLARE_API_TOKEN=… node kembo/console/scripts/migrate-kv-to-d1.mjs
-```
-
-Old-account `kembo-accounts` / `KEMBO_OPS` / `KEMBO_LICENSES` are left in place for rollback.
-
 ---
 
 ## Forbidden
 
-- Re-binding `KEMBO_OPS`, `KEMBO_LICENSES`, `KEMBO_ACCOUNTS`, or `RELAYBASE_APP_DOGFOOD` on `strum-relaybase-admin` / `strum-relaybase-console`
-- Dual-write to those KV namespaces
+- Reintroducing Cloudflare KV — HQ ops is D1 `strum-relaybase-ops` only
 - Putting product mailbox/audience/broadcast catalog in `strum-relaybase-ops` — that is `RELAYBASE_DB` on the customer Worker
 - Storing CF API tokens or plaintext API keys in `product_settings`
 - License/account/billing routes on the product Worker

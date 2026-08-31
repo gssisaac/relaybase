@@ -6,12 +6,12 @@
     "dev": "npm run dev --prefix server",
     "deploy": "npm run deploy --prefix server",
     "typecheck": "npm run typecheck --prefix server",
-    "admin:dev": "npm run dev --prefix kembo/admin",
-    "admin:build": "npm run build --prefix kembo/admin",
-    "admin:start": "npm run start --prefix kembo/admin",
-    "console:dev": "npm run dev --prefix kembo/console",
-    "console:build": "npm run build --prefix kembo/console",
-    "console:start": "npm run start --prefix kembo/console",
+    "admin:dev": "npm run dev --prefix hq/admin",
+    "admin:build": "npm run build --prefix hq/admin",
+    "admin:start": "npm run start --prefix hq/admin",
+    "console:dev": "npm run dev --prefix hq/console",
+    "console:build": "npm run build --prefix hq/console",
+    "console:start": "npm run start --prefix hq/console",
     "app:dev": "npm run dev --prefix app",
     "app:build": "npm run build --prefix app",
     "app:start": "npm run start --prefix app",
@@ -26,8 +26,8 @@
     "mobile:build:apk": "cd mobile && flutter build apk --release",
     "mobile:test": "cd mobile && flutter test",
     "pack:worker-install": "npm run pack:customer-install --prefix server",
-    "website:dev": "pnpm --dir kembo/website dev",
-    "website:build": "pnpm --dir kembo/website build",
-    "website:start": "pnpm --dir kembo/website start"
+    "website:dev": "pnpm --dir hq/website dev",
+    "website:build": "pnpm --dir hq/website build",
+    "website:start": "pnpm --dir hq/website start"
   }
 }

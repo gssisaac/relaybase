@@ -1,6 +1,6 @@
 # Storage architecture — D1 + R2 + `~/.relaybase`
 
-**Audience:** humans and coding agents changing where product data lives, API routing, D1/KV/R2 bindings, or desktop persistence.
+**Audience:** humans and coding agents changing where product data lives, API routing, D1/R2 bindings, or desktop persistence.
 
 **Rule:** Relaybase has **two** durable layers. Do not reintroduce Next userdata, cookie multi-tenant stores, or a Cloudflare KV binding on the product Worker. The product Worker's durable product state lives in D1 `relaybase-db` (binding `RELAYBASE_DB`).
 
@@ -10,7 +10,7 @@
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
 | **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `server/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
-| **Remote** | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared Kembo store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[kembo-ops-d1.md](./kembo-ops-d1.md)**. |
+| **Remote** | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared HQ store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[hq-ops-d1.md](./hq-ops-d1.md)**. |
 | **Local** | `~/.relaybase` | Credentials, API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login |
 
 Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
@@ -38,7 +38,7 @@ flowchart TB
     D1Mail["D1 RELAYBASE_MAIL\nmailbox_messages + mailbox_fts"]
   end
   subgraph console [console.relaybase.xyz + admin.relaybase.xyz]
-    KemboD1["D1 strum-relaybase-ops\nproduct_settings, licenses,\naccounts, workers, recovery,\nwaitlist, beta_invites"]
+    HqD1["D1 strum-relaybase-ops\nproduct_settings, licenses,\naccounts, workers, recovery,\nwaitlist, beta_invites"]
   end
   UI --> Fetch
   Fetch -->|"admin Bearer"| worker
@@ -48,7 +48,7 @@ flowchart TB
   worker --> D1App
   worker --> D1
   worker --> D1Mail
-  console --> KemboD1
+  console --> HqD1
 ```
 
 All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** product path: map `/api/email/*` → product Worker `/console/*` (management) and `/mail/*` (mail operations) via [`app/src/lib/desktop/api/email-api-map.ts`](../app/src/lib/desktop/api/email-api-map.ts) and [`desktopAwareFetch`](../app/src/lib/desktop/api/api-base.ts). Account/license/billing calls go to `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
@@ -156,7 +156,7 @@ Full design (schema, query safety, sync model, backfill, freshness): **[mailbox-
 ### Forbidden (do not reintroduce)
 
 - Cloudflare KV binding on the product Worker for app data
-- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in Kembo ops — the Worker reads them from wrangler secrets; D1 `strum-relaybase-ops` `product_settings` holds only `workerUrl` + `adminToken` (operator config)
+- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in HQ ops — the Worker reads them from wrangler secrets; D1 `strum-relaybase-ops` `product_settings` holds only `workerUrl` + `adminToken` (operator config)
 - End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `strum-relaybase-ops` — owner sessions live in the product Worker's D1 `owner_sessions` (hash-only); plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`
 - Global mobile password (no per-account row) — use the per-account row in D1 `mobile_passwords` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
@@ -169,7 +169,7 @@ Customer install template: three D1 databases (`relaybase-db`, `relaybase-logs`,
 
 ## Remote — D1 `strum-relaybase-ops` (console + admin)
 
-Binding: `DB` on `kembo/console/wrangler.jsonc`, `kembo/admin/wrangler.jsonc`, and `kembo/website/wrangler.jsonc` (database `strum-relaybase-ops`). Drizzle schema: `kembo/console/src/db/schema.ts`. Full rules: **[kembo-ops-d1.md](./kembo-ops-d1.md)**.
+Binding: `DB` on `hq/console/wrangler.jsonc`, `hq/admin/wrangler.jsonc`, and `hq/website/wrangler.jsonc` (database `strum-relaybase-ops`). Drizzle schema: `hq/console/src/db/schema.ts`. Full rules: **[hq-ops-d1.md](./hq-ops-d1.md)**.
 
 Operator config lives in `product_settings` (`service_id=relaybase`, `filename=settings.json`):
 
@@ -178,7 +178,7 @@ Operator config lives in `product_settings` (`service_id=relaybase`, `filename=s
 | `workerUrl` | Product Worker URL — admin proxies `/console/*` and `/mail/send` here |
 | `adminToken` | Service admin token. Must match the Worker's `ADMIN_TOKEN` wrangler secret. Authorizes admin → product Worker calls only — not license admin. |
 
-Licenses, console accounts, worker registration, recovery tokens, the legacy waitlist, and public beta invites (`beta_invites`) are the other tables in the same database. The marketing site Worker reads/writes `beta_invites` only. Legacy KV `KEMBO_OPS` / `KEMBO_LICENSES` and D1 `kembo-accounts` are not bound anymore.
+Licenses, console accounts, worker registration, recovery tokens, the legacy waitlist, and public beta invites (`beta_invites`) are the other tables in the same database. The marketing site Worker reads/writes `beta_invites` only. HQ ops is D1 `strum-relaybase-ops` only — no KV.
 
 Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
 

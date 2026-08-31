@@ -2,7 +2,7 @@ import { sessionCookieName, verifySession } from "./accounts";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 /**
- * Returns the Cloudflare bindings (D1/KV/secrets) for the current request.
+ * Returns the Cloudflare bindings (D1/secrets) for the current request.
  * In OpenNext on Cloudflare, `getCloudflareContext()` from @opennextjs/cloudflare
  * exposes the env. During `next dev`, bindings come from
  * `initOpenNextCloudflareForDev()` via the same call.

@@ -107,7 +107,8 @@ export function BetaForm() {
         </p>
       ) : (
         <p className="text-center text-xs text-muted-foreground">
-          We will email a personal download link from {siteConfig.beta.from}.
+          We will email a welcome note and a personal download link from{" "}
+          {siteConfig.beta.from}.
         </p>
       )}
     </form>

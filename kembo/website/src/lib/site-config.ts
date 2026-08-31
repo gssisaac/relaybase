@@ -48,7 +48,7 @@ export const siteConfig = {
   },
   beta: {
     from: "beta@relaybase.xyz",
-    note: "We will email a personal download link",
+    note: "We will email a welcome note and a personal download link",
   },
   /**
    * Clarifies that Relaybase Pro is a one-time software license and that

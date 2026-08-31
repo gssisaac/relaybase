@@ -6,7 +6,7 @@ import {
   insertInvite,
 } from "./invites";
 import { resolveDmgUrl } from "./release";
-import { sendBetaInviteEmail } from "./send";
+import { sendBetaSignupEmails } from "./send";
 import type { IncomingCf, InviteData, WorkerEnv } from "./types";
 import { parseUserAgent } from "./ua";
 
@@ -112,10 +112,11 @@ async function handleBeta(
     }
   }
 
-  const sent = await sendBetaInviteEmail(
+  const sent = await sendBetaSignupEmails(
     env,
     email,
     `${origin || SITE_ORIGIN}/downloads/${uuid}`,
+    { includeGreeting: !alreadyJoined },
   );
   if (!sent.ok) {
     return json({ error: sent.error }, 502, request);

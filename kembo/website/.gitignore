@@ -29,6 +29,7 @@ yarn-error.log*
 
 # env files
 .env*
+.dev.vars
 
 # Large desktop binaries live on R2 (download.relaybase.xyz), not in git
 /public/release/Relaybase.*.dmg

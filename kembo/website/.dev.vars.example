@@ -1,0 +1,4 @@
+# Local preview only (`pnpm preview:cf`). Never commit real keys.
+# Production: `wrangler secret put RELAYBASE_API_KEY`
+RELAYBASE_WORKER_URL=https://relaybase-api.gssisaac.workers.dev
+RELAYBASE_API_KEY=

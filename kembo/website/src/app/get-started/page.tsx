@@ -125,7 +125,7 @@ export default function GetStartedPage() {
                     Join the beta
                   </CardTitle>
                   <CardDescription>
-                    We will email you a personal download link
+                    We will email a welcome note and a personal download link
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-2">

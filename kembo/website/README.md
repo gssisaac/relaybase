@@ -36,10 +36,11 @@ In the Cloudflare project (root directory: `website`):
 
 2. **Wrangler secrets** (never commit):
    - `RELAYBASE_WORKER_URL` — product Worker that sends as `beta@relaybase.xyz`
-   - `RELAYBASE_ADMIN_TOKEN` — that Worker's `ADMIN_TOKEN`
+   - `RELAYBASE_API_KEY` — domain-scoped product API key (`rb_…`) used as
+     `Authorization: Bearer` on `POST /v1/send`
 
 3. **Mailbox:** `beta@relaybase.xyz` must exist on the product Worker so
-   `/mail/send` accepts `from`.
+   `/v1/send` accepts `from`.
 
 4. **D1:** apply `kembo/console` migrations so `beta_invites` exists on remote
    `strum-relaybase-ops` before the first signup.

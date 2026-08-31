@@ -40,5 +40,5 @@ export type WorkerEnv = {
   DB: D1Database;
   ASSETS: { fetch: (request: Request) => Promise<Response> };
   RELAYBASE_WORKER_URL?: string;
-  RELAYBASE_ADMIN_TOKEN?: string;
+  RELAYBASE_API_KEY?: string;
 };

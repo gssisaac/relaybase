@@ -96,6 +96,17 @@ pnpm run build:macos
 ```
 
 R2 (already provisioned): bucket `relaybase-releases`, CDN `download.relaybase.xyz`.
+The custom domain must use zone `relaybase.xyz` on the Strum account
+(`1474b7eaef3a2527c2bdc83d666143f5`). A stale/wrong zone ID produces
+Cloudflare 522 even though R2 lists the domain as connected.
+
+```bash
+cd kembo/website
+pnpm dlx wrangler@4 r2 bucket domain add relaybase-releases \
+  --domain download.relaybase.xyz \
+  --zone-id 1474b7eaef3a2527c2bdc83d666143f5 \
+  --min-tls 1.2 --force
+```
 
 Manual R2 upload:
 

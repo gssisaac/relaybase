@@ -142,9 +142,10 @@ consoleOwnerAuth.post("/rotate-passtoken", async (c) => {
  * POST /console/reset-admin
  *
  * Forgot-passtoken recovery. Unauthenticated by design; security comes from
- * a Cloudflare OAuth access token (`cfAccessToken`) that can GET this
- * Worker's CF_ACCOUNT_ID account. Issues a new passtoken (shown once) and
- * revokes every existing session.
+ * a Cloudflare OAuth access token (`cfAccessToken`) that can list Secrets
+ * Store on this Worker's CF_ACCOUNT_ID (passtoken-updater client), or GET
+ * that account (install client fallback). Issues a new passtoken (shown
+ * once) and revokes every existing session.
  */
 consoleOwnerAuth.post("/reset-admin", async (c) => {
   let body: { cfAccessToken?: string };

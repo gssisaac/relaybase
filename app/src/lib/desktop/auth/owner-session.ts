@@ -209,8 +209,8 @@ export async function ownerRotatePasstoken(): Promise<{
 
 /**
  * POST /console/reset-admin — forgot-passtoken recovery. The caller supplies a
- * Cloudflare OAuth access token; the Worker proves it can GET
- * /accounts/{CF_ACCOUNT_ID} and re-issues a passtoken ONCE.
+ * Cloudflare OAuth access token; the Worker proves Secrets Store access on
+ * CF_ACCOUNT_ID (or GET /accounts as fallback) and re-issues a passtoken ONCE.
  */
 export async function ownerResetAdmin(input: {
   cfAccessToken: string;

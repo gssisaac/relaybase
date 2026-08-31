@@ -5,7 +5,10 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { CfOauthInstallDetailsSheet } from "@/console/components/setup/CfOauthInstallDetailsSheet";
-import { CF_OAUTH_INSTALL_SCOPES, type DesktopErrorHelp } from "@/lib/desktop/bridge";
+import {
+  CF_OAUTH_INSTALL_SCOPES,
+  type DesktopErrorHelp,
+} from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 const ACTION_WIDTH = "w-[300px] max-w-full";
@@ -68,6 +71,8 @@ export function SetupCloudflareAuthorizeCard({
   authorizeLabel = "Authorize and install on Cloudflare",
   waitingLabel = "Waiting for authorization…",
   showCancelWait = true,
+  scopes = CF_OAUTH_INSTALL_SCOPES,
+  detailsVariant = "install",
 }: {
   oauthBusy: boolean;
   oauthError: DesktopErrorHelp | null;
@@ -76,6 +81,8 @@ export function SetupCloudflareAuthorizeCard({
   authorizeLabel?: string;
   waitingLabel?: string;
   showCancelWait?: boolean;
+  scopes?: readonly string[];
+  detailsVariant?: "install" | "recover";
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const buttonLabel = oauthBusy ? waitingLabel : authorizeLabel;
@@ -85,9 +92,13 @@ export function SetupCloudflareAuthorizeCard({
         <OAuthConnectDiagram waiting={oauthBusy} />
 
         <div className={`flex ${ACTION_WIDTH} flex-col items-center`}>
-          <p className="text-sm font-medium">We are asking permissions</p>
+          <p className="text-sm font-medium">
+            {scopes.length === 1
+              ? "We are asking one permission"
+              : "We are asking permissions"}
+          </p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
-            {CF_OAUTH_INSTALL_SCOPES.map((scope) => (
+            {scopes.map((scope) => (
               <li key={scope}>{scope}</li>
             ))}
           </ul>
@@ -134,6 +145,7 @@ export function SetupCloudflareAuthorizeCard({
       <CfOauthInstallDetailsSheet
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
+        variant={detailsVariant}
       />
     </div>
   );

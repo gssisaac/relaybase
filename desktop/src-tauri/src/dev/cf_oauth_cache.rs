@@ -24,6 +24,8 @@ struct CacheFile {
     refresh_token: String,
     access_expires_at: String,
     account_id: String,
+    #[serde(default)]
+    client_id: String,
 }
 
 fn cache_path() -> Result<PathBuf, String> {
@@ -51,6 +53,7 @@ pub fn save(session: &CfOAuthSession) {
         refresh_token: session.refresh_token.clone(),
         access_expires_at: session.access_expires_at.clone(),
         account_id: session.account_id.clone(),
+        client_id: session.client_id.clone(),
     };
     let Ok(json) = serde_json::to_string_pretty(&payload) else {
         return;
@@ -87,6 +90,7 @@ pub fn load() -> Option<CfOAuthSession> {
         refresh_token: file.refresh_token,
         access_expires_at: file.access_expires_at,
         account_id: file.account_id,
+        client_id: file.client_id,
     })
 }
 

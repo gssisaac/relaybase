@@ -38,7 +38,7 @@ The table is the **current internal hypothesis**. It is not on relaybase.xyz as 
 | Price | **$0** | **$35 one-time** (~50% off, first 300 seats) | **$69 one-time** |
 | Cloudflare Worker installs | 1 | 1 | 1 |
 | Domains | 1 | Unlimited (on that Worker's Cloudflare account) | Unlimited |
-| Email addresses | 1 | Unlimited | Unlimited |
+| Email addresses | Unlimited (changed 2026-08-31 — was 1; a single-domain user still wants billing@/support@/hello@, and Free costs ~$0 to serve, so an address cap on one domain doesn't buy anything) | Unlimited | Unlimited |
 | Send + receive API | Yes | Yes | Yes |
 | Inbox UI (Mac app) | Yes | Yes, + Windows and mobile companion when shipped | Yes |
 | Audience / Broadcasts / Metrics | No | Yes | Yes |
@@ -75,7 +75,7 @@ Publish these on the site only once the underlying feature exists in the app. Un
 
 These are the figures other **internal** docs should use *while this draft lasts*. They are allowed to change before launch. Do not paste them onto the marketing site, invite emails, or TERMS as if they were final.
 
-- Free (draft): $0, 1 domain, 1 address.
+- Free (draft): $0, 1 domain, unlimited addresses (changed 2026-08-31, was 1 address).
 - Pro (draft): $69 one-time, includes 1 year of updates.
 - Pro renewal (draft): $25/year, optional, perpetual fallback (§2).
 - Do not reintroduce "$39" or an absolute "no subscription, ever" claim. The draft public claim *at paid launch* would be **"no subscription required — and skipping the optional renewal never breaks your mail."** During private beta, say only: beta is free; mail stays on your Cloudflare account; we will not revoke what you already set up.

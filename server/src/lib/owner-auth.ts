@@ -358,7 +358,7 @@ export async function resetOwner(
     return { error: "Worker is missing CF_ACCOUNT_ID", status: 503 };
   }
 
-  const verified = await verifyCfTokenAccount(
+  const verified = await verifyCfTokenForReset(
     input.cfAccessToken,
     expectedAccount,
   );
@@ -399,4 +399,42 @@ export async function verifyCfTokenAccount(
   } catch {
     return { ok: false };
   }
+}
+
+/**
+ * Prove a Cloudflare OAuth access token can list Secrets Store on
+ * `expectedAccount` (`secrets-store.write`). Used by forgot-passtoken
+ * reset — that OAuth client has only this scope.
+ */
+export async function verifyCfTokenSecretsStore(
+  token: string,
+  expectedAccount: string,
+): Promise<{ ok: boolean; accountId?: string }> {
+  const bearer = token.trim();
+  const expected = expectedAccount.trim();
+  if (!bearer || !expected) return { ok: false };
+  try {
+    const storeRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(expected)}/secrets_store/stores?per_page=1`,
+      { headers: { Authorization: `Bearer ${bearer}` } },
+    );
+    const storeData = (await storeRes.json()) as { success?: boolean };
+    if (!storeData.success) return { ok: false };
+    return { ok: true, accountId: expected };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * Forgot-passtoken proof: Secrets Store list on `CF_ACCOUNT_ID`, then
+ * GET `/accounts/{id}` so an in-memory install token still works.
+ */
+export async function verifyCfTokenForReset(
+  token: string,
+  expectedAccount: string,
+): Promise<{ ok: boolean; accountId?: string }> {
+  const store = await verifyCfTokenSecretsStore(token, expectedAccount);
+  if (store.ok) return store;
+  return verifyCfTokenAccount(token, expectedAccount);
 }

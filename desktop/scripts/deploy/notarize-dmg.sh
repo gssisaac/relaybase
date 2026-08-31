@@ -3,7 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-DMG_DIR="$ROOT/src-tauri/target/release/bundle/dmg"
+CARGO_TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
+DMG_DIR="$CARGO_TARGET/universal-apple-darwin/release/bundle/dmg"
 
 if [[ ! -d "$DMG_DIR" ]]; then
   echo "✗ DMG directory not found: $DMG_DIR" >&2

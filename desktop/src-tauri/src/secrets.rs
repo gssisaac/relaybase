@@ -81,13 +81,16 @@ pub struct StoredCredentials {
     pub cf_oauth_account_id: String,
 }
 
-/// CF OAuth install-token session — process memory only, never written to disk.
+/// CF OAuth session — process memory only, never written to disk.
 #[derive(Debug, Clone)]
 pub struct CfOAuthSession {
     pub access_token: String,
     pub refresh_token: String,
     pub access_expires_at: String,
     pub account_id: String,
+    /// Client id used for this session (install vs passtoken-updater).
+    /// Refresh must use the same client; empty = fetch install config.
+    pub client_id: String,
 }
 
 static CF_OAUTH_SESSION: Mutex<Option<CfOAuthSession>> = Mutex::new(None);

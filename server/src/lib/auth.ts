@@ -82,7 +82,8 @@ export async function requirePepperBootstrap(
 
 /**
  * Cloudflare OAuth access token that can GET this Worker's `CF_ACCOUNT_ID`
- * account. Same proof as `POST /console/reset-admin`.
+ * account. Used by `init-db` / `migrate-db` (install client). Forgot-passtoken
+ * reset uses `verifyCfTokenForReset` (Secrets Store, then this GET).
  */
 export async function requireCfAccountProof(
   c: Context<{ Bindings: Env }>,

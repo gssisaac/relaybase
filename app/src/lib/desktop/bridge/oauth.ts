@@ -1,4 +1,5 @@
 import type { DesktopCredentials } from "./credentials";
+import type { CfOAuthPurpose } from "./cloudflare";
 import { invoke, isDesktopRuntime } from "./invoke";
 
 // --- Cloudflare OAuth (install token) ---
@@ -11,11 +12,13 @@ import { invoke, isDesktopRuntime } from "./invoke";
 // which stores them in Tauri process memory only. Refresh is handled
 // transparently by the Rust side before any wrangler/CF-API call.
 
-export async function desktopStartCfOAuth(): Promise<{
+export async function desktopStartCfOAuth(
+  purpose: CfOAuthPurpose = "install",
+): Promise<{
   authorizeUrl: string;
   state: string;
 }> {
-  return invoke("start_cf_oauth");
+  return invoke("start_cf_oauth", { purpose });
 }
 
 export type CfOAuthDeepLinkCallback = {

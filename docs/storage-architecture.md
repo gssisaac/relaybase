@@ -75,7 +75,7 @@ The desktop **god token is retired**. Owner auth is now a **Worker-issued passto
 - Desktop session storage: **dual refresh** in OS keyring `owner-session` (`mailRefreshToken` ~90d, console `refreshToken` ~30m); **passtoken** in a **separate** `owner-passtoken` item; **split access** in Tauri memory (mail ~60m, console ~30m). Mail boot is **silent** (`owner_boot_mail`). Touch ID / Windows Hello **only** decides whether Rust may **read** `owner-passtoken` for a new `/console/login`. Valid scoped refresh unlocks silently — no Touch ID. Typed passtoken is first-login and bio-fail / decline only. Teammate desktop unlock is silent from keyring — no biometry. Linux / unsigned `tauri dev` read `owner-passtoken` without a prompt if the item exists. JS never sees tokens — Rust `worker_request` picks scope by path prefix.
 - `POST /console/login` returns mail + console refresh tokens and mail access immediately; console access is minted at gate time via scoped refresh.
 - All `/console/*` routes require **console-scoped** access; `/mail/*` require **mail-scoped** access (`requireOwnerSession(c, scope)`).
-- Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can GET `/accounts/{CF_ACCOUNT_ID}`, then re-issues a passtoken once (download + write `owner-passtoken`) and revokes all sessions. No console email, no central god token.
+- Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can list Secrets Store on `CF_ACCOUNT_ID` (passtoken-updater client; GET `/accounts/{id}` is a fallback), then re-issues a passtoken once (download + write `owner-passtoken`) and revokes all sessions. No console email, no central god token.
 - `AUTH_PEPPER` (random, set once at install) replaces the old `ADMIN_TOKEN` wrangler secret. `owner_config.admin_token` and D1 `auth_tokens` (`rb-auth-…`) are dropped (migration `0003_owner_login`; after local `0002_app_settings`).
 
 The desktop **unlock flow** — silent mail boot, keyring passtoken + Touch ID
@@ -116,7 +116,7 @@ The product Worker resolves Cloudflare credentials from wrangler secrets (`CF_AC
 | `/console/setup-admin` | First-time owner setup: issue passtoken once (AUTH_PEPPER bootstrap) |
 | `/console/login` / `/console/refresh` / `/console/logout` | Owner session create / rotate / revoke |
 | `/console/rotate-passtoken` | Re-issue passtoken once (owner session); revokes all sessions |
-| `/console/reset-admin` | Re-issue passtoken once via CF OAuth (`GET /accounts/{CF_ACCOUNT_ID}`) |
+| `/console/reset-admin` | Re-issue passtoken once via CF OAuth (Secrets Store on `CF_ACCOUNT_ID`) |
 | `/console/auth-status` | Public probe: is an owner configured yet? |
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
 | `/console/addresses/mobile-password` | Per-account mobile password (owner session) |

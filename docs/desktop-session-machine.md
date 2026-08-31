@@ -46,7 +46,7 @@ Everything now flows through one MobX store, **`AppSessionStore`**
 | `unlock` | No in-memory mail access yet. `role: owner \| invited`, `mode: secret` only — first enrollment or bio-declined typed form. |
 | `invitedReady` | Invited session unlocked — render the team (mailbox-only) shell. |
 | `ownerReady` | Owner mail session unlocked — render the admin shell (mail routes). |
-| `ownerRecover` | Owner forgot passtoken → CF OAuth + `/console/reset-admin`. |
+| `ownerRecover` | Owner forgot passtoken → CF OAuth (Secrets Store) + `/console/reset-admin`. |
 
 Console dashboard access is **not** a phase — it is tracked via
 `ownerStatus.hasConsoleAccess` and the `consoleGateOpen` overlay
@@ -101,7 +101,7 @@ refresh can unlock silently.
 | Unlock action | `owner_boot_mail` (silent). Refresh gone → Touch ID → keyring passtoken → login | Valid console refresh → silent `owner_unlock_console`. Expired → Touch ID → keyring passtoken → login | `team_unlock` (silent) |
 | Worker scope | `/mail/*` mail access JWT | `/console/*` console access JWT | `/mobile/*` mobile password |
 | First-time | install → `setup-admin` → reveal + **write** `owner-passtoken` | same login mints both refreshes | `invitedLogin` → `invitedReady` |
-| Recover | `ownerRecover` → CF OAuth → `/console/reset-admin` → write new `owner-passtoken` | n/a | n/a (admin re-issues mobile password) |
+| Recover | `ownerRecover` → CF OAuth (Secrets Store) → `/console/reset-admin` → write new `owner-passtoken` | n/a | n/a (admin re-issues mobile password) |
 
 Both roles use the same `unlock` phase and the same `UnlockView` for the secret
 form; the store drives the difference via `role`.

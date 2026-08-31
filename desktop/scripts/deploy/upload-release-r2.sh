@@ -20,15 +20,58 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
 fi
 
 VERSION="$(node -p "require('$ROOT/src-tauri/tauri.conf.json').version")"
-DMG="$RELEASE_DIR/Relaybase.${VERSION}.dmg"
-TGZ="$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz"
-SIG="$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz.sig"
+CARGO_TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
+BUNDLE="$CARGO_TARGET/universal-apple-darwin/release/bundle"
+STAGE="$(mktemp -d "${TMPDIR:-/tmp}/relaybase-release.XXXXXX")"
+cleanup_stage() { rm -rf "$STAGE"; }
+trap cleanup_stage EXIT
 
+stage_or_release() {
+  local dest_name="$1"
+  local release_path="$2"
+  shift 2
+  local dest="$STAGE/$dest_name"
+  if [[ -f "$release_path" ]]; then
+    cp "$release_path" "$dest"
+    echo "$dest"
+    return 0
+  fi
+  local src
+  for src in "$@"; do
+    if [[ -n "$src" && -f "$src" ]]; then
+      cp "$src" "$dest"
+      echo "$dest"
+      return 0
+    fi
+  done
+  echo "$release_path"
+}
+
+BUNDLE_DMG="$(find "$BUNDLE/dmg" -name '*.dmg' 2>/dev/null | head -1 || true)"
+DMG="$(stage_or_release "Relaybase.${VERSION}.dmg" "$RELEASE_DIR/Relaybase.${VERSION}.dmg" "$BUNDLE_DMG")"
+TGZ="$(stage_or_release "Relaybase.${VERSION}.app.tar.gz" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz" "$BUNDLE/macos/Relaybase.app.tar.gz")"
+SIG="$(stage_or_release "Relaybase.${VERSION}.app.tar.gz.sig" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz.sig" "$BUNDLE/macos/Relaybase.app.tar.gz.sig")"
+
+WEBSITE_DIR="$(cd "$ROOT/../../kembo/website" && pwd)"
 # Prefer website wrangler if present; otherwise use desktop's pnpm dlx.
-if [[ -f "$ROOT/../../kembo/website/package.json" ]]; then
-  WRANGLER=(pnpm --dir "$ROOT/../../kembo/website" dlx wrangler@4)
+if [[ -f "$WEBSITE_DIR/package.json" ]]; then
+  WRANGLER=(pnpm --dir "$WEBSITE_DIR" dlx wrangler@4)
 else
   WRANGLER=(pnpm --dir "$ROOT" dlx wrangler@4)
+fi
+
+# R2 bucket lives on the website Worker account. desktop/.env may hold a
+# different CLOUDFLARE_ACCOUNT_ID (other CF accounts). Prefer wrangler.jsonc.
+if [[ -z "${RELAYBASE_RELEASE_CF_ACCOUNT_ID:-}" && -f "$WEBSITE_DIR/wrangler.jsonc" ]]; then
+  RELAYBASE_RELEASE_CF_ACCOUNT_ID="$(grep -o '"account_id": "[^"]*"' "$WEBSITE_DIR/wrangler.jsonc" | head -1 | cut -d'"' -f4 || true)"
+fi
+if [[ -n "${RELAYBASE_RELEASE_CF_ACCOUNT_ID:-}" ]]; then
+  export CLOUDFLARE_ACCOUNT_ID="$RELAYBASE_RELEASE_CF_ACCOUNT_ID"
+  echo "→ R2 account: $CLOUDFLARE_ACCOUNT_ID (website wrangler / RELAYBASE_RELEASE_CF_ACCOUNT_ID)"
+fi
+if [[ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+  echo "✗ CLOUDFLARE_ACCOUNT_ID is empty" >&2
+  exit 1
 fi
 
 upload_one() {
@@ -58,16 +101,21 @@ upload_one "$DMG" "application/x-apple-diskimage"
 upload_one "$TGZ" "application/gzip"
 upload_one "$SIG" "text/plain" 0
 
-RELEASE_DIR="$RELEASE_DIR" META_PATH="$META_PATH" VERSION="$VERSION" node <<'NODE'
+if [[ -f "$SIG" ]]; then
+  cp "$SIG" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz.sig"
+fi
+
+RELEASE_DIR="$RELEASE_DIR" META_PATH="$META_PATH" VERSION="$VERSION" STAGE_DIR="$STAGE" node <<'NODE'
 const fs = require('fs');
 const path = require('path');
 const dir = process.env.RELEASE_DIR;
 const metaPath = process.env.META_PATH;
 const version = process.env.VERSION;
 const existing = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf8')) : {};
+const staged = process.env.STAGE_DIR || '';
 for (const name of [`Relaybase.${version}.dmg`, `Relaybase.${version}.app.tar.gz`]) {
-  const p = path.join(dir, name);
-  if (!fs.existsSync(p)) continue;
+  const p = [staged && path.join(staged, name), path.join(dir, name)].find((c) => c && fs.existsSync(c));
+  if (!p) continue;
   existing[name] = { sizeBytes: fs.statSync(p).size, version };
 }
 fs.writeFileSync(metaPath, JSON.stringify(existing, null, 2) + '\n');

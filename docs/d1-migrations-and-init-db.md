@@ -12,7 +12,7 @@ The **Worker owns D1 schema**. The desktop installer creates empty D1 databases 
 Auth (any one is enough):
 
 - Owner **console access Bearer** (signed-in Settings → Update Worker)
-- **Cloudflare OAuth** — `X-Cf-Access-Token` that can GET this Worker's `CF_ACCOUNT_ID` account (same proof as `POST /console/reset-admin`). Desktop install / upgrade already holds this token; an existing owner must not fail the upgrade.
+- **Cloudflare OAuth** — `X-Cf-Access-Token` that can GET this Worker's `CF_ACCOUNT_ID` account (install client). Desktop install / upgrade already holds this token; an existing owner must not fail the upgrade. Forgot-passtoken reset is a different client (`secrets-store.write`) and is not used here.
 - **`AUTH_PEPPER` bootstrap** (`X-Auth-Pepper`) — only while no owner exists yet
 
 ---

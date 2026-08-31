@@ -16,18 +16,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const tauriConfPath = path.join(root, 'src-tauri', 'tauri.conf.json');
 const websiteRelease = path.join(root, '..', '..', 'kembo', 'website', 'public', 'release');
-const dmgDir = path.join(root, 'src-tauri', 'target', 'release', 'bundle', 'dmg');
-const macosDir = path.join(root, 'src-tauri', 'target', 'release', 'bundle', 'macos');
+const cargoTarget = process.env.CARGO_TARGET_DIR
+  ? path.resolve(process.env.CARGO_TARGET_DIR)
+  : path.join(root, 'src-tauri', 'target');
+const dmgDir = path.join(cargoTarget, 'universal-apple-darwin', 'release', 'bundle', 'dmg');
+const macosDir = path.join(cargoTarget, 'universal-apple-darwin', 'release', 'bundle', 'macos');
 
 function readTauriConf() {
   return JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
 }
 
-function inferDarwinPlatform(filename) {
+function inferDarwinPlatforms(filename) {
   const lower = filename.toLowerCase();
-  if (lower.includes('aarch64') || lower.includes('arm64')) return 'darwin-aarch64';
-  if (lower.includes('x86_64') || lower.includes('amd64')) return 'darwin-x86_64';
-  return process.arch === 'arm64' ? 'darwin-aarch64' : 'darwin-x86_64';
+  if (lower.includes('universal')) {
+    return ['darwin-universal', 'darwin-aarch64', 'darwin-x86_64'];
+  }
+  if (lower.includes('aarch64') || lower.includes('arm64')) return ['darwin-aarch64'];
+  if (lower.includes('x86_64') || lower.includes('amd64')) return ['darwin-x86_64'];
+  return ['darwin-universal', 'darwin-aarch64', 'darwin-x86_64'];
 }
 
 function readExistingLatest(p) {
@@ -108,10 +114,12 @@ function main() {
       fs.copyFileSync(path.join(macosDir, archive), path.join(websiteRelease, versionedArchive));
       fs.copyFileSync(sigPath, path.join(websiteRelease, versionedSig));
       const signature = fs.readFileSync(sigPath, 'utf8').trim();
-      const key = inferDarwinPlatform(archive);
-      manifest.platforms[key] = { url: `${downloadBase}/${encodeURIComponent(versionedArchive)}`, signature };
-      addedUpdaterPlatforms += 1;
-      console.log(`[sync-release] Updater: ${key} → ${downloadBase}/${versionedArchive}`);
+      const entry = { url: `${downloadBase}/${encodeURIComponent(versionedArchive)}`, signature };
+      for (const key of inferDarwinPlatforms(archive)) {
+        manifest.platforms[key] = entry;
+        addedUpdaterPlatforms += 1;
+        console.log(`[sync-release] Updater: ${key} → ${downloadBase}/${versionedArchive}`);
+      }
     }
     if (tgz.length === 0) {
       console.warn('[sync-release] No .app.tar.gz in bundle/macos. No new darwin updater entries this run.');

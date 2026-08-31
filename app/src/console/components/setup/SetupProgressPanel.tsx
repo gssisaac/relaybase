@@ -321,7 +321,6 @@ export function SetupProgressPanel({
     setNeedsOwnerSetup(false);
     setInstallPepper(null);
     setTokenSaved(false);
-    setOwnerUsername("");
     try {
       if (!(await ensureOauthSession())) {
         return;

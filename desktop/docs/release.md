@@ -27,7 +27,7 @@ tauri build --target universal-apple-darwin --bundles app,dmg
   `x86_64-apple-darwin`.
 - Bundle output:
   `desktop/src-tauri/target/universal-apple-darwin/release/bundle/{dmg,macos}/`
-  — not `target/release/bundle`.
+  — not `target/release/bundle`. Scripts honor `CARGO_TARGET_DIR` when set.
 - Public names stay `Relaybase.<version>.dmg` and
   `Relaybase.<version>.app.tar.gz` (no arch suffix).
 - `latest.json` writes the **same** URL + signature under `darwin-universal`,

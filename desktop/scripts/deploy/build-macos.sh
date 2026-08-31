@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build signed (and notarized when configured) Relaybase macOS DMG via Tauri.
+# Build signed (and notarized when configured) Universal Relaybase macOS DMG via Tauri.
 # Apple credentials: ops-dashboard Release settings, scripts/deploy/apple-signing.env, or .env
 set -euo pipefail
 
@@ -54,15 +54,25 @@ if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && -z "${TAURI_SIGNING_PRIVATE_KE
   fi
 fi
 
+echo "→ rustup targets aarch64-apple-darwin x86_64-apple-darwin"
+if ! command -v rustup >/dev/null 2>&1; then
+  echo "✗ rustup not found on PATH"
+  exit 1
+fi
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
 echo "→ pnpm install"
 "$PNPM" install
 
 export APPLE_SIGNING_IDENTITY
 export APPLE_TEAM_ID
 
-TAURI_ARGS=(build --bundles app,dmg)
+CARGO_TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
+BUNDLE_ROOT="$CARGO_TARGET/universal-apple-darwin/release/bundle"
+export CARGO_TARGET_DIR="$CARGO_TARGET"
+TAURI_ARGS=(build --target universal-apple-darwin --bundles app,dmg)
 if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
-  echo "→ pnpm run tauri build (sign + notarize)"
+  echo "→ pnpm run tauri build --target universal-apple-darwin (sign + notarize)"
   unset APPLE_ID APPLE_PASSWORD APPLE_APP_SPECIFIC_PASSWORD NOTARYTOOL_PROFILE
   if [[ -n "${APPLE_API_ISSUER:-}" && -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_PATH:-}" ]]; then
     export APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_PATH
@@ -70,7 +80,7 @@ if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
     export APPLE_ID APPLE_PASSWORD
   fi
 else
-  echo "→ pnpm run tauri build (sign only; notarization skipped)"
+  echo "→ pnpm run tauri build --target universal-apple-darwin (sign only; notarization skipped)"
   unset APPLE_ID APPLE_PASSWORD APPLE_APP_SPECIFIC_PASSWORD APPLE_API_KEY APPLE_API_ISSUER APPLE_API_KEY_PATH NOTARYTOOL_PROFILE
 fi
 
@@ -91,16 +101,22 @@ fi
 "$PNPM" exec tauri "${TAURI_ARGS[@]}"
 
 echo "→ Bundle output:"
-find src-tauri/target/release/bundle -maxdepth 3 -type f \( -name '*.dmg' -o -name '*.app' \) 2>/dev/null | head -20 || true
+find "$BUNDLE_ROOT" -maxdepth 3 -type f \( -name '*.dmg' -o -name '*.app' \) 2>/dev/null | head -20 || true
 
 VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
-DMG="$(find src-tauri/target/release/bundle/dmg -name "Relaybase_${VERSION}_*.dmg" 2>/dev/null | head -1)"
+APP_BIN="$BUNDLE_ROOT/macos/Relaybase.app/Contents/MacOS/Relaybase"
+if [[ -f "$APP_BIN" ]]; then
+  echo "→ lipo -info $APP_BIN"
+  lipo -info "$APP_BIN" || true
+fi
+
+DMG="$(find "$BUNDLE_ROOT/dmg" -name "Relaybase_${VERSION}_*.dmg" 2>/dev/null | head -1)"
 if [[ -z "$DMG" || ! -f "$DMG" ]]; then
-  DMG="$(find src-tauri/target/release/bundle/dmg -name '*.dmg' 2>/dev/null | head -1)"
+  DMG="$(find "$BUNDLE_ROOT/dmg" -name '*.dmg' 2>/dev/null | head -1)"
 fi
 
 if [[ -z "$DMG" || ! -f "$DMG" ]]; then
-  echo "✗ No .dmg found under src-tauri/target/release/bundle/dmg"
+  echo "✗ No .dmg found under $BUNDLE_ROOT/dmg"
   exit 1
 fi
 

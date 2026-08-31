@@ -49,10 +49,14 @@ export const CF_INSTALL_TOKEN_PERMISSIONS = [
 /** Human-readable OAuth scopes shown during Setup → Authorize with Cloudflare. */
 export const CF_OAUTH_INSTALL_SCOPES = [
   "D1 Write",
-  "Secrets Store Write",
   "Workers R2 Storage Write",
   "Workers Scripts Write",
 ] as const;
+
+/** Human-readable OAuth scope shown during Setup → I forgot my passtoken. */
+export const CF_OAUTH_RECOVER_SCOPES = ["Secrets Store Write"] as const;
+
+export type CfOAuthPurpose = "install" | "recover";
 
 /** Max wait after opening the Cloudflare authorize URL before treating as cancelled. */
 export const CF_OAUTH_AUTHORIZE_WAIT_MS = 3 * 60 * 1000;

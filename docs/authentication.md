@@ -256,7 +256,7 @@ While no owner exists: `setup-admin`, `init-db`, `migrate-db`.
 
 ### Cloudflare OAuth account proof (`X-Cf-Access-Token`)
 
-`init-db` and `migrate-db` also accept a Cloudflare OAuth access token that can GET this Worker's `CF_ACCOUNT_ID` account (same proof as `POST /console/reset-admin`). Desktop install and Worker upgrade already hold this token — an existing owner must not block migrate-db.
+`init-db` and `migrate-db` also accept a Cloudflare OAuth access token that can GET this Worker's `CF_ACCOUNT_ID` account (install client). Desktop install and Worker upgrade already hold this token — an existing owner must not block migrate-db. `POST /console/reset-admin` uses the narrower passtoken-updater client (`secrets-store.write`) and proves Secrets Store access on that account.
 
 ### Owner session (scoped Bearer)
 
@@ -290,7 +290,7 @@ Handlers: `server/src/routes/console/owner-auth.ts`.
 | O6 | Owner mail 401 | Silent mail refresh retry |
 | O6b | Owner console 401 | Console gate overlay |
 | O7 | Rotate passtoken | Logged-in owner; revokes all sessions; write new `owner-passtoken` |
-| O8 | Forgot passtoken | CF OAuth → `/console/reset-admin` → write new `owner-passtoken` |
+| O8 | Forgot passtoken | CF OAuth (Secrets Store) → `/console/reset-admin` → write new `owner-passtoken` |
 | T1 | Provision mobile password | Owner → `/console/addresses/mobile-password` |
 | T2 | Teammate first login | `/mobile/config` → keyring → `invitedReady` |
 | T3 | Teammate daily boot | Silent `team_unlock` → `invitedReady` |

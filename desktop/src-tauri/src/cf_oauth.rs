@@ -75,7 +75,11 @@ fn account_id_from_memory(
 async fn refresh_oauth_session(
     mut session: crate::secrets::CfOAuthSession,
 ) -> Result<crate::secrets::CfOAuthSession, String> {
-    let client_id = fetch_oauth_client_id().await?;
+    let client_id = if session.client_id.trim().is_empty() {
+        fetch_oauth_client_id("install").await?
+    } else {
+        session.client_id.clone()
+    };
     let http = reqwest::Client::new();
     let refresh_body = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("grant_type", "refresh_token")
@@ -116,13 +120,19 @@ async fn refresh_oauth_session(
     session.access_token = access_token;
     session.refresh_token = next_refresh;
     session.access_expires_at = new_iso_expires(expires_in);
+    session.client_id = client_id;
     set_cf_oauth_session(session.clone());
     Ok(session)
 }
 
-async fn fetch_oauth_client_id() -> Result<String, String> {
+async fn fetch_oauth_client_id(purpose: &str) -> Result<String, String> {
+    let purpose = if purpose == "recover" {
+        "recover"
+    } else {
+        "install"
+    };
     let url = format!(
-        "{}/api/v1/oauth/config",
+        "{}/api/v1/oauth/config?purpose={purpose}",
         crate::console_base_url().trim_end_matches('/')
     );
     let res = reqwest::Client::new()

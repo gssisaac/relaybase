@@ -10,8 +10,8 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 
 | Piece | Role |
 |-------|------|
-| **Cloudflare OAuth client** | One public PKCE client on the operator’s CF account. Grant types: `authorization_code` + **`refresh_token`**. Token auth: **None (PKCE)**. Redirect URI: `https://console.relaybase.xyz/oauth/callback`. |
-| **`console.relaybase.xyz`** | Public `/api/v1/oauth/config` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `strum-relaybase-ops`. |
+| **Cloudflare OAuth clients** | Two public PKCE clients on the operator’s CF account. Grant types: `authorization_code` + **`refresh_token`**. Token auth: **None (PKCE)**. Shared redirect URI: `https://console.relaybase.xyz/oauth/callback`. **Relaybase** (`CF_OAUTH_CLIENT_ID`) — Workers / R2 / D1 for install and Worker update. **Relaybase Pass-token Updater** (`CF_OAUTH_PASSTOKEN_CLIENT_ID`) — `secrets-store.write` only for forgot-passtoken reset. |
+| **`console.relaybase.xyz`** | Public `/api/v1/oauth/config?purpose=install\|recover` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `strum-relaybase-ops`. |
 | **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION`). All Cloudflare API / Worker `X-Cf-Access-Token` calls go through `require_cf_oauth()` in `desktop/src-tauri/src/cf_oauth.rs` — memory if the access token has ≥60s left, otherwise the Cloudflare token endpoint. App restart clears the session. |
 | **`~/.relaybase`** | Stores only the resolved CF account id (from the OAuth response). OAuth access/refresh tokens are **not** persisted — they live in Tauri memory only. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
 
@@ -21,17 +21,18 @@ No KV, no D1, and no Relaybase console **session** is required to connect Cloudf
 
 ## OAuth client setup (Cloudflare dashboard)
 
-Create **Manage account → OAuth clients → Create client**:
+Create **Manage account → OAuth clients → Create client** (two clients):
 
-| Setting | Value |
-|---------|--------|
-| Client name | e.g. `Relaybase` |
-| Response type | `Code` |
-| Grant type | `Authorization Code` **and** `Refresh Token` |
-| Token authentication | **None (PKCE)** |
-| Redirect URL | `https://console.relaybase.xyz/oauth/callback` |
+| Setting | Install (`Relaybase`) | Recover (`Relaybase Pass-token Updater`) |
+|---------|------------------------|------------------------------------------|
+| Response type | `Code` | `Code` |
+| Grant type | `Authorization Code` **and** `Refresh Token` | same |
+| Token authentication | **None (PKCE)** | **None (PKCE)** |
+| Redirect URL | `https://console.relaybase.xyz/oauth/callback` | same |
 
-**Scopes** (Developer Platform — use the dashboard IDs, hyphenated `.write`):
+Public clients need a `cloudflare_oauth_client_publisher=…` TXT on the `client_uri` domain (one record per client). Cloudflare polls until verified.
+
+**Install scopes** (Developer Platform — hyphenated `.write` IDs):
 
 | Scope ID | Purpose |
 |----------|---------|
@@ -39,7 +40,7 @@ Create **Manage account → OAuth clients → Create client**:
 | `workers-r2.write` | R2 buckets |
 | `d1.write` | D1 create + bindings on deploy |
 
-`secrets-store.write` is **not** required for auto-install. Worker secrets go through `PUT /workers/scripts/{name}/secrets` (`workers-scripts.write`). The console may still advertise `secrets-store.write` for an existing OAuth client; extra scopes are harmless.
+**Recover scopes:** `secrets-store.write` only. The Worker proves the token can `GET /accounts/{CF_ACCOUNT_ID}/secrets_store/stores`. Worker secrets still go through `PUT /workers/scripts/{name}/secrets` (`workers-scripts.write`) — recover does not write Cloudflare secrets.
 
 Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query. Cloudflare adds `offline_access` itself when the client has the `refresh_token` grant; requesting unregistered scopes makes dash.cloudflare.com show “Relaybase authorization failed”.
 
@@ -53,18 +54,19 @@ Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query.
 
 ```jsonc
 "vars": {
-  "CF_OAUTH_CLIENT_ID": "<client-id-from-dashboard>",
+  "CF_OAUTH_CLIENT_ID": "<install-client-id>",
+  "CF_OAUTH_PASSTOKEN_CLIENT_ID": "<recover-client-id>",
   "CF_OAUTH_REDIRECT_URI": "https://console.relaybase.xyz/oauth/callback"
 }
 ```
 
-After changing the client id, redeploy `strum-relaybase-console`. No `CF_OAUTH_CLIENT_SECRET` — PKCE public client.
+After changing a client id, redeploy `strum-relaybase-console`. No `CF_OAUTH_CLIENT_SECRET` — PKCE public clients.
 
 **Routes:**
 
 | Route | Purpose |
 |-------|---------|
-| `GET /api/v1/oauth/config` | `{ clientId, redirectUri, scopes }` for the desktop |
+| `GET /api/v1/oauth/config?purpose=install\|recover` | `{ clientId, redirectUri, scopes, purpose }` for the desktop (`install` is the default) |
 | `GET /oauth/callback` | Browser landing; delivers `code` + `state` to the app (see below) |
 
 ---
@@ -80,7 +82,7 @@ Only one Relaybase process can bind `127.0.0.1:32831`. If **Applications/Relayba
 
 Rust:
 
-- `start_cf_oauth` / `complete_cf_oauth` (`desktop/src-tauri/src/lib.rs`) — PKCE authorize + token exchange; writes `CF_OAUTH_SESSION`
+- `start_cf_oauth(purpose)` / `complete_cf_oauth` (`desktop/src-tauri/src/lib.rs`) — PKCE authorize + token exchange; writes `CF_OAUTH_SESSION` (includes the client id used, so refresh stays on that client)
 - Loopback server + `tauri-plugin-deep-link` — complete exchange, emit `cf-oauth-complete` / `cf-oauth-error`
 - `require_cf_oauth` (`desktop/src-tauri/src/cf_oauth.rs`) — only reader for CF commands. Returns `{ access_token, account_id }` from memory, or refreshes when the access token expires within 60s. No session → “Authorize with Cloudflare again”.
 
@@ -96,14 +98,14 @@ OAuth access/refresh tokens are **not** written to `credentials.json` — they l
 |-------|---------|
 | `accountId` | CF account id from the OAuth token response (persisted on disk) |
 
-The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) holds `access_token`, `refresh_token`, `access_expires_at`, `account_id` and is overlaid into IPC credentials for the lifetime of the process.
+The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) holds `access_token`, `refresh_token`, `access_expires_at`, `account_id`, `client_id` and is overlaid into IPC credentials for the lifetime of the process.
 
 ---
 
 ## Settings + setup UX
 
 - **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + owner passtoken copy). No separate install button.
-- **Lost passtoken** — typed unlock fallback → **I forgot my passtoken** (`/setup/recover-admin`). Daily use does not type the passtoken (it lives in OS keyring `owner-passtoken`; Touch ID reads it). Same Cloudflare OAuth as install; after authorization the app calls `POST /console/reset-admin` with the in-memory OAuth access token. The Worker proves that token can GET `/accounts/{CF_ACCOUNT_ID}` and re-issues a passtoken once (download + write `owner-passtoken`). No console email recovery.
+- **Lost passtoken** — typed unlock fallback → **I forgot my passtoken** (`/setup/recover-admin`). Daily use does not type the passtoken (it lives in OS keyring `owner-passtoken`; Touch ID reads it). Uses the **Pass-token Updater** OAuth client (`secrets-store.write` only). After authorization the app calls `POST /console/reset-admin` with the in-memory OAuth access token. The Worker proves that token can list Secrets Store on `CF_ACCOUNT_ID` (GET `/accounts/{id}` is a fallback) and re-issues a passtoken once (download + write `owner-passtoken`). No console email recovery.
 - **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe).
 - **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). The token is not written to disk.
 - **Settings → Cloudflare** — dashboard-first Enable email API dialog. OAuth is only requested if the user chooses paste & push and there is no install token in memory.
@@ -128,7 +130,7 @@ Errors use `explainCfOAuthError()`.
 | Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx`, `use-enable-email-api-dialog.tsx` (also opened from Domains → Refresh from Cloudflare when `GET /console/zones` reports the Worker token missing) |
 | Zone list (Refresh from Cloudflare) | `GET /console/zones` (`server/src/routes/console/zones.ts`) via `listCloudflareZones` — Worker `CF_API_TOKEN`, not desktop OAuth |
 | Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
-| Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `POST /console/reset-admin` (OAuth `GET /accounts/{CF_ACCOUNT_ID}`) |
+| Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `desktopStartCfOAuth("recover")` → `POST /console/reset-admin` (Secrets Store on `CF_ACCOUNT_ID`) |
 
 ---
 
@@ -136,7 +138,7 @@ Errors use `explainCfOAuthError()`.
 
 | Symptom | Likely cause |
 |---------|----------------|
-| `invalid_scope` or Cloudflare “authorization failed” | Scope strings in `/config` don’t match the OAuth client (use hyphenated `.write` IDs; do not request `offline_access` or KV). |
+| `invalid_scope` or Cloudflare “authorization failed” | Scope strings in `/config` don’t match that purpose’s OAuth client (install must not request `secrets-store.write`; recover must request only `secrets-store.write`). Do not request `offline_access` or KV. |
 | Browser “Finishing connection…” but app stays **Not connected** | `tauri dev` without loopback listener — restart desktop after pulling; ensure port **32831** is free. |
 | `Token endpoint did not return a refresh_token` | Missing `refresh_token` grant or `offline_access` on authorize — fixed in code (connection succeeds with access token only); enable **Refresh Token** grant on the client for auto-refresh. |
 | `relaybase://` does nothing | Expected in dev; loopback should succeed. In production, install the bundled `.app` so the URL scheme is registered. |

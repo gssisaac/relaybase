@@ -29,10 +29,12 @@ const NEEDED: { title: string; body: string; note?: string }[] = [
     title: "D1 Write",
     body: "Creates three databases in your account: one for product data (domains, addresses, settings, audiences, broadcasts), one for the activity log you see in the dashboard, and one so you can search incoming mail quickly. Install creates the empty databases; the Worker fills them in after it is running.",
   },
+];
+
+const RECOVER_NEEDED: { title: string; body: string; note?: string }[] = [
   {
     title: "Secrets Store Write",
-    body: "Shown on Cloudflare’s consent screen because it is part of the permission list we request. Install does not use it. Worker secrets such as the admin token are set with Workers Scripts Write.",
-    note: "not used",
+    body: "Proves you can edit Secrets Store on the Cloudflare account that already has this Worker. We do not create or change secrets. After that check, the Worker re-issues your owner passtoken once.",
   },
 ];
 
@@ -46,10 +48,14 @@ const NOT_NEEDED = [
 export function CfOauthInstallDetailsSheet({
   open,
   onOpenChange,
+  variant = "install",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  variant?: "install" | "recover";
 }) {
+  const isRecover = variant === "recover";
+  const needed = isRecover ? RECOVER_NEEDED : NEEDED;
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -57,10 +63,15 @@ export function CfOauthInstallDetailsSheet({
         className="h-full w-full max-w-[560px] gap-0 overflow-hidden p-0 sm:max-w-[560px]"
       >
         <SheetHeader className="shrink-0 border-b border-border/60 pr-12">
-          <SheetTitle>Why we ask for these permissions</SheetTitle>
+          <SheetTitle>
+            {isRecover
+              ? "Why we ask for this permission"
+              : "Why we ask for these permissions"}
+          </SheetTitle>
           <SheetDescription>
-            Install Relaybase in your Cloudflare account — not send or read
-            mail.
+            {isRecover
+              ? "Reset your owner passtoken — not install, send, or read mail."
+              : "Install Relaybase in your Cloudflare account — not send or read mail."}
           </SheetDescription>
         </SheetHeader>
 
@@ -68,10 +79,21 @@ export function CfOauthInstallDetailsSheet({
           <article className="space-y-8 px-5 py-6">
             <header className="space-y-3">
               <p className="text-[15px] leading-relaxed text-foreground">
-                These permissions let Relaybase install into{" "}
-                <span className="font-medium">your</span> Cloudflare account.
-                After setup, the Worker, mailbox storage, and databases live
-                there — not on Relaybase servers.
+                {isRecover ? (
+                  <>
+                    This permission lets Relaybase confirm you own the
+                    Cloudflare account that already has this Worker, then
+                    re-issue your owner passtoken. It does not install or
+                    update anything.
+                  </>
+                ) : (
+                  <>
+                    These permissions let Relaybase install into{" "}
+                    <span className="font-medium">your</span> Cloudflare
+                    account. After setup, the Worker, mailbox storage, and
+                    databases live there — not on Relaybase servers.
+                  </>
+                )}
               </p>
               <div className="rounded-lg border border-border/70 bg-muted/40 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -90,7 +112,7 @@ export function CfOauthInstallDetailsSheet({
                 What each permission is for
               </h3>
               <ol className="space-y-5">
-                {NEEDED.map((item, index) => (
+                {needed.map((item, index) => (
                   <li key={item.title} className="flex gap-3">
                     <span
                       className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums text-foreground"
@@ -137,11 +159,25 @@ export function CfOauthInstallDetailsSheet({
 
             <footer className="space-y-4 border-t border-border/60 pt-5">
               <p className="text-sm leading-relaxed text-muted-foreground">
-                In short, this is permission to put Relaybase in your Cloudflare
-                account — a Worker, mailbox storage, and databases.{" "}
-                <span className="text-foreground">
-                  It is not permission to send mail or change your domain.
-                </span>
+                {isRecover ? (
+                  <>
+                    In short, this is permission to prove you own the
+                    Cloudflare account — one Secrets Store check.{" "}
+                    <span className="text-foreground">
+                      It is not permission to install, send mail, or change
+                      your domain.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    In short, this is permission to put Relaybase in your
+                    Cloudflare account — a Worker, mailbox storage, and
+                    databases.{" "}
+                    <span className="text-foreground">
+                      It is not permission to send mail or change your domain.
+                    </span>
+                  </>
+                )}
               </p>
               <Card size="sm" className="border-border bg-card">
                 <CardHeader className="pb-0">

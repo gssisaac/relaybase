@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { downloadBlob } from "@/lib/attachments/download";
 import {
   CF_OAUTH_AUTHORIZE_WAIT_MS,
+  CF_OAUTH_RECOVER_SCOPES,
   desktopOpenExternal,
   desktopRegisterWorkerWithConsole,
   desktopSaveDownloadFile,
@@ -27,9 +28,9 @@ import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCl
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 
 /**
- * Forgot-passtoken recovery. Authorizes Cloudflare, then calls
- * `/console/reset-admin` with the in-memory OAuth access token. The Worker
- * re-issues the owner passtoken once.
+ * Forgot-passtoken recovery. Authorizes the Secrets Store Write OAuth
+ * client, then calls `/console/reset-admin` with the in-memory access
+ * token. The Worker re-issues the owner passtoken once.
  */
 export function RecoverAdminPanel() {
   const router = useRouter();
@@ -139,7 +140,7 @@ export function RecoverAdminPanel() {
     setIssueError(null);
     startOauthWaitTimer();
     try {
-      const start = await desktopStartCfOAuth();
+      const start = await desktopStartCfOAuth("recover");
       await desktopOpenExternal(start.authorizeUrl);
     } catch (err) {
       finishOauthWait({ error: explainCfOAuthError(err) });
@@ -273,6 +274,8 @@ export function RecoverAdminPanel() {
               onAuthorize={() => void handleAuthorize()}
               onCancelWait={handleCancelOauthWait}
               authorizeLabel="Authorize with Cloudflare"
+              scopes={CF_OAUTH_RECOVER_SCOPES}
+              detailsVariant="recover"
             />
             {issueError ? <DesktopErrorBanner error={issueError} /> : null}
           </div>

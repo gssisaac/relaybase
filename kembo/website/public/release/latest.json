@@ -1,11 +1,19 @@
 {
-  "version": "0.1.0",
-  "notes": "# Relaybase 0.1.0\n\n## Highlights\n- First signed macOS desktop release\n- Cloudflare Email Routing Worker install from the Mac app\n- Inbox, compose, and multi-domain account management\n\n## Changes\n- Initial Tauri shell with notarized DMG distribution\n- Auto-update artifacts hosted on download.relaybase.xyz",
-  "pub_date": "2026-08-19T09:27:25.980Z",
+  "version": "0.1.1",
+  "notes": "# Relaybase 0.1.1\n\n## Highlights\n- macOS installer is now a Universal binary (Apple Silicon and Intel)\n\n## Changes\n- One signed DMG / updater archive for both Mac architectures",
+  "pub_date": "2026-08-31T03:51:17.000Z",
   "platforms": {
+    "darwin-universal": {
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVCWGtCckZGU000anliRmsrMWx1a0IxM2xsZUNaZGgxbmRKQTFxS05oeFNEUVdQdGVlaVFJeXIyUmR3QXczMU1MM2NkVWNKTk1DTm44WFR3dG9JN0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTQ4Mjc5CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKa1hWNGJPQ244emp6YmZLRG5RNURPMnhtUkltTy9WT01JaTZDYThkNnZhaTFOZHE4TWlmT0dBelVHbXYxb2NQeDNWQWdNVEFEMlM2VTE0SmFDWGFkQXc9PQo="
+    },
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.0.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlFDeDFoczRoS2FWVFhHbnpmYmVWbVE5Ri91eTdobkZYNGh0d2NKcy9zcmxHWjM3NE5hSCtYMitPWWl3Ti9LRDJ2cUFHTXU1cHNZajF6VXdYVmErWEFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MTMxNjE3CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKOTVpRjIvTFFQUnhrUFp3NXd1dUtzZXNMMTd5WjJYdnRoWm4xbXRHQWc1SjlrZTBPWmg5eGYzSW50SVkvRFhyVkZqdS9Bdk0xSWhTaWFLVE90NjVsQUE9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVCWGtCckZGU000anliRmsrMWx1a0IxM2xsZUNaZGgxbmRKQTFxS05oeFNEUVdQdGVlaVFJeXIyUmR3QXczMU1MM2NkVWNKTk1DTm44WFR3dG9JN0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTQ4Mjc5CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKa1hWNGJPQ244emp6YmZLRG5RNURPMnhtUkltTy9WT01JaTZDYThkNnZhaTFOZHE4TWlmT0dBelVHbXYxb2NQeDNWQWdNVEFEMlM2VTE0SmFDWGFkQXc9PQo="
+    },
+    "darwin-x86_64": {
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVCWGtCckZGU000anliRmsrMWx1a0IxM2xsZUNaZGgxbmRKQTFxS05oeFNEUVdQdGVlaVFJeXIyUmR3QXczMU1MM2NkVWNKTk1DTm44WFR3dG9JN0EwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MTQ4Mjc5CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKa1hWNGJPQ244emp6YmZLRG5RNURPMnhtUkltTy9WT01JaTZDYThkNnZhaTFOZHE4TWlmT0dBelVHbXYxb2NQeDNWQWdNVEFEMlM2VTE0SmFDWGFkQXc9PQo="
     }
   }
 }

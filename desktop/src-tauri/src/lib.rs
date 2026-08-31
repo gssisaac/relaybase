@@ -535,11 +535,21 @@ struct OAuthStartResult {
 /// (clientId, redirectUri, scopes) from the console — no Relaybase session
 /// required — mints a `state`, builds the Cloudflare authorize URL, and
 /// remembers the state for CSRF verification in `complete_cf_oauth`.
+///
+/// `purpose`: `"install"` (default — Workers / R2 / D1) or `"recover"`
+/// (Secrets Store Write only, forgot-passtoken).
 #[tauri::command]
-async fn start_cf_oauth(app: tauri::AppHandle) -> Result<OAuthStartResult, String> {
+async fn start_cf_oauth(
+    app: tauri::AppHandle,
+    purpose: Option<String>,
+) -> Result<OAuthStartResult, String> {
     ensure_oauth_loopback(app).await?;
+    let purpose = match purpose.as_deref().map(str::trim) {
+        Some("recover") => "recover",
+        _ => "install",
+    };
     let url = format!(
-        "{}/api/v1/oauth/config",
+        "{}/api/v1/oauth/config?purpose={purpose}",
         console_base_url().trim_end_matches('/')
     );
     let http = reqwest::Client::new();
@@ -568,7 +578,11 @@ async fn start_cf_oauth(app: tauri::AppHandle) -> Result<OAuthStartResult, Strin
     let scopes = value
         .get("scopes")
         .and_then(|v| v.as_str())
-        .unwrap_or("d1.write secrets-store.write workers-r2.write workers-scripts.write")
+        .unwrap_or(if purpose == "recover" {
+            "secrets-store.write"
+        } else {
+            "d1.write workers-r2.write workers-scripts.write"
+        })
         .to_string();
 
     let state = Uuid::new_v4().to_string();
@@ -711,6 +725,7 @@ async fn complete_cf_oauth_inner(
         refresh_token: refresh_token.clone(),
         access_expires_at: expires_at.clone(),
         account_id: account_id.clone().unwrap_or_default(),
+        client_id: inflight.client_id.clone(),
     });
 
     let mut creds = load_credentials()?.unwrap_or_default();

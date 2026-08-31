@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
+import { DownloadCtaLabel } from "@/components/download-cta-label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
@@ -48,7 +49,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-3">
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
-            {siteConfig.beta.cta}
+            <DownloadCtaLabel />
             <ArrowRight data-icon="inline-end" />
           </Button>
         </div>

@@ -7,6 +7,7 @@ import {
   MonitorSmartphone,
 } from "lucide-react";
 
+import { DownloadCtaLabel } from "@/components/download-cta-label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
@@ -40,7 +41,7 @@ export function Hero() {
 
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-              {siteConfig.beta.cta}
+              <DownloadCtaLabel />
               <ArrowRight data-icon="inline-end" />
             </Button>
           </div>

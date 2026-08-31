@@ -49,7 +49,12 @@ export const siteConfig = {
   beta: {
     from: "beta@relaybase.xyz",
     note: "We will email a welcome note and a personal download link",
-    cta: "Download app (Beta)",
+    /**
+     * Mac-only until Windows ships. Drop "Mac" from the label and keep
+     * `ctaBadge` (or remove it) when a Windows build is ready.
+     */
+    cta: "Download Mac App",
+    ctaBadge: "Beta",
   },
   /**
    * Clarifies that Relaybase Pro is a one-time software license and that

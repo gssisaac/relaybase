@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DownloadCtaLabel } from "@/components/download-cta-label";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
 import { ResourceArticle } from "@/components/resource-article";
@@ -157,7 +158,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                   </p>
                 </div>
                 <Button size="lg" render={<Link href={siteConfig.getStartedPath} />}>
-                  {siteConfig.beta.cta}
+                  <DownloadCtaLabel />
                 </Button>
               </div>
             </div>

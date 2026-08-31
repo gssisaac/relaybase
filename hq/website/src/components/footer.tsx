@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { DownloadCtaLabel } from "@/components/download-cta-label";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
 
@@ -28,7 +29,7 @@ export function Footer() {
           </p>
 
           <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-            {siteConfig.beta.cta}
+            <DownloadCtaLabel />
           </Button>
 
           <div className="flex flex-wrap justify-center gap-4 text-sm">

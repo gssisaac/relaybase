@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 
+import { DownloadCtaLabel } from "@/components/download-cta-label";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trackCtaClick } from "@/lib/analytics";
@@ -96,7 +97,7 @@ export function BetaForm() {
           </>
         ) : (
           <>
-            {siteConfig.beta.cta}
+            <DownloadCtaLabel />
             <ArrowRight data-icon="inline-end" />
           </>
         )}

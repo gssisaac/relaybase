@@ -56,8 +56,6 @@ export async function POST(req: Request) {
         return await handleResetPassword(req, env);
       case "worker/register":
         return await handleWorkerRegister(req, env);
-      case "recovery-token":
-        return await handleRecoveryToken(req, env);
       case "logout":
         return handleLogout();
       default:
@@ -182,27 +180,4 @@ async function handleWorkerRegister(
   const body = await readJson<{ workerUrl?: string }>(req);
   await registerWorker(getDb(env), session.accountId, body.workerUrl ?? "");
   return json({ ok: true });
-}
-
-/**
- * Issues a one-time recovery token for ADMIN_TOKEN reset. The console admin
- * must be logged in; the token is delivered by email and later presented to
- * the customer Worker's /console/recover-admin endpoint (signed by
- * RECOVERY_SIGNING_SECRET — see lib/recovery.ts).
- */
-async function handleRecoveryToken(
-  req: Request,
-  env: CloudflareEnv,
-): Promise<Response> {
-  const secret = assertEnv(env, "CONSOLE_SESSION_SECRET");
-  const session = await sessionFromReq(req, secret);
-  if (!session) return json({ error: "Unauthorized" }, 401);
-  const token = await createRecoveryToken(
-    getDb(env),
-    session.accountId,
-    "admin_token",
-    15 * 60,
-  );
-  const devMode = !env.SMTP_FROM;
-  return json({ ok: true, devToken: devMode ? token : undefined });
 }

@@ -17,23 +17,17 @@ const LEGACY_STORE_IDS = ["email-sender", "flare-email-sender"] as const;
 const SETTINGS_FILE = "settings.json";
 
 /**
- * Operator config for the Relaybase product worker. Only the bits the
- * operator dashboard needs to reach the worker and authorize calls live
- * here — Cloudflare credentials, DMARC branding, and send logs now live on
- * the product worker (wrangler secrets + D1 `domain_branding` +
- * R2 `sent/_sendlog/*`).
+ * Operator config. HQ admin does not authenticate to the customer Worker.
+ * product_settings may still hold a worker URL for display / public /health.
  */
 export type EmailSenderSettings = {
   /** Product worker URL (e.g. https://relaybase-api.<subdomain>.workers.dev). */
   workerUrl: string;
-  /**
-   * Internal worker bridge token. Must match the worker's `ADMIN_TOKEN`
-   * wrangler secret (set via the desktop install flow).
-   */
-  adminToken: string;
 };
 
 type StoredEmailSenderSettings = EmailSenderSettings & {
+  /** Ignored. HQ no longer stores a customer Worker credential. */
+  adminToken?: string;
   // Legacy fields kept for migration reading only — never written back.
   workerScriptName?: string;
   cloudflareAccountId?: string;
@@ -50,16 +44,14 @@ type StoredEmailSenderSettings = EmailSenderSettings & {
 
 export type EmailSenderSettingsView = {
   workerUrl: string;
-  /** Worker URL + admin token are set (env or stored). */
   configured: boolean;
-  /** Worker accepts the stored admin token. */
+  /** Always false — HQ no longer holds a customer Worker credential. */
   workerLinked: boolean;
 };
 
 function emptySettings(): EmailSenderSettings {
   return {
     workerUrl: "",
-    adminToken: "",
   };
 }
 
@@ -68,7 +60,6 @@ function normalizeStoredSettings(
 ): EmailSenderSettings {
   return {
     workerUrl: raw.workerUrl?.trim().replace(/\/$/, "") ?? "",
-    adminToken: raw.adminToken?.trim() ?? "",
   };
 }
 
@@ -136,7 +127,6 @@ export async function writeEmailSenderSettings(
 ): Promise<string> {
   return writeProductJson(RELAYBASE_STORE_ID, SETTINGS_FILE, {
     workerUrl: settings.workerUrl.trim().replace(/\/$/, ""),
-    adminToken: settings.adminToken.trim(),
   });
 }
 
@@ -147,9 +137,6 @@ export async function mergeEmailSenderSettings(
   const next: EmailSenderSettings = { ...current };
   if (patch.workerUrl !== undefined) {
     next.workerUrl = patch.workerUrl.trim().replace(/\/$/, "");
-  }
-  if (patch.adminToken !== undefined && patch.adminToken.trim()) {
-    next.adminToken = patch.adminToken.trim();
   }
   await writeEmailSenderSettings(next);
   return next;
@@ -168,29 +155,22 @@ export function toEmailSenderSettingsView(
   settings: EmailSenderSettings,
 ): EmailSenderSettingsView {
   const workerUrl = settings.workerUrl.trim();
-  const workerLinked = Boolean(
-    settings.adminToken.trim() && !looksLikeCloudflareApiToken(settings.adminToken),
-  );
   return {
     workerUrl,
-    configured: Boolean(workerUrl && settings.adminToken.trim()),
-    workerLinked,
+    configured: Boolean(workerUrl),
+    workerLinked: false,
   };
 }
 
 export type EmailSenderAdminConfigDetail = EmailSenderSettingsView & {
-  adminToken: string;
   envSources: RelaybaseEnvSources;
 };
 
-/** Full settings for admin UI — includes the admin token for confirmation. */
 export async function getEmailSenderAdminSettingsDetail(): Promise<EmailSenderAdminConfigDetail> {
-  const settings = await readEmailSenderSettings();
   const connection = await getEmailSenderConnectionView();
   const env = readRelaybaseEnvSettings();
   return {
     ...connection,
-    adminToken: settings.adminToken.trim(),
     envSources: env.sources,
   };
 }

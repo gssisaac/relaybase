@@ -32,7 +32,7 @@ const TAB_COPY: Record<
   worker: {
     label: "Worker",
     icon: Server,
-    description: "Routing Worker URL and admin token verification.",
+    description: "Routing Worker URL and owner session verification.",
   },
   "inbound-r2": {
     label: "Inbound R2",

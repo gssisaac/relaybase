@@ -21,7 +21,7 @@ const steps: HowItWorksStep[] = [
     lede: "You install a Worker, a mailbox bucket, and three databases into your Cloudflare account. After that, the app talks to your Worker — not to a Relaybase mail server.",
     body: [
       "There is no Relaybase-hosted mailbox. Setup → Install deploys five resources into your account from the Mac. Mail keeps working if our site is down.",
-      "Authorize runs Wrangler on your machine after Cloudflare OAuth. Manual means you deploy the Worker ZIP yourself and paste the Worker URL plus admin token. Your Cloudflare credential never leaves the Mac. After Verify, inbox, send, search, and /v1 hit your Worker only. console.relaybase.xyz is for account, license, and token recovery — not the mail path. Receive can run on Cloudflare’s free plan; sending is billed by Cloudflare.",
+      "Authorize runs Wrangler on your machine after Cloudflare OAuth. Manual means you deploy the Worker ZIP yourself and paste the Worker URL — the Worker then issues your owner passtoken once. Your Cloudflare credential never leaves the Mac. After Verify, inbox, send, search, and /v1 hit your Worker only. console.relaybase.xyz is for account and license — not the mail path. Receive can run on Cloudflare’s free plan; sending is billed by Cloudflare.",
     ],
     details: [
       {

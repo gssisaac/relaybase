@@ -15,7 +15,7 @@ export const RESOURCE_NAMES = [
     kind: "Worker",
     why: "Your routing + admin API process. Deployed into your Cloudflare account; the Mac app only talks to this URL.",
     detail:
-      "This is the small program Relaybase runs inside your Cloudflare account. It's the brain that handles sending and receiving email, manages your addresses, and talks to the Mac app. The Mac app only ever contacts this one address (your Worker URL) using your admin token — Relaybase's own servers never see your mail.",
+      "This is the small program Relaybase runs inside your Cloudflare account. It's the brain that handles sending and receiving email, manages your addresses, and talks to the Mac app. The Mac app only ever contacts this one address (your Worker URL) using your owner session — Relaybase's own servers never see your mail.",
   },
   {
     name: "relaybase-mailbox",

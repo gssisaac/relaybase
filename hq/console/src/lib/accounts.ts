@@ -145,9 +145,9 @@ export async function listAccountWorkers(
   return rows.map((r) => r.workerUrl);
 }
 
-// --- Recovery tokens (password reset + admin-token recovery) ---
+// --- Recovery tokens (console password reset only) ---
 
-export type RecoveryPurpose = "password" | "admin_token";
+export type RecoveryPurpose = "password";
 
 export async function createRecoveryToken(
   db: Database,

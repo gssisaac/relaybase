@@ -50,7 +50,6 @@ const SAMPLE_CREDENTIALS = {
   accountId: "",
   installToken: "",
   workerUrl: WORKER_URL,
-  adminToken: "",
   workerScriptName: "",
   workerVersion: "",
   relaybaseAccountId: "",

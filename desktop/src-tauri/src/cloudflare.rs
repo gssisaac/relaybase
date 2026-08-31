@@ -357,23 +357,6 @@ pub async fn worker_health_ok(worker_url: &str) -> bool {
     }
 }
 
-pub async fn admin_auth_ok(worker_url: &str, admin_token: &str) -> bool {
-    if admin_token.trim().is_empty() {
-        return false;
-    }
-    let url = format!("{}/console/connect", worker_url.trim_end_matches('/'));
-    let http = reqwest::Client::new();
-    match http
-        .get(&url)
-        .header("Authorization", format!("Bearer {admin_token}"))
-        .send()
-        .await
-    {
-        Ok(res) => res.status().is_success(),
-        Err(_) => false,
-    }
-}
-
 /// Upload a Worker module with R2, optional D1, send_email, and plain-text vars.
 /// `d1_bindings` is `(binding_name, database_uuid)`.
 pub async fn upload_worker_script(

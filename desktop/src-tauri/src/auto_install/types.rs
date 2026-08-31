@@ -29,9 +29,6 @@ pub struct AutoInstallResult {
     /// AUTH_PEPPER just set on the Worker. Held in JS memory only during
     /// setup-admin; never written to ~/.relaybase.
     pub auth_pepper: String,
-    /// Always empty — kept so older JS still deserializes.
-    #[serde(default)]
-    pub admin_token: String,
     pub r2_bucket: String,
     pub account_id: String,
     pub d1_logs_id: String,

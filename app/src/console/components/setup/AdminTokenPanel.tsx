@@ -1,55 +1,37 @@
 "use client";
 
-import { Check, Copy, Info, RefreshCw } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   WORKER_INSTALL_MANIFEST_URL,
   WORKER_INSTALL_ZIP_URL,
   type WorkerInstallManifest,
 } from "@/lib/desktop/bridge";
 
-function generateAdminToken(): string {
-  const bytes = new Uint8Array(24);
+/** Install-only AUTH_PEPPER. Not the owner passtoken. Never persist. */
+function generateAuthPepper(): string {
+  const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
-  return `rb_admin_${hex}`;
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function maskToken(token: string): string {
-  if (token.length <= 12) return "••••••••••••";
-  return `${token.slice(0, 10)}${"•".repeat(18)}${token.slice(-4)}`;
-}
-
-/**
- * Build the full one-shot manual install script: download pre-built bundle +
- * wrangler R2/D1/secret/deploy. No npm install — the ZIP contains worker.js.
- */
-function workerUpdateCommand(token: string, zipUrl: string): string {
-  const escaped = token.replace(/'/g, `'\\''`);
+function workerUpdateCommand(zipUrl: string): string {
   return [
     `curl -L -o relaybase-worker-install.zip '${zipUrl}'`,
     `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
     `cd relaybase-worker-install/relaybase-worker-install || cd relaybase-worker-install`,
     `npx wrangler deploy`,
-    `curl -X POST https://relaybase-api.<subdomain>.workers.dev/console/migrate-db -H 'Authorization: Bearer ${escaped}' -H 'Content-Type: application/json' -d '{}'`,
   ].join("\n");
 }
 
 function fullInstallCommand(
-  token: string,
+  pepper: string,
   zipUrl: string,
   cf?: { accountId: string },
 ): string {
-  const escaped = token.replace(/'/g, `'\\''`);
+  const escaped = pepper.replace(/'/g, `'\\''`);
   const lines = [
     `curl -L -o relaybase-worker-install.zip '${zipUrl}'`,
     `unzip -o relaybase-worker-install.zip -d relaybase-worker-install`,
@@ -59,15 +41,13 @@ function fullInstallCommand(
     `npx wrangler d1 create relaybase-mail`,
     `npx wrangler d1 create relaybase-db`,
     `# paste each database_id into wrangler.toml (REPLACE_WITH_* placeholders)`,
-    `printf '%s' '${escaped}' | npx wrangler secret put ADMIN_TOKEN`,
+    `printf '%s' '${escaped}' | npx wrangler secret put AUTH_PEPPER`,
   ];
   if (cf?.accountId.trim()) {
     const acct = cf.accountId.replace(/'/g, `'\\''`);
     lines.push(`printf '%s' '${acct}' | npx wrangler secret put CF_ACCOUNT_ID`);
   } else {
-    lines.push(
-      `# Optional: CF_ACCOUNT_ID for domain API`,
-    );
+    lines.push(`# Optional: CF_ACCOUNT_ID for domain API`);
     lines.push(
       `# printf '%s' '<account-id>' | npx wrangler secret put CF_ACCOUNT_ID`,
     );
@@ -77,7 +57,7 @@ function fullInstallCommand(
   );
   lines.push(`npx wrangler deploy`);
   lines.push(
-    `curl -X POST https://relaybase-api.<subdomain>.workers.dev/console/init-db -H 'Authorization: Bearer ${escaped}' -H 'Content-Type: application/json' -d '{}'`,
+    `curl -X POST https://relaybase-api.<subdomain>.workers.dev/console/init-db -H 'X-Auth-Pepper: ${escaped}' -H 'Content-Type: application/json' -d '{}'`,
   );
   return lines.join("\n");
 }
@@ -86,21 +66,22 @@ async function copyText(value: string): Promise<void> {
   await navigator.clipboard.writeText(value);
 }
 
-export function AdminTokenPanel({
-  value,
-  onChange,
+/**
+ * Manual install / Worker-update script. AUTH_PEPPER is bootstrap only —
+ * the owner secret the user keeps is the passtoken issued after deploy.
+ */
+export function ManualInstallScriptPanel({
+  onPepperChange,
   cfAccountId,
   variant = "install",
-  allowRotate = true,
 }: {
-  value: string;
-  onChange: (token: string) => void;
+  onPepperChange?: (pepper: string) => void;
   cfAccountId?: string;
   variant?: "install" | "worker-update";
-  allowRotate?: boolean;
 }) {
-  const [copied, setCopied] = useState<"cmd" | "token" | null>(null);
+  const [copied, setCopied] = useState(false);
   const [zipUrl, setZipUrl] = useState(WORKER_INSTALL_ZIP_URL);
+  const [pepper, setPepper] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -120,98 +101,47 @@ export function AdminTokenPanel({
   }, []);
 
   useEffect(() => {
+    if (variant !== "install") return;
+    const next = generateAuthPepper();
+    setPepper(next);
+    onPepperChange?.(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant]);
+
+  useEffect(() => {
     if (!copied) return;
-    const t = window.setTimeout(() => setCopied(null), 2000);
+    const t = window.setTimeout(() => setCopied(false), 2000);
     return () => window.clearTimeout(t);
   }, [copied]);
 
-  function rotate() {
-    onChange(generateAdminToken());
-    setCopied(null);
-  }
-
-  const commandPreview = value
-    ? variant === "worker-update"
-      ? workerUpdateCommand(value, zipUrl)
-      : fullInstallCommand(value, zipUrl, {
-          accountId: cfAccountId ?? "",
-        })
-    : "Generate a token to reveal the full command.";
+  const commandPreview =
+    variant === "worker-update"
+      ? workerUpdateCommand(zipUrl)
+      : pepper
+        ? fullInstallCommand(pepper, zipUrl, {
+            accountId: cfAccountId ?? "",
+          })
+        : "Preparing install command…";
 
   async function copyCommand() {
-    if (!value) return;
+    if (variant === "install" && !pepper) return;
     await copyText(commandPreview);
-    setCopied("cmd");
-  }
-
-  async function copyTokenOnly() {
-    if (!value) return;
-    await copyText(value);
-    setCopied("token");
+    setCopied(true);
   }
 
   return (
     <div className="space-y-3">
       <div>
-        <div className="flex items-center gap-1.5">
-          <p className="text-sm font-medium">Admin token</p>
-          <Popover>
-            <PopoverTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label="Admin token details"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Info className="size-3.5" />
-                </button>
-              }
-            />
-            <PopoverContent align="start" side="bottom" className="max-w-xs">
-              <p className="text-xs text-muted-foreground">
-                Not a Cloudflare API token. Generate one here (or paste a token
-                you already set on the Worker). Copy the full command below, run
-                it in a terminal, then come back and verify with the same token.
-              </p>
-            </PopoverContent>
-          </Popover>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Generate or paste a token, then run the command below.
+        <p className="text-sm font-medium">
+          {variant === "worker-update"
+            ? "Worker update command"
+            : "Full install command"}
         </p>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-          {value ? maskToken(value) : "—"}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            aria-label="Copy admin token"
-            disabled={!value}
-            onClick={() => void copyTokenOnly()}
-          >
-            {copied === "token" ? (
-              <Check className="size-3.5" />
-            ) : (
-              <Copy className="size-3.5" />
-            )}
-          </Button>
-          {allowRotate ? (
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="outline"
-              aria-label={value.trim() ? "Rotate admin token" : "Generate admin token"}
-              onClick={rotate}
-            >
-              <RefreshCw className="size-3.5" />
-            </Button>
-          ) : null}
-        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {variant === "worker-update"
+            ? "Copy the command, deploy, then come back. Schema updates use your owner session — do not put a token in the script."
+            : "Copy the command and run it in a terminal. After deploy, the app issues an owner passtoken — that is what you keep, not a wrangler secret."}
+        </p>
       </div>
 
       <div className="space-y-2 rounded-md border border-border/80 bg-muted/30 p-3">
@@ -226,10 +156,10 @@ export function AdminTokenPanel({
             size="icon-sm"
             variant="outline"
             aria-label="Copy full install command"
-            disabled={!value}
+            disabled={variant === "install" && !pepper}
             onClick={() => void copyCommand()}
           >
-            {copied === "cmd" ? (
+            {copied ? (
               <Check className="size-3.5" />
             ) : (
               <Copy className="size-3.5" />
@@ -242,15 +172,21 @@ export function AdminTokenPanel({
         <p className="text-[11px] text-muted-foreground">
           Pre-built bundle — no <span className="font-mono">npm install</span>.
           After <span className="font-mono">wrangler deploy</span>
-          {variant === "worker-update"
-            ? ", wait a few seconds, then run migrate-db. Do not call init-db."
-            : <>
-                {" "}prints your{" "}
-                <span className="font-mono">*.workers.dev</span> URL, come back and tap
-                &ldquo;I&apos;m done&rdquo;.
-              </>}
+          {variant === "worker-update" ? (
+            ", come back and tap “I'm done”. Use Settings → Update Worker (Recommended) to apply schema."
+          ) : (
+            <>
+              {" "}
+              prints your <span className="font-mono">*.workers.dev</span> URL,
+              come back and tap &ldquo;I&apos;m done&rdquo;. The Worker then
+              issues your passtoken once.
+            </>
+          )}
         </p>
       </div>
     </div>
   );
 }
+
+/** @deprecated Use ManualInstallScriptPanel */
+export const AdminTokenPanel = ManualInstallScriptPanel;

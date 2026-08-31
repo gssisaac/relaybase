@@ -39,7 +39,7 @@ These override older plan drafts (global mobile password, Worker URL login, “a
 
 | Policy | Rule |
 |--------|------|
-| **Auth credential** | Per-account mobile password (12-char alphanumeric). **Not** the desktop admin token. **Not** a single global mobile password. |
+| **Auth credential** | Per-account mobile password (12-char alphanumeric). **Not** the owner passtoken. **Not** a single global mobile password. |
 | **Login fields** | Account email + password only. Users never enter a Worker URL. |
 | **Worker URL** | Baked into the Flutter build as `AppConfig.defaultWorkerUrl` (`https://relaybase-api.gssisaac.worker.dev` for the dogfood build; customer builds bake in the customer's own Worker URL). Change the constant + rebuild to retarget. |
 | **Account scope** | Every `/mobile/*` request is scoped to the authenticated email only. No full mailbox catalog, no “All inboxes”, no account switcher across other addresses. |
@@ -69,7 +69,7 @@ flowchart LR
   Scope --> Mail["Inbox / send / notifications"]
 ```
 
-1. Desktop (admin token) generates or rotates a password for one address via `/console/addresses/mobile-password`.
+1. Desktop (owner console session) generates or rotates a password for one address via `/console/addresses/mobile-password`.
 2. Mobile sends:
    - `Authorization: Bearer {plainPassword}`
    - `X-Account-Email: {email}`
@@ -103,7 +103,7 @@ QR may be removed later; Connect screen must keep working with email + password 
 
 ## Worker HTTP surface (`/mobile/*`)
 
-Mounted as a peer to `/v1/*` (mobile-password auth, not admin token).
+Mounted as a peer to `/v1/*` (mobile-password auth, not owner passtoken).
 
 | Method | Path | Notes |
 |--------|------|-------|
@@ -121,7 +121,7 @@ Mounted as a peer to `/v1/*` (mobile-password auth, not admin token).
 
 Shared mail helpers: `server/src/lib/mail/list-inbox.ts`, `send-message.ts` (also used by `/mail/*`).
 
-Console (admin token):
+Console (owner console access):
 
 | Method | Path | Notes |
 |--------|------|-------|

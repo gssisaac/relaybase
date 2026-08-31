@@ -146,7 +146,7 @@ export function mobileEnabledAddresses(data: MailboxData): MailboxAddress[] {
 /**
  * Merge profile fields (displayName, signature) into a single address record.
  * Used by the team `/mobile/profile` endpoint so a teammate can edit their own
- * identity without an admin token.
+ * identity without an owner session.
  */
 export async function updateAddressProfile(
   db: AppDb,

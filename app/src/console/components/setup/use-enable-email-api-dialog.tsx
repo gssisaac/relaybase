@@ -34,7 +34,6 @@ export type EnableEmailApiOpenOptions = {
   onClose?: () => void;
   accountId?: string;
   workerUrl?: string;
-  adminToken?: string;
   workerScriptName?: string;
 };
 
@@ -179,8 +178,6 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
     "";
   const workerUrl =
     opts.workerUrl?.trim() || credentials?.workerUrl?.trim() || "";
-  const adminToken =
-    opts.adminToken?.trim() || credentials?.adminToken?.trim() || "";
   const workerScriptName =
     opts.workerScriptName?.trim() ||
     credentials?.workerScriptName?.trim() ||
@@ -326,7 +323,6 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
         accountId={accountId}
         workerScriptName={workerScriptName}
         workerUrl={workerUrl}
-        adminToken={adminToken}
         allowSkip={opts.allowSkip}
         onVerified={() => {
           optsRef.current.onVerified?.();

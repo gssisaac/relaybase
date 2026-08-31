@@ -5,7 +5,7 @@ Monorepo for **Relaybase** — domain-scoped transactional email (send + receive
 The repo is split into two service sets:
 
 - **End-user product** (shipped to customers): `app/`, `desktop/`, `mobile/`, `server/`.
-- **HQ operations** (internal, ours): `hq/admin/`, `hq/console/`, `hq/website/`. Cloudflare resources for this set use the `strum-relaybase-*` worker names and D1 `strum-relaybase-ops` (binding `DB`; operator config only — `workerUrl` + `adminToken`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in that D1 — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `owner_sessions`, and plaintext keys locally in `~/.relaybase`.
+- **HQ operations** (internal, ours): `hq/admin/`, `hq/console/`, `hq/website/`. Cloudflare resources for this set use the `strum-relaybase-*` worker names and D1 `strum-relaybase-ops` (binding `DB`; operator config only — optional `workerUrl`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in that D1 — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `owner_sessions`, and plaintext keys locally in `~/.relaybase`.
 
 | Set | Package | Path | Port | Role |
 |-----|---------|------|------|------|
@@ -53,7 +53,7 @@ Inbound path:
 1. Node.js 22 (see `app/.node-version`, `admin/.node-version`)
 2. npm 10.9.2 (`packageManager` in frontend `package.json` files)
 3. Cloudflare account with **Email Sending** enabled and sending domain onboarded
-4. For the **hosted** Relaybase Worker / admin: API token with Email Sending (and Email Routing) as needed. For the **Mac app**, customers self-install via `pnpm pack:worker-install` ZIP + Wrangler — the app only needs Worker URL + admin token.
+4. For the **hosted** Relaybase Worker / admin: API token with Email Sending (and Email Routing) as needed. For the **Mac app**, customers self-install via `pnpm pack:worker-install` ZIP + Wrangler — the app needs Worker URL + owner passtoken session.
 
 ---
 
@@ -65,7 +65,7 @@ Inbound path:
 cd server
 npm install
 cp .dev.vars.example .dev.vars
-# Fill CF_ACCOUNT_ID, CF_API_TOKEN, ADMIN_TOKEN
+# Fill CF_ACCOUNT_ID, CF_API_TOKEN, AUTH_PEPPER
 
 npm run dev          # wrangler dev → http://127.0.0.1:8787
 ```
@@ -175,7 +175,7 @@ cd server
 # Secrets
 npx wrangler secret put CF_ACCOUNT_ID
 npx wrangler secret put CF_API_TOKEN
-npx wrangler secret put ADMIN_TOKEN
+npx wrangler secret put AUTH_PEPPER
 
 npm run deploy    # wrangler deploy
 ```
@@ -201,7 +201,7 @@ Bindings in `server/wrangler.toml`:
 |----------|------|-------------|
 | `CF_ACCOUNT_ID` | secret | Cloudflare account ID |
 | `CF_API_TOKEN` | secret | Token with Email Sending edit |
-| `ADMIN_TOKEN` | secret | Bearer token for `/console/*` and `/mail/*` routes |
+| `AUTH_PEPPER` | secret | Install/hash pepper for owner passtoken (not a login token) |
 | `WORKER_SCRIPT_NAME` | var | Worker name for routing helpers |
 | `INBOUND_BUCKET_NAME` | var | R2 bucket name label |
 
@@ -234,9 +234,9 @@ Routes under `hq/admin/src/relaybase/`:
 | Logs | `/logs` | Send attempt history |
 | Email | `/email`, `/email/compose` | Inbox + manual send (operator) |
 | Branding | `/branding` | Domain display names |
-| Settings | `/settings` | Worker URL + admin token (Cloudflare credentials live on the Worker as wrangler secrets) |
+| Settings | `/settings` | Worker URL + owner session (Cloudflare credentials live on the Worker as wrangler secrets) |
 
-Admin API routes proxy to the Worker (`hq/admin/src/app/api/relaybase/*`) using `ADMIN_TOKEN` from product settings.
+HQ admin no longer authenticates to the customer Worker. Mail and keys are managed from the desktop with an owner passtoken.
 
 ---
 
@@ -269,14 +269,14 @@ curl "$RELAYBASE_URL/health"
 
 ### Console & mail routes
 
-Require `Authorization: Bearer $ADMIN_TOKEN`. Management routes live under `/console/*` and mail operations under `/mail/*`. Operator-only endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/logs`) have been removed from the worker and moved into the admin Next.js server.
+Require an owner **console** or **mail** access token (`POST /console/login` with the passtoken). Management routes live under `/console/*` and mail operations under `/mail/*`. Operator-only endpoints (`/admin/bootstrap`, `/admin/cloudflare`, `/admin/logs`) have been removed from the worker and moved into the admin Next.js server.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/console/keys` | Issue API key (`domain`, `label`) |
 | `GET` | `/console/keys` | List keys (prefix only, not full secret) |
 | `GET` | `/console/ops-logs` | Ops event log (`?limit`, `?status`, `?domain`) |
-| `GET` | `/console/connect` | Desktop self-install probe (admin-token proof) |
+| `GET` | `/console/connect` | Desktop self-install probe (owner console access) |
 | `GET` | `/mail/inbox` | List inbound (`?domain`, `?limit`) |
 | `GET` | `/mail/inbox/:id` | Full inbound message |
 | `POST` | `/mail/inbox/routing` | Route addresses to Worker |
@@ -287,7 +287,7 @@ Issue a key:
 
 ```bash
 curl -X POST "$RELAYBASE_URL/console/keys" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Authorization: Bearer $OWNER_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"domain":"yourdomain.com","label":"billing-service"}'
 ```
@@ -366,7 +366,7 @@ Typical flow: webhook or poll → `GET /v1/inbox/messages/:id` → your app logi
 | Status | Meaning |
 |--------|---------|
 | `400` | Invalid body or domain format |
-| `401` | Missing/invalid admin token or API key |
+| `401` | Missing/invalid owner session or API key |
 | `403` | `from` does not match key domain |
 | `404` | Unknown route or message |
 | `502` | Cloudflare Email Sending API failure |
@@ -405,9 +405,9 @@ Cloudflare project settings:
 
 - Never commit `.dev.vars`, `.env.local`, or real tokens in `data/products/`.
 - Issue one API key per service/domain pair; rotate by re-issuing and updating env.
-- `ADMIN_TOKEN` is operator-only — not for customer apps.
+- Owner passtoken is for the desktop owner only — not for customer apps. Use domain API keys (`/v1/*`) for integrations.
 - Webhook secrets are shown once at registration; verify signatures in production.
-- **HQ operations D1 (`strum-relaybase-ops`) holds operator config only** — product Worker URL + service admin token (`workerUrl`, `adminToken` in `product_settings`). Cloudflare credentials, end-user dashboard auth tokens (`rb-auth-…`), and plaintext API keys are **never** stored there: CF credentials come from the product Worker's wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), tokens and catalog state live in the product Worker's D1 `RELAYBASE_DB`, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault.
+- **HQ operations D1 (`strum-relaybase-ops`) holds operator config only** — optional product Worker URL in `product_settings`. HQ does **not** store a customer Worker credential. Cloudflare credentials and owner passtoken are **never** stored there: CF credentials come from the product Worker's wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), owner sessions live on the product Worker, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault.
 
 ---
 

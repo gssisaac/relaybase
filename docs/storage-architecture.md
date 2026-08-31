@@ -10,7 +10,7 @@
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
 | **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `server/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
-| **Remote** | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared HQ store: `product_settings` (operator `workerUrl` + `adminToken` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[hq-ops-d1.md](./hq-ops-d1.md)**. |
+| **Remote** | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared HQ store: `product_settings` (optional operator `workerUrl` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[hq-ops-d1.md](./hq-ops-d1.md)**. |
 | **Local** | `~/.relaybase` | Credentials, API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login |
 
 Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
@@ -156,7 +156,7 @@ Full design (schema, query safety, sync model, backfill, freshness): **[mailbox-
 ### Forbidden (do not reintroduce)
 
 - Cloudflare KV binding on the product Worker for app data
-- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in HQ ops — the Worker reads them from wrangler secrets; D1 `strum-relaybase-ops` `product_settings` holds only `workerUrl` + `adminToken` (operator config)
+- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in HQ ops — the Worker reads them from wrangler secrets; D1 `strum-relaybase-ops` `product_settings` holds only an optional `workerUrl`
 - End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `strum-relaybase-ops` — owner sessions live in the product Worker's D1 `owner_sessions` (hash-only); plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`
 - Global mobile password (no per-account row) — use the per-account row in D1 `mobile_passwords` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
@@ -175,8 +175,7 @@ Operator config lives in `product_settings` (`service_id=relaybase`, `filename=s
 
 | Field | Purpose |
 |-------|---------|
-| `workerUrl` | Product Worker URL — admin proxies `/console/*` and `/mail/send` here |
-| `adminToken` | Service admin token. Must match the Worker's `ADMIN_TOKEN` wrangler secret. Authorizes admin → product Worker calls only — not license admin. |
+| `workerUrl` | Optional product Worker URL for display / public `/health`. HQ does not call `/console/*` with a stored credential. |
 
 Licenses, console accounts, worker registration, recovery tokens, the legacy waitlist, and public beta invites (`beta_invites`) are the other tables in the same database. The marketing site Worker reads/writes `beta_invites` only. HQ ops is D1 `strum-relaybase-ops` only — no KV.
 

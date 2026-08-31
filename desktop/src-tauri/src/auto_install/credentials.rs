@@ -23,7 +23,6 @@ pub fn merge_into_credentials(
         .or_else(|| (!result.account_id.is_empty()).then(|| result.account_id.clone()))
         .unwrap_or_else(|| existing.account_id.clone());
     next.worker_url = result.worker_url.clone();
-    next.admin_token.clear();
     next.worker_script_name = result.worker_script_name.clone();
     if !result.worker_version.trim().is_empty() {
         next.worker_version = result.worker_version.clone();

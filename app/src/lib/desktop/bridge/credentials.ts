@@ -6,7 +6,6 @@ export type DesktopCredentials = {
   /** Unused IPC leftover. OAuth is `cfOauthAccessToken` only. */
   installToken: string;
   workerUrl: string;
-  adminToken: string;
   workerScriptName: string;
   /** Deployed Worker bundle version (WORKER_VERSION). */
   workerVersion: string;
@@ -52,7 +51,6 @@ export async function desktopSaveRelaybaseAccount(input: {
     accountId: existing?.accountId ?? "",
     installToken: existing?.installToken ?? "",
     workerUrl: existing?.workerUrl ?? "",
-    adminToken: existing?.adminToken ?? "",
     workerScriptName: existing?.workerScriptName ?? "",
     workerVersion: existing?.workerVersion ?? "",
     relaybaseAccountId: input.accountId,
@@ -102,7 +100,6 @@ export async function desktopClearCredentials(): Promise<void> {
     body: JSON.stringify({
       accountId: "",
       workerUrl: "",
-      adminToken: "",
       workerScriptName: "",
       workerVersion: "",
     }),

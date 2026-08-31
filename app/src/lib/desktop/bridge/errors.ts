@@ -398,7 +398,7 @@ export function explainDesktopError(
 /**
  * Error explainer for the Cloudflare OAuth (install token) flow. Intentionally
  * does NOT attach the legacy manual-install links ("Download Worker install
- * ZIP", "Open install setup") or the legacy ADMIN_TOKEN install messaging —
+ * ZIP", "Open install setup") or the retired god-token install messaging —
  * those belong to the deprecated paste-a-token flow, not OAuth. Produces a
  * clean, OAuth-specific message.
  */

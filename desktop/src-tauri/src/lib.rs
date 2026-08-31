@@ -62,8 +62,8 @@ use team_session::{
     TeamSessionStatus, TeamWorkerRequestInput, TeamWorkerRequestOutput,
 };
 use worker::{
-    adopt_worker, install_worker, probe_install, reissue_admin_token as reissue_admin_token_inner,
-    update_worker, InstallResult, ProbeResult, ReissueAdminResult,
+    adopt_worker, install_worker, probe_install,
+    update_worker, InstallResult, ProbeResult,
 };
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -216,16 +216,6 @@ async fn verify_cf_token(
 async fn probe_routing_worker() -> Result<ProbeResult, String> {
     let oauth = require_cf_oauth().await?;
     probe_install(&oauth.account_id, &oauth.access_token).await
-}
-
-#[tauri::command]
-async fn reissue_admin_token() -> Result<ReissueAdminResult, String> {
-    let oauth = require_cf_oauth().await?;
-    let creds = load_credentials()?.unwrap_or_default();
-    let (result, next) =
-        reissue_admin_token_inner(&oauth.account_id, &oauth.access_token, &creds).await?;
-    save_credentials(&next)?;
-    Ok(result)
 }
 
 #[tauri::command]
@@ -442,7 +432,6 @@ async fn rollback_auto_install(
     rollback_all_install(app, oauth.access_token, Some(id), wipe_confirmation).await?;
     if let Ok(Some(mut creds)) = load_credentials() {
         creds.worker_url.clear();
-        creds.admin_token.clear();
         creds.worker_script_name.clear();
         creds.worker_version.clear();
         let _ = save_credentials(&creds);
@@ -454,7 +443,6 @@ async fn rollback_auto_install(
 #[tauri::command]
 async fn init_worker_db_cmd(
     worker_url: String,
-    _admin_token: String,
     clear: bool,
     _wipe_confirmation: Option<String>,
     _account_id: Option<String>,
@@ -480,7 +468,6 @@ async fn init_worker_db_cmd(
 #[tauri::command]
 async fn migrate_worker_db_cmd(
     worker_url: String,
-    _admin_token: String,
 ) -> Result<InitDbResult, String> {
     let cf = cf_oauth_if_present().await?;
     migrate_worker_db(
@@ -1203,7 +1190,6 @@ async fn fetch_connect_with_retry(
 #[tauri::command]
 async fn verify_worker_connection(
     worker_url: String,
-    _admin_token: String,
 ) -> Result<WorkerConnectResult, String> {
     let base = normalize_worker_url(&worker_url)?;
     let token = crate::owner_session::current_console_access_token()
@@ -1304,12 +1290,10 @@ async fn verify_worker_connection(
 #[tauri::command]
 async fn save_worker_connection(
     worker_url: String,
-    admin_token: String,
     worker_script_name: Option<String>,
     worker_version: Option<String>,
 ) -> Result<StoredCredentials, String> {
     let base = normalize_worker_url(&worker_url)?;
-    let _token = admin_token.trim();
     // Prefer merging into existing creds, but never block a successful verify
     // on a legacy/unreadable credentials.json — overwrite with what we know.
     let mut creds = match load_credentials() {
@@ -1320,7 +1304,6 @@ async fn save_worker_connection(
         }
     };
     creds.worker_url = base;
-    creds.admin_token.clear();
     creds.worker_script_name = worker_script_name
         .unwrap_or_default()
         .trim()
@@ -1772,7 +1755,6 @@ pub fn run() {
             save_cache_json,
             verify_cf_token,
             probe_routing_worker,
-            reissue_admin_token,
             adopt_routing_worker,
             install_routing_worker,
             update_routing_worker,

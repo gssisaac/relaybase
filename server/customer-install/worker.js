@@ -6718,20 +6718,21 @@ var schema_exports = {};
 __export(schema_exports, {
   addresses: () => addresses,
   apiKeys: () => apiKeys,
+  appSettings: () => appSettings,
   audienceContacts: () => audienceContacts,
   audienceGroups: () => audienceGroups,
-  authTokens: () => authTokens,
   broadcasts: () => broadcasts,
   domainBranding: () => domainBranding,
   domains: () => domains,
   inboundEvents: () => inboundEvents,
   mobilePasswords: () => mobilePasswords,
   ownerConfig: () => ownerConfig,
+  ownerSessions: () => ownerSessions,
   webhookFails: () => webhookFails,
   webhookSecrets: () => webhookSecrets,
   webhooks: () => webhooks
 });
-var domains, addresses, audienceGroups, audienceContacts, broadcasts, domainBranding, apiKeys, authTokens, mobilePasswords, webhooks, webhookSecrets, webhookFails, ownerConfig, inboundEvents;
+var domains, addresses, audienceGroups, audienceContacts, broadcasts, domainBranding, apiKeys, mobilePasswords, webhooks, webhookSecrets, webhookFails, appSettings, ownerConfig, ownerSessions, inboundEvents;
 var init_schema = __esm({
   "db/app/schema.ts"() {
     "use strict";
@@ -6839,14 +6840,6 @@ var init_schema = __esm({
         index("api_keys_active_idx").on(t.active)
       ]
     );
-    authTokens = sqliteTable("auth_tokens", {
-      id: text("id").primaryKey(),
-      tokenHash: text("token_hash").notNull().unique(),
-      label: text("label"),
-      productId: text("product_id"),
-      tokenPrefix: text("token_prefix").notNull(),
-      createdAt: text("created_at").notNull()
-    });
     mobilePasswords = sqliteTable("mobile_passwords", {
       email: text("email").primaryKey(),
       passwordHash: text("password_hash").notNull(),
@@ -6887,13 +6880,41 @@ var init_schema = __esm({
         index("webhook_fails_expires_idx").on(t.expiresAt)
       ]
     );
+    appSettings = sqliteTable("app_settings", {
+      id: integer("id").primaryKey(),
+      /** NULL = unlimited inbound per domain. Positive = keep newest N inbound. */
+      inboundRetainPerDomain: integer("inbound_retain_per_domain"),
+      updatedAt: text("updated_at").notNull()
+    });
     ownerConfig = sqliteTable("owner_config", {
       id: integer("id").primaryKey(),
       ownerEmail: text("owner_email"),
       workerUrl: text("worker_url"),
-      /** Recovered ADMIN_TOKEN override (wrangler secret still accepted). */
-      adminToken: text("admin_token")
+      /** Salt for the passtoken hash. */
+      passtokenSalt: text("passtoken_salt"),
+      /** sha256(pepper || salt || passtoken). Plaintext is shown once at issue. */
+      passtokenHash: text("passtoken_hash"),
+      passtokenPrefix: text("passtoken_prefix"),
+      passtokenUpdatedAt: text("passtoken_updated_at"),
+      /** Brute-force lockout for POST /console/login. */
+      failedAttempts: integer("failed_attempts").notNull().default(0),
+      lockedUntil: text("locked_until")
     });
+    ownerSessions = sqliteTable(
+      "owner_sessions",
+      {
+        id: text("id").primaryKey(),
+        /** sha256(refresh). Plaintext lives only in the OS keyring. */
+        tokenHash: text("token_hash").notNull().unique(),
+        /** Groups access+refresh issued by one login; reuse of a revoked refresh
+         *  revokes the whole family. */
+        family: text("family").notNull(),
+        label: text("label"),
+        createdAt: text("created_at").notNull(),
+        expiresAt: text("expires_at").notNull()
+      },
+      (t) => [index("owner_sessions_family_idx").on(t.family)]
+    );
     inboundEvents = sqliteTable(
       "inbound_events",
       {
@@ -7759,7 +7780,7 @@ function normalizeCfResponse(raw2) {
     result: null
   };
 }
-var API_BASE, CloudflareClient;
+var API_BASE, CloudflareClient, SendingOnboardApiMissingError;
 var init_cloudflare_client = __esm({
   "src/lib/cloudflare-client.ts"() {
     "use strict";
@@ -7791,7 +7812,12 @@ var init_cloudflare_client = __esm({
           ...init,
           headers: { ...this.tokenHeaders(), ...init?.headers }
         });
-        const raw2 = await res.json();
+        let raw2;
+        try {
+          raw2 = await res.json();
+        } catch {
+          raw2 = { error: `HTTP ${res.status}` };
+        }
         const data = normalizeCfResponse(raw2);
         return { res, data };
       }
@@ -7898,6 +7924,26 @@ var init_cloudflare_client = __esm({
           return this.sendRawEmail({ ...params, fromName });
         }
         return this.sendStructuredEmail(params);
+      }
+      async listZones() {
+        const zones = [];
+        const account = encodeURIComponent(this.accountId);
+        let page = 1;
+        for (; ; ) {
+          const data = await this.request(`/zones?account.id=${account}&per_page=50&page=${page}`);
+          const batch = data.result ?? [];
+          if (batch.length === 0) break;
+          for (const zone of batch) {
+            zones.push({
+              id: zone.id ?? "",
+              name: zone.name ?? "",
+              status: zone.status ?? ""
+            });
+          }
+          if (batch.length < 50) break;
+          page += 1;
+        }
+        return zones;
       }
       async resolveZoneId(domain) {
         const data = await this.request(
@@ -8013,6 +8059,60 @@ var init_cloudflare_client = __esm({
           `/zones/${zoneId}/email/routing/rules/${ruleId}`,
           { method: "DELETE" }
         );
+      }
+      async listSendingSubdomains(zoneId) {
+        const data = await this.request(
+          `/zones/${zoneId}/email/sending/subdomains`
+        );
+        return data.result ?? [];
+      }
+      /**
+       * Onboard or create an Email Sending domain. Official docs only describe
+       * the dashboard flow; this POST is the documented-adjacent list sibling.
+       * Callers must treat 404/405 as "API not available — use the dashboard".
+       */
+      async createSendingSubdomain(zoneId, name) {
+        const path = `/zones/${zoneId}/email/sending/subdomains`;
+        const { res, data } = await this.requestOnce(path, {
+          method: "POST",
+          body: JSON.stringify({ name, enabled: true })
+        });
+        if (res.status === 404 || res.status === 405) {
+          throw new SendingOnboardApiMissingError(res.status);
+        }
+        if (res.ok && data.success) return data.result;
+        throw this.formatCfError(res, data, path, "POST");
+      }
+      async updateSendingSubdomain(zoneId, name, patch) {
+        const path = `/zones/${zoneId}/email/sending/subdomains`;
+        const { res, data } = await this.requestOnce(path, {
+          method: "PATCH",
+          body: JSON.stringify({ name, enabled: patch.enabled })
+        });
+        if (res.status === 404 || res.status === 405) {
+          throw new SendingOnboardApiMissingError(res.status);
+        }
+        if (res.ok && data.success) return data.result;
+        throw this.formatCfError(res, data, path, "PATCH");
+      }
+      /** Email Sending bounce MX on `cf-bounce.{domain}` — apex onboard signal. */
+      async hasSendingBounceMx(zoneId, domain) {
+        const name = `cf-bounce.${domain.trim().toLowerCase()}`;
+        const records = await this.listDnsRecords(zoneId, { type: "MX", name });
+        return records.some((record) => record.type === "MX");
+      }
+    };
+    SendingOnboardApiMissingError = class extends Error {
+      static {
+        __name(this, "SendingOnboardApiMissingError");
+      }
+      status;
+      constructor(status) {
+        super(
+          `Cloudflare Email Sending onboard API is not available (HTTP ${status}). Open Cloudflare \u2192 Email Service \u2192 Email Sending \u2192 Onboard Domain, then Recheck.`
+        );
+        this.name = "SendingOnboardApiMissingError";
+        this.status = status;
       }
     };
   }
@@ -9223,9 +9323,18 @@ async function listMailboxPage(db, filters) {
     unread: Number(unreadResult?.total ?? 0)
   };
 }
-async function mailboxPruneIds(db, kind, domain, keep) {
+async function mailboxPruneIds(db, kind, domain, keep, limit) {
   if (!db || keep <= 0) return [];
   const raw2 = db.$client;
+  if (limit != null && limit > 0) {
+    const rows2 = await raw2.prepare(
+      `SELECT id FROM mailbox_messages
+         WHERE kind = ? AND domain = ?
+         ORDER BY occurred_at DESC, id DESC
+         LIMIT ? OFFSET ?`
+    ).bind(kind, domain, limit, keep).all();
+    return (rows2.results ?? []).map((row) => row.id);
+  }
   const rows = await raw2.prepare(
     `SELECT id FROM mailbox_messages
        WHERE kind = ? AND domain = ?
@@ -11645,46 +11754,6 @@ __name(probeD1Connection, "probeD1Connection");
 // src/lib/auth.ts
 init_app();
 
-// db/app/owner.ts
-init_drizzle_orm();
-init_schema();
-async function getOwnerConfig(db) {
-  if (!db) return { ownerEmail: null, workerUrl: null, adminToken: null };
-  const row = await db.select().from(ownerConfig).where(eq(ownerConfig.id, 1)).get();
-  return {
-    ownerEmail: row?.ownerEmail ?? null,
-    workerUrl: row?.workerUrl ?? null,
-    adminToken: row?.adminToken?.trim() || null
-  };
-}
-__name(getOwnerConfig, "getOwnerConfig");
-async function setOwnerAdminToken(db, adminToken) {
-  if (!db) return;
-  await db.insert(ownerConfig).values({
-    id: 1,
-    adminToken
-  }).onConflictDoUpdate({
-    target: ownerConfig.id,
-    set: { adminToken }
-  }).run();
-}
-__name(setOwnerAdminToken, "setOwnerAdminToken");
-async function setOwnerConfig(db, input) {
-  if (!db) return;
-  await db.insert(ownerConfig).values({
-    id: 1,
-    ownerEmail: input.ownerEmail,
-    workerUrl: input.workerUrl
-  }).onConflictDoUpdate({
-    target: ownerConfig.id,
-    set: {
-      ownerEmail: input.ownerEmail,
-      workerUrl: input.workerUrl
-    }
-  }).run();
-}
-__name(setOwnerConfig, "setOwnerConfig");
-
 // src/lib/crypto.ts
 var API_KEY_PREFIX = "rb_";
 var LEGACY_API_KEY_PREFIX = "fes_";
@@ -11858,6 +11927,512 @@ async function rotateKey(db, id) {
 }
 __name(rotateKey, "rotateKey");
 
+// src/lib/owner-auth.ts
+init_app();
+
+// db/app/owner-sessions.ts
+init_drizzle_orm();
+init_schema();
+async function createOwnerSession(db, input) {
+  if (!db) return;
+  await db.insert(ownerSessions).values({
+    id: input.id,
+    tokenHash: input.tokenHash,
+    family: input.family,
+    label: input.label,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    expiresAt: input.expiresAt
+  }).run();
+}
+__name(createOwnerSession, "createOwnerSession");
+async function findOwnerSessionByHash(db, tokenHash) {
+  if (!db) return null;
+  const row = await db.select().from(ownerSessions).where(eq(ownerSessions.tokenHash, tokenHash)).get();
+  return row ?? null;
+}
+__name(findOwnerSessionByHash, "findOwnerSessionByHash");
+async function deleteOwnerSession(db, id) {
+  if (!db) return;
+  await db.delete(ownerSessions).where(eq(ownerSessions.id, id)).run();
+}
+__name(deleteOwnerSession, "deleteOwnerSession");
+async function deleteOwnerSessionByHash(db, tokenHash) {
+  if (!db) return;
+  await db.delete(ownerSessions).where(eq(ownerSessions.tokenHash, tokenHash)).run();
+}
+__name(deleteOwnerSessionByHash, "deleteOwnerSessionByHash");
+async function deleteAllOwnerSessions(db) {
+  if (!db) return;
+  await db.delete(ownerSessions).run();
+}
+__name(deleteAllOwnerSessions, "deleteAllOwnerSessions");
+
+// db/app/owner.ts
+init_drizzle_orm();
+init_schema();
+async function getOwnerLoginConfig(db) {
+  if (!db) return null;
+  try {
+    const row = await db.select().from(ownerConfig).where(eq(ownerConfig.id, 1)).get();
+    if (!row) return null;
+    return {
+      ownerEmail: row.ownerEmail ?? null,
+      workerUrl: row.workerUrl ?? null,
+      passtokenSalt: row.passtokenSalt ?? null,
+      passtokenHash: row.passtokenHash ?? null,
+      passtokenPrefix: row.passtokenPrefix ?? null,
+      passtokenUpdatedAt: row.passtokenUpdatedAt ?? null,
+      failedAttempts: row.failedAttempts ?? 0,
+      lockedUntil: row.lockedUntil ?? null
+    };
+  } catch {
+    return null;
+  }
+}
+__name(getOwnerLoginConfig, "getOwnerLoginConfig");
+async function ownerIsConfigured(db) {
+  const cfg = await getOwnerLoginConfig(db);
+  return Boolean(cfg?.passtokenHash);
+}
+__name(ownerIsConfigured, "ownerIsConfigured");
+async function setOwnerLogin(db, input) {
+  if (!db) return;
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  await db.insert(ownerConfig).values({
+    id: 1,
+    passtokenSalt: input.passtokenSalt,
+    passtokenHash: input.passtokenHash,
+    passtokenPrefix: input.passtokenPrefix,
+    passtokenUpdatedAt: now,
+    failedAttempts: 0,
+    lockedUntil: null
+  }).onConflictDoUpdate({
+    target: ownerConfig.id,
+    set: {
+      passtokenSalt: input.passtokenSalt,
+      passtokenHash: input.passtokenHash,
+      passtokenPrefix: input.passtokenPrefix,
+      passtokenUpdatedAt: now,
+      failedAttempts: 0,
+      lockedUntil: null
+    }
+  }).run();
+}
+__name(setOwnerLogin, "setOwnerLogin");
+async function setOwnerConfig(db, input) {
+  if (!db) return;
+  await db.insert(ownerConfig).values({
+    id: 1,
+    ownerEmail: input.ownerEmail,
+    workerUrl: input.workerUrl
+  }).onConflictDoUpdate({
+    target: ownerConfig.id,
+    set: {
+      ownerEmail: input.ownerEmail,
+      workerUrl: input.workerUrl
+    }
+  }).run();
+}
+__name(setOwnerConfig, "setOwnerConfig");
+async function incrementFailedLogin(db, lockSeconds) {
+  if (!db) return { failedAttempts: 0, lockedUntil: null };
+  const row = await db.select().from(ownerConfig).where(eq(ownerConfig.id, 1)).get();
+  const next = (row?.failedAttempts ?? 0) + 1;
+  const lockedUntil = next >= 5 ? new Date(Date.now() + lockSeconds * 1e3).toISOString() : null;
+  await db.update(ownerConfig).set({ failedAttempts: next, lockedUntil }).where(eq(ownerConfig.id, 1)).run();
+  return { failedAttempts: next, lockedUntil };
+}
+__name(incrementFailedLogin, "incrementFailedLogin");
+async function resetFailedLogin(db) {
+  if (!db) return;
+  await db.update(ownerConfig).set({ failedAttempts: 0, lockedUntil: null }).where(eq(ownerConfig.id, 1)).run();
+}
+__name(resetFailedLogin, "resetFailedLogin");
+
+// src/lib/owner-tokens.ts
+var PASSTOKEN_PREFIX = "rb_pass_";
+var PASSTOKEN_PREFIX_LENGTH = 10;
+function bytesToBase64Url2(bytes) {
+  const bin = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+__name(bytesToBase64Url2, "bytesToBase64Url");
+function bytesToHex2(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(bytesToHex2, "bytesToHex");
+function generatePasstoken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return `${PASSTOKEN_PREFIX}${bytesToBase64Url2(bytes)}`;
+}
+__name(generatePasstoken, "generatePasstoken");
+function passtokenPrefix(token) {
+  const stripped = token.startsWith(PASSTOKEN_PREFIX) ? token.slice(PASSTOKEN_PREFIX.length) : token;
+  return stripped.slice(0, PASSTOKEN_PREFIX_LENGTH);
+}
+__name(passtokenPrefix, "passtokenPrefix");
+function isValidPasstokenFormat(token) {
+  const trimmed = token.trim();
+  if (!trimmed.startsWith(PASSTOKEN_PREFIX)) return false;
+  return trimmed.length > PASSTOKEN_PREFIX.length + PASSTOKEN_PREFIX_LENGTH;
+}
+__name(isValidPasstokenFormat, "isValidPasstokenFormat");
+function randomSalt() {
+  return bytesToHex2(crypto.getRandomValues(new Uint8Array(16)));
+}
+__name(randomSalt, "randomSalt");
+async function hashPasstoken(pepper, salt, passtoken) {
+  return sha256Hex(`${pepper}:${salt}:${passtoken.trim()}`);
+}
+__name(hashPasstoken, "hashPasstoken");
+var ACCESS_SEPARATOR = ".";
+function base64UrlEncode(input) {
+  return bytesToBase64Url2(new TextEncoder().encode(input));
+}
+__name(base64UrlEncode, "base64UrlEncode");
+function base64UrlDecode(input) {
+  const bin = atob(input.replace(/-/g, "+").replace(/_/g, "/"));
+  return new TextDecoder().decode(
+    Uint8Array.from(bin, (c) => c.charCodeAt(0))
+  );
+}
+__name(base64UrlDecode, "base64UrlDecode");
+async function hmacSha256Hex(key, message) {
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(message));
+  return bytesToHex2(new Uint8Array(sig));
+}
+__name(hmacSha256Hex, "hmacSha256Hex");
+var MAIL_ACCESS_TTL_SECONDS = 60 * 60;
+var CONSOLE_ACCESS_TTL_SECONDS = 30 * 60;
+var MAIL_REFRESH_TTL_SECONDS = 90 * 24 * 60 * 60;
+var CONSOLE_REFRESH_TTL_SECONDS = 30 * 60;
+function sessionLabelForScope(scope, deviceLabel) {
+  const trimmed = deviceLabel.trim() || "desktop";
+  return `${scope}:${trimmed}`;
+}
+__name(sessionLabelForScope, "sessionLabelForScope");
+function scopeFromSessionLabel(label) {
+  if (!label) return null;
+  if (label.startsWith("mail:")) return "mail";
+  if (label.startsWith("console:")) return "console";
+  return null;
+}
+__name(scopeFromSessionLabel, "scopeFromSessionLabel");
+async function signAccessToken(pepper, payload) {
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const sig = await hmacSha256Hex(pepper, body);
+  return `${body}${ACCESS_SEPARATOR}${sig}`;
+}
+__name(signAccessToken, "signAccessToken");
+async function verifyAccessToken(pepper, token) {
+  const parts = token.split(ACCESS_SEPARATOR);
+  if (parts.length !== 2) return null;
+  const [body, sig] = parts;
+  const expected = await hmacSha256Hex(pepper, body);
+  if (sig.length !== expected.length) return null;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) {
+    diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  if (diff !== 0) return null;
+  try {
+    const payload = JSON.parse(base64UrlDecode(body));
+    if (typeof payload.sub !== "string" || typeof payload.exp !== "number" || typeof payload.jti !== "string") {
+      return null;
+    }
+    if (payload.scope !== void 0 && payload.scope !== "mail" && payload.scope !== "console") {
+      return null;
+    }
+    if (payload.exp <= Math.floor(Date.now() / 1e3)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+__name(verifyAccessToken, "verifyAccessToken");
+function generateRefreshToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return bytesToBase64Url2(bytes);
+}
+__name(generateRefreshToken, "generateRefreshToken");
+
+// src/lib/owner-auth.ts
+var LOGIN_LOCK_SECONDS = 5 * 60;
+var MAX_FAILED_ATTEMPTS = 5;
+var OWNER_SUB = "owner";
+function accessTtlForScope(scope) {
+  return scope === "mail" ? MAIL_ACCESS_TTL_SECONDS : CONSOLE_ACCESS_TTL_SECONDS;
+}
+__name(accessTtlForScope, "accessTtlForScope");
+function refreshTtlForScope(scope) {
+  return scope === "mail" ? MAIL_REFRESH_TTL_SECONDS : CONSOLE_REFRESH_TTL_SECONDS;
+}
+__name(refreshTtlForScope, "refreshTtlForScope");
+function requirePepper(env) {
+  const pepper = env.AUTH_PEPPER?.trim() ?? "";
+  if (!pepper) {
+    return {
+      error: "Worker is missing AUTH_PEPPER. Re-run Setup so the install can set it.",
+      status: 503
+    };
+  }
+  return pepper;
+}
+__name(requirePepper, "requirePepper");
+async function mintScopedAccess(pepper, scope) {
+  const now = Math.floor(Date.now() / 1e3);
+  const expiresIn = accessTtlForScope(scope);
+  const accessPayload = {
+    sub: OWNER_SUB,
+    iat: now,
+    exp: now + expiresIn,
+    jti: crypto.randomUUID(),
+    scope
+  };
+  const accessToken = await signAccessToken(pepper, accessPayload);
+  return { accessToken, expiresIn };
+}
+__name(mintScopedAccess, "mintScopedAccess");
+async function createScopedRefreshSession(db, scope, label) {
+  const refreshToken = generateRefreshToken();
+  const refreshHash = await sha256Hex(refreshToken);
+  const now = /* @__PURE__ */ new Date();
+  const expiresAt = new Date(
+    now.getTime() + refreshTtlForScope(scope) * 1e3
+  ).toISOString();
+  const deviceLabel = label?.trim() || "desktop";
+  await createOwnerSession(db, {
+    id: crypto.randomUUID(),
+    tokenHash: refreshHash,
+    family: crypto.randomUUID(),
+    label: sessionLabelForScope(scope, deviceLabel),
+    expiresAt
+  });
+  return refreshToken;
+}
+__name(createScopedRefreshSession, "createScopedRefreshSession");
+async function setupOwner(env, input) {
+  const db = createAppDb(env.RELAYBASE_DB);
+  if (!db) return { error: "Database not configured", status: 503 };
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
+  if (pepper !== input.pepper.trim()) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  if (await ownerIsConfigured(db)) {
+    return { error: "Owner already configured", status: 409 };
+  }
+  const salt = randomSalt();
+  const passtoken = generatePasstoken();
+  const hash = await hashPasstoken(pepper, salt, passtoken);
+  await setOwnerLogin(db, {
+    passtokenSalt: salt,
+    passtokenHash: hash,
+    passtokenPrefix: passtokenPrefix(passtoken)
+  });
+  return { result: { passtoken } };
+}
+__name(setupOwner, "setupOwner");
+async function loginOwner(env, input) {
+  const db = createAppDb(env.RELAYBASE_DB);
+  if (!db) return { error: "Database not configured", status: 503 };
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
+  const cfg = await getOwnerLoginConfig(db);
+  if (!cfg || !cfg.passtokenHash || !cfg.passtokenSalt) {
+    return { error: "Invalid credentials", status: 401 };
+  }
+  if (cfg.lockedUntil) {
+    const lockedUntilMs = Date.parse(cfg.lockedUntil);
+    if (Number.isFinite(lockedUntilMs) && lockedUntilMs > Date.now()) {
+      return { error: "Too many attempts. Try again later.", status: 429 };
+    }
+  }
+  const passtokenOk = isValidPasstokenFormat(input.passtoken) && await hashPasstoken(pepper, cfg.passtokenSalt, input.passtoken) === cfg.passtokenHash;
+  if (!passtokenOk) {
+    const { failedAttempts } = await incrementFailedLogin(db, LOGIN_LOCK_SECONDS);
+    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+      return { error: "Too many attempts. Try again later.", status: 429 };
+    }
+    return { error: "Invalid credentials", status: 401 };
+  }
+  await resetFailedLogin(db);
+  const mailRefreshToken = await createScopedRefreshSession(
+    db,
+    "mail",
+    input.label ?? null
+  );
+  const consoleRefreshToken = await createScopedRefreshSession(
+    db,
+    "console",
+    input.label ?? null
+  );
+  const { accessToken: mailAccessToken, expiresIn: mailExpiresIn } = await mintScopedAccess(pepper, "mail");
+  return {
+    result: {
+      mailAccessToken,
+      mailRefreshToken,
+      consoleRefreshToken,
+      mailExpiresIn
+    }
+  };
+}
+__name(loginOwner, "loginOwner");
+async function refreshOwner(env, refreshToken, scope) {
+  const db = createAppDb(env.RELAYBASE_DB);
+  if (!db) return { error: "Database not configured", status: 503 };
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
+  const hash = await sha256Hex(refreshToken.trim());
+  const session = await findOwnerSessionByHash(db, hash);
+  if (!session) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  const sessionScope = scopeFromSessionLabel(session.label);
+  if (sessionScope !== null && sessionScope !== scope) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  if (Date.parse(session.expiresAt) <= Date.now()) {
+    await deleteOwnerSession(db, session.id);
+    return { error: "Unauthorized", status: 401 };
+  }
+  await deleteOwnerSession(db, session.id);
+  const cfg = await getOwnerLoginConfig(db);
+  if (!cfg?.passtokenHash) {
+    return { error: "Unauthorized", status: 401 };
+  }
+  const newRefresh = generateRefreshToken();
+  const newHash = await sha256Hex(newRefresh);
+  const now = /* @__PURE__ */ new Date();
+  const expiresAt = new Date(
+    now.getTime() + refreshTtlForScope(scope) * 1e3
+  ).toISOString();
+  const label = sessionScope !== null ? session.label : sessionLabelForScope(scope, session.label ?? "desktop");
+  await createOwnerSession(db, {
+    id: crypto.randomUUID(),
+    tokenHash: newHash,
+    family: session.family,
+    label,
+    expiresAt
+  });
+  const { accessToken, expiresIn } = await mintScopedAccess(pepper, scope);
+  return {
+    result: {
+      accessToken,
+      refreshToken: newRefresh,
+      expiresIn,
+      scope
+    }
+  };
+}
+__name(refreshOwner, "refreshOwner");
+async function logoutOwner(env, refreshToken) {
+  const db = createAppDb(env.RELAYBASE_DB);
+  if (!db) return;
+  const hash = await sha256Hex(refreshToken.trim());
+  await deleteOwnerSessionByHash(db, hash);
+}
+__name(logoutOwner, "logoutOwner");
+async function rotatePasstoken(env) {
+  const db = createAppDb(env.RELAYBASE_DB);
+  if (!db) return { error: "Database not configured", status: 503 };
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
+  const cfg = await getOwnerLoginConfig(db);
+  if (!cfg?.passtokenHash) return { error: "Unauthorized", status: 401 };
+  const salt = randomSalt();
+  const passtoken = generatePasstoken();
+  const hash = await hashPasstoken(pepper, salt, passtoken);
+  await setOwnerLogin(db, {
+    passtokenSalt: salt,
+    passtokenHash: hash,
+    passtokenPrefix: passtokenPrefix(passtoken)
+  });
+  await deleteAllOwnerSessions(db);
+  return { passtoken };
+}
+__name(rotatePasstoken, "rotatePasstoken");
+async function resetOwner(env, input) {
+  const db = createAppDb(env.RELAYBASE_DB);
+  if (!db) return { error: "Database not configured", status: 503 };
+  const pepperOrErr = requirePepper(env);
+  if (typeof pepperOrErr !== "string") return pepperOrErr;
+  const pepper = pepperOrErr;
+  const expectedAccount = env.CF_ACCOUNT_ID?.trim() ?? "";
+  if (!expectedAccount) {
+    return { error: "Worker is missing CF_ACCOUNT_ID", status: 503 };
+  }
+  const verified = await verifyCfTokenForReset(
+    input.cfAccessToken,
+    expectedAccount
+  );
+  if (!verified.ok) return { error: "Unauthorized", status: 401 };
+  const salt = randomSalt();
+  const passtoken = generatePasstoken();
+  const hash = await hashPasstoken(pepper, salt, passtoken);
+  await setOwnerLogin(db, {
+    passtokenSalt: salt,
+    passtokenHash: hash,
+    passtokenPrefix: passtokenPrefix(passtoken)
+  });
+  await deleteAllOwnerSessions(db);
+  return { passtoken };
+}
+__name(resetOwner, "resetOwner");
+async function verifyCfTokenAccount(token, expectedAccount) {
+  const bearer = token.trim();
+  const expected = expectedAccount.trim();
+  if (!bearer || !expected) return { ok: false };
+  try {
+    const accRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(expected)}`,
+      { headers: { Authorization: `Bearer ${bearer}` } }
+    );
+    const accData = await accRes.json();
+    const id = accData.result?.id?.trim() ?? "";
+    if (!accData.success || id !== expected) return { ok: false };
+    return { ok: true, accountId: expected };
+  } catch {
+    return { ok: false };
+  }
+}
+__name(verifyCfTokenAccount, "verifyCfTokenAccount");
+async function verifyCfTokenSecretsStore(token, expectedAccount) {
+  const bearer = token.trim();
+  const expected = expectedAccount.trim();
+  if (!bearer || !expected) return { ok: false };
+  try {
+    const storeRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(expected)}/secrets_store/stores?per_page=1`,
+      { headers: { Authorization: `Bearer ${bearer}` } }
+    );
+    const storeData = await storeRes.json();
+    if (!storeData.success) return { ok: false };
+    return { ok: true, accountId: expected };
+  } catch {
+    return { ok: false };
+  }
+}
+__name(verifyCfTokenSecretsStore, "verifyCfTokenSecretsStore");
+async function verifyCfTokenForReset(token, expectedAccount) {
+  const store = await verifyCfTokenSecretsStore(token, expectedAccount);
+  if (store.ok) return store;
+  return verifyCfTokenAccount(token, expectedAccount);
+}
+__name(verifyCfTokenForReset, "verifyCfTokenForReset");
+
 // src/lib/auth.ts
 function extractBearerToken(authHeader) {
   if (!authHeader) return null;
@@ -11865,31 +12440,78 @@ function extractBearerToken(authHeader) {
   return match2?.[1]?.trim() ?? null;
 }
 __name(extractBearerToken, "extractBearerToken");
-async function d1AdminToken(env) {
-  try {
-    const db = createAppDb(env.RELAYBASE_DB);
-    if (!db) return null;
-    const config = await getOwnerConfig(db);
-    return config.adminToken;
-  } catch {
-    return null;
-  }
-}
-__name(d1AdminToken, "d1AdminToken");
-async function requireAdmin(c) {
+async function requireOwnerSession(c, scope) {
   const token = extractBearerToken(c.req.header("Authorization"));
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  const secret = c.env.ADMIN_TOKEN?.trim() || null;
-  const fromD1 = await d1AdminToken(c.env);
-  const allowed = [secret, fromD1].filter(Boolean);
-  if (allowed.length === 0 || !allowed.includes(token)) {
+  const pepper = c.env.AUTH_PEPPER?.trim() ?? "";
+  if (!pepper) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const payload = await verifyAccessToken(pepper, token);
+  if (!payload) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (payload.scope !== void 0 && payload.scope !== scope) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (payload.scope === void 0 && scope !== "console") {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  if (db) {
+    const cfg = await getOwnerLoginConfig(db);
+    if (!cfg?.passtokenHash) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+  }
+  return null;
+}
+__name(requireOwnerSession, "requireOwnerSession");
+function requireConsoleSession(c) {
+  return requireOwnerSession(c, "console");
+}
+__name(requireConsoleSession, "requireConsoleSession");
+function requireMailSession(c) {
+  return requireOwnerSession(c, "mail");
+}
+__name(requireMailSession, "requireMailSession");
+async function requirePepperBootstrap(c) {
+  const pepper = c.env.AUTH_PEPPER?.trim() ?? "";
+  if (!pepper) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const provided = c.req.header("X-Auth-Pepper")?.trim() ?? "";
+  if (!provided || provided !== pepper) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   return null;
 }
-__name(requireAdmin, "requireAdmin");
+__name(requirePepperBootstrap, "requirePepperBootstrap");
+async function requireCfAccountProof(c) {
+  const token = c.req.header("X-Cf-Access-Token")?.trim() ?? "";
+  if (!token) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const expected = c.env.CF_ACCOUNT_ID?.trim() ?? "";
+  if (!expected) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  const verified = await verifyCfTokenAccount(token, expected);
+  if (!verified.ok) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  return null;
+}
+__name(requireCfAccountProof, "requireCfAccountProof");
+async function requireSchemaAuth(c, hasOwner) {
+  if (!await requireConsoleSession(c)) return null;
+  if (!await requireCfAccountProof(c)) return null;
+  if (!hasOwner) return requirePepperBootstrap(c);
+  return c.json({ error: "Unauthorized" }, 401);
+}
+__name(requireSchemaAuth, "requireSchemaAuth");
 async function requireApiKey(c) {
   const token = extractBearerToken(c.req.header("Authorization"));
   if (!token) {
@@ -11908,13 +12530,13 @@ init_app();
 init_catalog_audience();
 var consoleAudienceGroups = new Hono2();
 consoleAudienceGroups.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   return c.json({ groups: listGroupSummaries(catalog) });
 });
 consoleAudienceGroups.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -11937,7 +12559,7 @@ consoleAudienceGroups.post("/", async (c) => {
   }
 });
 consoleAudienceGroups.post("/test", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -11965,7 +12587,7 @@ consoleAudienceGroups.post("/test", async (c) => {
   }
 });
 consoleAudienceGroups.get("/:groupId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const detail = getGroupDetail2(catalog, c.req.param("groupId"));
@@ -11973,7 +12595,7 @@ consoleAudienceGroups.get("/:groupId", async (c) => {
   return c.json(detail);
 });
 consoleAudienceGroups.patch("/:groupId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -11994,7 +12616,7 @@ consoleAudienceGroups.patch("/:groupId", async (c) => {
   }
 });
 consoleAudienceGroups.delete("/:groupId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   try {
     await deleteAudienceGroup(createAppDb(c.env.RELAYBASE_DB), c.req.param("groupId"));
@@ -12005,7 +12627,7 @@ consoleAudienceGroups.delete("/:groupId", async (c) => {
   }
 });
 consoleAudienceGroups.get("/:groupId/contacts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const detail = getGroupDetail2(catalog, c.req.param("groupId"));
@@ -12013,7 +12635,7 @@ consoleAudienceGroups.get("/:groupId/contacts", async (c) => {
   return c.json({ contacts: detail.contacts });
 });
 consoleAudienceGroups.post("/:groupId/contacts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -12034,7 +12656,7 @@ consoleAudienceGroups.post("/:groupId/contacts", async (c) => {
   }
 });
 consoleAudienceGroups.delete("/:groupId/contacts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const contactId = c.req.query("id")?.trim();
   if (!contactId) return c.json({ error: "id is required" }, 400);
@@ -12051,7 +12673,7 @@ consoleAudienceGroups.delete("/:groupId/contacts", async (c) => {
   }
 });
 consoleAudienceGroups.post("/:groupId/sync", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   try {
     const result = await syncAudienceGroup(
@@ -12066,7 +12688,7 @@ consoleAudienceGroups.post("/:groupId/sync", async (c) => {
   }
 });
 consoleAudienceGroups.get("/:groupId/progress", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const catalog = await readAudienceCatalog(createAppDb(c.env.RELAYBASE_DB));
   const progress = getGroupProgress(catalog, c.req.param("groupId"));
@@ -12074,1931 +12696,11 @@ consoleAudienceGroups.get("/:groupId/progress", async (c) => {
   return c.json(progress);
 });
 
-// src/routes/console/auth-tokens.ts
-init_app();
-
-// db/app/auth-tokens.ts
-init_drizzle_orm();
-init_schema();
-function rowToRecord2(row) {
-  return {
-    id: row.id,
-    label: row.label,
-    productId: row.productId,
-    tokenPrefix: row.tokenPrefix,
-    createdAt: row.createdAt
-  };
-}
-__name(rowToRecord2, "rowToRecord");
-async function createAuthTokenRow(db, input) {
-  if (!db) return;
-  await db.insert(authTokens).values({
-    id: input.id,
-    tokenHash: input.tokenHash,
-    label: input.label,
-    productId: input.productId,
-    tokenPrefix: input.tokenPrefix,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  }).run();
-}
-__name(createAuthTokenRow, "createAuthTokenRow");
-async function findAuthTokenByHash(db, tokenHash) {
-  if (!db) return null;
-  const row = await db.select().from(authTokens).where(eq(authTokens.tokenHash, tokenHash)).get();
-  return row ? rowToRecord2(row) : null;
-}
-__name(findAuthTokenByHash, "findAuthTokenByHash");
-async function listAuthTokens(db) {
-  if (!db) return [];
-  const rows = await db.select().from(authTokens).orderBy(desc(authTokens.createdAt)).all();
-  return rows.map(rowToRecord2);
-}
-__name(listAuthTokens, "listAuthTokens");
-async function revokeAuthTokenRow(db, id) {
-  if (!db) return false;
-  const result = await db.delete(authTokens).where(eq(authTokens.id, id)).run();
-  return result.meta.changes > 0;
-}
-__name(revokeAuthTokenRow, "revokeAuthTokenRow");
-
-// src/lib/auth-tokens.ts
-var AUTH_TOKEN_PREFIX = "rb-auth-";
-var LEGACY_AUTH_TOKEN_PREFIX = "rb-admin-";
-var TOKEN_PREFIX_LENGTH = 8;
-function stripAuthTokenPrefix(token) {
-  if (token.startsWith(AUTH_TOKEN_PREFIX)) {
-    return token.slice(AUTH_TOKEN_PREFIX.length);
-  }
-  if (token.startsWith(LEGACY_AUTH_TOKEN_PREFIX)) {
-    return token.slice(LEGACY_AUTH_TOKEN_PREFIX.length);
-  }
-  return token;
-}
-__name(stripAuthTokenPrefix, "stripAuthTokenPrefix");
-function authTokenPrefix(token) {
-  const stripped = stripAuthTokenPrefix(token);
-  return stripped.slice(0, TOKEN_PREFIX_LENGTH);
-}
-__name(authTokenPrefix, "authTokenPrefix");
-function isValidAuthTokenFormat(token) {
-  const trimmed = token.trim();
-  if (!trimmed.startsWith(AUTH_TOKEN_PREFIX) && !trimmed.startsWith(LEGACY_AUTH_TOKEN_PREFIX)) {
-    return false;
-  }
-  return stripAuthTokenPrefix(trimmed).length > TOKEN_PREFIX_LENGTH;
-}
-__name(isValidAuthTokenFormat, "isValidAuthTokenFormat");
-function generateAuthToken() {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  return `${AUTH_TOKEN_PREFIX}${hex}`;
-}
-__name(generateAuthToken, "generateAuthToken");
-async function createAuthToken(db, params) {
-  const token = generateAuthToken();
-  const tokenHash = await sha256Hex(token);
-  const id = crypto.randomUUID();
-  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
-  const tokenPrefix = authTokenPrefix(token);
-  await createAuthTokenRow(db, {
-    id,
-    tokenHash,
-    label: params.label?.trim() || null,
-    productId: params.productId?.trim() || null,
-    tokenPrefix
-  });
-  return {
-    record: {
-      id,
-      label: params.label?.trim() || null,
-      productId: params.productId?.trim() || null,
-      tokenPrefix,
-      createdAt
-    },
-    token
-  };
-}
-__name(createAuthToken, "createAuthToken");
-async function listAuthTokens2(db) {
-  return listAuthTokens(db);
-}
-__name(listAuthTokens2, "listAuthTokens");
-async function findAuthToken(db, token) {
-  if (!isValidAuthTokenFormat(token)) return null;
-  const tokenHash = await sha256Hex(token.trim());
-  return findAuthTokenByHash(db, tokenHash);
-}
-__name(findAuthToken, "findAuthToken");
-async function revokeAuthToken(db, id) {
-  return revokeAuthTokenRow(db, id);
-}
-__name(revokeAuthToken, "revokeAuthToken");
-
-// src/routes/console/auth-tokens.ts
-var consoleAuthTokens = new Hono2();
-consoleAuthTokens.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  try {
-    const { record, token } = await createAuthToken(createAppDb(c.env.RELAYBASE_DB), {
-      label: body.label,
-      productId: body.productId
-    });
-    return c.json(
-      {
-        id: record.id,
-        token,
-        label: record.label,
-        productId: record.productId,
-        tokenPrefix: record.tokenPrefix,
-        createdAt: record.createdAt,
-        message: "Auth token issued \u2014 copy it now; it will not be shown again."
-      },
-      201
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create auth token";
-    return c.json({ error: message }, 400);
-  }
-});
-consoleAuthTokens.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const tokens = await listAuthTokens2(createAppDb(c.env.RELAYBASE_DB));
-  return c.json({ tokens });
-});
-consoleAuthTokens.post("/verify", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  const token = body.token?.trim();
-  if (!token) return c.json({ error: "token is required" }, 400);
-  const record = await findAuthToken(createAppDb(c.env.RELAYBASE_DB), token);
-  if (!record) return c.json({ valid: false }, 200);
-  return c.json({
-    valid: true,
-    token: {
-      id: record.id,
-      label: record.label,
-      productId: record.productId,
-      tokenPrefix: record.tokenPrefix,
-      createdAt: record.createdAt
-    }
-  });
-});
-consoleAuthTokens.delete("/:id", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const id = c.req.param("id");
-  const revoked = await revokeAuthToken(createAppDb(c.env.RELAYBASE_DB), id);
-  if (!revoked) return c.json({ error: "Auth token not found" }, 404);
-  return c.json({ ok: true });
-});
-
-// src/routes/console/broadcasts.ts
-init_cloudflare_api_hints();
-init_app();
-init_catalog_broadcasts();
-var consoleBroadcasts = new Hono2();
-consoleBroadcasts.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const broadcasts2 = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
-  const domain = c.req.query("domain")?.trim().toLowerCase();
-  const filtered = domain ? broadcasts2.filter((b) => b.domain === domain) : broadcasts2;
-  return c.json({ broadcasts: filtered });
-});
-consoleBroadcasts.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  try {
-    const broadcast = await createBroadcastDraft(createAppDb(c.env.RELAYBASE_DB), {
-      id: body.id,
-      groupIds: body.groupIds ?? [],
-      from: body.from,
-      subject: body.subject,
-      body: body.body
-    });
-    return c.json({ broadcast }, 201);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed";
-    return c.json({ error: message }, 400);
-  }
-});
-consoleBroadcasts.get("/:broadcastId", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const detail = await getBroadcastDetail(
-    createAppDb(c.env.RELAYBASE_DB),
-    c.req.param("broadcastId")
-  );
-  if (!detail) return c.json({ error: "Broadcast not found" }, 404);
-  return c.json(detail);
-});
-consoleBroadcasts.patch("/:broadcastId", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  try {
-    const broadcast = await updateBroadcastDraft2(
-      createAppDb(c.env.RELAYBASE_DB),
-      c.req.param("broadcastId"),
-      body
-    );
-    return c.json({ broadcast });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed";
-    return c.json({ error: message }, 400);
-  }
-});
-consoleBroadcasts.post("/:broadcastId/send", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body = {};
-  try {
-    body = await c.req.json();
-  } catch {
-  }
-  try {
-    const broadcast = await sendBroadcast(
-      c.env,
-      c.req.param("broadcastId"),
-      body
-    );
-    return c.json({ broadcast });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed";
-    const body2 = cloudflareSendErrorBody(message);
-    return c.json(body2, body2.code ? 403 : 400);
-  }
-});
-consoleBroadcasts.get("/:broadcastId/progress", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const broadcasts2 = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
-  const broadcast = broadcasts2.find(
-    (b) => b.id === c.req.param("broadcastId")
-  );
-  if (!broadcast) return c.json({ error: "Broadcast not found" }, 404);
-  return c.json(getBroadcastProgress(broadcast));
-});
-
-// src/routes/console/connect.ts
-init_email_send();
-
-// src/lib/r2-usage.ts
-var MAX_LIST_PAGES = 20;
-async function measureInboundR2Usage(bucket) {
-  if (!bucket) return null;
-  try {
-    let objectCount = 0;
-    let totalBytes = 0;
-    let cursor;
-    let truncated = false;
-    for (let page = 0; page < MAX_LIST_PAGES; page++) {
-      const listed = await bucket.list({ limit: 1e3, cursor });
-      for (const object of listed.objects) {
-        objectCount += 1;
-        totalBytes += object.size;
-      }
-      if (!listed.truncated) {
-        truncated = false;
-        break;
-      }
-      cursor = listed.cursor;
-      if (page === MAX_LIST_PAGES - 1) truncated = true;
-    }
-    return { objectCount, totalBytes, truncated };
-  } catch (error) {
-    console.error("Mailbox R2 usage failed", error);
-    return null;
-  }
-}
-__name(measureInboundR2Usage, "measureInboundR2Usage");
-
-// src/routes/console/connect.ts
-var CF_API = "https://api.cloudflare.com/client/v4";
-async function probeCfApiTokenValid(token) {
-  try {
-    const res = await fetch(`${CF_API}/zones?per_page=1`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json();
-    return data.success === true;
-  } catch {
-    return false;
-  }
-}
-__name(probeCfApiTokenValid, "probeCfApiTokenValid");
-var consoleConnect = new Hono2();
-async function checkInboundR2(bucket) {
-  try {
-    await bucket.list({ limit: 1 });
-    return true;
-  } catch (error) {
-    console.error("Inbound R2 check failed", error);
-    return false;
-  }
-}
-__name(checkInboundR2, "checkInboundR2");
-consoleConnect.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const r2Configured = await checkInboundR2(c.env.INBOUND);
-  const apiToken = c.env.CF_API_TOKEN?.trim() ?? "";
-  const cfApiTokenSet = Boolean(apiToken);
-  const [usage, d1, cfApiTokenValid] = await Promise.all([
-    r2Configured ? measureInboundR2Usage(c.env.INBOUND) : Promise.resolve(null),
-    probeD1Connection(
-      c.env.RELAYBASE_LOGS,
-      c.env.RELAYBASE_MAIL,
-      c.env.RELAYBASE_DB,
-      c.env.CF_ACCOUNT_ID,
-      c.env.CF_API_TOKEN
-    ),
-    cfApiTokenSet ? probeCfApiTokenValid(apiToken) : Promise.resolve(false)
-  ]);
-  return c.json({
-    ok: true,
-    product: "relaybase",
-    version: c.env.WORKER_VERSION?.trim() || "unknown",
-    workerScriptName: c.env.WORKER_SCRIPT_NAME || "relaybase-api",
-    // CF account id (from the CF_ACCOUNT_ID secret). Surfaced so the desktop
-    // can display/manage the server token without a separate OAuth connection
-    // or manual entry.
-    accountId: c.env.CF_ACCOUNT_ID?.trim() || "",
-    inbound: {
-      r2Configured,
-      bucketName: c.env.INBOUND_BUCKET_NAME || "relaybase-mailbox",
-      usage
-    },
-    d1,
-    // Worker has a CF_API_TOKEN secret (domain / routing / DNS API).
-    cfApiTokenSet,
-    // Secret is present and Cloudflare accepted a Zone Read probe.
-    cfApiTokenValid,
-    emailBindingConfigured: emailBindingConfigured(c.env)
-  });
-});
-
-// db/migrations.ts
-var APP_0000 = `CREATE TABLE \`domains\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`domain\` text NOT NULL,
-	\`created_at\` text NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX \`domains_domain_unique\` ON \`domains\` (\`domain\`);
---> statement-breakpoint
-CREATE TABLE \`addresses\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`email\` text NOT NULL,
-	\`domain\` text NOT NULL,
-	\`display_name\` text,
-	\`signature\` text,
-	\`inbound_enabled\` integer DEFAULT 1 NOT NULL,
-	\`mobile_enabled\` integer DEFAULT 1 NOT NULL,
-	\`created_at\` text NOT NULL,
-	FOREIGN KEY (\`domain\`) REFERENCES \`domains\`(\`id\`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX \`addresses_email_unique\` ON \`addresses\` (\`email\`);
---> statement-breakpoint
-CREATE INDEX \`addresses_domain_idx\` ON \`addresses\` (\`domain\`);
---> statement-breakpoint
-CREATE TABLE \`api_keys\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`key_hash\` text NOT NULL,
-	\`domain\` text NOT NULL,
-	\`label\` text,
-	\`key_prefix\` text NOT NULL,
-	\`created_at\` text NOT NULL,
-	\`active\` integer DEFAULT 1 NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX \`api_keys_key_hash_unique\` ON \`api_keys\` (\`key_hash\`);
---> statement-breakpoint
-CREATE INDEX \`api_keys_domain_idx\` ON \`api_keys\` (\`domain\`);
---> statement-breakpoint
-CREATE INDEX \`api_keys_active_idx\` ON \`api_keys\` (\`active\`);
---> statement-breakpoint
-CREATE TABLE \`audience_groups\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`name\` text NOT NULL,
-	\`domain\` text NOT NULL,
-	\`created_at\` text NOT NULL,
-	\`default_from\` text,
-	\`data_source_json\` text,
-	\`cron_enabled\` integer DEFAULT 0 NOT NULL,
-	\`cron_interval_minutes\` integer,
-	\`last_sync_at\` text,
-	\`last_sync_status\` text,
-	\`last_sync_error\` text,
-	\`last_sync_count\` integer,
-	\`sync_progress_json\` text,
-	\`sync_history_json\` text
-);
---> statement-breakpoint
-CREATE INDEX \`audience_groups_domain_idx\` ON \`audience_groups\` (\`domain\`);
---> statement-breakpoint
-CREATE TABLE \`audience_contacts\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`email\` text NOT NULL,
-	\`name\` text,
-	\`domain\` text NOT NULL,
-	\`group_id\` text NOT NULL,
-	\`source\` text NOT NULL,
-	\`added_at\` text NOT NULL,
-	FOREIGN KEY (\`group_id\`) REFERENCES \`audience_groups\`(\`id\`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX \`audience_contacts_group_email_idx\` ON \`audience_contacts\` (\`group_id\`,\`email\`);
---> statement-breakpoint
-CREATE INDEX \`audience_contacts_group_idx\` ON \`audience_contacts\` (\`group_id\`);
---> statement-breakpoint
-CREATE INDEX \`audience_contacts_domain_idx\` ON \`audience_contacts\` (\`domain\`);
---> statement-breakpoint
-CREATE TABLE \`auth_tokens\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`token_hash\` text NOT NULL,
-	\`label\` text,
-	\`product_id\` text,
-	\`token_prefix\` text NOT NULL,
-	\`created_at\` text NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX \`auth_tokens_token_hash_unique\` ON \`auth_tokens\` (\`token_hash\`);
---> statement-breakpoint
-CREATE TABLE \`broadcasts\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`subject\` text NOT NULL,
-	\`status\` text NOT NULL,
-	\`created_at\` text NOT NULL,
-	\`domain\` text NOT NULL,
-	\`group_ids_json\` text NOT NULL,
-	\`from_addr\` text,
-	\`body\` text,
-	\`recipient_count\` integer,
-	\`sent_at\` text,
-	\`send_progress_json\` text,
-	\`send_history_json\` text
-);
---> statement-breakpoint
-CREATE INDEX \`broadcasts_domain_idx\` ON \`broadcasts\` (\`domain\`);
---> statement-breakpoint
-CREATE INDEX \`broadcasts_status_idx\` ON \`broadcasts\` (\`status\`);
---> statement-breakpoint
-CREATE INDEX \`broadcasts_created_at_idx\` ON \`broadcasts\` (\`created_at\`);
---> statement-breakpoint
-CREATE TABLE \`domain_branding\` (
-	\`domain\` text PRIMARY KEY NOT NULL,
-	\`dmarc_policy\` text DEFAULT 'quarantine' NOT NULL,
-	\`dmarc_rua\` text NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE \`inbound_events\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`domain\` text NOT NULL,
-	\`event_type\` text NOT NULL,
-	\`created_at\` text NOT NULL,
-	\`payload_json\` text NOT NULL,
-	\`expires_at\` text NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX \`inbound_events_domain_idx\` ON \`inbound_events\` (\`domain\`);
---> statement-breakpoint
-CREATE INDEX \`inbound_events_expires_idx\` ON \`inbound_events\` (\`expires_at\`);
---> statement-breakpoint
-CREATE TABLE \`mobile_passwords\` (
-	\`email\` text PRIMARY KEY NOT NULL,
-	\`password_hash\` text NOT NULL,
-	\`salt\` text NOT NULL,
-	\`updated_at\` text NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE \`owner_config\` (
-	\`id\` integer PRIMARY KEY NOT NULL,
-	\`owner_email\` text,
-	\`worker_url\` text
-);
---> statement-breakpoint
-CREATE TABLE \`webhooks\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`domain\` text NOT NULL,
-	\`url\` text NOT NULL,
-	\`secret_hash\` text NOT NULL,
-	\`created_at\` text NOT NULL,
-	\`active\` integer DEFAULT 1 NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX \`webhooks_domain_idx\` ON \`webhooks\` (\`domain\`);
---> statement-breakpoint
-CREATE INDEX \`webhooks_active_idx\` ON \`webhooks\` (\`active\`);
---> statement-breakpoint
-CREATE TABLE \`webhook_fails\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`webhook_id\` text NOT NULL,
-	\`event_id\` text NOT NULL,
-	\`url\` text NOT NULL,
-	\`failed_at\` text NOT NULL,
-	\`expires_at\` text NOT NULL,
-	FOREIGN KEY (\`webhook_id\`) REFERENCES \`webhooks\`(\`id\`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX \`webhook_fails_webhook_idx\` ON \`webhook_fails\` (\`webhook_id\`);
---> statement-breakpoint
-CREATE INDEX \`webhook_fails_expires_idx\` ON \`webhook_fails\` (\`expires_at\`);
---> statement-breakpoint
-CREATE TABLE \`webhook_secrets\` (
-	\`webhook_id\` text PRIMARY KEY NOT NULL,
-	\`secret\` text NOT NULL,
-	FOREIGN KEY (\`webhook_id\`) REFERENCES \`webhooks\`(\`id\`) ON UPDATE no action ON DELETE cascade
-);`;
-var APP_0001 = `ALTER TABLE \`owner_config\` ADD \`admin_token\` text;`;
-var LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
-  id TEXT PRIMARY KEY,
-  at TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  ok INTEGER NOT NULL,
-  status INTEGER,
-  source TEXT,
-  domain TEXT,
-  from_addr TEXT,
-  to_addr TEXT,
-  subject TEXT,
-  message_id TEXT,
-  error TEXT,
-  key_id TEXT,
-  key_prefix TEXT,
-  meta_json TEXT
-);
-
-CREATE INDEX IF NOT EXISTS ops_log_at_idx ON ops_log (at DESC);
-CREATE INDEX IF NOT EXISTS ops_log_ok_idx ON ops_log (ok, at DESC);
-CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
-CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);`;
-var MAIL_0001 = `CREATE TABLE IF NOT EXISTS mailbox_messages (
-  id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL,
-  domain TEXT NOT NULL,
-  from_email TEXT NOT NULL,
-  from_name TEXT,
-  to_email TEXT NOT NULL,
-  to_emails TEXT,
-  cc_emails TEXT,
-  recipients TEXT NOT NULL,
-  subject TEXT NOT NULL,
-  body_preview TEXT NOT NULL,
-  occurred_at TEXT NOT NULL,
-  message_id TEXT,
-  in_reply_to TEXT,
-  refs TEXT,
-  size INTEGER NOT NULL,
-  attachment_count INTEGER NOT NULL,
-  read_at TEXT,
-  r2_prefix TEXT NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS mailbox_rfc_idx
-  ON mailbox_messages (domain, kind, message_id)
-  WHERE message_id IS NOT NULL;
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS mailbox_list_idx
-  ON mailbox_messages (kind, domain, occurred_at DESC, id DESC);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS mailbox_unread_idx
-  ON mailbox_messages (kind, domain, read_at)
-  WHERE kind = 'inbound' AND read_at IS NULL;
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS mailbox_domain_idx
-  ON mailbox_messages (domain, kind);
---> statement-breakpoint
-CREATE VIRTUAL TABLE IF NOT EXISTS mailbox_fts USING fts5(
-  id UNINDEXED,
-  kind UNINDEXED,
-  domain UNINDEXED,
-  subject,
-  from_email,
-  from_name,
-  to_emails,
-  cc_emails,
-  body_text
-);`;
-var MIGRATIONS = [
-  { target: "app", name: "0000_old_pandemic", sql: APP_0000 },
-  { target: "app", name: "0001_owner_admin_token", sql: APP_0001 },
-  { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
-  { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 }
-];
-function splitMigrationSql(sql4) {
-  return sql4.split("--> statement-breakpoint").map((part) => part.trim()).filter((part) => part.length > 0 && !isCommentOnly(part));
-}
-__name(splitMigrationSql, "splitMigrationSql");
-function isCommentOnly(sql4) {
-  return sql4.split("\n").every((line) => line.trim() === "" || line.trim().startsWith("--"));
-}
-__name(isCommentOnly, "isCommentOnly");
-
-// src/lib/d1-migration-names.ts
-function normalizeMigrationName(name) {
-  return name.trim().replace(/\.sql$/i, "");
-}
-__name(normalizeMigrationName, "normalizeMigrationName");
-function d1ErrorText(error) {
-  if (error instanceof Error) {
-    const cause = error.cause instanceof Error ? error.cause.message : error.cause != null ? String(error.cause) : "";
-    return [error.message, cause, error.toString()].filter(Boolean).join(" ");
-  }
-  if (error && typeof error === "object") {
-    const o = error;
-    return [o.message, o.error, o.cause, JSON.stringify(error)].filter((v) => v != null && String(v).length > 0).join(" ");
-  }
-  return String(error);
-}
-__name(d1ErrorText, "d1ErrorText");
-function isSchemaAlreadyPresentError(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("already exists") || lower.includes("duplicate column");
-}
-__name(isSchemaAlreadyPresentError, "isSchemaAlreadyPresentError");
-
-// src/lib/d1-migrations.ts
-var MIGRATIONS_TABLE = "d1_migrations";
-var PROBE_TABLES = {
-  app: "domains",
-  logs: "ops_log",
-  mail: "mailbox_messages"
-};
-var MIGRATION_TARGETS = ["app", "logs", "mail"];
-var BINDING_MAP = {
-  app: "RELAYBASE_DB",
-  logs: "RELAYBASE_LOGS",
-  mail: "RELAYBASE_MAIL"
-};
-async function tableExists(db, tableName) {
-  try {
-    const row = await db.prepare(
-      `SELECT 1 AS ok FROM sqlite_master WHERE type IN ('table', 'view') AND name = ? LIMIT 1`
-    ).bind(tableName).first();
-    if (row) return true;
-  } catch {
-  }
-  try {
-    await db.prepare(`SELECT 1 AS ok FROM "${tableName}" LIMIT 1`).first();
-    return true;
-  } catch {
-    return false;
-  }
-}
-__name(tableExists, "tableExists");
-function bindingFor(target) {
-  return BINDING_MAP[target];
-}
-__name(bindingFor, "bindingFor");
-function dbFor(env, target) {
-  return env[bindingFor(target)];
-}
-__name(dbFor, "dbFor");
-async function anyProbeTableExists(env) {
-  const results = [];
-  for (const target of MIGRATION_TARGETS) {
-    const binding = bindingFor(target);
-    const db = dbFor(env, target);
-    if (!db) {
-      results.push({ target, binding, present: false });
-      continue;
-    }
-    results.push({
-      target,
-      binding,
-      present: await tableExists(db, PROBE_TABLES[target])
-    });
-  }
-  return {
-    alreadyInitialized: results.some((r) => r.present),
-    results
-  };
-}
-__name(anyProbeTableExists, "anyProbeTableExists");
-async function listAppliedMigrations(db) {
-  try {
-    const rows = await db.prepare(`SELECT name FROM ${MIGRATIONS_TABLE} ORDER BY name`).all();
-    return new Set(
-      (rows.results ?? []).map((r) => normalizeMigrationName(r.name)).filter((n) => n.length > 0)
-    );
-  } catch {
-    return /* @__PURE__ */ new Set();
-  }
-}
-__name(listAppliedMigrations, "listAppliedMigrations");
-async function stampMigration(db, name) {
-  await db.prepare(
-    `INSERT OR IGNORE INTO ${MIGRATIONS_TABLE} (name) VALUES (?)`
-  ).bind(normalizeMigrationName(name)).run();
-}
-__name(stampMigration, "stampMigration");
-async function applyPendingForTarget(env, target) {
-  const binding = bindingFor(target);
-  const db = dbFor(env, target);
-  if (!db) {
-    return {
-      target,
-      binding,
-      configured: false,
-      alreadyInitialized: false,
-      applied: [],
-      skipped: [],
-      error: `D1 binding ${binding} is not configured`
-    };
-  }
-  try {
-    const alreadyInitialized = await tableExists(db, PROBE_TABLES[target]);
-    await db.prepare(
-      `CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)`
-    ).run();
-    const appliedSet = await listAppliedMigrations(db);
-    const targetMigrations = MIGRATIONS.filter((m) => m.target === target);
-    const applied = [];
-    const skipped = [];
-    for (const [index2, migration] of targetMigrations.entries()) {
-      const name = normalizeMigrationName(migration.name);
-      if (appliedSet.has(name)) {
-        skipped.push(name);
-        continue;
-      }
-      const isBaseline = index2 === 0;
-      if (alreadyInitialized && isBaseline) {
-        await stampMigration(db, name);
-        appliedSet.add(name);
-        skipped.push(name);
-        continue;
-      }
-      try {
-        const statements = splitMigrationSql(migration.sql);
-        for (const stmt of statements) {
-          try {
-            const result = await db.prepare(stmt).run();
-            const resultError = result && typeof result === "object" && "error" in result && result.error ? String(result.error) : "";
-            if (resultError && !isSchemaAlreadyPresentError(resultError)) {
-              throw new Error(resultError);
-            }
-          } catch (error) {
-            const message = d1ErrorText(error);
-            if (!isSchemaAlreadyPresentError(message)) {
-              throw error;
-            }
-          }
-        }
-        await stampMigration(db, name);
-        appliedSet.add(name);
-        applied.push(name);
-      } catch (error) {
-        const message = d1ErrorText(error);
-        if (isSchemaAlreadyPresentError(message)) {
-          await stampMigration(db, name);
-          appliedSet.add(name);
-          skipped.push(name);
-          continue;
-        }
-        throw error;
-      }
-    }
-    return {
-      target,
-      binding,
-      configured: true,
-      alreadyInitialized,
-      applied,
-      skipped
-    };
-  } catch (error) {
-    const message = d1ErrorText(error);
-    return {
-      target,
-      binding,
-      configured: true,
-      alreadyInitialized: false,
-      applied: [],
-      skipped: [],
-      error: message
-    };
-  }
-}
-__name(applyPendingForTarget, "applyPendingForTarget");
-async function applyPendingMigrations(env) {
-  const results = [];
-  for (const target of MIGRATION_TARGETS) {
-    results.push(await applyPendingForTarget(env, target));
-  }
-  return {
-    alreadyInitialized: results.some((r) => r.alreadyInitialized),
-    applied: results.flatMap((r) => r.applied),
-    skipped: results.flatMap((r) => r.skipped),
-    results,
-    errors: results.filter((r) => r.error).map((r) => `${r.binding}: ${r.error}`)
-  };
-}
-__name(applyPendingMigrations, "applyPendingMigrations");
-
-// src/routes/console/init-db.ts
-var consoleInitDb = new Hono2();
-consoleInitDb.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const probe = await anyProbeTableExists(c.env);
-  if (probe.alreadyInitialized) {
-    return c.json(
-      {
-        ok: false,
-        error: "DB_ALREADY_INITIALIZED",
-        alreadyInitialized: true,
-        applied: [],
-        skipped: [],
-        results: probe.results
-      },
-      409
-    );
-  }
-  const applied = await applyPendingMigrations(c.env);
-  if (applied.errors.length > 0) {
-    return c.json(
-      {
-        ok: false,
-        alreadyInitialized: false,
-        applied: applied.applied,
-        skipped: applied.skipped,
-        results: applied.results,
-        error: applied.errors.join("; ")
-      },
-      500
-    );
-  }
-  return c.json({
-    ok: true,
-    alreadyInitialized: false,
-    applied: applied.applied,
-    skipped: applied.skipped,
-    results: applied.results
-  });
-});
-
-// src/routes/console/migrate-db.ts
-var consoleMigrateDb = new Hono2();
-consoleMigrateDb.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const applied = await applyPendingMigrations(c.env);
-  if (applied.errors.length > 0) {
-    return c.json(
-      {
-        ok: false,
-        alreadyInitialized: applied.alreadyInitialized,
-        applied: applied.applied,
-        skipped: applied.skipped,
-        results: applied.results,
-        error: applied.errors.join("; ")
-      },
-      500
-    );
-  }
-  return c.json({
-    ok: true,
-    alreadyInitialized: applied.alreadyInitialized,
-    applied: applied.applied,
-    skipped: applied.skipped,
-    results: applied.results
-  });
-});
-
-// src/routes/console/mailbox.ts
-init_cloudflare_config();
-init_app();
-
-// src/lib/inbound-routing.ts
-init_cloudflare_client();
-async function resolveZoneId(cf, domain) {
-  const zoneId = await cf.resolveZoneId(domain);
-  if (!zoneId) {
-    throw new Error(
-      `Could not resolve Cloudflare zone for ${domain} \u2014 ensure the domain is on this account`
-    );
-  }
-  return zoneId;
-}
-__name(resolveZoneId, "resolveZoneId");
-function matchesAddress(rule, address) {
-  return rule.matchers.some(
-    (matcher) => matcher.type === "literal" && matcher.field === "to" && matcher.value?.toLowerCase() === address.toLowerCase()
-  );
-}
-__name(matchesAddress, "matchesAddress");
-var MX_CONFLICT_ERROR_CODE = 2008;
-function isMxConflictError(error) {
-  return error instanceof Error && error.message.includes(`[${MX_CONFLICT_ERROR_CODE}]`);
-}
-__name(isMxConflictError, "isMxConflictError");
-function isCloudflareMxContent(content) {
-  return content.trim().toLowerCase().endsWith("mx.cloudflare.net");
-}
-__name(isCloudflareMxContent, "isCloudflareMxContent");
-async function findConflictingMxRecords(cf, zoneId, domain) {
-  const apexNames = /* @__PURE__ */ new Set([domain.toLowerCase(), "@"]);
-  const mxRecords = await cf.listDnsRecords(zoneId, { type: "MX" });
-  return mxRecords.filter(
-    (record) => apexNames.has(record.name.toLowerCase()) && !isCloudflareMxContent(record.content)
-  ).map((record) => ({
-    id: record.id,
-    name: record.name,
-    content: record.content,
-    priority: record.priority
-  }));
-}
-__name(findConflictingMxRecords, "findConflictingMxRecords");
-async function clearConflictingMxRecords(cf, zoneId, domain) {
-  const conflicts = await findConflictingMxRecords(cf, zoneId, domain);
-  for (const record of conflicts) {
-    await cf.deleteDnsRecord(zoneId, record.id);
-  }
-  return { removed: conflicts };
-}
-__name(clearConflictingMxRecords, "clearConflictingMxRecords");
-var MxConflictError = class extends Error {
-  static {
-    __name(this, "MxConflictError");
-  }
-  domain;
-  zoneId;
-  mxConflicts;
-  constructor(domain, zoneId, mxConflicts) {
-    super(
-      `Non-Cloudflare MX records exist for ${domain}. Remove them (or approve removal) to enable Email Routing.`
-    );
-    this.name = "MxConflictError";
-    this.domain = domain;
-    this.zoneId = zoneId;
-    this.mxConflicts = mxConflicts;
-  }
-};
-async function ensureInboundRouting(cf, domain, entries, workerScriptName, opts = {}) {
-  const zoneId = await resolveZoneId(cf, domain);
-  const routing = await cf.getEmailRoutingSettings(zoneId);
-  if (!routing.enabled) {
-    try {
-      await cf.enableEmailRouting(zoneId);
-    } catch (error) {
-      if (!isMxConflictError(error)) throw error;
-      if (opts.forceMxResolve) {
-        await clearConflictingMxRecords(cf, zoneId, domain);
-        await cf.enableEmailRouting(zoneId);
-      } else {
-        const mxConflicts = await findConflictingMxRecords(cf, zoneId, domain);
-        throw new MxConflictError(domain, zoneId, mxConflicts);
-      }
-    }
-  }
-  const existing = await cf.listEmailRoutingRules(zoneId);
-  const rules = [];
-  for (const entry of entries) {
-    const address = entry.address.trim().toLowerCase();
-    if (!address) continue;
-    const receive = entry.inboundEnabled !== false;
-    const action = receive ? { type: "worker", value: [workerScriptName] } : { type: "drop" };
-    const ruleAction = receive ? "worker" : "drop";
-    const ruleName = receive ? `Store ${address} in Worker` : `Drop inbound for ${address}`;
-    const current = existing.find((rule) => matchesAddress(rule, address));
-    if (current) {
-      const updated = await cf.updateEmailRoutingRule(zoneId, current.id, {
-        enabled: true,
-        actions: [action],
-        matchers: [{ type: "literal", field: "to", value: address }]
-      });
-      rules.push({
-        address,
-        ruleId: updated.id,
-        action: ruleAction
-      });
-      continue;
-    }
-    const created = await cf.createEmailRoutingRule(zoneId, {
-      name: ruleName,
-      enabled: true,
-      priority: 0,
-      matchers: [{ type: "literal", field: "to", value: address }],
-      actions: [action]
-    });
-    rules.push({
-      address,
-      ruleId: created.id,
-      action: ruleAction
-    });
-  }
-  return {
-    domain,
-    zoneId,
-    routingEnabled: true,
-    rules
-  };
-}
-__name(ensureInboundRouting, "ensureInboundRouting");
-async function removeInboundWorkerRouting(cf, domain, addresses2) {
-  const zoneId = await resolveZoneId(cf, domain);
-  const existing = await cf.listEmailRoutingRules(zoneId);
-  const targets = new Set(
-    addresses2.map((address) => address.trim().toLowerCase()).filter(Boolean)
-  );
-  const removed = [];
-  for (const address of targets) {
-    const matches = existing.filter((rule) => matchesAddress(rule, address));
-    for (const rule of matches) {
-      await cf.deleteEmailRoutingRule(zoneId, rule.id);
-      removed.push({ address, ruleId: rule.id });
-    }
-  }
-  return { domain, zoneId, removed };
-}
-__name(removeInboundWorkerRouting, "removeInboundWorkerRouting");
-
-// src/routes/console/mailbox.ts
-init_catalog_store();
-
-// db/app/mobile.ts
-init_drizzle_orm();
-init_schema();
-async function getAccountMobileConfig(db, email) {
-  if (!db) return null;
-  const row = await db.select().from(mobilePasswords).where(eq(mobilePasswords.email, email.trim().toLowerCase())).get();
-  if (!row) return null;
-  return {
-    passwordHash: row.passwordHash,
-    salt: row.salt,
-    updatedAt: row.updatedAt
-  };
-}
-__name(getAccountMobileConfig, "getAccountMobileConfig");
-async function setAccountMobileConfig(db, email, config) {
-  if (!db) return;
-  await db.insert(mobilePasswords).values({
-    email: email.trim().toLowerCase(),
-    passwordHash: config.passwordHash,
-    salt: config.salt,
-    updatedAt: config.updatedAt
-  }).onConflictDoUpdate({
-    target: mobilePasswords.email,
-    set: {
-      passwordHash: config.passwordHash,
-      salt: config.salt,
-      updatedAt: config.updatedAt
-    }
-  }).run();
-}
-__name(setAccountMobileConfig, "setAccountMobileConfig");
-async function clearAccountMobileConfig(db, email) {
-  if (!db) return;
-  await db.delete(mobilePasswords).where(eq(mobilePasswords.email, email.trim().toLowerCase())).run();
-}
-__name(clearAccountMobileConfig, "clearAccountMobileConfig");
-
-// src/lib/mobile-config.ts
-function bytesToHex2(bytes) {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-__name(bytesToHex2, "bytesToHex");
-function randomHex(byteLength) {
-  return bytesToHex2(crypto.getRandomValues(new Uint8Array(byteLength)));
-}
-__name(randomHex, "randomHex");
-var PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
-function generateMobilePassword() {
-  const bytes = crypto.getRandomValues(new Uint8Array(12));
-  let out = "";
-  for (let i = 0; i < 12; i++) {
-    out += PASSWORD_ALPHABET[bytes[i] % PASSWORD_ALPHABET.length];
-  }
-  return out;
-}
-__name(generateMobilePassword, "generateMobilePassword");
-function generateMobileSalt() {
-  return randomHex(16);
-}
-__name(generateMobileSalt, "generateMobileSalt");
-async function hashMobilePassword(password, salt) {
-  return sha256Hex(`${salt}:${password.trim()}`);
-}
-__name(hashMobilePassword, "hashMobilePassword");
-function constantTimeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
-__name(constantTimeEqual, "constantTimeEqual");
-async function getAccountMobileConfig2(db, email) {
-  return getAccountMobileConfig(db, email);
-}
-__name(getAccountMobileConfig2, "getAccountMobileConfig");
-async function setAccountMobileConfig2(db, email, config) {
-  await setAccountMobileConfig(db, email, config);
-}
-__name(setAccountMobileConfig2, "setAccountMobileConfig");
-async function clearAccountMobileConfig2(db, email) {
-  await clearAccountMobileConfig(db, email);
-}
-__name(clearAccountMobileConfig2, "clearAccountMobileConfig");
-async function rotateAccountMobileConfig(db, email) {
-  const password = generateMobilePassword();
-  const salt = generateMobileSalt();
-  const passwordHash = await hashMobilePassword(password, salt);
-  const config = {
-    passwordHash,
-    salt,
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  await setAccountMobileConfig2(db, email, config);
-  return { password, config };
-}
-__name(rotateAccountMobileConfig, "rotateAccountMobileConfig");
-function toAccountMobileConfigPublicView(config) {
-  return config ? { hasPassword: true, updatedAt: config.updatedAt } : { hasPassword: false, updatedAt: null };
-}
-__name(toAccountMobileConfigPublicView, "toAccountMobileConfigPublicView");
-
-// src/routes/console/mailbox.ts
-var consoleMailbox = new Hono2();
-consoleMailbox.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
-  return c.json(data);
-});
-consoleMailbox.put("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  const domains2 = Array.isArray(body.domains) ? [
-    ...new Set(
-      body.domains.filter((d) => typeof d === "string").map(normalizeDomain2).filter(Boolean)
-    )
-  ].sort() : [];
-  const addresses2 = Array.isArray(body.addresses) ? body.addresses.filter(
-    (a) => !!a && typeof a === "object" && typeof a.email === "string" && typeof a.domain === "string"
-  ).map(
-    (a) => normalizeMailboxAddress({
-      email: a.email,
-      domain: a.domain,
-      displayName: typeof a.displayName === "string" ? a.displayName : void 0,
-      inboundEnabled: a.inboundEnabled === false ? false : a.inboundEnabled === true ? true : void 0
-    })
-  ) : [];
-  const data = { domains: domains2, addresses: addresses2 };
-  await writeMailbox(createAppDb(c.env.RELAYBASE_DB), data);
-  return c.json(data);
-});
-consoleMailbox.get("/config", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
-  const domains2 = data.domains;
-  const emailDomain = domains2[0] ?? "";
-  return c.json({
-    emailDomain,
-    domain: emailDomain,
-    domains: domains2,
-    activeDomain: emailDomain || null,
-    registeredAddresses: data.addresses.map((a) => a.email),
-    configured: domains2.length > 0,
-    relaybaseConfigured: true,
-    relaybaseAuthConfigured: true,
-    cloudflareConfigured: true,
-    credentialSource: "integration",
-    usesIntegrationCredentials: true,
-    audienceContacts: [],
-    broadcasts: [],
-    relaybaseWorkerUrl: ""
-  });
-});
-var consoleDomains = new Hono2();
-consoleDomains.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
-  return c.json({ domains: listDomainSummaries(data) });
-});
-consoleDomains.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  try {
-    const data = await addDomain2(createAppDb(c.env.RELAYBASE_DB), body.domain ?? "");
-    const domain = normalizeDomain2(body.domain ?? "");
-    const summaries = listDomainSummaries(data);
-    return c.json({
-      domains: summaries,
-      onboarding: summaries.find((d) => d.domain === domain)?.onboarding ?? null,
-      message: `Added ${domain}.`
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed";
-    return c.json({ error: message }, 400);
-  }
-});
-consoleDomains.delete("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const domain = c.req.query("domain")?.trim();
-  if (!domain) {
-    return c.json({ error: "domain is required" }, 400);
-  }
-  const data = await removeDomain2(createAppDb(c.env.RELAYBASE_DB), domain);
-  return c.json({
-    domains: listDomainSummaries(data),
-    message: "Domain removed"
-  });
-});
-var consoleAddresses = new Hono2();
-consoleAddresses.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
-  if (c.req.query("all") === "1") {
-    return c.json({ addresses: data.addresses });
-  }
-  const domain = normalizeDomain2(c.req.query("domain") ?? "");
-  if (!domain) {
-    return c.json({ error: "domain query required" }, 400);
-  }
-  if (!data.domains.includes(domain)) {
-    return c.json({ error: "Domain not found" }, 404);
-  }
-  return c.json({
-    addresses: data.addresses.filter((a) => a.domain === domain)
-  });
-});
-consoleAddresses.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  const domain = normalizeDomain2(
-    body.domain ?? c.req.query("domain") ?? ""
-  );
-  if (!domain) {
-    return c.json(
-      { error: "Select a domain before adding senders" },
-      400
-    );
-  }
-  const localParts = (Array.isArray(body.localParts) && body.localParts.length ? body.localParts : body.localPart ? [body.localPart] : []).map((part) => part.trim()).filter(Boolean);
-  if (!localParts.length) {
-    return c.json(
-      { error: "localPart or localParts is required" },
-      400
-    );
-  }
-  const emails = [
-    ...new Set(localParts.map((part) => `${part}@${domain}`.toLowerCase()))
-  ];
-  const inboundByLocal = body.inboundEnabledByLocalPart && typeof body.inboundEnabledByLocalPart === "object" ? body.inboundEnabledByLocalPart : {};
-  const singleDisplayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
-  const displayNames = body.displayNames && typeof body.displayNames === "object" ? body.displayNames : {};
-  const entries = emails.map((email) => {
-    const local = email.split("@")[0] ?? "";
-    const fromMap = typeof displayNames[local] === "string" ? displayNames[local].trim() : "";
-    const inboundFromMap = typeof inboundByLocal[local] === "boolean" ? inboundByLocal[local] : typeof inboundByLocal[local.toLowerCase()] === "boolean" ? inboundByLocal[local.toLowerCase()] : void 0;
-    const inboundEnabled = typeof inboundFromMap === "boolean" ? inboundFromMap : typeof body.inboundEnabled === "boolean" ? body.inboundEnabled : true;
-    return {
-      email,
-      displayName: fromMap || singleDisplayName || void 0,
-      inboundEnabled
-    };
-  });
-  try {
-    const cf = await createCloudflareClient(c.env);
-    await ensureInboundRouting(
-      cf,
-      domain,
-      entries.map((entry) => ({
-        address: entry.email,
-        inboundEnabled: entry.inboundEnabled
-      })),
-      c.env.WORKER_SCRIPT_NAME,
-      { forceMxResolve: body.forceMxResolve === true }
-    );
-  } catch (error) {
-    if (error instanceof MxConflictError) {
-      return c.json(
-        {
-          error: "Non-Cloudflare MX records exist for this domain. Remove them to enable Email Routing.",
-          mxConflict: true,
-          domain: error.domain,
-          mxConflicts: error.mxConflicts
-        },
-        409
-      );
-    }
-    const message = error instanceof Error ? error.message : "Failed to configure inbound routing";
-    return c.json(
-      {
-        error: `Could not configure inbox for ${emails.join(", ")}: ${message}`
-      },
-      502
-    );
-  }
-  const { data, added } = await upsertAddresses2(createAppDb(c.env.RELAYBASE_DB), domain, entries);
-  if (added.length === 1) {
-    return c.json({ address: added[0], addresses: added });
-  }
-  return c.json({
-    addresses: added,
-    all: data.addresses.filter((a) => a.domain === domain)
-  });
-});
-consoleAddresses.patch("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  const email = body.email?.trim().toLowerCase();
-  if (!email) {
-    return c.json({ error: "email is required" }, 400);
-  }
-  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
-  const index2 = data.addresses.findIndex((a) => a.email === email);
-  if (index2 < 0) {
-    return c.json({ error: "Address not found" }, 404);
-  }
-  const current = data.addresses[index2];
-  const displayName = typeof body.displayName === "string" ? body.displayName.trim() : body.displayName === null ? "" : void 0;
-  const signature = typeof body.signature === "string" ? body.signature : body.signature === null ? "" : void 0;
-  const inboundEnabled = typeof body.inboundEnabled === "boolean" ? body.inboundEnabled : current.inboundEnabled !== false;
-  const mobileEnabled = typeof body.mobileEnabled === "boolean" ? body.mobileEnabled : current.mobileEnabled !== false;
-  if (displayName === void 0 && signature === void 0 && typeof body.inboundEnabled !== "boolean" && typeof body.mobileEnabled !== "boolean") {
-    return c.json({ address: current });
-  }
-  if (typeof body.inboundEnabled === "boolean") {
-    try {
-      const cf = await createCloudflareClient(c.env);
-      await ensureInboundRouting(
-        cf,
-        current.domain,
-        [{ address: email, inboundEnabled }],
-        c.env.WORKER_SCRIPT_NAME
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update inbound routing";
-      return c.json({ error: message }, 502);
-    }
-  }
-  const updated = await updateAddress2(createAppDb(c.env.RELAYBASE_DB), email, {
-    displayName,
-    signature,
-    inboundEnabled,
-    mobileEnabled
-  });
-  if (!updated) {
-    return c.json({ error: "Address not found" }, 404);
-  }
-  return c.json({ address: updated });
-});
-consoleAddresses.delete("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const email = c.req.query("email")?.trim().toLowerCase();
-  if (!email) {
-    return c.json({ error: "email is required" }, 400);
-  }
-  const { data, removed } = await removeAddress2(createAppDb(c.env.RELAYBASE_DB), email);
-  if (removed) {
-    try {
-      const cf = await createCloudflareClient(c.env);
-      await removeInboundWorkerRouting(cf, removed.domain, [removed.email]);
-    } catch (error) {
-      console.error("Failed to remove inbound routing", error);
-    }
-  }
-  const domain = c.req.query("domain")?.trim().toLowerCase();
-  return c.json({
-    addresses: domain ? data.addresses.filter((a) => a.domain === domain) : data.addresses
-  });
-});
-consoleAddresses.get("/mobile-password", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const email = c.req.query("email")?.trim().toLowerCase();
-  if (!email) {
-    return c.json({ error: "email is required" }, 400);
-  }
-  const config = await getAccountMobileConfig2(createAppDb(c.env.RELAYBASE_DB), email);
-  return c.json(toAccountMobileConfigPublicView(config));
-});
-consoleAddresses.post("/mobile-password", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  const email = body.email?.trim().toLowerCase();
-  if (!email) {
-    return c.json({ error: "email is required" }, 400);
-  }
-  const { password, config } = await rotateAccountMobileConfig(
-    createAppDb(c.env.RELAYBASE_DB),
-    email
-  );
-  return c.json({
-    password,
-    hasPassword: true,
-    updatedAt: config.updatedAt
-  });
-});
-consoleAddresses.delete("/mobile-password", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const email = c.req.query("email")?.trim().toLowerCase();
-  if (!email) {
-    return c.json({ error: "email is required" }, 400);
-  }
-  await clearAccountMobileConfig2(createAppDb(c.env.RELAYBASE_DB), email);
-  return c.json({ hasPassword: false, updatedAt: null });
-});
-
-// src/routes/console/branding.ts
-init_cloudflare_config();
-init_app();
-
-// db/app/branding.ts
-init_drizzle_orm();
-init_schema();
-function defaultBrandingForDomain(domain) {
-  return {
-    dmarcPolicy: "quarantine",
-    dmarcRua: `dmarc@${domain}`
-  };
-}
-__name(defaultBrandingForDomain, "defaultBrandingForDomain");
-async function getDomainBranding(db, domain) {
-  if (!db) return defaultBrandingForDomain(domain);
-  const row = await db.select().from(domainBranding).where(eq(domainBranding.domain, domain.toLowerCase())).get();
-  if (!row) return defaultBrandingForDomain(domain);
-  return {
-    dmarcPolicy: row.dmarcPolicy,
-    dmarcRua: row.dmarcRua
-  };
-}
-__name(getDomainBranding, "getDomainBranding");
-async function mergeDomainBranding(db, domain, patch) {
-  if (!db) return defaultBrandingForDomain(domain);
-  const key = domain.toLowerCase();
-  const existing = await getDomainBranding(db, key);
-  const next = {
-    dmarcPolicy: patch.dmarcPolicy ?? existing.dmarcPolicy,
-    dmarcRua: patch.dmarcRua?.trim() || existing.dmarcRua
-  };
-  await db.insert(domainBranding).values({
-    domain: key,
-    dmarcPolicy: next.dmarcPolicy,
-    dmarcRua: next.dmarcRua
-  }).onConflictDoUpdate({
-    target: domainBranding.domain,
-    set: {
-      dmarcPolicy: next.dmarcPolicy,
-      dmarcRua: next.dmarcRua
-    }
-  }).run();
-  return next;
-}
-__name(mergeDomainBranding, "mergeDomainBranding");
-
-// src/lib/branding.ts
-function dmarcRecordName(domain) {
-  return `_dmarc.${domain}`;
-}
-__name(dmarcRecordName, "dmarcRecordName");
-function legacyBimiRecordName(domain) {
-  return `default._bimi.${domain}`;
-}
-__name(legacyBimiRecordName, "legacyBimiRecordName");
-function buildDmarcContent(config) {
-  const rua = config.dmarcRua.trim().replace(/^mailto:/i, "");
-  return `v=DMARC1; p=${config.dmarcPolicy}; rua=mailto:${rua}; adkim=s; aspf=s`;
-}
-__name(buildDmarcContent, "buildDmarcContent");
-function txtRecordMatches(records, name, includes) {
-  const target = name.toLowerCase();
-  return records.find(
-    (record) => record.type === "TXT" && record.name.toLowerCase() === target && record.content.includes(includes)
-  );
-}
-__name(txtRecordMatches, "txtRecordMatches");
-function parseDmarcPolicy(content) {
-  const match2 = content.match(/;\s*p\s*=\s*(none|quarantine|reject)/i);
-  if (!match2) return null;
-  return match2[1].toLowerCase();
-}
-__name(parseDmarcPolicy, "parseDmarcPolicy");
-async function getDomainBrandingConfig(db, domain) {
-  return getDomainBranding(db, domain);
-}
-__name(getDomainBrandingConfig, "getDomainBrandingConfig");
-async function mergeDomainBranding2(db, domain, patch) {
-  return mergeDomainBranding(db, domain, patch);
-}
-__name(mergeDomainBranding2, "mergeDomainBranding");
-async function fetchDomainBrandingStatus(db, cf, domain) {
-  const normalizedDomain = domain.trim().toLowerCase();
-  const config = await getDomainBrandingConfig(db, normalizedDomain);
-  const dmarcExpected = buildDmarcContent(config);
-  const notes = [
-    "DMARC authenticates this domain's mail (SPF/DKIM alignment) \u2014 it does not control any inbox logo."
-  ];
-  const zoneId = await cf.resolveZoneId(normalizedDomain);
-  if (!zoneId) {
-    return {
-      domain: normalizedDomain,
-      zoneId: null,
-      dnsConfigured: false,
-      dnsCanApply: true,
-      dnsApplyHint: null,
-      settings: config,
-      dmarc: {
-        type: "TXT",
-        name: dmarcRecordName(normalizedDomain),
-        expected: dmarcExpected,
-        current: null,
-        found: false,
-        recordId: null
-      },
-      dmarcEnforced: false,
-      notes: [
-        ...notes,
-        "Could not resolve the Cloudflare zone ID for this domain."
-      ]
-    };
-  }
-  const records = await cf.listDnsRecords(zoneId);
-  const dmarcRecord = txtRecordMatches(
-    records,
-    dmarcRecordName(normalizedDomain),
-    "v=DMARC1"
-  );
-  const dmarcPolicy = (dmarcRecord && parseDmarcPolicy(dmarcRecord.content)) ?? null;
-  const dmarcEnforced = dmarcPolicy === "quarantine" || dmarcPolicy === "reject";
-  return {
-    domain: normalizedDomain,
-    zoneId,
-    dnsConfigured: true,
-    dnsCanApply: true,
-    dnsApplyHint: null,
-    settings: config,
-    dmarc: {
-      type: "TXT",
-      name: dmarcRecordName(normalizedDomain),
-      expected: dmarcExpected,
-      current: dmarcRecord?.content ?? null,
-      found: Boolean(dmarcRecord),
-      recordId: dmarcRecord?.id ?? null
-    },
-    dmarcEnforced,
-    notes
-  };
-}
-__name(fetchDomainBrandingStatus, "fetchDomainBrandingStatus");
-async function removeLegacyBimiRecord(cf, zoneId, domain) {
-  const records = await cf.listDnsRecords(zoneId);
-  const bimiRecord = txtRecordMatches(
-    records,
-    legacyBimiRecordName(domain),
-    "v=BIMI1"
-  );
-  if (bimiRecord) {
-    await cf.deleteDnsRecord(zoneId, bimiRecord.id);
-  }
-}
-__name(removeLegacyBimiRecord, "removeLegacyBimiRecord");
-async function applyDomainBrandingDns(db, cf, domain) {
-  const normalizedDomain = domain.trim().toLowerCase();
-  const config = await getDomainBrandingConfig(db, normalizedDomain);
-  const zoneId = await cf.resolveZoneId(normalizedDomain);
-  if (!zoneId) {
-    throw new Error(
-      `Could not resolve Cloudflare zone for ${normalizedDomain}.`
-    );
-  }
-  await cf.upsertDnsRecord(zoneId, {
-    type: "TXT",
-    name: dmarcRecordName(normalizedDomain),
-    content: buildDmarcContent(config),
-    ttl: 1
-  });
-  await removeLegacyBimiRecord(cf, zoneId, normalizedDomain);
-  return fetchDomainBrandingStatus(db, cf, normalizedDomain);
-}
-__name(applyDomainBrandingDns, "applyDomainBrandingDns");
-
-// src/routes/console/branding.ts
-var consoleBranding = new Hono2();
-consoleBranding.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const domain = c.req.query("domain")?.trim();
-  if (!domain) {
-    return c.json({ error: "domain is required" }, 400);
-  }
-  let cf;
-  try {
-    cf = await createCloudflareClient(c.env);
-  } catch (error) {
-    return c.json(
-      {
-        error: error instanceof Error ? error.message : "Cloudflare is not configured on this worker."
-      },
-      503
-    );
-  }
-  const status = await fetchDomainBrandingStatus(createAppDb(c.env.RELAYBASE_DB), cf, domain);
-  return c.json(status);
-});
-consoleBranding.put("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const body = await c.req.json();
-  const domain = body.domain?.trim().toLowerCase();
-  if (!domain) {
-    return c.json({ error: "domain is required" }, 400);
-  }
-  await mergeDomainBranding2(createAppDb(c.env.RELAYBASE_DB), domain, {
-    dmarcPolicy: body.dmarcPolicy,
-    dmarcRua: body.dmarcRua
-  });
-  let cf;
-  try {
-    cf = await createCloudflareClient(c.env);
-  } catch (error) {
-    return c.json(
-      {
-        error: error instanceof Error ? error.message : "Cloudflare is not configured on this worker."
-      },
-      503
-    );
-  }
-  const status = await fetchDomainBrandingStatus(createAppDb(c.env.RELAYBASE_DB), cf, domain);
-  return c.json(status);
-});
-consoleBranding.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const body = await c.req.json();
-  const domain = body.domain?.trim().toLowerCase();
-  if (!domain) {
-    return c.json({ error: "domain is required" }, 400);
-  }
-  let cf;
-  try {
-    cf = await createCloudflareClient(c.env);
-  } catch (error) {
-    return c.json(
-      {
-        error: error instanceof Error ? error.message : "Cloudflare is not configured on this worker."
-      },
-      503
-    );
-  }
-  const status = await applyDomainBrandingDns(createAppDb(c.env.RELAYBASE_DB), cf, domain);
-  return c.json(status);
-});
-
-// src/routes/console/keys.ts
-init_app();
-var consoleKeys = new Hono2();
-consoleKeys.post("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  const domain = body.domain?.trim();
-  if (!domain) {
-    return c.json({ error: "domain is required" }, 400);
-  }
-  try {
-    const { record, apiKey } = await createKey(createAppDb(c.env.RELAYBASE_DB), {
-      domain,
-      label: body.label
-    });
-    return c.json(
-      {
-        id: record.id,
-        apiKey,
-        domain: record.domain,
-        label: record.label,
-        createdAt: record.createdAt
-      },
-      201
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create key";
-    return c.json({ error: message }, 400);
-  }
-});
-consoleKeys.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const keys = await listKeys2(createAppDb(c.env.RELAYBASE_DB));
-  return c.json({ keys });
-});
-consoleKeys.patch("/:id", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const id = c.req.param("id")?.trim();
-  if (!id) {
-    return c.json({ error: "id is required" }, 400);
-  }
-  let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-  if (typeof body.active !== "boolean") {
-    return c.json({ error: "active boolean is required" }, 400);
-  }
-  const record = await setKeyActive2(createAppDb(c.env.RELAYBASE_DB), id, body.active);
-  if (!record) {
-    return c.json({ error: "Key not found" }, 404);
-  }
-  return c.json({ key: record });
-});
-consoleKeys.post("/:id/rotate", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const id = c.req.param("id")?.trim();
-  if (!id) {
-    return c.json({ error: "id is required" }, 400);
-  }
-  const rotated = await rotateKey(createAppDb(c.env.RELAYBASE_DB), id);
-  if (!rotated) {
-    return c.json({ error: "Key not found" }, 404);
-  }
-  return c.json({
-    id: rotated.record.id,
-    apiKey: rotated.apiKey,
-    domain: rotated.record.domain,
-    label: rotated.record.label,
-    createdAt: rotated.record.createdAt
-  });
-});
-consoleKeys.delete("/:id", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const id = c.req.param("id")?.trim();
-  if (!id) {
-    return c.json({ error: "id is required" }, 400);
-  }
-  const deleted = await revokeKey(createAppDb(c.env.RELAYBASE_DB), id);
-  if (!deleted) {
-    return c.json({ error: "Key not found" }, 404);
-  }
-  return c.json({ ok: true, id });
-});
-
-// src/routes/console/mailbox-health.ts
-init_app();
-
-// db/mail/index.ts
-init_d1();
-
-// db/mail/schema.ts
-var schema_exports2 = {};
-__export(schema_exports2, {
-  mailboxFts: () => mailboxFts
-});
-init_drizzle_orm();
-var mailboxFts = sql.identifier("mailbox_fts");
-
-// db/mail/index.ts
-function createMailDb(db) {
-  if (!db) return null;
-  return drizzle(db, { schema: schema_exports2 });
-}
-__name(createMailDb, "createMailDb");
-
-// src/routes/console/mailbox-health.ts
-init_catalog_store();
-init_messages();
-var consoleMailboxHealth = new Hono2();
-consoleMailboxHealth.get("/", async (c) => {
-  const denied = await requireAdmin(c);
-  if (denied) return denied;
-  const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
-  if (!mailDb) {
-    return c.json({ error: "Mail index (RELAYBASE_MAIL) is not configured" }, 503);
-  }
-  const staleDaysThreshold = Number(c.req.query("staleDays") ?? "1");
-  const thresholdMs = Number.isFinite(staleDaysThreshold) && staleDaysThreshold > 0 ? staleDaysThreshold * 24 * 60 * 60 * 1e3 : 24 * 60 * 60 * 1e3;
-  const [freshness, mailbox] = await Promise.all([
-    mailboxFreshness(mailDb),
-    readMailbox2(createAppDb(c.env.RELAYBASE_DB))
-  ]);
-  const retainedDomains = new Set(
-    mailbox.domains.map((d) => d.trim().toLowerCase())
-  );
-  const now = Date.now();
-  const byDomain = {};
-  for (const domain of retainedDomains) {
-    byDomain[domain] = {
-      domain,
-      inbound: { lastAt: null, count: 0, stale: true },
-      sent: { lastAt: null, count: 0 }
-    };
-  }
-  for (const row of freshness) {
-    const domain = row.domain.trim().toLowerCase();
-    if (!byDomain[domain]) {
-      byDomain[domain] = {
-        domain,
-        inbound: { lastAt: null, count: 0, stale: true },
-        sent: { lastAt: null, count: 0 }
-      };
-    }
-    const bucket = byDomain[domain];
-    if (row.kind === "inbound") {
-      bucket.inbound = {
-        lastAt: row.last_at,
-        count: row.count,
-        stale: row.last_at ? now - new Date(row.last_at).getTime() > thresholdMs : true
-      };
-    } else if (row.kind === "sent") {
-      bucket.sent = { lastAt: row.last_at, count: row.count };
-    }
-  }
-  return c.json({
-    staleDaysThreshold,
-    domains: Object.values(byDomain).sort((a, b) => a.domain.localeCompare(b.domain)),
-    d1Configured: true,
-    r2Configured: Boolean(c.env.INBOUND),
-    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
-    totalDomains: Object.keys(byDomain).length,
-    staleDomains: Object.values(byDomain).filter((d) => d.inbound.stale).length,
-    totalInbound: Object.values(byDomain).reduce(
-      (sum, d) => sum + d.inbound.count,
-      0
-    ),
-    totalSent: Object.values(byDomain).reduce((sum, d) => sum + d.sent.count, 0)
-  });
-});
-
 // src/routes/console/ops-logs.ts
 init_ops_logs();
 var consoleOpsLogs = new Hono2();
 consoleOpsLogs.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const limit = Number(c.req.query("limit") ?? "100");
   const status = c.req.query("status") ?? "all";
@@ -14027,59 +12729,142 @@ consoleOpsLogs.get("/", async (c) => {
   });
 });
 
-// src/routes/console/recover-admin.ts
+// src/routes/console/owner-auth.ts
 init_app();
-var consoleRecoverAdmin = new Hono2();
-var CONSOLE_RECOVERY_VERIFY_URL = "https://console.relaybase.xyz/v1/recovery/verify-admin-token";
-consoleRecoverAdmin.post("/", async (c) => {
+var consoleOwnerAuth = new Hono2();
+consoleOwnerAuth.post("/setup-admin", async (c) => {
+  const denied = await requirePepperBootstrap(c);
+  if (denied) return denied;
+  try {
+    await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const result = await setupOwner(c.env, {
+    pepper: c.req.header("X-Auth-Pepper") ?? ""
+  });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json(
+    {
+      ok: true,
+      passtoken: result.result.passtoken,
+      message: "Copy this passtoken now. It will not be shown again."
+    },
+    201
+  );
+});
+consoleOwnerAuth.post("/login", async (c) => {
   let body;
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: "Invalid JSON" }, 400);
   }
-  const recoveryToken = body.recoveryToken?.trim() ?? "";
-  const newAdminToken = body.newAdminToken?.trim() ?? "";
-  const accountEmail = body.accountEmail?.trim().toLowerCase() ?? "";
-  const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") ?? "";
-  if (!recoveryToken || !newAdminToken || !accountEmail || !workerUrl) {
-    return c.json(
-      { error: "recoveryToken, newAdminToken, accountEmail, workerUrl required" },
-      400
-    );
+  const result = await loginOwner(c.env, {
+    passtoken: body.passtoken ?? "",
+    label: body.label
+  });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
   }
-  if (newAdminToken.length < 16) {
-    return c.json({ error: "newAdminToken must be at least 16 characters" }, 400);
-  }
-  let verifyOk = false;
+  return c.json({ ok: true, ...result.result });
+});
+consoleOwnerAuth.post("/refresh", async (c) => {
+  let body;
   try {
-    const res = await fetch(CONSOLE_RECOVERY_VERIFY_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recoveryToken, accountEmail, workerUrl })
-    });
-    const data = await res.json();
-    verifyOk = res.ok && Boolean(data.ok);
-  } catch (err) {
-    console.error("Recovery verify failed", err);
-    return c.json({ error: "Could not reach recovery service" }, 502);
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
   }
-  if (!verifyOk) {
-    return c.json({ error: "Invalid or expired recovery token" }, 403);
+  const refreshToken = body.refreshToken?.trim() ?? "";
+  if (!refreshToken) return c.json({ error: "refreshToken is required" }, 400);
+  const scopeRaw = body.scope?.trim() ?? "console";
+  if (scopeRaw !== "mail" && scopeRaw !== "console") {
+    return c.json({ error: "scope must be mail or console" }, 400);
   }
-  const db = createAppDb(c.env.RELAYBASE_DB);
-  if (!db) {
-    return c.json(
-      { error: "Cannot store recovered token \u2014 D1 RELAYBASE_DB is not bound" },
-      500
-    );
+  const result = await refreshOwner(c.env, refreshToken, scopeRaw);
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
   }
-  await setOwnerAdminToken(db, newAdminToken);
+  return c.json({ ok: true, ...result.result });
+});
+consoleOwnerAuth.post("/logout", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const refreshToken = body.refreshToken?.trim() ?? "";
+  if (refreshToken) await logoutOwner(c.env, refreshToken);
   return c.json({ ok: true });
+});
+consoleOwnerAuth.post("/rotate-passtoken", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const result = await rotatePasstoken(c.env);
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({
+    ok: true,
+    passtoken: result.passtoken,
+    message: "Copy this passtoken now. It will not be shown again."
+  });
+});
+consoleOwnerAuth.post("/reset-admin", async (c) => {
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+  const cfAccessToken = body.cfAccessToken?.trim() ?? "";
+  if (!cfAccessToken) return c.json({ error: "cfAccessToken is required" }, 400);
+  const result = await resetOwner(c.env, {
+    cfAccessToken
+  });
+  if ("error" in result) {
+    return c.json({ error: result.error }, result.status);
+  }
+  return c.json({
+    ok: true,
+    passtoken: result.passtoken,
+    message: "Copy this passtoken now. It will not be shown again."
+  });
+});
+consoleOwnerAuth.get("/auth-status", async (c) => {
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  const configured = db ? await ownerIsConfigured(db) : false;
+  return c.json({ ok: true, ownerConfigured: configured });
 });
 
 // src/routes/console/rebuild-mail.ts
 init_app();
+
+// db/mail/index.ts
+init_d1();
+
+// db/mail/schema.ts
+var schema_exports2 = {};
+__export(schema_exports2, {
+  mailboxFts: () => mailboxFts
+});
+init_drizzle_orm();
+var mailboxFts = sql.identifier("mailbox_fts");
+
+// db/mail/index.ts
+function createMailDb(db) {
+  if (!db) return null;
+  return drizzle(db, { schema: schema_exports2 });
+}
+__name(createMailDb, "createMailDb");
+
+// src/routes/console/rebuild-mail.ts
 init_catalog_store();
 
 // src/lib/bounce-detect.ts
@@ -18249,7 +17034,7 @@ __name(searchMailbox, "searchMailbox");
 
 // src/lib/mailbox-store.ts
 init_messages();
-var MAX_MESSAGES = 5e3;
+var PRUNE_BATCH_LIMIT = 50;
 var INBOUND_PREFIX = "inbound";
 var SENT_PREFIX = "sent";
 var JSON_META2 = { httpMetadata: { contentType: "application/json" } };
@@ -18533,7 +17318,6 @@ async function storeInboundMail(bucket, params, mailDb) {
   } catch (error) {
     console.error("Failed to index inbound email", error);
   }
-  await pruneMail(bucket, mailDb, "inbound", domain);
   return {
     record: thinMetaToInboundMeta(thin, bodyText),
     created: true
@@ -18617,7 +17401,6 @@ async function storeSentMail(bucket, params, mailDb) {
   } catch (error) {
     console.error("Failed to index sent email", error);
   }
-  await pruneMail(bucket, mailDb, "sent", domain);
   return { record: thin, created: true };
 }
 __name(storeSentMail, "storeSentMail");
@@ -18642,21 +17425,22 @@ async function getMailMessage(bucket, kind, domain, id) {
   if (!thin) return null;
   let bodyText = "";
   let bodyHtml = null;
-  if (thin.hasText || thin.hasHtml) {
-    const rawObject = await bucket.get(
-      rawObjectKey(kind, normalizedDomain, id)
-    );
-    if (rawObject) {
-      try {
-        const parsed = await parseInboundMime(await rawObject.arrayBuffer());
-        bodyText = parsed.bodyText;
-        bodyHtml = parsed.bodyHtml;
-      } catch (error) {
-        console.error("Failed to parse raw.eml for detail", error);
-      }
+  const rawObject = await bucket.get(
+    rawObjectKey(kind, normalizedDomain, id)
+  );
+  if (rawObject) {
+    try {
+      const parsed = await parseInboundMime(await rawObject.arrayBuffer());
+      bodyText = parsed.bodyText;
+      bodyHtml = parsed.bodyHtml;
+    } catch (error) {
+      console.error("Failed to parse raw.eml for detail", error);
     }
   }
-  const meta = thinMetaToInboundMeta(thin, bodyText);
+  const meta = thinMetaToInboundMeta(
+    thin,
+    bodyText || (rawObject ? "" : thin.bodyPreview)
+  );
   meta.bodyHtml = bodyHtml;
   return meta;
 }
@@ -18705,17 +17489,23 @@ async function setMailReadState(bucket, domain, ids, readAt, mailDb) {
   return { updated };
 }
 __name(setMailReadState, "setMailReadState");
-async function pruneMail(bucket, mailDb, kind, domain) {
-  if (!mailDb) return;
+async function pruneMail(bucket, mailDb, kind, domain, keep, limit = PRUNE_BATCH_LIMIT) {
+  if (!mailDb || keep <= 0) return 0;
   const normalizedDomain = domain.trim().toLowerCase();
   let staleIds = [];
   try {
-    staleIds = await mailboxPruneIds(mailDb, kind, normalizedDomain, MAX_MESSAGES);
+    staleIds = await mailboxPruneIds(
+      mailDb,
+      kind,
+      normalizedDomain,
+      keep,
+      limit
+    );
   } catch (error) {
     console.error("Failed to compute prune ids", error);
-    return;
+    return 0;
   }
-  if (staleIds.length === 0) return;
+  if (staleIds.length === 0) return 0;
   for (const id of staleIds) {
     await deleteMessageObjects(bucket, kind, normalizedDomain, id);
   }
@@ -18725,6 +17515,7 @@ async function pruneMail(bucket, mailDb, kind, domain) {
   } catch (error) {
     console.error("Failed to prune mail index rows", error);
   }
+  return staleIds.length;
 }
 __name(pruneMail, "pruneMail");
 async function listMessageFolderIds(bucket, kind, domain) {
@@ -18787,7 +17578,12 @@ async function rebuildDomain(bucket, mailDb, domain) {
     const metaKey = metaObjectKey("inbound", normalized, id);
     const raw2 = await readJsonAt(bucket, metaKey);
     if (!raw2) continue;
+    const fatHasText = Boolean(raw2.hasText ?? raw2.bodyText);
+    const fatHasHtml = Boolean(raw2.hasHtml ?? raw2.bodyHtml);
     const stripped = stripFatMeta(raw2);
+    const emlExists = Boolean(
+      await bucket.head(rawObjectKey("inbound", normalized, id))
+    );
     const thin = normalizeThinMeta({
       id,
       kind: "inbound",
@@ -18806,8 +17602,8 @@ async function rebuildDomain(bucket, mailDb, domain) {
       bodyPreview: previewText(stripped.bodyPreview ?? ""),
       attachments: stripped.attachments ?? [],
       readAt: stripped.readAt ?? null,
-      hasText: stripped.hasText ?? Boolean(stripped.bodyText),
-      hasHtml: stripped.hasHtml ?? Boolean(stripped.bodyHtml)
+      hasText: fatHasText || emlExists,
+      hasHtml: fatHasHtml || emlExists
     });
     await bucket.put(metaKey, JSON.stringify(thin), JSON_META2);
     const bodyText = await readEmlBodyText(bucket, "inbound", normalized, id);
@@ -18829,6 +17625,9 @@ async function rebuildDomain(bucket, mailDb, domain) {
     const raw2 = await readJsonAt(bucket, metaKey);
     if (!raw2) continue;
     const stripped = stripFatMeta(raw2);
+    const emlExists = Boolean(
+      await bucket.head(rawObjectKey("sent", normalized, id))
+    );
     const thin = normalizeThinMeta({
       id,
       kind: "sent",
@@ -18846,8 +17645,8 @@ async function rebuildDomain(bucket, mailDb, domain) {
       size: stripped.size ?? 0,
       bodyPreview: previewText(stripped.bodyPreview ?? ""),
       attachments: stripped.attachments ?? [],
-      hasText: stripped.hasText ?? false,
-      hasHtml: stripped.hasHtml ?? false
+      hasText: Boolean(stripped.hasText) || emlExists,
+      hasHtml: Boolean(stripped.hasHtml) || emlExists
     });
     await bucket.put(metaKey, JSON.stringify(thin), JSON_META2);
     const bodyText = await readEmlBodyText(bucket, "sent", normalized, id);
@@ -18937,7 +17736,7 @@ __name(deleteSendLogIndex, "deleteSendLogIndex");
 // src/routes/console/rebuild-mail.ts
 var consoleRebuildMail = new Hono2();
 consoleRebuildMail.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
   if (!mailDb) {
@@ -18982,7 +17781,7 @@ init_app();
 var consoleRegisterOwner = new Hono2();
 var EMAIL_RE = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 consoleRegisterOwner.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -19003,14 +17802,14 @@ consoleRegisterOwner.post("/", async (c) => {
   return c.json({ ok: true, ownerEmail: email, workerUrl });
 });
 consoleRegisterOwner.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const db = createAppDb(c.env.RELAYBASE_DB);
-  const config = await getOwnerConfig(db);
+  const config = await getOwnerLoginConfig(db);
   return c.json({
     ok: true,
-    ownerEmail: config.ownerEmail,
-    workerUrl: config.workerUrl
+    ownerEmail: config?.ownerEmail ?? null,
+    workerUrl: config?.workerUrl ?? null
   });
 });
 
@@ -19018,7 +17817,7 @@ consoleRegisterOwner.get("/", async (c) => {
 init_send_logs();
 var consoleSendLogs = new Hono2();
 consoleSendLogs.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const limit = Number(c.req.query("limit") ?? "100");
   const status = c.req.query("status") ?? "all";
@@ -19125,7 +17924,7 @@ function sumBuckets(buckets) {
 }
 __name(sumBuckets, "sumBuckets");
 consoleStats.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const range = parseStatsRange(c.req.query("range"));
   const domain = c.req.query("domain")?.trim().toLowerCase() || null;
@@ -19199,7 +17998,7 @@ consoleStats.get("/", async (c) => {
   });
 });
 consoleStats.get("/account-stats", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const email = c.req.query("email")?.trim().toLowerCase();
   if (!email) return c.json({ error: "email is required" }, 400);
@@ -19259,7 +18058,7 @@ consoleStats.get("/account-stats", async (c) => {
   });
 });
 consoleStats.get("/account-logs", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireConsoleSession(c);
   if (denied) return denied;
   const email = c.req.query("email")?.trim().toLowerCase();
   if (!email) return c.json({ error: "email is required" }, 400);
@@ -19322,6 +18121,2284 @@ consoleStats.get("/account-logs", async (c) => {
   });
 });
 
+// src/routes/console/broadcasts.ts
+init_cloudflare_api_hints();
+init_app();
+init_catalog_broadcasts();
+var consoleBroadcasts = new Hono2();
+consoleBroadcasts.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const broadcasts2 = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
+  const domain = c.req.query("domain")?.trim().toLowerCase();
+  const filtered = domain ? broadcasts2.filter((b) => b.domain === domain) : broadcasts2;
+  return c.json({ broadcasts: filtered });
+});
+consoleBroadcasts.post("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  try {
+    const broadcast = await createBroadcastDraft(createAppDb(c.env.RELAYBASE_DB), {
+      id: body.id,
+      groupIds: body.groupIds ?? [],
+      from: body.from,
+      subject: body.subject,
+      body: body.body
+    });
+    return c.json({ broadcast }, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed";
+    return c.json({ error: message }, 400);
+  }
+});
+consoleBroadcasts.get("/:broadcastId", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const detail = await getBroadcastDetail(
+    createAppDb(c.env.RELAYBASE_DB),
+    c.req.param("broadcastId")
+  );
+  if (!detail) return c.json({ error: "Broadcast not found" }, 404);
+  return c.json(detail);
+});
+consoleBroadcasts.patch("/:broadcastId", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  try {
+    const broadcast = await updateBroadcastDraft2(
+      createAppDb(c.env.RELAYBASE_DB),
+      c.req.param("broadcastId"),
+      body
+    );
+    return c.json({ broadcast });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed";
+    return c.json({ error: message }, 400);
+  }
+});
+consoleBroadcasts.post("/:broadcastId/send", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body = {};
+  try {
+    body = await c.req.json();
+  } catch {
+  }
+  try {
+    const broadcast = await sendBroadcast(
+      c.env,
+      c.req.param("broadcastId"),
+      body
+    );
+    return c.json({ broadcast });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed";
+    const body2 = cloudflareSendErrorBody(message);
+    return c.json(body2, body2.code ? 403 : 400);
+  }
+});
+consoleBroadcasts.get("/:broadcastId/progress", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const broadcasts2 = await readBroadcasts(createAppDb(c.env.RELAYBASE_DB));
+  const broadcast = broadcasts2.find(
+    (b) => b.id === c.req.param("broadcastId")
+  );
+  if (!broadcast) return c.json({ error: "Broadcast not found" }, 404);
+  return c.json(getBroadcastProgress(broadcast));
+});
+
+// src/routes/console/connect.ts
+init_email_send();
+
+// src/lib/r2-usage.ts
+var MAX_LIST_PAGES = 20;
+async function measureInboundR2Usage(bucket) {
+  if (!bucket) return null;
+  try {
+    let objectCount = 0;
+    let totalBytes = 0;
+    let cursor;
+    let truncated = false;
+    for (let page = 0; page < MAX_LIST_PAGES; page++) {
+      const listed = await bucket.list({ limit: 1e3, cursor });
+      for (const object of listed.objects) {
+        objectCount += 1;
+        totalBytes += object.size;
+      }
+      if (!listed.truncated) {
+        truncated = false;
+        break;
+      }
+      cursor = listed.cursor;
+      if (page === MAX_LIST_PAGES - 1) truncated = true;
+    }
+    return { objectCount, totalBytes, truncated };
+  } catch (error) {
+    console.error("Mailbox R2 usage failed", error);
+    return null;
+  }
+}
+__name(measureInboundR2Usage, "measureInboundR2Usage");
+
+// src/routes/console/connect.ts
+var CF_API = "https://api.cloudflare.com/client/v4";
+async function probeCfApiTokenValid(token) {
+  try {
+    const res = await fetch(`${CF_API}/zones?per_page=1`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
+__name(probeCfApiTokenValid, "probeCfApiTokenValid");
+var consoleConnect = new Hono2();
+async function checkInboundR2(bucket) {
+  try {
+    await bucket.list({ limit: 1 });
+    return true;
+  } catch (error) {
+    console.error("Inbound R2 check failed", error);
+    return false;
+  }
+}
+__name(checkInboundR2, "checkInboundR2");
+consoleConnect.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const r2Configured = await checkInboundR2(c.env.INBOUND);
+  const apiToken = c.env.CF_API_TOKEN?.trim() ?? "";
+  const cfApiTokenSet = Boolean(apiToken);
+  const [usage, d1, cfApiTokenValid] = await Promise.all([
+    r2Configured ? measureInboundR2Usage(c.env.INBOUND) : Promise.resolve(null),
+    probeD1Connection(
+      c.env.RELAYBASE_LOGS,
+      c.env.RELAYBASE_MAIL,
+      c.env.RELAYBASE_DB,
+      c.env.CF_ACCOUNT_ID,
+      c.env.CF_API_TOKEN
+    ),
+    cfApiTokenSet ? probeCfApiTokenValid(apiToken) : Promise.resolve(false)
+  ]);
+  return c.json({
+    ok: true,
+    product: "relaybase",
+    version: c.env.WORKER_VERSION?.trim() || "unknown",
+    workerScriptName: c.env.WORKER_SCRIPT_NAME || "relaybase-api",
+    // CF account id (from the CF_ACCOUNT_ID secret). Surfaced so the desktop
+    // can display/manage the server token without a separate OAuth connection
+    // or manual entry.
+    accountId: c.env.CF_ACCOUNT_ID?.trim() || "",
+    inbound: {
+      r2Configured,
+      bucketName: c.env.INBOUND_BUCKET_NAME || "relaybase-mailbox",
+      usage
+    },
+    d1,
+    // Worker has a CF_API_TOKEN secret (domain / routing / DNS API).
+    cfApiTokenSet,
+    // Secret is present and Cloudflare accepted a Zone Read probe.
+    cfApiTokenValid,
+    emailBindingConfigured: emailBindingConfigured(c.env)
+  });
+});
+
+// src/routes/console/init-db.ts
+init_app();
+
+// db/migrations.ts
+var APP_0000 = `CREATE TABLE \`domains\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`domain\` text NOT NULL,
+	\`created_at\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX \`domains_domain_unique\` ON \`domains\` (\`domain\`);
+--> statement-breakpoint
+CREATE TABLE \`addresses\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`email\` text NOT NULL,
+	\`domain\` text NOT NULL,
+	\`display_name\` text,
+	\`signature\` text,
+	\`inbound_enabled\` integer DEFAULT 1 NOT NULL,
+	\`mobile_enabled\` integer DEFAULT 1 NOT NULL,
+	\`created_at\` text NOT NULL,
+	FOREIGN KEY (\`domain\`) REFERENCES \`domains\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX \`addresses_email_unique\` ON \`addresses\` (\`email\`);
+--> statement-breakpoint
+CREATE INDEX \`addresses_domain_idx\` ON \`addresses\` (\`domain\`);
+--> statement-breakpoint
+CREATE TABLE \`api_keys\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`key_hash\` text NOT NULL,
+	\`domain\` text NOT NULL,
+	\`label\` text,
+	\`key_prefix\` text NOT NULL,
+	\`created_at\` text NOT NULL,
+	\`active\` integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX \`api_keys_key_hash_unique\` ON \`api_keys\` (\`key_hash\`);
+--> statement-breakpoint
+CREATE INDEX \`api_keys_domain_idx\` ON \`api_keys\` (\`domain\`);
+--> statement-breakpoint
+CREATE INDEX \`api_keys_active_idx\` ON \`api_keys\` (\`active\`);
+--> statement-breakpoint
+CREATE TABLE \`audience_groups\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`name\` text NOT NULL,
+	\`domain\` text NOT NULL,
+	\`created_at\` text NOT NULL,
+	\`default_from\` text,
+	\`data_source_json\` text,
+	\`cron_enabled\` integer DEFAULT 0 NOT NULL,
+	\`cron_interval_minutes\` integer,
+	\`last_sync_at\` text,
+	\`last_sync_status\` text,
+	\`last_sync_error\` text,
+	\`last_sync_count\` integer,
+	\`sync_progress_json\` text,
+	\`sync_history_json\` text
+);
+--> statement-breakpoint
+CREATE INDEX \`audience_groups_domain_idx\` ON \`audience_groups\` (\`domain\`);
+--> statement-breakpoint
+CREATE TABLE \`audience_contacts\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`email\` text NOT NULL,
+	\`name\` text,
+	\`domain\` text NOT NULL,
+	\`group_id\` text NOT NULL,
+	\`source\` text NOT NULL,
+	\`added_at\` text NOT NULL,
+	FOREIGN KEY (\`group_id\`) REFERENCES \`audience_groups\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX \`audience_contacts_group_email_idx\` ON \`audience_contacts\` (\`group_id\`,\`email\`);
+--> statement-breakpoint
+CREATE INDEX \`audience_contacts_group_idx\` ON \`audience_contacts\` (\`group_id\`);
+--> statement-breakpoint
+CREATE INDEX \`audience_contacts_domain_idx\` ON \`audience_contacts\` (\`domain\`);
+--> statement-breakpoint
+CREATE TABLE \`auth_tokens\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`token_hash\` text NOT NULL,
+	\`label\` text,
+	\`product_id\` text,
+	\`token_prefix\` text NOT NULL,
+	\`created_at\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX \`auth_tokens_token_hash_unique\` ON \`auth_tokens\` (\`token_hash\`);
+--> statement-breakpoint
+CREATE TABLE \`broadcasts\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`subject\` text NOT NULL,
+	\`status\` text NOT NULL,
+	\`created_at\` text NOT NULL,
+	\`domain\` text NOT NULL,
+	\`group_ids_json\` text NOT NULL,
+	\`from_addr\` text,
+	\`body\` text,
+	\`recipient_count\` integer,
+	\`sent_at\` text,
+	\`send_progress_json\` text,
+	\`send_history_json\` text
+);
+--> statement-breakpoint
+CREATE INDEX \`broadcasts_domain_idx\` ON \`broadcasts\` (\`domain\`);
+--> statement-breakpoint
+CREATE INDEX \`broadcasts_status_idx\` ON \`broadcasts\` (\`status\`);
+--> statement-breakpoint
+CREATE INDEX \`broadcasts_created_at_idx\` ON \`broadcasts\` (\`created_at\`);
+--> statement-breakpoint
+CREATE TABLE \`domain_branding\` (
+	\`domain\` text PRIMARY KEY NOT NULL,
+	\`dmarc_policy\` text DEFAULT 'quarantine' NOT NULL,
+	\`dmarc_rua\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE \`inbound_events\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`domain\` text NOT NULL,
+	\`event_type\` text NOT NULL,
+	\`created_at\` text NOT NULL,
+	\`payload_json\` text NOT NULL,
+	\`expires_at\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX \`inbound_events_domain_idx\` ON \`inbound_events\` (\`domain\`);
+--> statement-breakpoint
+CREATE INDEX \`inbound_events_expires_idx\` ON \`inbound_events\` (\`expires_at\`);
+--> statement-breakpoint
+CREATE TABLE \`mobile_passwords\` (
+	\`email\` text PRIMARY KEY NOT NULL,
+	\`password_hash\` text NOT NULL,
+	\`salt\` text NOT NULL,
+	\`updated_at\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE \`owner_config\` (
+	\`id\` integer PRIMARY KEY NOT NULL,
+	\`owner_email\` text,
+	\`worker_url\` text
+);
+--> statement-breakpoint
+CREATE TABLE \`webhooks\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`domain\` text NOT NULL,
+	\`url\` text NOT NULL,
+	\`secret_hash\` text NOT NULL,
+	\`created_at\` text NOT NULL,
+	\`active\` integer DEFAULT 1 NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX \`webhooks_domain_idx\` ON \`webhooks\` (\`domain\`);
+--> statement-breakpoint
+CREATE INDEX \`webhooks_active_idx\` ON \`webhooks\` (\`active\`);
+--> statement-breakpoint
+CREATE TABLE \`webhook_fails\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`webhook_id\` text NOT NULL,
+	\`event_id\` text NOT NULL,
+	\`url\` text NOT NULL,
+	\`failed_at\` text NOT NULL,
+	\`expires_at\` text NOT NULL,
+	FOREIGN KEY (\`webhook_id\`) REFERENCES \`webhooks\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX \`webhook_fails_webhook_idx\` ON \`webhook_fails\` (\`webhook_id\`);
+--> statement-breakpoint
+CREATE INDEX \`webhook_fails_expires_idx\` ON \`webhook_fails\` (\`expires_at\`);
+--> statement-breakpoint
+CREATE TABLE \`webhook_secrets\` (
+	\`webhook_id\` text PRIMARY KEY NOT NULL,
+	\`secret\` text NOT NULL,
+	FOREIGN KEY (\`webhook_id\`) REFERENCES \`webhooks\`(\`id\`) ON UPDATE no action ON DELETE cascade
+);`;
+var APP_0001 = `ALTER TABLE \`owner_config\` ADD \`admin_token\` text;`;
+var APP_0002 = `CREATE TABLE \`app_settings\` (
+	\`id\` integer PRIMARY KEY NOT NULL,
+	\`inbound_retain_per_domain\` integer,
+	\`updated_at\` text NOT NULL
+);`;
+var APP_0003 = `ALTER TABLE \`owner_config\` DROP COLUMN \`admin_token\`;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` ADD \`admin_username\` text;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` ADD \`passtoken_salt\` text;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` ADD \`passtoken_hash\` text;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` ADD \`passtoken_prefix\` text;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` ADD \`passtoken_updated_at\` text;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` ADD \`failed_attempts\` integer DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+ALTER TABLE \`owner_config\` ADD \`locked_until\` text;
+--> statement-breakpoint
+CREATE TABLE \`owner_sessions\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`token_hash\` text NOT NULL,
+	\`family\` text NOT NULL,
+	\`label\` text,
+	\`created_at\` text NOT NULL,
+	\`expires_at\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX \`owner_sessions_token_hash_unique\` ON \`owner_sessions\` (\`token_hash\`);
+--> statement-breakpoint
+CREATE INDEX \`owner_sessions_family_idx\` ON \`owner_sessions\` (\`family\`);
+--> statement-breakpoint
+DROP TABLE IF EXISTS \`auth_tokens\`;`;
+var APP_0004 = `ALTER TABLE \`owner_config\` DROP COLUMN \`admin_username\`;`;
+var LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
+  id TEXT PRIMARY KEY,
+  at TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  ok INTEGER NOT NULL,
+  status INTEGER,
+  source TEXT,
+  domain TEXT,
+  from_addr TEXT,
+  to_addr TEXT,
+  subject TEXT,
+  message_id TEXT,
+  error TEXT,
+  key_id TEXT,
+  key_prefix TEXT,
+  meta_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ops_log_at_idx ON ops_log (at DESC);
+CREATE INDEX IF NOT EXISTS ops_log_ok_idx ON ops_log (ok, at DESC);
+CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
+CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);`;
+var MAIL_0001 = `CREATE TABLE IF NOT EXISTS mailbox_messages (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  from_email TEXT NOT NULL,
+  from_name TEXT,
+  to_email TEXT NOT NULL,
+  to_emails TEXT,
+  cc_emails TEXT,
+  recipients TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body_preview TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  message_id TEXT,
+  in_reply_to TEXT,
+  refs TEXT,
+  size INTEGER NOT NULL,
+  attachment_count INTEGER NOT NULL,
+  read_at TEXT,
+  r2_prefix TEXT NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS mailbox_rfc_idx
+  ON mailbox_messages (domain, kind, message_id)
+  WHERE message_id IS NOT NULL;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mailbox_list_idx
+  ON mailbox_messages (kind, domain, occurred_at DESC, id DESC);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mailbox_unread_idx
+  ON mailbox_messages (kind, domain, read_at)
+  WHERE kind = 'inbound' AND read_at IS NULL;
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS mailbox_domain_idx
+  ON mailbox_messages (domain, kind);
+--> statement-breakpoint
+CREATE VIRTUAL TABLE IF NOT EXISTS mailbox_fts USING fts5(
+  id UNINDEXED,
+  kind UNINDEXED,
+  domain UNINDEXED,
+  subject,
+  from_email,
+  from_name,
+  to_emails,
+  cc_emails,
+  body_text
+);`;
+var MIGRATIONS = [
+  { target: "app", name: "0000_old_pandemic", sql: APP_0000 },
+  { target: "app", name: "0001_owner_admin_token", sql: APP_0001 },
+  { target: "app", name: "0002_app_settings", sql: APP_0002 },
+  { target: "app", name: "0003_owner_login", sql: APP_0003 },
+  { target: "app", name: "0004_drop_admin_username", sql: APP_0004 },
+  { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
+  { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 }
+];
+function splitMigrationSql(sql4) {
+  return sql4.split("--> statement-breakpoint").map((part) => part.trim()).filter((part) => part.length > 0 && !isCommentOnly(part));
+}
+__name(splitMigrationSql, "splitMigrationSql");
+function isCommentOnly(sql4) {
+  return sql4.split("\n").every((line) => line.trim() === "" || line.trim().startsWith("--"));
+}
+__name(isCommentOnly, "isCommentOnly");
+
+// src/lib/d1-migration-names.ts
+function normalizeMigrationName(name) {
+  return name.trim().replace(/\.sql$/i, "");
+}
+__name(normalizeMigrationName, "normalizeMigrationName");
+function d1ErrorText(error) {
+  if (error instanceof Error) {
+    const cause = error.cause instanceof Error ? error.cause.message : error.cause != null ? String(error.cause) : "";
+    return [error.message, cause, error.toString()].filter(Boolean).join(" ");
+  }
+  if (error && typeof error === "object") {
+    const o = error;
+    return [o.message, o.error, o.cause, JSON.stringify(error)].filter((v) => v != null && String(v).length > 0).join(" ");
+  }
+  return String(error);
+}
+__name(d1ErrorText, "d1ErrorText");
+function isSchemaAlreadyPresentError(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("already exists") || lower.includes("duplicate column");
+}
+__name(isSchemaAlreadyPresentError, "isSchemaAlreadyPresentError");
+
+// src/lib/d1-migrations.ts
+var MIGRATIONS_TABLE = "d1_migrations";
+var PROBE_TABLES = {
+  app: "domains",
+  logs: "ops_log",
+  mail: "mailbox_messages"
+};
+var MIGRATION_TARGETS = ["app", "logs", "mail"];
+var BINDING_MAP = {
+  app: "RELAYBASE_DB",
+  logs: "RELAYBASE_LOGS",
+  mail: "RELAYBASE_MAIL"
+};
+async function tableExists(db, tableName) {
+  try {
+    const row = await db.prepare(
+      `SELECT 1 AS ok FROM sqlite_master WHERE type IN ('table', 'view') AND name = ? LIMIT 1`
+    ).bind(tableName).first();
+    if (row) return true;
+  } catch {
+  }
+  try {
+    await db.prepare(`SELECT 1 AS ok FROM "${tableName}" LIMIT 1`).first();
+    return true;
+  } catch {
+    return false;
+  }
+}
+__name(tableExists, "tableExists");
+function bindingFor(target) {
+  return BINDING_MAP[target];
+}
+__name(bindingFor, "bindingFor");
+function dbFor(env, target) {
+  return env[bindingFor(target)];
+}
+__name(dbFor, "dbFor");
+async function anyProbeTableExists(env) {
+  const results = [];
+  for (const target of MIGRATION_TARGETS) {
+    const binding = bindingFor(target);
+    const db = dbFor(env, target);
+    if (!db) {
+      results.push({ target, binding, present: false });
+      continue;
+    }
+    results.push({
+      target,
+      binding,
+      present: await tableExists(db, PROBE_TABLES[target])
+    });
+  }
+  return {
+    alreadyInitialized: results.some((r) => r.present),
+    results
+  };
+}
+__name(anyProbeTableExists, "anyProbeTableExists");
+async function listAppliedMigrations(db) {
+  try {
+    const rows = await db.prepare(`SELECT name FROM ${MIGRATIONS_TABLE} ORDER BY name`).all();
+    return new Set(
+      (rows.results ?? []).map((r) => normalizeMigrationName(r.name)).filter((n) => n.length > 0)
+    );
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+__name(listAppliedMigrations, "listAppliedMigrations");
+async function stampMigration(db, name) {
+  await db.prepare(
+    `INSERT OR IGNORE INTO ${MIGRATIONS_TABLE} (name) VALUES (?)`
+  ).bind(normalizeMigrationName(name)).run();
+}
+__name(stampMigration, "stampMigration");
+async function applyPendingForTarget(env, target) {
+  const binding = bindingFor(target);
+  const db = dbFor(env, target);
+  if (!db) {
+    return {
+      target,
+      binding,
+      configured: false,
+      alreadyInitialized: false,
+      applied: [],
+      skipped: [],
+      error: `D1 binding ${binding} is not configured`
+    };
+  }
+  try {
+    const alreadyInitialized = await tableExists(db, PROBE_TABLES[target]);
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)`
+    ).run();
+    const appliedSet = await listAppliedMigrations(db);
+    const targetMigrations = MIGRATIONS.filter((m) => m.target === target);
+    const applied = [];
+    const skipped = [];
+    for (const [index2, migration] of targetMigrations.entries()) {
+      const name = normalizeMigrationName(migration.name);
+      if (appliedSet.has(name)) {
+        skipped.push(name);
+        continue;
+      }
+      const isBaseline = index2 === 0;
+      if (alreadyInitialized && isBaseline) {
+        await stampMigration(db, name);
+        appliedSet.add(name);
+        skipped.push(name);
+        continue;
+      }
+      try {
+        const statements = splitMigrationSql(migration.sql);
+        for (const stmt of statements) {
+          try {
+            const result = await db.prepare(stmt).run();
+            const resultError = result && typeof result === "object" && "error" in result && result.error ? String(result.error) : "";
+            if (resultError && !isSchemaAlreadyPresentError(resultError)) {
+              throw new Error(resultError);
+            }
+          } catch (error) {
+            const message = d1ErrorText(error);
+            if (!isSchemaAlreadyPresentError(message)) {
+              throw error;
+            }
+          }
+        }
+        await stampMigration(db, name);
+        appliedSet.add(name);
+        applied.push(name);
+      } catch (error) {
+        const message = d1ErrorText(error);
+        if (isSchemaAlreadyPresentError(message)) {
+          await stampMigration(db, name);
+          appliedSet.add(name);
+          skipped.push(name);
+          continue;
+        }
+        throw error;
+      }
+    }
+    return {
+      target,
+      binding,
+      configured: true,
+      alreadyInitialized,
+      applied,
+      skipped
+    };
+  } catch (error) {
+    const message = d1ErrorText(error);
+    return {
+      target,
+      binding,
+      configured: true,
+      alreadyInitialized: false,
+      applied: [],
+      skipped: [],
+      error: message
+    };
+  }
+}
+__name(applyPendingForTarget, "applyPendingForTarget");
+async function applyPendingMigrations(env) {
+  const results = [];
+  for (const target of MIGRATION_TARGETS) {
+    results.push(await applyPendingForTarget(env, target));
+  }
+  return {
+    alreadyInitialized: results.some((r) => r.alreadyInitialized),
+    applied: results.flatMap((r) => r.applied),
+    skipped: results.flatMap((r) => r.skipped),
+    results,
+    errors: results.filter((r) => r.error).map((r) => `${r.binding}: ${r.error}`)
+  };
+}
+__name(applyPendingMigrations, "applyPendingMigrations");
+
+// src/routes/console/init-db.ts
+var consoleInitDb = new Hono2();
+consoleInitDb.post("/", async (c) => {
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  const hasOwner = db ? await ownerIsConfigured(db) : false;
+  const denied = await requireSchemaAuth(c, hasOwner);
+  if (denied) return denied;
+  const probe = await anyProbeTableExists(c.env);
+  if (probe.alreadyInitialized) {
+    return c.json(
+      {
+        ok: false,
+        error: "DB_ALREADY_INITIALIZED",
+        alreadyInitialized: true,
+        applied: [],
+        skipped: [],
+        results: probe.results
+      },
+      409
+    );
+  }
+  const applied = await applyPendingMigrations(c.env);
+  if (applied.errors.length > 0) {
+    return c.json(
+      {
+        ok: false,
+        alreadyInitialized: false,
+        applied: applied.applied,
+        skipped: applied.skipped,
+        results: applied.results,
+        error: applied.errors.join("; ")
+      },
+      500
+    );
+  }
+  return c.json({
+    ok: true,
+    alreadyInitialized: false,
+    applied: applied.applied,
+    skipped: applied.skipped,
+    results: applied.results
+  });
+});
+
+// src/routes/console/migrate-db.ts
+init_app();
+var consoleMigrateDb = new Hono2();
+consoleMigrateDb.post("/", async (c) => {
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  const hasOwner = db ? await ownerIsConfigured(db) : false;
+  const denied = await requireSchemaAuth(c, hasOwner);
+  if (denied) return denied;
+  const applied = await applyPendingMigrations(c.env);
+  if (applied.errors.length > 0) {
+    return c.json(
+      {
+        ok: false,
+        alreadyInitialized: applied.alreadyInitialized,
+        applied: applied.applied,
+        skipped: applied.skipped,
+        results: applied.results,
+        error: applied.errors.join("; ")
+      },
+      500
+    );
+  }
+  return c.json({
+    ok: true,
+    alreadyInitialized: applied.alreadyInitialized,
+    applied: applied.applied,
+    skipped: applied.skipped,
+    results: applied.results
+  });
+});
+
+// src/routes/console/mailbox.ts
+init_cloudflare_config();
+init_app();
+
+// src/lib/inbound-routing.ts
+init_cloudflare_client();
+function describeRule(rule) {
+  const literal = rule.matchers.find(
+    (matcher) => matcher.type === "literal" && matcher.field === "to"
+  );
+  const action = rule.actions[0];
+  const actionType = action?.type ?? "unknown";
+  return {
+    ruleId: rule.id,
+    enabled: rule.enabled,
+    address: literal?.value?.trim().toLowerCase() ?? null,
+    matcherType: literal ? "literal" : rule.matchers[0]?.type ?? "unknown",
+    action: actionType,
+    worker: actionType === "worker" && Array.isArray(action?.value) ? action.value[0] ?? null : null
+  };
+}
+__name(describeRule, "describeRule");
+async function listInboundRouting(cf, domain) {
+  const zoneId = await resolveZoneId(cf, domain);
+  const [routing, existing] = await Promise.all([
+    cf.getEmailRoutingSettings(zoneId),
+    cf.listEmailRoutingRules(zoneId)
+  ]);
+  return {
+    domain,
+    zoneId,
+    routingEnabled: routing.enabled,
+    rules: existing.map(describeRule)
+  };
+}
+__name(listInboundRouting, "listInboundRouting");
+async function resolveZoneId(cf, domain) {
+  const zoneId = await cf.resolveZoneId(domain);
+  if (!zoneId) {
+    throw new Error(
+      `Could not resolve Cloudflare zone for ${domain} \u2014 ensure the domain is on this account`
+    );
+  }
+  return zoneId;
+}
+__name(resolveZoneId, "resolveZoneId");
+function matchesAddress(rule, address) {
+  return rule.matchers.some(
+    (matcher) => matcher.type === "literal" && matcher.field === "to" && matcher.value?.toLowerCase() === address.toLowerCase()
+  );
+}
+__name(matchesAddress, "matchesAddress");
+var MX_CONFLICT_ERROR_CODE = 2008;
+function isMxConflictError(error) {
+  return error instanceof Error && error.message.includes(`[${MX_CONFLICT_ERROR_CODE}]`);
+}
+__name(isMxConflictError, "isMxConflictError");
+function isCloudflareMxContent(content) {
+  return content.trim().toLowerCase().endsWith("mx.cloudflare.net");
+}
+__name(isCloudflareMxContent, "isCloudflareMxContent");
+async function findConflictingMxRecords(cf, zoneId, domain) {
+  const apexNames = /* @__PURE__ */ new Set([domain.toLowerCase(), "@"]);
+  const mxRecords = await cf.listDnsRecords(zoneId, { type: "MX" });
+  return mxRecords.filter(
+    (record) => apexNames.has(record.name.toLowerCase()) && !isCloudflareMxContent(record.content)
+  ).map((record) => ({
+    id: record.id,
+    name: record.name,
+    content: record.content,
+    priority: record.priority
+  }));
+}
+__name(findConflictingMxRecords, "findConflictingMxRecords");
+async function clearConflictingMxRecords(cf, zoneId, domain) {
+  const conflicts = await findConflictingMxRecords(cf, zoneId, domain);
+  for (const record of conflicts) {
+    await cf.deleteDnsRecord(zoneId, record.id);
+  }
+  return { removed: conflicts };
+}
+__name(clearConflictingMxRecords, "clearConflictingMxRecords");
+var MxConflictError = class extends Error {
+  static {
+    __name(this, "MxConflictError");
+  }
+  domain;
+  zoneId;
+  mxConflicts;
+  constructor(domain, zoneId, mxConflicts) {
+    super(
+      `Non-Cloudflare MX records exist for ${domain}. Remove them (or approve removal) to enable Email Routing.`
+    );
+    this.name = "MxConflictError";
+    this.domain = domain;
+    this.zoneId = zoneId;
+    this.mxConflicts = mxConflicts;
+  }
+};
+async function ensureInboundRouting(cf, domain, entries, workerScriptName, opts = {}) {
+  const zoneId = await resolveZoneId(cf, domain);
+  const routing = await cf.getEmailRoutingSettings(zoneId);
+  if (!routing.enabled) {
+    try {
+      await cf.enableEmailRouting(zoneId);
+    } catch (error) {
+      if (!isMxConflictError(error)) throw error;
+      if (opts.forceMxResolve) {
+        await clearConflictingMxRecords(cf, zoneId, domain);
+        await cf.enableEmailRouting(zoneId);
+      } else {
+        const mxConflicts = await findConflictingMxRecords(cf, zoneId, domain);
+        throw new MxConflictError(domain, zoneId, mxConflicts);
+      }
+    }
+  }
+  const existing = await cf.listEmailRoutingRules(zoneId);
+  const rules = [];
+  for (const entry of entries) {
+    const address = entry.address.trim().toLowerCase();
+    if (!address) continue;
+    const receive = entry.inboundEnabled !== false;
+    const action = receive ? { type: "worker", value: [workerScriptName] } : { type: "drop" };
+    const ruleAction = receive ? "worker" : "drop";
+    const ruleName = receive ? `Store ${address} in Worker` : `Drop inbound for ${address}`;
+    const current = existing.find((rule) => matchesAddress(rule, address));
+    if (current) {
+      const updated = await cf.updateEmailRoutingRule(zoneId, current.id, {
+        enabled: true,
+        actions: [action],
+        matchers: [{ type: "literal", field: "to", value: address }]
+      });
+      rules.push({
+        address,
+        ruleId: updated.id,
+        action: ruleAction
+      });
+      continue;
+    }
+    const created = await cf.createEmailRoutingRule(zoneId, {
+      name: ruleName,
+      enabled: true,
+      priority: 0,
+      matchers: [{ type: "literal", field: "to", value: address }],
+      actions: [action]
+    });
+    rules.push({
+      address,
+      ruleId: created.id,
+      action: ruleAction
+    });
+  }
+  return {
+    domain,
+    zoneId,
+    routingEnabled: true,
+    rules
+  };
+}
+__name(ensureInboundRouting, "ensureInboundRouting");
+async function removeInboundWorkerRouting(cf, domain, addresses2) {
+  const zoneId = await resolveZoneId(cf, domain);
+  const existing = await cf.listEmailRoutingRules(zoneId);
+  const targets = new Set(
+    addresses2.map((address) => address.trim().toLowerCase()).filter(Boolean)
+  );
+  const removed = [];
+  for (const address of targets) {
+    const matches = existing.filter((rule) => matchesAddress(rule, address));
+    for (const rule of matches) {
+      await cf.deleteEmailRoutingRule(zoneId, rule.id);
+      removed.push({ address, ruleId: rule.id });
+    }
+  }
+  return { domain, zoneId, removed };
+}
+__name(removeInboundWorkerRouting, "removeInboundWorkerRouting");
+
+// src/routes/console/mailbox.ts
+init_catalog_store();
+
+// db/app/mobile.ts
+init_drizzle_orm();
+init_schema();
+async function getAccountMobileConfig(db, email) {
+  if (!db) return null;
+  const row = await db.select().from(mobilePasswords).where(eq(mobilePasswords.email, email.trim().toLowerCase())).get();
+  if (!row) return null;
+  return {
+    passwordHash: row.passwordHash,
+    salt: row.salt,
+    updatedAt: row.updatedAt
+  };
+}
+__name(getAccountMobileConfig, "getAccountMobileConfig");
+async function setAccountMobileConfig(db, email, config) {
+  if (!db) return;
+  await db.insert(mobilePasswords).values({
+    email: email.trim().toLowerCase(),
+    passwordHash: config.passwordHash,
+    salt: config.salt,
+    updatedAt: config.updatedAt
+  }).onConflictDoUpdate({
+    target: mobilePasswords.email,
+    set: {
+      passwordHash: config.passwordHash,
+      salt: config.salt,
+      updatedAt: config.updatedAt
+    }
+  }).run();
+}
+__name(setAccountMobileConfig, "setAccountMobileConfig");
+async function clearAccountMobileConfig(db, email) {
+  if (!db) return;
+  await db.delete(mobilePasswords).where(eq(mobilePasswords.email, email.trim().toLowerCase())).run();
+}
+__name(clearAccountMobileConfig, "clearAccountMobileConfig");
+
+// src/lib/mobile-config.ts
+function bytesToHex3(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(bytesToHex3, "bytesToHex");
+function randomHex(byteLength) {
+  return bytesToHex3(crypto.getRandomValues(new Uint8Array(byteLength)));
+}
+__name(randomHex, "randomHex");
+var PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+function generateMobilePassword() {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  let out = "";
+  for (let i = 0; i < 12; i++) {
+    out += PASSWORD_ALPHABET[bytes[i] % PASSWORD_ALPHABET.length];
+  }
+  return out;
+}
+__name(generateMobilePassword, "generateMobilePassword");
+function generateMobileSalt() {
+  return randomHex(16);
+}
+__name(generateMobileSalt, "generateMobileSalt");
+async function hashMobilePassword(password, salt) {
+  return sha256Hex(`${salt}:${password.trim()}`);
+}
+__name(hashMobilePassword, "hashMobilePassword");
+function constantTimeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+__name(constantTimeEqual, "constantTimeEqual");
+async function getAccountMobileConfig2(db, email) {
+  return getAccountMobileConfig(db, email);
+}
+__name(getAccountMobileConfig2, "getAccountMobileConfig");
+async function setAccountMobileConfig2(db, email, config) {
+  await setAccountMobileConfig(db, email, config);
+}
+__name(setAccountMobileConfig2, "setAccountMobileConfig");
+async function clearAccountMobileConfig2(db, email) {
+  await clearAccountMobileConfig(db, email);
+}
+__name(clearAccountMobileConfig2, "clearAccountMobileConfig");
+async function rotateAccountMobileConfig(db, email) {
+  const password = generateMobilePassword();
+  const salt = generateMobileSalt();
+  const passwordHash = await hashMobilePassword(password, salt);
+  const config = {
+    passwordHash,
+    salt,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  await setAccountMobileConfig2(db, email, config);
+  return { password, config };
+}
+__name(rotateAccountMobileConfig, "rotateAccountMobileConfig");
+function toAccountMobileConfigPublicView(config) {
+  return config ? { hasPassword: true, updatedAt: config.updatedAt } : { hasPassword: false, updatedAt: null };
+}
+__name(toAccountMobileConfigPublicView, "toAccountMobileConfigPublicView");
+
+// src/routes/console/mailbox.ts
+var consoleMailbox = new Hono2();
+consoleMailbox.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  return c.json(data);
+});
+consoleMailbox.put("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const domains2 = Array.isArray(body.domains) ? [
+    ...new Set(
+      body.domains.filter((d) => typeof d === "string").map(normalizeDomain2).filter(Boolean)
+    )
+  ].sort() : [];
+  const addresses2 = Array.isArray(body.addresses) ? body.addresses.filter(
+    (a) => !!a && typeof a === "object" && typeof a.email === "string" && typeof a.domain === "string"
+  ).map(
+    (a) => normalizeMailboxAddress({
+      email: a.email,
+      domain: a.domain,
+      displayName: typeof a.displayName === "string" ? a.displayName : void 0,
+      inboundEnabled: a.inboundEnabled === false ? false : a.inboundEnabled === true ? true : void 0
+    })
+  ) : [];
+  const data = { domains: domains2, addresses: addresses2 };
+  await writeMailbox(createAppDb(c.env.RELAYBASE_DB), data);
+  return c.json(data);
+});
+consoleMailbox.get("/config", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  const domains2 = data.domains;
+  const emailDomain = domains2[0] ?? "";
+  return c.json({
+    emailDomain,
+    domain: emailDomain,
+    domains: domains2,
+    activeDomain: emailDomain || null,
+    registeredAddresses: data.addresses.map((a) => a.email),
+    configured: domains2.length > 0,
+    relaybaseConfigured: true,
+    relaybaseAuthConfigured: true,
+    cloudflareConfigured: true,
+    credentialSource: "integration",
+    usesIntegrationCredentials: true,
+    audienceContacts: [],
+    broadcasts: [],
+    relaybaseWorkerUrl: ""
+  });
+});
+var consoleDomains = new Hono2();
+consoleDomains.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  return c.json({ domains: listDomainSummaries(data) });
+});
+consoleDomains.post("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  try {
+    const data = await addDomain2(createAppDb(c.env.RELAYBASE_DB), body.domain ?? "");
+    const domain = normalizeDomain2(body.domain ?? "");
+    const summaries = listDomainSummaries(data);
+    return c.json({
+      domains: summaries,
+      onboarding: summaries.find((d) => d.domain === domain)?.onboarding ?? null,
+      message: `Added ${domain}.`
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed";
+    return c.json({ error: message }, 400);
+  }
+});
+consoleDomains.delete("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const domain = c.req.query("domain")?.trim();
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  const data = await removeDomain2(createAppDb(c.env.RELAYBASE_DB), domain);
+  return c.json({
+    domains: listDomainSummaries(data),
+    message: "Domain removed"
+  });
+});
+var consoleAddresses = new Hono2();
+consoleAddresses.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  if (c.req.query("all") === "1") {
+    return c.json({ addresses: data.addresses });
+  }
+  const domain = normalizeDomain2(c.req.query("domain") ?? "");
+  if (!domain) {
+    return c.json({ error: "domain query required" }, 400);
+  }
+  if (!data.domains.includes(domain)) {
+    return c.json({ error: "Domain not found" }, 404);
+  }
+  return c.json({
+    addresses: data.addresses.filter((a) => a.domain === domain)
+  });
+});
+consoleAddresses.post("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const domain = normalizeDomain2(
+    body.domain ?? c.req.query("domain") ?? ""
+  );
+  if (!domain) {
+    return c.json(
+      { error: "Select a domain before adding senders" },
+      400
+    );
+  }
+  const localParts = (Array.isArray(body.localParts) && body.localParts.length ? body.localParts : body.localPart ? [body.localPart] : []).map((part) => part.trim()).filter(Boolean);
+  if (!localParts.length) {
+    return c.json(
+      { error: "localPart or localParts is required" },
+      400
+    );
+  }
+  const emails = [
+    ...new Set(localParts.map((part) => `${part}@${domain}`.toLowerCase()))
+  ];
+  const inboundByLocal = body.inboundEnabledByLocalPart && typeof body.inboundEnabledByLocalPart === "object" ? body.inboundEnabledByLocalPart : {};
+  const singleDisplayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
+  const displayNames = body.displayNames && typeof body.displayNames === "object" ? body.displayNames : {};
+  const entries = emails.map((email) => {
+    const local = email.split("@")[0] ?? "";
+    const fromMap = typeof displayNames[local] === "string" ? displayNames[local].trim() : "";
+    const inboundFromMap = typeof inboundByLocal[local] === "boolean" ? inboundByLocal[local] : typeof inboundByLocal[local.toLowerCase()] === "boolean" ? inboundByLocal[local.toLowerCase()] : void 0;
+    const inboundEnabled = typeof inboundFromMap === "boolean" ? inboundFromMap : typeof body.inboundEnabled === "boolean" ? body.inboundEnabled : true;
+    return {
+      email,
+      displayName: fromMap || singleDisplayName || void 0,
+      inboundEnabled
+    };
+  });
+  try {
+    const cf = await createCloudflareClient(c.env);
+    await ensureInboundRouting(
+      cf,
+      domain,
+      entries.map((entry) => ({
+        address: entry.email,
+        inboundEnabled: entry.inboundEnabled
+      })),
+      c.env.WORKER_SCRIPT_NAME,
+      { forceMxResolve: body.forceMxResolve === true }
+    );
+  } catch (error) {
+    if (error instanceof MxConflictError) {
+      return c.json(
+        {
+          error: "Non-Cloudflare MX records exist for this domain. Remove them to enable Email Routing.",
+          mxConflict: true,
+          domain: error.domain,
+          mxConflicts: error.mxConflicts
+        },
+        409
+      );
+    }
+    const message = error instanceof Error ? error.message : "Failed to configure inbound routing";
+    return c.json(
+      {
+        error: `Could not configure inbox for ${emails.join(", ")}: ${message}`
+      },
+      502
+    );
+  }
+  const { data, added } = await upsertAddresses2(createAppDb(c.env.RELAYBASE_DB), domain, entries);
+  if (added.length === 1) {
+    return c.json({ address: added[0], addresses: added });
+  }
+  return c.json({
+    addresses: added,
+    all: data.addresses.filter((a) => a.domain === domain)
+  });
+});
+consoleAddresses.patch("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const email = body.email?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  const index2 = data.addresses.findIndex((a) => a.email === email);
+  if (index2 < 0) {
+    return c.json({ error: "Address not found" }, 404);
+  }
+  const current = data.addresses[index2];
+  const displayName = typeof body.displayName === "string" ? body.displayName.trim() : body.displayName === null ? "" : void 0;
+  const signature = typeof body.signature === "string" ? body.signature : body.signature === null ? "" : void 0;
+  const inboundEnabled = typeof body.inboundEnabled === "boolean" ? body.inboundEnabled : current.inboundEnabled !== false;
+  const mobileEnabled = typeof body.mobileEnabled === "boolean" ? body.mobileEnabled : current.mobileEnabled !== false;
+  if (displayName === void 0 && signature === void 0 && typeof body.inboundEnabled !== "boolean" && typeof body.mobileEnabled !== "boolean") {
+    return c.json({ address: current });
+  }
+  if (typeof body.inboundEnabled === "boolean") {
+    try {
+      const cf = await createCloudflareClient(c.env);
+      await ensureInboundRouting(
+        cf,
+        current.domain,
+        [{ address: email, inboundEnabled }],
+        c.env.WORKER_SCRIPT_NAME
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update inbound routing";
+      return c.json({ error: message }, 502);
+    }
+  }
+  const updated = await updateAddress2(createAppDb(c.env.RELAYBASE_DB), email, {
+    displayName,
+    signature,
+    inboundEnabled,
+    mobileEnabled
+  });
+  if (!updated) {
+    return c.json({ error: "Address not found" }, 404);
+  }
+  return c.json({ address: updated });
+});
+consoleAddresses.delete("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const email = c.req.query("email")?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  const { data, removed } = await removeAddress2(createAppDb(c.env.RELAYBASE_DB), email);
+  if (removed) {
+    try {
+      const cf = await createCloudflareClient(c.env);
+      await removeInboundWorkerRouting(cf, removed.domain, [removed.email]);
+    } catch (error) {
+      console.error("Failed to remove inbound routing", error);
+    }
+  }
+  const domain = c.req.query("domain")?.trim().toLowerCase();
+  return c.json({
+    addresses: domain ? data.addresses.filter((a) => a.domain === domain) : data.addresses
+  });
+});
+consoleAddresses.get("/mobile-password", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const email = c.req.query("email")?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  const config = await getAccountMobileConfig2(createAppDb(c.env.RELAYBASE_DB), email);
+  return c.json(toAccountMobileConfigPublicView(config));
+});
+consoleAddresses.post("/mobile-password", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const email = body.email?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  const { password, config } = await rotateAccountMobileConfig(
+    createAppDb(c.env.RELAYBASE_DB),
+    email
+  );
+  return c.json({
+    password,
+    hasPassword: true,
+    updatedAt: config.updatedAt
+  });
+});
+consoleAddresses.delete("/mobile-password", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const email = c.req.query("email")?.trim().toLowerCase();
+  if (!email) {
+    return c.json({ error: "email is required" }, 400);
+  }
+  await clearAccountMobileConfig2(createAppDb(c.env.RELAYBASE_DB), email);
+  return c.json({ hasPassword: false, updatedAt: null });
+});
+
+// src/routes/console/branding.ts
+init_cloudflare_config();
+init_app();
+
+// db/app/branding.ts
+init_drizzle_orm();
+init_schema();
+function defaultBrandingForDomain(domain) {
+  return {
+    dmarcPolicy: "quarantine",
+    dmarcRua: `dmarc@${domain}`
+  };
+}
+__name(defaultBrandingForDomain, "defaultBrandingForDomain");
+async function getDomainBranding(db, domain) {
+  if (!db) return defaultBrandingForDomain(domain);
+  const row = await db.select().from(domainBranding).where(eq(domainBranding.domain, domain.toLowerCase())).get();
+  if (!row) return defaultBrandingForDomain(domain);
+  return {
+    dmarcPolicy: row.dmarcPolicy,
+    dmarcRua: row.dmarcRua
+  };
+}
+__name(getDomainBranding, "getDomainBranding");
+async function mergeDomainBranding(db, domain, patch) {
+  if (!db) return defaultBrandingForDomain(domain);
+  const key = domain.toLowerCase();
+  const existing = await getDomainBranding(db, key);
+  const next = {
+    dmarcPolicy: patch.dmarcPolicy ?? existing.dmarcPolicy,
+    dmarcRua: patch.dmarcRua?.trim() || existing.dmarcRua
+  };
+  await db.insert(domainBranding).values({
+    domain: key,
+    dmarcPolicy: next.dmarcPolicy,
+    dmarcRua: next.dmarcRua
+  }).onConflictDoUpdate({
+    target: domainBranding.domain,
+    set: {
+      dmarcPolicy: next.dmarcPolicy,
+      dmarcRua: next.dmarcRua
+    }
+  }).run();
+  return next;
+}
+__name(mergeDomainBranding, "mergeDomainBranding");
+
+// src/lib/branding.ts
+function dmarcRecordName(domain) {
+  return `_dmarc.${domain}`;
+}
+__name(dmarcRecordName, "dmarcRecordName");
+function legacyBimiRecordName(domain) {
+  return `default._bimi.${domain}`;
+}
+__name(legacyBimiRecordName, "legacyBimiRecordName");
+function buildDmarcContent(config) {
+  const rua = config.dmarcRua.trim().replace(/^mailto:/i, "");
+  return `v=DMARC1; p=${config.dmarcPolicy}; rua=mailto:${rua}; adkim=s; aspf=s`;
+}
+__name(buildDmarcContent, "buildDmarcContent");
+function txtRecordMatches(records, name, includes) {
+  const target = name.toLowerCase();
+  return records.find(
+    (record) => record.type === "TXT" && record.name.toLowerCase() === target && record.content.includes(includes)
+  );
+}
+__name(txtRecordMatches, "txtRecordMatches");
+function parseDmarcPolicy(content) {
+  const match2 = content.match(/;\s*p\s*=\s*(none|quarantine|reject)/i);
+  if (!match2) return null;
+  return match2[1].toLowerCase();
+}
+__name(parseDmarcPolicy, "parseDmarcPolicy");
+async function getDomainBrandingConfig(db, domain) {
+  return getDomainBranding(db, domain);
+}
+__name(getDomainBrandingConfig, "getDomainBrandingConfig");
+async function mergeDomainBranding2(db, domain, patch) {
+  return mergeDomainBranding(db, domain, patch);
+}
+__name(mergeDomainBranding2, "mergeDomainBranding");
+async function fetchDomainBrandingStatus(db, cf, domain) {
+  const normalizedDomain = domain.trim().toLowerCase();
+  const config = await getDomainBrandingConfig(db, normalizedDomain);
+  const dmarcExpected = buildDmarcContent(config);
+  const notes = [
+    "DMARC authenticates this domain's mail (SPF/DKIM alignment) \u2014 it does not control any inbox logo."
+  ];
+  const zoneId = await cf.resolveZoneId(normalizedDomain);
+  if (!zoneId) {
+    return {
+      domain: normalizedDomain,
+      zoneId: null,
+      dnsConfigured: false,
+      dnsCanApply: true,
+      dnsApplyHint: null,
+      settings: config,
+      dmarc: {
+        type: "TXT",
+        name: dmarcRecordName(normalizedDomain),
+        expected: dmarcExpected,
+        current: null,
+        found: false,
+        recordId: null
+      },
+      dmarcEnforced: false,
+      notes: [
+        ...notes,
+        "Could not resolve the Cloudflare zone ID for this domain."
+      ]
+    };
+  }
+  const records = await cf.listDnsRecords(zoneId);
+  const dmarcRecord = txtRecordMatches(
+    records,
+    dmarcRecordName(normalizedDomain),
+    "v=DMARC1"
+  );
+  const dmarcPolicy = (dmarcRecord && parseDmarcPolicy(dmarcRecord.content)) ?? null;
+  const dmarcEnforced = dmarcPolicy === "quarantine" || dmarcPolicy === "reject";
+  return {
+    domain: normalizedDomain,
+    zoneId,
+    dnsConfigured: true,
+    dnsCanApply: true,
+    dnsApplyHint: null,
+    settings: config,
+    dmarc: {
+      type: "TXT",
+      name: dmarcRecordName(normalizedDomain),
+      expected: dmarcExpected,
+      current: dmarcRecord?.content ?? null,
+      found: Boolean(dmarcRecord),
+      recordId: dmarcRecord?.id ?? null
+    },
+    dmarcEnforced,
+    notes
+  };
+}
+__name(fetchDomainBrandingStatus, "fetchDomainBrandingStatus");
+async function removeLegacyBimiRecord(cf, zoneId, domain) {
+  const records = await cf.listDnsRecords(zoneId);
+  const bimiRecord = txtRecordMatches(
+    records,
+    legacyBimiRecordName(domain),
+    "v=BIMI1"
+  );
+  if (bimiRecord) {
+    await cf.deleteDnsRecord(zoneId, bimiRecord.id);
+  }
+}
+__name(removeLegacyBimiRecord, "removeLegacyBimiRecord");
+async function applyDomainBrandingDns(db, cf, domain) {
+  const normalizedDomain = domain.trim().toLowerCase();
+  const config = await getDomainBrandingConfig(db, normalizedDomain);
+  const zoneId = await cf.resolveZoneId(normalizedDomain);
+  if (!zoneId) {
+    throw new Error(
+      `Could not resolve Cloudflare zone for ${normalizedDomain}.`
+    );
+  }
+  await cf.upsertDnsRecord(zoneId, {
+    type: "TXT",
+    name: dmarcRecordName(normalizedDomain),
+    content: buildDmarcContent(config),
+    ttl: 1
+  });
+  await removeLegacyBimiRecord(cf, zoneId, normalizedDomain);
+  return fetchDomainBrandingStatus(db, cf, normalizedDomain);
+}
+__name(applyDomainBrandingDns, "applyDomainBrandingDns");
+
+// src/routes/console/branding.ts
+var consoleBranding = new Hono2();
+consoleBranding.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const domain = c.req.query("domain")?.trim();
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  let cf;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : "Cloudflare is not configured on this worker."
+      },
+      503
+    );
+  }
+  const status = await fetchDomainBrandingStatus(createAppDb(c.env.RELAYBASE_DB), cf, domain);
+  return c.json(status);
+});
+consoleBranding.put("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const body = await c.req.json();
+  const domain = body.domain?.trim().toLowerCase();
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  await mergeDomainBranding2(createAppDb(c.env.RELAYBASE_DB), domain, {
+    dmarcPolicy: body.dmarcPolicy,
+    dmarcRua: body.dmarcRua
+  });
+  let cf;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : "Cloudflare is not configured on this worker."
+      },
+      503
+    );
+  }
+  const status = await fetchDomainBrandingStatus(createAppDb(c.env.RELAYBASE_DB), cf, domain);
+  return c.json(status);
+});
+consoleBranding.post("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const body = await c.req.json();
+  const domain = body.domain?.trim().toLowerCase();
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  let cf;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : "Cloudflare is not configured on this worker."
+      },
+      503
+    );
+  }
+  const status = await applyDomainBrandingDns(createAppDb(c.env.RELAYBASE_DB), cf, domain);
+  return c.json(status);
+});
+
+// src/routes/console/keys.ts
+init_app();
+var consoleKeys = new Hono2();
+consoleKeys.post("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const domain = body.domain?.trim();
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  try {
+    const { record, apiKey } = await createKey(createAppDb(c.env.RELAYBASE_DB), {
+      domain,
+      label: body.label
+    });
+    return c.json(
+      {
+        id: record.id,
+        apiKey,
+        domain: record.domain,
+        label: record.label,
+        createdAt: record.createdAt
+      },
+      201
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to create key";
+    return c.json({ error: message }, 400);
+  }
+});
+consoleKeys.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const keys = await listKeys2(createAppDb(c.env.RELAYBASE_DB));
+  return c.json({ keys });
+});
+consoleKeys.patch("/:id", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const id = c.req.param("id")?.trim();
+  if (!id) {
+    return c.json({ error: "id is required" }, 400);
+  }
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  if (typeof body.active !== "boolean") {
+    return c.json({ error: "active boolean is required" }, 400);
+  }
+  const record = await setKeyActive2(createAppDb(c.env.RELAYBASE_DB), id, body.active);
+  if (!record) {
+    return c.json({ error: "Key not found" }, 404);
+  }
+  return c.json({ key: record });
+});
+consoleKeys.post("/:id/rotate", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const id = c.req.param("id")?.trim();
+  if (!id) {
+    return c.json({ error: "id is required" }, 400);
+  }
+  const rotated = await rotateKey(createAppDb(c.env.RELAYBASE_DB), id);
+  if (!rotated) {
+    return c.json({ error: "Key not found" }, 404);
+  }
+  return c.json({
+    id: rotated.record.id,
+    apiKey: rotated.apiKey,
+    domain: rotated.record.domain,
+    label: rotated.record.label,
+    createdAt: rotated.record.createdAt
+  });
+});
+consoleKeys.delete("/:id", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const id = c.req.param("id")?.trim();
+  if (!id) {
+    return c.json({ error: "id is required" }, 400);
+  }
+  const deleted = await revokeKey(createAppDb(c.env.RELAYBASE_DB), id);
+  if (!deleted) {
+    return c.json({ error: "Key not found" }, 404);
+  }
+  return c.json({ ok: true, id });
+});
+
+// src/routes/console/mailbox-health.ts
+init_app();
+init_catalog_store();
+init_messages();
+var consoleMailboxHealth = new Hono2();
+consoleMailboxHealth.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const mailDb = createMailDb(c.env.RELAYBASE_MAIL);
+  if (!mailDb) {
+    return c.json({ error: "Mail index (RELAYBASE_MAIL) is not configured" }, 503);
+  }
+  const staleDaysThreshold = Number(c.req.query("staleDays") ?? "1");
+  const thresholdMs = Number.isFinite(staleDaysThreshold) && staleDaysThreshold > 0 ? staleDaysThreshold * 24 * 60 * 60 * 1e3 : 24 * 60 * 60 * 1e3;
+  const [freshness, mailbox] = await Promise.all([
+    mailboxFreshness(mailDb),
+    readMailbox2(createAppDb(c.env.RELAYBASE_DB))
+  ]);
+  const retainedDomains = new Set(
+    mailbox.domains.map((d) => d.trim().toLowerCase())
+  );
+  const now = Date.now();
+  const byDomain = {};
+  for (const domain of retainedDomains) {
+    byDomain[domain] = {
+      domain,
+      inbound: { lastAt: null, count: 0, stale: true },
+      sent: { lastAt: null, count: 0 }
+    };
+  }
+  for (const row of freshness) {
+    const domain = row.domain.trim().toLowerCase();
+    if (!byDomain[domain]) {
+      byDomain[domain] = {
+        domain,
+        inbound: { lastAt: null, count: 0, stale: true },
+        sent: { lastAt: null, count: 0 }
+      };
+    }
+    const bucket = byDomain[domain];
+    if (row.kind === "inbound") {
+      bucket.inbound = {
+        lastAt: row.last_at,
+        count: row.count,
+        stale: row.last_at ? now - new Date(row.last_at).getTime() > thresholdMs : true
+      };
+    } else if (row.kind === "sent") {
+      bucket.sent = { lastAt: row.last_at, count: row.count };
+    }
+  }
+  return c.json({
+    staleDaysThreshold,
+    domains: Object.values(byDomain).sort((a, b) => a.domain.localeCompare(b.domain)),
+    d1Configured: true,
+    r2Configured: Boolean(c.env.INBOUND),
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    totalDomains: Object.keys(byDomain).length,
+    staleDomains: Object.values(byDomain).filter((d) => d.inbound.stale).length,
+    totalInbound: Object.values(byDomain).reduce(
+      (sum, d) => sum + d.inbound.count,
+      0
+    ),
+    totalSent: Object.values(byDomain).reduce((sum, d) => sum + d.sent.count, 0)
+  });
+});
+
+// src/routes/console/settings.ts
+init_app();
+
+// db/app/settings.ts
+init_drizzle_orm();
+init_schema();
+var MIN_INBOUND_RETAIN_PER_DOMAIN = 100;
+function normalizeRetain(value) {
+  if (typeof value !== "number" || !Number.isInteger(value)) return null;
+  if (value < MIN_INBOUND_RETAIN_PER_DOMAIN) return null;
+  return value;
+}
+__name(normalizeRetain, "normalizeRetain");
+async function getAppSettings(db) {
+  if (!db) return { inboundRetainPerDomain: null };
+  try {
+    const row = await db.select().from(appSettings).where(eq(appSettings.id, 1)).get();
+    return {
+      inboundRetainPerDomain: normalizeRetain(row?.inboundRetainPerDomain)
+    };
+  } catch {
+    return { inboundRetainPerDomain: null };
+  }
+}
+__name(getAppSettings, "getAppSettings");
+async function setInboundRetainPerDomain(db, inboundRetainPerDomain) {
+  if (!db) return { inboundRetainPerDomain: null };
+  const value = normalizeRetain(inboundRetainPerDomain);
+  const updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  await db.insert(appSettings).values({
+    id: 1,
+    inboundRetainPerDomain: value,
+    updatedAt
+  }).onConflictDoUpdate({
+    target: appSettings.id,
+    set: { inboundRetainPerDomain: value, updatedAt }
+  }).run();
+  return { inboundRetainPerDomain: value };
+}
+__name(setInboundRetainPerDomain, "setInboundRetainPerDomain");
+
+// src/routes/console/settings.ts
+var consoleSettings = new Hono2();
+consoleSettings.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  if (!db) {
+    return c.json({ error: "Product database is not configured" }, 503);
+  }
+  const settings = await getAppSettings(db);
+  return c.json({ inboundRetainPerDomain: settings.inboundRetainPerDomain });
+});
+consoleSettings.put("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  if (!db) {
+    return c.json({ error: "Product database is not configured" }, 503);
+  }
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  if (!("inboundRetainPerDomain" in body)) {
+    return c.json({ error: "inboundRetainPerDomain is required" }, 400);
+  }
+  const raw2 = body.inboundRetainPerDomain;
+  if (raw2 !== null && raw2 !== void 0) {
+    if (typeof raw2 !== "number" || !Number.isInteger(raw2)) {
+      return c.json(
+        { error: "inboundRetainPerDomain must be an integer or null" },
+        400
+      );
+    }
+    if (raw2 < MIN_INBOUND_RETAIN_PER_DOMAIN) {
+      return c.json(
+        {
+          error: `inboundRetainPerDomain must be at least ${MIN_INBOUND_RETAIN_PER_DOMAIN}, or null for unlimited`
+        },
+        400
+      );
+    }
+  }
+  const settings = await setInboundRetainPerDomain(
+    db,
+    raw2 === null || raw2 === void 0 ? null : raw2
+  );
+  return c.json({ inboundRetainPerDomain: settings.inboundRetainPerDomain });
+});
+
+// src/routes/console/sending-onboard.ts
+init_cloudflare_config();
+
+// src/lib/sending-onboard.ts
+init_cloudflare_client();
+
+// src/lib/sending-onboard-dns.ts
+function isSendingOwnedDnsRecord(record, domain) {
+  const d = domain.trim().toLowerCase();
+  const name = record.name.trim().toLowerCase();
+  const type = record.type.toUpperCase();
+  if (!d || !name) return false;
+  if (name !== `cf-bounce.${d}`) return false;
+  return type === "MX" || type === "TXT";
+}
+__name(isSendingOwnedDnsRecord, "isSendingOwnedDnsRecord");
+
+// src/lib/sending-health.ts
+var RESTRICTED_ERROR = "Email Sending is not onboarded. Until it is, Cloudflare only delivers to verified destination addresses \u2014 other Relaybase mailboxes do not count.";
+var DISABLED_ERROR = "Email Sending is disabled for this domain. Until it is enabled, Cloudflare only delivers to verified destination addresses \u2014 other Relaybase mailboxes do not count.";
+var NO_ZONE_ERROR = "This domain is not a zone on the connected Cloudflare account.";
+var UNKNOWN_ERROR = "Could not check Email Sending status.";
+function sendingRowMatchesDomain(rowName, domain) {
+  const name = rowName.trim().toLowerCase();
+  const needle = domain.trim().toLowerCase();
+  if (!name || !needle) return false;
+  if (name === needle) return true;
+  if (name.startsWith("*.")) {
+    const suffix = name.slice(1);
+    return needle.endsWith(suffix) && needle !== name.slice(2);
+  }
+  return false;
+}
+__name(sendingRowMatchesDomain, "sendingRowMatchesDomain");
+function evaluateSendingHealth(input) {
+  const domain = input.domain.trim().toLowerCase();
+  if (!input.zoneId) {
+    return {
+      domain,
+      status: "no_zone",
+      sendingEnabled: false,
+      sendingOnboarded: false,
+      zoneId: null,
+      error: NO_ZONE_ERROR
+    };
+  }
+  const matches = (input.sendingRows ?? []).filter(
+    (row) => sendingRowMatchesDomain(row.name, domain)
+  );
+  const enabledMatch = matches.find((row) => row.enabled);
+  if (enabledMatch) {
+    return {
+      domain,
+      status: "ready",
+      sendingEnabled: true,
+      sendingOnboarded: true,
+      zoneId: input.zoneId,
+      error: null
+    };
+  }
+  const disabledMatch = matches.find((row) => !row.enabled);
+  if (disabledMatch) {
+    return {
+      domain,
+      status: "restricted",
+      sendingEnabled: false,
+      sendingOnboarded: true,
+      zoneId: input.zoneId,
+      error: DISABLED_ERROR
+    };
+  }
+  if (input.hasCfBounceMx === true) {
+    return {
+      domain,
+      status: "ready",
+      sendingEnabled: true,
+      sendingOnboarded: true,
+      zoneId: input.zoneId,
+      error: null
+    };
+  }
+  if (input.sendingRows !== null || input.hasCfBounceMx === false) {
+    return {
+      domain,
+      status: "restricted",
+      sendingEnabled: false,
+      sendingOnboarded: false,
+      zoneId: input.zoneId,
+      error: RESTRICTED_ERROR
+    };
+  }
+  return {
+    domain,
+    status: "unknown",
+    sendingEnabled: false,
+    sendingOnboarded: false,
+    zoneId: input.zoneId,
+    error: UNKNOWN_ERROR
+  };
+}
+__name(evaluateSendingHealth, "evaluateSendingHealth");
+function unknownSendingHealthDomain(domain, error, cloudflareSendingUrl) {
+  return {
+    domain: domain.trim().toLowerCase(),
+    status: "unknown",
+    sendingEnabled: false,
+    sendingOnboarded: false,
+    zoneId: null,
+    error,
+    cloudflareSendingUrl
+  };
+}
+__name(unknownSendingHealthDomain, "unknownSendingHealthDomain");
+function sendingDashboardUrl(accountId) {
+  const id = accountId?.trim() ?? "";
+  if (id) return `https://dash.cloudflare.com/${id}/email-service/sending`;
+  return "https://dash.cloudflare.com/?to=/:account/email-service/sending";
+}
+__name(sendingDashboardUrl, "sendingDashboardUrl");
+async function collectSendingHealth(domains2, cf, opts = {}) {
+  const generatedAt = opts.generatedAt ?? (/* @__PURE__ */ new Date()).toISOString();
+  const cloudflareSendingUrl = sendingDashboardUrl(opts.accountId);
+  const unique = [
+    ...new Set(domains2.map((d) => d.trim().toLowerCase()).filter(Boolean))
+  ];
+  if (!cf) {
+    const error = opts.probeError ?? UNKNOWN_ERROR;
+    return {
+      generatedAt,
+      domains: unique.map(
+        (domain) => unknownSendingHealthDomain(domain, error, cloudflareSendingUrl)
+      )
+    };
+  }
+  let zones;
+  try {
+    zones = await cf.listZones();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : UNKNOWN_ERROR;
+    return {
+      generatedAt,
+      domains: unique.map(
+        (domain) => unknownSendingHealthDomain(domain, message, cloudflareSendingUrl)
+      )
+    };
+  }
+  const zoneByName = new Map(
+    zones.map((zone) => [zone.name.trim().toLowerCase(), zone])
+  );
+  const rows = await Promise.all(
+    unique.map(async (domain) => {
+      const zone = zoneByName.get(domain);
+      if (!zone) {
+        return {
+          ...evaluateSendingHealth({
+            domain,
+            zoneId: null,
+            sendingRows: [],
+            hasCfBounceMx: false
+          }),
+          cloudflareSendingUrl
+        };
+      }
+      let sendingRows = null;
+      try {
+        sendingRows = await cf.listSendingSubdomains(zone.id);
+      } catch {
+        sendingRows = null;
+      }
+      const apexEnabled = (sendingRows ?? []).some(
+        (row) => sendingRowMatchesDomain(row.name, domain) && row.enabled
+      );
+      let hasCfBounceMx = null;
+      if (!apexEnabled) {
+        try {
+          hasCfBounceMx = await cf.hasSendingBounceMx(zone.id, domain);
+        } catch {
+          hasCfBounceMx = null;
+        }
+      }
+      return {
+        ...evaluateSendingHealth({
+          domain,
+          zoneId: zone.id,
+          sendingRows,
+          hasCfBounceMx
+        }),
+        cloudflareSendingUrl
+      };
+    })
+  );
+  return { generatedAt, domains: rows };
+}
+__name(collectSendingHealth, "collectSendingHealth");
+
+// src/lib/sending-onboard.ts
+var NO_ZONE_ERROR2 = "This domain is not a zone on the connected Cloudflare account.";
+var CONFIRM_ERROR = "These DNS records would be replaced. Confirm to delete them and continue.";
+function toConflict(record) {
+  return {
+    id: record.id,
+    type: record.type,
+    name: record.name,
+    content: record.content,
+    priority: record.priority ?? null
+  };
+}
+__name(toConflict, "toConflict");
+async function listSendingDnsConflicts(cf, zoneId, domain) {
+  const d = domain.trim().toLowerCase();
+  const bounce = `cf-bounce.${d}`;
+  const [mxBounce, txtBounce] = await Promise.all([
+    cf.listDnsRecords(zoneId, { type: "MX", name: bounce }),
+    cf.listDnsRecords(zoneId, { type: "TXT", name: bounce })
+  ]);
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const record of [...mxBounce, ...txtBounce]) {
+    if (!isSendingOwnedDnsRecord(record, d) || seen.has(record.id)) continue;
+    seen.add(record.id);
+    out.push(toConflict(record));
+  }
+  return out;
+}
+__name(listSendingDnsConflicts, "listSendingDnsConflicts");
+async function enableOrCreateSending(cf, zoneId, domain) {
+  const rows = await cf.listSendingSubdomains(zoneId);
+  const match2 = rows.find((row) => sendingRowMatchesDomain(row.name, domain));
+  if (match2 && !match2.enabled) {
+    await cf.updateSendingSubdomain(zoneId, match2.name, { enabled: true });
+    return;
+  }
+  if (match2?.enabled) return;
+  await cf.createSendingSubdomain(zoneId, domain);
+}
+__name(enableOrCreateSending, "enableOrCreateSending");
+async function onboardSendingDomain(cf, domainInput, opts = {}) {
+  const domain = domainInput.trim().toLowerCase();
+  const zoneId = await cf.resolveZoneId(domain);
+  if (!zoneId) {
+    return { ok: false, code: "no_zone", domain, error: NO_ZONE_ERROR2 };
+  }
+  const records = await listSendingDnsConflicts(cf, zoneId, domain);
+  if (records.length > 0 && !opts.confirmReplace) {
+    return {
+      ok: false,
+      code: "needs_confirm",
+      domain,
+      zoneId,
+      records,
+      error: CONFIRM_ERROR
+    };
+  }
+  if (opts.confirmReplace) {
+    for (const record of records) {
+      try {
+        await cf.deleteDnsRecord(zoneId, record.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (message.includes("[1046]")) continue;
+        throw error;
+      }
+    }
+  }
+  try {
+    await enableOrCreateSending(cf, zoneId, domain);
+  } catch (error) {
+    if (error instanceof SendingOnboardApiMissingError) {
+      return {
+        ok: false,
+        code: "unavailable",
+        domain,
+        error: error.message,
+        cloudflareSendingUrl: sendingDashboardUrl(opts.accountId)
+      };
+    }
+    throw error;
+  }
+  const snapshot = await collectSendingHealth([domain], cf, {
+    accountId: opts.accountId
+  });
+  const row = snapshot.domains[0];
+  if (!row) {
+    return {
+      ok: false,
+      code: "unavailable",
+      domain,
+      error: "Onboard finished but sending health returned no row.",
+      cloudflareSendingUrl: sendingDashboardUrl(opts.accountId)
+    };
+  }
+  return { ok: true, domain: row };
+}
+__name(onboardSendingDomain, "onboardSendingDomain");
+
+// src/routes/console/sending-onboard.ts
+var consoleSendingOnboard = new Hono2();
+consoleSendingOnboard.post("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let body;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  const domain = typeof body.domain === "string" ? body.domain.trim() : "";
+  if (!domain) {
+    return c.json({ error: "domain is required" }, 400);
+  }
+  const confirmReplace = body.confirmReplace === true;
+  let cf;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : "Cloudflare API is not configured on this worker"
+      },
+      503
+    );
+  }
+  try {
+    const result = await onboardSendingDomain(cf, domain, {
+      confirmReplace,
+      accountId: c.env.CF_ACCOUNT_ID
+    });
+    if (result.ok) {
+      return c.json({ domain: result.domain });
+    }
+    if (result.code === "no_zone") {
+      return c.json(
+        { error: result.error, code: result.code, domain: result.domain },
+        400
+      );
+    }
+    if (result.code === "needs_confirm") {
+      return c.json(
+        {
+          error: result.error,
+          code: result.code,
+          domain: result.domain,
+          zoneId: result.zoneId,
+          records: result.records
+        },
+        409
+      );
+    }
+    return c.json(
+      {
+        error: result.error,
+        code: result.code,
+        domain: result.domain,
+        cloudflareSendingUrl: result.cloudflareSendingUrl
+      },
+      502
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Sending onboard failed";
+    return c.json({ error: message }, 502);
+  }
+});
+
+// src/routes/console/zones.ts
+init_cloudflare_config();
+var consoleZones = new Hono2();
+consoleZones.get("/", async (c) => {
+  const denied = await requireConsoleSession(c);
+  if (denied) return denied;
+  let cf;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    return c.json(
+      {
+        error: error instanceof Error ? error.message : "Cloudflare API is not configured on this worker \u2014 add a CF_API_TOKEN secret (Email Sending + Email Routing + Zone Read) so the Worker can manage domains and DNS"
+      },
+      503
+    );
+  }
+  try {
+    const zones = await cf.listZones();
+    return c.json({ zones });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to list zones";
+    return c.json({ error: message }, 502);
+  }
+});
+
+// src/routes/mail/addresses.ts
+init_app();
+init_catalog_store();
+var mailAddresses = new Hono2();
+mailAddresses.get("/", async (c) => {
+  const denied = await requireMailSession(c);
+  if (denied) return denied;
+  const data = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  return c.json({ addresses: data.addresses });
+});
+
 // src/routes/mail/favicon.ts
 var mailFavicon = new Hono2();
 var FETCH_TIMEOUT_MS = 5e3;
@@ -19378,7 +20455,7 @@ async function fetchIcon(domain, path) {
 }
 __name(fetchIcon, "fetchIcon");
 mailFavicon.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = sanitizeDomain(c.req.query("domain"));
   if (!domain) {
@@ -19460,7 +20537,7 @@ init_messages();
 init_catalog_store();
 var mailInbox = new Hono2();
 mailInbox.get("/notifications", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -19472,7 +20549,7 @@ mailInbox.get("/notifications", async (c) => {
   return c.json({ events });
 });
 mailInbox.post("/notifications/ack", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -19498,7 +20575,7 @@ function serializeMessage(message) {
 }
 __name(serializeMessage, "serializeMessage");
 mailInbox.get("/counts", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -19520,7 +20597,7 @@ mailInbox.get("/counts", async (c) => {
   return c.json({ counts, totalAll, unreadAll });
 });
 mailInbox.get("/search", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -19586,7 +20663,7 @@ function rowToInboundMeta(row) {
 }
 __name(rowToInboundMeta, "rowToInboundMeta");
 mailInbox.post("/read", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -19616,7 +20693,7 @@ mailInbox.post("/read", async (c) => {
   return c.json(result);
 });
 mailInbox.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -19645,7 +20722,7 @@ mailInbox.get("/", async (c) => {
   });
 });
 mailInbox.get("/:id/attachments/:attachmentId", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -19668,8 +20745,34 @@ mailInbox.get("/:id/attachments/:attachmentId", async (c) => {
     }
   });
 });
+mailInbox.get("/routing", async (c) => {
+  const denied = await requireMailSession(c);
+  if (denied) return denied;
+  const mailbox = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  const requested = c.req.query("domain")?.trim().toLowerCase();
+  const domains2 = requested ? [requested] : mailbox.domains.map((domain) => domain.trim().toLowerCase()).filter(Boolean);
+  try {
+    const cf = await createCloudflareClient(c.env);
+    const results = await Promise.all(
+      domains2.map(async (domain) => {
+        try {
+          return await listInboundRouting(cf, domain);
+        } catch (error) {
+          return {
+            domain,
+            error: error instanceof Error ? error.message : "Failed to list routing"
+          };
+        }
+      })
+    );
+    return c.json({ domains: results });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to list routing";
+    return c.json({ error: message }, 502);
+  }
+});
 mailInbox.post("/routing", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -19708,7 +20811,7 @@ mailInbox.post("/routing", async (c) => {
   }
 });
 mailInbox.delete("/routing", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -19738,7 +20841,7 @@ mailInbox.delete("/routing", async (c) => {
   }
 });
 mailInbox.get("/:id", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -19756,6 +20859,320 @@ init_cloudflare_api_hints();
 init_email_send();
 init_ops_logs();
 init_send_logs();
+init_mime();
+
+// src/lib/mail/local-deliver.ts
+init_app();
+init_catalog_store();
+init_inbound_events2();
+
+// db/app/webhooks.ts
+init_drizzle_orm();
+init_schema();
+function rowToWebhookRecord(row) {
+  const { secretHash: _secretHash, ...record } = row;
+  return {
+    id: record.id,
+    domain: record.domain,
+    url: record.url,
+    createdAt: record.createdAt,
+    active: record.active === 1
+  };
+}
+__name(rowToWebhookRecord, "rowToWebhookRecord");
+function rowToStoredWebhook(row) {
+  return {
+    id: row.id,
+    domain: row.domain,
+    url: row.url,
+    secretHash: row.secretHash,
+    createdAt: row.createdAt,
+    active: row.active === 1
+  };
+}
+__name(rowToStoredWebhook, "rowToStoredWebhook");
+async function listWebhooks(db, domain) {
+  if (!db) return [];
+  const rows = await db.select().from(webhooks).where(and(eq(webhooks.domain, domain.trim().toLowerCase()), eq(webhooks.active, 1))).all();
+  return rows.map(rowToWebhookRecord);
+}
+__name(listWebhooks, "listWebhooks");
+async function listStoredWebhooks(db, domain) {
+  if (!db) return [];
+  const rows = await db.select().from(webhooks).where(eq(webhooks.domain, domain.trim().toLowerCase())).all();
+  return rows.map(rowToStoredWebhook);
+}
+__name(listStoredWebhooks, "listStoredWebhooks");
+async function createWebhookRow(db, input) {
+  if (!db) return;
+  await db.insert(webhooks).values({
+    id: input.id,
+    domain: input.domain.trim().toLowerCase(),
+    url: input.url,
+    secretHash: input.secretHash,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    active: 1
+  }).run();
+}
+__name(createWebhookRow, "createWebhookRow");
+async function deleteWebhookRow(db, id) {
+  if (!db) return false;
+  const result = await db.delete(webhooks).where(eq(webhooks.id, id)).run();
+  return result.meta.changes > 0;
+}
+__name(deleteWebhookRow, "deleteWebhookRow");
+async function storeWebhookSecret(db, webhookId, secret) {
+  if (!db) return;
+  await db.insert(webhookSecrets).values({ webhookId, secret }).onConflictDoUpdate({
+    target: webhookSecrets.webhookId,
+    set: { secret }
+  }).run();
+}
+__name(storeWebhookSecret, "storeWebhookSecret");
+async function getWebhookSecret(db, webhookId) {
+  if (!db) return null;
+  const row = await db.select().from(webhookSecrets).where(eq(webhookSecrets.webhookId, webhookId)).get();
+  return row?.secret ?? null;
+}
+__name(getWebhookSecret, "getWebhookSecret");
+async function recordWebhookFail(db, input) {
+  if (!db) return;
+  await db.insert(webhookFails).values({
+    id: input.id,
+    webhookId: input.webhookId,
+    eventId: input.eventId,
+    url: input.url,
+    failedAt: input.failedAt,
+    expiresAt: input.expiresAt
+  }).run();
+}
+__name(recordWebhookFail, "recordWebhookFail");
+async function deleteExpiredWebhookFails(db, now) {
+  if (!db) return;
+  await db.delete(webhookFails).where(lt(webhookFails.expiresAt, now)).run();
+}
+__name(deleteExpiredWebhookFails, "deleteExpiredWebhookFails");
+
+// src/lib/webhooks.ts
+var MAX_WEBHOOKS_PER_DOMAIN = 3;
+var WEBHOOK_SECRET_PREFIX = "whsec_";
+var FAIL_TTL_SECONDS = 7 * 24 * 60 * 60;
+function bytesToHex4(bytes) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+__name(bytesToHex4, "bytesToHex");
+function generateWebhookSecret() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const bin = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+  const encoded = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `${WEBHOOK_SECRET_PREFIX}${encoded}`;
+}
+__name(generateWebhookSecret, "generateWebhookSecret");
+function isValidWebhookUrl(url) {
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+__name(isValidWebhookUrl, "isValidWebhookUrl");
+async function hmacSha256Hex2(secret, payload) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(payload)
+  );
+  return bytesToHex4(new Uint8Array(signature));
+}
+__name(hmacSha256Hex2, "hmacSha256Hex");
+async function listWebhooks2(db, domain) {
+  return listWebhooks(db, domain);
+}
+__name(listWebhooks2, "listWebhooks");
+async function createWebhook(db, params) {
+  const domain = params.domain.trim().toLowerCase();
+  const url = params.url.trim();
+  if (!isValidWebhookUrl(url)) {
+    throw new Error("url must be a valid http(s) URL");
+  }
+  const existing = await listWebhooks2(db, domain);
+  if (existing.length >= MAX_WEBHOOKS_PER_DOMAIN) {
+    throw new Error(`maximum ${MAX_WEBHOOKS_PER_DOMAIN} webhooks per domain`);
+  }
+  const secret = params.secret?.trim() || generateWebhookSecret();
+  const id = crypto.randomUUID();
+  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
+  await createWebhookRow(db, {
+    id,
+    domain,
+    url,
+    secretHash: await sha256Hex(secret)
+  });
+  await storeWebhookSecret2(db, id, secret);
+  return {
+    webhook: { id, domain, url, createdAt, active: true },
+    secret
+  };
+}
+__name(createWebhook, "createWebhook");
+async function deleteWebhook(db, domain, id) {
+  return deleteWebhookRow(db, id);
+}
+__name(deleteWebhook, "deleteWebhook");
+async function sleep(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+__name(sleep, "sleep");
+async function postWebhook(webhook, secret, event) {
+  const body = JSON.stringify(event);
+  const timestamp = Math.floor(Date.now() / 1e3);
+  const signedPayload = `${timestamp}.${body}`;
+  const signature = await hmacSha256Hex2(secret, signedPayload);
+  const res = await fetch(webhook.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Relaybase-Signature": `t=${timestamp},v1=${signature}`,
+      "X-Relaybase-Event-Id": event.id,
+      "X-Relaybase-Event-Type": event.type
+    },
+    body
+  });
+  return res.ok;
+}
+__name(postWebhook, "postWebhook");
+async function deliverWebhooks(db, domain, event) {
+  const webhooks2 = await listStoredWebhooks(db, domain);
+  const delays = [0, 1e3, 4e3, 16e3];
+  for (const webhook of webhooks2) {
+    if (!webhook.active) continue;
+    const secret = await getWebhookSecret(db, webhook.id);
+    if (!secret) continue;
+    let delivered = false;
+    for (const delay of delays) {
+      if (delay > 0) await sleep(delay);
+      try {
+        if (await postWebhook(webhook, secret, event)) {
+          delivered = true;
+          break;
+        }
+      } catch (error) {
+        console.error("Webhook delivery failed", webhook.url, error);
+      }
+    }
+    if (!delivered) {
+      const failedAt = (/* @__PURE__ */ new Date()).toISOString();
+      await recordWebhookFail(db, {
+        id: `${webhook.id}:${event.id}`,
+        webhookId: webhook.id,
+        eventId: event.id,
+        url: webhook.url,
+        failedAt,
+        expiresAt: new Date(
+          new Date(failedAt).getTime() + FAIL_TTL_SECONDS * 1e3
+        ).toISOString()
+      });
+    }
+  }
+  await deleteExpiredWebhookFails(db, (/* @__PURE__ */ new Date()).toISOString());
+}
+__name(deliverWebhooks, "deliverWebhooks");
+async function storeWebhookSecret2(db, webhookId, secret) {
+  await storeWebhookSecret(db, webhookId, secret);
+}
+__name(storeWebhookSecret2, "storeWebhookSecret");
+
+// src/lib/mail/local-deliver-select.ts
+function selectLocalInboundRecipients(recipients, addresses2, skip = []) {
+  const skipped = new Set(
+    [...skip].map((address) => address.trim().toLowerCase()).filter(Boolean)
+  );
+  const enabled = /* @__PURE__ */ new Set();
+  for (const row of addresses2) {
+    if (row.inboundEnabled === false) continue;
+    const email = row.email.trim().toLowerCase();
+    if (email) enabled.add(email);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const local = [];
+  for (const raw2 of recipients) {
+    const email = raw2.trim().toLowerCase();
+    if (!email || skipped.has(email) || seen.has(email)) continue;
+    if (!enabled.has(email)) continue;
+    seen.add(email);
+    local.push(email);
+  }
+  return local;
+}
+__name(selectLocalInboundRecipients, "selectLocalInboundRecipients");
+
+// src/lib/mail/local-deliver.ts
+async function dispatchLocalInboundEvent(db, record) {
+  const event = await enqueueInboundEvent(db, record);
+  await deliverWebhooks(db, record.domain, event);
+}
+__name(dispatchLocalInboundEvent, "dispatchLocalInboundEvent");
+async function deliverToLocalInboxes(env, params) {
+  if (!env.INBOUND) return;
+  try {
+    const appDb = createAppDb(env.RELAYBASE_DB);
+    const mailbox = await readMailbox2(appDb);
+    const local = selectLocalInboundRecipients(
+      [...params.to, ...params.cc ?? []],
+      mailbox.addresses,
+      params.skipAddresses
+    );
+    if (local.length === 0) return;
+    const raw2 = new TextEncoder().encode(params.rawMime);
+    const rawBuffer = raw2.buffer.slice(
+      raw2.byteOffset,
+      raw2.byteOffset + raw2.byteLength
+    );
+    const mailDb = createMailDb(env.RELAYBASE_MAIL);
+    for (const toEmail of local) {
+      try {
+        const { record, created } = await storeInboundMail(
+          env.INBOUND,
+          {
+            envelopeFrom: params.from,
+            toEmail,
+            subject: params.subject,
+            messageId: params.messageId,
+            inReplyTo: params.inReplyTo ?? null,
+            references: params.references ?? null,
+            size: raw2.byteLength,
+            raw: rawBuffer
+          },
+          mailDb
+        );
+        if (!created) continue;
+        const notify = dispatchLocalInboundEvent(appDb, record);
+        if (params.waitUntil) {
+          params.waitUntil(
+            notify.catch((error) => {
+              console.error("Failed to dispatch local inbound event", error);
+            })
+          );
+        } else {
+          await notify;
+        }
+      } catch (error) {
+        console.error("Failed to locally deliver inbound mail", toEmail, error);
+      }
+    }
+  } catch (error) {
+    console.error("Failed to locally deliver inbound mail", error);
+  }
+}
+__name(deliverToLocalInboxes, "deliverToLocalInboxes");
 
 // src/lib/recipients.ts
 var EMAIL_RE2 = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -19793,7 +21210,7 @@ async function persistSendLog(env, entry) {
   }
 }
 __name(persistSendLog, "persistSendLog");
-async function sendMailMessage(env, body, source) {
+async function sendMailMessage(env, body, source, options) {
   const from = body.from?.trim();
   const to = normalizeRecipients(body.to);
   const cc = normalizeRecipients(body.cc);
@@ -19949,6 +21366,19 @@ async function sendMailMessage(env, body, source) {
       error: hadBounces ? `Some recipients permanently bounced: ${result.permanentBounces.join(", ")}` : null,
       metaJson: JSON.stringify(meta)
     });
+    const rawMime = buildMimeMessage({
+      from,
+      fromName: body.fromName?.trim() || void 0,
+      to: to.length === 1 ? to[0] : to,
+      cc: cc.length ? cc : void 0,
+      subject,
+      text: text2,
+      html: body.html,
+      replyTo: body.replyTo,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || void 0,
+      references: body.references?.trim() || void 0
+    });
     if (domain) {
       try {
         await storeSentMail(
@@ -19963,7 +21393,8 @@ async function sendMailMessage(env, body, source) {
             html: body.html,
             messageId: result.messageId,
             inReplyTo: body.inReplyTo?.trim() || null,
-            references: body.references?.trim() || null
+            references: body.references?.trim() || null,
+            rawMime
           },
           createMailDb(env.RELAYBASE_MAIL)
         );
@@ -19971,6 +21402,18 @@ async function sendMailMessage(env, body, source) {
         console.error("Failed to persist sent mail", error);
       }
     }
+    await deliverToLocalInboxes(env, {
+      from,
+      to,
+      cc: cc.length ? cc : void 0,
+      subject,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || null,
+      references: body.references?.trim() || null,
+      rawMime,
+      skipAddresses: result.permanentBounces,
+      waitUntil: options?.waitUntil
+    });
     return {
       response: new Response(
         JSON.stringify({ messageId: result.messageId }),
@@ -20015,7 +21458,7 @@ __name(sendMailMessage, "sendMailMessage");
 // src/routes/mail/send.ts
 var mailSend = new Hono2();
 mailSend.post("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   let body;
   try {
@@ -20023,8 +21466,33 @@ mailSend.post("/", async (c) => {
   } catch {
     body = {};
   }
-  const result = await sendMailMessage(c.env, body, "compose");
+  const result = await sendMailMessage(c.env, body, "compose", {
+    waitUntil: /* @__PURE__ */ __name((promise) => c.executionCtx.waitUntil(promise), "waitUntil")
+  });
   return result.response;
+});
+
+// src/routes/mail/sending-health.ts
+init_app();
+init_catalog_store();
+init_cloudflare_config();
+var mailSendingHealth = new Hono2();
+mailSendingHealth.get("/", async (c) => {
+  const denied = await requireMailSession(c);
+  if (denied) return denied;
+  const mailbox = await readMailbox2(createAppDb(c.env.RELAYBASE_DB));
+  let cf = null;
+  let probeError;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    probeError = error instanceof Error ? error.message : UNKNOWN_ERROR;
+  }
+  const snapshot = await collectSendingHealth(mailbox.domains, cf, {
+    accountId: c.env.CF_ACCOUNT_ID,
+    probeError
+  });
+  return c.json(snapshot);
 });
 
 // src/routes/mail/sent.ts
@@ -20049,7 +21517,7 @@ function rowToSentItem(row) {
 }
 __name(rowToSentItem, "rowToSentItem");
 mailSent.get("/", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -20092,7 +21560,7 @@ mailSent.get("/", async (c) => {
   });
 });
 mailSent.get("/:id", async (c) => {
-  const denied = await requireAdmin(c);
+  const denied = await requireMailSession(c);
   if (denied) return denied;
   const domain = c.req.query("domain")?.trim().toLowerCase();
   if (!domain) {
@@ -20314,6 +21782,7 @@ __name(ackInboxNotifications, "ackInboxNotifications");
 
 // src/routes/mobile.ts
 init_messages();
+init_cloudflare_config();
 var mobile = new Hono2();
 mobile.use("*", async (c, next) => {
   const auth = await requireMobilePassword(c);
@@ -20329,6 +21798,27 @@ mobile.use("*", async (c, next) => {
   c.set("mobileAddresses", addresses2);
   c.set("mobileDomains", domains2);
   await next();
+});
+mobile.get("/sending-health", async (c) => {
+  const domains2 = c.get("mobileDomains");
+  let cf = null;
+  let probeError;
+  try {
+    cf = await createCloudflareClient(c.env);
+  } catch (error) {
+    probeError = error instanceof Error ? error.message : UNKNOWN_ERROR;
+  }
+  const snapshot = await collectSendingHealth(domains2, cf, {
+    accountId: c.env.CF_ACCOUNT_ID,
+    probeError
+  });
+  return c.json({
+    ...snapshot,
+    domains: snapshot.domains.map((domain) => ({
+      ...domain,
+      cloudflareSendingUrl: null
+    }))
+  });
 });
 mobile.get("/config", async (c) => {
   const email = c.get("authEmail");
@@ -20601,7 +22091,9 @@ mobile.post("/send", async (c) => {
       403
     );
   }
-  const result = await sendMailMessage(c.env, body, "mobile");
+  const result = await sendMailMessage(c.env, body, "mobile", {
+    waitUntil: /* @__PURE__ */ __name((promise) => c.executionCtx.waitUntil(promise), "waitUntil")
+  });
   return result.response;
 });
 mobile.get("/notifications", async (c) => {
@@ -20639,6 +22131,7 @@ init_cloudflare_api_hints();
 init_email_send();
 init_ops_logs();
 init_send_logs();
+init_mime();
 var send = new Hono2();
 function keyFields(record) {
   return {
@@ -20811,6 +22304,19 @@ send.post("/", async (c) => {
         metaJson: meta
       });
     }
+    const rawMime = buildMimeMessage({
+      from,
+      fromName: body.fromName?.trim() || void 0,
+      to: to.length === 1 ? to[0] : to,
+      cc: cc.length ? cc : void 0,
+      subject,
+      text: text2,
+      html: body.html,
+      replyTo: body.replyTo,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || void 0,
+      references: body.references?.trim() || void 0
+    });
     try {
       await storeSentMail(
         c.env.INBOUND,
@@ -20824,13 +22330,26 @@ send.post("/", async (c) => {
           html: body.html,
           messageId: result.messageId,
           inReplyTo: body.inReplyTo?.trim() || null,
-          references: body.references?.trim() || null
+          references: body.references?.trim() || null,
+          rawMime
         },
         createMailDb(c.env.RELAYBASE_MAIL)
       );
     } catch (error) {
       console.error("Failed to persist sent mail", error);
     }
+    await deliverToLocalInboxes(c.env, {
+      from,
+      to,
+      cc: cc.length ? cc : void 0,
+      subject,
+      messageId: result.messageId,
+      inReplyTo: body.inReplyTo?.trim() || null,
+      references: body.references?.trim() || null,
+      rawMime,
+      skipAddresses: result.permanentBounces,
+      waitUntil: /* @__PURE__ */ __name((promise) => c.executionCtx.waitUntil(promise), "waitUntil")
+    });
     return logAndRespond(c, {
       ok: true,
       opsOk: !hadBounces,
@@ -21055,232 +22574,6 @@ v1Inbox.get("/messages/:id", async (c) => {
 
 // src/routes/v1-webhooks.ts
 init_app();
-
-// db/app/webhooks.ts
-init_drizzle_orm();
-init_schema();
-function rowToWebhookRecord(row) {
-  const { secretHash: _secretHash, ...record } = row;
-  return {
-    id: record.id,
-    domain: record.domain,
-    url: record.url,
-    createdAt: record.createdAt,
-    active: record.active === 1
-  };
-}
-__name(rowToWebhookRecord, "rowToWebhookRecord");
-function rowToStoredWebhook(row) {
-  return {
-    id: row.id,
-    domain: row.domain,
-    url: row.url,
-    secretHash: row.secretHash,
-    createdAt: row.createdAt,
-    active: row.active === 1
-  };
-}
-__name(rowToStoredWebhook, "rowToStoredWebhook");
-async function listWebhooks(db, domain) {
-  if (!db) return [];
-  const rows = await db.select().from(webhooks).where(and(eq(webhooks.domain, domain.trim().toLowerCase()), eq(webhooks.active, 1))).all();
-  return rows.map(rowToWebhookRecord);
-}
-__name(listWebhooks, "listWebhooks");
-async function listStoredWebhooks(db, domain) {
-  if (!db) return [];
-  const rows = await db.select().from(webhooks).where(eq(webhooks.domain, domain.trim().toLowerCase())).all();
-  return rows.map(rowToStoredWebhook);
-}
-__name(listStoredWebhooks, "listStoredWebhooks");
-async function createWebhookRow(db, input) {
-  if (!db) return;
-  await db.insert(webhooks).values({
-    id: input.id,
-    domain: input.domain.trim().toLowerCase(),
-    url: input.url,
-    secretHash: input.secretHash,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-    active: 1
-  }).run();
-}
-__name(createWebhookRow, "createWebhookRow");
-async function deleteWebhookRow(db, id) {
-  if (!db) return false;
-  const result = await db.delete(webhooks).where(eq(webhooks.id, id)).run();
-  return result.meta.changes > 0;
-}
-__name(deleteWebhookRow, "deleteWebhookRow");
-async function storeWebhookSecret(db, webhookId, secret) {
-  if (!db) return;
-  await db.insert(webhookSecrets).values({ webhookId, secret }).onConflictDoUpdate({
-    target: webhookSecrets.webhookId,
-    set: { secret }
-  }).run();
-}
-__name(storeWebhookSecret, "storeWebhookSecret");
-async function getWebhookSecret(db, webhookId) {
-  if (!db) return null;
-  const row = await db.select().from(webhookSecrets).where(eq(webhookSecrets.webhookId, webhookId)).get();
-  return row?.secret ?? null;
-}
-__name(getWebhookSecret, "getWebhookSecret");
-async function recordWebhookFail(db, input) {
-  if (!db) return;
-  await db.insert(webhookFails).values({
-    id: input.id,
-    webhookId: input.webhookId,
-    eventId: input.eventId,
-    url: input.url,
-    failedAt: input.failedAt,
-    expiresAt: input.expiresAt
-  }).run();
-}
-__name(recordWebhookFail, "recordWebhookFail");
-async function deleteExpiredWebhookFails(db, now) {
-  if (!db) return;
-  await db.delete(webhookFails).where(lt(webhookFails.expiresAt, now)).run();
-}
-__name(deleteExpiredWebhookFails, "deleteExpiredWebhookFails");
-
-// src/lib/webhooks.ts
-var MAX_WEBHOOKS_PER_DOMAIN = 3;
-var WEBHOOK_SECRET_PREFIX = "whsec_";
-var FAIL_TTL_SECONDS = 7 * 24 * 60 * 60;
-function bytesToHex3(bytes) {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-__name(bytesToHex3, "bytesToHex");
-function generateWebhookSecret() {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  const bin = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
-  const encoded = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return `${WEBHOOK_SECRET_PREFIX}${encoded}`;
-}
-__name(generateWebhookSecret, "generateWebhookSecret");
-function isValidWebhookUrl(url) {
-  try {
-    const parsed = new URL(url.trim());
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-__name(isValidWebhookUrl, "isValidWebhookUrl");
-async function hmacSha256Hex(secret, payload) {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    new TextEncoder().encode(payload)
-  );
-  return bytesToHex3(new Uint8Array(signature));
-}
-__name(hmacSha256Hex, "hmacSha256Hex");
-async function listWebhooks2(db, domain) {
-  return listWebhooks(db, domain);
-}
-__name(listWebhooks2, "listWebhooks");
-async function createWebhook(db, params) {
-  const domain = params.domain.trim().toLowerCase();
-  const url = params.url.trim();
-  if (!isValidWebhookUrl(url)) {
-    throw new Error("url must be a valid http(s) URL");
-  }
-  const existing = await listWebhooks2(db, domain);
-  if (existing.length >= MAX_WEBHOOKS_PER_DOMAIN) {
-    throw new Error(`maximum ${MAX_WEBHOOKS_PER_DOMAIN} webhooks per domain`);
-  }
-  const secret = params.secret?.trim() || generateWebhookSecret();
-  const id = crypto.randomUUID();
-  const createdAt = (/* @__PURE__ */ new Date()).toISOString();
-  await createWebhookRow(db, {
-    id,
-    domain,
-    url,
-    secretHash: await sha256Hex(secret)
-  });
-  await storeWebhookSecret2(db, id, secret);
-  return {
-    webhook: { id, domain, url, createdAt, active: true },
-    secret
-  };
-}
-__name(createWebhook, "createWebhook");
-async function deleteWebhook(db, domain, id) {
-  return deleteWebhookRow(db, id);
-}
-__name(deleteWebhook, "deleteWebhook");
-async function sleep(ms) {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-__name(sleep, "sleep");
-async function postWebhook(webhook, secret, event) {
-  const body = JSON.stringify(event);
-  const timestamp = Math.floor(Date.now() / 1e3);
-  const signedPayload = `${timestamp}.${body}`;
-  const signature = await hmacSha256Hex(secret, signedPayload);
-  const res = await fetch(webhook.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Relaybase-Signature": `t=${timestamp},v1=${signature}`,
-      "X-Relaybase-Event-Id": event.id,
-      "X-Relaybase-Event-Type": event.type
-    },
-    body
-  });
-  return res.ok;
-}
-__name(postWebhook, "postWebhook");
-async function deliverWebhooks(db, domain, event) {
-  const webhooks2 = await listStoredWebhooks(db, domain);
-  const delays = [0, 1e3, 4e3, 16e3];
-  for (const webhook of webhooks2) {
-    if (!webhook.active) continue;
-    const secret = await getWebhookSecret(db, webhook.id);
-    if (!secret) continue;
-    let delivered = false;
-    for (const delay of delays) {
-      if (delay > 0) await sleep(delay);
-      try {
-        if (await postWebhook(webhook, secret, event)) {
-          delivered = true;
-          break;
-        }
-      } catch (error) {
-        console.error("Webhook delivery failed", webhook.url, error);
-      }
-    }
-    if (!delivered) {
-      const failedAt = (/* @__PURE__ */ new Date()).toISOString();
-      await recordWebhookFail(db, {
-        id: `${webhook.id}:${event.id}`,
-        webhookId: webhook.id,
-        eventId: event.id,
-        url: webhook.url,
-        failedAt,
-        expiresAt: new Date(
-          new Date(failedAt).getTime() + FAIL_TTL_SECONDS * 1e3
-        ).toISOString()
-      });
-    }
-  }
-  await deleteExpiredWebhookFails(db, (/* @__PURE__ */ new Date()).toISOString());
-}
-__name(deliverWebhooks, "deliverWebhooks");
-async function storeWebhookSecret2(db, webhookId, secret) {
-  await storeWebhookSecret(db, webhookId, secret);
-}
-__name(storeWebhookSecret2, "storeWebhookSecret");
-
-// src/routes/v1-webhooks.ts
 var v1Webhooks = new Hono2();
 v1Webhooks.post("/", async (c) => {
   const auth = await requireApiKey(c);
@@ -21378,7 +22671,6 @@ app.get("/health", async (c) => {
   });
 });
 app.route("/console/keys", consoleKeys);
-app.route("/console/auth-tokens", consoleAuthTokens);
 app.route("/console/ops-logs", consoleOpsLogs);
 app.route("/console/send-logs", consoleSendLogs);
 app.route("/console/branding", consoleBranding);
@@ -21386,15 +22678,20 @@ app.route("/console/connect", consoleConnect);
 app.route("/console/init-db", consoleInitDb);
 app.route("/console/migrate-db", consoleMigrateDb);
 app.route("/console/register-owner", consoleRegisterOwner);
-app.route("/console/recover-admin", consoleRecoverAdmin);
+app.route("/console", consoleOwnerAuth);
 app.route("/console/mailbox", consoleMailbox);
 app.route("/console/domains", consoleDomains);
+app.route("/console/zones", consoleZones);
+app.route("/console/sending-onboard", consoleSendingOnboard);
 app.route("/console/addresses", consoleAddresses);
 app.route("/console/audience-groups", consoleAudienceGroups);
 app.route("/console/broadcasts", consoleBroadcasts);
 app.route("/console/stats", consoleStats);
 app.route("/console/rebuild-mail", consoleRebuildMail);
 app.route("/console/mailbox-health", consoleMailboxHealth);
+app.route("/console/settings", consoleSettings);
+app.route("/mail/addresses", mailAddresses);
+app.route("/mail/sending-health", mailSendingHealth);
 app.route("/mail/inbox", mailInbox);
 app.route("/mail/send", mailSend);
 app.route("/mail/sent", mailSent);
@@ -21429,6 +22726,20 @@ async function handleInboundEmail(message, env) {
     },
     createMailDb(env.RELAYBASE_MAIL)
   );
+  await recordOpsLog(env.RELAYBASE_LOGS, {
+    kind: "inbound",
+    ok: true,
+    source: "inbound",
+    domain: result.record.domain,
+    fromAddr: message.from,
+    toAddr: message.to,
+    subject: result.record.subject,
+    messageId: result.record.messageId,
+    metaJson: JSON.stringify({
+      inboundId: result.record.id,
+      created: result.created
+    })
+  });
   if (isBounceMessage(raw2, message.from)) {
     const diagnostic = parseBounceDiagnostic(raw2);
     const error = buildBouncePreview(diagnostic, "Bounce: delivery failed");
@@ -21465,7 +22776,8 @@ async function runInboundIndexCron(env) {
   if (!env.INBOUND) return;
   const mailDb = createMailDb(env.RELAYBASE_MAIL);
   if (!mailDb) return;
-  const mailbox = await readMailbox2(createAppDb(env.RELAYBASE_DB));
+  const appDb = createAppDb(env.RELAYBASE_DB);
+  const mailbox = await readMailbox2(appDb);
   for (const domainEntry of mailbox.domains) {
     const domain = domainEntry.trim().toLowerCase();
     if (!domain) continue;
@@ -21478,6 +22790,17 @@ async function runInboundIndexCron(env) {
           error
         );
       }
+    }
+  }
+  const retain = (await getAppSettings(appDb)).inboundRetainPerDomain;
+  if (retain == null) return;
+  for (const domainEntry of mailbox.domains) {
+    const domain = domainEntry.trim().toLowerCase();
+    if (!domain) continue;
+    try {
+      await pruneMail(env.INBOUND, mailDb, "inbound", domain, retain);
+    } catch (error) {
+      console.error(`Mailbox inbound prune failed for ${domain}`, error);
     }
   }
 }
@@ -21552,6 +22875,7 @@ __name(listD1IdsForDomain, "listD1IdsForDomain");
 
 // src/index.ts
 init_inbound_events2();
+init_ops_logs();
 init_app();
 async function dispatchInboundEvent(db, record) {
   const event = await enqueueInboundEvent(db, record);
@@ -21580,6 +22904,19 @@ var index_default = {
       }
     } catch (error) {
       console.error("Failed to store inbound email", error);
+      const to = message.to;
+      const domain = to.includes("@") ? to.slice(to.lastIndexOf("@") + 1).trim().toLowerCase() : null;
+      await recordOpsLog(env.RELAYBASE_LOGS, {
+        kind: "inbound",
+        ok: false,
+        source: "inbound",
+        domain,
+        fromAddr: message.from,
+        toAddr: to,
+        subject: message.headers.get("subject")?.trim() || null,
+        messageId: message.headers.get("message-id")?.trim() || null,
+        error: error instanceof Error ? error.message : "Failed to store inbound email"
+      });
       throw error;
     }
   }

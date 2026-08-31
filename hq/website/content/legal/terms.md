@@ -34,7 +34,7 @@ Use of the desktop application beyond any trial requires a valid license purchas
 To use the Software with email:
 
 - Domains you manage must already be (or be added by you as) zones on **your own** Cloudflare account
-- You deploy the routing Worker into **your** Cloudflare account (install package + Wrangler) and connect the desktop app with the Worker URL and admin token **you** set
+- You deploy the routing Worker into **your** Cloudflare account (install package + Wrangler) and connect the desktop app with the Worker URL and owner passtoken the Worker issues
 - The routing Worker, KV namespaces, and R2 bucket live in **your** account
 - We do **not** require you to point nameservers at Relaybase, and we do **not** place your domains under a Relaybase-managed Cloudflare account
 

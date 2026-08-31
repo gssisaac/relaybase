@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Relaybase operator diagnostics — reads admin/.env.local + settings.json,
- * tests Worker health and admin token without printing secrets.
+ * tests Worker /health without printing secrets. HQ does not hold a
+ * customer Worker credential.
  *
  * Cloudflare credentials live on the product Worker as wrangler secrets
  * (CF_ACCOUNT_ID / CF_API_TOKEN); the admin app no longer holds them, so
@@ -69,8 +70,6 @@ const workerUrl = firstNonEmpty(
   envFile.FLARE_EMAIL_SENDER_URL,
   settings.workerUrl,
 ).replace(/\/$/, "");
-const adminToken = firstNonEmpty(settings.adminToken);
-
 function printCheck(id, ok, summary, detail) {
   const icon = ok ? "OK" : "FAIL";
   console.log(`[${icon}] ${summary}`);
@@ -80,7 +79,6 @@ function printCheck(id, ok, summary, detail) {
 console.log("Relaybase diagnostics");
 console.log(`Root: ${root}`);
 console.log(`Worker: ${workerUrl || "(missing)"}`);
-console.log(`Admin token: ${adminToken ? `${adminToken.slice(0, 12)}…` : "(missing)"}`);
 console.log("---");
 
 if (!workerUrl) {
@@ -112,29 +110,6 @@ if (health?.inbound?.bucketName) {
     mismatch
       ? "Redeploy worker: server/wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-mailbox, then npm run deploy --prefix server"
       : undefined,
-  );
-}
-
-if (adminToken) {
-  const adminRes = await fetch(`${workerUrl}/console/keys`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
-  });
-  printCheck(
-    "worker-admin-token",
-    adminRes.ok,
-    adminRes.ok
-      ? "Worker accepts stored admin service token"
-      : `Worker rejected admin token (HTTP ${adminRes.status})`,
-    adminRes.ok
-      ? undefined
-      : "Set ADMIN_TOKEN on the worker (wrangler secret put ADMIN_TOKEN) and update admin Settings → admin token to match",
-  );
-} else {
-  printCheck(
-    "worker-admin-token",
-    false,
-    "Admin token missing",
-    "Set the admin token in admin Settings (must match the worker's ADMIN_TOKEN wrangler secret)",
   );
 }
 

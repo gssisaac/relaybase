@@ -218,7 +218,6 @@ async fn auto_install_steps(
         worker_url,
         worker_script_name: DEFAULT_SCRIPT.to_string(),
         auth_pepper,
-        admin_token: String::new(),
         r2_bucket: R2_BUCKET.to_string(),
         account_id: account_id.to_string(),
         d1_logs_id: d1_ids.get(0).cloned().unwrap_or_default(),

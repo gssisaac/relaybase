@@ -80,7 +80,7 @@ export async function loadWorkerVersionCompare(workerUrl?: string): Promise<{
   const [check, connect] = await Promise.all([
     desktopCheckWorkerUpdate().catch(() => null),
     url
-      ? desktopVerifyWorkerConnection(url, "").catch(() => null)
+      ? desktopVerifyWorkerConnection(url).catch(() => null)
       : Promise.resolve(null),
   ]);
   const current =

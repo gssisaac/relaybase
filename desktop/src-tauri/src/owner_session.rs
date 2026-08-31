@@ -186,7 +186,6 @@ fn normalize_passtoken(raw: &str) -> String {
 fn persist_worker_url(worker_url: &str) -> Result<(), String> {
     let mut creds = load_credentials()?.unwrap_or_default();
     creds.worker_url = worker_url.trim().trim_end_matches('/').to_string();
-    creds.admin_token.clear();
     save_credentials(&creds)
 }
 

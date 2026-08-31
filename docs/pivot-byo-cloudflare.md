@@ -10,7 +10,7 @@ Relaybase is a **one-time** Mac/Windows desktop app (price numbers in `PRICING.m
 
 1. Installs a **routing Worker** into **the customer's own** Cloudflare account — by default the desktop runs Wrangler in the background (paste a CF API token, watch the install log), with manual Wrangler as a fallback.
 2. Talks only to that Worker (`/mail/*`, `/console/*`, `/mobile/*`, `/v1/*`) for product operations.
-3. Delegates **account, license, billing, and ADMIN_TOKEN recovery** to a separate central Next.js app at `console.relaybase.xyz` (OpenNext on Cloudflare Workers). The product Worker no longer hosts license/waitlist/account routes.
+3. Delegates **account, license, and billing** to a separate central Next.js app at `console.relaybase.xyz` (OpenNext on Cloudflare Workers). The product Worker no longer hosts license/waitlist/account routes. Lost passtoken uses desktop Cloudflare OAuth (`reset-admin`), not the console.
 
 The desktop app never sends the customer's Cloudflare API token to Relaybase — the token stays on the user's Mac and is used locally by Tauri to run Wrangler against the user's own account.
 
@@ -34,7 +34,7 @@ The old `api.relaybase.xyz` custom domain was removed; isaac's dogfood Worker ru
 ## Setup flow (desktop)
 
 1. `/setup/account` — log in or create a Relaybase account at `console.relaybase.xyz` (session stored locally)
-2. `/setup/install` — auto-install (paste CF API token → Tauri runs Wrangler → install log → auto-fill Worker URL + ADMIN_TOKEN) or manual install (download ZIP, Wrangler, paste URL + token)
+2. `/setup/install` — auto-install (Cloudflare OAuth → Tauri deploys → Worker issues owner passtoken once) or manual install (download ZIP, Wrangler, paste URL; app issues passtoken)
 3. Desktop registers the Worker URL with `console.relaybase.xyz` (`/v1/account?action=worker/register`) so the account ↔ Worker mapping is known for recovery
 4. Dashboard
 
@@ -45,7 +45,7 @@ Credentials: `~/.relaybase/credentials.json` (admin) and `~/.relaybase/team-logi
 ## Recovery
 
 - **Console admin password lost** → `console.relaybase.xyz/recover` (email link).
-- **ADMIN_TOKEN lost** → desktop **Setup → Connect existing Worker → I forgot my admin token**. Cloudflare OAuth (same as install) then generates a new token and pushes it as the Worker `ADMIN_TOKEN` secret. Do not use console email recovery or Settings reset for this.
+- **Owner passtoken lost** → desktop **Setup → I forgot my passtoken**. Cloudflare OAuth re-issues a passtoken (`reset-admin`). Do not use console email recovery.
 
 ## Relationship to `business-plan-risk-and-market.md`
 

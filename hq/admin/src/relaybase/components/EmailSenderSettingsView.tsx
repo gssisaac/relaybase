@@ -81,15 +81,8 @@ const FIELD_DEFS = [
     id: "relaybase-worker-url",
     label: "Worker URL",
     placeholder: "https://relaybase-api.gssisaac.worker.dev",
-  },
-  {
-    key: "adminToken" as const,
-    id: "relaybase-admin-token",
-    label: "Admin token",
-    placeholder: "rb-svc-… (must match the worker's ADMIN_TOKEN secret)",
     description:
-      "Internal worker bridge token. Set via the desktop install flow and paste the same value here.",
-    secret: true,
+      "Public /health only. HQ does not store an owner passtoken or call /console/*.",
   },
 ];
 
@@ -109,17 +102,13 @@ export function EmailSenderSettingsView() {
   const [message, setMessage] = useState<string | null>(null);
   const [inputs, setInputs] = useState({
     workerUrl: "",
-    adminToken: "",
   });
 
   const envSources = config?.envSources;
   const envLoaded = envSources !== undefined;
 
   const visibleFields = useMemo(
-    () =>
-      FIELD_DEFS.filter((field) =>
-        field.key === "adminToken" ? true : !envSources?.workerUrl,
-      ),
+    () => FIELD_DEFS.filter((field) => !envSources?.workerUrl || field.key !== "workerUrl"),
     [envSources],
   );
 
@@ -135,7 +124,6 @@ export function EmailSenderSettingsView() {
     if (!config) return;
     setInputs({
       workerUrl: config.workerUrl ?? "",
-      adminToken: config.adminToken ?? "",
     });
   }, [config]);
 
@@ -269,11 +257,9 @@ export function EmailSenderSettingsView() {
                 <Badge variant={config.healthy ? "default" : "destructive"}>
                   {config.healthy ? "Worker healthy" : "Worker unreachable"}
                 </Badge>
-                {!config.workerLinked ? (
-                  <Badge variant="secondary">
-                    Admin token not verified — save to verify
-                  </Badge>
-                ) : null}
+                <Badge variant="secondary">
+                  HQ does not hold an owner passtoken
+                </Badge>
               </>
             ) : (
               <Badge variant="secondary">Not configured</Badge>

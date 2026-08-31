@@ -29,7 +29,7 @@ export function WorkerUpdateBanner() {
   useEffect(() => {
     if (!isDesktopRuntime()) return;
     if (teamLogin) return;
-    if (!credentials?.workerUrl?.trim() || !credentials.adminToken?.trim()) {
+    if (!credentials?.workerUrl?.trim()) {
       return;
     }
     let active = true;
@@ -47,7 +47,7 @@ export function WorkerUpdateBanner() {
     return () => {
       active = false;
     };
-  }, [credentials?.workerUrl, credentials?.adminToken, credentials?.workerVersion, teamLogin]);
+  }, [credentials?.workerUrl, credentials?.workerVersion, teamLogin]);
 
   if (teamLogin) return null;
   if (loading || !check?.updateAvailable) return null;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { workerFetch } from "@/lib/desktop/api/worker-api";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 
@@ -32,23 +33,20 @@ export type MailboxHealthResult = {
 };
 
 /**
- * Fetch `GET /console/mailbox-health` directly from the Worker (admin-token
- * bearer). Used by the Domains / Accounts pages to surface per-domain last
- * inbound and flag stale receive (the `wedesk.so` silent-receive case).
- * Returns a null snapshot when the Worker/D1 is not configured yet.
+ * Fetch `GET /console/mailbox-health` via the owner session. Used by the
+ * Domains / Accounts pages to surface per-domain last inbound and flag stale
+ * receive (the `wedesk.so` silent-receive case). Returns a null snapshot when
+ * the Worker/D1 is not configured yet.
  */
 export async function fetchMailboxHealth(
   credentials: DesktopCredentials | null | undefined,
   staleDays = 1,
 ): Promise<MailboxHealthSnapshot | null> {
-  const url = credentials?.workerUrl?.trim();
-  const token = credentials?.adminToken?.trim();
-  if (!url || !token) return null;
+  if (!credentials?.workerUrl?.trim()) return null;
 
-  const base = url.replace(/\/$/, "");
-  const res = await fetch(
-    `${base}/console/mailbox-health?staleDays=${staleDays}`,
-    { headers: { Authorization: `Bearer ${token}` } },
+  const res = await workerFetch(
+    credentials,
+    `/console/mailbox-health?staleDays=${staleDays}`,
   );
   if (res.status === 503) return null;
   if (!res.ok) {

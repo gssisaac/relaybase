@@ -17,7 +17,7 @@
 
   | Resource | Kind | Role |
   |----------|------|------|
-  | `relaybase-api` | Worker | Routing + admin API. After install, the Mac talks only to this URL + your admin token. Relaybase’s servers never see your mail. |
+  | `relaybase-api` | Worker | Routing + owner API. After install, the Mac talks only to this URL with an owner session (passtoken login). Relaybase’s servers never see your mail. |
   | `relaybase-mailbox` | R2 | Inbound and sent originals (`inbound/` and `sent/`). Only you and your Worker can read them. |
   | `relaybase-db` | D1 | Domains, addresses, API keys, webhooks, audience, broadcasts, settings. Lives entirely in your account. |
   | `relaybase-mail` | D1 | Rebuildable list, count, and full-text search index. Bodies stay in R2. |
@@ -25,8 +25,8 @@
 
   Two paths, same result:
 
-  - **Authorize** — Cloudflare OAuth in the system browser. The desktop runs Wrangler on your Mac (creates R2/D1, sets `ADMIN_TOKEN`, deploys the Worker).
-  - **Manual** — download the pre-built Worker ZIP, run Wrangler yourself, paste the Worker URL + admin token.
+  - **Authorize** — Cloudflare OAuth in the system browser. The desktop runs Wrangler on your Mac (creates R2/D1, sets `AUTH_PEPPER`, deploys the Worker). The Worker then issues an owner passtoken once.
+  - **Manual** — download the pre-built Worker ZIP, run Wrangler yourself, paste the Worker URL. The app issues your owner passtoken once.
 
   Your Cloudflare credential never leaves the machine. We do not receive it, and we do not deploy into our account on your behalf.
 
@@ -107,7 +107,7 @@
 ## 8. The Mac is a cache; the Worker is the mailbox
 
 * **Purpose:** Read/unread and mail must survive a fresh install or another Mac, and the app should still open fast.
-* **How it works:** Read state lives on each message in R2 (`readAt`). `~/.relaybase` holds the Worker URL, admin token, API-key vault, and list caches — not the originals. The UI reads the Worker through one mapped API. Clearing the app cache does not clear the mailbox. Search falling back to local filter (see §4) is the same idea: the app can be wrong or empty; the Worker is not.
+* **How it works:** Read state lives on each message in R2 (`readAt`). `~/.relaybase` holds the Worker URL, API-key vault, and list caches — not the originals. The owner passtoken lives in the OS keyring. The UI reads the Worker through one mapped API. Clearing the app cache does not clear the mailbox. Search falling back to local filter (see §4) is the same idea: the app can be wrong or empty; the Worker is not.
 
 **Copy line:** The app is a window. The mailbox is on your Cloudflare account.
 
@@ -116,7 +116,7 @@
 ## 9. A teammate gets that address only
 
 * **Purpose:** Handing someone `support@` usually means a Cloudflare token, a full Workspace seat, or a forward that widens access.
-* **How it works:** Accounts → Other device issues a per-address password. Phone or a second desktop signs in with that email and password only (no Worker URL to type). Every request is scoped to that one mailbox — no All inboxes, no domain admin, no Audience, no API keys. Search is limited to messages where that address is on To or Cc. The teammate never receives the owner’s admin token or Cloudflare credential.
+* **How it works:** Accounts → Other device issues a per-address password. Phone or a second desktop signs in with that email and password only (no Worker URL to type). Every request is scoped to that one mailbox — no All inboxes, no domain admin, no Audience, no API keys. Search is limited to messages where that address is on To or Cc. The teammate never receives the owner’s passtoken or Cloudflare credential.
 
 **Copy line:** You hand over the role mailbox, not the account.
 

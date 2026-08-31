@@ -173,7 +173,7 @@ When changing sender avatars:
 
 ```bash
 # Worker (from server/)
-echo 'ADMIN_TOKEN=test-admin-token' > .dev.vars
+echo 'AUTH_PEPPER=test-auth-pepper' > .dev.vars
 pnpm exec wrangler dev --local --port 8787
 
 # Success

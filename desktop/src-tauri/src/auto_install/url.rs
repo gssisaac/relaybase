@@ -41,9 +41,9 @@ fn mismatch_error(expected: &str, oauth: &str) -> String {
     )
 }
 
-async fn peek_worker_account_id(worker_url: &str, admin_token: &str) -> Option<String> {
+async fn peek_worker_account_id(worker_url: &str, access_token: &str) -> Option<String> {
     let base = worker_url.trim().trim_end_matches('/');
-    let token = admin_token.trim();
+    let token = access_token.trim();
     if base.is_empty() || token.is_empty() {
         return None;
     }

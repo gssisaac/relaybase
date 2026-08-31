@@ -25,7 +25,6 @@ const STORAGE_LAYOUT_MARKER_FILE: &str = "storage-layout-v2.json";
 const DISK_CREDENTIAL_KEYS: &[&str] = &[
     "accountId",
     "workerUrl",
-    "adminToken",
     "workerScriptName",
     "workerVersion",
     "relaybaseAccountId",
@@ -39,7 +38,6 @@ const DISK_CREDENTIAL_KEYS: &[&str] = &[
 struct DiskCredentials {
     account_id: String,
     worker_url: String,
-    admin_token: String,
     worker_script_name: String,
     worker_version: String,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -59,7 +57,6 @@ pub struct StoredCredentials {
     #[serde(alias = "apiToken", alias = "api_token")]
     pub install_token: String,
     pub worker_url: String,
-    pub admin_token: String,
     pub worker_script_name: String,
     /// Deployed Worker bundle version (from WORKER_VERSION var / connect probe).
     pub worker_version: String,
@@ -159,8 +156,6 @@ fn credentials_for_disk(creds: &StoredCredentials) -> DiskCredentials {
     DiskCredentials {
         account_id: creds.account_id.trim().to_string(),
         worker_url: creds.worker_url.trim().to_string(),
-        // Never persist the retired god token or the owner passtoken.
-        admin_token: String::new(),
         worker_script_name: creds.worker_script_name.trim().to_string(),
         worker_version: creds.worker_version.trim().to_string(),
         relaybase_account_id: creds.relaybase_account_id.trim().to_string(),
@@ -173,7 +168,6 @@ fn stored_from_disk(disk: DiskCredentials) -> StoredCredentials {
     StoredCredentials {
         account_id: disk.account_id,
         worker_url: disk.worker_url,
-        admin_token: String::new(),
         worker_script_name: disk.worker_script_name,
         worker_version: disk.worker_version,
         relaybase_account_id: disk.relaybase_account_id,
@@ -558,12 +552,11 @@ pub fn load_credentials() -> Result<Option<StoredCredentials>, String> {
             path.display()
         )
     })?;
-    let mut creds = stored_from_disk(disk);
+    let creds = stored_from_disk(disk);
     // Drop leftover tokens / empty console keys so they never stay on disk.
     if credentials_json_is_dirty(&value) {
         save_credentials(&creds)?;
     }
-    creds.admin_token.clear();
     Ok(Some(creds))
 }
 

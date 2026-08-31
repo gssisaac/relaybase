@@ -15,8 +15,6 @@ import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
   desktopGetCredentials,
   desktopPushServerToken,
-  desktopRecoverAdminToken,
-  desktopRequestAdminRecoveryToken,
   desktopSaveWorkerConnection,
   desktopStartCfOAuth,
   listenCfOAuthResult,
@@ -54,8 +52,6 @@ type SettingsConnectionContextValue = {
   setAccountId: (value: string) => void;
   workerUrl: string;
   setWorkerUrl: (value: string) => void;
-  adminToken: string;
-  setAdminToken: (value: string) => void;
   cfEditing: boolean;
   setCfEditing: (value: boolean) => void;
   workerEditing: boolean;
@@ -72,21 +68,12 @@ type SettingsConnectionContextValue = {
   oauthBusy: boolean;
   oauthError: DesktopErrorHelp | null;
   handleStartCfOAuth: () => Promise<void>;
-  recoveryToken: string;
-  setRecoveryToken: (value: string) => void;
-  newAdminToken: string;
-  setNewAdminToken: (value: string) => void;
-  recoveryBusy: boolean;
-  recoveryError: DesktopErrorHelp | null;
-  recoveryMessage: string | null;
   resetCfDraft: () => void;
   resetWorkerDraft: () => void;
   handleSaveServerToken: () => Promise<void>;
   handlePasteServerToken: (token: string) => Promise<boolean>;
   handleSaveWorker: () => Promise<void>;
   handleRefreshStatus: () => Promise<void>;
-  handleRequestRecoveryToken: () => Promise<void>;
-  handleRecoverAdmin: () => Promise<void>;
 };
 
 const SettingsConnectionContext =
@@ -127,7 +114,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const [accountId, setAccountId] = useState("");
   const [serverToken, setServerToken] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
-  const [adminToken, setAdminToken] = useState("");
 
   const [cfEditing, setCfEditing] = useState(false);
   const [workerEditing, setWorkerEditing] = useState(false);
@@ -140,13 +126,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const [workerError, setWorkerError] = useState<DesktopErrorHelp | null>(null);
   const [cfMessage, setCfMessage] = useState<string | null>(null);
   const [workerMessage, setWorkerMessage] = useState<string | null>(null);
-
-  const [recoveryToken, setRecoveryToken] = useState("");
-  const [newAdminToken, setNewAdminToken] = useState("");
-  const [recoveryBusy, setRecoveryBusy] = useState(false);
-  const [recoveryError, setRecoveryError] =
-    useState<DesktopErrorHelp | null>(null);
-  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
   // CF OAuth (install token) state. Used internally for the push-time
   // authorize flow — not a persistent connection.
@@ -178,7 +157,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   function resetWorkerDraft() {
     setWorkerUrl(credentials?.workerUrl ?? "");
-    setAdminToken(credentials?.adminToken ?? "");
     setWorkerError(null);
     setWorkerMessage(null);
   }
@@ -193,7 +171,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     }
     if (!workerEditing) {
       setWorkerUrl(credentials?.workerUrl ?? "");
-      setAdminToken(credentials?.adminToken ?? "");
     }
   }, [credentials, cfEditing, workerEditing]);
 
@@ -349,10 +326,9 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     setWorkerError(null);
     setWorkerMessage(null);
     try {
-      const result = await desktopVerifyWorkerConnection(workerUrl, adminToken);
+      const result = await desktopVerifyWorkerConnection(workerUrl);
       await desktopSaveWorkerConnection({
         workerUrl: result.workerUrl,
-        adminToken,
         workerScriptName: result.workerScriptName,
         workerVersion: result.version,
       });
@@ -369,97 +345,16 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   async function handleRefreshStatus() {
     const url = credentials?.workerUrl?.trim() || workerUrl.trim();
-    const token = credentials?.adminToken?.trim() || adminToken.trim();
-    if (!url || !token) {
+    if (!url) {
       setWorkerError({
         title: "Worker not connected",
-        detail: "Save a Worker URL and admin token first.",
-        fix: "Paste your workers.dev URL and ADMIN_TOKEN, then verify.",
+        detail: "Save a Worker URL first.",
+        fix: "Paste your workers.dev URL, then verify with your owner session.",
       });
       return;
     }
     setWorkerError(null);
     await refreshConnectionStatus();
-  }
-
-  async function handleRequestRecoveryToken() {
-    setRecoveryBusy(true);
-    setRecoveryError(null);
-    setRecoveryMessage(null);
-    setRecoveryToken("");
-    try {
-      const result = await desktopRequestAdminRecoveryToken();
-      if (!result.ok) {
-        throw new Error(result.error ?? "Could not issue recovery token");
-      }
-      if (result.devToken) {
-        setRecoveryToken(result.devToken);
-        setRecoveryMessage(
-          "Recovery token issued (dev mode). Paste it below with a new admin token.",
-        );
-      } else {
-        setRecoveryMessage(
-          "A recovery token was emailed to your account address.",
-        );
-      }
-    } catch (err) {
-      setRecoveryError(
-        explainDesktopError(err, "Could not issue recovery token"),
-      );
-    } finally {
-      setRecoveryBusy(false);
-    }
-  }
-
-  async function handleRecoverAdmin() {
-    setRecoveryBusy(true);
-    setRecoveryError(null);
-    setRecoveryMessage(null);
-    const url = (credentials?.workerUrl ?? "").trim();
-    const email = (credentials?.relaybaseEmail ?? "").trim();
-    const token = recoveryToken.trim();
-    const next = newAdminToken.trim();
-    if (!url || !email || !token || !next) {
-      setRecoveryError({
-        title: "All fields are required",
-        detail:
-          "Worker URL, account email, recovery token, and a new admin token are all required.",
-        fix: "Request a recovery token, then paste it and a new admin token here.",
-      });
-      setRecoveryBusy(false);
-      return;
-    }
-    if (next.length < 16) {
-      setRecoveryError({
-        title: "New admin token too short",
-        detail: "The new admin token must be at least 16 characters.",
-        fix: "Use a longer token (e.g. openssl rand -hex 24).",
-      });
-      setRecoveryBusy(false);
-      return;
-    }
-    try {
-      const result = await desktopRecoverAdminToken({
-        workerUrl: url,
-        accountEmail: email,
-        recoveryToken: token,
-        newAdminToken: next,
-      });
-      if (!result.ok) throw new Error(result.error ?? "Recovery failed");
-      await desktopSaveWorkerConnection({
-        workerUrl: url,
-        adminToken: next,
-        workerScriptName: credentials?.workerScriptName,
-      });
-      await refreshCredentials();
-      setRecoveryToken("");
-      setNewAdminToken("");
-      setRecoveryMessage("Admin token reset. You can now use the new token.");
-    } catch (err) {
-      setRecoveryError(explainDesktopError(err, "Admin token recovery failed"));
-    } finally {
-      setRecoveryBusy(false);
-    }
   }
 
   const hasWorker = Boolean(credentials?.workerUrl?.trim());
@@ -472,7 +367,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
         tone: "bad",
         label: "Not connected",
         detail:
-          "No Worker URL saved. Deploy the install ZIP, then verify URL + admin token.",
+          "No Worker URL saved. Deploy the install ZIP, then verify with your owner session.",
       }
     : statusBusy && !workerStatus
       ? {
@@ -485,13 +380,13 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
             tone: "ok",
             label: "Connected — healthy",
             detail:
-              "Worker is reachable and admin token is accepted. No connection problems detected.",
+              "Worker is reachable and your owner session is accepted. No connection problems detected.",
           }
         : {
             tone: "bad",
             label: "Unreachable or unhealthy",
             detail:
-              "Could not verify the Worker. Check the URL, admin token, and that the deploy is live.",
+              "Could not verify the Worker. Check the URL, owner session, and that the deploy is live.",
           };
 
   const r2Health: HealthBlock = !hasWorker
@@ -590,8 +485,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       setAccountId,
       workerUrl,
       setWorkerUrl,
-      adminToken,
-      setAdminToken,
       cfEditing,
       setCfEditing,
       workerEditing,
@@ -607,21 +500,12 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       oauthBusy,
       oauthError,
       handleStartCfOAuth,
-      recoveryToken,
-      setRecoveryToken,
-      newAdminToken,
-      setNewAdminToken,
-      recoveryBusy,
-      recoveryError,
-      recoveryMessage,
       resetCfDraft,
       resetWorkerDraft,
       handleSaveServerToken,
       handlePasteServerToken,
       handleSaveWorker,
       handleRefreshStatus,
-      handleRequestRecoveryToken,
-      handleRecoverAdmin,
     }),
     [
       credentials,
@@ -638,7 +522,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       appOk,
       accountId,
       workerUrl,
-      adminToken,
       cfEditing,
       workerEditing,
       cfBusy,
@@ -651,11 +534,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       cfInstallTokenAvailable,
       oauthBusy,
       oauthError,
-      recoveryToken,
-      newAdminToken,
-      recoveryBusy,
-      recoveryError,
-      recoveryMessage,
     ],
   );
 

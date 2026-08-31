@@ -3,11 +3,7 @@ import {
   isLegacyInboundR2BucketName,
   workerInboundR2BucketMismatch,
 } from "@/relaybase-email/lib/r2-inbound";
-import {
-  fetchEmailSenderHealth,
-  verifyRelaybaseWorkerAdminToken,
-} from "@/relaybase/lib/client";
-import { resolveWorkerServiceToken } from "@/relaybase/lib/config";
+import { fetchEmailSenderHealth } from "@/relaybase/lib/client";
 import { readRelaybaseEnvSettings } from "@/relaybase/lib/env-settings";
 import { readEmailSenderSettings } from "@/relaybase/lib/settings";
 
@@ -28,7 +24,6 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
   const env = readRelaybaseEnvSettings();
   const settings = await readEmailSenderSettings();
   const workerUrl = env.workerUrl || settings.workerUrl.trim();
-  const adminToken = await resolveWorkerServiceToken();
   const expectedBucket = INBOUND_R2_BUCKET_NAME;
   const checks: RelaybaseDiagnosticCheck[] = [];
 
@@ -65,20 +60,6 @@ export async function runRelaybaseDiagnostics(): Promise<RelaybaseDiagnostics> {
       });
     }
 
-    if (adminToken) {
-      const workerAuth = await verifyRelaybaseWorkerAdminToken(workerUrl, adminToken);
-      checks.push({
-        id: "worker-admin-token",
-        ok: workerAuth,
-        summary: workerAuth
-          ? "Worker accepts the stored admin token"
-          : "Worker rejected the stored admin token",
-        detail: workerAuth
-          ? undefined
-          : "The admin token in Settings must match the worker's ADMIN_TOKEN wrangler secret (set via the desktop install flow). Re-save Settings with the matching token.",
-        logDetail: workerAuth ? undefined : `admin token prefix: ${adminToken.slice(0, 12)}…`,
-      });
-    }
   } else {
     checks.push({
       id: "worker-url",

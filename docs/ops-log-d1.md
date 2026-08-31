@@ -123,7 +123,7 @@ Do **not** overwrite `bodyText` on normal mail — only fill the fallback when t
 
 Exposed on:
 
-- `GET /console/connect` (admin token) — desktop Settings + dashboard home connection cards
+- `GET /console/connect` (owner console access) — desktop Settings + dashboard home connection cards
 - `GET /health` — public health (no admin proof)
 - `GET /console/ops-logs` — adds `d1Configured: boolean` (logs binding only) for the Log page summary
 

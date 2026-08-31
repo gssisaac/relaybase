@@ -5,7 +5,6 @@ export type EmailSenderConfigStatus = {
   healthy: boolean;
   inboundR2WorkerReady?: boolean;
   inboundR2WorkerBucketName?: string | null;
-  adminToken?: string;
   diagnostics?: {
     checkedAt: string;
     checks: Array<{

@@ -2,7 +2,6 @@
 
 import { Loader2, Server } from "lucide-react";
 
-import { AdminTokenPanel } from "@/console/components/setup/AdminTokenPanel";
 import { WorkerVersionSettingsCard } from "@/console/components/WorkerUpdateBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,6 @@ import {
   HealthStatus,
   SettingsPageBody,
   SummaryRow,
-  maskSecret,
 } from "@/console/pages/settings/settings-shared";
 
 export function SettingsWorkerPage() {
@@ -24,8 +22,6 @@ export function SettingsWorkerPage() {
     workerHealth,
     workerUrl,
     setWorkerUrl,
-    adminToken,
-    setAdminToken,
     workerEditing,
     setWorkerEditing,
     workerBusy,
@@ -40,7 +36,7 @@ export function SettingsWorkerPage() {
       <ConnectionCard
         icon={Server}
         title="Routing Worker"
-        description="Paste the workers.dev URL and the same admin token you set as a Worker secret."
+        description="Paste the workers.dev URL. Verify uses your owner passtoken session."
         editing={workerEditing}
         onEdit={() => {
           resetWorkerDraft();
@@ -62,12 +58,6 @@ export function SettingsWorkerPage() {
               />
             </div>
 
-            <AdminTokenPanel
-              value={adminToken}
-              onChange={setAdminToken}
-              cfAccountId={credentials?.accountId ?? ""}
-            />
-
             <DesktopErrorBanner error={workerError} />
             {workerMessage ? (
               <p className="text-sm text-emerald-700 dark:text-emerald-400">
@@ -79,9 +69,7 @@ export function SettingsWorkerPage() {
               <Button
                 type="button"
                 size="sm"
-                disabled={
-                  !workerUrl.trim() || !adminToken.trim() || workerBusy
-                }
+                disabled={!workerUrl.trim() || workerBusy}
                 onClick={() => void handleSaveWorker()}
               >
                 {workerBusy ? (
@@ -121,10 +109,6 @@ export function SettingsWorkerPage() {
                   credentials?.workerScriptName ||
                   "relaybase-api"
                 }
-              />
-              <SummaryRow
-                label="Admin token"
-                value={maskSecret(credentials?.adminToken ?? "")}
               />
               <SummaryRow
                 label="Version"

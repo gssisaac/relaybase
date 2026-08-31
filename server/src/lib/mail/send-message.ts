@@ -50,7 +50,7 @@ async function persistSendLog(
 }
 
 /**
- * Shared send pipeline used by `/mail/send` (admin token) and `/mobile/send`
+ * Shared send pipeline used by `/mail/send` (owner session) and `/mobile/send`
  * (mobile password). Validates the body, sends via the EMAIL binding (REST
  * fallback), records an ops log, locally ingests on-install recipients, and
  * returns a Hono-friendly JSON response.

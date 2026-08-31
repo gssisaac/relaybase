@@ -1,5 +1,3 @@
-import { resolveEmailSenderConfig } from "./config";
-
 export type DmarcPolicy = "none" | "quarantine" | "reject";
 
 export type DomainBrandingConfig = {
@@ -34,30 +32,12 @@ export type DomainBrandingStatus = {
 };
 
 async function brandingFetch<T>(
-  path: string,
-  init?: RequestInit,
+  _path: string,
+  _init?: RequestInit,
 ): Promise<T> {
-  const cfg = await resolveEmailSenderConfig();
-  if (!cfg) {
-    throw new Error(
-      "Relaybase worker is not configured — set the worker URL and admin token in Settings.",
-    );
-  }
-  const url = `${cfg.baseUrl.replace(/\/$/, "")}/console/branding${path}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${cfg.adminToken}`,
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-    cache: "no-store",
-  });
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) {
-    throw new Error(data.error ?? `Worker branding request failed (${res.status})`);
-  }
-  return data;
+  throw new Error(
+    "HQ admin no longer authenticates to the product Worker. Use the desktop app.",
+  );
 }
 
 export async function fetchDomainBrandingStatus(

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
 import {
-  ADMIN_TOKEN_ROTATE_GRACE_MS,
+  WORKER_UPDATE_GRACE_MS,
   isUnauthorizedGraceActive,
-  markAdminTokenJustRotated,
+  markWorkerUpdateGrace,
 } from "./unauthorized-grace.ts";
 
 function installSessionStorage() {
@@ -37,18 +37,18 @@ describe("unauthorized grace", () => {
     assert.equal(isUnauthorizedGraceActive(), false);
   });
 
-  it("is active immediately after rotation", () => {
+  it("is active immediately after a Worker update grace mark", () => {
     installSessionStorage();
-    markAdminTokenJustRotated();
+    markWorkerUpdateGrace();
     assert.equal(isUnauthorizedGraceActive(), true);
   });
 
   it("expires after the grace window", () => {
     installSessionStorage();
     const now = Date.now();
-    markAdminTokenJustRotated(ADMIN_TOKEN_ROTATE_GRACE_MS);
+    markWorkerUpdateGrace(WORKER_UPDATE_GRACE_MS);
     const originalNow = Date.now;
-    Date.now = () => now + ADMIN_TOKEN_ROTATE_GRACE_MS + 1;
+    Date.now = () => now + WORKER_UPDATE_GRACE_MS + 1;
     try {
       assert.equal(isUnauthorizedGraceActive(), false);
     } finally {

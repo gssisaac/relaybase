@@ -211,7 +211,7 @@ export class MailAccountsStore {
 
     // Team mode: the authenticated account is the only one in scope. Seed it
     // directly from teamLogin instead of calling the admin /console/addresses
-    // endpoint (team users have no admin token).
+    // endpoint (team users have no owner session).
     if (this.teamLogin) {
       const email = this.teamLogin.accountEmail.toLowerCase();
       const seeded: Address = { email, domain: email.split("@")[1] ?? "" };

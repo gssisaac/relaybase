@@ -1,7 +1,7 @@
 {
   "version": "0.1.2",
   "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.2.zip",
-  "zipSha256": "a83adb33cd5ba5e9f02e08de7596c76911e3b7783ca235381dd29b2173fddda6",
-  "publishedAt": "2026-08-29T09:45:35.003Z",
+  "zipSha256": "43985f62d3d08ea5e61d23303d1f2b958859a99725e0fc6b4e3c0f96e586f5d7",
+  "publishedAt": "2026-08-31T08:53:12.832Z",
   "notes": "# Relaybase Worker 0.1.2\n\n## Highlights\n- Forgot-passtoken reset proves Cloudflare OAuth by `GET /accounts/{CF_ACCOUNT_ID}`\n- Worker upgrade (`migrate-db`) uses the same OAuth account proof when an owner already exists\n\n## Changes\n- `POST /console/reset-admin` accepts a Cloudflare OAuth access token (`cfAccessToken`) and requires `CF_ACCOUNT_ID`\n- `verifyCfTokenAccount` calls `GET /accounts/{CF_ACCOUNT_ID}` (`success === true`)\n- `POST /console/init-db` and `/console/migrate-db` accept `X-Cf-Access-Token` with the same proof"
 }

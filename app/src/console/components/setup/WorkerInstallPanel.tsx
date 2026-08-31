@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Check, Copy, Download, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -15,17 +15,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ownerAuthStatusForWorkerUrl } from "@/lib/desktop/auth";
 import {
   CF_OAUTH_AUTHORIZE_WAIT_MS,
   desktopOpenExternal,
+  desktopOwnerLogin,
+  desktopOwnerSetupAdmin,
   desktopPreviewWorkerUpdateTarget,
   desktopRegisterWorkerWithConsole,
+  desktopSaveDownloadFile,
   desktopSaveWorkerConnection,
   desktopStartCfOAuth,
   desktopVerifyWorkerConnection,
   explainCfOAuthError,
   explainDesktopError,
   explainWorkerUpdateTargetError,
+  isDesktopRuntime,
   listenCfOAuthResult,
   oauthAuthorizationIncompleteHelp,
   type DesktopErrorHelp,
@@ -33,7 +38,7 @@ import {
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { useDesktop } from "@/lib/desktop/shell";
-import { AdminTokenPanel } from "@/console/components/setup/AdminTokenPanel";
+import { ManualInstallScriptPanel } from "@/console/components/setup/AdminTokenPanel";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
@@ -44,12 +49,11 @@ import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 const DRAFT_KEY = "relaybase.setup.install.draft";
 
 type Draft = {
-  adminToken: string;
   workerUrl: string;
 };
 
 function emptyDraft(): Draft {
-  return { adminToken: "", workerUrl: "" };
+  return { workerUrl: "" };
 }
 
 function loadDraft(): Draft {
@@ -61,8 +65,6 @@ function loadDraft(): Draft {
     if (!raw) return emptyDraft();
     const parsed = JSON.parse(raw) as Partial<Draft>;
     return {
-      adminToken:
-        typeof parsed.adminToken === "string" ? parsed.adminToken : "",
       workerUrl:
         typeof parsed.workerUrl === "string" ? parsed.workerUrl : "",
     };
@@ -79,13 +81,13 @@ function saveDraft(draft: Draft) {
   }
 }
 
-function generateAdminToken(): string {
-  const bytes = new Uint8Array(24);
-  crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
-  return `rb_admin_${hex}`;
+function downloadBlob(blob: Blob, filename: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(href);
 }
 
 export function WorkerInstallPanel({
@@ -98,7 +100,7 @@ export function WorkerInstallPanel({
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [workerUrl, setWorkerUrl] = useState("");
-  const [adminToken, setAdminToken] = useState("");
+  const [installPepper, setInstallPepper] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [busy, setBusy] = useState<"verify" | null>(null);
   const [oauthBusy, setOauthBusy] = useState(false);
@@ -106,9 +108,14 @@ export function WorkerInstallPanel({
   const [error, setError] = useState<DesktopErrorHelp | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
   const [doneUrl, setDoneUrl] = useState("");
+  const [revealedPasstoken, setRevealedPasstoken] = useState<string | null>(
+    null,
+  );
+  const [tokenSaved, setTokenSaved] = useState(false);
+  const [tokenDownloaded, setTokenDownloaded] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
   const [pendingContinue, setPendingContinue] = useState<{
     url: string;
-    token: string;
     scriptName?: string;
   } | null>(null);
   const [targetPreview, setTargetPreview] = useState<WorkerUpdateTarget | null>(
@@ -154,22 +161,14 @@ export function WorkerInstallPanel({
   useEffect(() => {
     const draft = loadDraft();
     setWorkerUrl(draft.workerUrl || credentials?.workerUrl || "");
-    setAdminToken(draft.adminToken || credentials?.adminToken || "");
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    saveDraft({ adminToken, workerUrl });
-  }, [hydrated, adminToken, workerUrl]);
-
-  useEffect(() => {
-    if (purpose === "install" && mode === "manual" && !adminToken.trim()) {
-      setAdminToken(generateAdminToken());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+    saveDraft({ workerUrl });
+  }, [hydrated, workerUrl]);
 
   useEffect(() => {
     return () => {
@@ -177,8 +176,6 @@ export function WorkerInstallPanel({
     };
   }, [clearOauthWaitTimer]);
 
-  // Same CF OAuth listener as Settings → Cloudflare. Rust completes the
-  // exchange (loopback or relaybase://) and emits cf-oauth-complete.
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     let active = true;
@@ -262,73 +259,138 @@ export function WorkerInstallPanel({
     await handleStartCfOAuth();
   }
 
-  function finishAfterEmailApi(opts?: {
-    url: string;
-    token: string;
-    scriptName?: string;
-  }) {
+  function finishAfterEmailApi(opts?: { url: string; scriptName?: string }) {
     const next = opts ?? pendingContinue;
     if (!next || finishingRef.current) return;
     finishingRef.current = true;
     void persistAndContinue(next);
   }
 
-  async function persistAndContinue(opts: {
-    url: string;
-    token: string;
-    scriptName?: string;
-  }) {
+  async function persistAndContinue(opts: { url: string; scriptName?: string }) {
     await desktopSaveWorkerConnection({
       workerUrl: opts.url,
-      adminToken: opts.token,
       workerScriptName: opts.scriptName,
     });
     void desktopRegisterWorkerWithConsole(opts.url).catch(() => {
       /* best-effort */
     });
+    setInstallPepper("");
     await refresh();
     router.replace(purpose === "worker-update" ? "/settings/worker" : "/");
+  }
+
+  async function probeHealth(url: string): Promise<void> {
+    const res = await fetch(`${url}/health`, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(
+        `Worker health check failed (${res.status}). Confirm wrangler deploy printed this URL.`,
+      );
+    }
   }
 
   async function handleDoneVerify() {
     setBusy("verify");
     setError(null);
-    const url = doneUrl.trim();
-    const token = adminToken;
+    const url = doneUrl.trim().replace(/\/$/, "");
     try {
-      const result = await desktopVerifyWorkerConnection(url, token);
-      setDoneOpen(false);
+      await probeHealth(url);
+      const status = await ownerAuthStatusForWorkerUrl(url);
+
+      if (purpose === "install" && !status.ownerConfigured) {
+        const pepper = installPepper.trim();
+        if (!pepper) {
+          throw new Error(
+            "Install pepper is missing. Switch away from Manual and back, then copy the command again.",
+          );
+        }
+        const issued = await desktopOwnerSetupAdmin({
+          workerUrl: url,
+          pepper,
+        });
+        await desktopOwnerLogin({
+          workerUrl: url,
+          passtoken: issued.passtoken,
+        });
+        setInstallPepper("");
+        setRevealedPasstoken(issued.passtoken);
+        setTokenSaved(false);
+        setTokenDownloaded(false);
+        setCopiedToken(false);
+      } else if (purpose === "install" && status.ownerConfigured) {
+        throw new Error(
+          "An owner passtoken is already configured on this Worker. Sign in from Setup → Already installed.",
+        );
+      }
+
+      const result = await desktopVerifyWorkerConnection(url);
       await desktopSaveWorkerConnection({
         workerUrl: result.workerUrl,
-        adminToken: token,
         workerScriptName: result.workerScriptName,
+        workerVersion: result.version,
       });
       await refresh();
       const next = {
         url: result.workerUrl,
-        token,
         scriptName: result.workerScriptName,
       };
       if (purpose === "worker-update") {
+        setDoneOpen(false);
         await persistAndContinue(next);
         return;
       }
       setPendingContinue(next);
-      openEnableEmailApiDialog({
-        allowSkip: true,
-        accountId: cfOAuthAccountId,
-        workerUrl: next.url,
-        adminToken: next.token,
-        workerScriptName: next.scriptName,
-        onVerified: () => finishAfterEmailApi(next),
-        onSkip: () => finishAfterEmailApi(next),
-        onClose: () => finishAfterEmailApi(next),
-      });
+      if (!revealedPasstoken && purpose === "install" && !status.ownerConfigured) {
+        /* reveal is set above; stay on dialog until they save it */
+      }
     } catch (err) {
       setError(explainDesktopError(err, "Could not verify Worker"));
     } finally {
       setBusy(null);
     }
+  }
+
+  async function copyPasstoken() {
+    if (!revealedPasstoken) return;
+    await navigator.clipboard.writeText(revealedPasstoken);
+    setCopiedToken(true);
+    setTokenSaved(true);
+  }
+
+  async function downloadPasstoken() {
+    if (!revealedPasstoken) return;
+    const content = [
+      "# Relaybase owner passtoken — save this file securely",
+      `# Worker URL: ${doneUrl.trim()}`,
+      `# Generated: ${new Date().toISOString()}`,
+      "",
+      `PASSTOKEN=${revealedPasstoken}`,
+      "",
+    ].join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const filename = "relaybase-passtoken.txt";
+    if (isDesktopRuntime()) {
+      const buffer = await blob.arrayBuffer();
+      await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
+    } else {
+      downloadBlob(blob, filename);
+    }
+    setTokenDownloaded(true);
+    setTokenSaved(true);
+  }
+
+  function continueAfterPasstoken() {
+    const next = pendingContinue;
+    if (!next) return;
+    setDoneOpen(false);
+    openEnableEmailApiDialog({
+      allowSkip: true,
+      accountId: cfOAuthAccountId,
+      workerUrl: next.url,
+      workerScriptName: next.scriptName,
+      onVerified: () => finishAfterEmailApi(next),
+      onSkip: () => finishAfterEmailApi(next),
+      onClose: () => finishAfterEmailApi(next),
+    });
   }
 
   function handleModeChange(next: "auto" | "manual") {
@@ -338,6 +400,9 @@ export function WorkerInstallPanel({
     }
     setMode(next);
   }
+
+  const canContinueAfterReveal =
+    Boolean(revealedPasstoken) && (tokenSaved || tokenDownloaded);
 
   return (
     <SetupScrollPage>
@@ -391,8 +456,8 @@ export function WorkerInstallPanel({
                 ? "Authorize the Cloudflare account that owns your saved Worker. We show both URLs before any upload."
                 : "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
               : purpose === "worker-update"
-                ? "Copy the update command, deploy the Worker, then run migrate-db."
-                : "Generate a token, copy the install command, and run it in a terminal."}
+                ? "Copy the update command, deploy the Worker, then come back. Schema uses your owner session."
+                : "Copy the install command, run it in a terminal, then come back. The Worker issues your passtoken once."}
           </p>
 
           <div className="mt-2 flex min-h-0 flex-1 flex-col">
@@ -416,24 +481,27 @@ export function WorkerInstallPanel({
               />
             ) : (
               <div className="flex min-h-0 flex-1 flex-col gap-4">
-                <AdminTokenPanel
-                  value={adminToken}
-                  onChange={setAdminToken}
+                <ManualInstallScriptPanel
+                  onPepperChange={setInstallPepper}
                   cfAccountId={cfOAuthAccountId}
                   variant={
                     purpose === "worker-update" ? "worker-update" : "install"
                   }
-                  allowRotate={purpose !== "worker-update"}
                 />
                 <DesktopErrorBanner error={error} />
                 <div className="mt-auto">
                   <Button
                     type="button"
                     className="w-full"
-                    disabled={!adminToken.trim() || busy !== null}
+                    disabled={
+                      busy !== null ||
+                      (purpose === "install" && !installPepper.trim())
+                    }
                     onClick={() => {
                       setDoneUrl(workerUrl);
                       setDoneOpen(true);
+                      setRevealedPasstoken(null);
+                      setError(null);
                     }}
                   >
                     {busy === "verify" ? (
@@ -450,46 +518,120 @@ export function WorkerInstallPanel({
         {purpose === "install" ? <WhatWeInstall /> : null}
       </div>
 
-      <Dialog open={doneOpen} onOpenChange={setDoneOpen}>
+      <Dialog
+        open={doneOpen}
+        onOpenChange={(open) => {
+          if (busy !== null) return;
+          if (!open && revealedPasstoken && !canContinueAfterReveal) return;
+          setDoneOpen(open);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Verify your Worker</DialogTitle>
+            <DialogTitle>
+              {revealedPasstoken
+                ? "Save your passtoken"
+                : "Verify your Worker"}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            Paste the <span className="font-mono">*.workers.dev</span> URL that
-            <span className="font-mono"> wrangler deploy</span> printed.
-            We&apos;ll verify it with the admin token you generated.
-          </p>
-          <div className="space-y-1.5">
-            <Label htmlFor="done-worker-url">Worker URL</Label>
-            <Input
-              id="done-worker-url"
-              value={doneUrl}
-              onChange={(e) => setDoneUrl(e.target.value)}
-              placeholder="https://relaybase-api.<subdomain>.workers.dev"
-              className="font-mono text-xs"
-              autoComplete="off"
-            />
-          </div>
-          <DesktopErrorBanner error={error} />
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDoneOpen(false)}
-              disabled={busy !== null}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={!doneUrl.trim() || busy !== null}
-              onClick={() => void handleDoneVerify()}
-            >
-              {busy === "verify" ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : null}
-              Verify &amp; continue
-            </Button>
-          </DialogFooter>
+          {revealedPasstoken ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Shown once. Copy or download a backup — this Mac also stores it
+                in the keyring, and Touch ID reads it later.
+              </p>
+              <div className="rounded-md border border-border bg-muted/30 p-2">
+                <code className="block break-all font-mono text-[11px]">
+                  {revealedPasstoken}
+                </code>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant={copiedToken || tokenSaved ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => void copyPasstoken()}
+                >
+                  {copiedToken ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  Copy passtoken
+                </Button>
+                <Button
+                  type="button"
+                  variant={tokenDownloaded ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => void downloadPasstoken()}
+                >
+                  {tokenDownloaded ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
+                  Download .txt
+                </Button>
+              </div>
+              {canContinueAfterReveal ? (
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                  Passtoken saved. You can continue.
+                </p>
+              ) : (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  Copy or download before continuing.
+                </p>
+              )}
+              <DialogFooter>
+                <Button
+                  disabled={!canContinueAfterReveal}
+                  onClick={continueAfterPasstoken}
+                >
+                  Continue
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Paste the <span className="font-mono">*.workers.dev</span> URL
+                that <span className="font-mono">wrangler deploy</span> printed.
+                {purpose === "install"
+                  ? " The Worker will issue your owner passtoken once."
+                  : " We verify with your owner session."}
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="done-worker-url">Worker URL</Label>
+                <Input
+                  id="done-worker-url"
+                  value={doneUrl}
+                  onChange={(e) => setDoneUrl(e.target.value)}
+                  placeholder="https://relaybase-api.<subdomain>.workers.dev"
+                  className="font-mono text-xs"
+                  autoComplete="off"
+                />
+              </div>
+              <DesktopErrorBanner error={error} />
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setDoneOpen(false)}
+                  disabled={busy !== null}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  disabled={!doneUrl.trim() || busy !== null}
+                  onClick={() => void handleDoneVerify()}
+                >
+                  {busy === "verify" ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : null}
+                  Verify &amp; continue
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -10,7 +10,7 @@
 
 ## Positioning (pivot)
 
-Relaybase is **software**, not a hosted multi-tenant email intermediary. You deploy the routing Worker into your Cloudflare account (Wrangler install ZIP); the Mac app only needs your Worker URL and admin token. We never ask you to point nameservers at Relaybase or place domains under our account.
+Relaybase is **software**, not a hosted multi-tenant email intermediary. You deploy the routing Worker into your Cloudflare account (Wrangler install ZIP); the Mac app connects with your Worker URL and an owner passtoken the Worker issues once. We never ask you to point nameservers at Relaybase or place domains under our account.
 
 See `docs/pivot-byo-cloudflare.md`.
 
@@ -34,7 +34,7 @@ Solo builders and multi-product operators who already manage domains on Cloudfla
 ## Core capabilities
 
 - Mac app: inbox, compose, accounts, domains (same IA as prior `app/` dashboard)
-- User self-install of `server/` Worker via install ZIP + Wrangler (app verifies URL + admin token)
+- User self-install of `server/` Worker via install ZIP + Wrangler (app verifies URL + owner passtoken session)
 - Domain-scoped API keys, webhooks, inbound R2 storage — owned by the user
 - Operator `admin/`: licenses, Worker health for Relaybase's own domain, release ops
 

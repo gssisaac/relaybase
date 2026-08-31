@@ -110,7 +110,7 @@ export async function probeConnectionStatus(
       };
     }
     try {
-      const result = await desktopVerifyWorkerConnection(url, "");
+      const result = await desktopVerifyWorkerConnection(url);
       const worker = workerStatusFromConnect(result);
       // D1 fallback probes need a Bearer token; Rust verify_worker_connection
       // already probes D1 when /console/connect omits bindings.
@@ -146,7 +146,6 @@ export async function probeConnectionStatus(
     }
   }
 
-  const token = credentials?.adminToken?.trim();
   const access = await ensureAccessToken();
 
   if (!url) {
@@ -154,17 +153,17 @@ export async function probeConnectionStatus(
   }
 
   try {
-    if (!access && !token) {
+    if (!access) {
       return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
     }
-    const result = await desktopVerifyWorkerConnection(url, access || token || "");
+    const result = await desktopVerifyWorkerConnection(url);
     const worker = workerStatusFromConnect(result);
     if (
       worker.ok &&
       !worker.d1Logs.configured &&
       !worker.d1Mail.configured
     ) {
-      const fallback = await probeD1WhenConnectOmits(url.replace(/\/$/, ""), access || token || "");
+      const fallback = await probeD1WhenConnectOmits(url.replace(/\/$/, ""), access);
       if (fallback.d1Logs.configured || fallback.d1Mail.configured) {
         worker.d1Logs = fallback.d1Logs;
         worker.d1Mail = fallback.d1Mail;

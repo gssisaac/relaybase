@@ -48,11 +48,11 @@ Console login. `password_hash` is the only secret stored here. Sessions are sign
 
 ### `account_workers`
 
-`(account_id, worker_url)` — which customer `*.workers.dev` URLs belong to a console account. Used for ADMIN_TOKEN recovery.
+`(account_id, worker_url)` — which customer `*.workers.dev` URLs belong to a console account.
 
 ### `account_recovery`
 
-One-time token hashes for password reset and `admin_token` recovery. Tokens themselves are never stored.
+One-time token hashes for console password reset. Tokens themselves are never stored.
 
 ### `product_settings`
 
@@ -60,9 +60,9 @@ Composite PK `(service_id, filename)`. Current row:
 
 | service_id | filename | `data` JSON |
 |------------|----------|-------------|
-| `relaybase` | `settings.json` | `{ workerUrl, adminToken }` only |
+| `relaybase` | `settings.json` | `{ workerUrl }` only (optional display / public `/health`) |
 
-`adminToken` must match the product Worker's `ADMIN_TOKEN` secret. It authorizes admin → product Worker calls (`/console/*`, `/mail/send`). It does **not** authorize license admin — admin reads `licenses` from D1 directly.
+HQ admin does **not** store a customer Worker credential. License admin is separate (`RELAYBASE_ADMIN_TOKEN` on the console). Admin reads `licenses` from D1 directly.
 
 **Never** store Cloudflare credentials, end-user `rb-auth-…` tokens, or plaintext API keys here.
 
@@ -82,8 +82,7 @@ Console Next routes live under `/api/v1/…`. `next.config.ts` rewrites `/v1/:pa
 | `POST /api/beta` on `relaybase.xyz` | public (website Worker) | `beta_invites` |
 | `GET /api/beta` on `admin.relaybase.xyz` | admin (direct D1 read) | `beta_invites` |
 | `GET /downloads/:uuid` on `relaybase.xyz` | public; 404 if unknown uuid | `beta_invites` |
-| `/api/v1/account?action=…` | public signup/login/recover; session for worker register + recovery-token | `accounts`, `account_workers`, `account_recovery` |
-| `POST /api/v1/recovery/verify-admin-token` | public, token-bound | `account_recovery` + `account_workers` |
+| `/api/v1/account?action=…` | public signup/login/recover; session for worker register | `accounts`, `account_workers`, `account_recovery` |
 | `GET/POST /api/v1/license/admin` | session **or** `RELAYBASE_ADMIN_TOKEN` bearer | `licenses` |
 | `DELETE /api/v1/license/admin/[id]` | same | `licenses` |
 | `POST /api/v1/license/verify` | public (desktop activate) | `licenses` |

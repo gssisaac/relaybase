@@ -1,24 +1,27 @@
 "use client";
 
 import type { PanelViewProps } from "@/lib/dashboard/shared/DashboardPageContent";
-import { EmailSenderBrandingView } from "@/relaybase/components/EmailSenderBrandingView";
-import { EmailSenderComposeView } from "@/relaybase/components/EmailSenderComposeView";
-import { EmailSenderEmailsView } from "@/relaybase/components/EmailSenderEmailsView";
-import { EmailSenderKeysView } from "@/relaybase/components/EmailSenderKeysView";
-import { EmailSenderLogsView } from "@/relaybase/components/EmailSenderLogsView";
 import { EmailSenderSettingsView } from "@/relaybase/components/EmailSenderSettingsView";
 import { EmailSenderShell } from "@/relaybase/components/EmailSenderShell";
 import { AdminDashboardView } from "@/components/dashboard/AdminDashboardView";
 
-function EmailSenderView({ subPath }: PanelViewProps) {
-  const [head, second] = subPath;
+function RetiredWorkerProxy() {
+  return (
+    <div className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
+      <p className="font-medium text-foreground">Retired</p>
+      <p className="mt-1">
+        HQ admin no longer calls the product Worker. Use the desktop app with
+        an owner passtoken for mail, keys, branding, and logs.
+      </p>
+    </div>
+  );
+}
 
-  if (head === "logs") return <EmailSenderLogsView />;
-  if (head === "keys") return <EmailSenderKeysView />;
-  if (head === "branding") return <EmailSenderBrandingView />;
-  if (head === "email") {
-    if (second === "compose") return <EmailSenderComposeView />;
-    return <EmailSenderEmailsView />;
+function EmailSenderView({ subPath }: PanelViewProps) {
+  const [head] = subPath;
+
+  if (head === "logs" || head === "keys" || head === "branding" || head === "email") {
+    return <RetiredWorkerProxy />;
   }
   if (head === "settings") return <EmailSenderSettingsView />;
   return <AdminDashboardView />;

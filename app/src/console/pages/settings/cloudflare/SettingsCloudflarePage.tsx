@@ -34,7 +34,6 @@ export function SettingsCloudflarePage() {
     "relaybase-api";
   const workerUrl =
     workerStatus?.workerUrl?.trim() || credentials?.workerUrl?.trim() || "";
-  const adminToken = credentials?.adminToken?.trim() || "";
 
   return (
     <SettingsPageBody>
@@ -96,7 +95,6 @@ export function SettingsCloudflarePage() {
                 accountId,
                 workerScriptName: scriptName,
                 workerUrl,
-                adminToken,
               });
             }}
           >

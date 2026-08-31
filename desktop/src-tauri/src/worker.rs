@@ -1,5 +1,5 @@
 use crate::cloudflare::{
-    admin_auth_ok, assert_r2_subscription, enable_workers_dev, ensure_r2_bucket, find_r2_bucket,
+    assert_r2_subscription, enable_workers_dev, ensure_r2_bucket, find_r2_bucket,
     put_worker_secret, upload_worker_script, worker_health_ok, worker_script_exists, CfClient,
 };
 use crate::secrets::StoredCredentials;
@@ -19,39 +19,6 @@ export default {
     if (url.pathname === "/health") {
       return Response.json({ ok: true, stub: true, inbound: { r2Configured: !!env.INBOUND } });
     }
-    if (url.pathname === "/console/connect" && request.method === "GET") {
-      const auth = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-      const expected = env.ADMIN_TOKEN || "";
-      if (!auth || auth !== expected) {
-        return Response.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      return Response.json({
-        ok: true,
-        product: "relaybase",
-        workerScriptName: env.WORKER_SCRIPT_NAME || "relaybase-api",
-        inbound: { r2Configured: !!env.INBOUND, bucketName: env.INBOUND_BUCKET_NAME || "relaybase-mailbox" },
-        d1: {
-          logs: {
-            configured: !!env.RELAYBASE_LOGS,
-            databaseName: "relaybase-logs",
-            binding: "RELAYBASE_LOGS",
-            sizeBytes: null,
-          },
-          mail: {
-            configured: !!env.RELAYBASE_MAIL,
-            databaseName: "relaybase-mail",
-            binding: "RELAYBASE_MAIL",
-            sizeBytes: null,
-          },
-          app: {
-            configured: !!env.RELAYBASE_DB,
-            databaseName: "relaybase-db",
-            binding: "RELAYBASE_DB",
-            sizeBytes: null,
-          },
-        },
-      });
-    }
     return Response.json({ error: "Relaybase Worker stub — replace with full server build via Update Worker", stub: true }, { status: 501 });
   },
   async email(message, env) {
@@ -68,7 +35,6 @@ export default {
 pub struct InstallResult {
     pub worker_url: String,
     pub worker_script_name: String,
-    pub admin_token: String,
     pub r2_bucket: String,
     /// true when an existing named install was reused without uploading a new script
     pub skipped: bool,
@@ -182,67 +148,6 @@ pub async fn probe_install(account_id: &str, api_token: &str) -> Result<ProbeRes
     })
 }
 
-async fn relink_admin(
-    client: &CfClient,
-    script_name: &str,
-    worker_url: &str,
-    account_id: &str,
-    api_token: &str,
-    server_token: Option<&str>,
-    existing_admin: &str,
-) -> Result<(String, bool), String> {
-    if admin_auth_ok(worker_url, existing_admin).await {
-        return Ok((existing_admin.to_string(), false));
-    }
-
-    let auth_pepper = format!("{}", Uuid::new_v4().simple());
-    put_worker_secret(client, script_name, "AUTH_PEPPER", &auth_pepper).await?;
-    put_worker_secret(client, script_name, "CF_ACCOUNT_ID", account_id).await?;
-    // Only push CF_API_TOKEN when a server token (Email Sending Edit) is
-    // available — pushing the install token here is what caused the
-    // [10000] Authentication error on send_raw.
-    if let Some(server) = server_token {
-        put_worker_secret(client, script_name, "CF_API_TOKEN", server).await?;
-    }
-    let _ = api_token;
-    Ok((auth_pepper, true))
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReissueAdminResult {
-    pub worker_url: String,
-    pub admin_token: String,
-    pub worker_script_name: String,
-    /// True when GET /console/connect accepted the new Bearer after the secret PUT.
-    pub verified: bool,
-}
-
-/// Issue a new ADMIN_TOKEN and push it as a Worker secret. Requires an
-/// existing `relaybase-api` script — does not install or re-push other secrets.
-pub async fn reissue_admin_token(
-    account_id: &str,
-    api_token: &str,
-    existing: &StoredCredentials,
-) -> Result<(ReissueAdminResult, StoredCredentials), String> {
-    let client = client_from(account_id, api_token);
-    let script_name = DEFAULT_SCRIPT.to_string();
-
-    let script_present = worker_script_exists(&client, &script_name).await?;
-    if !script_present {
-        return Err(
-            "No Worker named `relaybase-api` found on this Cloudflare account. Install first, or authorize the account that already has Relaybase."
-                .into(),
-        );
-    }
-
-    let _ = (client, script_name, existing, account_id);
-    Err(
-        "Passtoken recovery uses Cloudflare OAuth → Setup → I forgot my passtoken. The ADMIN_TOKEN secret is retired."
-            .into(),
-    )
-}
-
 /// Bind an already-installed named Worker into local credentials without re-uploading script.
 pub async fn adopt_worker(
     account_id: &str,
@@ -255,37 +160,23 @@ pub async fn adopt_worker(
             "Install is not ready to skip. Approve and run Install instead.".into(),
         );
     }
-    let client = client_from(account_id, api_token);
     let script_name = probe.worker_script_name.clone();
     let worker_url = probe
         .worker_url
         .clone()
         .ok_or_else(|| "Could not resolve workers.dev URL".to_string())?;
 
-    let (admin_token, admin_relinked) = relink_admin(
-        &client,
-        &script_name,
-        &worker_url,
-        account_id,
-        api_token,
-        None,
-        &existing.admin_token,
-    )
-    .await?;
-
     let result = InstallResult {
         worker_url: worker_url.clone(),
         worker_script_name: script_name.clone(),
-        admin_token: String::new(),
         r2_bucket: R2_BUCKET.to_string(),
         skipped: true,
-        admin_relinked,
+        admin_relinked: false,
     };
 
     let mut creds = existing.clone();
     creds.account_id = account_id.to_string();
     creds.worker_url = worker_url;
-    creds.admin_token = admin_token;
     creds.worker_script_name = script_name;
 
     Ok((result, creds))
@@ -325,7 +216,6 @@ pub async fn install_worker(
 
     let result = InstallResult {
         worker_url: worker_url.clone(),
-        admin_token: String::new(),
         worker_script_name: script_name.clone(),
         r2_bucket: R2_BUCKET.to_string(),
         skipped: false,
@@ -335,7 +225,6 @@ pub async fn install_worker(
     let mut creds = existing.clone();
     creds.account_id = account_id.to_string();
     creds.worker_url = worker_url;
-    creds.admin_token.clear();
     creds.worker_script_name = script_name;
 
     Ok((result, creds))
@@ -368,7 +257,6 @@ pub async fn update_worker(
     Ok(InstallResult {
         worker_url: creds.worker_url.clone(),
         worker_script_name: script_name,
-        admin_token: creds.admin_token.clone(),
         r2_bucket: R2_BUCKET.to_string(),
         skipped: false,
         admin_relinked: false,

@@ -24,7 +24,7 @@ export function CloudflareTrust() {
             <p className="mt-4 text-lg text-slate-400">
               Relaybase does not host email for you. You deploy our routing Worker
               into your Cloudflare account with Wrangler; the Mac app only needs
-              your Worker URL and admin token — then you get an inbox UX over
+              your Worker URL and owner passtoken — then you get an inbox UX over
               Cloudflare Email Sending and Routing.
             </p>
 
@@ -75,7 +75,7 @@ export function CloudflareTrust() {
               <p className="text-slate-500">{"// You deploy"}</p>
               <p>wrangler deploy ──▶ relaybase-api in your account</p>
               <p className="text-[#f6821f]">
-                Relaybase.app ──▶ your Worker URL + admin token
+                Relaybase.app ──▶ your Worker URL + owner passtoken
               </p>
               <p className="text-slate-500">
                 &nbsp;&nbsp;&nbsp;&nbsp;──▶ Email Sending API (your bill)

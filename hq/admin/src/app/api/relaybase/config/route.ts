@@ -58,7 +58,6 @@ export async function PUT(request: Request) {
   try {
     const body = (await request.json()) as {
       workerUrl?: string;
-      adminToken?: string;
     };
     const env = readRelaybaseEnvSettings();
 
@@ -74,7 +73,6 @@ export async function PUT(request: Request) {
 
     await mergeEmailSenderSettings({
       ...(env.sources.workerUrl ? {} : { workerUrl }),
-      adminToken: body.adminToken,
     });
 
     const resolved = await resolveEmailSenderConfig();

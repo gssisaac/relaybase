@@ -65,7 +65,6 @@ export function EnableEmailApiDialog({
   accountId,
   workerScriptName = "relaybase-api",
   workerUrl,
-  adminToken,
   allowSkip = false,
   onVerified,
   onSkip,
@@ -81,7 +80,6 @@ export function EnableEmailApiDialog({
   accountId: string;
   workerScriptName?: string;
   workerUrl: string;
-  adminToken: string;
   allowSkip?: boolean;
   onVerified: () => void;
   onSkip?: () => void;
@@ -130,7 +128,7 @@ export function EnableEmailApiDialog({
       if (!url) {
         throw new Error("Worker URL is required to verify.");
       }
-      const result = await desktopVerifyWorkerConnection(url, "");
+      const result = await desktopVerifyWorkerConnection(url);
       if (!result.cfApiTokenSet) {
         throw new Error(
           "The Worker has no CF_API_TOKEN secret yet. Add it under Runtime variables and secrets, then try again.",

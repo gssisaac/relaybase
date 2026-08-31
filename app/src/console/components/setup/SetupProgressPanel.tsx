@@ -145,11 +145,10 @@ export function SetupProgressPanel({
   const [logs, setLogs] = useState<InstallLogEvent[]>([]);
   const [autoDone, setAutoDone] = useState<{
     workerUrl: string;
-    adminToken: string;
+    revealedPasstoken: string;
   } | null>(null);
   const [pendingVerify, setPendingVerify] = useState<{
     workerUrl: string;
-    adminToken: string;
     workerVersion: string;
     dbAlreadyInitialized: boolean;
   } | null>(null);
@@ -157,7 +156,6 @@ export function SetupProgressPanel({
   const [verifyError, setVerifyError] = useState<DesktopErrorHelp | null>(null);
   const [dbAlreadyInit, setDbAlreadyInit] = useState<{
     workerUrl: string;
-    adminToken: string;
   } | null>(null);
   const [clearingDb, setClearingDb] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
@@ -203,12 +201,11 @@ export function SetupProgressPanel({
     "";
 
   const openMailApiDialog = useCallback(
-    (done: { workerUrl: string; adminToken: string }) => {
+    (done: { workerUrl: string; revealedPasstoken?: string }) => {
       openEnableEmailApiDialog({
         allowSkip: true,
         accountId: cfOAuthAccountId,
         workerUrl: done.workerUrl,
-        adminToken: done.adminToken,
         onVerified: () => {
           setMailApiVerified(true);
           setMailApiDone(true);
@@ -261,7 +258,7 @@ export function SetupProgressPanel({
     fireInstallConfetti();
     if (mailApiDone || emailDialogShownRef.current) return;
     if (needsOwnerSetup) return;
-    if (autoDone.adminToken && !tokenSaved) return;
+    if (autoDone.revealedPasstoken && !tokenSaved) return;
     emailDialogShownRef.current = true;
     openMailApiDialog(autoDone);
   }, [
@@ -378,7 +375,6 @@ export function SetupProgressPanel({
     const workerUrl = connect?.workerUrl || result.workerUrl;
     await desktopSaveWorkerConnection({
       workerUrl,
-      adminToken: "",
       workerScriptName:
         connect?.workerScriptName || result.workerScriptName || "relaybase-api",
       workerVersion: result.workerVersion || connect?.version,
@@ -396,7 +392,7 @@ export function SetupProgressPanel({
     if (purpose === "worker-update") {
       setNeedsOwnerSetup(false);
       setInstallPepper(null);
-      setAutoDone({ workerUrl, adminToken: "" });
+      setAutoDone({ workerUrl, revealedPasstoken: "" });
       router.replace("/settings/worker");
       return;
     }
@@ -411,12 +407,12 @@ export function SetupProgressPanel({
     if (ownerConfigured) {
       setNeedsOwnerSetup(false);
       setInstallPepper(null);
-      setAutoDone({ workerUrl, adminToken: "" });
+      setAutoDone({ workerUrl, revealedPasstoken: "" });
       return;
     }
     setNeedsOwnerSetup(true);
     setInstallPepper(pepper || null);
-    setAutoDone({ workerUrl, adminToken: "" });
+    setAutoDone({ workerUrl, revealedPasstoken: "" });
     if (!pepper) {
       setError({
         title: "Could not issue a passtoken",
@@ -430,7 +426,7 @@ export function SetupProgressPanel({
   /** OAuth deploy already succeeded. No owner session is the normal upgrade case. */
   async function completeAfterDeploy(result: AutoInstallResult) {
     try {
-      const connect = await desktopVerifyWorkerConnection(result.workerUrl, "");
+      const connect = await desktopVerifyWorkerConnection(result.workerUrl);
       await finishInstall(result, connect);
     } catch {
       await finishInstall(result);
@@ -442,18 +438,13 @@ export function SetupProgressPanel({
     setVerifying(true);
     setVerifyError(null);
     try {
-      await desktopMigrateWorkerDb(
-        pendingVerify.workerUrl,
-        pendingVerify.adminToken,
-      );
+      await desktopMigrateWorkerDb(pendingVerify.workerUrl);
       const connect = await desktopVerifyWorkerConnection(
         pendingVerify.workerUrl,
-        pendingVerify.adminToken,
       );
       await finishInstall(
         {
           workerUrl: pendingVerify.workerUrl,
-          adminToken: pendingVerify.adminToken,
           workerScriptName: connect.workerScriptName,
           r2Bucket: "",
           d1LogsId: "",
@@ -469,7 +460,6 @@ export function SetupProgressPanel({
     } catch {
       await finishInstall({
         workerUrl: pendingVerify.workerUrl,
-        adminToken: "",
         workerScriptName: "relaybase-api",
         r2Bucket: "",
         d1LogsId: "",
@@ -676,14 +666,14 @@ export function SetupProgressPanel({
       setCopiedToken(false);
       setAutoDone({
         workerUrl: autoDone.workerUrl,
-        adminToken: issued.passtoken,
+        revealedPasstoken: issued.passtoken,
       });
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);
       if (/already configured/i.test(raw)) {
         setNeedsOwnerSetup(false);
         setInstallPepper(null);
-        setAutoDone({ workerUrl: autoDone.workerUrl, adminToken: "" });
+        setAutoDone({ workerUrl: autoDone.workerUrl, revealedPasstoken: "" });
         return;
       }
       setError(explainDesktopError(err, "Could not create owner"));
@@ -693,20 +683,20 @@ export function SetupProgressPanel({
   }
 
   async function copyAutoToken() {
-    if (!autoDone?.adminToken) return;
-    await navigator.clipboard.writeText(autoDone.adminToken);
+    if (!autoDone?.revealedPasstoken) return;
+    await navigator.clipboard.writeText(autoDone.revealedPasstoken);
     setCopiedToken(true);
     setTokenSaved(true);
   }
 
   async function downloadAutoToken() {
-    if (!autoDone?.adminToken) return;
+    if (!autoDone?.revealedPasstoken) return;
     const content = [
       "# Relaybase owner passtoken — save this file securely",
       `# Worker URL: ${autoDone.workerUrl}`,
       `# Generated: ${new Date().toISOString()}`,
       "",
-      `PASSTOKEN=${autoDone.adminToken}`,
+      `PASSTOKEN=${autoDone.revealedPasstoken}`,
       "",
     ].join("\n");
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
@@ -876,7 +866,7 @@ export function SetupProgressPanel({
     }
     setAutoDone({
       workerUrl: dbAlreadyInit.workerUrl,
-      adminToken: dbAlreadyInit.adminToken,
+      revealedPasstoken: "",
     });
     setMessage(
       clear
@@ -1267,7 +1257,7 @@ export function SetupProgressPanel({
               <span className="font-mono">{autoDone.workerUrl}</span>
             </p>
             <div className="space-y-2">
-              {autoDone.adminToken ? (
+              {autoDone.revealedPasstoken ? (
                 <>
                   <p className="text-xs font-medium">Save your passtoken</p>
                   <p className="text-xs text-muted-foreground">
@@ -1276,7 +1266,7 @@ export function SetupProgressPanel({
                   </p>
                   <div className="rounded-md border border-border bg-muted/30 p-2">
                     <code className="block break-all font-mono text-[11px]">
-                      {autoDone.adminToken}
+                      {autoDone.revealedPasstoken}
                     </code>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -1414,17 +1404,17 @@ export function SetupProgressPanel({
               disabled={
                 leavingToMailbox ||
                 needsOwnerSetup ||
-                (Boolean(autoDone.adminToken) && !tokenSaved) ||
+                (Boolean(autoDone.revealedPasstoken) && !tokenSaved) ||
                 !mailApiDone
               }
               onClick={() => {
                 void (async () => {
                   setLeavingToMailbox(true);
-                  if (autoDone.adminToken) {
+                  if (autoDone.revealedPasstoken) {
                     try {
                       await store.loginWithPasstoken({
                         workerUrl: autoDone.workerUrl,
-                        passtoken: autoDone.adminToken,
+                        passtoken: autoDone.revealedPasstoken,
                       });
                       router.replace("/email/inbox");
                       return;

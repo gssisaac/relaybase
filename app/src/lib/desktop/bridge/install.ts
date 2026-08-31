@@ -4,18 +4,9 @@ import { formatDesktopError, invoke, isDesktopRuntime } from "./invoke";
 export type InstallResult = {
   workerUrl: string;
   workerScriptName: string;
-  adminToken: string;
   r2Bucket: string;
   skipped: boolean;
   adminRelinked: boolean;
-};
-
-export type ReissueAdminResult = {
-  workerUrl: string;
-  adminToken: string;
-  workerScriptName: string;
-  /** False when the secret was saved but /console/connect has not accepted it yet. */
-  verified?: boolean;
 };
 
 export type WorkerUpdateTarget = {
@@ -29,8 +20,6 @@ export type WorkerUpdateTarget = {
 export type AutoInstallResult = {
   workerUrl: string;
   workerScriptName: string;
-  /** @deprecated Retired god token. Empty. Use authPepper once for setup-admin. */
-  adminToken: string;
   /** AUTH_PEPPER just set. JS memory only — never persist. Empty on Worker update. */
   authPepper?: string;
   r2Bucket: string;
@@ -106,11 +95,6 @@ export async function desktopAdoptWorker(): Promise<InstallResult> {
   return invoke("adopt_routing_worker");
 }
 
-/** Generate a new ADMIN_TOKEN and push it as a Worker secret via the in-memory OAuth session. */
-export async function desktopReissueAdminToken(): Promise<ReissueAdminResult> {
-  return invoke("reissue_admin_token");
-}
-
 export async function desktopInstallWorker(
   workerJs?: string,
 ): Promise<InstallResult> {
@@ -181,14 +165,12 @@ export async function desktopRollbackInstall(
 /** Empty D1 only. `clear` is rejected by the desktop command. */
 export async function desktopInitWorkerDb(
   workerUrl: string,
-  adminToken: string,
   clear: boolean,
   wipeConfirmation?: string | null,
   accountId?: string,
 ): Promise<InitDbResult> {
   return invoke("init_worker_db_cmd", {
     workerUrl,
-    adminToken,
     clear,
     wipeConfirmation: wipeConfirmation?.trim() ? wipeConfirmation.trim() : null,
     accountId: accountId?.trim() ? accountId.trim() : null,
@@ -198,11 +180,9 @@ export async function desktopInitWorkerDb(
 /** Pending migrations only. Never drops tables. */
 export async function desktopMigrateWorkerDb(
   workerUrl: string,
-  adminToken: string,
 ): Promise<InitDbResult> {
   return invoke("migrate_worker_db_cmd", {
     workerUrl,
-    adminToken,
   });
 }
 

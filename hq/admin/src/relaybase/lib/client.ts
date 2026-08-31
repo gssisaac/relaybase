@@ -22,30 +22,16 @@ export type CreateEmailSenderKeyResult = {
   createdAt: string;
 };
 
+const HQ_WORKER_RETIRED =
+  "HQ admin no longer authenticates to the product Worker. Use the desktop app with an owner passtoken.";
+
 async function emailSenderFetch<T>(
-  cfg: EmailSenderConfig,
-  path: string,
-  init?: RequestInit,
+  _cfg: EmailSenderConfig,
+  _path: string,
+  _init?: RequestInit,
 ): Promise<T> {
-  const url = `${cfg.baseUrl}${path}`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${cfg.adminToken}`,
-        "Content-Type": "application/json",
-        ...init?.headers,
-      },
-      cache: "no-store",
-    });
-  } catch (error) {
-    const hint =
-      error instanceof TypeError
-        ? ` — cannot reach ${cfg.baseUrl}`
-        : "";
-    throw new Error(`Relaybase request failed${hint}`);
-  }
+  throw new Error(HQ_WORKER_RETIRED);
+}
 
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) {
@@ -176,8 +162,8 @@ export async function sendEmailWithApiKey(
 }
 
 export async function sendEmailWithAdminToken(
-  cfg: EmailSenderConfig,
-  params: {
+  _cfg: EmailSenderConfig,
+  _params: {
     from: string;
     fromName?: string;
     to: string | string[];
@@ -188,64 +174,5 @@ export async function sendEmailWithAdminToken(
     replyTo?: string;
   },
 ): Promise<{ messageId: string }> {
-  const url = `${cfg.baseUrl.replace(/\/$/, "")}/mail/send`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${cfg.adminToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(params),
-      cache: "no-store",
-    });
-  } catch (error) {
-    const hint =
-      error instanceof TypeError ? ` — cannot reach ${cfg.baseUrl}` : "";
-    throw new Error(`Relaybase send failed${hint}`);
-  }
-
-  const data = (await res.json().catch(() => ({}))) as {
-    messageId?: string;
-    error?: string;
-  };
-  if (!res.ok) {
-    throw new Error(data.error ?? `Relaybase send failed (${res.status})`);
-  }
-  return { messageId: data.messageId ?? "sent" };
-}
-
-async function workerFetch<T>(
-  baseUrl: string,
-  path: string,
-  adminToken: string,
-  init?: RequestInit,
-): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
-  const url = `${baseUrl.replace(/\/$/, "")}${path}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${adminToken}`,
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-    cache: "no-store",
-  });
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  return { ok: res.ok, status: res.status, data };
-}
-
-export async function verifyRelaybaseWorkerAdminToken(
-  baseUrl: string,
-  adminToken: string,
-): Promise<boolean> {
-  const trimmed = adminToken.trim();
-  if (!trimmed || !baseUrl.trim()) return false;
-  const result = await workerFetch<{ keys?: unknown[] }>(
-    baseUrl,
-    "/console/keys",
-    trimmed,
-  );
-  return result.ok;
+  throw new Error(HQ_WORKER_RETIRED);
 }

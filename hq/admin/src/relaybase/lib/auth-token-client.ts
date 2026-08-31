@@ -26,33 +26,13 @@ type WorkerCreateResponse = {
 };
 
 async function workerAuthTokensFetch<T>(
-  cfg: EmailSenderConfig,
-  path: string,
-  init?: RequestInit,
+  _cfg: EmailSenderConfig,
+  _path: string,
+  _init?: RequestInit,
 ): Promise<T> {
-  const url = `${cfg.baseUrl.replace(/\/$/, "")}/console/auth-tokens${path}`;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${cfg.adminToken}`,
-        "Content-Type": "application/json",
-        ...init?.headers,
-      },
-      cache: "no-store",
-    });
-  } catch (error) {
-    const hint =
-      error instanceof TypeError ? ` — cannot reach ${cfg.baseUrl}` : "";
-    throw new Error(`Relaybase auth-token request failed${hint}`);
-  }
-
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) {
-    throw new Error(data.error ?? `Relaybase auth-token request failed (${res.status})`);
-  }
-  return data;
+  throw new Error(
+    "HQ admin no longer authenticates to the product Worker. Use the desktop app.",
+  );
 }
 
 export async function listAuthTokensFromWorker(

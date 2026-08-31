@@ -19,9 +19,9 @@ export type D1ProbeResult = {
 /** Probe D1 via /health or legacy product routes (pre-connect-probe Workers). */
 export async function probeD1WhenConnectOmits(
   base: string,
-  adminToken: string,
+  accessToken: string,
 ): Promise<D1ProbeResult> {
-  const headers = { Authorization: `Bearer ${adminToken}` };
+  const headers = { Authorization: `Bearer ${accessToken}` };
   let d1Logs = { ...D1_LOGS_DEFAULT };
   let d1Mail = { ...D1_MAIL_DEFAULT };
   let d1App = { ...D1_APP_DEFAULT };

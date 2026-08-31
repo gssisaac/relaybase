@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
  * ~/.relaybase/credentials.json the same way the desktop shell does.
  * Not deployed — app Worker / OpenNext is decommissioned.
  *
- * Disk allowlist: accountId, workerUrl, adminToken, workerScriptName,
+ * Disk allowlist: accountId, workerUrl, workerScriptName,
  * workerVersion, plus non-empty relaybaseAccountId / Email / Session.
  * CF OAuth and API tokens are never read from or written to disk.
  */
@@ -16,7 +16,6 @@ import { NextResponse } from "next/server";
 type DiskCredentials = {
   accountId: string;
   workerUrl: string;
-  adminToken: string;
   workerScriptName: string;
   workerVersion: string;
   relaybaseAccountId?: string;
@@ -27,7 +26,6 @@ type DiskCredentials = {
 const DISK_KEYS = [
   "accountId",
   "workerUrl",
-  "adminToken",
   "workerScriptName",
   "workerVersion",
   "relaybaseAccountId",
@@ -55,7 +53,6 @@ function toDisk(input: Record<string, unknown>): DiskCredentials {
   const disk: DiskCredentials = {
     accountId: str("accountId"),
     workerUrl: str("workerUrl").replace(/\/$/, ""),
-    adminToken: str("adminToken"),
     workerScriptName: str("workerScriptName"),
     workerVersion: str("workerVersion"),
   };

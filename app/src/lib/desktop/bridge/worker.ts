@@ -98,86 +98,17 @@ export async function desktopRegisterWorkerWithConsole(
   return { ok: Boolean(data.ok), error: data.error };
 }
 
-/**
- * Request a one-time ADMIN_TOKEN recovery token from the Relaybase console.
- * The token is emailed to the account owner (returned inline in dev).
- * Requires a Relaybase account session.
- */
-export async function desktopRequestAdminRecoveryToken(): Promise<{
-  ok: boolean;
-  devToken?: string;
-  error?: string;
-}> {
-  const existing = isDesktopRuntime()
-    ? await desktopGetCredentials()
-    : await loadLocalCredentialsFile();
-  const session = existing?.relaybaseSession?.trim() ?? "";
-  if (!session) {
-    return { ok: false, error: "Not signed in to Relaybase" };
-  }
-  const res = await fetch(
-    `${CONSOLE_URL.replace(/\/$/, "")}/api/v1/account?action=recovery-token`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session}`,
-      },
-    },
-  );
-  const data = (await res.json().catch(() => ({}))) as {
-    ok?: boolean;
-    devToken?: string;
-    error?: string;
-  };
-  return { ok: Boolean(data.ok), devToken: data.devToken, error: data.error };
-}
-
-/**
- * Reset the customer Worker's ADMIN_TOKEN using a recovery token issued by
- * the Relaybase console. The Worker verifies the token with the console and
- * then stores the new admin token in D1 (no wrangler needed).
- */
-export async function desktopRecoverAdminToken(input: {
-  workerUrl: string;
-  accountEmail: string;
-  recoveryToken: string;
-  newAdminToken: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch(
-    `${input.workerUrl.replace(/\/$/, "")}/console/recover-admin`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recoveryToken: input.recoveryToken,
-        newAdminToken: input.newAdminToken,
-        accountEmail: input.accountEmail,
-        workerUrl: input.workerUrl,
-      }),
-    },
-  );
-  const data = (await res.json().catch(() => ({}))) as {
-    ok?: boolean;
-    error?: string;
-  };
-  return { ok: Boolean(data.ok), error: data.error };
-}
-
 export async function desktopVerifyWorkerConnection(
   workerUrl: string,
-  adminToken: string,
 ): Promise<WorkerConnectResult> {
   if (isDesktopRuntime()) {
     return invoke("verify_worker_connection", {
       workerUrl,
-      adminToken: adminToken.trim(),
     });
   }
 
   const { ensureAccessToken } = await import("@/lib/desktop/auth");
-  const ownerAccess = await ensureAccessToken();
-  const access = ownerAccess || adminToken.trim();
+  const access = await ensureAccessToken();
   const base = workerUrl.replace(/\/$/, "");
   if (!access) {
     throw new Error("Owner session required. Sign in with your passtoken.");
@@ -223,7 +154,7 @@ export async function desktopVerifyWorkerConnection(
       !value.d1.mail &&
       !value.d1.inboxIndex)
   ) {
-    const fallback = await probeD1WhenConnectOmits(base, adminToken);
+    const fallback = await probeD1WhenConnectOmits(base, access);
     if (fallback.d1Logs.configured || fallback.d1Mail.configured) {
       d1Logs = fallback.d1Logs;
       d1Mail = fallback.d1Mail;
@@ -257,14 +188,12 @@ export async function desktopVerifyWorkerConnection(
 
 export async function desktopSaveWorkerConnection(input: {
   workerUrl: string;
-  adminToken: string;
   workerScriptName?: string;
   workerVersion?: string;
 }): Promise<DesktopCredentials> {
   if (isDesktopRuntime()) {
     return invoke("save_worker_connection", {
       workerUrl: input.workerUrl,
-      adminToken: input.adminToken,
       workerScriptName: input.workerScriptName ?? null,
       workerVersion: input.workerVersion?.trim() ? input.workerVersion.trim() : null,
     });
@@ -274,7 +203,6 @@ export async function desktopSaveWorkerConnection(input: {
     accountId: existing?.accountId ?? "",
     installToken: existing?.installToken ?? "",
     workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
-    adminToken: input.adminToken.trim(),
     workerScriptName:
       input.workerScriptName?.trim() || existing?.workerScriptName || "",
     workerVersion:

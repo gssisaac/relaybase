@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Fingerprint, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -15,6 +15,7 @@ import {
 } from "@/lib/desktop/app-session/errors";
 import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { biometryLabel } from "@/lib/desktop/biometry/label";
 import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { normalizePasstokenInput } from "@/lib/desktop/worker-url/normalize-passtoken";
 import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
@@ -64,6 +65,8 @@ export function UnlockView({
   );
 
   const busy = store.busy;
+  const bioLabel = biometryLabel(0, store.ownerStatus?.platform ?? "macos");
+  const canTryBio = role === "owner" && Boolean(store.ownerStatus?.hasPasstoken);
   const selectedUrl = normalizeWorkerUrl(workerUrl);
   const canSubmit =
     Boolean(selectedUrl) &&
@@ -117,9 +120,32 @@ export function UnlockView({
             <p className="text-xs text-muted-foreground">
               {role === "invited"
                 ? "Sign in with your account email and the password your admin set up in Accounts → Teammate login."
-                : "Sign in with your passtoken. After this, Touch ID reads it from the keyring."}
+                : canTryBio
+                  ? `Use ${bioLabel} to read your stored passtoken, or type it if biometry fails or is declined.`
+                  : "Sign in with your passtoken. After this, Touch ID reads it from the keyring."}
             </p>
           </div>
+
+          {canTryBio ? (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => void store.loginOwnerFromKeyring()}
+              aria-label={`Sign in with ${bioLabel}`}
+              className="h-auto flex-col gap-3 self-center px-6 py-4"
+            >
+              <Fingerprint
+                className={cn(
+                  "size-12 text-foreground",
+                  busy && "animate-pulse",
+                )}
+              />
+              <span className="text-base font-medium tracking-tight">
+                {bioLabel}
+              </span>
+            </Button>
+          ) : null}
 
           <form
             className="flex w-full flex-col gap-4"

@@ -405,6 +405,35 @@ describe("AppSessionStore", () => {
     assert.equal(keyringLogins, 1);
   });
 
+  it("loginOwnerFromKeyring unlocks from UnlockView retry", async () => {
+    let attempts = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({ hasPasstoken: true }),
+      ownerLoginFromKeyring: () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return Promise.reject(
+            new Error("[UserCancel] - The user cancelled the authentication"),
+          );
+        }
+        return Promise.resolve(
+          ownerStatus({
+            hasPasstoken: true,
+            hasMailRefresh: true,
+            hasMailAccess: true,
+          }),
+        );
+      },
+    });
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ hasPasstoken: true }), teamStatus({}));
+    await waitUntil(() => store.phase.kind === "unlock", "unlock form");
+    await store.loginOwnerFromKeyring();
+    assert.equal(store.phase.kind, "ownerReady");
+    assert.equal(store.ownerStatus?.hasMailAccess, true);
+    assert.equal(attempts, 2);
+  });
+
   it("lands on passtoken form when owner has workerUrl but no keyring", () => {
     const store = createStore({ ownerStatus: ownerStatus({}) });
     store.setIdentity({

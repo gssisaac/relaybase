@@ -507,6 +507,30 @@ export class AppSessionStore {
     this.error = null;
   }
 
+  /** Touch ID then read keyring passtoken — UnlockView retry after boot decline. */
+  async loginOwnerFromKeyring(): Promise<void> {
+    if (!this.hasOwnerPasstoken()) return;
+    this.busy = true;
+    this.error = null;
+    try {
+      await this.loginFromKeyringPasstoken("Unlock Relaybase");
+      runInAction(() => {
+        if (this.hasOwnerMailAccess() && this.hasWorkerConnected()) {
+          this.phase = { kind: "ownerReady" };
+        }
+        this.busy = false;
+      });
+    } catch (err) {
+      runInAction(() => {
+        this.busy = false;
+        if (isWorkerUnreachableError(err)) this.markWorkerUnreachable();
+        const shown = visibleUnlockError(err, "owner");
+        if (shown) this.error = shown;
+      });
+      throw err;
+    }
+  }
+
   async loginWithPasstoken(input: {
     workerUrl: string;
     passtoken: string;

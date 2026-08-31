@@ -69,6 +69,15 @@ Flutter app under `mobile/` is a **teammate inbox**, not a second desktop:
 
 Full policy: **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)**.
 
+## Desktop release (macOS)
+
+Read **[desktop/docs/release.md](desktop/docs/release.md)** before any signed DMG / R2 / updater work.
+
+- **Only** `cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos` (same as `pnpm run build` inside `desktop/`).
+- **Never** `pnpm run build:host`, bare `tauri build`, or `pnpm exec tauri build --bundles app,dmg` for a release — on Apple Silicon that is **arm64-only** under `src-tauri/target/release/bundle/`, not the shipped Universal fat binary.
+- Release artifacts live under `src-tauri/target/universal-apple-darwin/release/bundle/`. `build-macos.sh` runs `verify-universal-app.sh` (`lipo` must list **x86_64** and **arm64**) before sync/R2.
+- R2 upload uses the **website** Cloudflare account from `hq/website/wrangler.jsonc`, not necessarily `desktop/.env` `CLOUDFLARE_ACCOUNT_ID`.
+
 ## Worker bundle
 
 Desktop install and Settings → Worker update upload a **pre-built** `worker.js`, not TypeScript from `server/src/`. Editing `server/` does **not** change the running Worker until you rebuild.

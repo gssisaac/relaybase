@@ -6,7 +6,8 @@
   "packageManager": "pnpm@9.12.0",
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build",
+    "build": "bash scripts/deploy/build-macos.sh",
+    "build:host": "tauri build --bundles app,dmg",
     "build:macos": "bash scripts/deploy/build-macos.sh",
     "sync:release": "node scripts/sync-release-artifacts.mjs",
     "upload:r2": "bash scripts/deploy/upload-release-r2.sh",

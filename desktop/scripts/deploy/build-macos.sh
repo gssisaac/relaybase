@@ -106,8 +106,7 @@ find "$BUNDLE_ROOT" -maxdepth 3 -type f \( -name '*.dmg' -o -name '*.app' \) 2>/
 VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
 APP_BIN="$BUNDLE_ROOT/macos/Relaybase.app/Contents/MacOS/Relaybase"
 if [[ -f "$APP_BIN" ]]; then
-  echo "→ lipo -info $APP_BIN"
-  lipo -info "$APP_BIN" || true
+  bash "$ROOT/scripts/deploy/verify-universal-app.sh" "$APP_BIN"
 fi
 
 DMG="$(find "$BUNDLE_ROOT/dmg" -name "Relaybase_${VERSION}_*.dmg" 2>/dev/null | head -1)"

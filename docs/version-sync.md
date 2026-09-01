@@ -15,7 +15,7 @@ Relaybase has two customer-facing version numbers that **must always match**:
 
 1. **One semver for both** — e.g. Desktop `0.1.2` + Worker `0.1.2`. Never ship mismatched patch labels.
 2. **Bump together** — every release touches Desktop **and** Worker, even when only one side changed materially (users compare Settings → Worker version against the app version).
-3. **Release notes in pairs** — `desktop/public/release-notes/X.Y.Z.md` and `server/release-notes/X.Y.Z.md` with the **same version** and aligned Highlights (wording may differ per surface).
+3. **Release notes in pairs** — `desktop/public/release-notes/X.Y.Z.md` and `server/release-notes/X.Y.Z.md` with the **same version** and aligned Highlights (wording may differ per surface). The marketing site `/release-notes` page is built from the **desktop** files (synced into `hq/website/content/release-notes` on `pnpm run dev` / `build`).
 4. **Patch-only channel** — after `0.1.1`, use `0.1.2`, `0.1.3`, … No separate dev / `+local` product channel.
 5. **HQ / app packages** (`hq/website`, `app/`, repo root) are **not** product version — leave them on their own package versions unless explicitly bumped for unrelated deploys.
 

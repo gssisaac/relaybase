@@ -4,7 +4,10 @@
   "private": true,
   "packageManager": "pnpm@9.12.0",
   "scripts": {
+    "sync:release-notes": "node scripts/sync-release-notes.mjs",
+    "predev": "pnpm run sync:release-notes",
     "dev": "next dev -p 32828",
+    "prebuild": "pnpm run sync:release-notes",
     "build": "next build",
     "build:cf": "corepack enable && pnpm install --frozen-lockfile && pnpm run build",
     "preview:cf": "pnpm run build && pnpm dlx wrangler@4 dev",

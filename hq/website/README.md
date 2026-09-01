@@ -13,6 +13,12 @@ pnpm dev
 
 Open [http://localhost:32828](http://localhost:32828).
 
+## Release notes (`/release-notes`)
+
+The page is built from `desktop/public/release-notes/*.md` (same files used by
+the Tauri updater). `pnpm run build` / `pnpm run dev` sync those files into
+`content/release-notes` via `scripts/sync-release-notes.mjs`.
+
 `next dev` serves the static pages only. Beta signup (`POST /api/beta`) and
 gated download pages (`/downloads/{uuid}`) run in the Worker — test those
 after a static export:

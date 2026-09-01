@@ -42,3 +42,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Synced from desktop/public/release-notes by scripts/sync-release-notes.mjs
+/content/release-notes/*.md

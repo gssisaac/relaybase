@@ -39,6 +39,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.8,
     },
+    {
+      url: `${siteConfig.url}/release-notes`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
     ...resources.map((resource) => ({
       url: `${siteConfig.url}/resources/${resource.slug}`,
       lastModified: resource.updated ?? resource.date,

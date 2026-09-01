@@ -243,7 +243,9 @@ date: YYYY-MM-DD
 - …
 ```
 
-`sync-release-artifacts.mjs` **fails** if this file is missing.
+`sync-release-artifacts.mjs` **fails** if this file is missing. The marketing
+site `/release-notes` page syncs these files into `hq/website/content/release-notes`
+on `pnpm run dev` / `build` — do not edit the website copies by hand.
 
 ### 3. Build + notarize + R2
 

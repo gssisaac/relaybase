@@ -12,6 +12,7 @@ const navItems = [
   { href: "/#features", label: "Features" },
   { href: "/#infrastructure", label: "Infrastructure" },
   { href: "/resources", label: "Resources" },
+  { href: "/release-notes", label: "Release notes" },
 ] as const;
 
 export function SiteHeader() {

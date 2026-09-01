@@ -66,6 +66,9 @@ export function Footer() {
             <Link href="/resources" className="hover:text-foreground">
               Resources
             </Link>
+            <Link href="/release-notes" className="hover:text-foreground">
+              Release notes
+            </Link>
           </nav>
 
           <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">

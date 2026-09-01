@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  buildEmailFrameFontCss,
+  buildEmailFrameInjectedHead,
+  collectParentFontFaceCss,
+  getAppFontFamily,
+  wrapEmailSrcDoc,
+} from "@/email/lib/email-frame-styles";
 import { desktopOpenExternal } from "@/lib/desktop/bridge";
 
 /**
@@ -30,6 +37,10 @@ export function EmailHtmlFrame({
 }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [height, setHeight] = useState<number>(200);
+  const srcDoc = useMemo(
+    () => wrapEmailSrcDoc(html, buildEmailFrameInjectedHead()),
+    [html],
+  );
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -118,6 +129,18 @@ export function EmailHtmlFrame({
       overflowStyle.textContent = FRAME_OVERFLOW_CSS;
       doc.head.appendChild(overflowStyle);
 
+      // Re-copy faces (srcDoc is a fresh document) and force the app font stack
+      // over sender defaults (Gmail plain-text HTML, forward headers, etc.).
+      const fontFaces = collectParentFontFaceCss();
+      if (fontFaces) {
+        const faceStyle = doc.createElement("style");
+        faceStyle.textContent = fontFaces;
+        doc.head.appendChild(faceStyle);
+      }
+      const fontStyle = doc.createElement("style");
+      fontStyle.textContent = buildEmailFrameFontCss(getAppFontFamily());
+      doc.head.appendChild(fontStyle);
+
       measure();
 
       try {
@@ -156,13 +179,13 @@ export function EmailHtmlFrame({
       ro?.disconnect();
       timers.forEach((t) => window.clearTimeout(t));
     };
-  }, [html]);
+  }, [srcDoc]);
 
   return (
     <iframe
       ref={iframeRef}
       title="Email content"
-      srcDoc={html}
+      srcDoc={srcDoc}
       sandbox="allow-same-origin allow-popups"
       scrolling="no"
       className={className}
@@ -184,9 +207,6 @@ const BASE_EMAIL_CSS = `
   body {
     background: #ffffff;
     color: #111111;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
     word-wrap: break-word;
   }
   img { max-width: 100%; height: auto; }

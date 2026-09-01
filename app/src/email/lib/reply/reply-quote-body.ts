@@ -112,8 +112,79 @@ const HTML_QUOTE_START_RE =
   /<div[^>]*class=(["'])[^"']*\b(?:gmail_quote|yahoo_quoted|protonmail_quote|moz-cite-prefix)[^"']*\1[^>]*>|<blockquote\b[^>]*>/i;
 
 /**
+ * Gmail / Apple / Outlook forward wrappers. Dashes required so prose like
+ * "see the forwarded message" does not match.
+ */
+const FORWARDED_MESSAGE_RE =
+  /-{2,}\s*Forwarded message\s*-{2,}|Begin forwarded message\s*:|-{5,}\s*Original Message\s*-{5,}/i;
+
+function isVisuallyEmptyHtml(html: string): boolean {
+  return (
+    html
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<br\s*\/?>/gi, "")
+      .replace(
+        /<\/?(?:div|span|p|html|body|font|center|table|tbody|thead|tr|td|th|u|i|b|strong|em|a)[^>]*>/gi,
+        "",
+      )
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, "") === ""
+  );
+}
+
+/**
+ * True when the *first* quote block is a forward, not a reply citation.
+ * Only the leading `gmail_attr` (or the first visible words) is checked so a
+ * reply to a forwarded message still trims.
+ */
+function quoteLooksLikeForward(quoteHtml: string): boolean {
+  const attr =
+    /<div[^>]*class=(["'])[^"']*\bgmail_attr\b[^"']*\1[^>]*>([\s\S]*?)<\/div>/i.exec(
+      quoteHtml,
+    );
+  if (attr?.[2]) return FORWARDED_MESSAGE_RE.test(attr[2]);
+  const visible = quoteHtml
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  return FORWARDED_MESSAGE_RE.test(visible);
+}
+
+/** Forward header appears before any `On … wrote:` reply citation. */
+function textLooksLikeForward(text: string): boolean {
+  const cut = /(?:^|\n)On .+ wrote:/m.exec(text);
+  const head =
+    cut && cut.index != null ? text.slice(0, cut.index) : text;
+  return FORWARDED_MESSAGE_RE.test(head);
+}
+
+function keepFullHtml(
+  replyHtml: string,
+  quoteHtml: string,
+): { replyHtml: string; quoteHtml: string | null } | null {
+  if (
+    !replyHtml.trim() ||
+    isVisuallyEmptyHtml(replyHtml) ||
+    quoteLooksLikeForward(quoteHtml)
+  ) {
+    return null;
+  }
+  return {
+    replyHtml,
+    quoteHtml: quoteHtml.length ? quoteHtml : null,
+  };
+}
+
+/**
  * Split HTML email body before common quoted-history containers
  * (Gmail / Yahoo / Proton / generic blockquote).
+ *
+ * Forwards wrap the *entire* original in `gmail_quote` / `<blockquote>`.
+ * Those stay intact — they are the message, not nested reply history.
  */
 export function splitQuotedHtml(html: string): {
   replyHtml: string;
@@ -129,18 +200,17 @@ export function splitQuotedHtml(html: string): {
         : onWrote.index;
       const replyHtml = html.slice(0, at).replace(/\s+$/g, "");
       const quoteHtml = html.slice(at);
-      if (replyHtml.trim()) {
-        return { replyHtml, quoteHtml: quoteHtml.length ? quoteHtml : null };
-      }
+      const kept = keepFullHtml(replyHtml, quoteHtml);
+      if (kept) return kept;
     }
     return { replyHtml: html, quoteHtml: null };
   }
   const replyHtml = html.slice(0, match.index).replace(/\s+$/g, "");
   const quoteHtml = html.slice(match.index);
-  if (!replyHtml.trim()) {
-    return { replyHtml: html, quoteHtml: null };
-  }
-  return { replyHtml, quoteHtml: quoteHtml.length ? quoteHtml : null };
+  return keepFullHtml(replyHtml, quoteHtml) ?? {
+    replyHtml: html,
+    quoteHtml: null,
+  };
 }
 
 export type TrimmedMessageBody = {
@@ -153,6 +223,9 @@ export type TrimmedMessageBody = {
 /**
  * For conversation stacks: keep only the new reply content and hide nested history.
  * Prefers plain-text split when a quote is found (HTML often duplicates it).
+ *
+ * Forwards are the message body — do not trim them, even when the forwarded
+ * original itself contains `On … wrote:` history.
  */
 export function trimQuotedHistoryForThread(input: {
   bodyText?: string | null;
@@ -163,6 +236,15 @@ export function trimQuotedHistoryForThread(input: {
     /\r\n/g,
     "\n",
   );
+  const html = input.bodyHtml?.trim();
+  if (textLooksLikeForward(rawText) || (html && quoteLooksLikeForward(html))) {
+    return {
+      bodyText: rawText,
+      bodyHtml: html || undefined,
+      quoteText: null,
+    };
+  }
+
   const textSplit = splitQuotedBody(rawText);
   if (textSplit.quote) {
     return {
@@ -172,7 +254,6 @@ export function trimQuotedHistoryForThread(input: {
     };
   }
 
-  const html = input.bodyHtml?.trim();
   if (html) {
     const htmlSplit = splitQuotedHtml(html);
     if (htmlSplit.quoteHtml) {

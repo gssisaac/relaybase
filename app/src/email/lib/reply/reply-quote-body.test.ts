@@ -136,6 +136,61 @@ describe("splitQuotedHtml / trimQuotedHistoryForThread", () => {
     assert.doesNotMatch(quoted, /Prior/);
     assert.doesNotMatch(quoted, /Older/);
   });
+
+  it("does not cut a Gmail HTML forward at gmail_quote", () => {
+    const html =
+      '<div dir="ltr"><br><br><div class="gmail_quote gmail_quote_container"><div dir="ltr" class="gmail_attr">---------- Forwarded message ---------<br>From: Skool &lt;noreply@skool.com&gt;<br></div><br><div style="background:#ffffff"><h1>SaaS breakdown Analyze</h1><a href="https://www.skool.com/calendar">VIEW CALENDAR</a></div></div></div>';
+    const split = splitQuotedHtml(html);
+    assert.equal(split.quoteHtml, null);
+    assert.ok(split.replyHtml.includes("VIEW CALENDAR"));
+
+    const trimmed = trimQuotedHistoryForThread({
+      bodyText:
+        "---------- Forwarded message ---------\nFrom: Skool <noreply@skool.com>\n\nSaaS breakdown Analyze\nVIEW CALENDAR",
+      bodyHtml: html,
+    });
+    assert.ok(trimmed.bodyHtml?.includes("VIEW CALENDAR"));
+    assert.equal(trimmed.quoteText, null);
+  });
+
+  it("keeps a user note plus the Gmail-forwarded original", () => {
+    const html =
+      '<div dir="ltr">FYI see this<br><br><div class="gmail_quote"><div class="gmail_attr">---------- Forwarded message ---------<br>From: A<br></div><p>Original body</p></div></div>';
+    const split = splitQuotedHtml(html);
+    assert.equal(split.quoteHtml, null);
+    assert.ok(split.replyHtml.includes("FYI see this"));
+    assert.ok(split.replyHtml.includes("Original body"));
+  });
+
+  it("still trims a reply that quotes a nested forward", () => {
+    const html =
+      '<div>Thanks</div><div class="gmail_quote"><div class="gmail_attr">On Tue, Sep 1, 2026 at 12:27 PM Isaac Lee wrote:<br></div><blockquote class="gmail_quote"><div class="gmail_quote"><div class="gmail_attr">---------- Forwarded message ---------<br></div><p>Original</p></div></blockquote></div>';
+    const split = splitQuotedHtml(html);
+    assert.equal(split.replyHtml, "<div>Thanks</div>");
+    assert.ok(split.quoteHtml?.includes("gmail_quote"));
+    assert.ok(split.quoteHtml?.includes("Forwarded message"));
+  });
+
+  it("does not hide an empty-wrapper + quote as a white box", () => {
+    const html =
+      '<div dir="ltr"><br><br></div><div class="gmail_quote"><div class="gmail_attr">On Sun wrote:<br></div><blockquote>old</blockquote></div>';
+    const split = splitQuotedHtml(html);
+    assert.equal(split.quoteHtml, null);
+    assert.ok(split.replyHtml.includes("old"));
+  });
+
+  it("keeps a forwarded thread whose original contains On … wrote:", () => {
+    const trimmed = trimQuotedHistoryForThread({
+      bodyText:
+        "---------- Forwarded message ---------\nFrom: A\n\nThanks\n\nOn Sun, Aug 9, 2026 at 1:56 AM x wrote:\n\n> Hey",
+      bodyHtml:
+        '<div dir="ltr"><br><div class="gmail_quote"><div class="gmail_attr">---------- Forwarded message ---------<br>From: A</div><div>Thanks</div></div></div>',
+    });
+    assert.ok(trimmed.bodyText.includes("---------- Forwarded message ---------"));
+    assert.ok(trimmed.bodyText.includes("On Sun,"));
+    assert.ok(trimmed.bodyHtml?.includes("Forwarded message"));
+    assert.equal(trimmed.quoteText, null);
+  });
 });
 
 describe("normalizeQuoteForDisplay", () => {

@@ -12,8 +12,11 @@ export function DownloadCtaLabel({
     <>
       {siteConfig.beta.cta}
       <Badge
-        variant="teal"
-        className={cn("h-4 px-1.5 text-[10px] font-semibold", badgeClassName)}
+        variant="outline"
+        className={cn(
+          "h-4 border-white bg-transparent px-1.5 text-[10px] font-semibold text-white",
+          badgeClassName,
+        )}
       >
         {siteConfig.beta.ctaBadge}
       </Badge>

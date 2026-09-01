@@ -47,26 +47,6 @@ type PaidGroup = {
 const walkthrough: WalkthroughFeature[] = [
   {
     n: "01",
-    title: "Mail runs in your Cloudflare account",
-    problem:
-      "Hosted email services ask you to hand over nameservers or mail. That is a second vendor — and a trust problem if you already run on Cloudflare.",
-    solution:
-      "The routing Worker installs into your Cloudflare account. Relaybase is the app. We do not host your mail.",
-    src: "/video/features/01-mail-in-your-account.mp4?v=1520x998",
-    record: {
-      duration: "14–18s",
-      frame: "Mac app, full window, 16:9 crop. Hide the dock and desktop clutter.",
-      shots: [
-        "Open Setup → Install. Hold on the five resources: Worker relaybase-api, R2 relaybase-mailbox, D1 relaybase-db, relaybase-mail, relaybase-logs.",
-        "Click Authorize (or flash Authorize and Manual so both paths are visible).",
-        "End on Verify success with the Worker URL on screen.",
-      ],
-      hide: "Cloudflare API token, owner passtoken, account ID.",
-      file: "/video/features/01-mail-in-your-account.mp4",
-    },
-  },
-  {
-    n: "02",
     title: "A locally cached inbox you can scan at full speed",
     problem:
       "Cloudflare Email Routing has no inbox. Product mail gets forwarded into a personal mailbox — and every row is another round-trip.",
@@ -86,7 +66,7 @@ const walkthrough: WalkthroughFeature[] = [
     },
   },
   {
-    n: "03",
+    n: "02",
     title: "Keyboard-first triage inbox",
     problem:
       "The Cloudflare dashboard and a stack of browser tabs are not a client for reading and clearing mail quickly.",
@@ -107,7 +87,7 @@ const walkthrough: WalkthroughFeature[] = [
     },
   },
   {
-    n: "04",
+    n: "03",
     title: "Compose and drafts that never lose your work",
     problem:
       "A thin compose box is not a client. Close the tab, hit Esc, or refresh — and the reply is gone.",
@@ -127,7 +107,7 @@ const walkthrough: WalkthroughFeature[] = [
     },
   },
   {
-    n: "05",
+    n: "04",
     title: "A product address without a mailbox seat",
     problem:
       "A mailbox nobody lives in still often costs a full seat, so billing@ and support@ get treated like people.",
@@ -146,7 +126,7 @@ const walkthrough: WalkthroughFeature[] = [
     },
   },
   {
-    n: "06",
+    n: "05",
     title: "Per-account conversation threading (including Sent)",
     problem:
       "The same thread can duplicate, or a reply sent as another address leaks into the wrong conversation.",
@@ -166,7 +146,7 @@ const walkthrough: WalkthroughFeature[] = [
     },
   },
   {
-    n: "07",
+    n: "06",
     title: "Full-text mail search",
     problem:
       "You cannot find a body from the list alone, and a forwarded copy only shows what that other inbox indexed.",
@@ -183,6 +163,26 @@ const walkthrough: WalkthroughFeature[] = [
       ],
       hide: "An empty result set.",
       file: "/video/features/07-search.mp4",
+    },
+  },
+  {
+    n: "07",
+    title: "Mail runs in your Cloudflare account",
+    problem:
+      "Hosted email services ask you to hand over nameservers or mail. That is a second vendor — and a trust problem if you already run on Cloudflare.",
+    solution:
+      "The routing Worker installs into your Cloudflare account. Relaybase is the app. We do not host your mail.",
+    src: "/video/features/01-mail-in-your-account.mp4?v=1520x998",
+    record: {
+      duration: "14–18s",
+      frame: "Mac app, full window, 16:9 crop. Hide the dock and desktop clutter.",
+      shots: [
+        "Open Setup → Install. Hold on the five resources: Worker relaybase-api, R2 relaybase-mailbox, D1 relaybase-db, relaybase-mail, relaybase-logs.",
+        "Click Authorize (or flash Authorize and Manual so both paths are visible).",
+        "End on Verify success with the Worker URL on screen.",
+      ],
+      hide: "Cloudflare API token, owner passtoken, account ID.",
+      file: "/video/features/01-mail-in-your-account.mp4",
     },
   },
   {
@@ -343,7 +343,7 @@ function FeatureClip({ feature }: { feature: WalkthroughFeature }) {
 
   if (src) {
     return (
-      <div className="overflow-hidden rounded-lg border border-border bg-black shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-border">
         <video
           className="aspect-[3290/2160] h-auto w-full object-cover object-top"
           width={760}

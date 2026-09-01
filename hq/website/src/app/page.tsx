@@ -5,7 +5,6 @@ import { Features } from "@/components/features";
 import { HowItWorks } from "@/components/how-it-works";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
-import { IntroVideo } from "@/components/intro-video";
 import { JsonLd } from "@/components/json-ld";
 import { SiteHeader } from "@/components/site-header";
 import { UseCases } from "@/components/use-cases";
@@ -49,7 +48,6 @@ export default function Home() {
       <SiteHeader />
       <main>
         <Hero />
-        <IntroVideo />
         <FeatureWalkthrough />
         <HowItWorks />
         <UseCases />

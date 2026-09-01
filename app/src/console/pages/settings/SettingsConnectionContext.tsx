@@ -102,8 +102,8 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   const workerStatus = snapshot?.worker ?? null;
   // The Worker's CF_API_TOKEN secret is the source of truth for whether
-  // the domain / routing API is configured. Device-local storage is not
-  // a management signal.
+  // the domain / routing API is configured. Worker CF_ACCOUNT_ID is not
+  // required. Device-local storage is not a management signal.
   // When the probe has run, use it; fall back to the local signal only when
   // the probe can't run (no worker status yet).
   const cfConnected = workerStatus

@@ -12,7 +12,7 @@ The **Worker owns D1 schema**. The desktop installer creates empty D1 databases 
 Auth (any one is enough):
 
 - Owner **console access Bearer** (signed-in Settings → Update Worker)
-- **Cloudflare OAuth** — `X-Cf-Access-Token` that can GET this Worker's `CF_ACCOUNT_ID` account (install client). Desktop install / upgrade already holds this token; an existing owner must not fail the upgrade. Forgot-passtoken reset is a different client (`secrets-store.write`) and is not used here.
+- **Cloudflare OAuth** — `X-Cf-Access-Token` that can prove this Worker's CF account (install client): env `CF_ACCOUNT_ID` if set, else D1 `owner_config.cf_account_id`, else `GET /accounts`. Desktop install / upgrade already holds this token; an existing owner must not fail the upgrade. Forgot-passtoken reset is a different client (`secrets-store.write`) and is not used here. Worker `CF_ACCOUNT_ID` is optional.
 - **`AUTH_PEPPER` bootstrap** (`X-Auth-Pepper`) — only while no owner exists yet
 
 ---
@@ -135,7 +135,7 @@ Desktop: `desktopMigrateWorkerDb` / `migrate_worker_db_cmd`. After Worker deploy
 1. **Probe** (`probe_auto_install`) — list existing Worker / R2 / D1 via Cloudflare API (OAuth install token). Uses script **list**, not GET-by-name (OAuth tokens return 403 on script download).
 2. **Confirm** — if resources exist, user picks **Skip** (reuse) or **Reinstall** (delete + recreate) per item. Default: Skip. Reinstall of D1 is how you wipe — not `init-db` `clear`.
 3. **Create** — R2 + D1 via Cloudflare HTTP API (no migrations). Skip reuses existing IDs.
-4. **Deploy** — PUT `worker.js` with bindings, set `AUTH_PEPPER` / `CF_ACCOUNT_ID` secrets, enable workers.dev.
+4. **Deploy** — PUT `worker.js` with bindings, set `AUTH_PEPPER` (and optional `CF_ACCOUNT_ID`), enable workers.dev.
 5. **Schema** — empty D1s (just created): `POST /console/init-db`. Reused D1s: `POST /console/migrate-db`. Auth is pepper (no owner), owner Bearer, or Cloudflare OAuth (`X-Cf-Access-Token`).
 6. **Owner setup** — `POST /console/setup-admin` (issued passtoken, shown once + downloaded + written to OS keyring `owner-passtoken`), then `POST /console/login` → owner access + refresh.
 7. **Connect** — `GET /console/connect`, save non-secret connection info.

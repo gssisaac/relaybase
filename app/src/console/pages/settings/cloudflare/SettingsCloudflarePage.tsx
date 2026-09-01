@@ -14,6 +14,7 @@ import {
   SummaryRow,
   maskAccountId,
 } from "@/console/pages/settings/settings-shared";
+import { displayCfAccountId } from "@/lib/desktop/bridge";
 
 export function SettingsCloudflarePage() {
   const {
@@ -26,8 +27,10 @@ export function SettingsCloudflarePage() {
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  const accountId =
-    workerStatus?.accountId?.trim() || credentials?.accountId?.trim() || "";
+  const accountId = displayCfAccountId({
+    workerAccountId: workerStatus?.accountId,
+    credentialsAccountId: credentials?.accountId,
+  });
   const scriptName =
     workerStatus?.workerScriptName?.trim() ||
     credentials?.workerScriptName?.trim() ||

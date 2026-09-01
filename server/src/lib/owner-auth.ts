@@ -325,14 +325,7 @@ export async function rotatePasstoken(
   return { passtoken };
 }
 
-/** Cloudflare account ids are 32-char hex. Ignore binding placeholders / garbage. */
-export function normalizeCfAccountId(
-  raw: string | null | undefined,
-): string | null {
-  const id = raw?.trim() ?? "";
-  if (!/^[a-f0-9]{32}$/i.test(id)) return null;
-  return id.toLowerCase();
-}
+export { normalizeCfAccountId } from "./cf-account-id.ts";
 
 // ─── reset-admin (forgot passtoken, CF OAuth proof) ─────────────────────
 
@@ -436,7 +429,7 @@ export async function verifyCfTokenSecretsStore(
 }
 
 /**
- * Forgot-passtoken proof: Secrets Store list on `CF_ACCOUNT_ID`, then
+ * Forgot-passtoken proof: Secrets Store list on the pinned CF account, then
  * GET `/accounts/{id}` so an in-memory install token still works.
  */
 export async function verifyCfTokenForReset(

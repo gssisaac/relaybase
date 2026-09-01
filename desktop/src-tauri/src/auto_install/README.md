@@ -85,7 +85,7 @@ mod.rs (re-exports) → lib.rs Tauri commands
 | `prepare_r2` | Worker-only URL guard; R2 subscription; reinstall or ensure bucket |
 | `prepare_d1` | D1 lookup / create / reuse → `(d1_ids, any_d1_reused)` |
 | `deploy_worker` | Upload script, verify bindings, cron, workers.dev URL |
-| `apply_secrets` | `AUTH_PEPPER` (skip when D1 reused or worker-only), `CF_ACCOUNT_ID`, optional `CF_API_TOKEN` |
+| `apply_secrets` | `AUTH_PEPPER` (skip when D1 reused or worker-only), optional `CF_ACCOUNT_ID`, optional `CF_API_TOKEN` |
 | `finalize_schema` | auth-status gate; init-db or migrate-db with console session or Cloudflare OAuth |
 
 ## Tauri command mapping (`lib.rs`)

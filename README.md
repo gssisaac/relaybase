@@ -65,7 +65,7 @@ Inbound path:
 cd server
 npm install
 cp .dev.vars.example .dev.vars
-# Fill CF_ACCOUNT_ID, CF_API_TOKEN, AUTH_PEPPER
+# Fill AUTH_PEPPER and CF_API_TOKEN (CF_ACCOUNT_ID is optional)
 
 npm run dev          # wrangler dev → http://127.0.0.1:8787
 ```
@@ -173,9 +173,10 @@ The product Worker (`server/`) deploys into the **customer's** Cloudflare accoun
 cd server
 
 # Secrets
-npx wrangler secret put CF_ACCOUNT_ID
-npx wrangler secret put CF_API_TOKEN
 npx wrangler secret put AUTH_PEPPER
+npx wrangler secret put CF_API_TOKEN
+# Optional — not required for mail or the Cloudflare API
+# npx wrangler secret put CF_ACCOUNT_ID
 
 npm run deploy    # wrangler deploy
 ```
@@ -199,8 +200,8 @@ Bindings in `server/wrangler.toml`:
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `CF_ACCOUNT_ID` | secret | Cloudflare account ID |
-| `CF_API_TOKEN` | secret | Token with Email Sending edit |
+| `CF_API_TOKEN` | secret | Token with Email Sending + Email Routing + Zone Read (required for domain / DNS API) |
+| `CF_ACCOUNT_ID` | secret | Optional. Account id is not required at runtime — see [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md). |
 | `AUTH_PEPPER` | secret | Install/hash pepper for owner passtoken (not a login token) |
 | `WORKER_SCRIPT_NAME` | var | Worker name for routing helpers |
 | `INBOUND_BUCKET_NAME` | var | R2 bucket name label |
@@ -212,7 +213,7 @@ Bindings in `server/wrangler.toml`:
 | `RELAYBASE_URL` | Worker base URL |
 | `RELAYBASE_CONSOLE_URL` | Console base URL (account/license/billing) |
 
-Cloudflare credentials live on the product Worker as wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), not in admin env.
+Cloudflare domain / DNS API uses the product Worker wrangler secret `CF_API_TOKEN`. `CF_ACCOUNT_ID` is optional. Neither lives in admin env.
 
 ### Consuming services (your apps)
 
@@ -407,7 +408,7 @@ Cloudflare project settings:
 - Issue one API key per service/domain pair; rotate by re-issuing and updating env.
 - Owner passtoken is for the desktop owner only — not for customer apps. Use domain API keys (`/v1/*`) for integrations.
 - Webhook secrets are shown once at registration; verify signatures in production.
-- **HQ operations D1 (`strum-relaybase-ops`) holds operator config only** — optional product Worker URL in `product_settings`. HQ does **not** store a customer Worker credential. Cloudflare credentials and owner passtoken are **never** stored there: CF credentials come from the product Worker's wrangler secrets (`CF_ACCOUNT_ID` / `CF_API_TOKEN`), owner sessions live on the product Worker, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault.
+- **HQ operations D1 (`strum-relaybase-ops`) holds operator config only** — optional product Worker URL in `product_settings`. HQ does **not** store a customer Worker credential. Cloudflare credentials and owner passtoken are **never** stored there: domain / DNS API uses the product Worker's `CF_API_TOKEN` secret (`CF_ACCOUNT_ID` is optional), owner sessions live on the product Worker, and plaintext API keys live only in the local `~/.relaybase/api-keys.json` vault.
 
 ---
 

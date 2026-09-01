@@ -75,7 +75,7 @@ The desktop **god token is retired**. Owner auth is now a **Worker-issued passto
 - Desktop session storage: **dual refresh** in OS keyring `owner-session` (`mailRefreshToken` ~90d, console `refreshToken` ~30m); **passtoken** in a **separate** `owner-passtoken` item; **split access** in Tauri memory (mail ~60m, console ~30m). Mail boot is **silent** (`owner_boot_mail`). Touch ID / Windows Hello **only** decides whether Rust may **read** `owner-passtoken` for a new `/console/login`. Valid scoped refresh unlocks silently — no Touch ID. Typed passtoken is first-login and bio-fail / decline only. Teammate desktop unlock is silent from keyring — no biometry. Linux / unsigned `tauri dev` read `owner-passtoken` without a prompt if the item exists. JS never sees tokens — Rust `worker_request` picks scope by path prefix.
 - `POST /console/login` returns mail + console refresh tokens and mail access immediately; console access is minted at gate time via scoped refresh.
 - All `/console/*` routes require **console-scoped** access; `/mail/*` require **mail-scoped** access (`requireOwnerSession(c, scope)`).
-- Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can list Secrets Store on `CF_ACCOUNT_ID` (passtoken-updater client; GET `/accounts/{id}` is a fallback), then re-issues a passtoken once (download + write `owner-passtoken`) and revokes all sessions. No console email, no central god token.
+- Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can list Secrets Store on the pinned CF account (env `CF_ACCOUNT_ID`, D1 `owner_config.cf_account_id`, body `cfAccountId`, or `GET /accounts`), then re-issues a passtoken once (download + write `owner-passtoken`) and revokes all sessions. No console email, no central god token. Worker `CF_ACCOUNT_ID` is optional.
 - `AUTH_PEPPER` (random, set once at install) replaces the old `ADMIN_TOKEN` wrangler secret. `owner_config.admin_token` and D1 `auth_tokens` (`rb-auth-…`) are dropped (migration `0003_owner_login`; after local `0002_app_settings`).
 
 The desktop **unlock flow** — silent mail boot, keyring passtoken + Touch ID
@@ -96,12 +96,12 @@ Mobile passwords (`/mobile/*`) and product API keys (`/v1/*`, `~/.relaybase/{sco
 
 ### HTTP surface (Bearer owner access token)
 
-The product Worker resolves Cloudflare credentials from wrangler secrets (`CF_ACCOUNT_ID`, `CF_API_TOKEN`), set via the desktop install flow. Owner auth uses `AUTH_PEPPER` (passtoken hashing + access-token HMAC) — see **Owner auth** above. The Worker exposes:
+The product Worker manages domains / inbox routing / DNS with wrangler secret `CF_API_TOKEN` (set after install). `CF_ACCOUNT_ID` is **optional** — not required for mail or the Cloudflare API; resolve from the token or D1 `owner_config.cf_account_id` when an id is needed. Policy: **[cf-oauth-install-token.md](./cf-oauth-install-token.md)** → *Worker CF_ACCOUNT_ID*. Owner auth uses `AUTH_PEPPER` (passtoken hashing + access-token HMAC) — see **Owner auth** above. The Worker exposes:
 
 | Route | Purpose |
 |-------|---------|
 | `/console/mailbox`, `/console/domains`, `/console/addresses` | Catalog mailbox CRUD |
-| `/console/zones` | List Cloudflare zones via Worker `CF_API_TOKEN` (Domains → Refresh) |
+| `/console/zones` | List Cloudflare zones via Worker `CF_API_TOKEN` (Domains → Refresh). `CF_ACCOUNT_ID` optional. |
 | `/console/audience-groups` (+ contacts/sync/progress) | Audience |
 | `/console/broadcasts` (+ send/progress) | Broadcasts |
 | `/console/keys` (+ rotate, PATCH active) | API keys |
@@ -116,7 +116,7 @@ The product Worker resolves Cloudflare credentials from wrangler secrets (`CF_AC
 | `/console/setup-admin` | First-time owner setup: issue passtoken once (AUTH_PEPPER bootstrap) |
 | `/console/login` / `/console/refresh` / `/console/logout` | Owner session create / rotate / revoke |
 | `/console/rotate-passtoken` | Re-issue passtoken once (owner session); revokes all sessions |
-| `/console/reset-admin` | Re-issue passtoken once via CF OAuth (Secrets Store on `CF_ACCOUNT_ID`) |
+| `/console/reset-admin` | Re-issue passtoken once via CF OAuth (Secrets Store on the pinned CF account — env, D1 `owner_config.cf_account_id`, or `GET /accounts`) |
 | `/console/auth-status` | Public probe: is an owner configured yet? |
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
 | `/console/addresses/mobile-password` | Per-account mobile password (owner session) |
@@ -156,7 +156,7 @@ Full design (schema, query safety, sync model, backfill, freshness): **[mailbox-
 ### Forbidden (do not reintroduce)
 
 - Cloudflare KV binding on the product Worker for app data
-- Cloudflare credentials (`CF_ACCOUNT_ID` / `CF_API_TOKEN`) stored in HQ ops — the Worker reads them from wrangler secrets; D1 `strum-relaybase-ops` `product_settings` holds only an optional `workerUrl`
+- Cloudflare credentials (`CF_API_TOKEN` / optional `CF_ACCOUNT_ID`) stored in HQ ops — the Worker reads `CF_API_TOKEN` from wrangler secrets; D1 `strum-relaybase-ops` `product_settings` holds only an optional `workerUrl`
 - End-user dashboard auth tokens (`rb-auth-…`) or plaintext API keys stored in `strum-relaybase-ops` — owner sessions live in the product Worker's D1 `owner_sessions` (hash-only); plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`
 - Global mobile password (no per-account row) — use the per-account row in D1 `mobile_passwords` only
 - Next `userdata:{userId}` / `data/users/*.json` / `DevUserEmailData`
@@ -181,7 +181,7 @@ Licenses, console accounts, worker registration, recovery tokens, the legacy wai
 
 Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
 
-- CF credentials → Worker wrangler secrets `CF_ACCOUNT_ID` / `CF_API_TOKEN` (set by the desktop install flow). The install token is obtained via Cloudflare OAuth (PKCE; callback on `console.relaybase.xyz`); access + refresh tokens live in Tauri process memory only, never in `credentials.json`. See **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
+- CF credentials → Worker wrangler secret `CF_API_TOKEN` (required for domain / routing / DNS). `CF_ACCOUNT_ID` is optional. The install token is obtained via Cloudflare OAuth (PKCE; callback on `console.relaybase.xyz`); access + refresh tokens live in Tauri process memory only, never in `credentials.json`. See **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 - DMARC branding → Worker D1 `domain_branding` via `/console/branding`.
 - Send logs → Worker R2 `sent/_sendlog/*` via `/console/send-logs`.
 

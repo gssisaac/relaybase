@@ -19,6 +19,7 @@ import {
   desktopPushServerToken,
   desktopStartCfOAuth,
   desktopVerifyCfToken,
+  displayCfAccountId,
   explainCfOAuthError,
   explainDesktopError,
   isCloudflareAuthExpired,
@@ -171,11 +172,11 @@ export function EnableEmailApiDialogHost({ children }: { children: ReactNode }) 
     };
   }, [openDialog]);
 
-  const accountId =
-    opts.accountId?.trim() ||
-    credentials?.accountId?.trim() ||
-    credentials?.cfOauthAccountId?.trim() ||
-    "";
+  const accountId = displayCfAccountId({
+    workerAccountId: opts.accountId,
+    credentialsAccountId:
+      credentials?.accountId || credentials?.cfOauthAccountId,
+  });
   const workerUrl =
     opts.workerUrl?.trim() || credentials?.workerUrl?.trim() || "";
   const workerScriptName =

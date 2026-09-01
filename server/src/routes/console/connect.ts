@@ -1,8 +1,11 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
+import { createAppDb } from "../../../db/app";
+import { getOwnerLoginConfig } from "../../../db/app/owner";
 import { requireConsoleSession } from "../../lib/auth";
 import { probeD1Connection } from "../../lib/d1-status";
 import { emailBindingConfigured } from "../../lib/email-send";
+import { normalizeCfAccountId } from "../../lib/cf-account-id.ts";
 import { measureInboundR2Usage } from "../../lib/r2-usage";
 
 const CF_API = "https://api.cloudflare.com/client/v4";
@@ -21,6 +24,16 @@ async function probeCfApiTokenValid(token: string): Promise<boolean> {
 }
 
 const consoleConnect = new Hono<{ Bindings: Env }>();
+
+/** Env secret if set, else D1 pin. Does not call Cloudflare — token resolve is lazy. */
+async function connectAccountId(env: Env): Promise<string> {
+  const fromEnv = normalizeCfAccountId(env.CF_ACCOUNT_ID) ?? "";
+  if (fromEnv) return fromEnv;
+  const db = createAppDb(env.RELAYBASE_DB);
+  if (!db) return "";
+  const cfg = await getOwnerLoginConfig(db);
+  return normalizeCfAccountId(cfg?.cfAccountId) ?? "";
+}
 
 async function checkInboundR2(bucket: R2Bucket): Promise<boolean> {
   try {
@@ -43,7 +56,7 @@ consoleConnect.get("/", async (c) => {
   const r2Configured = await checkInboundR2(c.env.INBOUND);
   const apiToken = c.env.CF_API_TOKEN?.trim() ?? "";
   const cfApiTokenSet = Boolean(apiToken);
-  const [usage, d1, cfApiTokenValid] = await Promise.all([
+  const [usage, d1, cfApiTokenValid, accountId] = await Promise.all([
     r2Configured ? measureInboundR2Usage(c.env.INBOUND) : Promise.resolve(null),
     probeD1Connection(
       c.env.RELAYBASE_LOGS,
@@ -53,6 +66,7 @@ consoleConnect.get("/", async (c) => {
       c.env.CF_API_TOKEN,
     ),
     cfApiTokenSet ? probeCfApiTokenValid(apiToken) : Promise.resolve(false),
+    connectAccountId(c.env),
   ]);
 
   return c.json({
@@ -60,10 +74,9 @@ consoleConnect.get("/", async (c) => {
     product: "relaybase",
     version: c.env.WORKER_VERSION?.trim() || "unknown",
     workerScriptName: c.env.WORKER_SCRIPT_NAME || "relaybase-api",
-    // CF account id (from the CF_ACCOUNT_ID secret). Surfaced so the desktop
-    // can display/manage the server token without a separate OAuth connection
-    // or manual entry.
-    accountId: c.env.CF_ACCOUNT_ID?.trim() || "",
+    // Optional: env CF_ACCOUNT_ID or D1 owner_config.cf_account_id.
+    // Desktop UI falls back to credentials.accountId when empty.
+    accountId,
     inbound: {
       r2Configured,
       bucketName: c.env.INBOUND_BUCKET_NAME || "relaybase-mailbox",

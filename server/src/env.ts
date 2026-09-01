@@ -12,6 +12,7 @@ export type Env = {
   RELAYBASE_MAIL?: D1Database;
   /** Durable product state (mailbox, audience, broadcasts, keys, tokens, …). */
   RELAYBASE_DB?: D1Database;
+  /** Optional. Not required for mail or the Cloudflare API. */
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   /** Outbound Email Sending binding (`[[send_email]] name = "EMAIL"`). */

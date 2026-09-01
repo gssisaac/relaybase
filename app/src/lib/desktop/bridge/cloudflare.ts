@@ -110,10 +110,10 @@ export function cloudflareWorkerSettingsUrl(
   return `https://dash.cloudflare.com/${id}/workers/services/view/${encodeURIComponent(scriptName)}/production/settings`;
 }
 
-/** Mail API is ready when the Worker secret exists. A false probe fails; an
- * omitted probe (older Worker) still counts as ready if the secret is set.
- * `accountId` must also be present — domain / routing calls need both
- * `CF_API_TOKEN` and `CF_ACCOUNT_ID`. */
+/** Mail API is ready when the Worker `CF_API_TOKEN` exists. A false probe
+ * fails; an omitted probe (older Worker) still counts as ready if the secret
+ * is set. Worker `accountId` / `CF_ACCOUNT_ID` is optional — zone-scoped
+ * APIs do not need it. Desktop UI links fall back to `credentials.accountId`. */
 export function mailApiReady(result: {
   cfApiTokenSet?: boolean;
   cfApiTokenValid?: boolean;
@@ -121,8 +121,17 @@ export function mailApiReady(result: {
 }): boolean {
   if (!result.cfApiTokenSet) return false;
   if (result.cfApiTokenValid === false) return false;
-  if (!result.accountId?.trim()) return false;
   return true;
+}
+
+/** Worker-reported id, else desktop credentials. For dashboard links only. */
+export function displayCfAccountId(opts: {
+  workerAccountId?: string | null;
+  credentialsAccountId?: string | null;
+}): string {
+  return (
+    opts.workerAccountId?.trim() || opts.credentialsAccountId?.trim() || ""
+  );
 }
 
 /** Cloudflare dashboard → this account's R2 home (not checkout). */

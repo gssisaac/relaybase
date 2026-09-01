@@ -23,8 +23,8 @@ export type HealthStatus = {
 };
 
 export type ConnectionStatusSnapshot = {
-  /** True when the Worker reports a working CF_API_TOKEN + CF_ACCOUNT_ID
-   * (`cfApiTokenSet` + `cfApiTokenValid` + accountId). Domain / routing API, not send. */
+  /** True when the Worker reports a working CF_API_TOKEN
+   * (`cfApiTokenSet` + `cfApiTokenValid`). Domain / routing API, not send. */
   cfConnected: boolean;
   /** True when an install token (Workers Scripts Edit) is saved locally.
    * Used only inside Settings; not shown on the dashboard card. */
@@ -33,7 +33,7 @@ export type ConnectionStatusSnapshot = {
     ok: boolean;
     workerUrl: string;
     workerScriptName: string;
-    /** CF account id reported by the Worker (from CF_ACCOUNT_ID secret). */
+    /** CF account id from the Worker (env or D1). Optional — UI falls back to credentials. */
     accountId: string;
     r2Configured: boolean;
     inboundBucketName: string;

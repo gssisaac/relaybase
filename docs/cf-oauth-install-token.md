@@ -6,6 +6,36 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 
 ---
 
+## Worker `CF_ACCOUNT_ID` — optional
+
+**Do not require a Worker `CF_ACCOUNT_ID` secret** for mail, domain, or DNS API readiness. Account id is not a secret (it is in every `dash.cloudflare.com/{id}/…` URL). Duplicating it onto the Worker is what made Enable email API fail when `CF_API_TOKEN` was already live.
+
+| Runtime | Needs `CF_ACCOUNT_ID`? |
+|---------|------------------------|
+| Inbound (Email Routing → Worker) | No |
+| Send (`EMAIL` binding) | No |
+| Mail R2 / D1 / search / owner login (`AUTH_PEPPER`) | No |
+| Mobile inbox / cron | No |
+| Domain / inbox / DNS via `CF_API_TOKEN` | No — zone-scoped APIs; list zones with the token alone |
+| REST Email Sending fallback (`/accounts/{id}/email/sending/send`) | Only if `EMAIL` is missing — resolve id from the token (`GET /accounts`) |
+| `init-db` / `migrate-db` / `reset-admin` OAuth proof | Optional pin — see below |
+
+**Ready signal** (`GET /console/connect` → `mailApiReady`): `cfApiTokenSet` and `cfApiTokenValid !== false`. Do **not** gate on Worker `accountId`.
+
+**Where account id lives instead**
+
+| Place | Role |
+|-------|------|
+| `~/.relaybase/credentials.json` `accountId` | Desktop UI links (Worker settings, R2, D1). Fallback when connect omits `accountId`. |
+| D1 `owner_config.cf_account_id` | Durable pin for OAuth proof after first successful verify / reset. Prefer this over a wrangler secret. |
+| Worker secret `CF_ACCOUNT_ID` | Optional convenience. Desktop auto-install may still PUT it. Absence must not block mail API or verify. |
+
+When the Worker needs an account id (REST send fallback, zone list filter, OAuth proof), resolve in this order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` → `GET /accounts` with `CF_API_TOKEN` (or the OAuth access token). Persist a discovered id to D1 when possible.
+
+Do **not** store Cloudflare account id or API tokens in HQ ops D1.
+
+---
+
 ## Architecture
 
 | Piece | Role |
@@ -36,11 +66,11 @@ Public clients need a `cloudflare_oauth_client_publisher=…` TXT on the `client
 
 | Scope ID | Purpose |
 |----------|---------|
-| `workers-scripts.write` | Worker script upload + Worker secrets (`AUTH_PEPPER`, `CF_ACCOUNT_ID`, `CF_API_TOKEN`) |
+| `workers-scripts.write` | Worker script upload + Worker secrets (`AUTH_PEPPER`, optional `CF_ACCOUNT_ID`, `CF_API_TOKEN`) |
 | `workers-r2.write` | R2 buckets |
 | `d1.write` | D1 create + bindings on deploy |
 
-**Recover scopes:** `secrets-store.write` only. The Worker proves the token can `GET /accounts/{CF_ACCOUNT_ID}/secrets_store/stores` (or accepts `cfAccountId` in the reset body when the Worker secret is empty at runtime). Worker runtime secrets use `workers-scripts.write` on the **install** client only — recover does not request that scope.
+**Recover scopes:** `secrets-store.write` only. The Worker proves the token can list Secrets Store on the pinned CF account (env `CF_ACCOUNT_ID`, D1 `owner_config.cf_account_id`, body `cfAccountId`, or `GET /accounts`). Worker runtime secrets use `workers-scripts.write` on the **install** client only — recover does not request that scope.
 
 Do **not** put **`offline_access`** or KV scopes in the authorize `scope` query. Cloudflare adds `offline_access` itself when the client has the `refresh_token` grant; requesting unregistered scopes makes dash.cloudflare.com show “Relaybase authorization failed”.
 
@@ -84,7 +114,7 @@ Rust:
 
 - `start_cf_oauth(purpose)` / `complete_cf_oauth` (`desktop/src-tauri/src/lib.rs`) — PKCE authorize + token exchange; writes `CF_OAUTH_SESSION` (includes the client id used, so refresh stays on that client)
 - Loopback server + `tauri-plugin-deep-link` — complete exchange, emit `cf-oauth-complete` / `cf-oauth-error`
-- `require_cf_oauth` (`desktop/src-tauri/src/cf_oauth.rs`) — only reader for CF commands. Returns `{ access_token, account_id }` from memory, or refreshes when the access token expires within 60s. No session → “Authorize with Cloudflare again”. Forgot-passtoken reset uses `require_cf_oauth_access_token()` instead — the recover client has `secrets-store.write` only, so the desktop cannot resolve `account_id` via `/accounts`; the Worker verifies the token against `CF_ACCOUNT_ID`.
+- `require_cf_oauth` (`desktop/src-tauri/src/cf_oauth.rs`) — only reader for CF commands. Returns `{ access_token, account_id }` from memory, or refreshes when the access token expires within 60s. No session → “Authorize with Cloudflare again”. Forgot-passtoken reset uses `require_cf_oauth_access_token()` instead — the recover client has `secrets-store.write` only, so the desktop cannot resolve `account_id` via `/accounts`; the Worker verifies the token against the pinned CF account (env, D1, or discover).
 
 Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `app/src/lib/desktop/bridge/oauth.ts` — not tied to staying on the Cloudflare settings page.
 
@@ -105,12 +135,12 @@ The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secret
 ## Settings + setup UX
 
 - **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + owner passtoken copy). No separate install button.
-- **Lost passtoken** — typed unlock fallback → **I forgot my passtoken** (`/setup/recover-admin`). Daily use does not type the passtoken (it lives in OS keyring `owner-passtoken`; Touch ID reads it). Uses the **Pass-token Updater** OAuth client (`secrets-store.write` only). After authorization the app calls `POST /console/reset-admin` with the in-memory OAuth access token. The Worker proves that token can list Secrets Store on `CF_ACCOUNT_ID` (GET `/accounts/{id}` is a fallback) and re-issues a passtoken once (download + write `owner-passtoken`). No console email recovery.
-- **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe).
+- **Lost passtoken** — typed unlock fallback → **I forgot my passtoken** (`/setup/recover-admin`). Daily use does not type the passtoken (it lives in OS keyring `owner-passtoken`; Touch ID reads it). Uses the **Pass-token Updater** OAuth client (`secrets-store.write` only). After authorization the app calls `POST /console/reset-admin` with the in-memory OAuth access token. The Worker proves that token can list Secrets Store on the pinned CF account (GET `/accounts/{id}` is a fallback) and re-issues a passtoken once (download + write `owner-passtoken`). No console email recovery.
+- **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe). Worker `accountId` is not required — desktop UI links fall back to `credentials.accountId`.
 - **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). The token is not written to disk.
 - **Settings → Cloudflare** — dashboard-first Enable email API dialog. OAuth is only requested if the user chooses paste & push and there is no install token in memory.
-- **Domains → Refresh from Cloudflare** — lists zones via the Worker (`GET /console/zones`) using `CF_API_TOKEN` + `CF_ACCOUNT_ID`, not the in-memory OAuth install token. If the Worker secret is missing, the dialog opens Enable email API. If the route 404s (old script), show running vs latest Worker versions and send the user to **Settings → Worker update** (`/settings/worker/update`) — do not offer the install ZIP. Do not add an OAuth flow on that page.
-- **Settings → Worker** — Check for updates on the card. **Update Worker** goes to `/settings/worker/update` (same OAuth / Manual + CLI UI as Setup, worker-only copy). After OAuth, the app resolves that account’s `workers.dev` URL and **must match** the saved Worker URL (custom domains match via `/console/connect` `accountId`). Mismatch stops before any upload. Then `/settings/worker/progress` uploads the script and calls **`migrate-db`**, not `init-db`.
+- **Domains → Refresh from Cloudflare** — lists zones via the Worker (`GET /console/zones`) using `CF_API_TOKEN`, not the in-memory OAuth install token. If the Worker token is missing, the dialog opens Enable email API. If the route 404s (old script), show running vs latest Worker versions and send the user to **Settings → Worker update** (`/settings/worker/update`) — do not offer the install ZIP. Do not add an OAuth flow on that page.
+- **Settings → Worker** — Check for updates on the card. **Update Worker** goes to `/settings/worker/update` (same OAuth / Manual + CLI UI as Setup, worker-only copy). After OAuth, the app resolves that account’s `workers.dev` URL and **must match** the saved Worker URL (custom domains match via `/console/connect` `accountId` — env, D1, or empty). Mismatch stops before any upload. Then `/settings/worker/progress` uploads the script and calls **`migrate-db`**, not `init-db`.
 - **Manual install** — Worker URL + passtoken inline on the install page; the same Enable email API dialog follows Worker URL verify.
 - **Sending** — the Worker `EMAIL` send_email binding, attached at deploy. `CF_API_TOKEN` is for domain / inbox routing / DNS API, not for send. `GET /console/connect` reports `emailBindingConfigured`.
 - **Server token source of truth** — the Worker's `CF_API_TOKEN` secret (`cfApiTokenSet` + `cfApiTokenValid`). The desktop does not persist that token.
@@ -130,7 +160,7 @@ Errors use `explainCfOAuthError()`.
 | Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx`, `use-enable-email-api-dialog.tsx` (also opened from Domains → Refresh from Cloudflare when `GET /console/zones` reports the Worker token missing) |
 | Zone list (Refresh from Cloudflare) | `GET /console/zones` (`server/src/routes/console/zones.ts`) via `listCloudflareZones` — Worker `CF_API_TOKEN`, not desktop OAuth |
 | Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
-| Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `desktopStartCfOAuth("recover")` → `POST /console/reset-admin` (Secrets Store on `CF_ACCOUNT_ID`) |
+| Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `desktopStartCfOAuth("recover")` → `POST /console/reset-admin` (Secrets Store on the pinned CF account) |
 
 ---
 
@@ -139,7 +169,7 @@ Errors use `explainCfOAuthError()`.
 | Symptom | Likely cause |
 |---------|----------------|
 | `invalid_scope` or Cloudflare “authorization failed” | Scope strings in `/config` don’t match that purpose’s OAuth client (install must not request `secrets-store.write`; recover must request only `secrets-store.write`). Do not request `offline_access` or KV. |
-| `Worker is missing CF_ACCOUNT_ID` after Authorize | Deploy the latest Worker (accepts `cfAccountId` in reset body) and ensure `accountId` is in `~/.relaybase/credentials.json`. |
+| `Worker is missing CF_ACCOUNT_ID` after Authorize | Latest Worker does not require the secret. Ensure `accountId` is in `~/.relaybase/credentials.json`, or pass `cfAccountId` in the reset body. |
 | Browser “Finishing connection…” but app stays **Not connected** | `tauri dev` without loopback listener — restart desktop after pulling; ensure port **32831** is free. |
 | `Token endpoint did not return a refresh_token` | Missing `refresh_token` grant or `offline_access` on authorize — fixed in code (connection succeeds with access token only); enable **Refresh Token** grant on the client for auto-refresh. |
 | `relaybase://` does nothing | Expected in dev; loopback should succeed. In production, install the bundled `.app` so the URL scheme is registered. |

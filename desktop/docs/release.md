@@ -19,7 +19,7 @@ Pattern mirrors sibling `../kloy/app/docs/release.md`.
 `pnpm run build:macos` (and `pnpm run build` in `desktop/`) always builds a
 fat binary. Host-arch-only and per-arch DMGs are not a release.
 
-**Agents / operators:** never run `pnpm run build:host`, bare `tauri build`, or
+**Agents / operators:** never run bare `tauri build` or
 `pnpm exec tauri build --bundles app,dmg` for a release. On Apple Silicon that
 produces **arm64-only** output under `target/release/bundle/` — it looks signed
 but is not the shipped Universal DMG and may fail to open on some Macs. The

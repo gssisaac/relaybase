@@ -148,7 +148,7 @@ Connect payload shape:
 }
 ```
 
-`sizeBytes` comes from the Cloudflare D1 API (`file_size`) when Worker secrets `CF_ACCOUNT_ID` + `CF_API_TOKEN` are set; otherwise null.
+`sizeBytes` comes from the Cloudflare D1 API (`file_size`) when `CF_API_TOKEN` is set and an account id is available (env `CF_ACCOUNT_ID` or resolved from the token); otherwise null. `CF_ACCOUNT_ID` is optional.
 
 Probe is read-only and soft-fails (returns `false` on D1 errors). `RELAYBASE_MAIL` is **required** for list/search/counts (503 when unbound); the legacy `inboxIndex` key is kept as a deprecated alias of `mail` for older desktop clients.
 

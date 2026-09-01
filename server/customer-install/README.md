@@ -36,12 +36,13 @@ npx wrangler secret put AUTH_PEPPER
 
 Use a long random value (e.g. `openssl rand -hex 32`). The desktop Manual install command generates this for you. After first owner setup, you do not type this value again.
 
-Optional — `CF_ACCOUNT_ID` is set by desktop auto-install. For domain / inbox routing / DNS from the Worker, add `CF_API_TOKEN` as a **Secret** in the dashboard (Worker → Settings → Runtime variables and secrets) or:
+For domain / inbox routing / DNS from the Worker, add `CF_API_TOKEN` as a **Secret** in the dashboard (Worker → Settings → Runtime variables and secrets) or:
 
 ```bash
-npx wrangler secret put CF_ACCOUNT_ID
 npx wrangler secret put CF_API_TOKEN
 ```
+
+`CF_ACCOUNT_ID` is optional. Desktop auto-install may set it. The Worker does not need it for mail or the Cloudflare API.
 
 The token needs Account → Email Sending → Edit, Zone → Email Routing Rules → Edit, and Zone → Zone → Read. Sending uses the `[[send_email]]` `EMAIL` binding in `wrangler.toml`, not this token.
 

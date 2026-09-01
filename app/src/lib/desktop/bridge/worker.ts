@@ -23,7 +23,7 @@ export type WorkerConnectResult = {
   version: string;
   workerScriptName: string;
   workerUrl: string;
-  /** CF account id reported by the Worker (from CF_ACCOUNT_ID secret). */
+  /** CF account id from the Worker (env or D1). Optional. */
   accountId: string;
   r2Configured: boolean;
   inboundBucketName: string;

@@ -61,7 +61,7 @@ export function buildWorkerInstallCommand(opts: {
       `printf '%s' ${shellSingleQuote(accountId)} | npx wrangler secret put CF_ACCOUNT_ID`,
     );
   } else {
-    lines.push(`# Optional: CF_ACCOUNT_ID for domain API`);
+    lines.push(`# Optional: CF_ACCOUNT_ID (not required for mail or the Cloudflare API)`);
     lines.push(
       `# printf '%s' '<account-id>' | npx wrangler secret put CF_ACCOUNT_ID`,
     );

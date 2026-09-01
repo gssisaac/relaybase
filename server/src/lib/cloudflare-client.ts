@@ -1,8 +1,10 @@
+import { resolveCfAccountIdFromToken } from "./cloudflare-account.ts";
 import {
   cloudflarePermissionHint,
   cloudflareSendingErrorHint,
-} from "./cloudflare-api-hints";
-import { buildMimeMessage } from "./mime";
+} from "./cloudflare-api-hints.ts";
+import { normalizeCfAccountId } from "./cf-account-id.ts";
+import { buildMimeMessage } from "./mime.ts";
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
 
@@ -93,7 +95,8 @@ export type CfSendingSubdomain = {
 };
 
 export type CloudflareClientCredentials = {
-  accountId: string;
+  /** Optional — resolved from the token when an account-scoped path is used. */
+  accountId?: string;
   apiToken: string;
 };
 
@@ -102,8 +105,20 @@ export class CloudflareClient {
   private apiToken: string;
 
   constructor(credentials: CloudflareClientCredentials) {
-    this.accountId = credentials.accountId;
+    this.accountId = normalizeCfAccountId(credentials.accountId) ?? "";
     this.apiToken = credentials.apiToken;
+  }
+
+  private async requireAccountId(): Promise<string> {
+    if (this.accountId) return this.accountId;
+    const resolved = await resolveCfAccountIdFromToken(this.apiToken);
+    if (!resolved) {
+      throw new Error(
+        "Could not resolve Cloudflare account from CF_API_TOKEN. Check token permissions.",
+      );
+    }
+    this.accountId = resolved;
+    return resolved;
   }
 
   private tokenHeaders(): Record<string, string> {
@@ -248,7 +263,8 @@ export class CloudflareClient {
     const replyTo = params.replyTo?.trim();
     if (replyTo) body.reply_to = replyTo;
 
-    const path = `/accounts/${this.accountId}/email/sending/send`;
+    const accountId = await this.requireAccountId();
+    const path = `/accounts/${accountId}/email/sending/send`;
     const data = await this.sendWithRetry<{
       message_id: string;
       delivered: string[];
@@ -296,7 +312,8 @@ export class CloudflareClient {
       references: params.references,
     });
 
-    const path = `/accounts/${this.accountId}/email/sending/send_raw`;
+    const accountId = await this.requireAccountId();
+    const path = `/accounts/${accountId}/email/sending/send_raw`;
     const data = await this.sendWithRetry<{
       message_id: string;
       delivered: string[];
@@ -337,12 +354,19 @@ export class CloudflareClient {
 
   async listZones(): Promise<Array<{ id: string; name: string; status: string }>> {
     const zones: Array<{ id: string; name: string; status: string }> = [];
-    const account = encodeURIComponent(this.accountId);
+    let account = this.accountId;
+    if (!account) {
+      account = (await resolveCfAccountIdFromToken(this.apiToken)) ?? "";
+      if (account) this.accountId = account;
+    }
+    const accountQuery = account
+      ? `account.id=${encodeURIComponent(account)}&`
+      : "";
     let page = 1;
     for (;;) {
       const data = await this.request<
         Array<{ id?: string; name?: string; status?: string }>
-      >(`/zones?account.id=${account}&per_page=50&page=${page}`);
+      >(`/zones?${accountQuery}per_page=50&page=${page}`);
       const batch = data.result ?? [];
       if (batch.length === 0) break;
       for (const zone of batch) {

@@ -11,7 +11,7 @@ account_id = "3adf03d991843094a7343eebc0a98007"
 [vars]
 WORKER_SCRIPT_NAME = "relaybase-api"
 INBOUND_BUCKET_NAME = "relaybase-mailbox"
-WORKER_VERSION = "0.1.0"
+WORKER_VERSION = "0.1.2"
 
 # Audience group data-source sync (single catalog — no per-user fan-out).
 [triggers]

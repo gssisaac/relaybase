@@ -2,8 +2,14 @@ import type { Context } from "hono";
 import type { Env } from "../env";
 import { createAppDb } from "../../db/app";
 import { resolveKey } from "./keys";
-import { verifyAccessToken, verifyCfTokenAccount, type OwnerScope } from "./owner-auth";
-import { getOwnerLoginConfig } from "../../db/app/owner";
+import { normalizeCfAccountId } from "./cf-account-id.ts";
+import { resolveCfAccountIdFromToken } from "./cloudflare-account.ts";
+import {
+  verifyAccessToken,
+  verifyCfTokenAccount,
+  type OwnerScope,
+} from "./owner-auth";
+import { getOwnerLoginConfig, setOwnerCfAccountId } from "../../db/app/owner";
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
   if (!authHeader) return null;
@@ -81,9 +87,11 @@ export async function requirePepperBootstrap(
 }
 
 /**
- * Cloudflare OAuth access token that can GET this Worker's `CF_ACCOUNT_ID`
- * account. Used by `init-db` / `migrate-db` (install client). Forgot-passtoken
- * reset uses `verifyCfTokenForReset` (Secrets Store, then this GET).
+ * Cloudflare OAuth access token that can prove this Worker's CF account.
+ * Pin order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` →
+ * `GET /accounts`. Used by `init-db` / `migrate-db` (install client).
+ * Worker `CF_ACCOUNT_ID` is optional. Forgot-passtoken reset uses
+ * `verifyCfTokenForReset` (Secrets Store, then GET `/accounts/{id}`).
  */
 export async function requireCfAccountProof(
   c: Context<{ Bindings: Env }>,
@@ -92,13 +100,31 @@ export async function requireCfAccountProof(
   if (!token) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  const expected = c.env.CF_ACCOUNT_ID?.trim() ?? "";
+  const db = createAppDb(c.env.RELAYBASE_DB);
+  const fromEnv = normalizeCfAccountId(c.env.CF_ACCOUNT_ID) ?? "";
+  let expected = fromEnv;
+  let fromD1 = "";
+  if (!expected && db) {
+    const cfg = await getOwnerLoginConfig(db);
+    fromD1 = normalizeCfAccountId(cfg?.cfAccountId) ?? "";
+    expected = fromD1;
+  }
+  if (!expected) {
+    expected = (await resolveCfAccountIdFromToken(token)) ?? "";
+  }
   if (!expected) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   const verified = await verifyCfTokenAccount(token, expected);
   if (!verified.ok) {
     return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (db && !fromD1) {
+    try {
+      await setOwnerCfAccountId(db, expected);
+    } catch (err) {
+      console.warn("Could not persist cf_account_id on owner_config", err);
+    }
   }
   return null;
 }

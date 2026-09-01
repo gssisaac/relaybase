@@ -256,7 +256,7 @@ While no owner exists: `setup-admin`, `init-db`, `migrate-db`.
 
 ### Cloudflare OAuth account proof (`X-Cf-Access-Token`)
 
-`init-db` and `migrate-db` also accept a Cloudflare OAuth access token that can GET this Worker's `CF_ACCOUNT_ID` account (install client). Desktop install and Worker upgrade already hold this token — an existing owner must not block migrate-db. `POST /console/reset-admin` uses the narrower passtoken-updater client (`secrets-store.write`) and proves Secrets Store access on that account.
+`init-db` and `migrate-db` also accept a Cloudflare OAuth access token that can prove the install account (install client): env `CF_ACCOUNT_ID`, D1 `owner_config.cf_account_id`, or `GET /accounts`. Desktop install and Worker upgrade already hold this token — an existing owner must not block migrate-db. `POST /console/reset-admin` uses the narrower passtoken-updater client (`secrets-store.write`) and proves Secrets Store access on that account. Worker `CF_ACCOUNT_ID` is optional — **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 
 ### Owner session (scoped Bearer)
 

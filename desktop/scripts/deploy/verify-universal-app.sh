@@ -17,7 +17,7 @@ if [[ "$INFO" != *x86_64* || "$INFO" != *arm64* ]]; then
   echo "✗ Not a Universal macOS release binary." >&2
   echo "  lipo: $INFO" >&2
   echo "  Expected both x86_64 and arm64." >&2
-  echo "  Do not run \`pnpm run build:host\` or bare \`tauri build\` for release." >&2
+  echo "  Do not run bare \`tauri build\` for release." >&2
   echo "  Use: cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos" >&2
   exit 1
 fi

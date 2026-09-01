@@ -139,11 +139,6 @@ export function EnableEmailApiDialog({
           "CF_API_TOKEN is set but Cloudflare rejected it. Check permissions (Email Sending Edit, Email Routing Rules Edit, Zone Read) and try again.",
         );
       }
-      if (!result.accountId?.trim()) {
-        throw new Error(
-          "The Worker has no CF_ACCOUNT_ID secret yet. Add it under Runtime variables and secrets, then try again.",
-        );
-      }
       if (!mailApiReady(result)) {
         throw new Error("Cloudflare API is not ready on this Worker.");
       }
@@ -233,9 +228,10 @@ export function EnableEmailApiDialog({
                         <span className="font-mono text-foreground">
                           CF_API_TOKEN
                         </span>
-                        , Value = the token you just created.{" "}
-                        <span className="font-mono">CF_ACCOUNT_ID</span> is
-                        already set from install.
+                        , Value = the token you just created. The Worker does
+                        not need a{" "}
+                        <span className="font-mono">CF_ACCOUNT_ID</span>{" "}
+                        secret.
                       </p>
                       <button
                         type="button"

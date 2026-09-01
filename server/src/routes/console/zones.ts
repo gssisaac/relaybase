@@ -5,7 +5,7 @@ import { createCloudflareClient } from "../../lib/cloudflare-config";
 
 const consoleZones = new Hono<{ Bindings: Env }>();
 
-/** List Cloudflare zones for this Worker account (`CF_API_TOKEN` + `CF_ACCOUNT_ID`). */
+/** List Cloudflare zones for this Worker account (`CF_API_TOKEN`). */
 consoleZones.get("/", async (c) => {
   const denied = await requireConsoleSession(c);
   if (denied) return denied;

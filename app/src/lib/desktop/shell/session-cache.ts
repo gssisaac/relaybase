@@ -46,6 +46,8 @@ export function clearDesktopSessionCache(): void {
 const SCOPE_DEPENDENT_LOCAL_STORAGE_PREFIXES = [
   "relaybase:mail:v1:",
   "relaybase:cache:v1:",
+  "relaybase:compose-contacts:",
+  "relaybase:mail-accounts:",
   "products-v1:",
   "relaybase:email.json",
   "relaybase:api-keys-vault:v1",

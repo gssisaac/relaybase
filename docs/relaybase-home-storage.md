@@ -61,7 +61,8 @@ Server/worker data (Cloudflare D1 + R2) is separate — that is the remote produ
                 ├── sidebar.json
                 ├── accounts.json
                 ├── read.json
-                └── trash.json
+                ├── trash.json
+                └── compose-contacts.json
 ```
 
 ### Account scope id (`{scopeId}`)

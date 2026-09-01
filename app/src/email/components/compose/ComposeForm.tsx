@@ -15,7 +15,9 @@ import {
 import { joinQuotedBody, splitQuotedBody } from "@/email/lib/reply/reply-quote-body";
 import { QuotedReplyBlock } from "@/email/components/reply/QuotedReplyBlock";
 import { ComposeAttachmentChips } from "@/email/components/compose/ComposeAttachmentChips";
+import { EmailInput } from "@/email/components/compose/EmailInput";
 import type { Address, DraftAttachment } from "@/email/components/mailbox/types";
+import { useComposeContacts } from "@/email/lib/compose/compose-contacts";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 
@@ -41,6 +43,7 @@ export function ComposeForm({
   compact,
   allowFromSelect = false,
   autoFocusBody = false,
+  autoFocusTo = false,
   attachments = [],
   previewUrls = {},
   attachmentError,
@@ -71,6 +74,8 @@ export function ComposeForm({
   allowFromSelect?: boolean;
   /** Focus the body textarea on mount (reply composer). */
   autoFocusBody?: boolean;
+  /** Focus the To field on mount (new standalone compose). */
+  autoFocusTo?: boolean;
   attachments?: DraftAttachment[];
   previewUrls?: Record<string, string | null>;
   attachmentError?: string | null;
@@ -80,6 +85,7 @@ export function ComposeForm({
   onRenameAttachment?: (id: string, filename: string) => void;
 }) {
   const sendingHealth = useSendingHealth();
+  const { contacts, recordUsed } = useComposeContacts();
   const selected = addresses.find((a) => a.email === sendFrom);
   const displayName = selected?.displayName?.trim();
   const fromLabel = displayName
@@ -234,43 +240,30 @@ export function ComposeForm({
           />
         </div>
 
-        <div className="flex shrink-0 items-center py-1">
-          <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
+        <div className="flex shrink-0 items-start py-1">
+          <span className="w-16 shrink-0 select-none pt-2 text-xs font-medium text-muted-foreground">
             To:
           </span>
-          <input
-            type="text"
+          <EmailInput
             value={sendTo}
-            onChange={(e) => setSendTo(e.target.value)}
+            onChange={setSendTo}
             placeholder="one@example.com, two@example.com"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            inputMode="email"
-            data-1p-ignore
-            data-lpignore="true"
-            className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
+            autoFocus={autoFocusTo}
+            suggestions={contacts}
+            onContactUsed={recordUsed}
           />
         </div>
 
-        <div className="flex shrink-0 items-center py-1">
-          <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
+        <div className="flex shrink-0 items-start py-1">
+          <span className="w-16 shrink-0 select-none pt-2 text-xs font-medium text-muted-foreground">
             Cc:
           </span>
-          <input
-            type="text"
+          <EmailInput
             value={sendCc}
-            onChange={(e) => setSendCc(e.target.value)}
+            onChange={setSendCc}
             placeholder="cc@example.com, team@example.com"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck={false}
-            inputMode="email"
-            data-1p-ignore
-            data-lpignore="true"
-            className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0"
+            suggestions={contacts}
+            onContactUsed={recordUsed}
           />
         </div>
 
@@ -283,7 +276,7 @@ export function ComposeForm({
             value={sendSubject}
             onChange={(e) => setSendSubject(e.target.value)}
             placeholder="Enter subject..."
-            autoFocus={!compact && !autoFocusBody}
+            autoFocus={!compact && !autoFocusBody && !autoFocusTo}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"

@@ -28,6 +28,7 @@ import {
   cleanupLocalAttachmentBytes,
 } from "@/email/lib/attachments/send-attachments";
 import { domainOf } from "@/email/lib/reply/reply-helpers";
+import { recordComposeContacts } from "@/email/lib/compose/compose-contacts";
 import {
   desktopAwareFetch,
   readResponseJson,
@@ -79,7 +80,7 @@ type DraftStore = {
     replyAll?: boolean;
     forwardKey?: string;
   }) => unknown;
-  removeDraft: (id: string) => void;
+  removeDraft: (id: string, opts?: { keepAttachmentBytes?: boolean }) => void;
   findDraftByReplyKey?: (replyKey: string) => { id: string } | null;
   setError: (value: string | null) => void;
 };
@@ -236,7 +237,8 @@ export function useComposeDraftController({
 
     void (async () => {
       const next: Record<string, string | null> = {};
-      const id = draftId ?? ensureDraftId();
+      const id =
+        latestRef.current.draftId ?? draftId ?? ensureDraftId();
       for (const item of attachments) {
         if (!isImageContentType(item.contentType)) {
           next[item.id] = null;
@@ -275,6 +277,16 @@ export function useComposeDraftController({
       }
     };
   }, [apiBase, attachments, draftId, ensureDraftId, productId]);
+
+  function resolveActiveDraftId(): string {
+    const currentMode = modeRef.current;
+    return (
+      latestRef.current.draftId ??
+      draftId ??
+      (currentMode.kind === "reply" ? currentMode.draftId : null) ??
+      crypto.randomUUID()
+    );
+  }
 
   function flushDraft() {
     if (closedRef.current) return;
@@ -495,6 +507,12 @@ export function useComposeDraftController({
       store.setError(`Invalid email address: ${invalid.join(", ")}`);
       return;
     }
+
+    recordComposeContacts(productId, [
+      ...toParsed.emails.map((email) => ({ email })),
+      ...ccParsed.emails.map((email) => ({ email })),
+    ]);
+
     const sizeErr = stagedSizeError(
       attachments,
       new TextEncoder().encode(sendText).byteLength,
@@ -508,14 +526,15 @@ export function useComposeDraftController({
     setSending(true);
     store.setError(null);
 
+    // Persist draft + attachment metadata under the same id used for local bytes.
+    flushNow();
+
     const currentMode = modeRef.current;
     const threading = currentMode.threading;
     const domainKey = domainOf(sendFrom) || "none";
     const from = sendFrom;
 
-    const restoreDraftId =
-      draftId ??
-      (currentMode.kind === "reply" ? currentMode.draftId : crypto.randomUUID());
+    const restoreDraftId = resolveActiveDraftId();
     const restoreDraft = {
       id: restoreDraftId,
       from: sendFrom,
@@ -539,7 +558,9 @@ export function useComposeDraftController({
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    if (draftId) store.removeDraft(draftId, { keepAttachmentBytes: true });
+    if (restoreDraftId) {
+      store.removeDraft(restoreDraftId, { keepAttachmentBytes: true });
+    }
     onAfterSendRef.current({ from });
 
     scheduleEmailSend({

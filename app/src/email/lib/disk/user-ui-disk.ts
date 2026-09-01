@@ -89,4 +89,5 @@ export const UI_FILES = {
   accounts: "accounts.json",
   read: "read.json",
   trash: "trash.json",
+  composeContacts: "compose-contacts.json",
 } as const;

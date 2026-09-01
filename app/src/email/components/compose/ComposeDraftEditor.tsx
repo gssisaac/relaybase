@@ -33,6 +33,8 @@ export type ComposeDraftEditorProps = {
   compact?: boolean;
   /** Focus body textarea on mount (inline reply). */
   autoFocusBody?: boolean;
+  /** Focus To field on mount (new standalone compose). */
+  autoFocusTo?: boolean;
   skipAutosaveWhenEmpty?: boolean;
   navigateOnSendStart?: boolean;
   /** When false, discard is hidden until there is content or a draft id. */
@@ -55,6 +57,7 @@ export function ComposeDraftEditor({
   allowFromSelect = false,
   compact = false,
   autoFocusBody = false,
+  autoFocusTo = false,
   skipAutosaveWhenEmpty = false,
   navigateOnSendStart = false,
   alwaysShowDiscard = false,
@@ -144,6 +147,7 @@ export function ComposeDraftEditor({
       }
       compact={compact}
       autoFocusBody={autoFocusBody}
+      autoFocusTo={autoFocusTo}
     />
   );
 

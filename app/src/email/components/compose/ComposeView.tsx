@@ -296,6 +296,7 @@ export const ComposeView = observer(function ComposeView() {
           onAfterDiscard={onAfterDiscard}
           onAfterSend={onAfterSend}
           onEscape={onBack}
+          autoFocusTo={!isForward}
         />
       </div>
     </div>

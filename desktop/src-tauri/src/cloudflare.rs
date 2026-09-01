@@ -586,12 +586,64 @@ pub async fn create_d1_database(client: &CfClient, name: &str) -> Result<String,
     }
 }
 
-async fn find_d1_id(client: &CfClient, name: &str) -> Result<Option<String>, String> {
+/// Resolve a D1 database uuid by human-readable name.
+///
+/// OAuth install tokens often 403 on account-wide list; the name filter and
+/// Worker binding reads are tried before paginated list.
+pub async fn find_d1_id(client: &CfClient, name: &str) -> Result<Option<String>, String> {
+    // Name-filtered list — narrower than GET /d1/database with no params.
+    let path = format!(
+        "/accounts/{}/d1/database?name={name}&per_page=10",
+        client.account_id
+    );
+    match cf_request(client, reqwest::Method::GET, &path, None).await {
+        Ok(value) => {
+            if let Some(id) = d1_id_from_list_response(&value, name) {
+                return Ok(Some(id));
+            }
+        }
+        Err(e) if is_forbidden_status(&e) => {}
+        Err(e) => return Err(e),
+    }
     let list = list_d1_databases(client).await?;
     Ok(list
         .into_iter()
         .find(|(n, _)| n == name)
         .map(|(_, id)| id))
+}
+
+fn d1_id_from_row(row: &Value) -> Option<String> {
+    row.get("uuid")
+        .or_else(|| row.get("id"))
+        .and_then(|v| v.as_str())
+        .filter(|s| s.len() >= 16)
+        .map(|s| s.to_string())
+}
+
+fn d1_id_from_list_response(value: &Value, name: &str) -> Option<String> {
+    value
+        .get("result")
+        .and_then(|v| v.as_array())
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row.get("name").and_then(|v| v.as_str()) == Some(name))
+                .and_then(d1_id_from_row)
+        })
+}
+
+fn parse_d1_rows(value: &Value) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if let Some(rows) = value.get("result").and_then(|v| v.as_array()) {
+        for row in rows {
+            let db_name = row.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if let Some(id) = d1_id_from_row(row) {
+                if !db_name.is_empty() {
+                    out.push((db_name.to_string(), id));
+                }
+            }
+        }
+    }
+    out
 }
 
 fn parse_d1_uuid(value: &Value) -> Option<String> {
@@ -601,6 +653,40 @@ fn parse_d1_uuid(value: &Value) -> Option<String> {
         .and_then(|v| v.as_str())
         .filter(|s| s.len() >= 16)
         .map(|s| s.to_string())
+}
+
+/// D1 binding name → database uuid from the live Worker script settings.
+pub async fn list_worker_d1_bindings(
+    client: &CfClient,
+    script_name: &str,
+) -> Result<Vec<(String, String)>, String> {
+    let path = format!(
+        "/accounts/{}/workers/scripts/{script_name}/settings",
+        client.account_id
+    );
+    let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
+    let mut out = Vec::new();
+    if let Some(arr) = value
+        .pointer("/result/bindings")
+        .or_else(|| value.get("result").and_then(|v| v.get("bindings")))
+        .and_then(|v| v.as_array())
+    {
+        for b in arr {
+            if b.get("type").and_then(|v| v.as_str()) != Some("d1") {
+                continue;
+            }
+            let binding = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let id = b
+                .get("database_id")
+                .or_else(|| b.get("id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !binding.is_empty() && !id.is_empty() {
+                out.push((binding.to_string(), id.to_string()));
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// Resolve `https://{script}.{subdomain}.workers.dev` for this account.
@@ -703,21 +789,25 @@ pub async fn delete_d1_database(client: &CfClient, database_id: &str) -> Result<
 
 /// Returns `(name, uuid)` for every D1 database in the account.
 pub async fn list_d1_databases(client: &CfClient) -> Result<Vec<(String, String)>, String> {
-    let path = format!("/accounts/{}/d1/database", client.account_id);
-    let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
     let mut out = Vec::new();
-    if let Some(rows) = value.get("result").and_then(|v| v.as_array()) {
-        for row in rows {
-            let name = row.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let id = row
-                .get("uuid")
-                .or_else(|| row.get("id"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            if !name.is_empty() && !id.is_empty() {
-                out.push((name.to_string(), id.to_string()));
-            }
+    let mut page = 1u32;
+    loop {
+        let path = format!(
+            "/accounts/{}/d1/database?per_page=100&page={page}",
+            client.account_id
+        );
+        let value = cf_request(client, reqwest::Method::GET, &path, None).await?;
+        let batch = parse_d1_rows(&value);
+        let batch_len = batch.len();
+        out.extend(batch);
+        let total = value
+            .pointer("/result_info/total_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(out.len() as u64);
+        if batch_len == 0 || out.len() as u64 >= total {
+            break;
         }
+        page += 1;
     }
     Ok(out)
 }

@@ -5,9 +5,9 @@ use tauri::{AppHandle, Emitter};
 use crate::cloudflare::{
     assert_r2_subscription, count_d1_user_rows, count_r2_objects, create_d1_database,
     delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket,
-    enable_workers_dev, ensure_r2_bucket, find_r2_bucket, list_d1_databases,
-    list_worker_bindings, list_worker_secrets, put_worker_schedules, put_worker_secret,
-    upload_worker_script, CfClient, DEFAULT_WORKER_CRON,
+    enable_workers_dev, ensure_r2_bucket, find_d1_id, find_r2_bucket, list_d1_databases,
+    list_worker_bindings, list_worker_d1_bindings, list_worker_secrets, put_worker_schedules,
+    put_worker_secret, upload_worker_script, CfClient, DEFAULT_WORKER_CRON,
 };
 use crate::secrets::load_credentials;
 use crate::worker::DEFAULT_SCRIPT;
@@ -342,26 +342,42 @@ async fn prepare_d1(
 ) -> Result<(Vec<String>, bool), String> {
     let mut d1_ids: Vec<String> = Vec::with_capacity(D1_DATABASES.len());
     let mut any_d1_reused = false;
+    let worker_d1 = if run_opts.worker_only {
+        list_worker_d1_bindings(client, DEFAULT_SCRIPT)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
 
-    for (_binding, db_name) in D1_DATABASES {
+    for (binding, db_name) in D1_DATABASES {
         let (db_id, log_ready) = if run_opts.worker_only {
-            match existing_d1.iter().find(|(n, _)| n == db_name) {
-                Some((_, id)) => {
-                    any_d1_reused = true;
-                    emit_log(
-                        app,
-                        "d1",
-                        "info",
-                        format!("D1 {db_name} found — reusing (id {id})"),
-                    );
-                    (id.clone(), true)
-                }
-                None => {
-                    return Err(format!(
-                        "D1 {db_name} is missing. Complete Setup install first."
-                    ));
-                }
-            }
+            let db_id = worker_d1
+                .iter()
+                .find(|(b, _)| b == binding)
+                .map(|(_, id)| id.clone())
+                .or_else(|| {
+                    existing_d1
+                        .iter()
+                        .find(|(n, _)| n == db_name)
+                        .map(|(_, id)| id.clone())
+                });
+            let db_id = match db_id {
+                Some(id) => id,
+                None => find_d1_id(client, db_name)
+                    .await?
+                    .ok_or_else(|| {
+                        format!("D1 {db_name} is missing. Complete Setup install first.")
+                    })?,
+            };
+            any_d1_reused = true;
+            emit_log(
+                app,
+                "d1",
+                "info",
+                format!("D1 {db_name} found — reusing (id {db_id})"),
+            );
+            (db_id, true)
         } else if plan.should_reinstall_d1(db_name) {
             if let Some((_, id)) = existing_d1.iter().find(|(n, _)| n == db_name) {
                 let occ = count_d1_user_rows(client, id).await;

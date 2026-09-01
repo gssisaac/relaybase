@@ -1,6 +1,6 @@
 use crate::cloudflare::{
     account_workers_dev_url, assert_r2_subscription, count_d1_user_rows, count_r2_objects,
-    find_r2_bucket, list_d1_databases, worker_script_exists, CfClient,
+    find_d1_id, find_r2_bucket, list_worker_d1_bindings, worker_script_exists, CfClient,
 };
 use crate::worker::DEFAULT_SCRIPT;
 
@@ -44,16 +44,26 @@ pub async fn probe_install_resources(
         r2.occupied = occ.occupied;
     }
     resources.push(r2);
-    let d1_list = match list_d1_databases(&client).await {
-        Ok(v) => v,
-        Err(_) => Vec::new(),
+    let worker_d1 = if worker_present {
+        list_worker_d1_bindings(&client, DEFAULT_SCRIPT)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
     };
-    for (_binding, name) in D1_DATABASES {
-        let id = d1_list
+    for (binding, name) in D1_DATABASES {
+        let mut id = worker_d1
             .iter()
-            .find(|(n, _)| n == name)
+            .find(|(b, _)| b == binding)
             .map(|(_, id)| id.clone())
             .unwrap_or_default();
+        if id.is_empty() {
+            id = find_d1_id(&client, name)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+        }
         let mut d1 = InstallResourceProbe::base("d1", *name, !id.is_empty(), id.clone());
         if !id.is_empty() {
             let occ = count_d1_user_rows(&client, &id).await;

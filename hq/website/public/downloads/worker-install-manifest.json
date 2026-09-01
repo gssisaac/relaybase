@@ -1,7 +1,7 @@
 {
   "version": "0.1.2",
   "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.2.zip",
-  "zipSha256": "41751e9a19f8fe4d51f85e30c00bdeef60259b8730dc76598953ea59ab5de970",
-  "publishedAt": "2026-08-31T12:22:14.539Z",
-  "notes": "# Relaybase Worker 0.1.2\n\n## Highlights\n- Forgot-passtoken reset proves Cloudflare OAuth by `GET /accounts/{CF_ACCOUNT_ID}`\n- Worker upgrade (`migrate-db`) uses the same OAuth account proof when an owner already exists\n\n## Changes\n- `POST /console/reset-admin` accepts a Cloudflare OAuth access token (`cfAccessToken`) and requires `CF_ACCOUNT_ID`\n- `verifyCfTokenAccount` calls `GET /accounts/{CF_ACCOUNT_ID}` (`success === true`)\n- `POST /console/init-db` and `/console/migrate-db` accept `X-Cf-Access-Token` with the same proof"
+  "zipSha256": "9e6d56d34cfe11bd25059f2d19ab7a51625a75c84545a355b4fde84cae7dcabb",
+  "publishedAt": "2026-09-01T04:04:19.067Z",
+  "notes": "# Relaybase Worker 0.1.2\n\n## Highlights\n- Worker `CF_ACCOUNT_ID` is optional — domain / DNS / sending health use `CF_API_TOKEN` only\n- Discover account id from `GET /zones` (`account.id` on the zone), not a required secret\n- Forgot-passtoken reset and Worker upgrade (`migrate-db`) accept Cloudflare OAuth account proof\n\n## Changes\n- `mailApiReady` / Enable email API verify do not require Worker `accountId`\n- `createCloudflareClient` requires `CF_API_TOKEN` only; list zones without `account.id` filter\n- Resolve account id: env → D1 `owner_config.cf_account_id` → zone `account.id` → `GET /accounts`\n- `POST /console/reset-admin` accepts `cfAccessToken`; `init-db` / `migrate-db` accept `X-Cf-Access-Token`"
 }

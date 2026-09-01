@@ -17,7 +17,7 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 | Mail R2 / D1 / search / owner login (`AUTH_PEPPER`) | No |
 | Mobile inbox / cron | No |
 | Domain / inbox / DNS via `CF_API_TOKEN` | No — zone-scoped APIs; list zones with the token alone |
-| REST Email Sending fallback (`/accounts/{id}/email/sending/send`) | Only if `EMAIL` is missing — resolve id from the token (`GET /accounts`) |
+| REST Email Sending fallback (`/accounts/{id}/email/sending/send`) | Only if `EMAIL` is missing — discover id from `GET /zones` (`account.id` on the zone) |
 | `init-db` / `migrate-db` / `reset-admin` OAuth proof | Optional pin — see below |
 
 **Ready signal** (`GET /console/connect` → `mailApiReady`): `cfApiTokenSet` and `cfApiTokenValid !== false`. Do **not** gate on Worker `accountId`.
@@ -30,7 +30,7 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 | D1 `owner_config.cf_account_id` | Durable pin for OAuth proof after first successful verify / reset. Prefer this over a wrangler secret. |
 | Worker secret `CF_ACCOUNT_ID` | Optional convenience. Desktop auto-install may still PUT it. Absence must not block mail API or verify. |
 
-When the Worker needs an account id (REST send fallback, zone list filter, OAuth proof), resolve in this order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` → `GET /accounts` with `CF_API_TOKEN` (or the OAuth access token). Persist a discovered id to D1 when possible.
+When the Worker needs an account id (REST send fallback, dashboard links, OAuth proof), resolve in this order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` → **`GET /zones` and read `account.id`** (Zone Read — the server token already has this) → `GET /accounts` (Account Read, often missing). Do **not** filter `GET /zones` by `account.id`; the token already scopes the list. A wrong filter empties zones and marks every domain sending `no_zone`. Persist a discovered id to D1 when possible.
 
 Do **not** store Cloudflare account id or API tokens in HQ ops D1.
 

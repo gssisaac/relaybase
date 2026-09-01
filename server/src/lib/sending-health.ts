@@ -149,6 +149,7 @@ export function sendingDashboardUrl(accountId: string | undefined): string {
 
 export type SendingHealthCf = {
   listZones(): Promise<Array<{ id: string; name: string }>>;
+  resolveZoneId?(domain: string): Promise<string | null>;
   listSendingSubdomains(zoneId: string): Promise<SendingSubdomainRow[]>;
   hasSendingBounceMx(zoneId: string, domain: string): Promise<boolean>;
 };
@@ -193,7 +194,11 @@ export async function collectSendingHealth(
 
   const rows = await Promise.all(
     unique.map(async (domain) => {
-      const zone = zoneByName.get(domain);
+      let zone = zoneByName.get(domain);
+      if (!zone && cf.resolveZoneId) {
+        const resolvedId = await cf.resolveZoneId(domain);
+        if (resolvedId) zone = { id: resolvedId, name: domain };
+      }
       if (!zone) {
         return {
           ...evaluateSendingHealth({

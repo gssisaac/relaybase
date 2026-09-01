@@ -142,4 +142,27 @@ describe("collectSendingHealth", () => {
       "restricted",
     );
   });
+
+  it("resolves a zone by name when the list omits it", async () => {
+    const snapshot = await collectSendingHealth(
+      ["dailyvoca.xyz"],
+      {
+        async listZones() {
+          return [];
+        },
+        async resolveZoneId(domain) {
+          return domain === "dailyvoca.xyz" ? "z-daily" : null;
+        },
+        async listSendingSubdomains() {
+          return [{ name: "dailyvoca.xyz", enabled: true }];
+        },
+        async hasSendingBounceMx() {
+          return false;
+        },
+      },
+      { generatedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    assert.equal(snapshot.domains[0]?.status, "ready");
+    assert.equal(snapshot.domains[0]?.zoneId, "z-daily");
+  });
 });

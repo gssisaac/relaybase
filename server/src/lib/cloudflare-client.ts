@@ -354,22 +354,25 @@ export class CloudflareClient {
 
   async listZones(): Promise<Array<{ id: string; name: string; status: string }>> {
     const zones: Array<{ id: string; name: string; status: string }> = [];
-    let account = this.accountId;
-    if (!account) {
-      account = (await resolveCfAccountIdFromToken(this.apiToken)) ?? "";
-      if (account) this.accountId = account;
-    }
-    const accountQuery = account
-      ? `account.id=${encodeURIComponent(account)}&`
-      : "";
+    // Token-scoped. Do not filter by account.id — a wrong env/resolved id
+    // returns an empty list and every domain becomes sending "no_zone".
     let page = 1;
     for (;;) {
       const data = await this.request<
-        Array<{ id?: string; name?: string; status?: string }>
-      >(`/zones?${accountQuery}per_page=50&page=${page}`);
+        Array<{
+          id?: string;
+          name?: string;
+          status?: string;
+          account?: { id?: string };
+        }>
+      >(`/zones?per_page=50&page=${page}`);
       const batch = data.result ?? [];
       if (batch.length === 0) break;
       for (const zone of batch) {
+        if (!this.accountId) {
+          const discovered = normalizeCfAccountId(zone.account?.id);
+          if (discovered) this.accountId = discovered;
+        }
         zones.push({
           id: zone.id ?? "",
           name: zone.name ?? "",

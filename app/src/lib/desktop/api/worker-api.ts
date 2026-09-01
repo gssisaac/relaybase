@@ -7,6 +7,34 @@ import {
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
 
+export type DesktopWorkerResponse = {
+  status: number;
+  headers: [string, string][];
+  bodyBase64: string;
+};
+
+/** Decode a standard base64 Worker response body from the Tauri bridge. */
+export function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function responseFromDesktopWorker(result: DesktopWorkerResponse): Response {
+  const resHeaders = new Headers();
+  for (const [k, v] of result.headers) {
+    resHeaders.append(k, v);
+  }
+  const bytes = base64ToBytes(result.bodyBase64);
+  return new Response(new Uint8Array(bytes), {
+    status: result.status,
+    headers: resHeaders,
+  });
+}
+
 /**
  * Call the Worker installed in the user's Cloudflare account.
  *
@@ -40,14 +68,7 @@ export async function workerFetch(
       headers,
       body,
     });
-    const resHeaders = new Headers();
-    for (const [k, v] of result.headers) {
-      resHeaders.append(k, v);
-    }
-    return new Response(result.body, {
-      status: result.status,
-      headers: resHeaders,
-    });
+    return responseFromDesktopWorker(result);
   }
 
   const base = creds.workerUrl.replace(/\/$/, "");
@@ -126,12 +147,5 @@ export async function teamWorkerFetch(
     headers,
     body,
   });
-  const resHeaders = new Headers();
-  for (const [k, v] of result.headers) {
-    resHeaders.append(k, v);
-  }
-  return new Response(result.body, {
-    status: result.status,
-    headers: resHeaders,
-  });
+  return responseFromDesktopWorker(result);
 }

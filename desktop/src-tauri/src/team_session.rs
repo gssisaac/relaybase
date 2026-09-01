@@ -3,6 +3,7 @@
 //! account email); the password is never written to disk.
 
 use crate::secrets::{clear_team_login, load_team_login, save_team_login, TeamLogin};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -249,7 +250,8 @@ pub struct TeamWorkerRequestInput {
 pub struct TeamWorkerRequestOutput {
     pub status: u16,
     pub headers: Vec<(String, String)>,
-    pub body: String,
+    /// Response body as standard base64 (preserves binary attachment bytes).
+    pub body_base64: String,
 }
 
 pub async fn team_worker_request(
@@ -295,10 +297,10 @@ pub async fn team_worker_request(
             Some((k.as_str().to_string(), v.to_str().ok()?.to_string()))
         })
         .collect();
-    let body = res.text().await.unwrap_or_default();
+    let bytes = res.bytes().await.unwrap_or_default();
     Ok(TeamWorkerRequestOutput {
         status,
         headers,
-        body,
+        body_base64: STANDARD.encode(bytes),
     })
 }

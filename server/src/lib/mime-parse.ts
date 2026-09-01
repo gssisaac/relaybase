@@ -1,5 +1,7 @@
 import PostalMime, { decodeWords, type Address } from "postal-mime";
 
+import { normalizeAttachmentBytes } from "./attachment-bytes.ts";
+
 export function decodeMimeHeader(value: string | null | undefined): string {
   if (!value?.trim()) return "";
   return decodeWords(value).trim();
@@ -74,13 +76,7 @@ function pickFromAddress(entry: Address | undefined): {
 }
 
 function attachmentBytes(content: Uint8Array | ArrayBuffer | string): ArrayBuffer {
-  if (typeof content === "string") {
-    return new TextEncoder().encode(content).buffer as ArrayBuffer;
-  }
-  const bytes = content instanceof ArrayBuffer ? new Uint8Array(content) : content;
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
+  return normalizeAttachmentBytes(content);
 }
 
 function normalizeContentId(value: string | undefined | null): string | null {

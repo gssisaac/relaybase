@@ -22,6 +22,7 @@ import {
   isBounceMessage,
   parseBounceDiagnostic,
 } from "./bounce-detect";
+import { normalizeAttachmentBytes } from "./attachment-bytes.ts";
 import { decodeMimeHeader, parseInboundMime } from "./mime-parse";
 import { buildMimeMessage, buildStrippedInboundMime } from "./mime";
 import type { MailDb } from "../../db/mail";
@@ -794,7 +795,11 @@ export async function getMailAttachment(
   if (!objectKey) return null;
   const object = await bucket.get(objectKey);
   if (!object) return null;
-  return { meta: attachment, body: await object.arrayBuffer() };
+  const rawBody = await object.arrayBuffer();
+  return {
+    meta: attachment,
+    body: normalizeAttachmentBytes(rawBody),
+  };
 }
 
 /** @deprecated Use getMailAttachment with kind `"inbound"`. */

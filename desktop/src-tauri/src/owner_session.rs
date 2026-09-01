@@ -8,6 +8,7 @@
 
 use crate::cloudflare::{resolve_account_id_for_recover_with_hint, secrets_store_accessible};
 use crate::secrets::{get_cf_oauth_session, load_credentials, save_credentials};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -667,7 +668,8 @@ pub struct WorkerRequestInput {
 pub struct WorkerRequestOutput {
     pub status: u16,
     pub headers: Vec<(String, String)>,
-    pub body: String,
+    /// Response body as standard base64 (preserves binary attachment bytes).
+    pub body_base64: String,
 }
 
 pub async fn worker_request(input: WorkerRequestInput) -> Result<WorkerRequestOutput, String> {
@@ -724,11 +726,11 @@ pub async fn worker_request(input: WorkerRequestInput) -> Result<WorkerRequestOu
             Some((k.as_str().to_string(), v.to_str().ok()?.to_string()))
         })
         .collect();
-    let body = res.text().await.unwrap_or_default();
+    let bytes = res.bytes().await.unwrap_or_default();
     Ok(WorkerRequestOutput {
         status,
         headers,
-        body,
+        body_base64: STANDARD.encode(bytes),
     })
 }
 

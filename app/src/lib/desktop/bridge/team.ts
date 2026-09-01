@@ -92,6 +92,6 @@ export async function desktopTeamWorkerRequest(input: {
   path: string;
   headers?: Record<string, string>;
   body?: string;
-}): Promise<{ status: number; headers: [string, string][]; body: string }> {
+}): Promise<{ status: number; headers: [string, string][]; bodyBase64: string }> {
   return invoke("team_worker_request_cmd", { input });
 }

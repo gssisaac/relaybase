@@ -231,6 +231,6 @@ export async function desktopWorkerRequest(input: {
   path: string;
   headers?: Record<string, string>;
   body?: string;
-}): Promise<{ status: number; headers: [string, string][]; body: string }> {
+}): Promise<{ status: number; headers: [string, string][]; bodyBase64: string }> {
   return invoke("worker_request_cmd", { input });
 }

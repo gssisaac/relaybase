@@ -59,6 +59,8 @@ Headers, `bodyPreview` (≤500 chars), `attachments[]`, `occurredAt` (inbound `r
 
 Legacy sent rows imported from `_list.json` have **no `raw.eml`** (only `bodyPreview`); `hasText`/`hasHtml` stay false and the detail endpoint returns preview-only. Recovering those bodies is explicitly out of scope.
 
+Compose/API sends with attachments write `sent/{domain}/{id}/attachments/{aid}-{name}` the same way inbound does (thin `meta.json` + stripped `raw.eml` when binaries exist). Download via `GET /mail/sent/:id/attachments/:attachmentId?domain=`.
+
 Broadcasts still write `sent/_sendlog/*` only — they do **not** insert every recipient into `mailbox_messages`.
 
 ---

@@ -246,6 +246,12 @@ export class CloudflareClient {
     text: string;
     html?: string;
     replyTo?: string;
+    attachments?: Array<{
+      content: string;
+      filename: string;
+      type: string;
+      disposition: "attachment";
+    }>;
   }): Promise<CfEmailSendResult> {
     const fromAddress = params.from.trim();
     const fromName = params.fromName?.trim();
@@ -262,6 +268,7 @@ export class CloudflareClient {
     if (html) body.html = html;
     const replyTo = params.replyTo?.trim();
     if (replyTo) body.reply_to = replyTo;
+    if (params.attachments?.length) body.attachments = params.attachments;
 
     const accountId = await this.requireAccountId();
     const path = `/accounts/${accountId}/email/sending/send`;
@@ -288,6 +295,11 @@ export class CloudflareClient {
     replyTo?: string;
     inReplyTo?: string;
     references?: string;
+    attachments?: Array<{
+      filename: string;
+      contentType: string;
+      content: ArrayBuffer;
+    }>;
   }): Promise<CfEmailSendResult> {
     const fromAddress = params.from.trim();
     const toList = Array.isArray(params.to) ? params.to : [params.to];
@@ -310,6 +322,11 @@ export class CloudflareClient {
       replyTo: params.replyTo,
       inReplyTo: params.inReplyTo,
       references: params.references,
+      attachments: params.attachments?.map((item) => ({
+        filename: item.filename,
+        contentType: item.contentType,
+        content: item.content,
+      })),
     });
 
     const accountId = await this.requireAccountId();
@@ -341,13 +358,37 @@ export class CloudflareClient {
     replyTo?: string;
     inReplyTo?: string;
     references?: string;
+    attachments?: Array<{
+      content: string;
+      filename: string;
+      type: string;
+      disposition: "attachment";
+    }>;
+    rawAttachments?: Array<{
+      filename: string;
+      contentType: string;
+      content: ArrayBuffer;
+    }>;
   }): Promise<CfEmailSendResult> {
     const fromName = params.fromName?.trim();
     const needsRaw = Boolean(
-      fromName || params.inReplyTo?.trim() || params.references?.trim(),
+      fromName ||
+        params.inReplyTo?.trim() ||
+        params.references?.trim() ||
+        (params.rawAttachments?.length ?? 0) > 0,
     );
     if (needsRaw) {
-      return this.sendRawEmail({ ...params, fromName });
+      return this.sendRawEmail({
+        ...params,
+        fromName,
+        attachments: params.rawAttachments,
+      });
+    }
+    if (params.attachments?.length) {
+      return this.sendStructuredEmail({
+        ...params,
+        attachments: params.attachments,
+      });
     }
     return this.sendStructuredEmail(params);
   }

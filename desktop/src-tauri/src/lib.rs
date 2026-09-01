@@ -37,10 +37,14 @@ use cloudflare::{resolve_account_id, resolve_account_id_for_recover, verify_toke
 use secrets::{
     clear_credentials, clear_team_login, get_cf_oauth_session,
     load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
-    load_credentials_merged, load_email_prefs, load_mail_json as read_mail_json, load_team_login,
+    load_credentials_merged, load_email_prefs,     load_mail_json as read_mail_json, load_team_login,
+    load_mail_binary as read_mail_binary,
     migrate_mail_to_desktop_user, migrate_storage_layout_v2, current_scope_id,
     remove_api_key_vault_entry, save_cache_json as write_cache_json,
     save_credentials, save_email_prefs as write_email_prefs, save_mail_json as write_mail_json,
+    save_mail_binary as write_mail_binary,
+    delete_mail_binary as remove_mail_binary,
+    delete_mail_binary_dir as remove_mail_binary_dir,
     save_team_login, set_cf_oauth_session, upsert_api_key_vault_entry, ApiKeyVault,
     ApiKeyVaultEntry, CfOAuthSession, EmailPrefs, StorageLayoutMarker, StoredCredentials,
     TeamLogin,
@@ -189,6 +193,29 @@ async fn save_mail_json(
     value: serde_json::Value,
 ) -> Result<(), String> {
     write_mail_json(&relative_path, &value)
+}
+
+#[tauri::command]
+async fn get_mail_binary(relative_path: String) -> Result<Option<String>, String> {
+    read_mail_binary(&relative_path)
+}
+
+#[tauri::command]
+async fn save_mail_binary(
+    relative_path: String,
+    base64_data: String,
+) -> Result<(), String> {
+    write_mail_binary(&relative_path, &base64_data)
+}
+
+#[tauri::command]
+async fn delete_mail_binary(relative_path: String) -> Result<(), String> {
+    remove_mail_binary(&relative_path)
+}
+
+#[tauri::command]
+async fn delete_mail_binary_dir(relative_path: String) -> Result<(), String> {
+    remove_mail_binary_dir(&relative_path)
 }
 
 #[tauri::command]
@@ -1782,6 +1809,10 @@ pub fn run() {
             migrate_storage_layout,
             get_mail_json,
             save_mail_json,
+            get_mail_binary,
+            save_mail_binary,
+            delete_mail_binary,
+            delete_mail_binary_dir,
             get_cache_json,
             save_cache_json,
             verify_cf_token,

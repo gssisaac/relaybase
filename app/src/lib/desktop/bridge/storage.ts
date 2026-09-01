@@ -31,6 +31,35 @@ export async function desktopSaveMailJson(
   return invoke("save_mail_json", { relativePath, value });
 }
 
+/** Read binary from `~/.relaybase/mail/{relativePath}` (standard base64). */
+export async function desktopGetMailBinary(
+  relativePath: string,
+): Promise<string | null> {
+  return invoke("get_mail_binary", { relativePath });
+}
+
+/** Write binary to `~/.relaybase/mail/{relativePath}` (standard base64). */
+export async function desktopSaveMailBinary(
+  relativePath: string,
+  base64Data: string,
+): Promise<void> {
+  return invoke("save_mail_binary", { relativePath, base64Data: base64Data });
+}
+
+/** Delete one binary mail file. */
+export async function desktopDeleteMailBinary(
+  relativePath: string,
+): Promise<void> {
+  return invoke("delete_mail_binary", { relativePath });
+}
+
+/** Delete a mail subdirectory (e.g. all draft attachments for one draft). */
+export async function desktopDeleteMailBinaryDir(
+  relativePath: string,
+): Promise<void> {
+  return invoke("delete_mail_binary_dir", { relativePath });
+}
+
 /** Read JSON from `~/.relaybase/cache/{relativePath}`. */
 export async function desktopGetCacheJson(
   relativePath: string,

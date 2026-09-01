@@ -100,6 +100,18 @@ export const ComposeView = observer(function ComposeView() {
     };
   }, [accountFilter, forwardKey, store]);
 
+  useEffect(() => {
+    if (!forwardSentId) return;
+    const listHit =
+      store.sent.find((m) => m.id === forwardSentId) ??
+      store.visibleSent.find((m) => m.id === forwardSentId);
+    const domain =
+      (listHit ? domainOf(listHit.from) : "") ||
+      (accountFilter !== "all" ? domainOf(accountFilter) : "");
+    if (!domain) return;
+    void store.loadSentDetail(forwardSentId, domain);
+  }, [accountFilter, forwardSentId, store]);
+
   const fromFallbacks = useMemo(() => {
     const list: string[] = [];
     const fromQuery = fromParam?.trim();
@@ -131,6 +143,7 @@ export const ComposeView = observer(function ComposeView() {
     }
     if (forwardSentId) {
       const sentMsg =
+        store.getCachedSentDetail(forwardSentId) ??
         store.sent.find((m) => m.id === forwardSentId) ??
         store.visibleSent.find((m) => m.id === forwardSentId);
       if (!sentMsg) return null;
@@ -152,6 +165,7 @@ export const ComposeView = observer(function ComposeView() {
     store.visibleSent,
     // recompute when detail cache fills
     forwardKey ? store.getCachedDetail(forwardKey) : null,
+    forwardSentId ? store.getCachedSentDetail(forwardSentId) : null,
   ]);
 
   const initial = useMemo(() => {
@@ -162,6 +176,7 @@ export const ComposeView = observer(function ComposeView() {
         cc: forwardInitial.cc,
         subject: forwardInitial.subject,
         body: forwardInitial.body,
+        attachments: forwardInitial.attachments ?? [],
       };
     }
     if (standaloneDraft) {
@@ -171,6 +186,7 @@ export const ComposeView = observer(function ComposeView() {
         cc: standaloneDraft.cc ?? "",
         subject: standaloneDraft.subject,
         body: standaloneDraft.body,
+        attachments: standaloneDraft.attachments ?? [],
       };
     }
     return {
@@ -182,6 +198,7 @@ export const ComposeView = observer(function ComposeView() {
       cc: ccParam?.trim() || "",
       subject: subjectParam?.trim() || "",
       body: "",
+      attachments: [],
     };
   }, [
     accountFilter,

@@ -325,7 +325,7 @@ const MailRow = memo(
     const subject = thread?.subject ?? item.message.subject;
     const attachmentCount = isInbox
       ? item.message.attachmentCount ?? item.message.attachments?.length ?? 0
-      : 0;
+      : item.message.attachmentCount ?? item.message.attachments?.length ?? 0;
     const date = formatDate(
       thread?.latestAt ??
         (isInbox ? item.message.receivedAt : item.message.sentAt),

@@ -124,6 +124,21 @@ export type InboundAttachment = {
   contentId?: string | null;
 };
 
+/** Compose draft attachment metadata (bytes stored separately). */
+export type DraftAttachment = {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  origin: "local" | "source";
+  source?: {
+    kind: "inbound" | "sent";
+    domain: string;
+    messageId: string;
+    attachmentId: string;
+  };
+};
+
 /** @deprecated Use RoutingActivityEvent — kept for inbox list compatibility */
 export type InboundMessage = RoutingActivityEvent & {
   bodyText?: string;
@@ -144,6 +159,8 @@ export type SentEmail = {
   references?: string;
   /** Parent inbox message key when this was sent as a reply. */
   replyKey?: string;
+  attachmentCount?: number;
+  attachments?: InboundAttachment[];
 };
 
 export type DraftEmail = {
@@ -153,6 +170,7 @@ export type DraftEmail = {
   cc?: string;
   subject: string;
   body: string;
+  attachments?: DraftAttachment[];
   createdAt: string;
   updatedAt: string;
   /** When set, this is a reply draft tied to an inbox message. */

@@ -50,6 +50,9 @@ Server/worker data (Cloudflare D1 + R2) is separate — that is the remote produ
             ├── inbox.json             # accumulated inbox pages + nextBefore/hasMore + total/unread per domain
             ├── sent.json              # accumulated sent pages + nextBefore/hasMore/total per domain
             ├── drafts.json
+            ├── draft-attachments/
+            │   └── {draftId}/
+            │       └── {attachmentId}          # local compose bytes (metadata in drafts.json)
             ├── details/
             │   └── {messageKey}.json
             └── ui/

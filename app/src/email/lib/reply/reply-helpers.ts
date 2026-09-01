@@ -1,4 +1,10 @@
-import type { Address, RoutingActivityEvent, SentEmail } from "@/email/components/mailbox/types";
+import type {
+  Address,
+  DraftAttachment,
+  InboundAttachment,
+  RoutingActivityEvent,
+  SentEmail,
+} from "@/email/components/mailbox/types";
 import type { EmailAccountFilter } from "@/email/components/accounts/EmailAccountSelect";
 import { trimQuotedHistoryForThread } from "@/email/lib/reply/reply-quote-body";
 import { formatSenderDisplay } from "@/lib/email/format-sender";
@@ -213,6 +219,101 @@ export type ForwardThreadPart =
   | { kind: "inbound"; event: RoutingActivityEvent }
   | { kind: "sent"; message: SentEmail };
 
+function sourceAttachmentFromInbound(
+  event: RoutingActivityEvent,
+  attachment: InboundAttachment,
+): DraftAttachment {
+  const domain = domainOf(event.toEmail);
+  return {
+    id: crypto.randomUUID().slice(0, 8),
+    filename: attachment.filename,
+    contentType: attachment.contentType,
+    size: attachment.size,
+    origin: "source",
+    source: {
+      kind: "inbound",
+      domain,
+      messageId: event.key,
+      attachmentId: attachment.id,
+    },
+  };
+}
+
+function sourceAttachmentFromSent(
+  sent: SentEmail,
+  attachment: InboundAttachment,
+): DraftAttachment {
+  const domain = domainOf(sent.from);
+  return {
+    id: crypto.randomUUID().slice(0, 8),
+    filename: attachment.filename,
+    contentType: attachment.contentType,
+    size: attachment.size,
+    origin: "source",
+    source: {
+      kind: "sent",
+      domain,
+      messageId: sent.id,
+      attachmentId: attachment.id,
+    },
+  };
+}
+
+function dedupeSourceAttachments(
+  attachments: DraftAttachment[],
+): DraftAttachment[] {
+  const seen = new Set<string>();
+  const out: DraftAttachment[] = [];
+  for (const item of attachments) {
+    const key = item.source
+      ? `${item.source.kind}:${item.source.messageId}:${item.source.attachmentId}`
+      : item.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
+export function attachmentsFromInbound(
+  event: RoutingActivityEvent,
+): DraftAttachment[] {
+  if (!event.attachments?.length) return [];
+  return event.attachments.map((attachment) =>
+    sourceAttachmentFromInbound(event, attachment),
+  );
+}
+
+export function attachmentsFromSent(sent: SentEmail): DraftAttachment[] {
+  if (!sent.attachments?.length) return [];
+  return sent.attachments.map((attachment) =>
+    sourceAttachmentFromSent(sent, attachment),
+  );
+}
+
+export function attachmentsFromForwardParts(
+  parts: ForwardThreadPart[],
+): DraftAttachment[] {
+  const all: DraftAttachment[] = [];
+  for (const part of parts) {
+    if (part.kind === "inbound") {
+      all.push(...attachmentsFromInbound(part.event));
+    } else {
+      all.push(...attachmentsFromSent(part.message));
+    }
+  }
+  return dedupeSourceAttachments(all);
+}
+
+export function attachmentsFromReplyFocus(
+  part: ForwardThreadPart | undefined,
+): DraftAttachment[] {
+  if (!part) return [];
+  return part.kind === "inbound"
+    ? attachmentsFromInbound(part.event)
+    : attachmentsFromSent(part.message);
+}
+
 /** Same wire format as reply quotes so ComposeForm shows the quote rail. */
 function quoteForwardPart(part: ForwardThreadPart): string {
   if (part.kind === "inbound") {
@@ -265,6 +366,7 @@ export function buildReplyPrefillFromParts(
       cc: "",
       subject: replySubject(""),
       body: "\n\n",
+      attachments: [] as DraftAttachment[],
       inReplyTo: undefined as string | undefined,
       references: undefined as string | undefined,
     };
@@ -277,6 +379,7 @@ export function buildReplyPrefillFromParts(
   return {
     ...base,
     body: quote ? `\n\n${quote}` : "\n\n",
+    attachments: attachmentsFromReplyFocus(focus),
   };
 }
 
@@ -376,6 +479,7 @@ export function buildForwardPrefillFromParts(
     cc: "",
     subject: forwardSubject(subjectSource),
     body: quote ? `\n\n${quote}` : "\n\n",
+    attachments: attachmentsFromForwardParts(parts),
   };
 }
 

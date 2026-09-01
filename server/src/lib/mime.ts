@@ -51,6 +51,55 @@ export function generateMessageId(fromAddress: string): string {
   return `<${random}@${domain || "relaybase.local"}>`;
 }
 
+function encodeBase64Chunked(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+    binary += String.fromCharCode(...slice);
+  }
+  return btoa(binary);
+}
+
+function buildBodyPart(params: {
+  text: string;
+  html?: string;
+}): { contentType: string; body: string } {
+  const html = params.html?.trim();
+  if (html) {
+    const boundary = `relaybase-alt-${Date.now().toString(36)}`;
+    const body = [
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=utf-8",
+      "Content-Transfer-Encoding: 7bit",
+      "",
+      params.text,
+      `--${boundary}`,
+      "Content-Type: text/html; charset=utf-8",
+      "Content-Transfer-Encoding: 7bit",
+      "",
+      html,
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+    return {
+      contentType: `multipart/alternative; boundary="${boundary}"`,
+      body,
+    };
+  }
+  return {
+    contentType: "text/plain; charset=utf-8",
+    body: params.text,
+  };
+}
+
+export type MimeAttachmentPart = {
+  filename: string;
+  contentType: string;
+  content: ArrayBuffer;
+};
+
 export function buildMimeMessage(params: {
   from: string;
   fromName?: string;
@@ -63,6 +112,7 @@ export function buildMimeMessage(params: {
   messageId?: string;
   inReplyTo?: string;
   references?: string;
+  attachments?: MimeAttachmentPart[];
 }): string {
   const messageId =
     params.messageId?.trim()
@@ -92,35 +142,58 @@ export function buildMimeMessage(params: {
     "MIME-Version: 1.0",
   ];
 
-  const html = params.html?.trim();
-  if (html) {
-    const boundary = `relaybase-${Date.now().toString(36)}`;
+  const attachments = params.attachments ?? [];
+  const bodyPart = buildBodyPart({ text: params.text, html: params.html });
+
+  if (attachments.length === 0) {
+    if (params.html?.trim()) {
+      return [
+        ...headers,
+        `Content-Type: ${bodyPart.contentType}`,
+        "",
+        bodyPart.body,
+        "",
+      ].join("\r\n");
+    }
     return [
       ...headers,
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      "",
-      `--${boundary}`,
-      "Content-Type: text/plain; charset=utf-8",
+      `Content-Type: ${bodyPart.contentType}`,
       "Content-Transfer-Encoding: 7bit",
       "",
-      params.text,
-      `--${boundary}`,
-      "Content-Type: text/html; charset=utf-8",
-      "Content-Transfer-Encoding: 7bit",
-      "",
-      html,
-      `--${boundary}--`,
+      bodyPart.body,
       "",
     ].join("\r\n");
   }
 
+  const mixedBoundary = `relaybase-mixed-${Date.now().toString(36)}`;
+  const parts: string[] = [
+    `--${mixedBoundary}`,
+    `Content-Type: ${bodyPart.contentType}`,
+    ...(params.html?.trim()
+      ? [""]
+      : ["Content-Transfer-Encoding: 7bit", ""]),
+    bodyPart.body,
+  ];
+
+  for (const attachment of attachments) {
+    const encoded = encodeBase64Chunked(attachment.content);
+    const wrapped = encoded.replace(/.{1,76}/g, (line) => `${line}\r\n`).trim();
+    parts.push(
+      `--${mixedBoundary}`,
+      `Content-Type: ${attachment.contentType}; name="${attachment.filename.replace(/"/g, '\\"')}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${attachment.filename.replace(/"/g, '\\"')}"`,
+      "",
+      wrapped,
+    );
+  }
+  parts.push(`--${mixedBoundary}--`, "");
+
   return [
     ...headers,
-    "Content-Type: text/plain; charset=utf-8",
-    "Content-Transfer-Encoding: 7bit",
+    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
     "",
-    params.text,
-    "",
+    ...parts,
   ].join("\r\n");
 }
 

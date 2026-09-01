@@ -118,6 +118,13 @@ export function ComposeDraftEditor({
       setSendSubject={controller.setSendSubject}
       sendText={controller.sendText}
       setSendText={controller.setSendText}
+      attachments={controller.attachments}
+      previewUrls={controller.previewUrls}
+      attachmentError={controller.attachmentError}
+      onAddFiles={controller.addFiles}
+      onAddFromTransfer={controller.addFromTransfer}
+      onRemoveAttachment={controller.removeAttachment}
+      onRenameAttachment={controller.renameAttachment}
       sending={controller.sending}
       onSend={controller.send}
       draftStatus={controller.draftStatus}

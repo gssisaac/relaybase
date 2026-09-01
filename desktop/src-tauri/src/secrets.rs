@@ -712,6 +712,73 @@ pub fn load_mail_json(relative_path: &str) -> Result<Option<serde_json::Value>, 
     Ok(parse_rebuildable_json(&json))
 }
 
+/// Persist binary mail data under `~/.relaybase/{scopeId}/mail/{relative_path}`.
+/// `base64_data` is standard base64 (no data-URL prefix).
+pub fn save_mail_binary(relative_path: &str, base64_data: &str) -> Result<(), String> {
+    use base64::Engine as _;
+    let bytes = base64::prelude::BASE64_STANDARD
+        .decode(base64_data.as_bytes())
+        .map_err(|e| format!("Invalid base64: {e}"))?;
+    let path = mail_file_path(relative_path)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "Failed to create mail directory {}: {e}",
+                parent.display()
+            )
+        })?;
+        #[cfg(unix)]
+        {
+            let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+        }
+    }
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, &bytes).map_err(|e| {
+        format!("Failed to write mail binary {}: {e}", path.display())
+    })?;
+    restrict_file_permissions(&tmp);
+    fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    restrict_file_permissions(&path);
+    Ok(())
+}
+
+/// Read binary mail data as standard base64. Returns `None` when missing.
+pub fn load_mail_binary(relative_path: &str) -> Result<Option<String>, String> {
+    use base64::Engine as _;
+    let path = mail_file_path(relative_path)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let bytes = fs::read(&path).map_err(|e| {
+        format!("Failed to read mail binary {}: {e}", path.display())
+    })?;
+    Ok(Some(
+        base64::prelude::BASE64_STANDARD.encode(bytes),
+    ))
+}
+
+/// Delete one binary mail file. Missing files are OK.
+pub fn delete_mail_binary(relative_path: &str) -> Result<(), String> {
+    let path = mail_file_path(relative_path)?;
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_file(&path).map_err(|e| {
+        format!("Failed to delete mail binary {}: {e}", path.display())
+    })
+}
+
+/// Delete a mail subdirectory and all files under it (e.g. draft attachments).
+pub fn delete_mail_binary_dir(relative_path: &str) -> Result<(), String> {
+    let path = mail_file_path(relative_path)?;
+    if !path.exists() {
+        return Ok(());
+    }
+    fs::remove_dir_all(&path).map_err(|e| {
+        format!("Failed to delete mail directory {}: {e}", path.display())
+    })
+}
+
 /// Persist opaque JSON under `~/.relaybase/{scopeId}/cache/{relative_path}`.
 /// Same path rules as mail JSON.
 fn cache_file_path(relative_path: &str) -> Result<PathBuf, String> {

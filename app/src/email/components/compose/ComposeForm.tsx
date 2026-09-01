@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Paperclip } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/select";
 import { joinQuotedBody, splitQuotedBody } from "@/email/lib/reply/reply-quote-body";
 import { QuotedReplyBlock } from "@/email/components/reply/QuotedReplyBlock";
-import type { Address } from "@/email/components/mailbox/types";
+import { ComposeAttachmentChips } from "@/email/components/compose/ComposeAttachmentChips";
+import type { Address, DraftAttachment } from "@/email/components/mailbox/types";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 
@@ -40,6 +41,13 @@ export function ComposeForm({
   compact,
   allowFromSelect = false,
   autoFocusBody = false,
+  attachments = [],
+  previewUrls = {},
+  attachmentError,
+  onAddFiles,
+  onAddFromTransfer,
+  onRemoveAttachment,
+  onRenameAttachment,
 }: {
   sendFrom: string;
   setSendFrom: (v: string) => void;
@@ -63,6 +71,13 @@ export function ComposeForm({
   allowFromSelect?: boolean;
   /** Focus the body textarea on mount (reply composer). */
   autoFocusBody?: boolean;
+  attachments?: DraftAttachment[];
+  previewUrls?: Record<string, string | null>;
+  attachmentError?: string | null;
+  onAddFiles?: (files: File[]) => void | Promise<void>;
+  onAddFromTransfer?: (data: DataTransfer | null) => void | Promise<void>;
+  onRemoveAttachment?: (id: string) => void;
+  onRenameAttachment?: (id: string, filename: string) => void;
 }) {
   const sendingHealth = useSendingHealth();
   const selected = addresses.find((a) => a.email === sendFrom);
@@ -77,6 +92,35 @@ export function ComposeForm({
   );
 
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (!onAddFromTransfer) return;
+    const files = e.clipboardData?.files;
+    const hasFiles =
+      (files?.length ?? 0) > 0 ||
+      Array.from(e.clipboardData?.items ?? []).some((i) => i.kind === "file");
+    if (!hasFiles) return;
+    const text = e.clipboardData.getData("text/plain");
+    if (!text) e.preventDefault();
+    void onAddFromTransfer(e.clipboardData);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (!onAddFromTransfer) return;
+    const files = e.dataTransfer?.files;
+    if (!files?.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void onAddFromTransfer(e.dataTransfer);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!onAddFromTransfer) return;
+    if (e.dataTransfer?.types.includes("Files")) {
+      e.preventDefault();
+    }
+  };
 
   // Grow textarea with content; no internal max-height / scrollbar (parent scrolls).
   const syncCompactBodyHeight = React.useCallback(() => {
@@ -98,7 +142,9 @@ export function ComposeForm({
   }, [autoFocusBody]);
 
   const canSend =
-    !sending && Boolean(sendFrom && sendTo.trim() && sendSubject);
+    !sending &&
+    Boolean(sendFrom && sendTo.trim() && sendSubject) &&
+    !attachmentError;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -118,6 +164,9 @@ export function ComposeForm({
     <div
       data-allow-tab-focus
       onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
       className={
         compact
           ? "flex shrink-0 flex-col rounded-xl border border-border/40 bg-card shadow-sm"
@@ -272,12 +321,51 @@ export function ComposeForm({
             <QuotedReplyBlock quote={quote} />
           </div>
         ) : null}
+        {onRemoveAttachment && onRenameAttachment ? (
+          <ComposeAttachmentChips
+            attachments={attachments}
+            previewUrls={previewUrls}
+            onRemove={onRemoveAttachment}
+            onRename={onRenameAttachment}
+          />
+        ) : null}
+        {attachmentError ? (
+          <p className="mt-2 text-xs text-destructive">{attachmentError}</p>
+        ) : null}
       </div>
 
       <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/20 bg-muted/10 px-4 py-3">
-        <span className="select-none text-xs text-muted-foreground/60">
-          {draftStatus ? draftStatus : "⌘Enter to send"}
-        </span>
+        <div className="flex min-w-0 items-center gap-2">
+          {onAddFiles ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  e.target.value = "";
+                  if (files.length) void onAddFiles(files);
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="shrink-0 px-2"
+                disabled={sending}
+                aria-label="Attach files"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="size-4" aria-hidden />
+              </Button>
+            </>
+          ) : null}
+          <span className="select-none truncate text-xs text-muted-foreground/60">
+            {draftStatus ? draftStatus : "⌘Enter to send"}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           {onDiscard ? (
             <Button

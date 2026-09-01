@@ -4,6 +4,7 @@ import { requireMailSession } from "../../lib/auth";
 import { createMailDb } from "../../../db/mail";
 import {
   getMailMessage,
+  getMailAttachment,
 } from "../../lib/mailbox-store";
 import {
   listMailboxPage,
@@ -136,6 +137,34 @@ mailSent.get("/:id", async (c) => {
       references: message.references ?? null,
       size: message.size,
       attachments: message.attachments,
+    },
+  });
+});
+
+mailSent.get("/:id/attachments/:attachmentId", async (c) => {
+  const denied = await requireMailSession(c);
+  if (denied) return denied;
+
+  const domain = c.req.query("domain")?.trim().toLowerCase();
+  if (!domain) {
+    return c.json({ error: "domain query parameter is required" }, 400);
+  }
+
+  const result = await getMailAttachment(c.env.INBOUND, "sent", {
+    domain,
+    messageId: c.req.param("id"),
+    attachmentId: c.req.param("attachmentId"),
+  });
+  if (!result) {
+    return c.json({ error: "Attachment not found" }, 404);
+  }
+
+  const encoded = encodeURIComponent(result.meta.filename);
+  return new Response(result.body, {
+    headers: {
+      "Content-Type": result.meta.contentType,
+      "Content-Disposition": `${result.meta.disposition === "inline" ? "inline" : "attachment"}; filename="${result.meta.filename}"; filename*=UTF-8''${encoded}`,
+      "Cache-Control": "private, max-age=3600",
     },
   });
 });

@@ -16,6 +16,17 @@ export type SendOutboundParams = {
   replyTo?: string;
   inReplyTo?: string;
   references?: string;
+  attachments?: Array<{
+    content: string;
+    filename: string;
+    type: string;
+    disposition: "attachment";
+  }>;
+  rawAttachments?: Array<{
+    filename: string;
+    contentType: string;
+    content: ArrayBuffer;
+  }>;
 };
 
 export function emailBindingConfigured(env: Env): boolean {
@@ -51,6 +62,7 @@ async function sendViaBinding(
   if (html) payload.html = html;
   const replyTo = params.replyTo?.trim();
   if (replyTo) payload.replyTo = replyTo;
+  if (params.attachments?.length) payload.attachments = params.attachments;
   if (Object.keys(headers).length) payload.headers = headers;
 
   const result = await email.send(payload);

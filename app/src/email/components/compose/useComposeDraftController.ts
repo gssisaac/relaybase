@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
 import { scheduleEmailSend } from "@/email/components/compose/email-pending-send";
@@ -9,7 +9,24 @@ import {
   dispatchEmailSendSucceeded,
   dispatchEmailSendUndone,
 } from "@/email/components/compose/email-send-events";
-import type { Address, SentEmail } from "@/email/components/mailbox/types";
+import type { Address, DraftAttachment, SentEmail } from "@/email/components/mailbox/types";
+import {
+  deleteDraftAttachmentBytes,
+  deleteDraftAttachmentsDir,
+  loadDraftAttachmentBytes,
+} from "@/email/lib/attachments/draft-attachment-store";
+import {
+  ingestFilesAsAttachments,
+  ingestTransferAsAttachments,
+  removeDraftAttachment,
+  renameDraftAttachment,
+} from "@/email/lib/attachments/ingest-attachment";
+import { isImageContentType } from "@/email/lib/attachments/image-optimize";
+import { stagedSizeError } from "@/email/lib/attachments/limits";
+import {
+  buildSendAttachmentPayloads,
+  cleanupLocalAttachmentBytes,
+} from "@/email/lib/attachments/send-attachments";
 import { domainOf } from "@/email/lib/reply/reply-helpers";
 import {
   desktopAwareFetch,
@@ -25,6 +42,7 @@ export type ComposeDraftFields = {
   cc: string;
   subject: string;
   body: string;
+  attachments?: DraftAttachment[];
 };
 
 export type ComposeDraftThreading = {
@@ -56,6 +74,7 @@ type DraftStore = {
     cc?: string;
     subject: string;
     body: string;
+    attachments?: DraftAttachment[];
     replyKey?: string;
     replyAll?: boolean;
     forwardKey?: string;
@@ -70,12 +89,14 @@ export function hasDraftContent(fields: {
   cc: string;
   subject: string;
   body: string;
+  attachments?: DraftAttachment[];
 }) {
   return Boolean(
     fields.to.trim() ||
       fields.cc.trim() ||
       fields.subject.trim() ||
-      fields.body.trim(),
+      fields.body.trim() ||
+      (fields.attachments?.length ?? 0) > 0,
   );
 }
 
@@ -123,6 +144,13 @@ export function useComposeDraftController({
   const [sendCc, setSendCc] = useState(initial.cc);
   const [sendSubject, setSendSubject] = useState(initial.subject);
   const [sendText, setSendText] = useState(initial.body);
+  const [attachments, setAttachments] = useState<DraftAttachment[]>(
+    initial.attachments ?? [],
+  );
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string | null>>(
+    {},
+  );
   const [sending, setSending] = useState(false);
   const [draftStatus, setDraftStatus] = useState<string | null>(
     initialDraftId ? "Draft saved" : null,
@@ -131,6 +159,7 @@ export function useComposeDraftController({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedRef = useRef(false);
   const modeRef = useRef(mode);
+  const previewUrlsRef = useRef<Record<string, string>>({});
   const latestRef = useRef({
     draftId,
     sendFrom,
@@ -138,12 +167,12 @@ export function useComposeDraftController({
     sendCc,
     sendSubject,
     sendText,
+    attachments,
   });
   const onAfterDiscardRef = useRef(onAfterDiscard);
   const onAfterSendRef = useRef(onAfterSend);
   const prevPreferredFromRef = useRef<string | null | undefined>(undefined);
 
-  // Keep refs in sync during render so Esc/unmount flush never sees a stale snapshot.
   modeRef.current = mode;
   onAfterDiscardRef.current = onAfterDiscard;
   onAfterSendRef.current = onAfterSend;
@@ -154,13 +183,22 @@ export function useComposeDraftController({
     sendCc,
     sendSubject,
     sendText,
+    attachments,
   };
 
-  // Resolve From from draft / fallbacks only — never invent a From from
-  // addresses[0]. When no account is selected (All inboxes), leave From
-  // empty so the user must pick one (mistake prevention).
-  // When the preferred account changes (e.g. sidebar Compose account),
-  // apply it even if the current From is still a valid address.
+  const ensureDraftId = useCallback((): string => {
+    const snap = latestRef.current;
+    const currentMode = modeRef.current;
+    if (snap.draftId) return snap.draftId;
+    const id =
+      currentMode.kind === "reply"
+        ? currentMode.draftId
+        : crypto.randomUUID();
+    latestRef.current.draftId = id;
+    setDraftId(id);
+    return id;
+  }, []);
+
   const preferredFrom =
     fromFallbacks.find(
       (email) =>
@@ -191,6 +229,53 @@ export function useComposeDraftController({
     if (sendFrom) setSendFrom("");
   }, [addresses, preferredFrom, sendFrom]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const revoke = { ...previewUrlsRef.current };
+    previewUrlsRef.current = {};
+
+    void (async () => {
+      const next: Record<string, string | null> = {};
+      const id = draftId ?? ensureDraftId();
+      for (const item of attachments) {
+        if (!isImageContentType(item.contentType)) {
+          next[item.id] = null;
+          continue;
+        }
+        if (item.origin === "local") {
+          const bytes = await loadDraftAttachmentBytes(productId, id, item.id);
+          if (cancelled) return;
+          if (bytes) {
+            const url = URL.createObjectURL(
+              new Blob([bytes], { type: item.contentType }),
+            );
+            previewUrlsRef.current[item.id] = url;
+            next[item.id] = url;
+          } else {
+            next[item.id] = null;
+          }
+          continue;
+        }
+        if (item.source) {
+          const params = new URLSearchParams({ domain: item.source.domain });
+          const path =
+            item.source.kind === "inbound"
+              ? `${apiBase}/inbox/${encodeURIComponent(item.source.messageId)}/attachments/${encodeURIComponent(item.source.attachmentId)}?${params}`
+              : `${apiBase}/sent/${encodeURIComponent(item.source.messageId)}/attachments/${encodeURIComponent(item.source.attachmentId)}?${params}`;
+          next[item.id] = path;
+        }
+      }
+      if (!cancelled) setPreviewUrls(next);
+    })();
+
+    return () => {
+      cancelled = true;
+      for (const url of Object.values(revoke)) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [apiBase, attachments, draftId, ensureDraftId, productId]);
+
   function flushDraft() {
     if (closedRef.current) return;
     const snap = latestRef.current;
@@ -203,20 +288,13 @@ export function useComposeDraftController({
         cc: snap.sendCc,
         subject: snap.sendSubject,
         body: snap.sendText,
+        attachments: snap.attachments,
       })
     ) {
       return;
     }
 
-    const id =
-      snap.draftId ??
-      (currentMode.kind === "reply"
-        ? currentMode.draftId
-        : crypto.randomUUID());
-    if (!snap.draftId) {
-      latestRef.current.draftId = id;
-      setDraftId(id);
-    }
+    const id = ensureDraftId();
 
     store.upsertDraft({
       id,
@@ -225,6 +303,7 @@ export function useComposeDraftController({
       cc: snap.sendCc || undefined,
       subject: snap.sendSubject,
       body: snap.sendText,
+      attachments: snap.attachments.length ? snap.attachments : undefined,
       ...(currentMode.kind === "reply"
         ? {
             replyKey: currentMode.replyKey,
@@ -237,7 +316,6 @@ export function useComposeDraftController({
     setDraftStatus("Draft saved");
   }
 
-  /** Sync save before Esc/back so resume (`c`) sees this draft as latest. */
   function flushNow() {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
@@ -254,6 +332,7 @@ export function useComposeDraftController({
         cc: sendCc,
         subject: sendSubject,
         body: sendText,
+        attachments,
       })
     ) {
       return;
@@ -269,7 +348,15 @@ export function useComposeDraftController({
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- field-driven autosave
-  }, [sendCc, sendFrom, sendSubject, sendText, sendTo, skipAutosaveWhenEmpty]);
+  }, [attachments, sendCc, sendFrom, sendSubject, sendText, sendTo, skipAutosaveWhenEmpty]);
+
+  useEffect(() => {
+    const sizeErr = stagedSizeError(
+      attachments,
+      new TextEncoder().encode(sendText).byteLength,
+    );
+    setAttachmentError(sizeErr);
+  }, [attachments, sendText]);
 
   useEffect(() => {
     const flush = () => {
@@ -292,19 +379,91 @@ export function useComposeDraftController({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const addFiles = useCallback(
+    async (files: File[]) => {
+      const id = ensureDraftId();
+      const bodyBytes = new TextEncoder().encode(latestRef.current.sendText)
+        .byteLength;
+      const result = await ingestFilesAsAttachments(
+        files,
+        latestRef.current.attachments,
+        productId,
+        id,
+        bodyBytes,
+      );
+      if (!result.ok) {
+        setAttachmentError(result.error);
+        return;
+      }
+      setAttachmentError(null);
+      setAttachments(result.attachments);
+      latestRef.current.attachments = result.attachments;
+    },
+    [ensureDraftId, productId],
+  );
+
+  const addFromTransfer = useCallback(
+    async (data: DataTransfer | null) => {
+      const id = ensureDraftId();
+      const bodyBytes = new TextEncoder().encode(latestRef.current.sendText)
+        .byteLength;
+      const result = await ingestTransferAsAttachments(
+        data,
+        latestRef.current.attachments,
+        productId,
+        id,
+        bodyBytes,
+      );
+      if (!result.ok) {
+        setAttachmentError(result.error);
+        return;
+      }
+      setAttachmentError(null);
+      setAttachments(result.attachments);
+      latestRef.current.attachments = result.attachments;
+    },
+    [ensureDraftId, productId],
+  );
+
+  const removeAttachment = useCallback(
+    (attachmentId: string) => {
+      const id = latestRef.current.draftId ?? draftId;
+      const item = latestRef.current.attachments.find(
+        (a) => a.id === attachmentId,
+      );
+      const next = removeDraftAttachment(
+        latestRef.current.attachments,
+        attachmentId,
+      );
+      setAttachments(next);
+      latestRef.current.attachments = next;
+      if (item?.origin === "local" && id) {
+        void deleteDraftAttachmentBytes(productId, id, attachmentId);
+      }
+    },
+    [draftId, productId],
+  );
+
+  const renameAttachment = useCallback((attachmentId: string, filename: string) => {
+    const next = renameDraftAttachment(
+      latestRef.current.attachments,
+      attachmentId,
+      filename,
+    );
+    setAttachments(next);
+    latestRef.current.attachments = next;
+  }, []);
+
   function discard() {
     closedRef.current = true;
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    // Prefer latestRef — autosave may have assigned an id before React re-rendered.
     const id =
       latestRef.current.draftId ??
       draftId ??
       (modeRef.current.kind === "reply" ? modeRef.current.draftId : null);
-    // Only remove this draft — sibling reply/forward drafts for the same
-    // thread key must remain (Gmail-style multiple drafts).
     if (id) store.removeDraft(id);
     latestRef.current.draftId = null;
     setDraftId(null);
@@ -312,6 +471,9 @@ export function useComposeDraftController({
     setSendCc("");
     setSendSubject("");
     setSendText("");
+    setAttachments([]);
+    latestRef.current.attachments = [];
+    setAttachmentError(null);
     setDraftStatus(null);
     onAfterDiscardRef.current();
   }
@@ -333,31 +495,21 @@ export function useComposeDraftController({
       store.setError(`Invalid email address: ${invalid.join(", ")}`);
       return;
     }
+    const sizeErr = stagedSizeError(
+      attachments,
+      new TextEncoder().encode(sendText).byteLength,
+    );
+    if (sizeErr) {
+      setAttachmentError(sizeErr);
+      store.setError(sizeErr);
+      return;
+    }
 
     setSending(true);
     store.setError(null);
 
     const currentMode = modeRef.current;
     const threading = currentMode.threading;
-    const payload = {
-      from: sendFrom,
-      to:
-        toParsed.emails.length === 1
-          ? toParsed.emails[0]
-          : toParsed.emails,
-      cc: ccParsed.emails.length
-        ? ccParsed.emails.length === 1
-          ? ccParsed.emails[0]
-          : ccParsed.emails
-        : undefined,
-      subject: sendSubject,
-      text: sendText,
-      inReplyTo: threading?.inReplyTo,
-      references: threading?.references,
-      ...(currentMode.kind === "reply" && currentMode.replyKey
-        ? { replyKey: currentMode.replyKey }
-        : {}),
-    };
     const domainKey = domainOf(sendFrom) || "none";
     const from = sendFrom;
 
@@ -371,6 +523,7 @@ export function useComposeDraftController({
       cc: sendCc || undefined,
       subject: sendSubject,
       body: sendText,
+      attachments: attachments.length ? attachments : undefined,
       ...(currentMode.kind === "reply"
         ? {
             replyKey: currentMode.replyKey,
@@ -386,8 +539,7 @@ export function useComposeDraftController({
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    if (draftId) store.removeDraft(draftId);
-    // Close composer immediately; actual network send waits for Unsend window.
+    if (draftId) store.removeDraft(draftId, { keepAttachmentBytes: true });
     onAfterSendRef.current({ from });
 
     scheduleEmailSend({
@@ -403,9 +555,36 @@ export function useComposeDraftController({
         });
       },
       execute: async () => {
-        // Unsend toast already covered the waiting UI — skip "Sending…" loading.
         let sendFailedDispatched = false;
         try {
+          const sendAttachments = await buildSendAttachmentPayloads(
+            attachments,
+            productId,
+            restoreDraftId,
+          );
+          const payload = {
+            from: sendFrom,
+            to:
+              toParsed.emails.length === 1
+                ? toParsed.emails[0]
+                : toParsed.emails,
+            cc: ccParsed.emails.length
+              ? ccParsed.emails.length === 1
+                ? ccParsed.emails[0]
+                : ccParsed.emails
+              : undefined,
+            subject: sendSubject,
+            text: sendText,
+            inReplyTo: threading?.inReplyTo,
+            references: threading?.references,
+            ...(sendAttachments.length
+              ? { attachments: sendAttachments }
+              : {}),
+            ...(currentMode.kind === "reply" && currentMode.replyKey
+              ? { replyKey: currentMode.replyKey }
+              : {}),
+          };
+
           const res = await desktopAwareFetch(`${apiBase}/send`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -425,6 +604,12 @@ export function useComposeDraftController({
             sendFailedDispatched = true;
             throw new Error(data.error ?? "Send failed");
           }
+          await cleanupLocalAttachmentBytes(
+            attachments,
+            productId,
+            restoreDraftId,
+          );
+          void deleteDraftAttachmentsDir(productId, restoreDraftId);
           clearEmailCache(productId, `sent:${domainKey}`);
           const sent = data.sent;
           dispatchEmailSendSucceeded(
@@ -438,7 +623,6 @@ export function useComposeDraftController({
               : undefined,
           );
         } catch (e) {
-          // Keep the message — restore draft so the user can retry.
           store.upsertDraft(restoreDraft);
           if (!sendFailedDispatched) {
             dispatchEmailSendFailed({
@@ -470,6 +654,13 @@ export function useComposeDraftController({
     setSendSubject,
     sendText,
     setSendText,
+    attachments,
+    previewUrls,
+    attachmentError,
+    addFiles,
+    addFromTransfer,
+    removeAttachment,
+    renameAttachment,
     sending,
     draftStatus,
     discard,
@@ -480,6 +671,7 @@ export function useComposeDraftController({
       cc: sendCc,
       subject: sendSubject,
       body: sendText,
+      attachments,
     }),
   };
 }

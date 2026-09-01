@@ -52,6 +52,7 @@ import {
   type TrashEntry,
   type TrashKind,
 } from "@/email/lib/trash/trash-store";
+import { deleteDraftAttachmentsDir } from "@/email/lib/attachments/draft-attachment-store";
 import { inboundMatchesAccount } from "@/email/lib/threading/conversation-threading";
 import type { LoadPhase } from "@/email/stores/mail-accounts-store";
 import { notifyNewMail } from "@/lib/desktop/notify";
@@ -114,6 +115,8 @@ export class EmailMailboxStore {
 
   /** Cached inbox message details by key. */
   activityDetailByKey: Record<string, RoutingActivityEvent> = {};
+  /** Cached sent message details by id (includes attachments when loaded). */
+  sentDetailById: Record<string, SentEmail> = {};
   /** Last requested detail key (compat); prefer `isDetailLoading`. */
   detailLoadingKey: string | null = null;
   /** Keys currently loading detail. */
@@ -842,6 +845,7 @@ export class EmailMailboxStore {
       cc: input.cc,
       subject: input.subject,
       body: input.body,
+      attachments: input.attachments?.length ? input.attachments : undefined,
       createdAt: existing?.createdAt ?? input.createdAt ?? now,
       updatedAt: input.updatedAt ?? now,
       replyKey: input.replyKey,
@@ -857,15 +861,88 @@ export class EmailMailboxStore {
     return draft;
   }
 
-  removeDraft(id: string) {
+  removeDraft(id: string, opts?: { keepAttachmentBytes?: boolean }) {
     const next = this.drafts.filter((d) => d.id !== id);
     if (next.length === this.drafts.length) return;
     this.drafts = next;
     this.persistDrafts();
+    if (this.productId && !opts?.keepAttachmentBytes) {
+      void deleteDraftAttachmentsDir(this.productId, id);
+    }
   }
 
   getCachedDetail(messageId: string): RoutingActivityEvent | null {
     return this.activityDetailByKey[messageId] ?? null;
+  }
+
+  getCachedSentDetail(sentId: string): SentEmail | null {
+    return this.sentDetailById[sentId] ?? null;
+  }
+
+  async loadSentDetail(sentId: string, domain: string): Promise<SentEmail | null> {
+    const cached = this.sentDetailById[sentId];
+    if (cached?.attachments?.length) return cached;
+
+    const listHit =
+      this.sent.find((m) => m.id === sentId) ??
+      this.visibleSent.find((m) => m.id === sentId);
+    if (listHit?.attachments?.length) {
+      runInAction(() => {
+        this.sentDetailById[sentId] = listHit;
+      });
+      return listHit;
+    }
+
+    try {
+      const res = await desktopAwareFetch(
+        `${this.apiBase}/sent/${encodeURIComponent(sentId)}?domain=${encodeURIComponent(domain)}`,
+      );
+      const data = await readResponseJson<{
+        message?: {
+          key: string;
+          fromEmail: string;
+          toEmail: string;
+          ccEmails?: string[];
+          subject: string;
+          bodyPreview: string;
+          bodyText?: string;
+          sentAt: string;
+          messageId?: string | null;
+          inReplyTo?: string | null;
+          references?: string | null;
+          attachments?: SentEmail["attachments"];
+        };
+        error?: string;
+      }>(res);
+      if (!res.ok || !data.message) {
+        throw new Error(data.error ?? "Failed to load sent message");
+      }
+      const row = data.message;
+      const message: SentEmail = {
+        id: row.key,
+        from: row.fromEmail,
+        to: row.toEmail,
+        cc: row.ccEmails?.length ? row.ccEmails.join(", ") : listHit?.cc,
+        subject: row.subject,
+        bodyPreview: row.bodyPreview || row.bodyText || listHit?.bodyPreview || "",
+        sentAt: row.sentAt,
+        messageId: row.messageId ?? undefined,
+        inReplyTo: row.inReplyTo ?? undefined,
+        references: row.references ?? undefined,
+        attachments: row.attachments,
+        attachmentCount: row.attachments?.length,
+      };
+      runInAction(() => {
+        this.sentDetailById[sentId] = message;
+      });
+      return message;
+    } catch (e) {
+      runInAction(() => {
+        this.error =
+          e instanceof Error ? e.message : "Failed to load sent message";
+      });
+      return listHit ?? null;
+    }
   }
 
   async loadMessageDetail(messageId: string, domain: string) {

@@ -7,6 +7,12 @@ import { createMailDb } from "../../../db/mail";
 import { storeSentMail } from "../mailbox-store";
 import { buildMimeMessage } from "../mime";
 import {
+  assertSendMessageSize,
+  attachmentsForEmailBinding,
+  resolveSendAttachments,
+  type SendAttachmentInput,
+} from "./send-attachments";
+import {
   deliverToLocalInboxes,
   type LocalDeliverWaitUntil,
 } from "./local-deliver";
@@ -26,6 +32,7 @@ export type SendMailBody = {
   replyTo?: string;
   inReplyTo?: string;
   references?: string;
+  attachments?: SendAttachmentInput[];
 };
 
 export type SendMailResult = {
@@ -140,6 +147,48 @@ export async function sendMailMessage(
   }
 
   try {
+    let resolvedAttachments;
+    try {
+      resolvedAttachments = await resolveSendAttachments(
+        env.INBOUND,
+        body.attachments,
+      );
+      assertSendMessageSize(text, body.html, resolvedAttachments);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Invalid attachments";
+      await persistSendLog(env, {
+        ok: false,
+        status: 400,
+        domain,
+        keyId: null,
+        keyPrefix: null,
+        keyLabel: source,
+        from,
+        to: toJoined,
+        subject,
+        error: message,
+      });
+      await recordOpsLog(env.RELAYBASE_LOGS, {
+        kind: "api_error",
+        ok: false,
+        status: 400,
+        source,
+        domain,
+        fromAddr: from,
+        toAddr: toJoined,
+        subject,
+        error: message,
+      });
+      return {
+        response: new Response(JSON.stringify({ error: message }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
+      };
+    }
+
+    const bindingAttachments = attachmentsForEmailBinding(resolvedAttachments);
     const result = await sendOutboundEmail(env, {
       from,
       fromName: body.fromName?.trim() || undefined,
@@ -151,6 +200,12 @@ export async function sendMailMessage(
       replyTo: body.replyTo,
       inReplyTo: body.inReplyTo?.trim() || undefined,
       references: body.references?.trim() || undefined,
+      attachments: bindingAttachments.length ? bindingAttachments : undefined,
+      rawAttachments: resolvedAttachments.map((item) => ({
+        filename: item.filename,
+        contentType: item.contentType,
+        content: item.content,
+      })),
     });
 
     const hadBounces = result.permanentBounces.length > 0;
@@ -247,6 +302,11 @@ export async function sendMailMessage(
       messageId: result.messageId,
       inReplyTo: body.inReplyTo?.trim() || undefined,
       references: body.references?.trim() || undefined,
+      attachments: resolvedAttachments.map((item) => ({
+        filename: item.filename,
+        contentType: item.contentType,
+        content: item.content,
+      })),
     });
 
     if (domain) {
@@ -265,6 +325,7 @@ export async function sendMailMessage(
             inReplyTo: body.inReplyTo?.trim() || null,
             references: body.references?.trim() || null,
             rawMime,
+            attachments: resolvedAttachments,
           },
           createMailDb(env.RELAYBASE_MAIL),
         );

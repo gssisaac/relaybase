@@ -64,6 +64,7 @@ export const InlineReplyComposer = observer(function InlineReplyComposer({
         : prefill.cc,
       subject: existing?.subject || prefill.subject,
       body: joinQuotedBody(typed, quote),
+      attachments: existing?.attachments ?? prefill.attachments ?? [],
     };
   }, [existing, prefill, replyAll]);
 

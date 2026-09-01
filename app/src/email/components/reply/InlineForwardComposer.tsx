@@ -50,6 +50,7 @@ export const InlineForwardComposer = observer(function InlineForwardComposer({
         cc: prefill.cc,
         subject: prefill.subject,
         body: prefill.body,
+        attachments: prefill.attachments ?? [],
       };
     }
     // Keep typed forward text from a draft, but refresh nested quote history.
@@ -61,6 +62,7 @@ export const InlineForwardComposer = observer(function InlineForwardComposer({
       cc: existing.cc ?? prefill.cc,
       subject: existing.subject || prefill.subject,
       body: joinQuotedBody(typed, quote),
+      attachments: existing.attachments ?? prefill.attachments ?? [],
     };
   }, [existing, prefill]);
 

@@ -555,6 +555,12 @@ export type StoreSentMailParams = {
    * built from the params via `buildMimeMessage`. */
   rawMime?: string;
   sentAt?: string;
+  attachments?: Array<{
+    filename: string;
+    contentType: string;
+    content: ArrayBuffer;
+    size: number;
+  }>;
 };
 
 export type StoreSentMailResult = {
@@ -610,8 +616,52 @@ export async function storeSentMail(
       messageId: params.messageId,
       inReplyTo: params.inReplyTo,
       references: params.references,
+      attachments: params.attachments?.map((item) => ({
+        filename: item.filename,
+        contentType: item.contentType,
+        content: item.content,
+      })),
     });
-  const rawBytes = new TextEncoder().encode(rawMime);
+
+  const attachmentMeta: InboundAttachmentMeta[] = [];
+  for (let index = 0; index < (params.attachments?.length ?? 0); index++) {
+    const attachment = params.attachments![index]!;
+    const attachmentId = String(index);
+    await bucket.put(
+      attachmentObjectKey("sent", domain, id, attachmentId, attachment.filename),
+      attachment.content,
+      {
+        httpMetadata: { contentType: attachment.contentType },
+        customMetadata: {
+          filename: attachment.filename,
+          disposition: "attachment",
+        },
+      },
+    );
+    attachmentMeta.push({
+      id: attachmentId,
+      filename: attachment.filename,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      disposition: "attachment",
+      contentId: null,
+    });
+  }
+
+  const rawBody =
+    attachmentMeta.length > 0
+      ? buildStrippedInboundMime({
+          fromEmail: params.from,
+          fromName: params.fromName,
+          toEmail: params.to[0] ?? params.from,
+          ccEmails: params.cc ?? [],
+          subject: params.subject,
+          messageId: params.messageId,
+          bodyText: params.text,
+          bodyHtml: params.html ?? null,
+          attachments: attachmentMeta,
+        })
+      : new TextEncoder().encode(rawMime).buffer;
 
   const thin: ThinMailMeta = {
     id,
@@ -627,9 +677,9 @@ export async function storeSentMail(
     messageId: params.messageId,
     inReplyTo: params.inReplyTo ?? null,
     references: params.references ?? null,
-    size: rawBytes.byteLength,
+    size: rawBody.byteLength,
     bodyPreview: previewText(params.text),
-    attachments: [],
+    attachments: attachmentMeta,
     readAt: null,
     hasText: Boolean(params.text),
     hasHtml: Boolean(params.html?.trim()),
@@ -640,7 +690,7 @@ export async function storeSentMail(
     JSON.stringify(thin),
     JSON_META,
   );
-  await bucket.put(rawObjectKey("sent", domain, id), rawBytes, {
+  await bucket.put(rawObjectKey("sent", domain, id), rawBody, {
     ...EML_META,
     customMetadata: {
       from: params.from,
@@ -662,7 +712,15 @@ export async function storeSentMail(
   return { record: thin, created: true };
 }
 
-function buildSentMime(params: StoreSentMailParams): string {
+function buildSentMime(
+  params: StoreSentMailParams & {
+    attachments?: Array<{
+      filename: string;
+      contentType: string;
+      content: ArrayBuffer;
+    }>;
+  },
+): string {
   return buildMimeMessage({
     from: params.from,
     fromName: params.fromName,
@@ -674,6 +732,7 @@ function buildSentMime(params: StoreSentMailParams): string {
     messageId: params.messageId ?? undefined,
     inReplyTo: params.inReplyTo ?? undefined,
     references: params.references ?? undefined,
+    attachments: params.attachments,
   });
 }
 
@@ -717,24 +776,33 @@ export async function getMailMessage(
   return meta;
 }
 
-export async function getInboundAttachment(
+export async function getMailAttachment(
   bucket: R2Bucket,
+  kind: MailboxKind,
   params: { domain: string; messageId: string; attachmentId: string },
 ): Promise<{ meta: InboundAttachmentMeta; body: ArrayBuffer } | null> {
   const domain = params.domain.trim().toLowerCase();
-  const thin = await loadThinMeta(bucket, "inbound", domain, params.messageId);
+  const thin = await loadThinMeta(bucket, kind, domain, params.messageId);
   if (!thin) return null;
   const attachment = thin.attachments.find(
     (item) => item.id === params.attachmentId,
   );
   if (!attachment) return null;
-  const prefix = `${objectPrefix("inbound", domain, params.messageId)}/attachments/${attachment.id}-`;
+  const prefix = `${objectPrefix(kind, domain, params.messageId)}/attachments/${attachment.id}-`;
   const listed = await bucket.list({ prefix, limit: 20 });
   const objectKey = listed.objects[0]?.key;
   if (!objectKey) return null;
   const object = await bucket.get(objectKey);
   if (!object) return null;
   return { meta: attachment, body: await object.arrayBuffer() };
+}
+
+/** @deprecated Use getMailAttachment with kind `"inbound"`. */
+export async function getInboundAttachment(
+  bucket: R2Bucket,
+  params: { domain: string; messageId: string; attachmentId: string },
+): Promise<{ meta: InboundAttachmentMeta; body: ArrayBuffer } | null> {
+  return getMailAttachment(bucket, "inbound", params);
 }
 
 /**

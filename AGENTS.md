@@ -28,7 +28,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
 | Marketing site feature clips (`hq/website` homepage videos) | [hq/website/docs/feature-video-encode.md](hq/website/docs/feature-video-encode.md) — also [hq/website/AGENT.md](hq/website/AGENT.md) |
-| **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [desktop/docs/release.md](desktop/docs/release.md) and [server/customer-install/RELEASE.md](server/customer-install/RELEASE.md) |
+| **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [docs/version-sync.md](docs/version-sync.md) — **same semver for both** — then [desktop/docs/release.md](desktop/docs/release.md) and [server/customer-install/RELEASE.md](server/customer-install/RELEASE.md) |
 
 ## Storage (summary)
 

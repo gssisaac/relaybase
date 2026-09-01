@@ -1,36 +1,12 @@
 {
-  "Relaybase.0.1.0.dmg": {
-    "sizeBytes": 9871870,
-    "version": "0.1.0"
-  },
-  "Relaybase.0.1.0.app.tar.gz": {
-    "sizeBytes": 9194117,
-    "version": "0.1.0"
-  },
-  "Relaybase.0.1.1.dmg": {
-    "sizeBytes": 20519201,
-    "version": "0.1.1"
-  },
-  "Relaybase.0.1.1.app.tar.gz": {
-    "sizeBytes": 20034883,
-    "version": "0.1.1"
-  },
-  "Relaybase.0.1.2.dmg": {
-    "sizeBytes": 20512781,
-    "version": "0.1.2"
-  },
-  "Relaybase.0.1.2.app.tar.gz": {
-    "sizeBytes": 20006857,
-    "version": "0.1.2"
-  },
-  "Relaybase.0.1.2.aarch64.dmg": {
-    "sizeBytes": 10899855,
-    "version": "0.1.2",
+  "Relaybase.0.1.1.aarch64.dmg": {
+    "sizeBytes": 10906672,
+    "version": "0.1.1",
     "arch": "aarch64"
   },
-  "Relaybase.0.1.2.aarch64.app.tar.gz": {
-    "sizeBytes": 10268596,
-    "version": "0.1.2",
+  "Relaybase.0.1.1.aarch64.app.tar.gz": {
+    "sizeBytes": 10276103,
+    "version": "0.1.1",
     "arch": "aarch64"
   }
 }

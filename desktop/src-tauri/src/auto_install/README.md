@@ -25,7 +25,7 @@ If you lost the passtoken and need to sign in:
 2. **Setup → I forgot my passtoken** (`/setup/recover-admin`) — Cloudflare OAuth (Secrets Store Write client) re-issues a passtoken for the current Worker.
 3. Sign in via **Already installed** (`/setup/connect`).
 
-Rollback (`rollback_all_install`) deletes Worker, D1s, and R2 in reverse; occupied resources require wipe confirmation.
+Rollback (`rollback_all_install`) deletes Worker, D1s, and R2 by name; occupied resources require wipe confirmation. Returns an error if any resource is still present after delete attempts (the UI does not show “Rolled back” on failure).
 
 ## File map
 

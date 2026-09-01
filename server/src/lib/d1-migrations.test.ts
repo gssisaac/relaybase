@@ -9,8 +9,8 @@ import {
 
 describe("normalizeMigrationName", () => {
   it("strips wrangler .sql suffix", () => {
-    assert.equal(normalizeMigrationName("0000_old_pandemic.sql"), "0000_old_pandemic");
-    assert.equal(normalizeMigrationName("0000_old_pandemic"), "0000_old_pandemic");
+    assert.equal(normalizeMigrationName("0000_normal_terrax.sql"), "0000_normal_terrax");
+    assert.equal(normalizeMigrationName("0000_normal_terrax"), "0000_normal_terrax");
   });
 });
 

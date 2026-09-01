@@ -21,7 +21,7 @@ Auth (any one is enough):
 
 The Worker is the only process that applies product SQL. Desktop and Wrangler do not run migrations on customer D1s during install/update.
 
-**Ledger:** each D1 has `d1_migrations` (`name` unique). Names are compared **without** a `.sql` suffix so Wrangler’s `0000_old_pandemic.sql` matches the Worker’s `0000_old_pandemic`.
+**Ledger:** each D1 has `d1_migrations` (`name` unique). Names are compared **without** a `.sql` suffix so Wrangler’s `0000_normal_terrax.sql` matches the Worker’s `0000_normal_terrax`.
 
 **Probe tables** (exist ⇒ this D1 already has product schema):
 
@@ -165,7 +165,7 @@ See also: [cf-oauth-install-token.md](./cf-oauth-install-token.md), [storage-arc
 1. Change `server/db/app/schema.ts`.
 2. Run `pnpm exec drizzle-kit generate --config=drizzle.app.config.ts` → new file under `server/db/app/migrations/`.
 3. Copy the new SQL into `server/db/migrations.ts` (`MIGRATIONS` array, `target: "app"`).
-4. Deploy Worker; call **`POST /console/migrate-db`** on existing installs (or `init-db` only on empty D1). Do not rewrite `0000_old_pandemic` — existing D1s already have that schema.
+4. Deploy Worker; call **`POST /console/migrate-db`** on existing installs (or `init-db` only on empty D1). Do not rewrite a migration file that live D1s have already applied — add a new numbered file instead.
 
 ### Logs or mail index (hand-written SQL)
 

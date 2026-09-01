@@ -63,6 +63,12 @@ CREATE INDEX \`api_keys_domain_idx\` ON \`api_keys\` (\`domain\`);
 --> statement-breakpoint
 CREATE INDEX \`api_keys_active_idx\` ON \`api_keys\` (\`active\`);
 --> statement-breakpoint
+CREATE TABLE \`app_settings\` (
+	\`id\` integer PRIMARY KEY NOT NULL,
+	\`inbound_retain_per_domain\` integer,
+	\`updated_at\` text NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE \`audience_groups\` (
 	\`id\` text PRIMARY KEY NOT NULL,
 	\`name\` text NOT NULL,
@@ -98,17 +104,6 @@ CREATE UNIQUE INDEX \`audience_contacts_group_email_idx\` ON \`audience_contacts
 CREATE INDEX \`audience_contacts_group_idx\` ON \`audience_contacts\` (\`group_id\`);
 --> statement-breakpoint
 CREATE INDEX \`audience_contacts_domain_idx\` ON \`audience_contacts\` (\`domain\`);
---> statement-breakpoint
-CREATE TABLE \`auth_tokens\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`token_hash\` text NOT NULL,
-	\`label\` text,
-	\`product_id\` text,
-	\`token_prefix\` text NOT NULL,
-	\`created_at\` text NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX \`auth_tokens_token_hash_unique\` ON \`auth_tokens\` (\`token_hash\`);
 --> statement-breakpoint
 CREATE TABLE \`broadcasts\` (
 	\`id\` text PRIMARY KEY NOT NULL,
@@ -160,8 +155,26 @@ CREATE TABLE \`mobile_passwords\` (
 CREATE TABLE \`owner_config\` (
 	\`id\` integer PRIMARY KEY NOT NULL,
 	\`owner_email\` text,
-	\`worker_url\` text
+	\`worker_url\` text,
+	\`passtoken_salt\` text,
+	\`passtoken_hash\` text,
+	\`passtoken_prefix\` text,
+	\`passtoken_updated_at\` text,
+	\`cf_account_id\` text
 );
+--> statement-breakpoint
+CREATE TABLE \`owner_sessions\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`token_hash\` text NOT NULL,
+	\`family\` text NOT NULL,
+	\`label\` text,
+	\`created_at\` text NOT NULL,
+	\`expires_at\` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX \`owner_sessions_token_hash_unique\` ON \`owner_sessions\` (\`token_hash\`);
+--> statement-breakpoint
+CREATE INDEX \`owner_sessions_family_idx\` ON \`owner_sessions\` (\`family\`);
 --> statement-breakpoint
 CREATE TABLE \`webhooks\` (
 	\`id\` text PRIMARY KEY NOT NULL,
@@ -194,58 +207,16 @@ CREATE TABLE \`webhook_secrets\` (
 	\`webhook_id\` text PRIMARY KEY NOT NULL,
 	\`secret\` text NOT NULL,
 	FOREIGN KEY (\`webhook_id\`) REFERENCES \`webhooks\`(\`id\`) ON UPDATE no action ON DELETE cascade
-);`;
-
-const APP_0001 = `ALTER TABLE \`owner_config\` ADD \`admin_token\` text;`;
-
-const APP_0002 = `CREATE TABLE \`app_settings\` (
-	\`id\` integer PRIMARY KEY NOT NULL,
-	\`inbound_retain_per_domain\` integer,
-	\`updated_at\` text NOT NULL
-);`;
-
-const APP_0003 = `ALTER TABLE \`owner_config\` DROP COLUMN \`admin_token\`;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`admin_username\` text;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`passtoken_salt\` text;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`passtoken_hash\` text;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`passtoken_prefix\` text;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` ADD \`passtoken_updated_at\` text;
---> statement-breakpoint
-CREATE TABLE \`owner_sessions\` (
-	\`id\` text PRIMARY KEY NOT NULL,
-	\`token_hash\` text NOT NULL,
-	\`family\` text NOT NULL,
-	\`label\` text,
-	\`created_at\` text NOT NULL,
-	\`expires_at\` text NOT NULL
 );
---> statement-breakpoint
-CREATE UNIQUE INDEX \`owner_sessions_token_hash_unique\` ON \`owner_sessions\` (\`token_hash\`);
---> statement-breakpoint
-CREATE INDEX \`owner_sessions_family_idx\` ON \`owner_sessions\` (\`family\`);
---> statement-breakpoint
-DROP TABLE IF EXISTS \`auth_tokens\`;`;
-
-const APP_0004 = `ALTER TABLE \`owner_config\` DROP COLUMN \`admin_username\`;`;
-
-const APP_0005 = `ALTER TABLE \`owner_config\` DROP COLUMN \`failed_attempts\`;
---> statement-breakpoint
-ALTER TABLE \`owner_config\` DROP COLUMN \`locked_until\`;`;
-
-const APP_0006 = `ALTER TABLE \`owner_config\` ADD \`cf_account_id\` text;`;
+`;
 
 const LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
   id TEXT PRIMARY KEY,
   at TEXT NOT NULL,
-  kind TEXT NOT NULL,
+  kind TEXT NOT NULL,          -- send | bounce | api_error
   ok INTEGER NOT NULL,
   status INTEGER,
-  source TEXT,
+  source TEXT,                 -- compose | api | broadcast | inbound
   domain TEXT,
   from_addr TEXT,
   to_addr TEXT,
@@ -254,15 +225,31 @@ const LOGS_0001 = `CREATE TABLE IF NOT EXISTS ops_log (
   error TEXT,
   key_id TEXT,
   key_prefix TEXT,
-  meta_json TEXT
+  meta_json TEXT               -- CF permanent_bounces, DSN status, etc.
 );
 
 CREATE INDEX IF NOT EXISTS ops_log_at_idx ON ops_log (at DESC);
 CREATE INDEX IF NOT EXISTS ops_log_ok_idx ON ops_log (ok, at DESC);
 CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
-CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);`;
+CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);
+`;
 
-const MAIL_0001 = `CREATE TABLE IF NOT EXISTS mailbox_messages (
+const MAIL_0001 = `-- Unified mailbox D1: list/count/cursor table for inbound + sent, plus a
+-- full-text search side index. R2 stays the source of truth (per-message
+-- meta.json + raw.eml); this database is rebuildable from R2 via
+-- POST /console/rebuild-mail.
+--
+-- \`mailbox_messages\` is the hot path for list pages, counts, and account
+-- scoping. \`mailbox_fts\` is FTS5 over subject/from/to/cc/body_text (capped
+-- excerpt only — full bodies live in R2 raw.eml).
+--
+-- \`occurred_at\` is inbound \`receivedAt\` or sent \`sentAt\`. \`recipients\` is the
+-- lowercased To+Cc membership list (comma-joined) used for exact account
+-- scoping on /mobile/inbox/search. \`refs\` holds the RFC \`References\` header
+-- (\`references\` is a reserved word). \`r2_prefix\` is the R2 folder prefix
+-- (\`inbound|sent/{domain}/{id}\`) so a row can resolve to its R2 object
+-- without recomputing the key.
+CREATE TABLE IF NOT EXISTS mailbox_messages (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
   domain TEXT NOT NULL,
@@ -283,21 +270,21 @@ const MAIL_0001 = `CREATE TABLE IF NOT EXISTS mailbox_messages (
   read_at TEXT,
   r2_prefix TEXT NOT NULL
 );
---> statement-breakpoint
+
 CREATE UNIQUE INDEX IF NOT EXISTS mailbox_rfc_idx
   ON mailbox_messages (domain, kind, message_id)
   WHERE message_id IS NOT NULL;
---> statement-breakpoint
+
 CREATE INDEX IF NOT EXISTS mailbox_list_idx
   ON mailbox_messages (kind, domain, occurred_at DESC, id DESC);
---> statement-breakpoint
+
 CREATE INDEX IF NOT EXISTS mailbox_unread_idx
   ON mailbox_messages (kind, domain, read_at)
   WHERE kind = 'inbound' AND read_at IS NULL;
---> statement-breakpoint
+
 CREATE INDEX IF NOT EXISTS mailbox_domain_idx
   ON mailbox_messages (domain, kind);
---> statement-breakpoint
+
 CREATE VIRTUAL TABLE IF NOT EXISTS mailbox_fts USING fts5(
   id UNINDEXED,
   kind UNINDEXED,
@@ -308,16 +295,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS mailbox_fts USING fts5(
   to_emails,
   cc_emails,
   body_text
-);`;
+);
+`;
 
 export const MIGRATIONS: Migration[] = [
-  { target: "app", name: "0000_old_pandemic", sql: APP_0000 },
-  { target: "app", name: "0001_owner_admin_token", sql: APP_0001 },
-  { target: "app", name: "0002_app_settings", sql: APP_0002 },
-  { target: "app", name: "0003_owner_login", sql: APP_0003 },
-  { target: "app", name: "0004_drop_admin_username", sql: APP_0004 },
-  { target: "app", name: "0005_drop_login_lockout", sql: APP_0005 },
-  { target: "app", name: "0006_owner_cf_account_id", sql: APP_0006 },
+  { target: "app", name: "0000_normal_terrax", sql: APP_0000 },
   { target: "logs", name: "0001_ops_logs", sql: LOGS_0001 },
   { target: "mail", name: "0001_create_mailbox", sql: MAIL_0001 },
 ];

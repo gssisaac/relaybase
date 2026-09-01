@@ -1,6 +1,6 @@
 {
   "name": "relaybase-desktop",
-  "version": "0.1.2",
+  "version": "0.1.1",
   "private": true,
   "description": "Relaybase desktop shell (Tauri + Next.js dual-mode)",
   "packageManager": "pnpm@9.12.0",

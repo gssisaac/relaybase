@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1787204861412,
-      "tag": "0000_old_pandemic",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1787208000000,
-      "tag": "0001_owner_admin_token",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1787666400000,
-      "tag": "0002_app_settings",
+      "when": 1788273148896,
+      "tag": "0000_normal_terrax",
       "breakpoints": true
     }
   ]

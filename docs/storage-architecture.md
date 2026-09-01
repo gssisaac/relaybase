@@ -76,7 +76,7 @@ The desktop **god token is retired**. Owner auth is now a **Worker-issued passto
 - `POST /console/login` returns mail + console refresh tokens and mail access immediately; console access is minted at gate time via scoped refresh.
 - All `/console/*` routes require **console-scoped** access; `/mail/*` require **mail-scoped** access (`requireOwnerSession(c, scope)`).
 - Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can list Secrets Store on the pinned CF account (env `CF_ACCOUNT_ID`, D1 `owner_config.cf_account_id`, body `cfAccountId`, or `GET /accounts`), then re-issues a passtoken once (download + write `owner-passtoken`) and revokes all sessions. No console email, no central god token. Worker `CF_ACCOUNT_ID` is optional.
-- `AUTH_PEPPER` (random, set once at install) replaces the old `ADMIN_TOKEN` wrangler secret. `owner_config.admin_token` and D1 `auth_tokens` (`rb-auth-…`) are dropped (migration `0003_owner_login`; after local `0002_app_settings`).
+- `AUTH_PEPPER` (random, set once at install) replaces the retired `ADMIN_TOKEN` wrangler secret. The product baseline schema has no `owner_config.admin_token`, `auth_tokens`, or dashboard god tokens.
 
 The desktop **unlock flow** — silent mail boot, keyring passtoken + Touch ID
 as the read-gate, owner/invited phase machine, team keyring, scoped 401 — is

@@ -1,11 +1,11 @@
 {
-  "version": "0.1.2",
-  "notes": "# Relaybase 0.1.2\n\n## Highlights\n- Fix macOS launch failure on macOS 26 (Tahoe) and recent releases\n\n## Changes\n- Remove `keychain-access-groups` from the Developer ID build (AMFI blocked launch with error 163 even when notarization passed)\n- Owner and team secrets continue to use the login keychain via SecItem",
-  "pub_date": "2026-09-01T13:46:16.448Z",
+  "version": "0.1.1",
+  "notes": "# Relaybase 0.1.1\n\nFirst public release.\n\n## Highlights\n- Guided Cloudflare install — deploy the Worker, create storage, set up owner passtoken\n- macOS desktop app (Apple Silicon) with in-app Worker update\n- Email + dashboard in one app\n\n## Changes\n- Setup Rollback deletes Worker, D1, and R2 — fails if anything remains\n- Owner passtoken in OS keyring; Touch ID read-gate for console unlock\n- Settings → Worker update reuses OAuth and runs `migrate-db` on existing installs",
+  "pub_date": "2026-09-01T14:55:45.132Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.2.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlF3ZWFKdGVrSTZCL3ZiYmJqUHhGc0xrTmRsdVlFVXNabGRtRzdqYStOS1FRN0NHU3ZlbTJSdS9saGxrYlJ5QWFoMm5Ca1dOVjdxNWhCRUd0QVVBaUE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MjcwMzQ4CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKS08yN2FvTlZSWE9Od3RVRS9oSjBZME0zRkRGbFBoNWRBTldBeUJtdGJNRnJDVkVWY0c4cE5HZkhxUjltQkJCdEVpMXpQQVdtRkdSNTFiL0Z1VW5wRHc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlZ6RDRqR0RRZGdURmEvWDdzelkzTXE0MjR1ekhwbXZmeWNyMittZi9XSFNCeFZZTjVKWnBkNUsvbWdvV1pWbllBUERpMTNJNk5Oak4zdGVqNFZDWGc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4Mjc0NTEzCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKTVFybDBvSXVoU0Y2VVR2MFF3VXV5eUNkYlpuTnF4VVpvUTV4V3Y5RXBrL25DZXROcFNUaDMxSXVueC9JS1Qydnd6TUljVk02b3JGMUo4cW1tTUwzRHc9PQo="
     }
   }
 }

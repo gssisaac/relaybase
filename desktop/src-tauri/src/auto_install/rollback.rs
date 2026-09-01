@@ -1,8 +1,8 @@
 use tauri::AppHandle;
 
 use crate::cloudflare::{
-    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket,
-    list_d1_databases, CfClient,
+    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket, find_d1_id,
+    find_r2_bucket, worker_script_exists, CfClient,
 };
 use crate::worker::DEFAULT_SCRIPT;
 
@@ -15,6 +15,7 @@ use super::wipe::{assert_occupied_wipe_allowed, wipe_confirmation_allows};
 /// Delete every Relaybase install resource in the account (Worker, D1, R2).
 /// Streams the same `install-log` events as auto-install.
 /// Occupied R2 / D1 require `wipe_confirmation` (`DELETE ME` or a resource name).
+/// Returns an error if any resource is still present after delete attempts.
 pub async fn rollback_all_install(
     app: AppHandle,
     api_token: String,
@@ -81,6 +82,8 @@ pub async fn rollback_all_install(
         }
     }
 
+    let mut failures: Vec<String> = Vec::new();
+
     emit_log(
         &app,
         "rollback",
@@ -94,19 +97,22 @@ pub async fn rollback_all_install(
             "info",
             format!("Deleted Worker `{DEFAULT_SCRIPT}`"),
         ),
-        Err(e) => emit_log(&app, "rollback", "stderr", format!("Worker delete: {e}")),
+        Err(e) => {
+            let msg = format!("Worker delete: {e}");
+            emit_log(&app, "rollback", "stderr", msg.clone());
+            failures.push(msg);
+        }
     }
 
-    emit_log(&app, "rollback", "info", "Looking up D1 databases…");
-    let d1_wanted: Vec<&str> = D1_DATABASES.iter().map(|(_, name)| *name).collect();
-    match list_d1_databases(&client).await {
-        Ok(all) => {
-            let mut found = 0u32;
-            for (name, id) in all {
-                if !d1_wanted.contains(&name.as_str()) {
-                    continue;
-                }
-                found += 1;
+    for (_, name) in D1_DATABASES {
+        emit_log(
+            &app,
+            "rollback",
+            "info",
+            format!("Looking up D1 {name}…"),
+        );
+        match find_d1_id(&client, name).await {
+            Ok(Some(id)) => {
                 emit_log(
                     &app,
                     "rollback",
@@ -114,50 +120,150 @@ pub async fn rollback_all_install(
                     format!("Deleting D1 {name} ({id})…"),
                 );
                 match delete_d1_database(&client, &id).await {
-                    Ok(()) => emit_log(&app, "rollback", "info", format!("Deleted D1 {name}")),
+                    Ok(()) => emit_log(
+                        &app,
+                        "rollback",
+                        "info",
+                        format!("Deleted D1 {name}"),
+                    ),
                     Err(e) => {
-                        emit_log(&app, "rollback", "stderr", format!("D1 {name} delete: {e}"))
+                        let msg = format!("D1 {name} delete: {e}");
+                        emit_log(&app, "rollback", "stderr", msg.clone());
+                        failures.push(msg);
                     }
                 }
             }
-            if found == 0 {
-                emit_log(&app, "rollback", "info", "No Relaybase D1 databases found");
+            Ok(None) => emit_log(
+                &app,
+                "rollback",
+                "info",
+                format!("D1 {name} not found — skipping"),
+            ),
+            Err(e) => {
+                let msg = format!("D1 {name} lookup: {e}");
+                emit_log(&app, "rollback", "stderr", msg.clone());
+                failures.push(msg);
             }
         }
-        Err(e) => emit_log(&app, "rollback", "stderr", format!("D1 list failed: {e}")),
     }
 
+    let mut r2_deleted = false;
+    match find_r2_bucket(&client, R2_BUCKET).await {
+        Ok(true) => {
+            if let Err(e) = empty_and_delete_r2(&app, &client).await {
+                emit_log(&app, "rollback", "stderr", e.clone());
+                emit_log(
+                    &app,
+                    "rollback",
+                    "info",
+                    "Retrying R2 empty and delete once…",
+                );
+                if let Err(retry) = empty_and_delete_r2(&app, &client).await {
+                    emit_log(&app, "rollback", "stderr", retry.clone());
+                    failures.push(retry);
+                } else {
+                    r2_deleted = true;
+                }
+            } else {
+                r2_deleted = true;
+            }
+        }
+        Ok(false) => {
+            emit_log(
+                &app,
+                "rollback",
+                "info",
+                format!("R2 bucket {R2_BUCKET} not found — skipping"),
+            );
+            r2_deleted = true;
+        }
+        Err(e) => {
+            let msg = format!("R2 lookup: {e}");
+            emit_log(&app, "rollback", "stderr", msg.clone());
+            failures.push(msg);
+        }
+    }
+
+    let mut remaining: Vec<String> = Vec::new();
+
+    match worker_script_exists(&client, DEFAULT_SCRIPT).await {
+        Ok(true) => remaining.push(format!("Worker `{DEFAULT_SCRIPT}`")),
+        Ok(false) => {}
+        Err(e) => remaining.push(format!("Worker `{DEFAULT_SCRIPT}` (could not verify: {e})")),
+    }
+
+    for (_, name) in D1_DATABASES {
+        match find_d1_id(&client, name).await {
+            Ok(Some(_)) => remaining.push(format!("D1 `{name}`")),
+            Ok(None) => {}
+            Err(e) => remaining.push(format!("D1 `{name}` (could not verify: {e})")),
+        }
+    }
+
+    if !r2_deleted {
+        remaining.push(format!("R2 `{R2_BUCKET}`"));
+    } else {
+        match find_r2_bucket(&client, R2_BUCKET).await {
+            Ok(true) => remaining.push(format!("R2 `{R2_BUCKET}`")),
+            Ok(false) => {}
+            Err(e) => remaining.push(format!("R2 `{R2_BUCKET}` (could not verify: {e})")),
+        }
+    }
+
+    if !failures.is_empty() || !remaining.is_empty() {
+        let mut parts = Vec::new();
+        if !remaining.is_empty() {
+            parts.push(format!(
+                "Rollback incomplete — still present: {}",
+                remaining.join(", ")
+            ));
+        }
+        if !failures.is_empty() {
+            parts.push(failures.join("; "));
+        }
+        emit_log(
+            &app,
+            "rollback",
+            "stderr",
+            "Rollback did not remove every Relaybase resource.",
+        );
+        return Err(parts.join(". "));
+    }
+
+    emit_log(&app, "rollback", "info", "Rollback finished — account is clear.");
+    Ok(())
+}
+
+async fn empty_and_delete_r2(app: &AppHandle, client: &CfClient) -> Result<(), String> {
     emit_log(
-        &app,
+        app,
         "rollback",
         "info",
         format!("Emptying R2 bucket {R2_BUCKET}…"),
     );
-    match empty_r2_bucket(&client, R2_BUCKET).await {
+    match empty_r2_bucket(client, R2_BUCKET).await {
         Ok(n) => emit_log(
-            &app,
+            app,
             "rollback",
             "info",
             format!("Removed {n} object(s) from {R2_BUCKET}"),
         ),
-        Err(e) => emit_log(&app, "rollback", "stderr", format!("R2 empty: {e}")),
+        Err(e) => return Err(format!("R2 empty: {e}")),
     }
     emit_log(
-        &app,
+        app,
         "rollback",
         "info",
         format!("Deleting R2 bucket {R2_BUCKET}…"),
     );
-    match delete_r2_bucket(&client, R2_BUCKET).await {
-        Ok(()) => emit_log(
-            &app,
-            "rollback",
-            "info",
-            format!("Deleted R2 bucket {R2_BUCKET}"),
-        ),
-        Err(e) => emit_log(&app, "rollback", "stderr", format!("R2 delete: {e}")),
-    }
-
-    emit_log(&app, "rollback", "info", "Rollback finished.");
+    delete_r2_bucket(client, R2_BUCKET)
+        .await
+        .map_err(|e| format!("R2 delete: {e}"))?;
+    emit_log(
+        app,
+        "rollback",
+        "info",
+        format!("Deleted R2 bucket {R2_BUCKET}"),
+    );
     Ok(())
 }

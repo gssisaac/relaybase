@@ -29,8 +29,8 @@ export async function getOwnerLoginConfig(
       cfAccountId: row.cfAccountId ?? null,
     };
   } catch {
-    // Pre-0003_owner_login D1s do not have passtoken columns yet. Treat as
-    // unconfigured so migrate-db can still run with AUTH_PEPPER bootstrap.
+    // owner_config missing or unreadable (empty D1). Treat as unconfigured so
+    // init-db / migrate-db can still run with AUTH_PEPPER bootstrap.
     return null;
   }
 }

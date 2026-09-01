@@ -2,8 +2,10 @@
 
 Customer-facing Worker installs ship as **pre-built JS bundles** (not TypeScript source).
 
-Desktop and Worker versions are **independent**. Both start at **0.1.0**. Later
-updates bump the **patch** only (`0.1.1`, `0.1.2`, …). There is no separate
+Desktop and Worker share **one product semver** — always bump both together.
+First public release: **0.1.1**. Policy: [docs/version-sync.md](../../docs/version-sync.md).
+
+Later updates bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate
 dev / `+local` channel. Desktop install/update uploads **only** this hosted ZIP.
 
 Desktop releases: [desktop/docs/release.md](../../desktop/docs/release.md).
@@ -33,7 +35,7 @@ release-worker-<semver>    # e.g. release-worker-0.1.1
 
 ### 1. Version bump
 
-Set the version in [`server/package.json`](../package.json) (e.g. `0.1.0` → `0.1.1`).
+Set the version in [`server/package.json`](../package.json) **and** bump Desktop to the same semver — see [docs/version-sync.md](../../docs/version-sync.md).
 
 ### 2. Release notes (required)
 

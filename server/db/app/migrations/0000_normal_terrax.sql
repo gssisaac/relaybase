@@ -38,6 +38,12 @@ CREATE INDEX `api_keys_domain_idx` ON `api_keys` (`domain`);
 --> statement-breakpoint
 CREATE INDEX `api_keys_active_idx` ON `api_keys` (`active`);
 --> statement-breakpoint
+CREATE TABLE `app_settings` (
+	`id` integer PRIMARY KEY NOT NULL,
+	`inbound_retain_per_domain` integer,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `audience_groups` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -73,17 +79,6 @@ CREATE UNIQUE INDEX `audience_contacts_group_email_idx` ON `audience_contacts` (
 CREATE INDEX `audience_contacts_group_idx` ON `audience_contacts` (`group_id`);
 --> statement-breakpoint
 CREATE INDEX `audience_contacts_domain_idx` ON `audience_contacts` (`domain`);
---> statement-breakpoint
-CREATE TABLE `auth_tokens` (
-	`id` text PRIMARY KEY NOT NULL,
-	`token_hash` text NOT NULL,
-	`label` text,
-	`product_id` text,
-	`token_prefix` text NOT NULL,
-	`created_at` text NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `auth_tokens_token_hash_unique` ON `auth_tokens` (`token_hash`);
 --> statement-breakpoint
 CREATE TABLE `broadcasts` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -135,8 +130,26 @@ CREATE TABLE `mobile_passwords` (
 CREATE TABLE `owner_config` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`owner_email` text,
-	`worker_url` text
+	`worker_url` text,
+	`passtoken_salt` text,
+	`passtoken_hash` text,
+	`passtoken_prefix` text,
+	`passtoken_updated_at` text,
+	`cf_account_id` text
 );
+--> statement-breakpoint
+CREATE TABLE `owner_sessions` (
+	`id` text PRIMARY KEY NOT NULL,
+	`token_hash` text NOT NULL,
+	`family` text NOT NULL,
+	`label` text,
+	`created_at` text NOT NULL,
+	`expires_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `owner_sessions_token_hash_unique` ON `owner_sessions` (`token_hash`);
+--> statement-breakpoint
+CREATE INDEX `owner_sessions_family_idx` ON `owner_sessions` (`family`);
 --> statement-breakpoint
 CREATE TABLE `webhooks` (
 	`id` text PRIMARY KEY NOT NULL,

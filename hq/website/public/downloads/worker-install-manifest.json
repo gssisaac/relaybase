@@ -1,7 +1,7 @@
 {
-  "version": "0.1.2",
-  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.2.zip",
-  "zipSha256": "9e6d56d34cfe11bd25059f2d19ab7a51625a75c84545a355b4fde84cae7dcabb",
-  "publishedAt": "2026-09-01T04:04:19.067Z",
-  "notes": "# Relaybase Worker 0.1.2\n\n## Highlights\n- Worker `CF_ACCOUNT_ID` is optional — domain / DNS / sending health use `CF_API_TOKEN` only\n- Discover account id from `GET /zones` (`account.id` on the zone), not a required secret\n- Forgot-passtoken reset and Worker upgrade (`migrate-db`) accept Cloudflare OAuth account proof\n\n## Changes\n- `mailApiReady` / Enable email API verify do not require Worker `accountId`\n- `createCloudflareClient` requires `CF_API_TOKEN` only; list zones without `account.id` filter\n- Resolve account id: env → D1 `owner_config.cf_account_id` → zone `account.id` → `GET /accounts`\n- `POST /console/reset-admin` accepts `cfAccessToken`; `init-db` / `migrate-db` accept `X-Cf-Access-Token`"
+  "version": "0.1.1",
+  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.1.zip",
+  "zipSha256": "b877bdbee320b0c6944324b0a16ce765fcebde28be65fe72d3470e5f95268be7",
+  "publishedAt": "2026-09-01T14:46:55.600Z",
+  "notes": "# Relaybase Worker 0.1.1\n\nFirst public release.\n\n## Highlights\n- Cloudflare OAuth install — Worker, R2, and D1 in the customer's account\n- Owner passtoken auth (`AUTH_PEPPER` + scoped sessions)\n- Single D1 app baseline — today's schema in one migration\n\n## Changes\n- `POST /console/init-db` / `migrate-db` / `setup-admin` with pepper bootstrap or OAuth\n- Mail index (`RELAYBASE_MAIL`), ops log (`RELAYBASE_LOGS`), mailbox R2 layout\n- Optional Worker `CF_ACCOUNT_ID`; domain/DNS via `CF_API_TOKEN`"
 }

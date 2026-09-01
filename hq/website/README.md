@@ -55,12 +55,13 @@ handles install instead.
 
 ## Desktop downloads (R2)
 
-One Universal macOS DMG / updater `.tar.gz` (Apple Silicon + Intel) is hosted
-on R2 bucket `relaybase-releases` at `https://download.relaybase.xyz`. Small
+Per-arch macOS DMGs / updater `.tar.gz` files are hosted on R2 bucket
+`relaybase-releases` at `https://download.relaybase.xyz`
+(`Relaybase.<ver>.aarch64.*` shipped; `.x86_64.*` when Intel is enabled). Small
 metadata (`public/release/latest.json`, `.sig`) ships with this site. Valid
-beta UUIDs redirect the file download to the current DMG. See
-`desktop/docs/release.md` for the full notarize + upload flow
-(`cd desktop && pnpm run build:macos`).
+beta UUIDs get a download page with Apple Silicon + Intel buttons (Intel
+disabled until enabled in the Worker). See `desktop/docs/release.md`
+(`cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos`).
 
 ## Stack
 

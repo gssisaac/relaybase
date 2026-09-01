@@ -1,8 +1,11 @@
 # Relaybase desktop release guide
 
-Signed, notarized **Universal** macOS release (Apple Silicon + Intel in one
-`.app`). Binaries live on **Cloudflare R2** (`download.relaybase.xyz`); small
-metadata lives on `relaybase.xyz/release`.
+Signed, notarized **per-arch** macOS releases. **Apple Silicon (`aarch64`) is
+the shipped default.** Intel (`x86_64`) scripts and R2/updater wiring exist, but
+the download page keeps Intel disabled until the first Intel build ships.
+
+Binaries live on **Cloudflare R2** (`download.relaybase.xyz`); small metadata
+lives on `relaybase.xyz/release`.
 
 Desktop and Worker versions are **independent**. Both start at **0.1.0**. Later
 updates bump the **patch** only (`0.1.1`, `0.1.2`, …). There is no separate
@@ -14,51 +17,46 @@ Pattern mirrors sibling `../kloy/app/docs/release.md`.
 
 ---
 
-## macOS target (Universal only)
+## macOS targets (per-arch; Universal retired)
 
-`pnpm run build:macos` (and `pnpm run build` in `desktop/`) always builds a
-fat binary. Host-arch-only and per-arch DMGs are not a release.
-
-**Agents / operators:** for **shipping**, never use the local arm64 scripts below or bare
-`tauri build` without `--target universal-apple-darwin`. On Apple Silicon that
-produces **arm64-only** output under `target/release/bundle/` — it looks signed
-but is not the shipped Universal DMG and may fail to open on Intel Macs. The
-release script verifies `lipo -info` shows both `x86_64` and `arm64` before
-sync/R2 upload.
+`pnpm run build:macos` (and `pnpm run build` in `desktop/`) builds **Apple
+Silicon only**:
 
 ```text
-tauri build --target universal-apple-darwin --bundles app,dmg
+tauri build --target aarch64-apple-darwin --bundles app,dmg
 ```
 
-- Rust targets (the script installs them): `aarch64-apple-darwin` and
-  `x86_64-apple-darwin`.
-- Bundle output:
-  `desktop/src-tauri/target/universal-apple-darwin/release/bundle/{dmg,macos}/`
-  — not `target/release/bundle`. Scripts honor `CARGO_TARGET_DIR` when set.
-- Public names stay `Relaybase.<version>.dmg` and
-  `Relaybase.<version>.app.tar.gz` (no arch suffix).
-- `latest.json` writes the **same** URL + signature under `darwin-universal`,
-  `darwin-aarch64`, and `darwin-x86_64` so Intel and Apple Silicon updaters
-  both resolve.
-- Size: frontend is stored once; only the Rust binary is duplicated. Expect
-  roughly +6–7 MiB vs an Apple Silicon-only DMG.
+Intel is a separate opt-in command (same signing / notarize / sync / R2 path):
+
+```text
+pnpm run build:macos:x86_64
+# → tauri build --target x86_64-apple-darwin --bundles app,dmg
+```
+
+| Arch | Command | Rust target | Bundle output | Public names |
+|------|---------|-------------|---------------|--------------|
+| Apple Silicon (ship) | `build:macos` / `build:macos:aarch64` | `aarch64-apple-darwin` | `…/target/aarch64-apple-darwin/release/bundle/` | `Relaybase.<ver>.aarch64.dmg` · `.app.tar.gz` |
+| Intel (ready, not default) | `build:macos:x86_64` | `x86_64-apple-darwin` | `…/target/x86_64-apple-darwin/release/bundle/` | `Relaybase.<ver>.x86_64.dmg` · `.app.tar.gz` |
+
+`latest.json` platforms:
+
+- `darwin-aarch64` — written by the aarch64 build
+- `darwin-x86_64` — written by the x86_64 build (merged if same version)
+- `darwin-universal` — **retired**; sync strips it on new writes
+
+Do not overwrite an already-shipped version+arch on R2. Versioned objects use
+`Cache-Control: immutable` (1 year). Bump the patch and upload new keys.
 
 Verify after build: `lipo -info` on `Relaybase.app/Contents/MacOS/Relaybase`
-must list `x86_64` and `arm64`.
-
-Do not overwrite an already-shipped version on R2. Versioned objects use
-`Cache-Control: immutable` (1 year). Bump the patch and upload new keys.
+must list **only** the expected arch (`arm64` or `x86_64`), never both.
 
 ---
 
 ## Local install test (Apple Silicon, **not** a release)
 
-Fast **host-arch-only** builds for drag-to-`/Applications` smoke tests on your
-own Mac. These are **not** Universal, **not** uploaded to R2, and **must not**
-replace shipped release artifacts or `hq/website/public/release/latest.json`.
-
-Scripts live in `desktop/package.json`; repo root wraps them with the
-`desktop:` prefix.
+Fast **host-arch** builds for drag-to-`/Applications` smoke tests on your own
+Mac. These skip notarization, sync, and R2, and **must not** replace shipped
+release artifacts or `hq/website/public/release/latest.json`.
 
 | Goal | Repo root | `desktop/` |
 |------|-----------|------------|
@@ -67,23 +65,15 @@ Scripts live in `desktop/package.json`; repo root wraps them with the
 | Build arm64 release DMG only | `pnpm run desktop:build:local` | `pnpm run build:local` |
 | Build debug DMG only | `pnpm run desktop:build:local:debug` | `pnpm run build:local:debug` |
 | Build `.app` only (fastest) | `pnpm run desktop:build:local:app` | `pnpm run build:local:app` |
-| Open an existing local DMG / app | `desktop:open:local:dmg`, `desktop:open:local:debug:dmg`, `desktop:open:local:app` | same without prefix |
+| Open an existing local DMG / app | `desktop:open:local:*` | same without prefix |
 
-**Output paths** (do **not** confuse with the Universal release tree):
+**Output paths:**
 
 | Profile | `.app` / DMG |
 |---------|----------------|
-| Release (local) | `desktop/src-tauri/target/release/bundle/{macos,dmg}/` |
-| Debug (local) | `desktop/src-tauri/target/debug/bundle/{macos,dmg}/` |
-| **Shipped release** | `desktop/src-tauri/target/universal-apple-darwin/release/bundle/{macos,dmg}/` |
-
-Under the hood, `build:local*` runs `tauri build` on the **host** triple (arm64 on
-Apple Silicon). It skips dual-arch compile, `lipo`, `verify-universal-app.sh`,
-notarization wrapper, `sync-release-artifacts.mjs`, and R2 upload.
-
-**Agents:** use `desktop:install:local` (or `build:local*`) only when the user
-asks for a **local install test** on Apple Silicon. For customer-facing release,
-website sync, or updater metadata, use **`pnpm run build:macos`** only.
+| Local smoke (`build:local*`) | `desktop/src-tauri/target/release/bundle/` (or `debug/`) |
+| **Shipped aarch64** | `desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/` |
+| **Shipped x86_64** | `desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/` |
 
 Daily UI work remains `pnpm dev` / `desktop:dev` (`tauri dev` → `target/debug/`).
 
@@ -91,17 +81,11 @@ Daily UI work remains `pnpm dev` / `desktop:dev` (`tauri dev` → `target/debug/
 
 ## Build cautions
 
-Read this before changing signing entitlements, running release builds from an
-agent/automation, or debugging “The application Relaybase can't be opened.”
+### Per-arch only (Universal is not a release)
 
-### Universal target only (arm64-only is not a release)
-
-On Apple Silicon, `tauri build` without `--target universal-apple-darwin` writes
-to `target/release/bundle/` and produces an **arm64-only** `.app` / DMG. The
-`build:local*` / `install:local*` scripts intentionally use this path for **local
-smoke tests only** — see [Local install test](#local-install-test-apple-silicon-not-a-release).
-For anything that ships, always use `pnpm run build:macos`; the script fails if
-`lipo -info` does not list both `x86_64` and `arm64`.
+`universal-apple-darwin` is rejected by `build-macos.sh`. Do not reintroduce fat
+binaries — they double compile time on Apple Silicon and are not needed while
+Intel is still gated on the download page.
 
 ### Do **not** add `keychain-access-groups` to Developer ID entitlements
 
@@ -149,7 +133,7 @@ pick up `com.apple.macl` extended attributes and confuse Gatekeeper debugging.
 Quick checks after install:
 
 ```bash
-lipo -info /Applications/Relaybase.app/Contents/MacOS/Relaybase   # x86_64 arm64
+lipo -info /Applications/Relaybase.app/Contents/MacOS/Relaybase   # arm64 only for aarch64 ship
 codesign --verify --deep --strict /Applications/Relaybase.app
 spctl -a -vv /Applications/Relaybase.app                          # Notarized Developer ID
 codesign -d --entitlements - --xml /Applications/Relaybase.app/Contents/MacOS/Relaybase \
@@ -182,18 +166,32 @@ git diff hq/website/public/release/latest.json   # version should match tauri.co
 ## Architecture
 
 ```text
-pnpm run build:macos
-  ├─ rustup target add aarch64-apple-darwin x86_64-apple-darwin
-  ├─ tauri build --target universal-apple-darwin --bundles app,dmg
-  ├─ sync-release-artifacts.mjs  → hq/website/public/release/ (desktop/../hq)
-  └─ upload-release-r2.sh        → R2 bucket relaybase-releases
+pnpm run build:macos                 # aarch64 (default ship)
+  ├─ rustup target add aarch64-apple-darwin
+  ├─ tauri build --target aarch64-apple-darwin --bundles app,dmg
+  ├─ verify-arch-app.sh (arm64 only)
+  ├─ sync-release-artifacts.mjs      → hq/website/public/release/ (*.aarch64.*)
+  └─ upload-release-r2.sh            → R2 bucket relaybase-releases
+
+pnpm run build:macos:x86_64          # Intel when ready
+  └─ same pipeline with x86_64 names / darwin-x86_64 updater key
 ```
 
 | Artifact | Where | Public URL |
 |----------|-------|------------|
 | `latest.json` | git → website assets | `https://relaybase.xyz/release/latest.json` |
-| `Relaybase.<version>.dmg` | R2 `relaybase-releases` | `https://download.relaybase.xyz/Relaybase.<version>.dmg` |
-| `Relaybase.<version>.app.tar.gz` | R2 | `https://download.relaybase.xyz/Relaybase.<version>.app.tar.gz` |
+| `Relaybase.<ver>.aarch64.dmg` | R2 | `https://download.relaybase.xyz/Relaybase.<ver>.aarch64.dmg` |
+| `Relaybase.<ver>.aarch64.app.tar.gz` | R2 | updater for `darwin-aarch64` |
+| `Relaybase.<ver>.x86_64.dmg` | R2 (when built) | download page `/file/x86_64` |
+| `Relaybase.<ver>.x86_64.app.tar.gz` | R2 (when built) | updater for `darwin-x86_64` |
+
+Beta download page (`/downloads/{uuid}`):
+
+- Apple Silicon button → `/downloads/{uuid}/file/aarch64` (active)
+- Intel button → disabled until `INTEL_MAC_DOWNLOAD_ENABLED` in
+  `hq/website/src/worker/release.ts` is flipped **and** an x86_64 DMG is in
+  `artifacts.json`
+- `/downloads/{uuid}/file` (no arch) still redirects to Apple Silicon
 
 ---
 
@@ -257,28 +255,29 @@ Credentials in `desktop/.env` (gitignored) + `scripts/deploy/apple-signing.env`:
 | `APPLE_API_ISSUER` / `APPLE_API_KEY` / `APPLE_API_KEY_PATH` | Notarization |
 | `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` | R2 upload |
 
+Apple Silicon (default ship):
+
 ```bash
 cd desktop
-pnpm run build:macos
+RELAYBASE_NOTARIZE=1 pnpm run build:macos
+```
+
+Intel (when enabling that channel):
+
+```bash
+cd desktop
+RELAYBASE_NOTARIZE=1 pnpm run build:macos:x86_64
+# then flip INTEL_MAC_DOWNLOAD_ENABLED in hq/website/src/worker/release.ts
+# and deploy hq/website
 ```
 
 R2 (already provisioned): bucket `relaybase-releases`, CDN `download.relaybase.xyz`.
-The custom domain must use zone `relaybase.xyz` on the Strum account
-(`1474b7eaef3a2527c2bdc83d666143f5`). A stale/wrong zone ID produces
-Cloudflare 522 even though R2 lists the domain as connected.
+
+Manual R2 upload for one arch:
 
 ```bash
-cd hq/website
-pnpm dlx wrangler@4 r2 bucket domain add relaybase-releases \
-  --domain download.relaybase.xyz \
-  --zone-id 1474b7eaef3a2527c2bdc83d666143f5 \
-  --min-tls 1.2 --force
-```
-
-Manual R2 upload:
-
-```bash
-bash scripts/deploy/upload-release-r2.sh
+RELAYBASE_MAC_ARCH=aarch64 bash scripts/deploy/upload-release-r2.sh
+RELAYBASE_MAC_ARCH=x86_64 bash scripts/deploy/upload-release-r2.sh
 ```
 
 ### 4. Commit what belongs in git
@@ -294,15 +293,15 @@ cd hq/website
 pnpm run deploy:cf
 ```
 
-This ships `latest.json` / marketing. DMG and updater `.tar.gz` are already live
-on `download.relaybase.xyz` after the R2 upload.
+This ships `latest.json` / marketing / download Worker. DMG and updater `.tar.gz`
+are already live on `download.relaybase.xyz` after the R2 upload.
 
 ### 6. Verify
 
 ```bash
 curl -sI https://relaybase.xyz/release/latest.json | grep -i content-type
 # expect: application/json
-curl -s https://relaybase.xyz/release/latest.json | head -c 200; echo
+curl -s https://relaybase.xyz/release/latest.json | head -c 400; echo
 ```
 
 Test in-app updates only with a **release** build, not `tauri dev`.

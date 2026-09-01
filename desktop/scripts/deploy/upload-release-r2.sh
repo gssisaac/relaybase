@@ -2,6 +2,13 @@
 # Upload large release binaries (DMG + updater tar.gz) to Cloudflare R2.
 # Small metadata (latest.json, .sig, artifacts.json) stays in git under website/public/release/.
 #
+# Per-arch keys:
+#   Relaybase.<version>.aarch64.dmg
+#   Relaybase.<version>.aarch64.app.tar.gz
+#   Relaybase.<version>.x86_64.dmg
+#   …
+#
+# Env: RELAYBASE_MAC_ARCH=aarch64|x86_64 (default aarch64)
 # Requires CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (or wrangler OAuth).
 # Bucket: relaybase-releases, served at https://download.relaybase.xyz/<key>
 set -euo pipefail
@@ -14,6 +21,16 @@ IMMUTABLE_CACHE_CONTROL="public, max-age=31536000, immutable"
 CDN_HOST="${DOWNLOAD_CDN_BASE_URL:-https://download.relaybase.xyz}"
 CDN_HOST="${CDN_HOST%/}"
 
+ARCH_RAW="${RELAYBASE_MAC_ARCH:-aarch64}"
+case "$ARCH_RAW" in
+  aarch64|arm64) ARCH="aarch64"; RUST_TARGET="aarch64-apple-darwin" ;;
+  x86_64|intel|amd64) ARCH="x86_64"; RUST_TARGET="x86_64-apple-darwin" ;;
+  *)
+    echo "✗ Unknown RELAYBASE_MAC_ARCH=$ARCH_RAW (use aarch64 or x86_64)" >&2
+    exit 1
+    ;;
+esac
+
 if [[ ! -d "$RELEASE_DIR" ]]; then
   echo "✗ Missing $RELEASE_DIR" >&2
   exit 1
@@ -21,10 +38,14 @@ fi
 
 VERSION="$(node -p "require('$ROOT/src-tauri/tauri.conf.json').version")"
 CARGO_TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
-BUNDLE="$CARGO_TARGET/universal-apple-darwin/release/bundle"
+BUNDLE="$CARGO_TARGET/$RUST_TARGET/release/bundle"
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/relaybase-release.XXXXXX")"
 cleanup_stage() { rm -rf "$STAGE"; }
 trap cleanup_stage EXIT
+
+DMG_NAME="Relaybase.${VERSION}.${ARCH}.dmg"
+TGZ_NAME="Relaybase.${VERSION}.${ARCH}.app.tar.gz"
+SIG_NAME="${TGZ_NAME}.sig"
 
 stage_or_release() {
   local dest_name="$1"
@@ -48,9 +69,9 @@ stage_or_release() {
 }
 
 BUNDLE_DMG="$(find "$BUNDLE/dmg" -name '*.dmg' 2>/dev/null | head -1 || true)"
-DMG="$(stage_or_release "Relaybase.${VERSION}.dmg" "$RELEASE_DIR/Relaybase.${VERSION}.dmg" "$BUNDLE_DMG")"
-TGZ="$(stage_or_release "Relaybase.${VERSION}.app.tar.gz" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz" "$BUNDLE/macos/Relaybase.app.tar.gz")"
-SIG="$(stage_or_release "Relaybase.${VERSION}.app.tar.gz.sig" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz.sig" "$BUNDLE/macos/Relaybase.app.tar.gz.sig")"
+DMG="$(stage_or_release "$DMG_NAME" "$RELEASE_DIR/$DMG_NAME" "$BUNDLE_DMG")"
+TGZ="$(stage_or_release "$TGZ_NAME" "$RELEASE_DIR/$TGZ_NAME" "$BUNDLE/macos/Relaybase.app.tar.gz")"
+SIG="$(stage_or_release "$SIG_NAME" "$RELEASE_DIR/$SIG_NAME" "$BUNDLE/macos/Relaybase.app.tar.gz.sig")"
 
 WEBSITE_DIR="$(cd "$ROOT/../hq/website" && pwd)"
 # Prefer website wrangler if present; otherwise use desktop's pnpm dlx.
@@ -96,27 +117,31 @@ upload_one() {
   "${WRANGLER[@]}" "${args[@]}"
 }
 
-echo "→ Uploading release ${VERSION} binaries to R2 bucket ${BUCKET} (CDN: ${CDN_HOST})"
+echo "→ Uploading release ${VERSION} (${ARCH}) binaries to R2 bucket ${BUCKET} (CDN: ${CDN_HOST})"
 upload_one "$DMG" "application/x-apple-diskimage"
 upload_one "$TGZ" "application/gzip"
 upload_one "$SIG" "text/plain" 0
 
 if [[ -f "$SIG" ]]; then
-  cp "$SIG" "$RELEASE_DIR/Relaybase.${VERSION}.app.tar.gz.sig"
+  cp "$SIG" "$RELEASE_DIR/$SIG_NAME"
 fi
 
-RELEASE_DIR="$RELEASE_DIR" META_PATH="$META_PATH" VERSION="$VERSION" STAGE_DIR="$STAGE" node <<'NODE'
+RELEASE_DIR="$RELEASE_DIR" META_PATH="$META_PATH" VERSION="$VERSION" ARCH="$ARCH" STAGE_DIR="$STAGE" node <<'NODE'
 const fs = require('fs');
 const path = require('path');
 const dir = process.env.RELEASE_DIR;
 const metaPath = process.env.META_PATH;
 const version = process.env.VERSION;
+const arch = process.env.ARCH;
 const existing = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf8')) : {};
 const staged = process.env.STAGE_DIR || '';
-for (const name of [`Relaybase.${version}.dmg`, `Relaybase.${version}.app.tar.gz`]) {
+for (const name of [
+  `Relaybase.${version}.${arch}.dmg`,
+  `Relaybase.${version}.${arch}.app.tar.gz`,
+]) {
   const p = [staged && path.join(staged, name), path.join(dir, name)].find((c) => c && fs.existsSync(c));
   if (!p) continue;
-  existing[name] = { sizeBytes: fs.statSync(p).size, version };
+  existing[name] = { sizeBytes: fs.statSync(p).size, version, arch };
 }
 fs.writeFileSync(metaPath, JSON.stringify(existing, null, 2) + '\n');
 console.log('[upload-release-r2] Wrote', metaPath);

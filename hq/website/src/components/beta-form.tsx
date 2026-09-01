@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 
 import { DownloadCtaLabel } from "@/components/download-cta-label";
@@ -11,10 +11,16 @@ import { siteConfig } from "@/lib/site-config";
 
 type Status = "idle" | "loading" | "success" | "already" | "error";
 
-export function BetaForm() {
+export function BetaForm({ autoFocus = false }: { autoFocus?: boolean }) {
+  const emailRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    emailRef.current?.focus();
+  }, [autoFocus]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,10 +79,12 @@ export function BetaForm() {
         Email address
       </label>
       <Input
+        ref={emailRef}
         id="beta-email"
         type="email"
         name="email"
         autoComplete="email"
+        autoFocus={autoFocus}
         required
         placeholder="you@company.com"
         value={email}

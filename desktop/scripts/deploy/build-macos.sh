@@ -1,10 +1,38 @@
 #!/usr/bin/env bash
-# Build signed (and notarized when configured) Universal Relaybase macOS DMG via Tauri.
+# Build signed (and notarized when configured) single-arch Relaybase macOS DMG via Tauri.
+# Usage:
+#   bash scripts/deploy/build-macos.sh            # aarch64 (default / shipped)
+#   bash scripts/deploy/build-macos.sh aarch64
+#   bash scripts/deploy/build-macos.sh x86_64     # Intel (ready; not the default ship)
+#
 # Apple credentials: ops-dashboard Release settings, scripts/deploy/apple-signing.env, or .env
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
+
+ARCH_ARG="${1:-${RELAYBASE_MAC_ARCH:-aarch64}}"
+case "$ARCH_ARG" in
+  aarch64|arm64)
+    ARCH="aarch64"
+    RUST_TARGET="aarch64-apple-darwin"
+    LIPO_EXPECT="arm64"
+    ;;
+  x86_64|intel|amd64)
+    ARCH="x86_64"
+    RUST_TARGET="x86_64-apple-darwin"
+    LIPO_EXPECT="x86_64"
+    ;;
+  universal|universal-apple-darwin)
+    echo "✗ Universal builds are retired. Use aarch64 (default) or x86_64." >&2
+    exit 1
+    ;;
+  *)
+    echo "✗ Unknown arch '$ARCH_ARG' (use aarch64 or x86_64)" >&2
+    exit 1
+    ;;
+esac
+export RELAYBASE_MAC_ARCH="$ARCH"
 
 setup_toolchain() {
   if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
@@ -54,12 +82,12 @@ if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && -z "${TAURI_SIGNING_PRIVATE_KE
   fi
 fi
 
-echo "→ rustup targets aarch64-apple-darwin x86_64-apple-darwin"
+echo "→ rustup target $RUST_TARGET"
 if ! command -v rustup >/dev/null 2>&1; then
   echo "✗ rustup not found on PATH"
   exit 1
 fi
-rustup target add aarch64-apple-darwin x86_64-apple-darwin
+rustup target add "$RUST_TARGET"
 
 echo "→ pnpm install"
 "$PNPM" install
@@ -68,11 +96,11 @@ export APPLE_SIGNING_IDENTITY
 export APPLE_TEAM_ID
 
 CARGO_TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
-BUNDLE_ROOT="$CARGO_TARGET/universal-apple-darwin/release/bundle"
+BUNDLE_ROOT="$CARGO_TARGET/$RUST_TARGET/release/bundle"
 export CARGO_TARGET_DIR="$CARGO_TARGET"
-TAURI_ARGS=(build --target universal-apple-darwin --bundles app,dmg)
+TAURI_ARGS=(build --target "$RUST_TARGET" --bundles app,dmg)
 if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
-  echo "→ pnpm run tauri build --target universal-apple-darwin (sign + notarize)"
+  echo "→ pnpm run tauri build --target $RUST_TARGET (sign + notarize)"
   unset APPLE_ID APPLE_PASSWORD APPLE_APP_SPECIFIC_PASSWORD NOTARYTOOL_PROFILE
   if [[ -n "${APPLE_API_ISSUER:-}" && -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_KEY_PATH:-}" ]]; then
     export APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_PATH
@@ -80,10 +108,11 @@ if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
     export APPLE_ID APPLE_PASSWORD
   fi
 else
-  echo "→ pnpm run tauri build --target universal-apple-darwin (sign only; notarization skipped)"
+  echo "→ pnpm run tauri build --target $RUST_TARGET (sign only; notarization skipped)"
   unset APPLE_ID APPLE_PASSWORD APPLE_APP_SPECIFIC_PASSWORD APPLE_API_KEY APPLE_API_ISSUER APPLE_API_KEY_PATH NOTARYTOOL_PROFILE
 fi
 
+echo "→ Arch: $ARCH ($RUST_TARGET)"
 echo "→ Signing identity: $APPLE_SIGNING_IDENTITY"
 
 # `tauri build` updater signing reads TAURI_SIGNING_PRIVATE_KEY (inline), not PATH alone.
@@ -106,7 +135,7 @@ find "$BUNDLE_ROOT" -maxdepth 3 -type f \( -name '*.dmg' -o -name '*.app' \) 2>/
 VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
 APP_BIN="$BUNDLE_ROOT/macos/Relaybase.app/Contents/MacOS/Relaybase"
 if [[ -f "$APP_BIN" ]]; then
-  bash "$ROOT/scripts/deploy/verify-universal-app.sh" "$APP_BIN"
+  bash "$ROOT/scripts/deploy/verify-arch-app.sh" "$APP_BIN" "$LIPO_EXPECT"
 fi
 
 DMG="$(find "$BUNDLE_ROOT/dmg" -name "Relaybase_${VERSION}_*.dmg" 2>/dev/null | head -1)"
@@ -120,7 +149,7 @@ if [[ -z "$DMG" || ! -f "$DMG" ]]; then
 fi
 
 if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
-  bash "$ROOT/scripts/deploy/notarize-dmg.sh"
+  bash "$ROOT/scripts/deploy/notarize-dmg.sh" "$BUNDLE_ROOT/dmg"
 fi
 
 echo "→ Verifying DMG signature"
@@ -130,8 +159,8 @@ if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
   spctl -a -vv -t install "$DMG" 2>&1 || true
 fi
 
-echo "→ Syncing DMG and updater artifacts to website/public/release"
-node "$ROOT/scripts/sync-release-artifacts.mjs"
+echo "→ Syncing DMG and updater artifacts to website/public/release ($ARCH)"
+RELAYBASE_MAC_ARCH="$ARCH" node "$ROOT/scripts/sync-release-artifacts.mjs"
 
 LATEST_JSON="$ROOT/../hq/website/public/release/latest.json"
 if [[ ! -f "$LATEST_JSON" ]]; then
@@ -143,11 +172,11 @@ fi
 echo "→ Updater manifest: hq/website/public/release/latest.json"
 
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" || -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
-  echo "→ Uploading release binaries to Cloudflare R2"
-  bash "$ROOT/scripts/deploy/upload-release-r2.sh"
+  echo "→ Uploading release binaries to Cloudflare R2 ($ARCH)"
+  RELAYBASE_MAC_ARCH="$ARCH" bash "$ROOT/scripts/deploy/upload-release-r2.sh"
 else
   echo "⚠ CLOUDFLARE_API_TOKEN/ACCOUNT_ID unset — skipping R2 upload."
   echo "  Large DMG/tar.gz must be uploaded before downloads/updater will work."
 fi
 
-echo "✓ Relaybase macOS build complete"
+echo "✓ Relaybase macOS $ARCH build complete"

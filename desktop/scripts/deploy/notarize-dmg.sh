@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
 # Notarize and staple DMGs (Tauri notarizes the .app; the .dmg needs its own pass).
+# Usage: notarize-dmg.sh [dmg-dir]
+# Default dmg-dir: aarch64-apple-darwin release bundle (or RELAYBASE_MAC_ARCH).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CARGO_TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
-DMG_DIR="$CARGO_TARGET/universal-apple-darwin/release/bundle/dmg"
+
+ARCH="${RELAYBASE_MAC_ARCH:-aarch64}"
+case "$ARCH" in
+  aarch64|arm64) RUST_TARGET="aarch64-apple-darwin" ;;
+  x86_64|intel|amd64) RUST_TARGET="x86_64-apple-darwin" ;;
+  *)
+    echo "✗ Unknown RELAYBASE_MAC_ARCH=$ARCH (use aarch64 or x86_64)" >&2
+    exit 1
+    ;;
+esac
+
+DMG_DIR="${1:-$CARGO_TARGET/$RUST_TARGET/release/bundle/dmg}"
 
 if [[ ! -d "$DMG_DIR" ]]; then
   echo "✗ DMG directory not found: $DMG_DIR" >&2

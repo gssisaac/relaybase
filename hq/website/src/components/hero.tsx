@@ -50,9 +50,9 @@ export function Hero() {
             </Badge>
 
             <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl lg:text-[3.25rem] lg:leading-[1.06]">
-              Your domains already live on Cloudflare.
+              Fast email client
               <span className="mt-2 block text-brand">
-                Now give them an inbox.
+                for your Cloudflare domains
               </span>
             </h1>
 

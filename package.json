@@ -18,6 +18,8 @@
     "desktop:dev": "pnpm --dir desktop dev",
     "desktop:build": "pnpm --dir desktop build",
     "desktop:build:macos": "pnpm --dir desktop build:macos",
+    "desktop:build:macos:aarch64": "pnpm --dir desktop build:macos:aarch64",
+    "desktop:build:macos:x86_64": "pnpm --dir desktop build:macos:x86_64",
     "desktop:build:local": "pnpm --dir desktop build:local",
     "desktop:build:local:debug": "pnpm --dir desktop build:local:debug",
     "desktop:build:local:app": "pnpm --dir desktop build:local:app",

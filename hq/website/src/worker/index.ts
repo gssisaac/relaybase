@@ -5,7 +5,11 @@ import {
   getInviteByUuid,
   insertInvite,
 } from "./invites";
-import { resolveRelease } from "./release";
+import {
+  INTEL_MAC_DOWNLOAD_ENABLED,
+  resolveRelease,
+  type MacArch,
+} from "./release";
 import { sendBetaSignupEmails } from "./send";
 import type { IncomingCf, InviteData, WorkerEnv } from "./types";
 import { parseUserAgent } from "./ua";
@@ -32,21 +36,30 @@ export default {
       if (request.method !== "GET" && request.method !== "HEAD") {
         return new Response("Method not allowed", { status: 405 });
       }
-      return handleDownload(env, download.uuid, download.file);
+      return handleDownload(env, download.uuid, download.file, download.arch);
     }
 
     return env.ASSETS.fetch(request);
   },
 };
 
-function matchDownload(
-  path: string,
-): { uuid: string; file: boolean } | null {
+function matchDownload(path: string): {
+  uuid: string;
+  file: boolean;
+  arch: MacArch | null;
+} | null {
   const match = path.match(
-    /^\/downloads\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(\/file)?\/?$/i,
+    /^\/downloads\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/file(?:\/(aarch64|x86_64))?)?\/?$/i,
   );
   if (!match) return null;
-  return { uuid: match[1]!.toLowerCase(), file: Boolean(match[2]) };
+  const archRaw = match[2]?.toLowerCase();
+  const arch: MacArch | null =
+    archRaw === "aarch64" || archRaw === "x86_64" ? archRaw : null;
+  return {
+    uuid: match[1]!.toLowerCase(),
+    file: path.includes("/file"),
+    arch,
+  };
 }
 
 async function handleBeta(
@@ -129,6 +142,7 @@ async function handleDownload(
   env: WorkerEnv,
   uuid: string,
   file: boolean,
+  arch: MacArch | null,
 ): Promise<Response> {
   if (!UUID_RE.test(uuid) || !env.DB) {
     return renderNotFound();
@@ -142,16 +156,26 @@ async function handleDownload(
   const release = await resolveRelease(env);
 
   if (file) {
-    if (!release.dmgUrl) {
+    const selected: MacArch = arch ?? "aarch64";
+    if (selected === "x86_64" && !INTEL_MAC_DOWNLOAD_ENABLED) {
+      return new Response("Intel Mac installer is not available yet", {
+        status: 503,
+      });
+    }
+    const dmgUrl =
+      selected === "x86_64" ? release.dmgUrlX86_64 : release.dmgUrlAarch64;
+    if (!dmgUrl) {
       return new Response("Installer unavailable", { status: 503 });
     }
     await appendDownload(env, uuid, new Date().toISOString());
-    return Response.redirect(release.dmgUrl, 302);
+    return Response.redirect(dmgUrl, 302);
   }
 
   return renderDownloadPage({
-    dmgUrl: release.dmgUrl,
-    filePath: `/downloads/${uuid}/file`,
+    dmgUrlAarch64: release.dmgUrlAarch64,
+    dmgUrlX86_64: release.dmgUrlX86_64,
+    filePathAarch64: `/downloads/${uuid}/file/aarch64`,
+    filePathX86_64: `/downloads/${uuid}/file/x86_64`,
     version: release.version,
   });
 }

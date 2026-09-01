@@ -22,5 +22,15 @@
   "Relaybase.0.1.2.app.tar.gz": {
     "sizeBytes": 20006857,
     "version": "0.1.2"
+  },
+  "Relaybase.0.1.2.aarch64.dmg": {
+    "sizeBytes": 10899855,
+    "version": "0.1.2",
+    "arch": "aarch64"
+  },
+  "Relaybase.0.1.2.aarch64.app.tar.gz": {
+    "sizeBytes": 10268596,
+    "version": "0.1.2",
+    "arch": "aarch64"
   }
 }

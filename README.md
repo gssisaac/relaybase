@@ -110,10 +110,11 @@ pnpm run desktop:install:local   # from repo root; build + open DMG
 
 See [desktop/docs/release.md](desktop/docs/release.md) → *Local install test* for `build:local:debug`, `.app`-only, and output paths.
 
-Release DMG (Universal, signing via `desktop/scripts/deploy/`, adapted from kloy):
+Release DMG (Apple Silicon / aarch64, signing via `desktop/scripts/deploy/`):
 
 ```bash
-cd desktop && pnpm run build:macos
+cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos
+# Intel when ready: pnpm run build:macos:x86_64
 # or from repo root: pnpm run desktop:build:macos
 ```
 

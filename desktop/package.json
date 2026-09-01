@@ -6,8 +6,10 @@
   "packageManager": "pnpm@9.12.0",
   "scripts": {
     "dev": "tauri dev",
-    "build": "bash scripts/deploy/build-macos.sh",
-    "build:macos": "bash scripts/deploy/build-macos.sh",
+    "build": "bash scripts/deploy/build-macos.sh aarch64",
+    "build:macos": "bash scripts/deploy/build-macos.sh aarch64",
+    "build:macos:aarch64": "bash scripts/deploy/build-macos.sh aarch64",
+    "build:macos:x86_64": "bash scripts/deploy/build-macos.sh x86_64",
     "build:local": "pnpm exec tauri build --bundles app,dmg",
     "build:local:debug": "pnpm exec tauri build --debug --bundles app,dmg",
     "build:local:app": "pnpm exec tauri build --bundles app",
@@ -16,8 +18,12 @@
     "open:local:app": "open src-tauri/target/release/bundle/macos/Relaybase.app",
     "install:local": "pnpm run build:local && pnpm run open:local:dmg",
     "install:local:debug": "pnpm run build:local:debug && pnpm run open:local:debug:dmg",
-    "sync:release": "node scripts/sync-release-artifacts.mjs",
-    "upload:r2": "bash scripts/deploy/upload-release-r2.sh",
+    "sync:release": "RELAYBASE_MAC_ARCH=aarch64 node scripts/sync-release-artifacts.mjs",
+    "sync:release:aarch64": "RELAYBASE_MAC_ARCH=aarch64 node scripts/sync-release-artifacts.mjs",
+    "sync:release:x86_64": "RELAYBASE_MAC_ARCH=x86_64 node scripts/sync-release-artifacts.mjs",
+    "upload:r2": "RELAYBASE_MAC_ARCH=aarch64 bash scripts/deploy/upload-release-r2.sh",
+    "upload:r2:aarch64": "RELAYBASE_MAC_ARCH=aarch64 bash scripts/deploy/upload-release-r2.sh",
+    "upload:r2:x86_64": "RELAYBASE_MAC_ARCH=x86_64 bash scripts/deploy/upload-release-r2.sh",
     "tauri": "tauri"
   },
   "devDependencies": {

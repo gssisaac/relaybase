@@ -1,3 +1,5 @@
+import { INTEL_MAC_DOWNLOAD_ENABLED } from "./release";
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -7,15 +9,24 @@ function escapeHtml(value: string): string {
 }
 
 export function renderDownloadPage(opts: {
-  dmgUrl: string | null;
-  filePath: string;
+  dmgUrlAarch64: string | null;
+  dmgUrlX86_64: string | null;
+  filePathAarch64: string;
+  filePathX86_64: string;
   version: string | null;
 }): Response {
-  const href = opts.dmgUrl ? opts.filePath : null;
   const versionLabel = opts.version ? escapeHtml(opts.version) : null;
-  const macButton = versionLabel
-    ? `Download Mac app ${versionLabel} (Universal)`
-    : "Download Mac app (Universal)";
+  const siliconLabel = versionLabel
+    ? `Download ${versionLabel} · Apple Silicon`
+    : "Download · Apple Silicon";
+  const intelLabel = versionLabel
+    ? `Download ${versionLabel} · Intel`
+    : "Download · Intel";
+
+  const siliconHref = opts.dmgUrlAarch64 ? opts.filePathAarch64 : null;
+  const intelEnabled =
+    INTEL_MAC_DOWNLOAD_ENABLED && Boolean(opts.dmgUrlX86_64);
+  const intelHref = intelEnabled ? opts.filePathX86_64 : null;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -84,7 +95,7 @@ export function renderDownloadPage(opts: {
       text-transform: uppercase;
       color: var(--muted);
     }
-    a.btn {
+    a.btn, button.btn, span.btn {
       display: inline-block;
       margin-top: 0.65rem;
       padding: 0.7rem 1.15rem;
@@ -94,13 +105,28 @@ export function renderDownloadPage(opts: {
       text-decoration: none;
       font-weight: 600;
       font-size: 0.95rem;
+      border: none;
+      font-family: inherit;
+      cursor: pointer;
     }
     a.btn:hover { filter: brightness(0.95); }
+    span.btn.disabled, button.btn:disabled {
+      background: #cbd5e1;
+      color: #475569;
+      cursor: not-allowed;
+      filter: none;
+    }
     .soon-label {
       margin-top: 0.45rem;
       font-size: 0.95rem;
       font-weight: 600;
       color: var(--muted);
+    }
+    .hint {
+      margin-top: 0.35rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
     }
     .missing { margin-top: 0.65rem; color: #b91c1c; font-size: 0.9rem; }
   </style>
@@ -110,14 +136,25 @@ export function renderDownloadPage(opts: {
     <img src="/icon.png" alt="" />
     <div class="badge">Beta</div>
     <h1>Download Relaybase</h1>
-    <p class="lead">Mac is available now as a Universal build. Windows is coming soon.</p>
+    <p class="lead">Mac for Apple Silicon is available now. Intel Mac and Windows are coming soon.</p>
     <div class="platforms">
       <div class="row">
-        <div class="os">Mac</div>
+        <div class="os">Mac · Apple Silicon</div>
         ${
-          href
-            ? `<a class="btn" href="${href}">${macButton}</a>`
-            : `<p class="missing">The installer is not available yet. Try again shortly.</p>`
+          siliconHref
+            ? `<a class="btn" href="${siliconHref}">${siliconLabel}</a>
+               <p class="hint">M1, M2, M3, M4 and later</p>`
+            : `<p class="missing">The Apple Silicon installer is not available yet. Try again shortly.</p>`
+        }
+      </div>
+      <div class="row${intelEnabled ? "" : " soon"}">
+        <div class="os">Mac · Intel</div>
+        ${
+          intelHref
+            ? `<a class="btn" href="${intelHref}">${intelLabel}</a>
+               <p class="hint">Intel Macs (x86_64)</p>`
+            : `<span class="btn disabled" aria-disabled="true">${intelLabel}</span>
+               <p class="soon-label">Coming soon</p>`
         }
       </div>
       <div class="row soon">

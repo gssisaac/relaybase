@@ -6,9 +6,7 @@
 //! Boot: silent mail refresh (`owner_boot_mail`). Expired refresh: Touch ID
 //! then `owner_login_from_keyring`. Valid console refresh unlocks silently.
 
-use crate::cloudflare::{
-    resolve_account_id, resolve_account_id_for_recover_with_hint, secrets_store_accessible,
-};
+use crate::cloudflare::{resolve_account_id_for_recover_with_hint, secrets_store_accessible};
 use crate::secrets::{get_cf_oauth_session, load_credentials, save_credentials};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

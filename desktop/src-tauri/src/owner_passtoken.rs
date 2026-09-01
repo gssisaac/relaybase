@@ -76,11 +76,6 @@ pub fn is_stored() -> bool {
     read_record().is_some()
 }
 
-/// Back-compat alias for status probes.
-pub fn exists() -> bool {
-    is_stored()
-}
-
 /// Prefix hint for Worker matching — never returns the secret.
 pub fn stored_prefix() -> String {
     read_record()

@@ -19,10 +19,10 @@ Pattern mirrors sibling `../kloy/app/docs/release.md`.
 `pnpm run build:macos` (and `pnpm run build` in `desktop/`) always builds a
 fat binary. Host-arch-only and per-arch DMGs are not a release.
 
-**Agents / operators:** never run bare `tauri build` or
-`pnpm exec tauri build --bundles app,dmg` for a release. On Apple Silicon that
+**Agents / operators:** for **shipping**, never use the local arm64 scripts below or bare
+`tauri build` without `--target universal-apple-darwin`. On Apple Silicon that
 produces **arm64-only** output under `target/release/bundle/` — it looks signed
-but is not the shipped Universal DMG and may fail to open on some Macs. The
+but is not the shipped Universal DMG and may fail to open on Intel Macs. The
 release script verifies `lipo -info` shows both `x86_64` and `arm64` before
 sync/R2 upload.
 
@@ -51,6 +51,44 @@ Do not overwrite an already-shipped version on R2. Versioned objects use
 
 ---
 
+## Local install test (Apple Silicon, **not** a release)
+
+Fast **host-arch-only** builds for drag-to-`/Applications` smoke tests on your
+own Mac. These are **not** Universal, **not** uploaded to R2, and **must not**
+replace shipped release artifacts or `hq/website/public/release/latest.json`.
+
+Scripts live in `desktop/package.json`; repo root wraps them with the
+`desktop:` prefix.
+
+| Goal | Repo root | `desktop/` |
+|------|-----------|------------|
+| Build arm64 release DMG + open | `pnpm run desktop:install:local` | `pnpm run install:local` |
+| Build debug DMG + open | `pnpm run desktop:install:local:debug` | `pnpm run install:local:debug` |
+| Build arm64 release DMG only | `pnpm run desktop:build:local` | `pnpm run build:local` |
+| Build debug DMG only | `pnpm run desktop:build:local:debug` | `pnpm run build:local:debug` |
+| Build `.app` only (fastest) | `pnpm run desktop:build:local:app` | `pnpm run build:local:app` |
+| Open an existing local DMG / app | `desktop:open:local:dmg`, `desktop:open:local:debug:dmg`, `desktop:open:local:app` | same without prefix |
+
+**Output paths** (do **not** confuse with the Universal release tree):
+
+| Profile | `.app` / DMG |
+|---------|----------------|
+| Release (local) | `desktop/src-tauri/target/release/bundle/{macos,dmg}/` |
+| Debug (local) | `desktop/src-tauri/target/debug/bundle/{macos,dmg}/` |
+| **Shipped release** | `desktop/src-tauri/target/universal-apple-darwin/release/bundle/{macos,dmg}/` |
+
+Under the hood, `build:local*` runs `tauri build` on the **host** triple (arm64 on
+Apple Silicon). It skips dual-arch compile, `lipo`, `verify-universal-app.sh`,
+notarization wrapper, `sync-release-artifacts.mjs`, and R2 upload.
+
+**Agents:** use `desktop:install:local` (or `build:local*`) only when the user
+asks for a **local install test** on Apple Silicon. For customer-facing release,
+website sync, or updater metadata, use **`pnpm run build:macos`** only.
+
+Daily UI work remains `pnpm dev` / `desktop:dev` (`tauri dev` → `target/debug/`).
+
+---
+
 ## Build cautions
 
 Read this before changing signing entitlements, running release builds from an
@@ -59,10 +97,11 @@ agent/automation, or debugging “The application Relaybase can't be opened.”
 ### Universal target only (arm64-only is not a release)
 
 On Apple Silicon, `tauri build` without `--target universal-apple-darwin` writes
-to `target/release/bundle/` and produces an **arm64-only** `.app` / DMG. It can
-look signed and notarized but is **not** what ships. Always use
-`pnpm run build:macos`; the script fails if `lipo -info` does not list both
-`x86_64` and `arm64`.
+to `target/release/bundle/` and produces an **arm64-only** `.app` / DMG. The
+`build:local*` / `install:local*` scripts intentionally use this path for **local
+smoke tests only** — see [Local install test](#local-install-test-apple-silicon-not-a-release).
+For anything that ships, always use `pnpm run build:macos`; the script fails if
+`lipo -info` does not list both `x86_64` and `arm64`.
 
 ### Do **not** add `keychain-access-groups` to Developer ID entitlements
 

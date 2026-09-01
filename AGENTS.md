@@ -73,8 +73,9 @@ Full policy: **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)*
 
 Read **[desktop/docs/release.md](desktop/docs/release.md)** before any signed DMG / R2 / updater work.
 
-- **Only** `cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos` (same as `pnpm run build` inside `desktop/`). Run from a normal terminal with network — sandboxed/agent runs can fail codesign timestamp.
-- **Never** bare `tauri build` or `pnpm exec tauri build --bundles app,dmg` for a release — on Apple Silicon that is **arm64-only** under `src-tauri/target/release/bundle/`, not the shipped Universal fat binary.
+- **Ship / R2 / updater:** `cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos` (same as `pnpm run build` inside `desktop/`). Run from a normal terminal with network — sandboxed/agent runs can fail codesign timestamp.
+- **Local install smoke test (Apple Silicon only, not a release):** `pnpm run desktop:install:local` from repo root, or `pnpm run install:local` in `desktop/`. Output under `src-tauri/target/release/bundle/` — **not** `universal-apple-darwin/`. See *Local install test* in `desktop/docs/release.md`.
+- **Never** use `build:local*` / bare `tauri build` for a customer release — on Apple Silicon that is **arm64-only** under `src-tauri/target/release/bundle/`, not the shipped Universal fat binary.
 - Release artifacts live under `src-tauri/target/universal-apple-darwin/release/bundle/`. `build-macos.sh` runs `verify-universal-app.sh` (`lipo` must list **x86_64** and **arm64**) before sync/R2.
 - **Never** add `keychain-access-groups` to `entitlements.plist` for Developer ID builds — macOS 26 AMFI blocks launch (error 163) even when notarization passes. See **Build cautions** in `desktop/docs/release.md`.
 - R2 upload uses the **website** Cloudflare account from `hq/website/wrangler.jsonc`, not necessarily `desktop/.env` `CLOUDFLARE_ACCOUNT_ID`.

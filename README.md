@@ -101,10 +101,20 @@ pnpm dev   # starts app/ on :32830 and opens the Tauri window
 
 Daily UI work: prefer `cd app && pnpm dev` in the browser (fast HMR). Use `desktop` when testing Worker install or the native shell (credentials temporarily in `~/.relaybase/`).
 
-Release DMG (signing via `desktop/scripts/deploy/`, adapted from kloy):
+Local install smoke test on Apple Silicon (arm64-only DMG — **not** a shipped release):
+
+```bash
+pnpm run desktop:install:local   # from repo root; build + open DMG
+# or: cd desktop && pnpm run install:local
+```
+
+See [desktop/docs/release.md](desktop/docs/release.md) → *Local install test* for `build:local:debug`, `.app`-only, and output paths.
+
+Release DMG (Universal, signing via `desktop/scripts/deploy/`, adapted from kloy):
 
 ```bash
 cd desktop && pnpm run build:macos
+# or from repo root: pnpm run desktop:build:macos
 ```
 
 Static export only (what Tauri bundles):

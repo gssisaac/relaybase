@@ -8,4 +8,4 @@ mod keyring_store;
 mod tmp_fs;
 
 pub use cf_oauth_cache::{clear as clear_cf_oauth_cache, hydrate, load as load_cf_oauth_cache, save as save_cf_oauth_cache};
-pub use keyring_store::{delete_password, get_password, has_password, set_password};
+pub use keyring_store::{delete_password, get_password, set_password};

@@ -121,13 +121,22 @@ function fireInstallConfetti() {
 
 export function SetupProgressPanel({
   purpose = "install",
+  fromRecover = false,
 }: {
   purpose?: InstallFlowPurpose;
+  /** Forgot-passtoken recover cannot enter Settings; keep update on /setup. */
+  fromRecover?: boolean;
 }) {
   const router = useRouter();
   const store = useAppSession();
   const { refresh, credentials } = useDesktop();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
+  const workerUpdateHref = fromRecover
+    ? "/setup/worker-update"
+    : "/settings/worker/update";
+  const workerUpdateHomeHref = fromRecover
+    ? "/setup/recover-admin"
+    : "/settings/worker";
   const [probing, setProbing] = useState(false);
   const [existing, setExisting] = useState<InstallResourceProbe[]>([]);
   const [decisions, setDecisions] = useState<Record<string, "skip" | "reinstall">>(
@@ -279,7 +288,7 @@ export function SetupProgressPanel({
     if (!cfOAuthConnected) {
       router.replace(
         purpose === "worker-update"
-          ? "/settings/worker/update"
+          ? workerUpdateHref
           : "/setup/install",
       );
       return;
@@ -397,7 +406,7 @@ export function SetupProgressPanel({
       setNeedsOwnerSetup(false);
       setInstallPepper(null);
       setAutoDone({ workerUrl, revealedPasstoken: "" });
-      router.replace("/settings/worker");
+      router.replace(workerUpdateHomeHref);
       return;
     }
     const pepper = result.authPepper?.trim() ?? "";
@@ -882,10 +891,12 @@ export function SetupProgressPanel({
     <SetupScrollPage>
       <div className="flex justify-end">
         <SetupBackLink
-          href={purpose === "worker-update" ? "/settings/worker" : "/setup"}
+          href={purpose === "worker-update" ? workerUpdateHomeHref : "/setup"}
           label={
             purpose === "worker-update"
-              ? "Back to Worker settings"
+              ? fromRecover
+                ? "Back"
+                : "Back to Worker settings"
               : "Back to start"
           }
           onClick={async () => {
@@ -1559,7 +1570,7 @@ export function SetupProgressPanel({
               onClick={() =>
                 router.push(
                   purpose === "worker-update"
-                    ? "/settings/worker/update"
+                    ? workerUpdateHref
                     : "/setup/install",
                 )
               }

@@ -82,8 +82,11 @@ function saveDraft(draft: Draft) {
 
 export function WorkerInstallPanel({
   purpose = "install",
+  backHref,
 }: {
   purpose?: InstallFlowPurpose;
+  /** Override back/finish path. Setup recover uses `/setup/recover-admin`. */
+  backHref?: string;
 }) {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
@@ -266,7 +269,10 @@ export function WorkerInstallPanel({
     });
     setInstallPepper("");
     await refresh();
-    router.replace(purpose === "worker-update" ? "/settings/worker" : "/");
+    router.replace(
+      backHref ??
+        (purpose === "worker-update" ? "/settings/worker" : "/"),
+    );
   }
 
   async function probeHealth(url: string): Promise<void> {
@@ -401,9 +407,16 @@ export function WorkerInstallPanel({
 
         <div className="flex justify-end">
           <SetupBackLink
-            href={purpose === "worker-update" ? "/settings/worker" : "/setup"}
+            href={
+              backHref ??
+              (purpose === "worker-update" ? "/settings/worker" : "/setup")
+            }
             label={
-              purpose === "worker-update" ? "Back to Worker settings" : "Back to start"
+              backHref
+                ? "Back"
+                : purpose === "worker-update"
+                  ? "Back to Worker settings"
+                  : "Back to start"
             }
           />
         </div>
@@ -620,7 +633,11 @@ export function WorkerInstallPanel({
         onConfirm={() => {
           if (!targetPreview?.matches) return;
           setTargetConfirmOpen(false);
-          router.push("/settings/worker/progress");
+          router.push(
+            backHref
+              ? "/setup/worker-update/progress"
+              : "/settings/worker/progress",
+          );
         }}
         onAuthorizeAgain={() => {
           setTargetConfirmOpen(false);

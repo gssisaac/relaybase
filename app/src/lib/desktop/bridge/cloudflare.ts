@@ -134,6 +134,18 @@ export function displayCfAccountId(opts: {
   );
 }
 
+/** Account this Mac connected via Cloudflare OAuth (`workspace.json`). */
+export function connectedCfAccountId(credentials?: {
+  accountId?: string | null;
+  cfOauthAccountId?: string | null;
+} | null): string {
+  return (
+    credentials?.accountId?.trim() ||
+    credentials?.cfOauthAccountId?.trim() ||
+    ""
+  );
+}
+
 /** Cloudflare dashboard → this account's R2 home (not checkout). */
 export function cloudflareR2DashboardUrl(accountId: string): string {
   const id = accountId.trim();

@@ -37,7 +37,11 @@ export function SessionPhaseScreen({
       router.replace("/setup");
       return;
     }
-    if (phase.kind === "ownerRecover" && path !== "/setup/recover-admin") {
+    if (
+      phase.kind === "ownerRecover" &&
+      path !== "/setup/recover-admin" &&
+      !path.startsWith("/setup/worker-update")
+    ) {
       router.replace("/setup/recover-admin");
       return;
     }

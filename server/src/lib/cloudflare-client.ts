@@ -1,4 +1,3 @@
-import { resolveCfAccountIdFromToken } from "./cloudflare-account.ts";
 import {
   cloudflarePermissionHint,
   cloudflareSendingErrorHint,
@@ -108,7 +107,7 @@ export type CloudflareClientCredentials = {
 };
 
 export class CloudflareClient {
-  private accountId: string;
+  public readonly accountId: string;
   private apiToken: string;
 
   constructor(credentials: CloudflareClientCredentials) {
@@ -118,14 +117,9 @@ export class CloudflareClient {
 
   private async requireAccountId(): Promise<string> {
     if (this.accountId) return this.accountId;
-    const resolved = await resolveCfAccountIdFromToken(this.apiToken);
-    if (!resolved) {
-      throw new Error(
-        "Could not resolve Cloudflare account from CF_API_TOKEN. Check token permissions.",
-      );
-    }
-    this.accountId = resolved;
-    return resolved;
+    throw new Error(
+      "Cloudflare account is not pinned. REST Email Sending needs CF_ACCOUNT_ID, D1 owner_config.cf_account_id, or the connected desktop accountId — it must not guess from GET /zones.",
+    );
   }
 
   private tokenHeaders(): Record<string, string> {
@@ -401,8 +395,9 @@ export class CloudflareClient {
   }
 
   async listZones(): Promise<CfListedZone[]> {
-    const zones: CfListedZone[] = [];
     const pinned = this.accountId;
+    if (!pinned) return [];
+    const zones: CfListedZone[] = [];
     let page = 1;
     for (;;) {
       const data = await this.request<
@@ -425,9 +420,10 @@ export class CloudflareClient {
   }
 
   async resolveZoneId(domain: string): Promise<string | null> {
+    if (!this.accountId) return null;
     const name = domain.trim();
     const params = new URLSearchParams({ name });
-    if (this.accountId) params.set("account.id", this.accountId);
+    params.set("account.id", this.accountId);
     const data = await this.request<
       Array<{ id: string; name: string; account?: { id?: string } }>
     >(`/zones?${params.toString()}`);

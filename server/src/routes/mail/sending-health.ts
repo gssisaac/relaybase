@@ -8,6 +8,7 @@ import {
   collectSendingHealth,
   UNKNOWN_ERROR,
 } from "../../lib/sending-health";
+import { normalizeCfAccountId } from "../../lib/cf-account-id.ts";
 
 const mailSendingHealth = new Hono<{ Bindings: Env }>();
 
@@ -25,14 +26,18 @@ mailSendingHealth.get("/", async (c) => {
   let cf = null;
   let probeError: string | undefined;
   try {
-    cf = await createCloudflareClient(c.env);
+    cf = await createCloudflareClient(c.env, {
+      accountId: c.req.query("accountId"),
+    });
   } catch (error) {
     probeError =
       error instanceof Error ? error.message : UNKNOWN_ERROR;
   }
 
   const snapshot = await collectSendingHealth(mailbox.domains, cf, {
-    accountId: c.env.CF_ACCOUNT_ID,
+    accountId:
+      normalizeCfAccountId(c.req.query("accountId")) ??
+      c.env.CF_ACCOUNT_ID,
     probeError,
   });
   return c.json(snapshot);

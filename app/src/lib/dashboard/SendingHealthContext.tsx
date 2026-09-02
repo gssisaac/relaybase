@@ -11,6 +11,8 @@ import {
 } from "react";
 
 import { useAppSession } from "@/lib/desktop/app-session";
+import { connectedCfAccountId } from "@/lib/desktop/bridge";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 import {
   desktopAwareFetch,
   readResponseJson,
@@ -39,10 +41,15 @@ export type SendingHealthApi = {
 
 const SendingHealthContext = createContext<SendingHealthApi | null>(null);
 
-async function fetchSendingHealth(team: boolean): Promise<SendingHealthSnapshot> {
+async function fetchSendingHealth(
+  team: boolean,
+  accountId?: string,
+): Promise<SendingHealthSnapshot> {
+  const pin = accountId?.trim() ?? "";
+  const qs = pin ? `?accountId=${encodeURIComponent(pin)}` : "";
   const res = team
-    ? await teamWorkerFetch("/mobile/sending-health")
-    : await desktopAwareFetch("/api/email/sending-health");
+    ? await teamWorkerFetch(`/mobile/sending-health${qs}`)
+    : await desktopAwareFetch(`/api/email/sending-health${qs}`);
   if (!res.ok) {
     const body = await readResponseJson<{ error?: string }>(res).catch(
       () => ({ error: undefined as string | undefined }),
@@ -62,6 +69,8 @@ export function SendingHealthProvider({
   enabled?: boolean;
 }) {
   const session = useAppSession();
+  const desktop = useOptionalDesktop();
+  const connectedAccountId = connectedCfAccountId(desktop?.credentials);
   const isTeam = session.phase.kind === "invitedReady";
   const canFetch =
     enabled && (session.phase.kind === "ownerReady" || isTeam);
@@ -83,7 +92,7 @@ export function SendingHealthProvider({
       if (!force) setLoading(true);
       else setRefreshing(true);
       try {
-        const next = await fetchSendingHealth(isTeam);
+        const next = await fetchSendingHealth(isTeam, connectedAccountId);
         setSnapshot(next);
         setError(null);
       } catch (err) {
@@ -95,7 +104,7 @@ export function SendingHealthProvider({
         setRefreshing(false);
       }
     },
-    [canFetch, isTeam],
+    [canFetch, isTeam, connectedAccountId],
   );
 
   useEffect(() => {

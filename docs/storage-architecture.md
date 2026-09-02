@@ -96,7 +96,7 @@ Mobile passwords (`/mobile/*`) and product API keys (`/v1/*`, `~/.relaybase/{sco
 
 ### HTTP surface (Bearer owner access token)
 
-The product Worker manages domains / inbox routing / DNS with wrangler secret `CF_API_TOKEN` (set after install). `CF_ACCOUNT_ID` is **optional** — not required for mail API readiness; when listing or resolving zones, prefer the pinned account (env → D1) so other CF accounts on the same token are not imported. Policy: **[cf-oauth-install-token.md](./cf-oauth-install-token.md)** → *Worker CF_ACCOUNT_ID*. Owner auth uses `AUTH_PEPPER` (passtoken hashing + access-token HMAC) — see **Owner auth** above. The Worker exposes:
+The product Worker manages domains / inbox routing / DNS with wrangler secret `CF_API_TOKEN` (set after install). `CF_ACCOUNT_ID` is **optional** — not required for mail API readiness. Listing, importing, and resolving zones uses only the pinned account (caller `accountId` → env → D1). Other Cloudflare accounts on the same token are never listed. Policy: **[cf-oauth-install-token.md](./cf-oauth-install-token.md)** → *Worker CF_ACCOUNT_ID*. Owner auth uses `AUTH_PEPPER` (passtoken hashing + access-token HMAC) — see **Owner auth** above. The Worker exposes:
 
 | Route | Purpose |
 |-------|---------|

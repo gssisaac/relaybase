@@ -9,6 +9,8 @@ import {
 import { formatWorkerApiError } from "@/lib/dashboard/worker-api-error";
 import { type SendingHealthDomain } from "@/lib/dashboard/sending-health";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
+import { connectedCfAccountId } from "@/lib/desktop/bridge";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,6 +63,7 @@ function markSteps(
 async function postSendingOnboard(
   domain: string,
   confirmReplace: boolean,
+  accountId?: string,
 ): Promise<
   | { kind: "ok"; domain: SendingHealthDomain }
   | { kind: "needs_confirm"; records: SendingDnsConflict[]; error: string }
@@ -70,7 +73,7 @@ async function postSendingOnboard(
   const res = await desktopAwareFetch("/api/email/sending-onboard", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ domain, confirmReplace }),
+    body: JSON.stringify({ domain, confirmReplace, accountId }),
   });
   const data = await readResponseJson<{
     domain?: SendingHealthDomain;
@@ -122,6 +125,8 @@ export function FixSendingDialog({
   onFixed: () => void;
 }) {
   const sendingHealth = useSendingHealth();
+  const desktop = useOptionalDesktop();
+  const connectedAccountId = connectedCfAccountId(desktop?.credentials);
   const [steps, setSteps] = useState<DialogStep[]>(INITIAL_STEPS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +157,11 @@ export function FixSendingDialog({
     setSteps(markSteps("zone", "running"));
     try {
       setSteps(markSteps("onboard", "running"));
-      const result = await postSendingOnboard(domain, confirmReplace);
+      const result = await postSendingOnboard(
+        domain,
+        confirmReplace,
+        connectedAccountId,
+      );
       if (result.kind === "needs_confirm") {
         setRecords(result.records);
         setError(result.error);

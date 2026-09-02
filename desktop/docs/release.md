@@ -10,7 +10,7 @@ lives on `relaybase.xyz/release`.
 Desktop and Worker share **one product semver** — always bump both together.
 First public release: **0.1.1**. Policy: [docs/version-sync.md](../../docs/version-sync.md).
 
-Later updates bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate
+**CRITICAL (Pre-launch):** Version is frozen at **`0.1.1`**. Do **NOT** bump versions before official launch. Later updates after launch bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate
 dev / `+local` channel.
 
 Worker releases: [server/customer-install/RELEASE.md](../../server/customer-install/RELEASE.md).

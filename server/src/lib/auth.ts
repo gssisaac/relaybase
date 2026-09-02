@@ -89,7 +89,7 @@ export async function requirePepperBootstrap(
 /**
  * Cloudflare OAuth access token that can prove this Worker's CF account.
  * Pin order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` →
- * `GET /accounts`. Used by `init-db` / `migrate-db` (install client).
+ * `GET /accounts` only when that token sees exactly one account.
  * Worker `CF_ACCOUNT_ID` is optional. Forgot-passtoken reset uses
  * `verifyCfTokenForReset` (Secrets Store, then GET `/accounts/{id}`).
  */

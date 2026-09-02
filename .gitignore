@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+.wrangler/
 data/products/
 data/users/*.json
 !data/users.json

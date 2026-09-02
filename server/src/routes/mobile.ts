@@ -71,13 +71,16 @@ mobile.get("/sending-health", async (c) => {
   const domains = c.get("mobileDomains");
   let cf = null;
   let probeError: string | undefined;
+  const callerAccountId = c.req.query("accountId");
   try {
-    cf = await createCloudflareClient(c.env);
+    cf = await createCloudflareClient(c.env, {
+      accountId: callerAccountId,
+    });
   } catch (error) {
     probeError = error instanceof Error ? error.message : UNKNOWN_ERROR;
   }
   const snapshot = await collectSendingHealth(domains, cf, {
-    accountId: c.env.CF_ACCOUNT_ID,
+    accountId: callerAccountId || cf?.accountId || c.env.CF_ACCOUNT_ID,
     probeError,
   });
   return c.json({

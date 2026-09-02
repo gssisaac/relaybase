@@ -15,6 +15,7 @@ import {
   setOwnerCfAccountId,
 } from "../../db/app/owner";
 import { sha256Hex } from "./crypto";
+import { normalizeCfAccountId } from "./cf-account-id.ts";
 import {
   CONSOLE_ACCESS_TTL_SECONDS,
   CONSOLE_REFRESH_TTL_SECONDS,
@@ -325,7 +326,7 @@ export async function rotatePasstoken(
   return { passtoken };
 }
 
-export { normalizeCfAccountId } from "./cf-account-id.ts";
+export { normalizeCfAccountId };
 
 // ─── reset-admin (forgot passtoken, CF OAuth proof) ─────────────────────
 

@@ -17,7 +17,7 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 | Mail R2 / D1 / search / owner login (`AUTH_PEPPER`) | No |
 | Mobile inbox / cron | No |
 | Domain / inbox / DNS via `CF_API_TOKEN` | No — zone-scoped APIs. List/import zones for the **pinned** account only (see below) |
-| REST Email Sending fallback (`/accounts/{id}/email/sending/send`) | Only if `EMAIL` is missing — discover id from `GET /zones` (`account.id` on the zone) |
+| REST Email Sending fallback (`/accounts/{id}/email/sending/send`) | Only if `EMAIL` is missing — same pinned account id as zone list (env → D1 → caller). Never invent an id from `GET /zones` |
 | `init-db` / `migrate-db` / `reset-admin` OAuth proof | Optional pin — see below |
 
 **Ready signal** (`GET /console/connect` → `mailApiReady`): `cfApiTokenSet` and `cfApiTokenValid !== false`. Do **not** gate on Worker `accountId`.
@@ -30,9 +30,9 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 | D1 `owner_config.cf_account_id` | Durable pin for OAuth proof after first successful verify / reset. Prefer this over a wrangler secret. |
 | Worker secret `CF_ACCOUNT_ID` | Optional convenience. Desktop auto-install may still PUT it. Absence must not block mail API or verify. |
 
-When the Worker needs an account id (REST send fallback, dashboard links, OAuth proof), resolve in this order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` → **`GET /zones` and read `account.id`** (Zone Read — the server token already has this) → `GET /accounts` (Account Read, often missing). Persist a discovered id to D1 when possible.
+When the Worker needs an account id (REST send fallback, dashboard links, OAuth proof), resolve in this order: caller-supplied id (desktop `workspace.json` `accountId`) → env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id`. If none of those exist, OAuth proof may use `GET /accounts` only when that token sees **exactly one** account. Never take an account id from `GET /zones`.
 
-**Zone list / import is account-scoped.** A user API token often sees zones on every Cloudflare account the user belongs to. `GET /console/zones`, sending health, and `resolveZoneId` must use the pinned account (env → D1). Do **not** invent a pin from the first zone in an unfiltered list — that can lock onto the wrong account. When no pin is available, each zone includes `account.id` so the desktop can filter by the OAuth-selected `workspace.json` `accountId`. A domain on another account must not be offered or onboarded (Email Routing cannot attach that zone to this Worker).
+**Zone list / import is account-scoped.** `GET /console/zones`, sending health, and `resolveZoneId` require the pinned account. No pin → no zones and no zone id. A domain on another account is not listed or onboarded.
 
 Do **not** store Cloudflare account id or API tokens in HQ ops D1.
 

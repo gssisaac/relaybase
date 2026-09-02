@@ -8,29 +8,29 @@ const ACCOUNT_B = "bb".repeat(16);
 
 describe("zonesOnConnectedAccount", () => {
   const zones = [
-    { id: "1", name: "relaybase.xyz", status: "active", accountId: ACCOUNT_A },
+    { id: "1", name: "wipibox.com", status: "active", accountId: ACCOUNT_A },
     { id: "2", name: "other.dev", status: "active", accountId: ACCOUNT_B },
   ];
 
-  it("drops zones from other Cloudflare accounts", () => {
+  it("keeps only the connected Cloudflare account", () => {
     assert.deepEqual(zonesOnConnectedAccount(zones, ACCOUNT_A), [zones[0]]);
   });
 
-  it("keeps the full list when the Worker omitted accountId", () => {
-    const legacy = [
-      { id: "1", name: "relaybase.xyz", status: "active" },
+  it("drops untagged zones instead of showing every account", () => {
+    const untagged = [
+      { id: "1", name: "wipibox.com", status: "active" },
       { id: "2", name: "other.dev", status: "active" },
     ];
-    assert.deepEqual(zonesOnConnectedAccount(legacy, ACCOUNT_A), legacy);
+    assert.deepEqual(zonesOnConnectedAccount(untagged, ACCOUNT_A), []);
   });
 
-  it("keeps the full list without a connected account id", () => {
-    assert.equal(zonesOnConnectedAccount(zones, "").length, 2);
+  it("returns nothing without a connected account id", () => {
+    assert.deepEqual(zonesOnConnectedAccount(zones, ""), []);
   });
 
-  it("does not hide a Worker-scoped list from a different pin", () => {
+  it("does not keep another account's Worker-scoped list", () => {
     const onlyB = [zones[1]!];
-    assert.deepEqual(zonesOnConnectedAccount(onlyB, ACCOUNT_A), onlyB);
+    assert.deepEqual(zonesOnConnectedAccount(onlyB, ACCOUNT_A), []);
   });
 
   it("hides a mixed list that does not include the connected account", () => {

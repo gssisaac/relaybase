@@ -22,15 +22,16 @@ export function mapCfZoneRow(zone: {
 }
 
 /**
- * Keep zones on the pinned CF account. An empty pin does not filter —
- * the desktop then uses the OAuth-selected account id.
+ * Keep zones on the pinned CF account only. No pin → empty.
+ * A user API token can see every account the user belongs to; import and
+ * sending health must never use that unscoped list.
  */
 export function zonesOnPinnedAccount<T extends { accountId?: string }>(
   zones: T[],
   pinnedAccountId: string | null | undefined,
 ): T[] {
   const pinned = normalizeCfAccountId(pinnedAccountId);
-  if (!pinned) return zones;
+  if (!pinned) return [];
   return zones.filter(
     (zone) => normalizeCfAccountId(zone.accountId) === pinned,
   );
@@ -41,19 +42,22 @@ export function zoneBelongsToPinnedAccount(
   pinnedAccountId: string | null | undefined,
 ): boolean {
   const pinned = normalizeCfAccountId(pinnedAccountId);
-  if (!pinned) return true;
+  if (!pinned) return false;
   return normalizeCfAccountId(zoneAccountId) === pinned;
 }
 
 export function zonesListQuery(
   page: number,
-  pinnedAccountId?: string | null,
+  pinnedAccountId: string,
 ): string {
+  const pinned = normalizeCfAccountId(pinnedAccountId);
+  if (!pinned) {
+    throw new Error("Cloudflare zone list requires a pinned account id");
+  }
   const params = new URLSearchParams({
     per_page: "50",
     page: String(page),
+    "account.id": pinned,
   });
-  const pinned = normalizeCfAccountId(pinnedAccountId);
-  if (pinned) params.set("account.id", pinned);
   return params.toString();
 }

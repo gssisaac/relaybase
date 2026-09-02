@@ -23,14 +23,18 @@ export async function readCloudflareRuntimeConfig(
   return { accountId, apiToken };
 }
 
-export async function createCloudflareClient(env: Env): Promise<CloudflareClient> {
+export async function createCloudflareClient(
+  env: Env,
+  opts?: { accountId?: string | null },
+): Promise<CloudflareClient> {
   const config = await readCloudflareRuntimeConfig(env);
   if (!config) {
     throw new Error(
       "Cloudflare API is not configured on this worker — add a CF_API_TOKEN secret (Email Routing + Zone Read + DNS) so the Worker can manage domains and DNS",
     );
   }
-  let accountId = config.accountId;
+  const fromCaller = normalizeCfAccountId(opts?.accountId) ?? "";
+  let accountId = fromCaller || config.accountId;
   if (!accountId) {
     const { pinnedCfAccountId } = await import("./pinned-cf-account.ts");
     accountId = await pinnedCfAccountId(env);

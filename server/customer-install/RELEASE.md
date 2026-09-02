@@ -5,7 +5,7 @@ Customer-facing Worker installs ship as **pre-built JS bundles** (not TypeScript
 Desktop and Worker share **one product semver** — always bump both together.
 First public release: **0.1.1**. Policy: [docs/version-sync.md](../../docs/version-sync.md).
 
-Later updates bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate
+**CRITICAL (Pre-launch):** Version is frozen at **`0.1.1`**. Do **NOT** bump versions for pre-launch bug fixes or repackaging. After official launch, later updates bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate
 dev / `+local` channel. Desktop install/update uploads **only** this hosted ZIP.
 
 Desktop releases: [desktop/docs/release.md](../../desktop/docs/release.md).

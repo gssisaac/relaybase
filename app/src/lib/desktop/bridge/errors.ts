@@ -539,6 +539,21 @@ export function explainPasstokenResetError(err: unknown): DesktopErrorHelp {
       fix: "Check that the Worker is live, then Authorize with Cloudflare again.",
     };
   }
+  if (
+    lower.includes("internal server error") ||
+    lower.includes("is not defined")
+  ) {
+    return {
+      title: "Could not reset passtoken",
+      detail:
+        stripRawApiNoise(raw) ||
+        "The running Worker threw while re-issuing the passtoken.",
+      fix: "Update the Worker script first (install OAuth — Workers Scripts Write), then come back and Authorize with Cloudflare again.",
+      links: [
+        { label: "Update Worker script", href: "/setup/worker-update" },
+      ],
+    };
+  }
   return {
     title: "Could not reset passtoken",
     detail:

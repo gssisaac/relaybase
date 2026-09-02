@@ -101,7 +101,14 @@ export async function loadWorkerVersionCompare(workerUrl?: string): Promise<{
 export async function listCloudflareZones(
   connectedAccountId?: string | null,
 ): Promise<ZoneSummary[]> {
-  const res = await desktopAwareFetch("/api/email/zones");
+  const pin = connectedAccountId?.trim() ?? "";
+  if (!pin) {
+    throw new Error(
+      "Cloudflare account is not connected. Authorize with Cloudflare, then retry.",
+    );
+  }
+  const path = `/api/email/zones?accountId=${encodeURIComponent(pin)}`;
+  const res = await desktopAwareFetch(path);
   const data = (await res.json().catch(() => ({}))) as {
     zones?: ZoneSummary[];
     error?: string;

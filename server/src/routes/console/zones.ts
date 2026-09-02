@@ -12,7 +12,9 @@ consoleZones.get("/", async (c) => {
 
   let cf;
   try {
-    cf = await createCloudflareClient(c.env);
+    cf = await createCloudflareClient(c.env, {
+      accountId: c.req.query("accountId"),
+    });
   } catch (error) {
     return c.json(
       {

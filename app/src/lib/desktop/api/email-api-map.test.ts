@@ -26,6 +26,12 @@ describe("mapEmailApiToWorker", () => {
       "/console/domains",
     );
     assert.equal(mapEmailApiToWorker("/api/email/zones"), "/console/zones");
+    assert.equal(
+      mapEmailApiToWorker(
+        "/api/email/zones?accountId=674a35f00d9800eec7d6bc42fe55726e",
+      ),
+      "/console/zones?accountId=674a35f00d9800eec7d6bc42fe55726e",
+    );
     assert.equal(mapEmailApiToWorker("/api/email/send"), "/mail/send");
     assert.equal(
       mapEmailApiToWorker("/api/email/sending-health"),

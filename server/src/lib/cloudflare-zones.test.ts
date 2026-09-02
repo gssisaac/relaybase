@@ -19,10 +19,10 @@ describe("zonesOnPinnedAccount", () => {
     { id: "z3", name: "also.xyz", status: "active", accountId: ACCOUNT_A },
   ];
 
-  it("keeps every zone when no account is pinned", () => {
-    assert.equal(zonesOnPinnedAccount(zones, "").length, 3);
-    assert.equal(zonesOnPinnedAccount(zones, null).length, 3);
-    assert.equal(zonesOnPinnedAccount(zones, "not-an-id").length, 3);
+  it("returns nothing when no account is pinned", () => {
+    assert.deepEqual(zonesOnPinnedAccount(zones, ""), []);
+    assert.deepEqual(zonesOnPinnedAccount(zones, null), []);
+    assert.deepEqual(zonesOnPinnedAccount(zones, "not-an-id"), []);
   });
 
   it("drops zones that belong to another Cloudflare account", () => {
@@ -35,8 +35,8 @@ describe("zonesOnPinnedAccount", () => {
 });
 
 describe("zoneBelongsToPinnedAccount", () => {
-  it("accepts any zone when nothing is pinned", () => {
-    assert.equal(zoneBelongsToPinnedAccount(ACCOUNT_B, ""), true);
+  it("rejects every zone when nothing is pinned", () => {
+    assert.equal(zoneBelongsToPinnedAccount(ACCOUNT_B, ""), false);
   });
 
   it("rejects a zone on a different account", () => {
@@ -46,12 +46,11 @@ describe("zoneBelongsToPinnedAccount", () => {
 });
 
 describe("zonesListQuery", () => {
-  it("omits account.id without a pin", () => {
-    assert.equal(zonesListQuery(1), "per_page=50&page=1");
-    assert.equal(zonesListQuery(2, ""), "per_page=50&page=2");
+  it("refuses to build an unfiltered zone list", () => {
+    assert.throws(() => zonesListQuery(1, ""), /pinned account id/);
   });
 
-  it("includes account.id when pinned", () => {
+  it("always includes account.id", () => {
     assert.equal(
       zonesListQuery(1, ACCOUNT_A),
       `per_page=50&page=1&account.id=${ACCOUNT_A}`,

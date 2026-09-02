@@ -16,7 +16,7 @@ consoleSendingOnboard.post("/", async (c) => {
   const denied = await requireConsoleSession(c);
   if (denied) return denied;
 
-  let body: { domain?: unknown; confirmReplace?: unknown };
+  let body: { domain?: unknown; confirmReplace?: unknown; accountId?: unknown };
   try {
     body = await c.req.json();
   } catch {
@@ -27,10 +27,12 @@ consoleSendingOnboard.post("/", async (c) => {
     return c.json({ error: "domain is required" }, 400);
   }
   const confirmReplace = body.confirmReplace === true;
+  const bodyAccountId =
+    typeof body.accountId === "string" ? body.accountId : "";
 
   let cf;
   try {
-    cf = await createCloudflareClient(c.env);
+    cf = await createCloudflareClient(c.env, { accountId: bodyAccountId });
   } catch (error) {
     return c.json(
       {
@@ -46,7 +48,7 @@ consoleSendingOnboard.post("/", async (c) => {
   try {
     const result = await onboardSendingDomain(cf, domain, {
       confirmReplace,
-      accountId: c.env.CF_ACCOUNT_ID,
+      accountId: bodyAccountId || cf.accountId || c.env.CF_ACCOUNT_ID,
     });
     if (result.ok) {
       return c.json({ domain: result.domain });

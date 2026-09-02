@@ -15,6 +15,7 @@ import {
   loadWorkerVersionCompare,
 } from "@/lib/dashboard/list-cf-zones";
 import {
+  connectedCfAccountId,
   explainDesktopError,
   type DesktopErrorHelp,
   type ZoneSummary,
@@ -53,7 +54,7 @@ export function ImportCloudflareZonesDialog({
   const router = useRouter();
   const desktop = useOptionalDesktop();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
-  const connectedAccountId = desktop?.credentials?.accountId ?? "";
+  const connectedAccountId = connectedCfAccountId(desktop?.credentials);
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;

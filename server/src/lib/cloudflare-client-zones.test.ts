@@ -52,32 +52,18 @@ describe("CloudflareClient.listZones", () => {
     }
   });
 
-  it("returns every token-visible zone when no account is pinned", async () => {
+  it("returns no zones when no account is pinned", async () => {
     const seen: string[] = [];
     const previous = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       seen.push(String(input));
-      return jsonOk([
-        {
-          id: "z1",
-          name: "relaybase.xyz",
-          status: "active",
-          account: { id: ACCOUNT_A },
-        },
-        {
-          id: "z2",
-          name: "other.dev",
-          status: "active",
-          account: { id: ACCOUNT_B },
-        },
-      ]);
+      return jsonOk([]);
     }) as typeof fetch;
     try {
       const cf = new CloudflareClient({ apiToken: "tok" });
       const zones = await cf.listZones();
-      assert.doesNotMatch(seen[0] ?? "", /account\.id=/);
-      assert.equal(zones.length, 2);
-      assert.equal(zones[1]?.accountId, ACCOUNT_B);
+      assert.equal(seen.length, 0);
+      assert.deepEqual(zones, []);
     } finally {
       globalThis.fetch = previous;
     }
@@ -103,6 +89,22 @@ describe("CloudflareClient.resolveZoneId", () => {
         apiToken: "tok",
       });
       assert.equal(await cf.resolveZoneId("other.dev"), null);
+    } finally {
+      globalThis.fetch = previous;
+    }
+  });
+
+  it("does not resolve a zone without a pinned account", async () => {
+    const previous = globalThis.fetch;
+    let called = false;
+    globalThis.fetch = (async () => {
+      called = true;
+      return jsonOk([]);
+    }) as typeof fetch;
+    try {
+      const cf = new CloudflareClient({ apiToken: "tok" });
+      assert.equal(await cf.resolveZoneId("wipibox.com"), null);
+      assert.equal(called, false);
     } finally {
       globalThis.fetch = previous;
     }

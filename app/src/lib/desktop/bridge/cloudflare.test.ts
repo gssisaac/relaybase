@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { displayCfAccountId, mailApiReady } from "./cloudflare.ts";
+import { connectedCfAccountId, displayCfAccountId, mailApiReady } from "./cloudflare.ts";
 
 describe("mailApiReady", () => {
   it("is ready when the token is set and the probe is not false", () => {
@@ -46,5 +46,25 @@ describe("displayCfAccountId", () => {
       "bb".repeat(16),
     );
     assert.equal(displayCfAccountId({}), "");
+  });
+});
+
+describe("connectedCfAccountId", () => {
+  it("prefers workspace accountId over the OAuth overlay", () => {
+    assert.equal(
+      connectedCfAccountId({
+        accountId: "aa".repeat(16),
+        cfOauthAccountId: "bb".repeat(16),
+      }),
+      "aa".repeat(16),
+    );
+    assert.equal(
+      connectedCfAccountId({
+        accountId: "",
+        cfOauthAccountId: "bb".repeat(16),
+      }),
+      "bb".repeat(16),
+    );
+    assert.equal(connectedCfAccountId(null), "");
   });
 });

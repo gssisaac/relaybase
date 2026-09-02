@@ -169,6 +169,14 @@ fn json_string<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty())
 }
 
+fn worker_error_message(value: &serde_json::Value, fallback: &str) -> String {
+    let error = json_string(value, "error").unwrap_or(fallback);
+    match json_string(value, "detail") {
+        Some(detail) if !error.contains(detail) => format!("{error}: {detail}"),
+        _ => error.to_string(),
+    }
+}
+
 fn normalize_passtoken(raw: &str) -> String {
     let mut token = raw.trim().to_string();
     if let Some(rest) = token.strip_prefix("PASSTOKEN=") {
@@ -566,9 +574,7 @@ pub async fn owner_reset_admin(
     }
     let (status, value) = post_json(&url, body, &[]).await?;
     if status != 200 {
-        return Err(json_string(&value, "error")
-            .unwrap_or("Could not reset passtoken")
-            .to_string());
+        return Err(worker_error_message(&value, "Could not reset passtoken"));
     }
     let passtoken = json_string(&value, "passtoken")
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;

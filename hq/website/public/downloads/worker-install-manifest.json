@@ -1,7 +1,7 @@
 {
   "version": "0.1.1",
   "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.1.zip",
-  "zipSha256": "b877bdbee320b0c6944324b0a16ce765fcebde28be65fe72d3470e5f95268be7",
-  "publishedAt": "2026-09-01T14:46:55.600Z",
+  "zipSha256": "f63a39b25a7b630daa2031d4b2c02a20396f9f6694741e5aa86879522ffda254",
+  "publishedAt": "2026-09-02T12:14:42.117Z",
   "notes": "# Relaybase Worker 0.1.1\n\nFirst public release.\n\n## Highlights\n- Cloudflare OAuth install — Worker, R2, and D1 in the customer's account\n- Owner passtoken auth (`AUTH_PEPPER` + scoped sessions)\n- Single D1 app baseline — today's schema in one migration\n\n## Changes\n- `POST /console/init-db` / `migrate-db` / `setup-admin` with pepper bootstrap or OAuth\n- Mail index (`RELAYBASE_MAIL`), ops log (`RELAYBASE_LOGS`), mailbox R2 layout\n- Optional Worker `CF_ACCOUNT_ID`; domain/DNS via `CF_API_TOKEN`"
 }

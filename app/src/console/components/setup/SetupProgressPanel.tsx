@@ -1572,6 +1572,9 @@ export function SetupProgressPanel({
                 className="w-full"
                 onClick={() => {
                   const href =
+                    error.links?.find((l) =>
+                      l.label.toLowerCase().includes("cloudflare"),
+                    )?.href ||
                     error.links?.[0]?.href ||
                     cloudflareR2DashboardUrl(cfOAuthAccountId);
                   void desktopOpenExternal(href);
@@ -1582,14 +1585,36 @@ export function SetupProgressPanel({
                 <ExternalLink className="size-3.5" />
               </Button>
               {r2DashboardOpened ? (
-                <Button
-                  type="button"
-                  className="w-full"
-                  onClick={() => void startFlow()}
-                >
-                  I&apos;ve added R2 — continue
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={() => void startFlow()}
+                  >
+                    I&apos;ve added R2 — continue
+                  </Button>
+                  <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
+                    It can take 1–2 minutes for Cloudflare to activate the
+                    subscription across its API after adding a payment method.
+                  </p>
+                </>
               ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  const learnMoreHref =
+                    error.links?.find(
+                      (l) => !l.label.toLowerCase().includes("cloudflare"),
+                    )?.href ||
+                    "https://relaybase.xyz/resources/why-cloudflare-r2-for-email";
+                  void desktopOpenExternal(learnMoreHref);
+                }}
+              >
+                Why is R2 required? (10 GB free tier)
+                <ExternalLink className="size-3" />
+              </Button>
             </div>
           ) : (
             <Button

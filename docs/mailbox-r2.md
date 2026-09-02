@@ -96,7 +96,7 @@ Desktop auto-install checks this **before** deleting or creating Worker / R2 / D
 
 `https://dash.cloudflare.com/{account_id}/r2`
 
-From that page the user can add R2 back if Cloudflare prompts. Do not deep-link `/r2/checkout/payment`.
+From that page the user can add R2 back if Cloudflare prompts. Do not deep-link `/r2/checkout/payment`. Note that after enabling R2 or adding a payment method in Cloudflare, it can take 1–2 minutes for the subscription state to propagate across Cloudflare's API.
 
 ---
 

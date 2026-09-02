@@ -326,9 +326,15 @@ export function explainDesktopError(
     return {
       title: "Cloudflare R2 is not active",
       detail:
-        "This Cloudflare account has no R2 product. Cloudflare sometimes removes the unused $0 subscription a few days after first use. Mail cannot be stored until R2 is added back.",
-      fix: "Open R2 in the Cloudflare dashboard, add R2 to the account if prompted, then return here and Try again.",
-      links: [{ label: "Open R2 in Cloudflare", href }],
+        "This Cloudflare account has no active R2 product. Cloudflare sometimes removes the unused $0 subscription a few days after first use. Mail cannot be stored until R2 is enabled (R2 includes 10 GB free monthly storage, though Cloudflare requires a payment method on file to activate).",
+      fix: "Open R2 in the Cloudflare dashboard and add R2 if prompted. It can take 1–2 minutes for Cloudflare to activate the subscription — then return here and Try again.",
+      links: [
+        { label: "Open R2 in Cloudflare", href },
+        {
+          label: "Why is R2 required? (10 GB free tier)",
+          href: "https://relaybase.xyz/resources/why-cloudflare-r2-for-email",
+        },
+      ],
     };
   }
 

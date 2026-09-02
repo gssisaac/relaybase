@@ -234,6 +234,12 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         .as_ref()
         .map(|b| !b.refresh_token.trim().is_empty())
         .unwrap_or(false);
+    let creds = load_credentials().ok().flatten().unwrap_or_default();
+    let creds_worker_url = if creds.worker_url.trim().is_empty() {
+        None
+    } else {
+        Some(creds.worker_url.trim().to_string())
+    };
     Ok(OwnerSessionStatus {
         has_mail_refresh,
         has_console_refresh,
@@ -243,15 +249,9 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         has_access: mail_access.is_some() || console_access.is_some(),
         has_passtoken: crate::owner_passtoken::is_stored(),
         keyring_passtoken_prefix: crate::owner_passtoken::stored_prefix(),
-        worker_url: blob
-            .as_ref()
-            .map(|b| b.worker_url.clone())
-            .or_else(|| {
-                mail_access
-                    .as_ref()
-                    .map(|a| a.worker_url.clone())
-                    .or_else(|| console_access.as_ref().map(|a| a.worker_url.clone()))
-            })
+        worker_url: creds_worker_url
+            .or_else(|| mail_access.as_ref().map(|a| a.worker_url.clone()))
+            .or_else(|| console_access.as_ref().map(|a| a.worker_url.clone()))
             .unwrap_or_default(),
         platform: platform_name(),
     })
@@ -323,7 +323,9 @@ async fn refresh_scope(blob: &KeyringBlob, scope: &str) -> Result<KeyringBlob, S
     }
     save_keyring(&updated)?;
     set_scoped_access(scope, base, access, expires_in);
-    persist_worker_url(base)?;
+    if load_credentials()?.is_some() {
+        persist_worker_url(base)?;
+    }
     Ok(updated)
 }
 
@@ -394,6 +396,10 @@ pub async fn owner_login(
 
 /// Silent boot mail unlock — no biometry.
 pub async fn owner_boot_mail() -> Result<OwnerSessionStatus, String> {
+    let creds = load_credentials()?.unwrap_or_default();
+    if creds.worker_url.trim().is_empty() {
+        return Err("No worker URL configured in ~/.relaybase".into());
+    }
     if access_if_valid("mail").is_some() {
         return owner_session_status();
     }
@@ -742,11 +748,4 @@ pub fn current_access_token() -> Option<String> {
 
 pub fn current_console_access_token() -> Option<String> {
     access_if_valid("console").map(|m| m.access_token)
-}
-
-pub fn current_worker_url() -> Option<String> {
-    access_if_valid("mail")
-        .map(|m| m.worker_url)
-        .or_else(|| access_if_valid("console").map(|m| m.worker_url))
-        .or_else(|| load_keyring().ok().flatten().map(|b| b.worker_url))
 }

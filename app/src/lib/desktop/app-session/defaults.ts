@@ -54,6 +54,14 @@ export function createDefaultDeps(
       ),
     clearTeamDisk: () =>
       bridge().then((b) => b.desktopClearTeamLogin()),
+    factoryReset: () => bridge().then((b) => b.desktopFactoryReset()),
+    clearDashboardClientCache: () => {
+      import("../../dashboard/shared/dashboard-client-cache")
+        .then((m) => m.clearAllDashboardClientCache())
+        .catch(() => {
+          /* best-effort */
+        });
+    },
     ...overrides,
   };
 }

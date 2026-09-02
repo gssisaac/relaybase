@@ -53,14 +53,12 @@ export function UnlockView({
   const workerUrlSeeds = useMemo(
     () =>
       role === "invited"
-        ? [teamLogin?.workerUrl, store.teamStatus?.workerUrl]
-        : [credentials?.workerUrl, store.ownerStatus?.workerUrl],
+        ? [teamLogin?.workerUrl]
+        : [credentials?.workerUrl],
     [
       role,
       credentials?.workerUrl,
-      store.ownerStatus?.workerUrl,
       teamLogin?.workerUrl,
-      store.teamStatus?.workerUrl,
     ],
   );
 

@@ -578,6 +578,21 @@ pub fn clear_credentials() -> Result<(), String> {
     Ok(())
 }
 
+/// Delete the entire `~/.relaybase` directory tree. Used by factory reset
+/// so the app returns to the initial install screen. The caller is also
+/// responsible for clearing the OS keyring and WebKit data.
+pub fn clear_all_relaybase_data() -> Result<(), String> {
+    clear_cf_oauth_session();
+    let dir = relaybase_dir()?;
+    if !dir.exists() {
+        return Ok(());
+    }
+    fs::remove_dir_all(&dir).map_err(|e| {
+        format!("Failed to delete {}: {e}", dir.display())
+    })?;
+    Ok(())
+}
+
 pub fn save_email_prefs(prefs: &EmailPrefs) -> Result<(), String> {
     let scope_id = current_scope_id()?;
     let dir = scoped_dir(&scope_id)?;

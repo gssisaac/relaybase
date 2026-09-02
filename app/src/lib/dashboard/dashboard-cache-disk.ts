@@ -33,6 +33,7 @@ function readLocalJson<T>(relativePath: string): T | null {
 
 function writeLocalJson(relativePath: string, value: unknown) {
   if (typeof window === "undefined") return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(localKey(relativePath), JSON.stringify(value));
   } catch {

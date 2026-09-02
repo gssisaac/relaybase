@@ -107,19 +107,28 @@ pub fn team_session_status() -> Result<TeamSessionStatus, String> {
     migrate_legacy_team_login()?;
     let blob = load_keyring()?;
     let access = memory_if_valid();
+    let team_login = load_team_login().ok().flatten();
+    let disk_worker_url = team_login
+        .as_ref()
+        .map(|t| t.worker_url.trim().to_string())
+        .filter(|u| !u.is_empty());
+    let disk_email = team_login
+        .as_ref()
+        .map(|t| t.account_email.trim().to_string())
+        .filter(|e| !e.is_empty());
+
+    let account_email = disk_email
+        .or_else(|| access.as_ref().map(|a| a.account_email.clone()))
+        .unwrap_or_default();
+    let worker_url = disk_worker_url
+        .or_else(|| access.as_ref().map(|a| a.worker_url.clone()))
+        .unwrap_or_default();
+
     Ok(TeamSessionStatus {
         has_secret: blob.is_some(),
         has_access: access.is_some(),
-        account_email: blob
-            .as_ref()
-            .map(|b| b.account_email.clone())
-            .or_else(|| access.as_ref().map(|a| a.account_email.clone()))
-            .unwrap_or_default(),
-        worker_url: blob
-            .as_ref()
-            .map(|b| b.worker_url.clone())
-            .or_else(|| access.as_ref().map(|a| a.worker_url.clone()))
-            .unwrap_or_default(),
+        account_email,
+        worker_url,
         platform: platform_name(),
     })
 }
@@ -214,6 +223,10 @@ pub async fn team_login(
 
 /// Load the mobile password from the keyring into process memory (no biometry).
 pub async fn team_unlock() -> Result<TeamSessionStatus, String> {
+    let team_login = load_team_login()?.unwrap_or_default();
+    if team_login.worker_url.trim().is_empty() {
+        return Err("No team worker URL configured in ~/.relaybase".into());
+    }
     if memory_if_valid().is_some() {
         return team_session_status();
     }

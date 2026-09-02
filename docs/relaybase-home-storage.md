@@ -20,7 +20,20 @@ On the **Mac / Tauri desktop app**, durable user data **must** live under `~/.re
 | | Ad-hoc paths under the repo (`data/`, `app/data/`, etc.) for desktop UX |
 | | Keychain / other home dirs as a second source of truth (unless explicitly migrated later) |
 
-`localStorage` may mirror disk for sync reads **after** hydrate. It is **not** the source of truth. Binary renames (`relaybase_desktop` → `Relaybase`) reset WebKit profiles and will look like “data wiped” if anything still depends on localhost storage alone.
+`localStorage` may mirror disk for sync reads **after** hydrate. It is **not** the source of truth. On desktop runtime, `localStorage` writes are **no-op** — only `~/.relaybase` is written. Binary renames (`relaybase_desktop` → `Relaybase`) reset WebKit profiles and will look like “data wiped” if anything still depends on localhost storage alone.
+
+### WebKit / OS-level data outside `~/.relaybase`
+
+The Tauri WKWebView leaves data in OS directories that are **not** under `~/.relaybase`:
+
+| Path | Contents |
+|------|----------|
+| `~/Library/WebKit/Relaybase/WebsiteData/` | LocalStorage, IndexedDB, CacheStorage |
+| `~/Library/Caches/com.relaybase.desktop/` | WebKit network cache, HSTS |
+| `~/Library/Caches/Relaybase/` | Legacy cache path |
+| `~/Library/HTTPStorages/Relaybase.binarycookies` | Cookies |
+
+These survive `~/.relaybase` deletion. To return to the initial install screen, use `factory_reset_cmd` (Tauri) / `desktopFactoryReset()` (JS) which deletes `~/.relaybase` **and** wipes WebKit data. The OS keyring is a separate explicit action (see *OS keyring* below).
 
 Server/worker data (Cloudflare D1 + R2) is separate — that is the remote product store, not local desktop UX state.
 
@@ -125,14 +138,14 @@ paths under the new `{scopeId}/`).
 
 ### `credentials.json`
 
-> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). **Daily unlock** resolves the Worker URL from the OS keyring first (`owner-session` blob `workerUrl`); `credentials.json` `workerUrl` is an optional disk mirror for install scope, CF linkage, and browser `pnpm next`. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms always show a **Worker URL select** (`WorkerUrlPicker`): the last saved URL (keyring or disk) is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
+> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). **`~/.relaybase/credentials.json` is the source of truth for workspace configuration (`workerUrl`).** Keyring tokens (`owner-session`) authenticate an existing workspace on disk; keyring information must **never** be used to invent or restore a workspace when `~/.relaybase` is missing or deleted. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms show a **Worker URL select** (`WorkerUrlPicker`): the URL from `credentials.json` is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
 
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
 | Field | Purpose |
 |-------|---------|
 | `accountId` | Cloudflare account id (resolved from the OAuth flow) |
-| `workerUrl` | Deployed Worker base URL (disk mirror; daily unlock prefers keyring `owner-session.workerUrl`) |
+| `workerUrl` | Deployed Worker base URL (primary source of truth for workspace connection) |
 | `workerScriptName` | Wrangler script name |
 | `workerVersion` | Deployed Worker bundle version |
 | `relaybaseAccountId` | Relaybase console account id — written only when non-empty |
@@ -151,7 +164,7 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/keyring_store.rs`,
 | service | `com.relaybase.desktop` |
 | account | `owner-session` |
 
-Blob (`camelCase`): `{ workerUrl, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. **`workerUrl`** is the source of truth for daily unlock — JS resolves it before `credentials.json`. This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
+Blob (`camelCase`): `{ workerUrl, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. Keyring tokens authenticate an active workspace whose URL is configured on disk in `~/.relaybase/credentials.json`. When `~/.relaybase` is missing or deleted, keyring tokens are ignored and the app starts at the initial welcome/install screen (`choice` phase). This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
 
 ### OS keyring (owner passtoken)
 
@@ -298,3 +311,5 @@ When adding durable desktop state:
 5. Hydrate from disk on boot; migrate legacy `localStorage` keys once if present.
 6. TTL API caches may mirror in `localStorage` but must also write through to `~/.relaybase/{scopeId}/cache/…` on desktop.
 7. On account-scope change, clear scope-dependent `localStorage` mirrors (`clearScopeDependentLocalStorage`) and the dashboard client cache `Map` (`clearAllDashboardClientCache`) so stale data does not bleed across accounts.
+8. On desktop runtime, `localStorage` writes must be **no-op** (guard with `isDesktopRuntime()`). The disk (`~/.relaybase`) is the only durable store; `localStorage` is a browser-only fallback.
+9. To return to the initial install screen, call `factory_reset_cmd` (Rust) / `desktopFactoryReset()` (JS) — it deletes `~/.relaybase` and wipes WebKit data. The OS keyring must also be cleared separately (phase A).

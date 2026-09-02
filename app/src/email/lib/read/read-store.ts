@@ -1,4 +1,5 @@
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
 /**
  * Read/unread truth now lives on the Worker (`RoutingActivityEvent.readAt`,
@@ -44,6 +45,7 @@ function normalizeLegacyKeys(raw: unknown): string[] {
 
 function writeLocalOverrides(userId: string, overrides: ReadOverrides) {
   if (typeof window === "undefined" || !userId) return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(
       readKeysStorageKey(userId),

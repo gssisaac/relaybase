@@ -93,6 +93,8 @@ function makeDeps(
     refreshIdentity?: () => Promise<void>;
     clearOwnerDisk?: () => Promise<void>;
     clearTeamDisk?: () => Promise<void>;
+    factoryReset?: () => Promise<string>;
+    clearDashboardClientCache?: () => void;
   },
   storeRef?: { current: AppSessionStore | null },
 ) {
@@ -144,6 +146,9 @@ function makeDeps(
       }),
     clearOwnerDisk: overrides.clearOwnerDisk ?? (() => Promise.resolve()),
     clearTeamDisk: overrides.clearTeamDisk ?? (() => Promise.resolve()),
+    factoryReset: overrides.factoryReset ?? (() => Promise.resolve("")),
+    clearDashboardClientCache:
+      overrides.clearDashboardClientCache ?? (() => {}),
   };
 }
 
@@ -180,6 +185,39 @@ describe("AppSessionStore", () => {
     const store = createStore({});
     connectOwner(store);
     assert.equal(store.phase.kind, "boot");
+  });
+
+  it("routes to choice phase and skips silent boot when disk has no credentials even if keyring has tokens", async () => {
+    let booted = 0;
+    const store = createStore({
+      ownerBootMail: () => {
+        booted += 1;
+        return Promise.resolve(
+          ownerStatus({ hasMailRefresh: true, hasMailAccess: true }),
+        );
+      },
+    });
+    // Disk has no credentials (~/.relaybase was deleted)
+    store.setIdentity({
+      ready: true,
+      isDesktop: true,
+      credentials: null,
+      teamIdentity: null,
+    });
+    // Keyring has leftover tokens
+    store.setStatuses(
+      ownerStatus({
+        hasMailRefresh: true,
+        hasPasstoken: true,
+        workerUrl: "https://keyring.example.com",
+      }),
+      teamStatus({
+        hasSecret: true,
+        workerUrl: "https://keyring.example.com",
+      }),
+    );
+    assert.equal(store.phase.kind, "choice");
+    assert.equal(booted, 0);
   });
 
   it("silently boot-mails when owner has mail refresh but no access", async () => {

@@ -1,4 +1,5 @@
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
 /** Expanded domain cards on Accounts — default is collapsed (compact). */
 export type AccountsUiState = {
@@ -44,6 +45,7 @@ function readLocal(userId: string): AccountsUiState {
 
 function writeLocal(userId: string, state: AccountsUiState) {
   if (typeof window === "undefined" || !userId) return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(`${LOCAL_PREFIX}${userId}`, JSON.stringify(state));
   } catch {

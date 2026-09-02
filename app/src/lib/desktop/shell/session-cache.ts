@@ -42,12 +42,24 @@ export function clearDesktopSessionCache(): void {
  * - `products-v1:` (dashboard TTL client cache)
  * - `relaybase:email.json` (email prefs)
  * - `relaybase:api-keys-vault:v1` (API key vault)
+ * - `relaybase:mail-read:` (read overrides)
+ * - `relaybase:mail-trash:` (trash entries)
+ * - `relaybase:sidebar:` (sidebar mode, last routes)
+ * - `relaybase:sidebar-collapsed:` (sidebar collapse state)
+ * - `relaybase:accounts-ui:` (Accounts page UI state)
+ * - `relaybase:favicon-status:v1` (favicon probe status)
  */
 const SCOPE_DEPENDENT_LOCAL_STORAGE_PREFIXES = [
   "relaybase:mail:v1:",
   "relaybase:cache:v1:",
   "relaybase:compose-contacts:",
   "relaybase:mail-accounts:",
+  "relaybase:mail-read:",
+  "relaybase:mail-trash:",
+  "relaybase:sidebar:",
+  "relaybase:sidebar-collapsed:",
+  "relaybase:accounts-ui:",
+  "relaybase:favicon-status:v1",
   "products-v1:",
   "relaybase:email.json",
   "relaybase:api-keys-vault:v1",

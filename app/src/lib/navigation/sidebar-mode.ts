@@ -1,4 +1,5 @@
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import {
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,
@@ -60,6 +61,7 @@ function readLocalSidebar(userId: string): SidebarUiState {
 
 function writeLocalSidebar(userId: string, state: SidebarUiState) {
   if (typeof window === "undefined" || !userId) return;
+  if (isDesktopRuntime()) return;
   try {
     if (state.mode) {
       localStorage.setItem(`${MODE_PREFIX}${userId}`, state.mode);

@@ -40,7 +40,7 @@ Everything now flows through one MobX store, **`AppSessionStore`**
 | Phase | Meaning |
 |-------|---------|
 | `boot` | Window just opened; keyring status not yet fetched. |
-| `choice` | Nothing enrolled (no worker URL, no keyring secret) → welcome. |
+| `choice` | Nothing enrolled on disk (`~/.relaybase` missing or no worker URL) → welcome. |
 | `install` | First-time install: `oauth` → `progress` → `createOwner` → `revealPasstoken`. |
 | `invitedLogin` | Invited teammate, no keyring secret yet → `TeamLoginView` (Worker URL + account email + mobile password). |
 | `unlock` | No in-memory mail access yet. `role: owner \| invited`, `mode: secret` only — first enrollment or bio-declined typed form. |
@@ -70,8 +70,9 @@ until keyring statuses are hydrated **and** any silent unlock attempt finishes.
 Identity alone (e.g. a saved Worker URL) must not flash `UnlockView` before that
 settles. `UnlockView` is the secret form only — never the auto-login check.
 
-`setStatuses` → `bootFromKeyring()` when a silent attempt is needed:
+`setStatuses` → `bootFromKeyring()` when a silent attempt is needed (requires an active workspace on disk):
 
+- **If no workspace is configured on disk** (`~/.relaybase/credentials.json` or `team-login.json` is missing or has no `workerUrl`): silent boot is skipped and the app transitions directly to `choice` phase (`/setup`). Keyring tokens are never used to invent or restore a workspace.
 - **Owner** with `mail_refresh_token` but no mail access → `owner_boot_mail`
   (silent, no Touch ID) → `ownerReady` when Worker URL is connected.
 - **Owner** whose mail refresh is missing / expired, but `owner-passtoken`
@@ -80,8 +81,6 @@ settles. `UnlockView` is the secret form only — never the auto-login check.
   passtoken item is missing.
 - **Invited** with keyring secret but no access → `team_unlock` (silent) →
   `invitedReady`.
-- No keyring secret at all → `unlock { mode: "secret" }` (first-login typed
-  form).
 - **Worker unreachable / offline** (enrolled owner or teammate) → same
   `ownerReady` / `invitedReady` with `workerUnreachable`. Cached mailbox.
   `UnlockView` is not an offline screen — typing a passtoken or mobile

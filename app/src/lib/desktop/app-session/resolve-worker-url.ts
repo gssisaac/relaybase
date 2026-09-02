@@ -18,19 +18,17 @@ function normalizeWorkerUrl(raw: string | undefined | null): string {
 }
 
 /**
- * Keyring workerUrl is primary; disk (`credentials.json` / `team-login.json`)
- * is fallback for install scope and browser dev.
+ * Disk (`~/.relaybase/credentials.json` for owner, `~/.relaybase/team-login.json`
+ * for invited) is the primary source of truth for the workspace Worker URL.
+ * Keyring tokens authenticate an existing workspace on disk; keyring information
+ * must never be used to invent or restore a workspace when ~/.relaybase is missing.
  */
 export function resolveWorkerUrl(input: ResolveWorkerUrlInput): string {
-  const { role, ownerStatus, teamStatus, credentials, teamLogin } = input;
+  const { role, credentials, teamLogin } = input;
   if (role === "invited") {
-    const fromKeyring = normalizeWorkerUrl(teamStatus?.workerUrl);
-    if (fromKeyring) return fromKeyring;
     const fromTeamLogin = normalizeWorkerUrl(teamLogin?.workerUrl);
     if (fromTeamLogin) return fromTeamLogin;
     return normalizeWorkerUrl(credentials?.workerUrl);
   }
-  const fromKeyring = normalizeWorkerUrl(ownerStatus?.workerUrl);
-  if (fromKeyring) return fromKeyring;
   return normalizeWorkerUrl(credentials?.workerUrl);
 }

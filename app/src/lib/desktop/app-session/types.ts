@@ -70,4 +70,8 @@ export type AppSessionDeps = {
   refreshIdentity: () => Promise<void>;
   clearOwnerDisk: () => Promise<void>;
   clearTeamDisk: () => Promise<void>;
+  /** Full factory reset: delete ~/.relaybase + WebKit data (Rust side). */
+  factoryReset: () => Promise<string>;
+  /** Clear the in-memory dashboard client cache Map. */
+  clearDashboardClientCache: () => void;
 };

@@ -171,3 +171,23 @@ export async function desktopMigrateStorageLayout(): Promise<void> {
   if (!isDesktopRuntime()) return;
   await invoke("migrate_storage_layout");
 }
+
+/**
+ * Wipe WebKit / OS-level data (LocalStorage, IndexedDB, caches, cookies)
+ * that lives outside `~/.relaybase`. Used during factory reset so the app
+ * returns to the initial install screen.
+ */
+export async function desktopClearWebkitData(): Promise<string> {
+  if (!isDesktopRuntime()) return "";
+  return invoke("clear_webkit_data_cmd");
+}
+
+/**
+ * Full factory reset: delete `~/.relaybase`, clear WebKit data, and wipe
+ * in-memory session state. The OS keyring is NOT cleared (separate action).
+ * After this, the app should re-render to show the initial install screen.
+ */
+export async function desktopFactoryReset(): Promise<string> {
+  if (!isDesktopRuntime()) return "";
+  return invoke("factory_reset_cmd");
+}

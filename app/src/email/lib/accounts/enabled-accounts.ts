@@ -1,4 +1,5 @@
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
 const KEY_PREFIX = "relaybase:mail-accounts:";
 
@@ -30,6 +31,7 @@ export function readEnabledAccounts(userId: string): string[] {
 
 function writeLocalEnabledAccounts(userId: string, emails: string[]) {
   if (typeof window === "undefined" || !userId) return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(
       enabledAccountsKey(userId),

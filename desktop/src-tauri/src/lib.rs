@@ -11,6 +11,7 @@ mod secrets;
 mod team_session;
 mod touch_id;
 mod tray;
+mod webkit_cleanup;
 mod worker;
 
 /// Relaybase console base URL. The desktop calls console.relaybase.xyz for
@@ -35,7 +36,7 @@ use cf_oauth::{
 };
 use cloudflare::{resolve_account_id, resolve_account_id_for_recover, verify_token};
 use secrets::{
-    clear_credentials, clear_team_login, get_cf_oauth_session,
+    clear_credentials, clear_all_relaybase_data, clear_team_login, get_cf_oauth_session,
     load_api_key_vault, load_cache_json as read_cache_json, load_credentials,
     load_credentials_merged, load_email_prefs,     load_mail_json as read_mail_json, load_team_login,
     load_mail_binary as read_mail_binary,
@@ -127,19 +128,43 @@ async fn get_credentials() -> Result<Option<StoredCredentials>, String> {
     if disk.is_none() && get_cf_oauth_session().is_none() {
         return Ok(None);
     }
-    let mut creds = load_credentials_merged()?;
-    // Worker URL lives in the owner keyring after login; disk may still be empty.
-    if creds.worker_url.trim().is_empty() {
-        if let Some(url) = crate::owner_session::current_worker_url() {
-            creds.worker_url = url;
-        }
-    }
+    let creds = load_credentials_merged()?;
     Ok(Some(creds))
 }
 
 #[tauri::command]
 async fn clear_stored_credentials() -> Result<(), String> {
     clear_credentials()
+}
+
+/// Wipe WebKit / OS-level data (LocalStorage, IndexedDB, caches, cookies)
+/// that lives outside `~/.relaybase`. Used during factory reset so the app
+/// returns to the initial install screen.
+#[tauri::command]
+async fn clear_webkit_data_cmd() -> Result<String, String> {
+    webkit_cleanup::clear_webkit_data()
+}
+
+/// Full factory reset: delete `~/.relaybase`, clear WebKit data, and wipe
+/// in-memory session state. The OS keyring (owner-session, owner-passtoken,
+/// team-session) is **not** cleared here — that is a separate explicit action
+/// because it requires biometry / user confirmation on read-back paths.
+///
+/// After this command, the app should restart or re-render to show the
+/// initial install screen.
+#[tauri::command]
+async fn factory_reset_cmd() -> Result<String, String> {
+    // 1. Clear in-memory session state (owner access, team memory, CF OAuth).
+    let _ = owner_logout_inner().await;
+    let _ = team_logout_inner().await;
+
+    // 2. Delete the entire ~/.relaybase directory tree.
+    clear_all_relaybase_data()?;
+
+    // 3. Wipe WebKit / OS-level data outside ~/.relaybase.
+    let cleared = webkit_cleanup::clear_webkit_data()?;
+
+    Ok(format!("Factory reset complete. Cleared: {cleared}"))
 }
 
 #[tauri::command]
@@ -1799,6 +1824,8 @@ pub fn run() {
             save_cf_credentials,
             get_credentials,
             clear_stored_credentials,
+            clear_webkit_data_cmd,
+            factory_reset_cmd,
             get_email_prefs,
             save_email_prefs,
             get_api_key_vault,

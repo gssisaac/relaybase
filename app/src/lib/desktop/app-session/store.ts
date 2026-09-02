@@ -8,6 +8,10 @@ import { createDefaultDeps } from "./defaults";
 import { isWorkerUnreachableError, visibleUnlockError } from "./errors";
 import { resolveWorkerUrl } from "./resolve-worker-url";
 import {
+  clearDesktopSessionCache,
+  clearScopeDependentLocalStorage,
+} from "../shell/session-cache";
+import {
   isValidPasstokenFormat,
   normalizePasstokenInput,
   passtokenFormatHint,
@@ -165,11 +169,17 @@ export class AppSessionStore {
   }
 
   private enrolledAsInvited(): boolean {
-    return Boolean(this.identity.teamIdentity || this.teamStatus?.hasSecret);
+    return Boolean(
+      this.hasInvitedWorkerUrl() &&
+        (this.identity.teamIdentity || this.teamStatus?.hasSecret),
+    );
   }
 
   private enrolledAsOwner(): boolean {
-    return this.hasOwnerMailRefresh() || this.hasOwnerPasstoken();
+    return Boolean(
+      this.hasOwnerWorkerUrl() &&
+        (this.hasOwnerMailRefresh() || this.hasOwnerPasstoken()),
+    );
   }
 
   private ownerCanEnterMailbox(): boolean {
@@ -226,6 +236,9 @@ export class AppSessionStore {
   }
 
   private needsSilentBoot(): boolean {
+    if (!this.hasWorkerConnected()) {
+      return false;
+    }
     const team = this.teamStatus;
     if (this.identity.teamIdentity || (team && team.hasSecret)) {
       return Boolean(team?.hasSecret && !team.hasAccess);
@@ -310,6 +323,17 @@ export class AppSessionStore {
       return;
     }
 
+    // If ~/.relaybase has no workspace connected (no credentials.json / team-login.json with workerUrl),
+    // we never enter unlock or ready phases — we go directly to choice when identity is ready.
+    if (!this.hasWorkerConnected()) {
+      if (!this.identity.ready) {
+        if (this.phase.kind !== "boot") this.phase = { kind: "boot" };
+      } else {
+        this.phase = { kind: "choice" };
+      }
+      return;
+    }
+
     if (this.phase.kind === "invitedLogin") {
       if (this.invitedCanEnterMailbox() && this.hasInvitedWorkerUrl()) {
         this.phase = { kind: "invitedReady" };
@@ -389,7 +413,7 @@ export class AppSessionStore {
       return;
     }
 
-    if (this.resolvedWorkerUrl("owner")) {
+    if (this.hasOwnerWorkerUrl()) {
       this.phase = { kind: "unlock", role: "owner", mode: "secret" };
       return;
     }
@@ -821,6 +845,51 @@ export class AppSessionStore {
       }
       this.phase = { kind: "choice" };
     });
+  }
+
+  /**
+   * Full factory reset: delete `~/.relaybase` + WebKit data, clear all
+   * in-memory state, and return to the initial install screen (`choice`).
+   *
+   * The OS keyring (owner-session, owner-passtoken, team-session) is NOT
+   * cleared by this — that is a separate explicit action. If the keyring
+   * still has a mail refresh token, the next boot will silently re-login.
+   * To fully return to the install screen, the caller must also clear the
+   * keyring (phase A).
+   */
+  async factoryReset(): Promise<void> {
+    this.busy = true;
+    this.error = null;
+    try {
+      await this.deps.factoryReset();
+    } catch (err) {
+      runInAction(() => {
+        this.error = visibleUnlockError(err) ?? "Factory reset failed.";
+        this.busy = false;
+      });
+      throw err;
+    }
+    // Clear all JS in-memory state. The Rust side already deleted WebKit data
+    // (localStorage, sessionStorage, IndexedDB) and ~/.relaybase.
+    clearDesktopSessionCache();
+    clearScopeDependentLocalStorage();
+    this.deps.clearDashboardClientCache();
+    runInAction(() => {
+      this.ownerStatus = null;
+      this.teamStatus = null;
+      this.statusesHydrated = false;
+      this.error = null;
+      this.revealedPasstoken = null;
+      this.consoleGateOpen = false;
+      this.workerUnreachable = false;
+      this.bioDismissed = false;
+      this.busy = false;
+      this.phase = { kind: "choice" };
+    });
+    // Reload to clear all remaining JS state (MobX stores, React tree).
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
   }
 
   enterRecover(): void {

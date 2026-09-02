@@ -1,4 +1,5 @@
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
 export type TrashKind = "inbox" | "sent";
 
@@ -40,6 +41,7 @@ export function readTrash(userId: string): TrashEntry[] {
 
 function writeLocalTrash(userId: string, entries: TrashEntry[]) {
   if (typeof window === "undefined" || !userId) return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(trashKey(userId), JSON.stringify(entries));
   } catch {

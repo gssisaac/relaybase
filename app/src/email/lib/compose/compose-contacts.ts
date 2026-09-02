@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { parseRecipientToken } from "@/lib/email/parse-recipients";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 
@@ -67,6 +68,7 @@ function readLocalComposeContacts(userId: string): ComposeContact[] {
 
 function writeLocalComposeContacts(userId: string, contacts: ComposeContact[]) {
   if (typeof window === "undefined" || !userId) return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(composeContactsKey(userId), JSON.stringify(contacts));
   } catch {

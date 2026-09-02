@@ -57,6 +57,7 @@ function readLocalPrefs(): EmailPrefs {
 
 function writeLocalPrefs(prefs: EmailPrefs) {
   if (typeof window === "undefined") return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(LOCAL_KEY, JSON.stringify(prefs));
   } catch {

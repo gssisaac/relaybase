@@ -51,6 +51,7 @@ function readStorage<T>(key: string): CacheEntry<T> | null {
 
 function writeStorage<T>(key: string, entry: CacheEntry<T>): void {
   if (typeof window === "undefined") return;
+  if (isDesktopRuntime()) return;
   try {
     localStorage.setItem(key, JSON.stringify(entry));
   } catch {

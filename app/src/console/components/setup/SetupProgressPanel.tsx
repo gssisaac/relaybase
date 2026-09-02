@@ -184,6 +184,7 @@ export function SetupProgressPanel({
   const [mailApiDone, setMailApiDone] = useState(false);
   const [mailApiVerified, setMailApiVerified] = useState(false);
   const emailDialogShownRef = useRef(false);
+  const confettiFiredRef = useRef(false);
   const [leavingToMailbox, setLeavingToMailbox] = useState(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
   const [r2DashboardOpened, setR2DashboardOpened] = useState(false);
@@ -251,12 +252,16 @@ export function SetupProgressPanel({
   useEffect(() => {
     if (purpose === "worker-update") return;
     if (!autoDone) {
+      confettiFiredRef.current = false;
       setTokenDownloaded(false);
       setTokenSaved(false);
       return;
     }
     setInstallLogExpanded(false);
-    fireInstallConfetti();
+    if (!confettiFiredRef.current) {
+      confettiFiredRef.current = true;
+      fireInstallConfetti();
+    }
     if (mailApiDone || emailDialogShownRef.current) return;
     if (needsOwnerSetup) return;
     if (autoDone.revealedPasstoken && !tokenSaved) return;

@@ -16,7 +16,7 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 | Send (`EMAIL` binding) | No |
 | Mail R2 / D1 / search / owner login (`AUTH_PEPPER`) | No |
 | Mobile inbox / cron | No |
-| Domain / inbox / DNS via `CF_API_TOKEN` | No — zone-scoped APIs; list zones with the token alone |
+| Domain / inbox / DNS via `CF_API_TOKEN` | No — zone-scoped APIs. List/import zones for the **pinned** account only (see below) |
 | REST Email Sending fallback (`/accounts/{id}/email/sending/send`) | Only if `EMAIL` is missing — discover id from `GET /zones` (`account.id` on the zone) |
 | `init-db` / `migrate-db` / `reset-admin` OAuth proof | Optional pin — see below |
 
@@ -26,11 +26,13 @@ The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudfl
 
 | Place | Role |
 |-------|------|
-| `~/.relaybase/credentials.json` `accountId` | Desktop UI links (Worker settings, R2, D1). Fallback when connect omits `accountId`. |
+| `~/.relaybase/workspace.json` `accountId` | Desktop UI links (Worker settings, R2, D1). Fallback when connect omits `accountId`. |
 | D1 `owner_config.cf_account_id` | Durable pin for OAuth proof after first successful verify / reset. Prefer this over a wrangler secret. |
 | Worker secret `CF_ACCOUNT_ID` | Optional convenience. Desktop auto-install may still PUT it. Absence must not block mail API or verify. |
 
-When the Worker needs an account id (REST send fallback, dashboard links, OAuth proof), resolve in this order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` → **`GET /zones` and read `account.id`** (Zone Read — the server token already has this) → `GET /accounts` (Account Read, often missing). Do **not** filter `GET /zones` by `account.id`; the token already scopes the list. A wrong filter empties zones and marks every domain sending `no_zone`. Persist a discovered id to D1 when possible.
+When the Worker needs an account id (REST send fallback, dashboard links, OAuth proof), resolve in this order: env `CF_ACCOUNT_ID` → D1 `owner_config.cf_account_id` → **`GET /zones` and read `account.id`** (Zone Read — the server token already has this) → `GET /accounts` (Account Read, often missing). Persist a discovered id to D1 when possible.
+
+**Zone list / import is account-scoped.** A user API token often sees zones on every Cloudflare account the user belongs to. `GET /console/zones`, sending health, and `resolveZoneId` must use the pinned account (env → D1). Do **not** invent a pin from the first zone in an unfiltered list — that can lock onto the wrong account. When no pin is available, each zone includes `account.id` so the desktop can filter by the OAuth-selected `workspace.json` `accountId`. A domain on another account must not be offered or onboarded (Email Routing cannot attach that zone to this Worker).
 
 Do **not** store Cloudflare account id or API tokens in HQ ops D1.
 
@@ -122,7 +124,7 @@ Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `
 
 ## Local credentials fields
 
-OAuth access/refresh tokens are **not** written to `credentials.json` — they live in Tauri process memory only and are cleared on app restart. Only the CF account id is persisted on disk:
+OAuth access/refresh tokens are **not** written to `workspace.json` — they live in Tauri process memory only and are cleared on app restart. Only the CF account id is persisted on disk:
 
 | Field | Purpose |
 |-------|---------|
@@ -169,7 +171,7 @@ Errors use `explainCfOAuthError()`.
 | Symptom | Likely cause |
 |---------|----------------|
 | `invalid_scope` or Cloudflare “authorization failed” | Scope strings in `/config` don’t match that purpose’s OAuth client (install must not request `secrets-store.write`; recover must request only `secrets-store.write`). Do not request `offline_access` or KV. |
-| `Worker is missing CF_ACCOUNT_ID` after Authorize | Latest Worker does not require the secret. Ensure `accountId` is in `~/.relaybase/credentials.json`, or pass `cfAccountId` in the reset body. |
+| `Worker is missing CF_ACCOUNT_ID` after Authorize | Latest Worker does not require the secret. Ensure `accountId` is in `~/.relaybase/workspace.json`, or pass `cfAccountId` in the reset body. |
 | Browser “Finishing connection…” but app stays **Not connected** | `tauri dev` without loopback listener — restart desktop after pulling; ensure port **32831** is free. |
 | `Token endpoint did not return a refresh_token` | Missing `refresh_token` grant or `offline_access` on authorize — fixed in code (connection succeeds with access token only); enable **Refresh Token** grant on the client for auto-refresh. |
 | `relaybase://` does nothing | Expected in dev; loopback should succeed. In production, install the bundled `.app` so the URL scheme is registered. |

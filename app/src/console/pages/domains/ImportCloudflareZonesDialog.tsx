@@ -53,6 +53,7 @@ export function ImportCloudflareZonesDialog({
   const router = useRouter();
   const desktop = useOptionalDesktop();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
+  const connectedAccountId = desktop?.credentials?.accountId ?? "";
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;
@@ -70,7 +71,7 @@ export function ImportCloudflareZonesDialog({
     setEmailApiMissing(false);
     setNeedsWorkerUpdate(false);
     try {
-      const list = await listCloudflareZones();
+      const list = await listCloudflareZones(connectedAccountId);
       const existing = new Set(
         store.domains.map((d) => d.domain.trim().toLowerCase()),
       );
@@ -101,7 +102,7 @@ export function ImportCloudflareZonesDialog({
     } finally {
       setLoading(false);
     }
-  }, [store.domains, desktop?.credentials?.workerUrl]);
+  }, [store.domains, desktop?.credentials?.workerUrl, connectedAccountId]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,8 +149,8 @@ export function ImportCloudflareZonesDialog({
           <DialogTitle>Refresh zones from Cloudflare</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          New domains on your Cloudflare account that are not in Relaybase yet.
-          Setup continues in the background after you confirm.
+          New domains on the connected Cloudflare account that are not in
+          Relaybase yet. Setup continues in the background after you confirm.
         </p>
         {loading ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">

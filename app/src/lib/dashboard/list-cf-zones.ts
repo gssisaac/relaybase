@@ -7,8 +7,10 @@ import {
   type ZoneSummary,
 } from "@/lib/desktop/bridge";
 import { workerNeedsUpgrade } from "@/lib/dashboard/worker-version";
+import { zonesOnConnectedAccount } from "@/lib/dashboard/zones-on-connected-account";
 
 export { workerNeedsUpgrade } from "@/lib/dashboard/worker-version";
+export { zonesOnConnectedAccount } from "@/lib/dashboard/zones-on-connected-account";
 
 export function isZoneListNeedsWorkerUpdate(err: unknown): boolean {
   const message =
@@ -96,7 +98,9 @@ export async function loadWorkerVersionCompare(workerUrl?: string): Promise<{
 }
 
 /** List Cloudflare zones via the Worker `CF_API_TOKEN` (`GET /console/zones`). */
-export async function listCloudflareZones(): Promise<ZoneSummary[]> {
+export async function listCloudflareZones(
+  connectedAccountId?: string | null,
+): Promise<ZoneSummary[]> {
   const res = await desktopAwareFetch("/api/email/zones");
   const data = (await res.json().catch(() => ({}))) as {
     zones?: ZoneSummary[];
@@ -110,5 +114,6 @@ export async function listCloudflareZones(): Promise<ZoneSummary[]> {
     }
     throw new Error(data.error ?? "Failed to list zones");
   }
-  return Array.isArray(data.zones) ? data.zones : [];
+  const zones = Array.isArray(data.zones) ? data.zones : [];
+  return zonesOnConnectedAccount(zones, connectedAccountId);
 }

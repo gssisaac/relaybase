@@ -4,6 +4,13 @@ import {
   cloudflareSendingErrorHint,
 } from "./cloudflare-api-hints.ts";
 import { normalizeCfAccountId } from "./cf-account-id.ts";
+import {
+  mapCfZoneRow,
+  zoneBelongsToPinnedAccount,
+  zonesListQuery,
+  zonesOnPinnedAccount,
+  type CfListedZone,
+} from "./cloudflare-zones.ts";
 import { buildMimeMessage } from "./mime.ts";
 
 const API_BASE = "https://api.cloudflare.com/client/v4";
@@ -393,10 +400,9 @@ export class CloudflareClient {
     return this.sendStructuredEmail(params);
   }
 
-  async listZones(): Promise<Array<{ id: string; name: string; status: string }>> {
-    const zones: Array<{ id: string; name: string; status: string }> = [];
-    // Token-scoped. Do not filter by account.id — a wrong env/resolved id
-    // returns an empty list and every domain becomes sending "no_zone".
+  async listZones(): Promise<CfListedZone[]> {
+    const zones: CfListedZone[] = [];
+    const pinned = this.accountId;
     let page = 1;
     for (;;) {
       const data = await this.request<
@@ -406,34 +412,31 @@ export class CloudflareClient {
           status?: string;
           account?: { id?: string };
         }>
-      >(`/zones?per_page=50&page=${page}`);
+      >(`/zones?${zonesListQuery(page, pinned)}`);
       const batch = data.result ?? [];
       if (batch.length === 0) break;
       for (const zone of batch) {
-        if (!this.accountId) {
-          const discovered = normalizeCfAccountId(zone.account?.id);
-          if (discovered) this.accountId = discovered;
-        }
-        zones.push({
-          id: zone.id ?? "",
-          name: zone.name ?? "",
-          status: zone.status ?? "",
-        });
+        zones.push(mapCfZoneRow(zone));
       }
       if (batch.length < 50) break;
       page += 1;
     }
-    return zones;
+    return zonesOnPinnedAccount(zones, pinned);
   }
 
   async resolveZoneId(domain: string): Promise<string | null> {
-    const data = await this.request<Array<{ id: string; name: string }>>(
-      `/zones?name=${encodeURIComponent(domain.trim())}`,
-    );
-    const zone = data.result?.find(
-      (item) => item.name.toLowerCase() === domain.trim().toLowerCase(),
-    );
-    return zone?.id ?? data.result?.[0]?.id ?? null;
+    const name = domain.trim();
+    const params = new URLSearchParams({ name });
+    if (this.accountId) params.set("account.id", this.accountId);
+    const data = await this.request<
+      Array<{ id: string; name: string; account?: { id?: string } }>
+    >(`/zones?${params.toString()}`);
+    const want = name.toLowerCase();
+    const zone = data.result?.find((item) => {
+      if (item.name.toLowerCase() !== want) return false;
+      return zoneBelongsToPinnedAccount(item.account?.id, this.accountId);
+    });
+    return zone?.id ?? null;
   }
 
   async listDnsRecords(

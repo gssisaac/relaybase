@@ -3,7 +3,7 @@ import { normalizeCfAccountId } from "./cf-account-id.ts";
 import { CloudflareClient } from "./cloudflare-client.ts";
 
 export type CloudflareRuntimeConfig = {
-  /** May be empty — resolve from the token when an id is needed. */
+  /** May be empty — resolve from the token when an account-scoped path is used. */
   accountId: string;
   apiToken: string;
 };
@@ -30,8 +30,13 @@ export async function createCloudflareClient(env: Env): Promise<CloudflareClient
       "Cloudflare API is not configured on this worker — add a CF_API_TOKEN secret (Email Routing + Zone Read + DNS) so the Worker can manage domains and DNS",
     );
   }
+  let accountId = config.accountId;
+  if (!accountId) {
+    const { pinnedCfAccountId } = await import("./pinned-cf-account.ts");
+    accountId = await pinnedCfAccountId(env);
+  }
   return new CloudflareClient({
-    accountId: config.accountId,
+    accountId,
     apiToken: config.apiToken,
   });
 }

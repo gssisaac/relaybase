@@ -1,11 +1,9 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
-import { createAppDb } from "../../../db/app";
-import { getOwnerLoginConfig } from "../../../db/app/owner";
 import { requireConsoleSession } from "../../lib/auth";
 import { probeD1Connection } from "../../lib/d1-status";
 import { emailBindingConfigured } from "../../lib/email-send";
-import { normalizeCfAccountId } from "../../lib/cf-account-id.ts";
+import { pinnedCfAccountId } from "../../lib/pinned-cf-account";
 import { measureInboundR2Usage } from "../../lib/r2-usage";
 
 const CF_API = "https://api.cloudflare.com/client/v4";
@@ -24,16 +22,6 @@ async function probeCfApiTokenValid(token: string): Promise<boolean> {
 }
 
 const consoleConnect = new Hono<{ Bindings: Env }>();
-
-/** Env secret if set, else D1 pin. Does not call Cloudflare — token resolve is lazy. */
-async function connectAccountId(env: Env): Promise<string> {
-  const fromEnv = normalizeCfAccountId(env.CF_ACCOUNT_ID) ?? "";
-  if (fromEnv) return fromEnv;
-  const db = createAppDb(env.RELAYBASE_DB);
-  if (!db) return "";
-  const cfg = await getOwnerLoginConfig(db);
-  return normalizeCfAccountId(cfg?.cfAccountId) ?? "";
-}
 
 async function checkInboundR2(bucket: R2Bucket): Promise<boolean> {
   try {
@@ -66,7 +54,7 @@ consoleConnect.get("/", async (c) => {
       c.env.CF_API_TOKEN,
     ),
     cfApiTokenSet ? probeCfApiTokenValid(apiToken) : Promise.resolve(false),
-    connectAccountId(c.env),
+    pinnedCfAccountId(c.env),
   ]);
 
   return c.json({

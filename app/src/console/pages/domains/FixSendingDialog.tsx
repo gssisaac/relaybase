@@ -9,12 +9,11 @@ import {
 import { formatWorkerApiError } from "@/lib/dashboard/worker-api-error";
 import { type SendingHealthDomain } from "@/lib/dashboard/sending-health";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
-import { connectedCfAccountId } from "@/lib/desktop/bridge";
+import { connectedCfAccountId, cloudflareDomainsOverviewUrl, cloudflareEmailSendingUrl } from "@/lib/desktop/bridge";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
 import {
   CF_PLAN_DIALOG_MESSAGE,
   CF_WORKERS_PAID_REQUIRED_CODE,
-  CF_WORKERS_PLANS_URL,
   isCloudflarePlanError,
 } from "@/lib/cloudflare/plan-required";
 import { Button } from "@/components/ui/button";
@@ -45,8 +44,6 @@ type DialogStep = {
   status: DialogStepStatus;
 };
 
-const ADD_SITE_URL = "https://dash.cloudflare.com/?to=/:account/domains/overview";
-
 const INITIAL_STEPS: DialogStep[] = [
   { id: "zone", label: "Find zone", status: "pending" },
   { id: "onboard", label: "Onboard Email Sending", status: "pending" },
@@ -54,7 +51,7 @@ const INITIAL_STEPS: DialogStep[] = [
 ];
 
 const PLAN_STEPS = [
-  "Open Workers plans",
+  "Open Email Sending",
   "Upgrade to Workers Paid on Cloudflare",
   "Recheck sending",
 ] as const;
@@ -107,14 +104,21 @@ async function postSendingOnboard(
   }
   if (
     data.code === CF_WORKERS_PAID_REQUIRED_CODE ||
-    isCloudflarePlanError({ error: data.error, code: data.code })
+    isCloudflarePlanError({ error: data.error, code: data.code }) ||
+    isCloudflarePlanError(data.error)
   ) {
     return {
       kind: "plan_required",
-      error: data.error ?? CF_PLAN_DIALOG_MESSAGE,
+      error:
+        data.code === CF_WORKERS_PAID_REQUIRED_CODE && data.error
+          ? data.error
+          : CF_PLAN_DIALOG_MESSAGE,
     };
   }
   if (data.code === "unavailable" || res.status === 502) {
+    if (isCloudflarePlanError(data.error)) {
+      return { kind: "plan_required", error: CF_PLAN_DIALOG_MESSAGE };
+    }
     return {
       kind: "unavailable",
       error:
@@ -124,9 +128,15 @@ async function postSendingOnboard(
     };
   }
   if (!res.ok || !data.domain) {
-    throw new Error(
-      formatWorkerApiError(res.status, data.error, "Sending onboard"),
+    const formatted = formatWorkerApiError(
+      res.status,
+      data.error,
+      "Sending onboard",
     );
+    if (isCloudflarePlanError(formatted) || isCloudflarePlanError(data.error)) {
+      return { kind: "plan_required", error: CF_PLAN_DIALOG_MESSAGE };
+    }
+    throw new Error(formatted);
   }
   return { kind: "ok", domain: data.domain };
 }
@@ -149,6 +159,8 @@ export function FixSendingDialog({
   const sendingHealth = useSendingHealth();
   const desktop = useOptionalDesktop();
   const connectedAccountId = connectedCfAccountId(desktop?.credentials);
+  const emailSendingUrl = cloudflareEmailSendingUrl(connectedAccountId);
+  const domainsOverviewUrl = cloudflareDomainsOverviewUrl(connectedAccountId);
   const [steps, setSteps] = useState<DialogStep[]>(INITIAL_STEPS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -205,15 +217,15 @@ export function FixSendingDialog({
       if (result.kind === "plan_required") {
         setPlanFromOnboard(true);
         setRecords([]);
-        setError(result.error);
-        setSteps(markSteps("onboard", "failed"));
+        setError(null);
+        setSteps(INITIAL_STEPS);
         return;
       }
       if (result.kind === "unavailable") {
         if (isCloudflarePlanError(result.error)) {
           setPlanFromOnboard(true);
-          setError(result.error);
-          setSteps(markSteps("onboard", "failed"));
+          setError(null);
+          setSteps(INITIAL_STEPS);
           return;
         }
         setFallbackUrl(result.cloudflareSendingUrl);
@@ -230,8 +242,8 @@ export function FixSendingDialog({
       ) {
         setPlanFromOnboard(true);
         setRecords([]);
-        setError(result.domain.error ?? CF_PLAN_DIALOG_MESSAGE);
-        setSteps(markSteps("onboard", "failed"));
+        setError(null);
+        setSteps(INITIAL_STEPS);
         return;
       }
       setRecords([]);
@@ -252,11 +264,12 @@ export function FixSendingDialog({
         err instanceof Error ? err.message : "Sending onboard failed";
       if (isCloudflarePlanError(message)) {
         setPlanFromOnboard(true);
-        setError(message);
+        setError(null);
+        setSteps(INITIAL_STEPS);
       } else {
         setError(message);
+        setSteps(markSteps("onboard", "failed"));
       }
-      setSteps(markSteps("onboard", "failed"));
     } finally {
       setBusy(false);
     }
@@ -401,7 +414,7 @@ export function FixSendingDialog({
                 variant="outline"
                 size="sm"
                 render={
-                  <a href={ADD_SITE_URL} target="_blank" rel="noreferrer" />
+                  <a href={domainsOverviewUrl} target="_blank" rel="noreferrer" />
                 }
                 nativeButton={false}
               >
@@ -441,13 +454,13 @@ export function FixSendingDialog({
                 nativeButton={false}
                 render={
                   <a
-                    href={CF_WORKERS_PLANS_URL}
+                    href={emailSendingUrl}
                     target="_blank"
                     rel="noreferrer"
                   />
                 }
               >
-                Open Cloudflare Workers plans
+                Open Cloudflare Email Sending
               </Button>
             </>
           ) : records.length ? (

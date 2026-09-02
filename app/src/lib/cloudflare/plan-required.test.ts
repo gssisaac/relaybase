@@ -33,6 +33,24 @@ describe("isCloudflarePlanError", () => {
     );
   });
 
+  it("matches zone Email Sending [2036] Unauthorized (Workers Free)", () => {
+    assert.equal(
+      isCloudflarePlanError(
+        "Cloudflare API: [2036] Unauthorized\nAPI: GET /zones/abc/email/sending/subdomains",
+      ),
+      true,
+    );
+  });
+
+  it("does not match [2036] outside Email Sending", () => {
+    assert.equal(
+      isCloudflarePlanError(
+        "Cloudflare API: [2036] Unauthorized\nAPI: GET /zones/abc/dns_records",
+      ),
+      false,
+    );
+  });
+
   it("does not match sending_disabled / domain setup errors", () => {
     assert.equal(
       isCloudflarePlanError(

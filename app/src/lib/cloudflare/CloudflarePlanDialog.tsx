@@ -15,10 +15,11 @@ import {
 
 import {
   CF_PLAN_DIALOG_MESSAGE,
-  CF_WORKERS_PLANS_URL,
   type CloudflarePlanErrorInput,
   isCloudflarePlanError,
 } from "./plan-required";
+import { cloudflareEmailSendingUrl, connectedCfAccountId } from "@/lib/desktop/bridge";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 
 type OpenListener = () => void;
 
@@ -35,6 +36,10 @@ export function notifyIfCloudflarePlanError(
 
 export function CloudflarePlanDialogHost() {
   const [open, setOpen] = useState(false);
+  const desktop = useOptionalDesktop();
+  const emailSendingUrl = cloudflareEmailSendingUrl(
+    connectedCfAccountId(desktop?.credentials),
+  );
 
   useEffect(() => {
     openListener = () => setOpen(true);
@@ -54,10 +59,10 @@ export function CloudflarePlanDialogHost() {
           <AlertDialogCancel>Dismiss</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => {
-              window.open(CF_WORKERS_PLANS_URL, "_blank", "noopener,noreferrer");
+              window.open(emailSendingUrl, "_blank", "noopener,noreferrer");
             }}
           >
-            Open Cloudflare Workers plans
+            Open Cloudflare Email Sending
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

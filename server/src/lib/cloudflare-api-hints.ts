@@ -1,15 +1,30 @@
 /** Relaybase API code when Cloudflare Email Sending requires Workers Paid. */
 export const CF_WORKERS_PAID_REQUIRED_CODE = "cf_workers_paid_required";
 
+/**
+ * Free accounts often get zone Email Sending APIs as [2036] Unauthorized
+ * instead of Email Sending’s [10105] not_entitled.
+ */
 function messageLooksLikePlanError(message: string): boolean {
   const lower = message.toLowerCase();
-  return (
+  if (
     lower.includes("[10105]") ||
     lower.includes("not_entitled") ||
     lower.includes("not entitled") ||
     lower.includes("workers paid") ||
     lower.includes("paid plan")
-  );
+  ) {
+    return true;
+  }
+  // Zone Email Sending list/create on Workers Free.
+  if (
+    lower.includes("[2036]") &&
+    lower.includes("unauthorized") &&
+    lower.includes("email/sending")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /** True when Cloudflare rejected send because the account lacks Workers Paid. */
@@ -21,6 +36,7 @@ export function isCloudflarePlanError(
     const code = input[0]?.code;
     const msg = input[0]?.message ?? "";
     if (code === 10105) return true;
+    if (code === 2036 && /unauthorized/i.test(msg)) return true;
     return messageLooksLikePlanError(msg);
   }
   return messageLooksLikePlanError(input);
@@ -106,6 +122,13 @@ export function cloudflareSendingErrorHint(
 
   if (code === 10105 || msg.includes("not_entitled")) {
     return "This Cloudflare account is not entitled to Email Sending. Enroll in Email Service in the Cloudflare dashboard.";
+  }
+
+  if (
+    code === 2036 ||
+    (msg.toLowerCase().includes("unauthorized") && msg.includes("[2036]"))
+  ) {
+    return "Sending requires a Cloudflare Workers Paid plan (~$5/mo, billed by Cloudflare).";
   }
 
   if (code === 10102 || code === 10103 || msg.includes("forbidden")) {

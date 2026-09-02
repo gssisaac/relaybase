@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { connectedCfAccountId, displayCfAccountId, mailApiReady } from "./cloudflare.ts";
+import { connectedCfAccountId, displayCfAccountId, mailApiReady, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl } from "./cloudflare.ts";
 
 describe("mailApiReady", () => {
   it("is ready when the token is set and the probe is not false", () => {
@@ -66,5 +66,25 @@ describe("connectedCfAccountId", () => {
       "bb".repeat(16),
     );
     assert.equal(connectedCfAccountId(null), "");
+  });
+});
+
+describe("cloudflare dashboard urls", () => {
+  const accountId = "a".repeat(32);
+
+  it("builds email sending and domains overview with account id", () => {
+    assert.equal(
+      cloudflareEmailSendingUrl(accountId),
+      `https://dash.cloudflare.com/${accountId}/email-service/sending`,
+    );
+    assert.equal(
+      cloudflareDomainsOverviewUrl(accountId),
+      `https://dash.cloudflare.com/${accountId}/domains/overview`,
+    );
+  });
+
+  it("falls back to dashboard home without account id", () => {
+    assert.equal(cloudflareEmailSendingUrl(""), "https://dash.cloudflare.com/");
+    assert.equal(cloudflareDomainsOverviewUrl("  "), "https://dash.cloudflare.com/");
   });
 });

@@ -177,7 +177,7 @@ export function planRequiredSendingHealthDomain(
 export function sendingDashboardUrl(accountId: string | undefined): string {
   const id = accountId?.trim() ?? "";
   if (id) return `https://dash.cloudflare.com/${id}/email-service/sending`;
-  return "https://dash.cloudflare.com/?to=/:account/email-service/sending";
+  return "https://dash.cloudflare.com/";
 }
 
 export type SendingHealthCf = {

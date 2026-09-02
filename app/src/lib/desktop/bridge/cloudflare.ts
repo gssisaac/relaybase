@@ -146,6 +146,20 @@ export function connectedCfAccountId(credentials?: {
   );
 }
 
+/** Cloudflare dashboard → this account's Email Sending page. */
+export function cloudflareEmailSendingUrl(accountId: string): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/email-service/sending`;
+}
+
+/** Cloudflare dashboard → this account's domain overview (add a site). */
+export function cloudflareDomainsOverviewUrl(accountId: string): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  return `https://dash.cloudflare.com/${id}/domains/overview`;
+}
+
 /** Cloudflare dashboard → this account's R2 home (not checkout). */
 export function cloudflareR2DashboardUrl(accountId: string): string {
   const id = accountId.trim();

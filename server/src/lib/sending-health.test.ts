@@ -190,4 +190,28 @@ describe("collectSendingHealth", () => {
     assert.match(row?.error ?? "", /Workers Paid/i);
     assert.equal(row?.zoneId, "z-wipi");
   });
+
+  it("marks plan required when list throws [2036] Unauthorized on email/sending", async () => {
+    const snapshot = await collectSendingHealth(
+      ["wipibox.com"],
+      {
+        async listZones() {
+          return [{ id: "z-wipi", name: "wipibox.com" }];
+        },
+        async listSendingSubdomains() {
+          throw new Error(
+            "Cloudflare API: [2036] Unauthorized\nAPI: GET /zones/z-wipi/email/sending/subdomains",
+          );
+        },
+        async hasSendingBounceMx() {
+          throw new Error("should not probe bounce MX after plan error");
+        },
+      },
+      { generatedAt: "2026-01-01T00:00:00.000Z" },
+    );
+    const row = snapshot.domains[0];
+    assert.equal(row?.status, "restricted");
+    assert.equal(row?.code, "cf_workers_paid_required");
+    assert.match(row?.error ?? "", /Workers Paid/i);
+  });
 });

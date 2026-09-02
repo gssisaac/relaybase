@@ -1,5 +1,4 @@
 import {
-  WORKER_INSTALL_ZIP_URL,
   cloudflareR2DashboardUrl,
   isCloudflareAuthExpired,
 } from "./cloudflare";
@@ -169,11 +168,6 @@ export function explainDesktopError(
       }
     );
   }
-  const installLinks: DesktopErrorLink[] = [
-    { label: "Download Worker install ZIP", href: WORKER_INSTALL_ZIP_URL },
-    { label: "Open install setup", href: "/setup/install" },
-  ];
-
   if (
     lower.includes("does not support zone listing") ||
     lower.includes("does not have this api yet") ||
@@ -239,7 +233,6 @@ export function explainDesktopError(
         "D1 already has an owner passtoken, and this request had no Cloudflare OAuth token or console session for migrate-db.",
       fix:
         "Authorize with Cloudflare again and Try again. OAuth upgrade can run migrate-db without signing in. If you need the mailbox, use Setup → I forgot my passtoken, then Already installed.",
-      links: installLinks,
     };
   }
 
@@ -253,8 +246,7 @@ export function explainDesktopError(
       title: "Could not reach your Worker",
       detail:
         "This Mac could not call the Worker URL. Check the URL, that deploy finished, and your network.",
-      fix: "Open the URL + `/health` in a browser. If that fails, redeploy from the install ZIP.",
-      links: installLinks,
+      fix: "Open the URL + `/health` in a browser. If that fails, open Worker update in Settings and redeploy.",
     };
   }
 
@@ -301,7 +293,6 @@ export function explainDesktopError(
       title: "Worker URL looks invalid",
       detail: stripRawApiNoise(raw) || "Enter your workers.dev HTTPS URL.",
       fix: "Example: https://relaybase-api.<your-subdomain>.workers.dev",
-      links: installLinks,
     };
   }
 
@@ -397,7 +388,6 @@ export function explainDesktopError(
         ? cleaned
         : "Something unexpected happened while connecting to your Worker.",
     fix: "Check the Worker URL, then try again.",
-    links: installLinks,
   };
 }
 

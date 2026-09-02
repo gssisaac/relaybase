@@ -190,6 +190,7 @@ export function SetupProgressPanel({
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const installStartedRef = useRef(false);
   const busyRef = useRef(false);
+  const wipeProbeCancelledRef = useRef(false);
 
   const cfOAuthConnected = Boolean(
     credentials?.cfOauthRefreshToken?.trim() ||
@@ -481,6 +482,14 @@ export function SetupProgressPanel({
     setWipeOpen(true);
   }
 
+  function handleWipeOpenChange(open: boolean) {
+    setWipeOpen(open);
+    if (!open) {
+      wipeProbeCancelledRef.current = true;
+      setWipeProbing(false);
+    }
+  }
+
   async function runAutoInstall(
     plan?: InstallDecision[],
     wipeConfirmation?: string | null,
@@ -595,22 +604,25 @@ export function SetupProgressPanel({
 
   async function requestRollback() {
     if (rollingBack || busyRef.current || wipeProbing) return;
-    setWipeProbing(true);
     setError(null);
+    wipeProbeCancelledRef.current = false;
+    openWipe({ kind: "rollback" }, []);
+    setWipeProbing(true);
     try {
       if (!(await ensureOauthSession())) {
+        handleWipeOpenChange(false);
         return;
       }
       const probe = await desktopProbeInstall(cfOAuthAccountId || undefined);
-      openWipe(
-        { kind: "rollback" },
-        probe.resources.filter((r) => r.present),
-      );
+      if (wipeProbeCancelledRef.current) return;
+      setWipeTargets(probe.resources.filter((r) => r.present));
     } catch (err) {
-      openWipe({ kind: "rollback" }, unknownOccupiedTargets());
-      setError(
-        explainDesktopError(err, "Could not check existing data before rollback"),
-      );
+      if (!wipeProbeCancelledRef.current) {
+        setWipeTargets(unknownOccupiedTargets());
+        setError(
+          explainDesktopError(err, "Could not check existing data before rollback"),
+        );
+      }
     } finally {
       setWipeProbing(false);
     }
@@ -620,6 +632,8 @@ export function SetupProgressPanel({
     if (rollingBack || busyRef.current) return;
     setRollingBack(true);
     setError(null);
+    setLogs([]);
+    setInstallLogExpanded(true);
     if (!(await ensureOauthSession())) {
       setRollingBack(false);
       return;
@@ -1507,7 +1521,7 @@ export function SetupProgressPanel({
               className="w-full justify-between"
               onClick={() => setInstallLogExpanded(true)}
             >
-              Install log
+              Log
               <ChevronDown className="size-3.5" />
             </Button>
           ) : (
@@ -1518,11 +1532,11 @@ export function SetupProgressPanel({
                   className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
                   onClick={() => setInstallLogExpanded(false)}
                 >
-                  Install log
+                  Log
                   <ChevronUp className="size-3.5" />
                 </button>
               ) : (
-                <p className="text-xs font-medium">Install log</p>
+                <p className="text-xs font-medium">Log</p>
               )}
               <div
                 ref={logEndRef}
@@ -1640,22 +1654,21 @@ export function SetupProgressPanel({
             disabled={wipeProbing}
             onClick={() => void requestRollback()}
           >
-            {wipeProbing ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : null}
             Rollback
           </Button>
         ) : null}
 
         <InstallWipeConfirmDialog
           open={wipeOpen}
-          onOpenChange={setWipeOpen}
+          onOpenChange={handleWipeOpenChange}
           title={wipeDialogCopy().title}
           description={wipeDialogCopy().description}
           targets={wipeTargets}
           confirmLabel={wipeDialogCopy().confirmLabel}
           onConfirm={onWipeConfirm}
           confirming={rollingBack || clearingDb}
+          checking={wipeProbing && wipeIntent?.kind === "rollback"}
+          checkingMessage="Checking existing Cloudflare resources…"
           requirePhrase={wipeIntent?.kind === "rollback"}
         />
 

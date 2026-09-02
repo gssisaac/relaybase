@@ -109,7 +109,7 @@ export function cloudflareSendingErrorHint(
   }
 
   if (code === 10102 || code === 10103 || msg.includes("forbidden")) {
-    return "API token lacks Email Sending permission. Add Account → Email Sending → Edit.";
+    return "API token lacks permission. Verify Zone and Routing permissions for this token.";
   }
 
   if (code === 10100 || msg.includes("upstream")) {

@@ -19,7 +19,7 @@ consoleZones.get("/", async (c) => {
         error:
           error instanceof Error
             ? error.message
-            : "Cloudflare API is not configured on this worker — add a CF_API_TOKEN secret (Email Sending + Email Routing + Zone Read) so the Worker can manage domains and DNS",
+            : "Cloudflare API is not configured on this worker — add a CF_API_TOKEN secret (Email Routing + Zone Read + DNS) so the Worker can manage domains and DNS",
       },
       503,
     );

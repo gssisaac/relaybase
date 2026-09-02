@@ -4,7 +4,7 @@ import {
   clearAccountMobileConfig as dbClearAccountMobileConfig,
   getAccountMobileConfig as dbGetAccountMobileConfig,
   setAccountMobileConfig as dbSetAccountMobileConfig,
-} from "../../db/app/mobile";
+} from "../../db/app/mobile.ts";
 
 /**
  * Mobile access password stored in D1 `mobile_passwords` table.

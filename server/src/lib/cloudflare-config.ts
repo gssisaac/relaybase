@@ -27,7 +27,7 @@ export async function createCloudflareClient(env: Env): Promise<CloudflareClient
   const config = await readCloudflareRuntimeConfig(env);
   if (!config) {
     throw new Error(
-      "Cloudflare API is not configured on this worker — add a CF_API_TOKEN secret (Email Sending + Email Routing + Zone Read) so the Worker can manage domains and DNS",
+      "Cloudflare API is not configured on this worker — add a CF_API_TOKEN secret (Email Routing + Zone Read + DNS) so the Worker can manage domains and DNS",
     );
   }
   return new CloudflareClient({

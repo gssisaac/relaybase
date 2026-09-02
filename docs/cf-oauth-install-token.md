@@ -2,7 +2,7 @@
 
 **Audience:** humans and coding agents changing Settings → Cloudflare, desktop Cloudflare API install, or `hq/console` OAuth routes.
 
-The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudflare HTTP API for deploy and Worker secrets) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Sending Edit / Email Routing / Zone Read → Worker `CF_API_TOKEN`) is added by the user in the Cloudflare dashboard after install (optional paste-and-push remains). Sending uses the Worker `EMAIL` binding, not this token.
+The **install token** (Workers Scripts / R2 / D1 — used by the desktop Cloudflare HTTP API for deploy and Worker secrets) is obtained via **Cloudflare OAuth**, not pasted in Setup or Settings. The **server token** (Email Routing / Zone Read / DNS Edit → Worker `CF_API_TOKEN`) is added by the user in the Cloudflare dashboard after install (optional paste-and-push remains). Sending uses the Worker `EMAIL` binding, not this token.
 
 ---
 

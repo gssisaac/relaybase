@@ -49,7 +49,6 @@ export function missingWorkerHelp(role: "owner" | "invited"): DesktopErrorHelp {
     title: "Worker not found",
     detail: "There is no Relaybase Worker at this URL.",
     fix: "Install Relaybase on your Cloudflare account first, then sign in again.",
-    links: [{ label: "Open install setup", href: "/setup/install" }],
   };
 }
 

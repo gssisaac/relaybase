@@ -44,7 +44,7 @@ npx wrangler secret put CF_API_TOKEN
 
 `CF_ACCOUNT_ID` is optional. Desktop auto-install may set it. The Worker does not need it for mail or the Cloudflare API.
 
-The token needs Account → Email Sending → Edit, Zone → Email Routing Rules → Edit, and Zone → Zone → Read. Sending uses the `[[send_email]]` `EMAIL` binding in `wrangler.toml`, not this token.
+The token needs Zone → Email Routing Rules → Edit, Zone → Zone → Read, and Zone → DNS → Edit. Sending uses the `[[send_email]]` `EMAIL` binding in `wrangler.toml`, not this token.
 
 Do **not** set `ADMIN_TOKEN`. That secret is retired.
 

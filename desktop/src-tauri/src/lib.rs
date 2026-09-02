@@ -533,7 +533,7 @@ async fn migrate_worker_db_cmd(
     .await
 }
 
-/// Push a one-shot server token (Email Sending Edit) to the deployed Worker
+/// Push a one-shot server token to the deployed Worker
 /// as the `CF_API_TOKEN` secret. The token is not written to disk. Auth is
 /// the in-memory OAuth access token (refreshed if needed).
 #[tauri::command]

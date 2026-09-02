@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -71,6 +72,8 @@ export function InstallWipeConfirmDialog({
   confirmLabel,
   onConfirm,
   confirming = false,
+  checking = false,
+  checkingMessage = "Checking existing Cloudflare resources…",
   requirePhrase = false,
 }: {
   open: boolean;
@@ -81,6 +84,8 @@ export function InstallWipeConfirmDialog({
   confirmLabel: string;
   onConfirm: (phrase: string | null) => void;
   confirming?: boolean;
+  checking?: boolean;
+  checkingMessage?: string;
   /** Always type DELETE ME — used for rollback so an empty probe cannot one-click wipe. */
   requirePhrase?: boolean;
 }) {
@@ -92,7 +97,9 @@ export function InstallWipeConfirmDialog({
     ...new Set([...occupied.map((r) => r.name), WIPE_PROJECT_NAME]),
   ];
   const canConfirm =
-    armed && (!needsPhrase || wipePhraseIsValid(phrase, acceptedNames));
+    !checking &&
+    armed &&
+    (!needsPhrase || wipePhraseIsValid(phrase, acceptedNames));
 
   useEffect(() => {
     if (!open) {
@@ -112,7 +119,13 @@ export function InstallWipeConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        {targets.length > 0 ? (
+        {checking ? (
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-4 text-sm text-muted-foreground">
+            <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+            <span>{checkingMessage}</span>
+          </div>
+        ) : null}
+        {!checking && targets.length > 0 ? (
           <ul className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
             {targets.map((r) => {
               const summary = occupancySummary(r);
@@ -153,7 +166,7 @@ export function InstallWipeConfirmDialog({
             })}
           </ul>
         ) : null}
-        {needsPhrase ? (
+        {!checking && needsPhrase ? (
           <div className="space-y-2">
             <Label htmlFor="install-wipe-phrase">
               Type <span className="font-mono">{WIPE_PHRASE_DELETE_ME}</span> or{" "}
@@ -167,12 +180,12 @@ export function InstallWipeConfirmDialog({
               placeholder={WIPE_PHRASE_DELETE_ME}
               autoComplete="off"
               autoFocus
-              disabled={confirming}
+              disabled={confirming || checking}
             />
           </div>
         ) : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={confirming}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={confirming || checking}>Cancel</AlertDialogCancel>
           <Button
             type="button"
             variant="destructive"

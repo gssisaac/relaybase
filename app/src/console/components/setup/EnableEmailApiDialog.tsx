@@ -136,7 +136,7 @@ export function EnableEmailApiDialog({
       }
       if (result.cfApiTokenValid === false) {
         throw new Error(
-          "CF_API_TOKEN is set but Cloudflare rejected it. Check permissions (Email Sending Edit, Email Routing Rules Edit, Zone Read) and try again.",
+          "CF_API_TOKEN is set but Cloudflare rejected it. Check permissions (Email Routing Rules Edit, Zone Read, DNS Edit) and try again.",
         );
       }
       if (!mailApiReady(result)) {
@@ -302,7 +302,7 @@ export function EnableEmailApiDialog({
                     type="password"
                     value={pasteToken}
                     onChange={(e) => setPasteToken(e.target.value)}
-                    placeholder="Email Sending Edit token"
+                    placeholder="Zone & routing API token"
                     className="font-mono text-xs"
                     autoComplete="off"
                     spellCheck={false}

@@ -649,7 +649,7 @@ export function CloudflareConfigAlert({ show }: { show: boolean }) {
     <Alert>
       <AlertTitle>Cloudflare not configured</AlertTitle>
       <AlertDescription>
-        Email Sending and DNS need a CF_API_TOKEN secret on your Worker.
+        Email Routing and DNS need a CF_API_TOKEN secret on your Worker.
         <Button
           type="button"
           size="sm"

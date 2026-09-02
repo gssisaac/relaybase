@@ -30,13 +30,13 @@ export type WorkerUpdateCheck = {
 };
 
 /**
- * Optional Cloudflare API token scopes for Zone / Email assist
- * (Domains import, routing automation). Not required for Worker self-install.
+ * Optional Cloudflare API token scopes for Zone / Email Routing assist
+ * (Domains import, routing automation, DMARC DNS). Not required for Worker self-install.
  */
 export const CF_REQUIRED_TOKEN_PERMISSIONS = [
-  "Account — Email Sending — Edit",
   "Zone — Email Routing Rules — Edit",
   "Zone — Zone — Read",
+  "Zone — DNS — Edit",
 ] as const;
 
 /** Scopes needed for desktop auto-install (Wrangler deploy + R2 + D1). */

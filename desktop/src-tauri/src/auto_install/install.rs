@@ -569,7 +569,7 @@ async fn apply_secrets(
             app,
             "secret",
             "info",
-            "CF_API_TOKEN skipped — set the server token (Email Sending Edit) in Settings to enable sending.",
+            "CF_API_TOKEN skipped — set the server token in Settings to enable zone and routing management.",
         );
     }
 

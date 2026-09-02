@@ -34,11 +34,11 @@ describe("isMissingWorkerError", () => {
 });
 
 describe("missingWorkerHelp", () => {
-  it("tells owners to install and links to setup", () => {
+  it("tells owners to install without manual-install links", () => {
     const help = missingWorkerHelp("owner");
     assert.equal(help.title, "Worker not found");
     assert.match(help.fix, /Install Relaybase/i);
-    assert.equal(help.links?.[0]?.href, "/setup/install");
+    assert.equal(help.links, undefined);
   });
 
   it("tells invited teammates to contact the owner without install links", () => {

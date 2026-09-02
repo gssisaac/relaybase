@@ -252,7 +252,7 @@ Implemented in `api-base.ts` + `context.tsx`.
 
 ### Pepper bootstrap (`X-Auth-Pepper`)
 
-While no owner exists: `setup-admin`, `init-db`, `migrate-db`.
+Install / reinstall bootstrap: `setup-admin`, `init-db`, `migrate-db`. Proving `AUTH_PEPPER` in `setup-admin` always resets D1 `owner_config` and issues a fresh passtoken (overwriting any previous owner and invalidating old sessions), guaranteeing new installs/reinstalls never fail with `OWNER_ALREADY_CONFIGURED`.
 
 ### Cloudflare OAuth account proof (`X-Cf-Access-Token`)
 

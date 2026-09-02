@@ -12,6 +12,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Mailbox R2 layout (`relaybase-mailbox`, `inbound|sent {domain}/{id}/` thin `meta.json` + `raw.eml`, send-log, bucket copy scripts) | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Settings → Cloudflare OAuth (install token), `hq/console` OAuth routes, or desktop CF API install | [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) |
+| **Install, Login, and Recovery Lifecycle** (Use cases, edge cases, passtoken overwrite, deadlock prevention) | [docs/install-auth-recovery-spec.md](docs/install-auth-recovery-spec.md) |
 | Owner login (passtoken + sessions), `AUTH_PEPPER`, `/console/login` / `setup-admin` / `reset-admin`, or retiring `ADMIN_TOKEN` | [docs/storage-architecture.md](docs/storage-architecture.md) → *Owner auth* |
 | Desktop owner/invited unlock, keyring passtoken + Touch ID read-gate, `AppSessionStore` phase machine, team keyring (`team-session`), or scoped 401 re-prompt | [docs/desktop-session-machine.md](docs/desktop-session-machine.md) + [docs/authentication.md](docs/authentication.md) |
 | Email Cmd+K, row context menus, mail action shortcuts, or anything under `app/src/email/commands/` | [docs/email-command-system.md](docs/email-command-system.md) |

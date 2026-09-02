@@ -226,19 +226,6 @@ export function explainDesktopError(
   }
 
   if (
-    lower.includes("owner_already_configured") ||
-    lower.includes("owner already configured")
-  ) {
-    return {
-      title: "Owner already configured on this Worker",
-      detail:
-        "D1 already has an owner passtoken, and this request had no Cloudflare OAuth token or console session for migrate-db.",
-      fix:
-        "Authorize with Cloudflare again and Try again. OAuth upgrade can run migrate-db without signing in. If you need the mailbox, use Setup → I forgot my passtoken, then Already installed.",
-    };
-  }
-
-  if (
     lower.includes("could not reach worker") ||
     lower.includes("error sending request") ||
     lower.includes("timed out") ||

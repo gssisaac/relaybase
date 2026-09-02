@@ -130,16 +130,16 @@ export async function requireCfAccountProof(
 }
 
 /**
- * init-db / migrate-db auth: console session, or CF OAuth account proof
- * (desktop install / upgrade), or AUTH_PEPPER when no owner exists yet.
+ * init-db / migrate-db auth: console session, CF OAuth account proof
+ * (desktop install / upgrade), or AUTH_PEPPER bootstrap (install / reinstall).
  */
 export async function requireSchemaAuth(
   c: Context<{ Bindings: Env }>,
-  hasOwner: boolean,
+  _hasOwner?: boolean,
 ): Promise<Response | null> {
   if (!(await requireConsoleSession(c))) return null;
   if (!(await requireCfAccountProof(c))) return null;
-  if (!hasOwner) return requirePepperBootstrap(c);
+  if (!(await requirePepperBootstrap(c))) return null;
   return c.json({ error: "Unauthorized" }, 401);
 }
 

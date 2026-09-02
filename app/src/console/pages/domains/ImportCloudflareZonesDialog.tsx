@@ -117,7 +117,7 @@ export function ImportCloudflareZonesDialog({
 
   function handleImport() {
     if (selectedNames.length === 0) return;
-    store.queueAddDomains(selectedNames, true);
+    store.queueAddDomains(selectedNames);
     setOpen(false);
     setError(null);
     setEmailApiMissing(false);

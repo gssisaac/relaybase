@@ -420,9 +420,9 @@ export class DomainStore {
 
   /**
    * Queue a background domain add. Returns immediately — dialog should close.
-   * Onboarding (and optional default addresses) continue in the store.
+   * Onboarding continues in the store without creating default addresses.
    */
-  queueAddDomain(domain: string, seedDefaults = true): DomainAddJob {
+  queueAddDomain(domain: string, seedDefaults = false): DomainAddJob {
     return this.enqueueJob({
       domain,
       kind: "add",
@@ -433,7 +433,7 @@ export class DomainStore {
   }
 
   /** Queue several domains at once; returns immediately for background processing. */
-  queueAddDomains(domains: string[], seedDefaults = true): DomainAddJob[] {
+  queueAddDomains(domains: string[], seedDefaults = false): DomainAddJob[] {
     return domains.map((domain) => this.queueAddDomain(domain, seedDefaults));
   }
 

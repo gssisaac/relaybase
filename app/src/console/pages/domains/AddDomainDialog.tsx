@@ -57,7 +57,7 @@ export function AddDomainDialog({
       setLocalError("This domain is already in Relaybase.");
       return;
     }
-    store.queueAddDomain(trimmed, true);
+    store.queueAddDomain(trimmed);
     reset();
     setOpen(false);
   }

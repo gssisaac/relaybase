@@ -525,15 +525,16 @@ async fn apply_secrets(
     account_id: &str,
     run_opts: &InstallRunOptions,
     server_token: Option<&str>,
-    any_d1_reused: bool,
+    _any_d1_reused: bool,
 ) -> Result<String, String> {
     let existing_secrets = list_worker_secrets(client, DEFAULT_SCRIPT)
         .await
         .unwrap_or_default();
     let has_pepper = existing_secrets.iter().any(|n| n == "AUTH_PEPPER");
-    // Reuse D1 / Worker update must not rotate a live pepper. If the secret
-    // is missing, login HMAC is an empty key — always PUT in that case.
-    let skip_pepper = (run_opts.skip_auth_pepper || any_d1_reused) && has_pepper;
+    // Only Worker update (run_opts.skip_auth_pepper) reuses existing pepper.
+    // When creating or reinstalling the Worker via Setup, always generate a new
+    // AUTH_PEPPER so a fresh passtoken is issued, matching first-time install.
+    let skip_pepper = run_opts.skip_auth_pepper && has_pepper;
     let auth_pepper = if skip_pepper {
         String::new()
     } else if let Some(existing) = run_opts.existing_auth_pepper.as_ref() {
@@ -588,25 +589,13 @@ async fn finalize_schema(
     let owner_configured = fetch_owner_configured(worker_url).await.unwrap_or(false);
     let console_access = access_token.filter(|t| !t.trim().is_empty());
     let cf_access = cf_access_token.filter(|t| !t.trim().is_empty());
-    if owner_configured && console_access.is_none() && cf_access.is_none() {
-        emit_log(
-            app,
-            "migrate-db",
-            "stderr",
-            "Owner already configured — migrate-db requires a signed-in console session or Cloudflare OAuth.",
-        );
-        return Err(
-            "OWNER_ALREADY_CONFIGURED: Authorize with Cloudflare again so Setup can finish the upgrade."
-                .into(),
-        );
-    }
-
-    let use_migrate = run_opts.worker_only || any_d1_reused;
     let pepper = if auth_pepper.is_empty() {
         None
     } else {
         Some(auth_pepper)
     };
+
+    let use_migrate = run_opts.worker_only || any_d1_reused;
     let init = if use_migrate {
         migrate_worker_db_with_retry(app, worker_url, pepper, console_access, cf_access).await
     } else {
@@ -656,7 +645,5 @@ async fn finalize_schema(
 
 fn is_schema_auth_skip(err: &str) -> bool {
     let lower = err.to_lowercase();
-    lower.contains("401")
-        || lower.contains("unauthorized")
-        || lower.contains("owner already configured")
+    lower.contains("401") || lower.contains("unauthorized")
 }

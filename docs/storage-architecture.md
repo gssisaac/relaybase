@@ -77,6 +77,7 @@ The desktop **god token is retired**. Owner auth is now a **Worker-issued passto
 - All `/console/*` routes require **console-scoped** access; `/mail/*` require **mail-scoped** access (`requireOwnerSession(c, scope)`).
 - Lost passtoken: `POST /console/reset-admin` proves a Cloudflare OAuth access token can list Secrets Store on the pinned CF account (env `CF_ACCOUNT_ID`, D1 `owner_config.cf_account_id`, body `cfAccountId`, or `GET /accounts`), then re-issues a passtoken once (download + write `owner-passtoken`) and revokes all sessions. No console email, no central god token. Worker `CF_ACCOUNT_ID` is optional.
 - `AUTH_PEPPER` (random, set once at install) replaces the retired `ADMIN_TOKEN` wrangler secret. The product baseline schema has no `owner_config.admin_token`, `auth_tokens`, or dashboard god tokens.
+- **Install/Reinstall passtoken guarantee**: When creating or reinstalling a Worker via Setup, `POST /console/setup-admin` verified with `AUTH_PEPPER` always overwrites any existing owner in D1 and issues a fresh passtoken without throwing `OWNER_ALREADY_CONFIGURED`, guaranteeing recovery even from broken/legacy workers.
 
 The desktop **unlock flow** — silent mail boot, keyring passtoken + Touch ID
 as the read-gate, owner/invited phase machine, team keyring, scoped 401 — is
@@ -113,7 +114,7 @@ The product Worker manages domains / inbox routing / DNS with wrangler secret `C
 | `/console/branding` (GET status / PUT merge / POST apply DNS) | Per-domain DMARC config in D1 `domain_branding` + DMARC TXT via the Worker's Cloudflare client |
 | `/console/connect` | Desktop self-install probe (owner access token) |
 | `/console/register-owner` | Record the console account that owns this Worker (owner session) |
-| `/console/setup-admin` | First-time owner setup: issue passtoken once (AUTH_PEPPER bootstrap) |
+| `/console/setup-admin` | Owner setup / reinstall: issue passtoken once (AUTH_PEPPER bootstrap) |
 | `/console/login` / `/console/refresh` / `/console/logout` | Owner session create / rotate / revoke |
 | `/console/rotate-passtoken` | Re-issue passtoken once (owner session); revokes all sessions |
 | `/console/reset-admin` | Re-issue passtoken once via CF OAuth (Secrets Store on the pinned CF account — env, D1 `owner_config.cf_account_id`, or `GET /accounts`) |

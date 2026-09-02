@@ -292,30 +292,31 @@ export function WorkerInstallPanel({
       await probeHealth(url);
       const status = await ownerAuthStatusForWorkerUrl(url);
 
-      if (purpose === "install" && !status.ownerConfigured) {
+      if (purpose === "install") {
         const pepper = installPepper.trim();
-        if (!pepper) {
+        if (pepper) {
+          const issued = await desktopOwnerSetupAdmin({
+            workerUrl: url,
+            pepper,
+          });
+          await desktopOwnerLogin({
+            workerUrl: url,
+            passtoken: issued.passtoken,
+          });
+          setInstallPepper("");
+          setRevealedPasstoken(issued.passtoken);
+          setTokenSaved(false);
+          setTokenDownloaded(false);
+          setCopiedToken(false);
+        } else if (status.ownerConfigured) {
+          throw new Error(
+            "An owner passtoken is already configured on this Worker. Sign in from Setup → Already installed.",
+          );
+        } else {
           throw new Error(
             "Install pepper is missing. Switch away from Manual and back, then copy the command again.",
           );
         }
-        const issued = await desktopOwnerSetupAdmin({
-          workerUrl: url,
-          pepper,
-        });
-        await desktopOwnerLogin({
-          workerUrl: url,
-          passtoken: issued.passtoken,
-        });
-        setInstallPepper("");
-        setRevealedPasstoken(issued.passtoken);
-        setTokenSaved(false);
-        setTokenDownloaded(false);
-        setCopiedToken(false);
-      } else if (purpose === "install" && status.ownerConfigured) {
-        throw new Error(
-          "An owner passtoken is already configured on this Worker. Sign in from Setup → Already installed.",
-        );
       }
 
       const result = await desktopVerifyWorkerConnection(url);
@@ -335,9 +336,7 @@ export function WorkerInstallPanel({
         return;
       }
       setPendingContinue(next);
-      if (!revealedPasstoken && purpose === "install" && !status.ownerConfigured) {
-        /* reveal is set above; stay on dialog until they save it */
-      }
+      // When a new passtoken is revealed, the dialog stays open until the user saves/copies the token.
     } catch (err) {
       setError(explainDesktopError(err, "Could not verify Worker"));
     } finally {

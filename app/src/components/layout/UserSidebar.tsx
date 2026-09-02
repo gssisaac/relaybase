@@ -198,6 +198,7 @@ function ModeSwitchButton({
 function TitleMenuItems({
   mode,
   teamMode,
+  canAddAccount = true,
   onAddAccount,
   onOpenSettings,
   onSwitchMode,
@@ -205,6 +206,7 @@ function TitleMenuItems({
 }: {
   mode: SidebarMode;
   teamMode: boolean;
+  canAddAccount?: boolean;
   onAddAccount: () => void;
   onOpenSettings: () => void;
   onSwitchMode: () => void;
@@ -213,7 +215,7 @@ function TitleMenuItems({
   return (
     <>
       {mode === "email" ? (
-        <DropdownMenuItem onClick={onAddAccount}>
+        <DropdownMenuItem onClick={onAddAccount} disabled={!canAddAccount}>
           <Plus className="size-3.5" />
           Add account
         </DropdownMenuItem>
@@ -271,6 +273,7 @@ function FolderTree({
   collapsed,
   unreadCount = 0,
   unreadCountForAccount,
+  canAddAccount = true,
   onAddAccount,
   onRemoveAccount,
 }: {
@@ -285,6 +288,7 @@ function FolderTree({
   collapsed: boolean;
   unreadCount?: number;
   unreadCountForAccount?: (email: string) => number;
+  canAddAccount?: boolean;
   onAddAccount?: () => void;
   onRemoveAccount?: (email: string) => void;
 }) {
@@ -371,7 +375,7 @@ function FolderTree({
             {parentRow}
           </ContextMenuTrigger>
           <ContextMenuContent>
-            <ContextMenuItem onClick={onAddAccount}>
+            <ContextMenuItem onClick={onAddAccount} disabled={!canAddAccount}>
               <Plus className="size-3.5" />
               Add account
             </ContextMenuItem>
@@ -479,8 +483,13 @@ function EmailModeNav({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { enabledAddresses, getColor, removeEnabledAccount, phase: accountsPhase } =
-    useMailAccounts();
+  const {
+    availableAddresses,
+    enabledAddresses,
+    getColor,
+    removeEnabledAccount,
+    phase: accountsPhase,
+  } = useMailAccounts();
   const { unreadCount, unreadCountForAccount, phase: mailPhase } = useEmailMailbox();
   const accountsReady = accountsPhase === "done";
   const mailReady = mailPhase === "done";
@@ -509,6 +518,15 @@ function EmailModeNav({
     }
   }
 
+  const hasAvailableAccounts = availableAddresses.length > 0;
+  const enabledSet = useMemo(
+    () => new Set(enabledAddresses.map((a) => a.email.toLowerCase())),
+    [enabledAddresses],
+  );
+  const canAddMoreAccounts = availableAddresses.some(
+    (a) => !enabledSet.has(a.email.toLowerCase()),
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1">
       {!accountsReady ? (
@@ -524,7 +542,12 @@ function EmailModeNav({
             size={collapsed ? "icon-sm" : "sm"}
             className={cn(collapsed ? "mx-auto" : "w-full")}
             onClick={onAddAccount}
-            title="Add account"
+            disabled={!hasAvailableAccounts}
+            title={
+              hasAvailableAccounts
+                ? "Add account"
+                : "No domain addresses available"
+            }
           >
             <Plus className="size-3.5" />
             {!collapsed ? "Add account" : null}
@@ -557,6 +580,7 @@ function EmailModeNav({
             unreadCountForAccount={
               showUnread ? unreadCountForAccount : () => 0
             }
+            canAddAccount={canAddMoreAccounts}
             onAddAccount={onAddAccount}
             onRemoveAccount={handleRemoveAccount}
           />
@@ -692,6 +716,14 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const session = useAppSession();
   const { settings: settingsHref } = useEmailPaths();
   const isTeam = teamMode || Boolean(teamLogin);
+  const { availableAddresses, enabledAccounts } = useMailAccounts();
+  const enabledSet = useMemo(
+    () => new Set(enabledAccounts.map((e) => e.toLowerCase())),
+    [enabledAccounts],
+  );
+  const canAddAccount =
+    isTeam ||
+    availableAddresses.some((a) => !enabledSet.has(a.email.toLowerCase()));
   const [addOpen, setAddOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -839,6 +871,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                 <TitleMenuItems
                   mode={mode}
                   teamMode={isTeam}
+                  canAddAccount={canAddAccount}
                   onAddAccount={() => setAddOpen(true)}
                   onOpenSettings={openSettings}
                   onSwitchMode={switchModeTarget}
@@ -893,6 +926,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                     <TitleMenuItems
                       mode={mode}
                       teamMode={isTeam}
+                      canAddAccount={canAddAccount}
                       onAddAccount={() => setAddOpen(true)}
                       onOpenSettings={openSettings}
                       onSwitchMode={switchModeTarget}

@@ -410,6 +410,31 @@ export function SetupProgressPanel({
       return;
     }
     const pepper = result.authPepper?.trim() ?? "";
+    if (pepper) {
+      try {
+        const issued = await desktopOwnerSetupAdmin({
+          workerUrl,
+          pepper,
+        });
+        setInstallPepper(null);
+        setNeedsOwnerSetup(false);
+        setTokenSaved(false);
+        setTokenDownloaded(false);
+        setCopiedToken(false);
+        setAutoDone({
+          workerUrl,
+          revealedPasstoken: issued.passtoken,
+        });
+        fireInstallConfetti();
+        return;
+      } catch (err) {
+        console.error("Auto setup-admin failed, falling back to manual issue", err);
+        setNeedsOwnerSetup(true);
+        setInstallPepper(pepper);
+        setAutoDone({ workerUrl, revealedPasstoken: "" });
+        return;
+      }
+    }
     let ownerConfigured = false;
     try {
       ownerConfigured = (await ownerAuthStatusForWorkerUrl(workerUrl))
@@ -424,16 +449,14 @@ export function SetupProgressPanel({
       return;
     }
     setNeedsOwnerSetup(true);
-    setInstallPepper(pepper || null);
+    setInstallPepper(null);
     setAutoDone({ workerUrl, revealedPasstoken: "" });
-    if (!pepper) {
-      setError({
-        title: "Could not issue a passtoken",
-        detail:
-          "Install finished but AUTH_PEPPER was not available in memory to create the first owner.",
-        fix: "Try again from Setup. If this Worker already has an owner, use I forgot my passtoken.",
-      });
-    }
+    setError({
+      title: "Could not issue a passtoken",
+      detail:
+        "Install finished but AUTH_PEPPER was not available in memory to create the first owner.",
+      fix: "Try again from Setup. If this Worker already has an owner, use I forgot my passtoken.",
+    });
   }
 
   /** OAuth deploy already succeeded. No owner session is the normal upgrade case. */
@@ -694,14 +717,8 @@ export function SetupProgressPanel({
         workerUrl: autoDone.workerUrl,
         revealedPasstoken: issued.passtoken,
       });
+      fireInstallConfetti();
     } catch (err) {
-      const raw = err instanceof Error ? err.message : String(err);
-      if (/already configured/i.test(raw)) {
-        setNeedsOwnerSetup(false);
-        setInstallPepper(null);
-        setAutoDone({ workerUrl: autoDone.workerUrl, revealedPasstoken: "" });
-        return;
-      }
       setError(explainDesktopError(err, "Could not create owner"));
     } finally {
       setCreatingOwner(false);
@@ -1000,25 +1017,24 @@ export function SetupProgressPanel({
               </div>
             ) : workerOwnerConfigured ? (
               <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-amber-800 dark:text-amber-300">
-                <p className="font-medium">Owner already configured</p>
+                <p className="font-medium">Existing Worker detected</p>
                 <p className="mt-1 text-muted-foreground">
-                  This Worker already has an owner passtoken in D1. Setup
-                  Reinstall will fail at migrate-db unless you are signed in.
-                  Skip all resources, then use{" "}
+                  An owner is already configured in D1. Reinstalling or creating the Worker again will issue a new owner passtoken and connect this Mac.
+                  If you already have your passtoken, you can sign in via{" "}
                   <Link
                     href="/setup/connect"
                     className="underline underline-offset-2"
                   >
                     Already installed
                   </Link>{" "}
-                  to sign in with your passtoken, or{" "}
+                  or use{" "}
                   <Link
                     href="/setup/recover-admin"
                     className="underline underline-offset-2"
                   >
                     I forgot my passtoken
                   </Link>
-                  , then Settings → Update Worker.
+                  .
                 </p>
                 {workerVersions ? (
                   <p className="mt-2 font-mono text-[11px] text-muted-foreground">
@@ -1035,15 +1051,6 @@ export function SetupProgressPanel({
               <p className="font-mono text-[11px] text-muted-foreground">
                 Worker v{workerVersions.current} · latest v
                 {workerVersions.latest}
-              </p>
-            ) : null}
-            {Object.entries(decisions).some(
-              ([key, action]) =>
-                action === "reinstall" && key.startsWith("worker:"),
-            ) && workerOwnerConfigured && !workerVersions?.needsUpgrade ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                Reinstall Worker is selected while an owner exists — migrate-db
-                will return 401. Choose Skip for the Worker instead.
               </p>
             ) : null}
             <ul className="space-y-3">

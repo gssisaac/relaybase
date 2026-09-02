@@ -152,10 +152,6 @@ export async function setupOwner(
     return { error: "Unauthorized", status: 401 };
   }
 
-  if (await ownerIsConfigured(db)) {
-    return { error: "Owner already configured", status: 409 };
-  }
-
   const salt = randomSalt();
   const passtoken = generatePasstoken();
   const hash = await hashPasstoken(pepper, salt, passtoken);
@@ -164,6 +160,7 @@ export async function setupOwner(
     passtokenHash: hash,
     passtokenPrefix: passtokenPrefix(passtoken),
   });
+  await deleteAllOwnerSessions(db);
   return { result: { passtoken } };
 }
 

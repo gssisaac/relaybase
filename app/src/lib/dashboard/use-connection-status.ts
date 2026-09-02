@@ -8,6 +8,7 @@ import {
   saveDashboardCache,
 } from "@/lib/dashboard/dashboard-cache-disk";
 import {
+  cfInstallTokenPresent,
   probeConnectionStatus,
   type ConnectionStatusSnapshot,
 } from "@/lib/dashboard/connection-status";
@@ -40,7 +41,7 @@ export function useConnectionStatus() {
       } else {
         setSnapshot({
           cfConnected: false,
-          cfInstallTokenPresent: Boolean(credentials?.cfOauthAccessToken?.trim()),
+          cfInstallTokenPresent: cfInstallTokenPresent(credentials),
           worker: null,
         });
       }
@@ -65,7 +66,7 @@ export function useConnectionStatus() {
       } catch {
         const fallback: ConnectionStatusSnapshot = {
           cfConnected: false,
-          cfInstallTokenPresent: Boolean(credentials?.cfOauthAccessToken?.trim()),
+          cfInstallTokenPresent: cfInstallTokenPresent(credentials),
           worker: null,
         };
         setSnapshot((prev) => prev ?? fallback);

@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import type { Env } from "../../env";
 import { requireConsoleSession } from "../../lib/auth";
+import {
+  cloudflareSendErrorBody,
+  isCloudflarePlanError,
+} from "../../lib/cloudflare-api-hints";
 import { createCloudflareClient } from "../../lib/cloudflare-config";
 import { onboardSendingDomain } from "../../lib/sending-onboard";
 
@@ -71,6 +75,16 @@ consoleSendingOnboard.post("/", async (c) => {
         409,
       );
     }
+    if (result.code === "cf_workers_paid_required") {
+      return c.json(
+        {
+          error: result.error,
+          code: result.code,
+          domain: result.domain,
+        },
+        403,
+      );
+    }
     return c.json(
       {
         error: result.error,
@@ -83,6 +97,17 @@ consoleSendingOnboard.post("/", async (c) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Sending onboard failed";
+    if (isCloudflarePlanError(message)) {
+      const body = cloudflareSendErrorBody(message);
+      return c.json(
+        {
+          error: body.error,
+          code: body.code ?? "cf_workers_paid_required",
+          domain,
+        },
+        403,
+      );
+    }
     return c.json({ error: message }, 502);
   }
 });

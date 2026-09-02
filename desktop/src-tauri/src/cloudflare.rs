@@ -33,7 +33,10 @@ async fn cf_request(
 ) -> Result<Value, String> {
     let url = format!("{CF_API}{path}");
     let method_label = method.as_str().to_string();
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let mut req = http
         .request(method, &url)
         .header("Authorization", format!("Bearer {}", client.api_token))
@@ -58,7 +61,10 @@ async fn cf_request(
 
 async fn cf_get_status(client: &CfClient, path: &str) -> Result<reqwest::StatusCode, String> {
     let url = format!("{CF_API}{path}");
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let res = http
         .get(&url)
         .header("Authorization", format!("Bearer {}", client.api_token))

@@ -39,7 +39,7 @@
 | **UC-1** | **Clean install** | `/setup/install` (Auto) | Create R2, create 3 D1 databases, deploy Worker, inject new `AUTH_PEPPER`, run `init-db`, then `setup-admin` to issue a new passtoken, show it once, save to keyring | `auto_install_worker` creates resources and runs `init-db`; frontend calls `desktopOwnerSetupAdmin`, shows token UI, saves to keyring | None | Done |
 | **UC-2** | **Reinstall with D1 reuse** | `/setup/install` (Reinstall decisions) | Keep R2/D1, redeploy Worker, inject new `AUTH_PEPPER`, run `migrate-db`, then `setup-admin` overwrites D1 `owner_config` and issues a new passtoken | `apply_secrets` injects new pepper; `setupOwner` overwrites D1 and returns new token; `OWNER_ALREADY_CONFIGURED` block removed | None | Done |
 | **UC-3** | **Wipe all reinstall** | `/setup/install` (All reinstall + `DELETE ME`) | Delete and recreate R2/D1, redeploy Worker, inject new `AUTH_PEPPER`, run `init-db`, issue new passtoken | Deletes/recreates D1/R2, runs `init-db` → `setup-admin` pipeline | None | Done |
-| **UC-4** | **Settings Worker update** | Settings → Update Worker | Keep R2/D1/secrets/passtoken/sessions; upload script only; run `migrate-db`; return to dashboard | `update_installed_worker` with `skip_auth_pepper=true`; `migrate-db` then dashboard return | None | Done |
+| **UC-4** | **Settings Worker update** | Settings → Update Worker | Keep R2/D1/secrets/passtoken/sessions; silent token refresh via keyring `cf-oauth-install` (zero browser prompt); upload script only; run `migrate-db`; return to dashboard | `update_installed_worker` with `skip_auth_pepper=true` using keyring `refresh_token`; `migrate-db` then dashboard return | None | Done |
 | **UC-5** | **Manual Wrangler install** | `/setup/install` (Manual tab) | After terminal deploy, entering Worker URL runs `setup-admin`, issues new D1 passtoken, auto-login | `WorkerInstallPanel` calls `desktopOwnerSetupAdmin` with `installPepper`, overwrites D1, logs in | None | Done |
 | **UC-6** | **Already installed connect** | `/setup/connect` | Worker URL + existing passtoken → `POST /console/login` → save to keyring → mailbox | `SetupConnectPage` → `UnlockView` → `store.loginWithPasstoken` → `/email/inbox` | None | Done |
 | **UC-7** | **Forgot passtoken reset** | `/setup/recover-admin` | CF OAuth (Secrets Store) → `POST /console/reset-admin` → reissue D1 passtoken | `RecoverAdminPanel` → `desktopOwnerResetAdmin` → `resetOwner` updates D1, revokes sessions, returns new token | None | Done |
@@ -147,6 +147,7 @@
 | **Owner session** | `com.relaybase.desktop` / `owner-session` | `workerUrl`, `refreshToken` (console), `mailRefreshToken` (mail) | **Silent** — auto-read on boot and mailbox entry |
 | **Owner passtoken** | `com.relaybase.desktop` / `owner-passtoken` | `rb_pass_...` plaintext | **Touch ID / Windows Hello only** |
 | **Teammate session** | `com.relaybase.desktop` / `team-session:{email}` | `workerUrl`, `email`, `mobilePassword` | **Silent** — team shell boot |
+| **CF OAuth install refresh** | `com.relaybase.desktop` / `cf-oauth-install` | `refreshToken` (Cloudflare OAuth) | **Silent** — background Worker updates without browser re-auth |
 | **API key vault** | `~/.relaybase/{scopeId}/api-keys.json` | API key plaintext | Local file read |
 
 **Never:**

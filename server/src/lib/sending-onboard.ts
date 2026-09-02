@@ -3,6 +3,11 @@ import {
   type CfDnsRecord,
   type CloudflareClient,
 } from "./cloudflare-client";
+import {
+  CF_WORKERS_PAID_REQUIRED_CODE,
+  cloudflareSendErrorBody,
+  isCloudflarePlanError,
+} from "./cloudflare-api-hints";
 import { isSendingOwnedDnsRecord } from "./sending-onboard-dns";
 import {
   collectSendingHealth,
@@ -43,6 +48,12 @@ export type SendingOnboardResult =
       domain: string;
       error: string;
       cloudflareSendingUrl: string | null;
+    }
+  | {
+      ok: false;
+      code: typeof CF_WORKERS_PAID_REQUIRED_CODE;
+      domain: string;
+      error: string;
     };
 
 const NO_ZONE_ERROR =
@@ -140,6 +151,16 @@ export async function onboardSendingDomain(
         domain,
         error: error.message,
         cloudflareSendingUrl: sendingDashboardUrl(opts.accountId),
+      };
+    }
+    const message = error instanceof Error ? error.message : "";
+    if (isCloudflarePlanError(message)) {
+      const body = cloudflareSendErrorBody(message);
+      return {
+        ok: false,
+        code: CF_WORKERS_PAID_REQUIRED_CODE,
+        domain,
+        error: body.error,
       };
     }
     throw error;

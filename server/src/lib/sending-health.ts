@@ -1,3 +1,9 @@
+import {
+  CF_WORKERS_PAID_REQUIRED_CODE,
+  cloudflareSendErrorBody,
+  isCloudflarePlanError,
+} from "./cloudflare-api-hints";
+
 export type SendingHealthStatus =
   | "ready"
   | "restricted"
@@ -16,6 +22,7 @@ export type SendingHealthDomain = {
   sendingOnboarded: boolean;
   zoneId: string | null;
   error: string | null;
+  code: string | null;
   cloudflareSendingUrl: string | null;
 };
 
@@ -63,6 +70,7 @@ export function evaluateSendingHealth(input: {
       sendingOnboarded: false,
       zoneId: null,
       error: NO_ZONE_ERROR,
+      code: null,
     };
   }
 
@@ -78,6 +86,7 @@ export function evaluateSendingHealth(input: {
       sendingOnboarded: true,
       zoneId: input.zoneId,
       error: null,
+      code: null,
     };
   }
   const disabledMatch = matches.find((row) => !row.enabled);
@@ -89,6 +98,7 @@ export function evaluateSendingHealth(input: {
       sendingOnboarded: true,
       zoneId: input.zoneId,
       error: DISABLED_ERROR,
+      code: null,
     };
   }
 
@@ -101,6 +111,7 @@ export function evaluateSendingHealth(input: {
       sendingOnboarded: true,
       zoneId: input.zoneId,
       error: null,
+      code: null,
     };
   }
 
@@ -112,6 +123,7 @@ export function evaluateSendingHealth(input: {
       sendingOnboarded: false,
       zoneId: input.zoneId,
       error: RESTRICTED_ERROR,
+      code: null,
     };
   }
 
@@ -122,6 +134,7 @@ export function evaluateSendingHealth(input: {
     sendingOnboarded: false,
     zoneId: input.zoneId,
     error: UNKNOWN_ERROR,
+    code: null,
   };
 }
 
@@ -137,6 +150,26 @@ export function unknownSendingHealthDomain(
     sendingOnboarded: false,
     zoneId: null,
     error,
+    code: null,
+    cloudflareSendingUrl,
+  };
+}
+
+export function planRequiredSendingHealthDomain(
+  domain: string,
+  zoneId: string,
+  probeMessage: string,
+  cloudflareSendingUrl: string | null,
+): SendingHealthDomain {
+  const body = cloudflareSendErrorBody(probeMessage);
+  return {
+    domain: domain.trim().toLowerCase(),
+    status: "restricted",
+    sendingEnabled: false,
+    sendingOnboarded: false,
+    zoneId,
+    error: body.error,
+    code: body.code ?? CF_WORKERS_PAID_REQUIRED_CODE,
     cloudflareSendingUrl,
   };
 }
@@ -214,7 +247,16 @@ export async function collectSendingHealth(
       let sendingRows: SendingSubdomainRow[] | null = null;
       try {
         sendingRows = await cf.listSendingSubdomains(zone.id);
-      } catch {
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "";
+        if (isCloudflarePlanError(message)) {
+          return planRequiredSendingHealthDomain(
+            domain,
+            zone.id,
+            message,
+            cloudflareSendingUrl,
+          );
+        }
         sendingRows = null;
       }
 

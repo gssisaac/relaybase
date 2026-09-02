@@ -29,6 +29,7 @@ import {
   explainCfOAuthError,
   explainDesktopError,
   explainWorkerUpdateTargetError,
+  formatDesktopError,
   listenCfOAuthResult,
   oauthAuthorizationIncompleteHelp,
   type DesktopErrorHelp,
@@ -116,6 +117,8 @@ export function WorkerInstallPanel({
   );
   const [targetConfirmOpen, setTargetConfirmOpen] = useState(false);
   const [targetChecking, setTargetChecking] = useState(false);
+  const [autoChecking, setAutoChecking] = useState(false);
+  const [authorizedReady, setAuthorizedReady] = useState(false);
   const finishingRef = useRef(false);
   const modeRef = useRef(mode);
   const oauthWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,6 +173,61 @@ export function WorkerInstallPanel({
   }, [clearOauthWaitTimer]);
 
   useEffect(() => {
+    if (purpose !== "worker-update") return;
+
+    let unmounted = false;
+    setAutoChecking(true);
+    setOauthError(null);
+
+    const safetyTimer = setTimeout(() => {
+      if (!unmounted) {
+        setAutoChecking(false);
+        setAuthorizedReady(false);
+      }
+    }, 6000);
+
+    void (async () => {
+      try {
+        const target = await desktopPreviewWorkerUpdateTarget();
+        if (unmounted) return;
+        clearTimeout(safetyTimer);
+        setTargetPreview(target);
+        setAuthorizedReady(true);
+        setAutoChecking(false);
+        if (!target.matches) {
+          setOauthError({
+            title: "Wrong Cloudflare account",
+            detail: `Your Relaybase Worker is ${target.expectedWorkerUrl}. This login would update ${target.oauthWorkerUrl}.`,
+            fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+          });
+        }
+      } catch (err) {
+        if (unmounted) return;
+        clearTimeout(safetyTimer);
+        setAutoChecking(false);
+        setAuthorizedReady(false);
+        const raw = formatDesktopError(err).toLowerCase();
+        if (
+          raw.includes("cloudflare_auth_expired") ||
+          raw.includes("authorize with cloudflare again") ||
+          raw.includes("invalid_grant") ||
+          raw.includes("no worker url") ||
+          raw.includes("timed out")
+        ) {
+          setOauthError(null);
+        } else {
+          setOauthError(explainWorkerUpdateTargetError(err));
+        }
+      }
+    })();
+
+    return () => {
+      unmounted = true;
+      clearTimeout(safetyTimer);
+    };
+  }, [purpose]);
+
+  useEffect(() => {
     let unlisten: (() => void) | null = null;
     let active = true;
     listenCfOAuthResult({
@@ -188,6 +246,7 @@ export function WorkerInstallPanel({
               const target = await desktopPreviewWorkerUpdateTarget();
               if (!active) return;
               setTargetPreview(target);
+              setAuthorizedReady(true);
               setTargetConfirmOpen(true);
               finishOauthWait({
                 error: target.matches
@@ -200,6 +259,7 @@ export function WorkerInstallPanel({
               });
             } catch (err) {
               if (!active) return;
+              setAuthorizedReady(false);
               finishOauthWait({
                 error: explainWorkerUpdateTargetError(err),
               });
@@ -249,6 +309,56 @@ export function WorkerInstallPanel({
   }
 
   async function handleAuthorize() {
+    if (purpose === "worker-update") {
+      if (authorizedReady && targetPreview?.matches) {
+        setTargetConfirmOpen(true);
+        return;
+      }
+      if (authorizedReady && targetPreview && !targetPreview.matches) {
+        await handleStartCfOAuth();
+        return;
+      }
+      setTargetChecking(true);
+      setOauthError(null);
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Worker URL check timed out")),
+            10000,
+          ),
+        );
+        const target = await Promise.race([
+          desktopPreviewWorkerUpdateTarget(),
+          timeoutPromise,
+        ]);
+        setTargetPreview(target);
+        setAuthorizedReady(true);
+        setTargetConfirmOpen(true);
+        if (!target.matches) {
+          setOauthError({
+            title: "Wrong Cloudflare account",
+            detail: `Your Relaybase Worker is ${target.expectedWorkerUrl}. This login would update ${target.oauthWorkerUrl}.`,
+            fix: "Authorize again and pick the Cloudflare account that owns your Worker. Nothing was uploaded.",
+          });
+        }
+        return;
+      } catch (err) {
+        const raw = formatDesktopError(err).toLowerCase();
+        if (
+          raw.includes("cloudflare_auth_expired") ||
+          raw.includes("authorize with cloudflare again") ||
+          raw.includes("invalid_grant")
+        ) {
+          setAuthorizedReady(false);
+          await handleStartCfOAuth();
+          return;
+        }
+        setOauthError(explainWorkerUpdateTargetError(err));
+        return;
+      } finally {
+        setTargetChecking(false);
+      }
+    }
     await handleStartCfOAuth();
   }
 
@@ -440,7 +550,11 @@ export function WorkerInstallPanel({
           <p className="mt-3 text-xs text-muted-foreground">
             {mode === "auto"
               ? purpose === "worker-update"
-                ? "Authorize the Cloudflare account that owns your saved Worker. We show both URLs before any upload."
+                ? autoChecking
+                  ? "Authorizing with Cloudflare and checking your saved Worker URL…"
+                  : authorizedReady
+                    ? "Your Cloudflare authorization is active. Click Update Worker to verify and deploy the update."
+                    : "Authorize the Cloudflare account that owns your saved Worker. We show both URLs before any upload."
                 : "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
               : purpose === "worker-update"
                 ? "Copy the update command, deploy the Worker, then come back. Schema uses your owner session."
@@ -450,21 +564,42 @@ export function WorkerInstallPanel({
           <div className="mt-2 flex min-h-0 flex-1 flex-col">
             {mode === "auto" ? (
               <SetupCloudflareAuthorizeCard
-                oauthBusy={oauthBusy || targetChecking}
+                oauthBusy={oauthBusy || targetChecking || autoChecking}
+                diagramWaiting={oauthBusy || targetChecking || autoChecking}
+                waitingSubtitle={
+                  oauthBusy
+                    ? "Complete authorization in your browser, then return here."
+                    : autoChecking
+                      ? "Verifying Cloudflare authorization…"
+                      : targetChecking
+                        ? "Comparing Worker URLs…"
+                        : null
+                }
                 oauthError={oauthError}
                 onAuthorize={() => void handleAuthorize()}
-                onCancelWait={handleCancelOauthWait}
+                onCancelWait={() => {
+                  if (autoChecking) {
+                    setAutoChecking(false);
+                    setAuthorizedReady(false);
+                  } else if (oauthBusy) {
+                    handleCancelOauthWait();
+                  }
+                }}
                 authorizeLabel={
                   purpose === "worker-update"
-                    ? "Authorize with Cloudflare"
+                    ? authorizedReady
+                      ? "Update Worker"
+                      : "Authorize with Cloudflare"
                     : "Authorize and install on Cloudflare"
                 }
                 waitingLabel={
-                  targetChecking
-                    ? "Checking Worker URL…"
-                    : "Waiting for authorization…"
+                  autoChecking
+                    ? "Authorizing…"
+                    : targetChecking
+                      ? "Checking Worker URL…"
+                      : "Waiting for authorization…"
                 }
-                showCancelWait={!targetChecking}
+                showCancelWait={oauthBusy || autoChecking}
               />
             ) : (
               <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -641,8 +776,9 @@ export function WorkerInstallPanel({
         onAuthorizeAgain={() => {
           setTargetConfirmOpen(false);
           setTargetPreview(null);
+          setAuthorizedReady(false);
           setOauthError(null);
-          void handleAuthorize();
+          void handleStartCfOAuth();
         }}
       />
     </SetupScrollPage>

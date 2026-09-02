@@ -165,4 +165,29 @@ describe("collectSendingHealth", () => {
     assert.equal(snapshot.domains[0]?.status, "ready");
     assert.equal(snapshot.domains[0]?.zoneId, "z-daily");
   });
+
+  it("marks restricted with cf_workers_paid_required when list throws 10105", async () => {
+    const snapshot = await collectSendingHealth(
+      ["wipibox.com"],
+      {
+        async listZones() {
+          return [{ id: "z-wipi", name: "wipibox.com" }];
+        },
+        async listSendingSubdomains() {
+          throw new Error(
+            "Cloudflare API: [10105] email.sending.error.authentication.not_entitled",
+          );
+        },
+        async hasSendingBounceMx() {
+          throw new Error("should not probe bounce MX after plan error");
+        },
+      },
+      { generatedAt: "2026-01-01T00:00:00.000Z", accountId: "acc" },
+    );
+    const row = snapshot.domains[0];
+    assert.equal(row?.status, "restricted");
+    assert.equal(row?.code, "cf_workers_paid_required");
+    assert.match(row?.error ?? "", /Workers Paid/i);
+    assert.equal(row?.zoneId, "z-wipi");
+  });
 });

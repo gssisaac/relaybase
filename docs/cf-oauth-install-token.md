@@ -44,8 +44,8 @@ Do **not** store Cloudflare account id or API tokens in HQ ops D1.
 |-------|------|
 | **Cloudflare OAuth clients** | Two public PKCE clients on the operator’s CF account. Grant types: `authorization_code` + **`refresh_token`**. Token auth: **None (PKCE)**. Shared redirect URI: `https://console.relaybase.xyz/oauth/callback`. **Relaybase** (`CF_OAUTH_CLIENT_ID`) — Workers / R2 / D1 for install and Worker update. **Relaybase Pass-token Updater** (`CF_OAUTH_PASSTOKEN_CLIENT_ID`) — `secrets-store.write` only for forgot-passtoken reset. |
 | **`console.relaybase.xyz`** | Public `/api/v1/oauth/config?purpose=install\|recover` (client id, redirect URI, scope list). `/oauth/callback` relays `code` + `state` to the desktop — **no token exchange on the console**, no CF user credentials stored in D1 `strum-relaybase-ops`. |
-| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`, holds tokens in **process memory only** (`CF_OAUTH_SESSION`). All Cloudflare API / Worker `X-Cf-Access-Token` calls go through `require_cf_oauth()` in `desktop/src-tauri/src/cf_oauth.rs` — memory if the access token has ≥60s left, otherwise the Cloudflare token endpoint. App restart clears the session. |
-| **`~/.relaybase`** | Stores only the resolved CF account id (from the OAuth response). OAuth access/refresh tokens are **not** persisted — they live in Tauri memory only. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
+| **Desktop (Tauri)** | Fetches config, runs PKCE authorize in the system browser, receives callback, exchanges `code` + `code_verifier` with `https://dash.cloudflare.com/oauth2/token`. The **`refresh_token` (30-day sliding TTL)** is securely persisted in the **OS Keyring** (`com.relaybase.desktop` / `cf-oauth-install`), while short-lived `access_token` (1h TTL) is held in **process memory** (`CF_OAUTH_SESSION`). All Cloudflare API / Worker `X-Cf-Access-Token` calls go through `require_cf_oauth()` in `desktop/src-tauri/src/cf_oauth.rs` — memory if the access token has ≥60s left, otherwise silent token refresh using the keyring `refresh_token` against the Cloudflare token endpoint. On each refresh, Cloudflare rotates the `refresh_token` (rolling 30-day window) and Rust updates the OS Keyring. App restart clears memory, but the keyring `refresh_token` allows **seamless, zero-prompt background updates** without re-authorizing in the browser. |
+| **`~/.relaybase`** | Stores only the resolved CF account id (from the OAuth response) in `workspace.json`. OAuth access/refresh tokens are **never written to disk in plain JSON** — `refresh_token` lives in the OS Keyring and `access_token` lives in Tauri memory only. See **[relaybase-home-storage.md](./relaybase-home-storage.md)**. |
 
 No KV, no D1, and no Relaybase console **session** is required to connect Cloudflare.
 
@@ -124,25 +124,26 @@ Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `
 
 ## Local credentials fields
 
-OAuth access/refresh tokens are **not** written to `workspace.json` — they live in Tauri process memory only and are cleared on app restart. Only the CF account id is persisted on disk:
+OAuth access/refresh tokens are **not** written to `workspace.json` in plain text — only the CF account id is persisted on disk in JSON:
 
 | Field | Purpose |
 |-------|---------|
-| `accountId` | CF account id from the OAuth token response (persisted on disk) |
+| `accountId` | CF account id from the OAuth token response (persisted on disk in `workspace.json`) |
+| `cf-oauth-install` | Cloudflare OAuth install `refresh_token` (persisted in the **OS Keyring** under service `com.relaybase.desktop`, silent read) |
 
-The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) holds `access_token`, `refresh_token`, `access_expires_at`, `account_id`, `client_id` and is overlaid into IPC credentials for the lifetime of the process.
+The in-memory OAuth session (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) holds `access_token`, `refresh_token`, `access_expires_at`, `account_id`, `client_id` and is overlaid into IPC credentials for the lifetime of the process. When the memory session is empty (e.g. fresh launch), Rust hydrates a fresh session by calling Cloudflare's token refresh endpoint using the keyring's `refresh_token`.
 
 ---
 
 ## Settings + setup UX
 
-- **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app navigates to **Setup → Progress** and auto-installs (install log + owner passtoken copy). No separate install button.
+- **Authorize with Cloudflare** — OAuth install token on **Setup → Install** (recommended path). After authorization, the app stores the `refresh_token` in the OS Keyring, navigates to **Setup → Progress**, and auto-installs (install log + owner passtoken copy). No separate install button.
+- **Settings → Worker update** — Check for updates on the card. When the user clicks **Update Worker**, if a valid `cf-oauth-install` refresh token exists in the OS Keyring, the app performs a **silent background refresh** (zero prompt / no browser authorization popup) and proceeds directly to download the package, upload the Worker script, and run `migrate-db`. If the refresh token is missing, expired (>30 days inactive), or revoked, it falls back to the browser OAuth authorization screen (`/settings/worker/update`).
 - **Lost passtoken** — typed unlock fallback → **I forgot my passtoken** (`/setup/recover-admin`). Daily use does not type the passtoken (it lives in OS keyring `owner-passtoken`; Touch ID reads it). Uses the **Pass-token Updater** OAuth client (`secrets-store.write` only). After authorization the app calls `POST /console/reset-admin` with the in-memory OAuth access token. The Worker proves that token can list Secrets Store on the pinned CF account (GET `/accounts/{id}` is a fallback) and re-issues a passtoken once (download + write `owner-passtoken`). No console email recovery.
 - **Enable email API** — after install (and in Settings when the API is not configured), a dialog walks the user through creating a Cloudflare API token and adding it themselves as the Worker `CF_API_TOKEN` secret. The app never stores that token on disk in the default path. **I have done this → Verify** calls `GET /console/connect` and requires `cfApiTokenSet` plus `cfApiTokenValid` (Zone Read probe). Worker `accountId` is not required — desktop UI links fall back to `credentials.accountId`.
 - **Optional paste & push** — same dialog, folded away. Verify the token locally, then push via the install OAuth session (`put_worker_secret`). The token is not written to disk.
 - **Settings → Cloudflare** — dashboard-first Enable email API dialog. OAuth is only requested if the user chooses paste & push and there is no install token in memory.
 - **Domains → Refresh from Cloudflare** — lists zones via the Worker (`GET /console/zones`) using `CF_API_TOKEN`, not the in-memory OAuth install token. If the Worker token is missing, the dialog opens Enable email API. If the route 404s (old script), show running vs latest Worker versions and send the user to **Settings → Worker update** (`/settings/worker/update`) — do not offer the install ZIP. Do not add an OAuth flow on that page.
-- **Settings → Worker** — Check for updates on the card. **Update Worker** goes to `/settings/worker/update` (same OAuth / Manual + CLI UI as Setup, worker-only copy). After OAuth, the app resolves that account’s `workers.dev` URL and **must match** the saved Worker URL (custom domains match via `/console/connect` `accountId` — env, D1, or empty). Mismatch stops before any upload. Then `/settings/worker/progress` uploads the script and calls **`migrate-db`**, not `init-db`.
 - **Manual install** — Worker URL + passtoken inline on the install page; the same Enable email API dialog follows Worker URL verify.
 - **Sending** — the Worker `EMAIL` send_email binding, attached at deploy. `CF_API_TOKEN` is for domain / inbox routing / DNS API, not for send. `GET /console/connect` reports `emailBindingConfigured`.
 - **Server token source of truth** — the Worker's `CF_API_TOKEN` secret (`cfApiTokenSet` + `cfApiTokenValid`). The desktop does not persist that token.

@@ -7,6 +7,11 @@ use std::path::{Path, PathBuf};
 use std::os::unix::fs::PermissionsExt;
 
 pub fn relaybase_tmp_dir() -> Result<PathBuf, String> {
+    if let Ok(dir) = std::env::var("RELAYBASE_DEV_TMP_DIR") {
+        if !dir.trim().is_empty() {
+            return Ok(PathBuf::from(dir.trim()));
+        }
+    }
     dirs::home_dir()
         .map(|home| home.join(".relaybase").join("tmp"))
         .ok_or_else(|| "Could not resolve home directory for dev tmp store".into())

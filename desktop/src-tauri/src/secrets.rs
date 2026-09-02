@@ -136,15 +136,25 @@ pub fn hydrate_cf_oauth_session_dev_cache() {
 
 /// Overlay the in-memory OAuth session onto credentials for UI / IPC responses.
 pub fn apply_cf_oauth_session(creds: &mut StoredCredentials) {
-    let Some(session) = get_cf_oauth_session() else {
-        return;
-    };
-    creds.cf_oauth_access_token = session.access_token.clone();
-    creds.cf_oauth_refresh_token = session.refresh_token.clone();
-    creds.cf_oauth_access_expires_at = session.access_expires_at.clone();
-    creds.cf_oauth_account_id = session.account_id.clone();
-    if !session.account_id.is_empty() {
-        creds.account_id = session.account_id.clone();
+    if let Some(session) = get_cf_oauth_session() {
+        creds.cf_oauth_access_token = session.access_token.clone();
+        creds.cf_oauth_refresh_token = session.refresh_token.clone();
+        creds.cf_oauth_access_expires_at = session.access_expires_at.clone();
+        creds.cf_oauth_account_id = session.account_id.clone();
+        if !session.account_id.is_empty() {
+            creds.account_id = session.account_id.clone();
+        }
+    }
+    if creds.cf_oauth_refresh_token.trim().is_empty() {
+        if let Ok(Some(keyring_blob)) = crate::cf_oauth::load_keyring_oauth_refresh() {
+            creds.cf_oauth_refresh_token = keyring_blob.refresh_token;
+            if !keyring_blob.account_id.is_empty() {
+                creds.cf_oauth_account_id = keyring_blob.account_id.clone();
+                if creds.account_id.is_empty() {
+                    creds.account_id = keyring_blob.account_id;
+                }
+            }
+        }
     }
 }
 
@@ -609,6 +619,7 @@ pub fn clear_credentials() -> Result<(), String> {
 /// responsible for clearing the OS keyring and WebKit data.
 pub fn clear_all_relaybase_data() -> Result<(), String> {
     clear_cf_oauth_session();
+    crate::cf_oauth::delete_keyring_oauth_refresh();
     let dir = relaybase_dir()?;
     if !dir.exists() {
         return Ok(());
@@ -687,7 +698,18 @@ fn parse_rebuildable_json(json: &str) -> Option<serde_json::Value> {
 }
 
 fn write_json_atomic(path: &Path, json: &str) -> Result<(), String> {
-    let tmp = path.with_extension("json.tmp");
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            {
+                let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+            }
+        }
+    }
+    let unique = uuid::Uuid::new_v4().simple();
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    let tmp = path.with_file_name(format!("{filename}.{unique}.tmp"));
     fs::write(&tmp, json).map_err(|e| e.to_string())?;
     restrict_file_permissions(&tmp);
     fs::rename(&tmp, path).map_err(|e| e.to_string())?;
@@ -773,7 +795,9 @@ pub fn save_mail_binary(relative_path: &str, base64_data: &str) -> Result<(), St
             let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
         }
     }
-    let tmp = path.with_extension("tmp");
+    let unique = uuid::Uuid::new_v4().simple();
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("binary");
+    let tmp = path.with_file_name(format!("{filename}.{unique}.tmp"));
     fs::write(&tmp, &bytes).map_err(|e| {
         format!("Failed to write mail binary {}: {e}", path.display())
     })?;

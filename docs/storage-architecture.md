@@ -182,7 +182,7 @@ Licenses, console accounts, worker registration, recovery tokens, the legacy wai
 
 Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
 
-- CF credentials → Worker wrangler secret `CF_API_TOKEN` (required for domain / routing / DNS). `CF_ACCOUNT_ID` is optional. The install token is obtained via Cloudflare OAuth (PKCE; callback on `console.relaybase.xyz`); access + refresh tokens live in Tauri process memory only, never in `workspace.json`. See **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
+- CF credentials → Worker wrangler secret `CF_API_TOKEN` (required for domain / routing / DNS). `CF_ACCOUNT_ID` is optional. The install token is obtained via Cloudflare OAuth (PKCE; callback on `console.relaybase.xyz`); the `refresh_token` lives in the OS Keyring (`cf-oauth-install`) for silent background updates, while short-lived `access_token` lives in Tauri process memory only, never in `workspace.json`. See **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 - DMARC branding → Worker D1 `domain_branding` via `/console/branding`.
 - Send logs → Worker R2 `sent/_sendlog/*` via `/console/send-logs`.
 
@@ -240,6 +240,7 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 | API key plaintext | `~/.relaybase/api-keys.json` | — |
 | Owner sessions | D1 `RELAYBASE_DB` (`owner_sessions`, refresh hash-only) | OS keyring `owner-session` (refresh plaintext) |
 | Owner passtoken plaintext | OS keyring `owner-passtoken` (Touch ID to read) | one-time user download (backup) |
+| CF OAuth install refresh token | OS keyring `cf-oauth-install` (silent background refresh for Worker updates) | — |
 | Webhooks | D1 `RELAYBASE_DB` (`webhooks`, `webhook_secrets`, `webhook_fails`) | — |
 | Mobile passwords | D1 `RELAYBASE_DB` (`mobile_passwords`) | OS keyring `team-session:{email}` (desktop teammate) |
 | Owner config / passtoken hash | D1 `RELAYBASE_DB` (`owner_config`) | — |

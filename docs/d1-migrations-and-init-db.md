@@ -152,7 +152,7 @@ UI reuses Setup method + progress modules (`purpose: "worker-update"`):
 2. **`/settings/worker/update`** — Recommended (OAuth) or Manual + CLI. After OAuth, confirm the account’s Worker URL matches the saved URL. Wrong Cloudflare account → stop, no upload.
 3. **Progress** — same URL check again, then upload Worker script only (existing R2/D1 lookup). Then **`migrate-db`**, never `init-db`. Pending Verify retries migrate-db + connect. No Keep/Clear, no R2/D1 rollback.
 
-OAuth install tokens expire (~1 hour). Authorize again on `/setup/install` or `/settings/worker/update`.
+OAuth install `access_token` expires in ~1 hour, while the `refresh_token` (30-day sliding TTL) is stored in the OS Keyring (`cf-oauth-install`). Update Worker silently exchanges the refresh token in the background without prompting the user. Browser re-authorization is only needed if the refresh token was revoked or unused for >30 days.
 
 See also: [cf-oauth-install-token.md](./cf-oauth-install-token.md), [storage-architecture.md](./storage-architecture.md).
 

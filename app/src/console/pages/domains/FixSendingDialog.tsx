@@ -11,6 +11,12 @@ import { type SendingHealthDomain } from "@/lib/dashboard/sending-health";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
 import { connectedCfAccountId } from "@/lib/desktop/bridge";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
+import {
+  CF_PLAN_DIALOG_MESSAGE,
+  CF_WORKERS_PAID_REQUIRED_CODE,
+  CF_WORKERS_PLANS_URL,
+  isCloudflarePlanError,
+} from "@/lib/cloudflare/plan-required";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +53,12 @@ const INITIAL_STEPS: DialogStep[] = [
   { id: "recheck", label: "Recheck sending", status: "pending" },
 ];
 
+const PLAN_STEPS = [
+  "Open Workers plans",
+  "Upgrade to Workers Paid on Cloudflare",
+  "Recheck sending",
+] as const;
+
 function markSteps(
   current: DialogStepId,
   status: DialogStepStatus,
@@ -68,6 +80,7 @@ async function postSendingOnboard(
   | { kind: "ok"; domain: SendingHealthDomain }
   | { kind: "needs_confirm"; records: SendingDnsConflict[]; error: string }
   | { kind: "no_zone"; error: string }
+  | { kind: "plan_required"; error: string }
   | { kind: "unavailable"; error: string; cloudflareSendingUrl: string | null }
 > {
   const res = await desktopAwareFetch("/api/email/sending-onboard", {
@@ -91,6 +104,15 @@ async function postSendingOnboard(
   }
   if (res.status === 400 && data.code === "no_zone") {
     return { kind: "no_zone", error: data.error ?? "This domain is not a zone." };
+  }
+  if (
+    data.code === CF_WORKERS_PAID_REQUIRED_CODE ||
+    isCloudflarePlanError({ error: data.error, code: data.code })
+  ) {
+    return {
+      kind: "plan_required",
+      error: data.error ?? CF_PLAN_DIALOG_MESSAGE,
+    };
   }
   if (data.code === "unavailable" || res.status === 502) {
     return {
@@ -132,9 +154,15 @@ export function FixSendingDialog({
   const [error, setError] = useState<string | null>(null);
   const [records, setRecords] = useState<SendingDnsConflict[]>([]);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const [planFromOnboard, setPlanFromOnboard] = useState(false);
 
   const live = domain ? sendingHealth.statusForDomain(domain) ?? entry : entry;
   const isNoZone = live?.status === "no_zone";
+  const isPlanRequired =
+    !isNoZone &&
+    (planFromOnboard ||
+      live?.code === CF_WORKERS_PAID_REQUIRED_CODE ||
+      isCloudflarePlanError({ error: live?.error ?? undefined, code: live?.code ?? undefined }));
 
   useEffect(() => {
     if (!open) return;
@@ -142,6 +170,7 @@ export function FixSendingDialog({
     setBusy(false);
     setError(null);
     setRecords([]);
+    setPlanFromOnboard(false);
     setFallbackUrl(live?.cloudflareSendingUrl ?? null);
   }, [open, domain, live?.cloudflareSendingUrl]);
 
@@ -173,9 +202,35 @@ export function FixSendingDialog({
         setSteps(markSteps("zone", "failed"));
         return;
       }
+      if (result.kind === "plan_required") {
+        setPlanFromOnboard(true);
+        setRecords([]);
+        setError(result.error);
+        setSteps(markSteps("onboard", "failed"));
+        return;
+      }
       if (result.kind === "unavailable") {
+        if (isCloudflarePlanError(result.error)) {
+          setPlanFromOnboard(true);
+          setError(result.error);
+          setSteps(markSteps("onboard", "failed"));
+          return;
+        }
         setFallbackUrl(result.cloudflareSendingUrl);
         setError(result.error);
+        setSteps(markSteps("onboard", "failed"));
+        return;
+      }
+      if (
+        result.domain.code === CF_WORKERS_PAID_REQUIRED_CODE ||
+        isCloudflarePlanError({
+          error: result.domain.error ?? undefined,
+          code: result.domain.code ?? undefined,
+        })
+      ) {
+        setPlanFromOnboard(true);
+        setRecords([]);
+        setError(result.domain.error ?? CF_PLAN_DIALOG_MESSAGE);
         setSteps(markSteps("onboard", "failed"));
         return;
       }
@@ -193,9 +248,14 @@ export function FixSendingDialog({
           "Cloudflare accepted onboard. Recheck in a few minutes if Sending is still Restricted.",
       );
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Sending onboard failed",
-      );
+      const message =
+        err instanceof Error ? err.message : "Sending onboard failed";
+      if (isCloudflarePlanError(message)) {
+        setPlanFromOnboard(true);
+        setError(message);
+      } else {
+        setError(message);
+      }
       setSteps(markSteps("onboard", "failed"));
     } finally {
       setBusy(false);
@@ -220,7 +280,9 @@ export function FixSendingDialog({
                 <span className="font-mono text-foreground">{domain}</span>
                 {isNoZone
                   ? " is not a zone on this Cloudflare account."
-                  : " is restricted: Cloudflare only delivers to verified destination addresses until Email Sending is onboarded. Other Relaybase mailboxes do not count."}
+                  : isPlanRequired
+                    ? ` — ${CF_PLAN_DIALOG_MESSAGE}`
+                    : " is restricted: Cloudflare only delivers to verified destination addresses until Email Sending is onboarded. Other Relaybase mailboxes do not count."}
               </>
             ) : (
               "Choose a domain to fix."
@@ -236,6 +298,32 @@ export function FixSendingDialog({
             </p>
             {error ? (
               <p className="break-words whitespace-pre-wrap text-destructive">
+                {error}
+              </p>
+            ) : null}
+          </div>
+        ) : isPlanRequired ? (
+          <div className="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden">
+            <ol className="space-y-1.5">
+              {PLAN_STEPS.map((label, index) => (
+                <li
+                  key={label}
+                  className="flex items-start gap-2 text-xs text-foreground"
+                >
+                  <span className="mt-0.5 w-4 shrink-0 text-muted-foreground">
+                    {index + 1}.
+                  </span>
+                  <span>{label}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="break-words text-sm text-muted-foreground">
+              Cloudflare Email Sending is not available on the Workers Free
+              plan. Upgrade, then recheck — domain onboard may still be needed
+              afterward.
+            </p>
+            {error ? (
+              <p className="min-w-0 break-words whitespace-pre-wrap text-sm text-destructive">
                 {error}
               </p>
             ) : null}
@@ -334,6 +422,32 @@ export function FixSendingDialog({
                 onClick={handleRecheck}
               >
                 {sendingHealth.refreshing ? "Checking…" : "Recheck"}
+              </Button>
+            </>
+          ) : isPlanRequired ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={sendingHealth.refreshing}
+                onClick={handleRecheck}
+              >
+                {sendingHealth.refreshing ? "Checking…" : "Recheck"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                nativeButton={false}
+                render={
+                  <a
+                    href={CF_WORKERS_PLANS_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  />
+                }
+              >
+                Open Cloudflare Workers plans
               </Button>
             </>
           ) : records.length ? (

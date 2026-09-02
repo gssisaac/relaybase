@@ -58,7 +58,10 @@ export type ConnectionStatusSnapshot = {
 export function cfInstallTokenPresent(
   credentials: DesktopCredentials | null | undefined,
 ): boolean {
-  return Boolean(credentials?.cfOauthAccessToken?.trim());
+  return Boolean(
+    credentials?.cfOauthRefreshToken?.trim() ||
+      credentials?.cfOauthAccessToken?.trim(),
+  );
 }
 
 export function workerStatusFromConnect(

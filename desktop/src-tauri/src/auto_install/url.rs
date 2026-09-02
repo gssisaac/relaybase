@@ -47,7 +47,10 @@ async fn peek_worker_account_id(worker_url: &str, access_token: &str) -> Option<
     if base.is_empty() || token.is_empty() {
         return None;
     }
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let res = http
         .get(format!("{base}/console/connect"))
         .header("Authorization", format!("Bearer {token}"))

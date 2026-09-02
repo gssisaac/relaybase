@@ -34,7 +34,13 @@ function CloudflareMark({ className }: { className?: string }) {
   );
 }
 
-function OAuthConnectDiagram({ waiting }: { waiting: boolean }) {
+function OAuthConnectDiagram({
+  waiting,
+  subtitle,
+}: {
+  waiting: boolean;
+  subtitle?: string | null;
+}) {
   return (
     <div className="flex flex-col items-center">
       <div className="flex items-center gap-5">
@@ -54,9 +60,9 @@ function OAuthConnectDiagram({ waiting }: { waiting: boolean }) {
           <CloudflareMark className="h-8 w-11" />
         </div>
       </div>
-      {waiting ? (
+      {waiting && subtitle ? (
         <p className="mt-1.5 text-center text-xs text-muted-foreground">
-          Complete authorization in your browser, then return here.
+          {subtitle}
         </p>
       ) : null}
     </div>
@@ -70,6 +76,8 @@ export function SetupCloudflareAuthorizeCard({
   onCancelWait,
   authorizeLabel = "Authorize and install on Cloudflare",
   waitingLabel = "Waiting for authorization…",
+  waitingSubtitle,
+  diagramWaiting,
   showCancelWait = true,
   scopes = CF_OAUTH_INSTALL_SCOPES,
   detailsVariant = "install",
@@ -80,16 +88,27 @@ export function SetupCloudflareAuthorizeCard({
   onCancelWait: () => void;
   authorizeLabel?: string;
   waitingLabel?: string;
+  waitingSubtitle?: string | null;
+  diagramWaiting?: boolean;
   showCancelWait?: boolean;
   scopes?: readonly string[];
   detailsVariant?: "install" | "recover";
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const buttonLabel = oauthBusy ? waitingLabel : authorizeLabel;
+  const isDiagramWaiting = diagramWaiting ?? oauthBusy;
+  const diagramSubtitle =
+    waitingSubtitle !== undefined
+      ? waitingSubtitle
+      : "Complete authorization in your browser, then return here.";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
       <div className="flex flex-col items-center gap-2">
-        <OAuthConnectDiagram waiting={oauthBusy} />
+        <OAuthConnectDiagram
+          waiting={isDiagramWaiting}
+          subtitle={diagramSubtitle}
+        />
 
         <div className={`flex ${ACTION_WIDTH} flex-col items-center`}>
           <p className="text-sm font-medium">

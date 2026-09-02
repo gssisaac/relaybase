@@ -153,7 +153,7 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `relaybaseSession` | Signed console session token (local only; Bearer to console APIs) — written only when non-empty |
 | ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext in OS keyring `owner-passtoken` + the user's one-time download). |
 
-Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. CF OAuth access/refresh tokens live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
+Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. Cloudflare OAuth install `refresh_token` lives in the OS Keyring (`cf-oauth-install`), while short-lived `access_token` lives in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`). Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
 
 ### OS keyring (owner refresh)
 
@@ -191,6 +191,21 @@ Mirror of the owner keyring for invited (team) users (`keyring_store.rs`, called
 Blob (`camelCase`): `{ workerUrl, accountEmail, mobilePassword }`. The mobile password lives **only** in the keyring + process memory — never in `team-login.json`. Daily unlock: silent **`team_unlock`** loads the password into process memory; `team_worker_request` attaches `Authorization: Bearer <mobilePassword>` + `X-Account-Email` so JS never reads the password. First login verifies against `/mobile/config` and stores the password in the keyring.
 
 A one-shot `migrate_legacy_team_login()` runs inside `team_session_status`: if an old `team-login.json` still contains a plaintext `mobilePassword`, it is moved into the keyring and the file is rewritten identity-only.
+
+### OS keyring (Cloudflare OAuth install refresh token)
+
+Holds the Cloudflare OAuth refresh token for silent, zero-prompt Worker updates (`desktop/src-tauri/src/keyring_store.rs`, called from `cf_oauth.rs`):
+
+| Field | Service / account |
+|-------|-------------------|
+| service | `com.relaybase.desktop` |
+| account | `cf-oauth-install` |
+
+Contents: the OAuth `refresh_token` string (or JSON with `{ refreshToken, accountId, clientId }`).
+- **Write:** On initial OAuth completion (`/setup/install`) and on each successful token refresh.
+- **Read:** **Silent-read** by the Rust backend when calling Cloudflare APIs (Worker updates / secrets / deploys).
+- **TTL & Rotation:** Cloudflare refresh tokens have a rolling 30-day TTL. On each exchange, Cloudflare issues a new `access_token` (1h) and rotates the `refresh_token` (extending it by another 30 days). Rust writes the rotated refresh token back to this keyring item.
+- **Benefit:** Eliminates browser re-authorization popups when updating Workers in Settings. If the token is revoked on Cloudflare or left unused for >30 days, the app falls back to the browser OAuth flow.
 
 ### `team-login.json`
 

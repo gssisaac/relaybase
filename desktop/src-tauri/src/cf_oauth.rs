@@ -5,6 +5,8 @@
 //! from memory with no network. The Cloudflare token endpoint is hit only when
 //! the access token expires within 60 seconds.
 
+use serde::{Deserialize, Serialize};
+
 use crate::secrets::{
     clear_cf_oauth_session, get_cf_oauth_session, load_credentials, set_cf_oauth_session,
 };
@@ -12,6 +14,63 @@ use crate::secrets::{
 pub const CLOUDFLARE_AUTH_EXPIRED: &str = "CLOUDFLARE_AUTH_EXPIRED";
 
 const AUTH_AGAIN: &str = "Authorize with Cloudflare again";
+
+pub const CF_OAUTH_KEYRING_SERVICE: &str = "com.relaybase.desktop";
+pub const CF_OAUTH_KEYRING_USER: &str = "cf-oauth-install";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct KeyringCfOAuth {
+    pub refresh_token: String,
+    pub account_id: String,
+    pub client_id: String,
+}
+
+pub fn save_keyring_oauth_refresh(
+    refresh_token: &str,
+    account_id: &str,
+    client_id: &str,
+) -> Result<(), String> {
+    let refresh_token = refresh_token.trim();
+    if refresh_token.is_empty() {
+        delete_keyring_oauth_refresh();
+        return Ok(());
+    }
+    let blob = KeyringCfOAuth {
+        refresh_token: refresh_token.to_string(),
+        account_id: account_id.trim().to_string(),
+        client_id: client_id.trim().to_string(),
+    };
+    let json = serde_json::to_string(&blob).map_err(|e| e.to_string())?;
+    crate::keyring_store::set_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER, &json)
+}
+
+pub fn load_keyring_oauth_refresh() -> Result<Option<KeyringCfOAuth>, String> {
+    let raw = match crate::keyring_store::get_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER)? {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if let Ok(blob) = serde_json::from_str::<KeyringCfOAuth>(trimmed) {
+        if !blob.refresh_token.trim().is_empty() {
+            return Ok(Some(blob));
+        }
+    } else if !trimmed.starts_with('{') {
+        return Ok(Some(KeyringCfOAuth {
+            refresh_token: trimmed.to_string(),
+            account_id: String::new(),
+            client_id: String::new(),
+        }));
+    }
+    Ok(None)
+}
+
+pub fn delete_keyring_oauth_refresh() {
+    crate::keyring_store::delete_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER);
+}
 
 #[derive(Debug, Clone)]
 pub struct CfOAuthCreds {
@@ -45,14 +104,42 @@ pub async fn require_cf_oauth_access_token() -> Result<String, String> {
 
 async fn require_cf_oauth_session(
 ) -> Result<crate::secrets::CfOAuthSession, String> {
-    let Some(mut session) = get_cf_oauth_session() else {
+    let mut session = if let Some(mut mem) = get_cf_oauth_session() {
+        if mem.refresh_token.trim().is_empty() {
+            if let Ok(Some(keyring_blob)) = load_keyring_oauth_refresh() {
+                mem.refresh_token = keyring_blob.refresh_token;
+                if mem.client_id.trim().is_empty() {
+                    mem.client_id = keyring_blob.client_id;
+                }
+                if mem.account_id.trim().is_empty() && !keyring_blob.account_id.trim().is_empty() {
+                    mem.account_id = keyring_blob.account_id;
+                }
+            }
+        }
+        mem
+    } else if let Ok(Some(keyring_blob)) = load_keyring_oauth_refresh() {
+        let disk = load_credentials()?.unwrap_or_default();
+        let account_id = if !keyring_blob.account_id.trim().is_empty() {
+            keyring_blob.account_id.trim().to_string()
+        } else {
+            disk.account_id
+        };
+        crate::secrets::CfOAuthSession {
+            access_token: String::new(),
+            refresh_token: keyring_blob.refresh_token,
+            access_expires_at: String::new(),
+            account_id,
+            client_id: keyring_blob.client_id,
+        }
+    } else {
         return Err(expired(AUTH_AGAIN));
     };
 
     let now_secs = now_unix_secs();
     let expires_at_secs = parse_iso_to_secs(&session.access_expires_at);
-    let fresh = session.access_expires_at.is_empty()
-        || expires_at_secs.saturating_sub(now_secs) >= 60;
+    let fresh = !session.access_token.trim().is_empty()
+        && (session.access_expires_at.is_empty()
+            || expires_at_secs.saturating_sub(now_secs) >= 60);
     if !fresh {
         if session.refresh_token.trim().is_empty() {
             return Err(expired(AUTH_AGAIN));
@@ -67,10 +154,14 @@ async fn require_cf_oauth_session(
 /// not authorized. Used by schema commands that also accept pepper / console
 /// session.
 pub async fn cf_oauth_if_present() -> Result<Option<CfOAuthCreds>, String> {
-    if get_cf_oauth_session().is_none() {
+    if get_cf_oauth_session().is_none() && load_keyring_oauth_refresh()?.is_none() {
         return Ok(None);
     }
-    Ok(Some(require_cf_oauth().await?))
+    match require_cf_oauth().await {
+        Ok(creds) => Ok(Some(creds)),
+        Err(e) if e.contains(CLOUDFLARE_AUTH_EXPIRED) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 fn account_id_from_memory(
@@ -96,7 +187,10 @@ async fn refresh_oauth_session(
     } else {
         session.client_id.clone()
     };
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
     let refresh_body = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("grant_type", "refresh_token")
         .append_pair("refresh_token", &session.refresh_token)
@@ -115,6 +209,7 @@ async fn refresh_oauth_session(
         let lower = body.to_lowercase();
         if status.as_u16() == 400 || lower.contains("invalid_grant") || lower.contains("invalid") {
             clear_cf_oauth_session();
+            delete_keyring_oauth_refresh();
             return Err(expired(AUTH_AGAIN));
         }
         return Err(format!("Token refresh failed (HTTP {status}): {body}"));
@@ -133,11 +228,23 @@ async fn refresh_oauth_session(
         .map(|s| s.to_string())
         .unwrap_or_else(|| session.refresh_token.clone());
 
-    session.access_token = access_token;
-    session.refresh_token = next_refresh;
+    session.access_token = access_token.clone();
+    session.refresh_token = next_refresh.clone();
     session.access_expires_at = new_iso_expires(expires_in);
-    session.client_id = client_id;
+    session.client_id = client_id.clone();
+
+    if session.account_id.trim().is_empty() {
+        if let Ok(acct) = crate::cloudflare::resolve_account_id(&access_token).await {
+            session.account_id = acct;
+        }
+    }
+
     set_cf_oauth_session(session.clone());
+
+    if !next_refresh.is_empty() {
+        let _ = save_keyring_oauth_refresh(&next_refresh, &session.account_id, &client_id);
+    }
+
     Ok(session)
 }
 
@@ -151,7 +258,10 @@ async fn fetch_oauth_client_id(purpose: &str) -> Result<String, String> {
         "{}/api/v1/oauth/config?purpose={purpose}",
         crate::console_base_url().trim_end_matches('/')
     );
-    let res = reqwest::Client::new()
+    let res = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
         .get(&url)
         .send()
         .await
@@ -262,4 +372,38 @@ fn days_to_ymd(days: i64) -> (i64, i64, i64) {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     (y, m, d)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keyring_oauth_refresh_lifecycle() {
+        let temp_dir = std::env::temp_dir().join(format!("relaybase-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        std::env::set_var("RELAYBASE_DEV_TMP_DIR", &temp_dir);
+
+        delete_keyring_oauth_refresh();
+        assert_eq!(load_keyring_oauth_refresh().unwrap(), None);
+
+        save_keyring_oauth_refresh("test-refresh-123", "acct-456", "client-789").unwrap();
+        let loaded = load_keyring_oauth_refresh().unwrap().expect("should load");
+        assert_eq!(loaded.refresh_token, "test-refresh-123");
+        assert_eq!(loaded.account_id, "acct-456");
+        assert_eq!(loaded.client_id, "client-789");
+
+        // Saving empty deletes it
+        save_keyring_oauth_refresh("", "acct-456", "client-789").unwrap();
+        assert_eq!(load_keyring_oauth_refresh().unwrap(), None);
+
+        // Delete cleans up
+        save_keyring_oauth_refresh("test-refresh-abc", "", "").unwrap();
+        assert!(load_keyring_oauth_refresh().unwrap().is_some());
+        delete_keyring_oauth_refresh();
+        assert_eq!(load_keyring_oauth_refresh().unwrap(), None);
+
+        std::env::remove_var("RELAYBASE_DEV_TMP_DIR");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }

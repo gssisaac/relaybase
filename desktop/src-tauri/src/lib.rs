@@ -90,6 +90,7 @@ struct InFlightOauth {
     verifier: String,
     client_id: String,
     redirect_uri: String,
+    purpose: String,
 }
 static CF_OAUTH_INFLIGHT: Mutex<Option<InFlightOauth>> = Mutex::new(None);
 
@@ -125,7 +126,10 @@ async fn save_cf_credentials(account_id: String) -> Result<StoredCredentials, St
 #[tauri::command]
 async fn get_credentials() -> Result<Option<StoredCredentials>, String> {
     let disk = load_credentials()?;
-    if disk.is_none() && get_cf_oauth_session().is_none() {
+    if disk.is_none()
+        && get_cf_oauth_session().is_none()
+        && crate::cf_oauth::load_keyring_oauth_refresh().ok().flatten().is_none()
+    {
         return Ok(None);
     }
     let creds = load_credentials_merged()?;
@@ -635,6 +639,7 @@ async fn start_cf_oauth(
             verifier,
             client_id: client_id.clone(),
             redirect_uri: redirect_uri.clone(),
+            purpose: purpose.to_string(),
         });
     }
 
@@ -796,6 +801,14 @@ async fn complete_cf_oauth_inner(
         account_id: account_id.clone().unwrap_or_default(),
         client_id: inflight.client_id.clone(),
     });
+
+    if inflight.purpose != "recover" && !refresh_token.is_empty() {
+        let _ = crate::cf_oauth::save_keyring_oauth_refresh(
+            &refresh_token,
+            account_id.as_deref().unwrap_or(""),
+            &inflight.client_id,
+        );
+    }
 
     let mut creds = load_credentials()?.unwrap_or_default();
     if let Some(acct) = account_id {

@@ -11,6 +11,8 @@ export type SendingHealthDomain = {
   sendingOnboarded: boolean;
   zoneId: string | null;
   error: string | null;
+  /** Present when CF entitlement blocked sending (e.g. `cf_workers_paid_required`). */
+  code?: string | null;
   cloudflareSendingUrl: string | null;
 };
 

@@ -114,6 +114,13 @@ pub fn hydrate(session_slot: &Mutex<Option<CfOAuthSession>>) {
     let Some(session) = load() else {
         return;
     };
+    if !session.refresh_token.trim().is_empty() {
+        let _ = crate::cf_oauth::save_keyring_oauth_refresh(
+            &session.refresh_token,
+            &session.account_id,
+            &session.client_id,
+        );
+    }
     if let Ok(mut guard) = session_slot.lock() {
         *guard = Some(session);
     }

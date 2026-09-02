@@ -26,6 +26,7 @@ const snapshot: SendingHealthSnapshot = {
       sendingOnboarded: false,
       zoneId: "z1",
       error: "restricted",
+      code: null,
       cloudflareSendingUrl: null,
     },
     {
@@ -35,6 +36,7 @@ const snapshot: SendingHealthSnapshot = {
       sendingOnboarded: true,
       zoneId: "z2",
       error: null,
+      code: null,
       cloudflareSendingUrl: null,
     },
   ],

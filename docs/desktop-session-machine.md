@@ -72,7 +72,7 @@ settles. `UnlockView` is the secret form only — never the auto-login check.
 
 `setStatuses` → `bootFromKeyring()` when a silent attempt is needed (requires an active workspace on disk):
 
-- **If no workspace is configured on disk** (`~/.relaybase/credentials.json` or `team-login.json` is missing or has no `workerUrl`): silent boot is skipped and the app transitions directly to `choice` phase (`/setup`). Keyring tokens are never used to invent or restore a workspace.
+- **If no workspace is configured on disk** (`~/.relaybase/workspace.json` or `team-login.json` is missing or has no `workerUrl`): silent boot is skipped and the app transitions directly to `choice` phase (`/setup`). Keyring tokens are never used to invent or restore a workspace.
 - **Owner** with `mail_refresh_token` but no mail access → `owner_boot_mail`
   (silent, no Touch ID) → `ownerReady` when Worker URL is connected.
 - **Owner** whose mail refresh is missing / expired, but `owner-passtoken`

@@ -18,7 +18,7 @@ function normalizeWorkerUrl(raw: string | undefined | null): string {
 }
 
 /**
- * Disk (`~/.relaybase/credentials.json` for owner, `~/.relaybase/team-login.json`
+ * Disk (`~/.relaybase/workspace.json` for owner, `~/.relaybase/team-login.json`
  * for invited) is the primary source of truth for the workspace Worker URL.
  * Keyring tokens authenticate an existing workspace on disk; keyring information
  * must never be used to invent or restore a workspace when ~/.relaybase is missing.

@@ -189,14 +189,16 @@ export function explainDesktopError(
     lower.includes("~/.relaybase") ||
     lower.includes(".relaybase") ||
     lower.includes("credentials.json") ||
+    lower.includes("workspace.json") ||
     lower.includes("could not resolve home") ||
     lower.includes("failed to create") ||
-    lower.includes("failed to write credentials")
+    lower.includes("failed to write credentials") ||
+    lower.includes("failed to write workspace")
   ) {
     return {
-      title: "Could not save credentials on this Mac",
-      detail: stripRawApiNoise(raw) || "Could not create or write ~/.relaybase/credentials.json.",
-      fix: "Relaybase creates ~/.relaybase automatically. Ensure your home folder is writable, then Verify again. To reset, delete ~/.relaybase/credentials.json.",
+      title: "Could not save workspace on this Mac",
+      detail: stripRawApiNoise(raw) || "Could not create or write ~/.relaybase/workspace.json.",
+      fix: "Relaybase creates ~/.relaybase automatically. Ensure your home folder is writable, then Verify again. To reset, delete ~/.relaybase/workspace.json.",
     };
   }
 
@@ -515,7 +517,7 @@ export function explainPasstokenResetError(err: unknown): DesktopErrorHelp {
       title: "Cloudflare account id missing locally",
       detail:
         "Relaybase needs the CF account id from your first install to reset the passtoken.",
-      fix: "Finish Setup once on this Mac, or add accountId to ~/.relaybase/credentials.json, then try again.",
+      fix: "Finish Setup once on this Mac, or add accountId to ~/.relaybase/workspace.json, then try again.",
     };
   }
   if (lower.includes("worker is missing cf_account_id")) {
@@ -523,7 +525,7 @@ export function explainPasstokenResetError(err: unknown): DesktopErrorHelp {
       title: "Worker CF account id not available",
       detail:
         "The Worker could not read CF_ACCOUNT_ID at runtime. Reset sends cfAccountId from this Mac instead.",
-      fix: "Ensure accountId is in ~/.relaybase/credentials.json, deploy the latest Worker, then Authorize again.",
+      fix: "Ensure accountId is in ~/.relaybase/workspace.json, deploy the latest Worker, then Authorize again.",
     };
   }
   if (

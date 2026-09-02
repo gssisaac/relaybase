@@ -323,7 +323,7 @@ export class AppSessionStore {
       return;
     }
 
-    // If ~/.relaybase has no workspace connected (no credentials.json / team-login.json with workerUrl),
+    // If ~/.relaybase has no workspace connected (no workspace.json / team-login.json with workerUrl),
     // we never enter unlock or ready phases — we go directly to choice when identity is ready.
     if (!this.hasWorkerConnected()) {
       if (!this.identity.ready) {

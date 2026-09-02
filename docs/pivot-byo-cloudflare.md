@@ -40,7 +40,7 @@ The old `api.relaybase.xyz` custom domain was removed; isaac's dogfood Worker ru
 
 Team users skip steps 1–2 and sign in at `/login` with their account email + per-account mobile password (same model as the Flutter companion); they get email-only mode (no management console).
 
-Credentials: `~/.relaybase/credentials.json` (admin) and `~/.relaybase/team-login.json` (team user).
+Workspace: `~/.relaybase/workspace.json` (owner) and `~/.relaybase/team-login.json` (team user).
 
 ## Recovery
 

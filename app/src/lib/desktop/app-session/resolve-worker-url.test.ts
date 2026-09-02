@@ -7,7 +7,7 @@ const WORKER_URL = "https://relaybase-api.example.workers.dev";
 const KEYRING_URL = "https://relaybase-api.keyring.workers.dev";
 
 describe("resolveWorkerUrl", () => {
-  it("uses credentials.json for owner role", () => {
+  it("uses workspace.json for owner role", () => {
     assert.equal(
       resolveWorkerUrl({
         role: "owner",
@@ -40,7 +40,7 @@ describe("resolveWorkerUrl", () => {
     );
   });
 
-  it("falls back to credentials.json for invited role when teamLogin is missing", () => {
+  it("falls back to workspace.json for invited role when teamLogin is missing", () => {
     assert.equal(
       resolveWorkerUrl({
         role: "invited",

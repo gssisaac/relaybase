@@ -108,7 +108,7 @@ unzip, and upload the script — **no `npm install`**, no local overlay.
 
 ## Desktop behavior
 
-- **Fresh install:** downloads latest ZIP from manifest → deploy → stores `workerVersion` in `~/.relaybase/credentials.json`.
+- **Fresh install:** downloads latest ZIP from manifest → deploy → stores `workerVersion` in `~/.relaybase/workspace.json`.
 - **Startup banner:** compares stored version to manifest; prompts update.
 - **Settings → Cloudflare:** manual check + “Update Worker” re-deploy.
 

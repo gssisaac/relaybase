@@ -10,8 +10,11 @@ use std::os::unix::fs::PermissionsExt;
 
 /// Desktop durable store root: ~/.relaybase (see docs/relaybase-home-storage.md).
 /// Do not add alternate roots (Application Support, Keychain, cwd, etc.).
-/// Path: ~/.relaybase/credentials.json
-const CREDENTIALS_FILE: &str = "credentials.json";
+/// Path: ~/.relaybase/workspace.json — Worker URL, CF account id, script/version.
+/// Secrets (passtoken, OAuth, refresh) live in the OS keyring, not this file.
+const WORKSPACE_FILE: &str = "workspace.json";
+/// Pre-rename filename. Read once and rewritten to `workspace.json`.
+const LEGACY_CREDENTIALS_FILE: &str = "credentials.json";
 /// Email UI prefs (account colors, etc.). Path: ~/.relaybase/{scopeId}/email.json
 const EMAIL_PREFS_FILE: &str = "email.json";
 /// Local API key plaintext vault. Path: ~/.relaybase/{scopeId}/api-keys.json
@@ -20,7 +23,7 @@ const API_KEYS_FILE: &str = "api-keys.json";
 /// Path: ~/.relaybase/storage-layout-v2.json
 const STORAGE_LAYOUT_MARKER_FILE: &str = "storage-layout-v2.json";
 
-/// Keys that may appear in `~/.relaybase/credentials.json`.
+/// Keys that may appear in `~/.relaybase/workspace.json`.
 /// Everything else is stripped on load and never written back.
 const DISK_CREDENTIAL_KEYS: &[&str] = &[
     "accountId",
@@ -53,7 +56,7 @@ struct DiskCredentials {
 pub struct StoredCredentials {
     pub account_id: String,
     /// Unused IPC leftover. OAuth is `cf_oauth_access_token` only.
-    /// Never written to `credentials.json`.
+    /// Never written to `workspace.json`.
     #[serde(alias = "apiToken", alias = "api_token")]
     pub install_token: String,
     pub worker_url: String,
@@ -177,7 +180,7 @@ fn stored_from_disk(disk: DiskCredentials) -> StoredCredentials {
     }
 }
 
-fn credentials_json_is_dirty(value: &serde_json::Value) -> bool {
+fn workspace_json_is_dirty(value: &serde_json::Value) -> bool {
     let Some(obj) = value.as_object() else {
         return true;
     };
@@ -262,8 +265,18 @@ fn relaybase_dir() -> Result<PathBuf, String> {
     Ok(home_dir()?.join(".relaybase"))
 }
 
-fn credentials_path() -> Result<PathBuf, String> {
-    Ok(relaybase_dir()?.join(CREDENTIALS_FILE))
+fn workspace_path() -> Result<PathBuf, String> {
+    Ok(relaybase_dir()?.join(WORKSPACE_FILE))
+}
+
+fn legacy_credentials_path() -> Result<PathBuf, String> {
+    Ok(relaybase_dir()?.join(LEGACY_CREDENTIALS_FILE))
+}
+
+fn remove_file_if_exists(path: &Path) {
+    if path.exists() {
+        let _ = fs::remove_file(path);
+    }
 }
 
 /// Create `~/.relaybase` if missing (and parents). Idempotent.
@@ -498,13 +511,14 @@ fn restrict_file_permissions(_path: &PathBuf) {}
 
 pub fn save_credentials(creds: &StoredCredentials) -> Result<(), String> {
     let dir = ensure_dir()?;
-    let path = dir.join(CREDENTIALS_FILE);
+    let path = dir.join(WORKSPACE_FILE);
     let disk = credentials_for_disk(creds);
     let json = serde_json::to_string_pretty(&disk).map_err(|e| e.to_string())?;
 
     match fs::write(&path, &json) {
         Ok(()) => {
             restrict_file_permissions(&path);
+            remove_file_if_exists(&dir.join(LEGACY_CREDENTIALS_FILE));
             Ok(())
         }
         Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -512,16 +526,17 @@ pub fn save_credentials(creds: &StoredCredentials) -> Result<(), String> {
             ensure_dir()?;
             fs::write(&path, &json).map_err(|e2| {
                 format!(
-                    "Failed to write credentials to {} after creating {}: {e2}",
+                    "Failed to write workspace to {} after creating {}: {e2}",
                     path.display(),
                     dir.display()
                 )
             })?;
             restrict_file_permissions(&path);
+            remove_file_if_exists(&dir.join(LEGACY_CREDENTIALS_FILE));
             Ok(())
         }
         Err(e) => Err(format!(
-            "Failed to write credentials to {}: {e}",
+            "Failed to write workspace to {}: {e}",
             path.display()
         )),
     }
@@ -529,52 +544,63 @@ pub fn save_credentials(creds: &StoredCredentials) -> Result<(), String> {
 
 pub fn load_credentials() -> Result<Option<StoredCredentials>, String> {
     let dir = relaybase_dir()?;
-    let path = dir.join(CREDENTIALS_FILE);
-    // Missing dir or file → treat as no credentials (do not error).
-    if !path.exists() {
+    let current = dir.join(WORKSPACE_FILE);
+    let legacy = dir.join(LEGACY_CREDENTIALS_FILE);
+    // Prefer the current name; fall back to the pre-rename file.
+    let (path, from_legacy) = if current.exists() {
+        (current, false)
+    } else if legacy.exists() {
+        (legacy.clone(), true)
+    } else {
         return Ok(None);
-    }
+    };
     let json = fs::read_to_string(&path).map_err(|e| {
         format!(
-            "Failed to read credentials from {}: {e}",
+            "Failed to read workspace from {}: {e}",
             path.display()
         )
     })?;
     let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
         format!(
-            "Invalid credentials file {}: {e}. Delete the file and verify again.",
+            "Invalid workspace file {}: {e}. Delete the file and verify again.",
             path.display()
         )
     })?;
     let disk: DiskCredentials = serde_json::from_value(value.clone()).map_err(|e| {
         format!(
-            "Invalid credentials file {}: {e}. Delete the file and verify again.",
+            "Invalid workspace file {}: {e}. Delete the file and verify again.",
             path.display()
         )
     })?;
     let creds = stored_from_disk(disk);
-    // Drop leftover tokens / empty console keys so they never stay on disk.
-    if credentials_json_is_dirty(&value) {
+    // Drop leftover tokens / empty console keys, and migrate credentials.json
+    // → workspace.json so both never stay on disk together.
+    if workspace_json_is_dirty(&value) || from_legacy {
         save_credentials(&creds)?;
+    } else if legacy.exists() {
+        remove_file_if_exists(&legacy);
     }
     Ok(Some(creds))
 }
 
 pub fn clear_credentials() -> Result<(), String> {
     clear_cf_oauth_session();
-    let path = match credentials_path() {
+    let current = match workspace_path() {
         Ok(p) => p,
         Err(_) => return Ok(()),
     };
-    if !path.exists() {
-        return Ok(());
+    let legacy = legacy_credentials_path().ok();
+    for path in [Some(current), legacy].into_iter().flatten() {
+        if !path.exists() {
+            continue;
+        }
+        fs::remove_file(&path).map_err(|e| {
+            format!(
+                "Failed to delete {}: {e}",
+                path.display()
+            )
+        })?;
     }
-    fs::remove_file(&path).map_err(|e| {
-        format!(
-            "Failed to delete {}: {e}",
-            path.display()
-        )
-    })?;
     Ok(())
 }
 
@@ -967,8 +993,8 @@ pub fn migrate_mail_to_desktop_user() -> Result<Option<String>, String> {
 }
 
 // --- Team user login (per-account mobile password) ---
-// Stored separately from admin credentials.json so a teammate never holds
-// the admin token. Path: ~/.relaybase/team-login.json
+// Stored separately from owner workspace.json so a teammate never holds
+// owner identity. Path: ~/.relaybase/team-login.json
 
 const TEAM_LOGIN_FILE: &str = "team-login.json";
 

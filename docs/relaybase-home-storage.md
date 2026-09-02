@@ -43,7 +43,7 @@ Server/worker data (Cloudflare D1 + R2) is separate — that is the remote produ
 
 ```text
 ~/.relaybase/                          # mode 0700
-├── credentials.json                   # Cloudflare + Worker + Relaybase console account (0600; session, global)
+├── workspace.json                     # Worker URL + CF account id + Worker script/version (0600; session, global). Secrets are not stored here.
 ├── team-login.json                    # team-user identity only (workerUrl + accountEmail; 0600; session, global). Mobile password lives in the OS keyring.
 ├── app-icon.png                       # notification identity image (global)
 ├── storage-layout-v2.json            # migration marker (version, migratedAt, scopeId, from)
@@ -124,7 +124,7 @@ and the marker is written.
 | First launch after upgrade | Move flat `mail/`, `cache/`, `email.json`, `api-keys.json` → `{scopeId}/` |
 | CF / invite account switch | New `{scopeId}/` created empty; old folder retained |
 | Same account reconnects same worker | Same `{scopeId}/` → data restored |
-| Sign out | Clear `credentials.json` only; scoped folders remain |
+| Sign out | Clear `workspace.json` only; scoped folders remain |
 
 On scope change, `DesktopContext` clears the in-memory session cache, all
 scope-dependent `localStorage` mirrors, and the dashboard client cache
@@ -136,9 +136,9 @@ paths under the new `{scopeId}/`).
 
 ## File contracts
 
-### `credentials.json`
+### `workspace.json`
 
-> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). **`~/.relaybase/credentials.json` is the source of truth for workspace configuration (`workerUrl`).** Keyring tokens (`owner-session`) authenticate an existing workspace on disk; keyring information must **never** be used to invent or restore a workspace when `~/.relaybase` is missing or deleted. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms show a **Worker URL select** (`WorkerUrlPicker`): the URL from `credentials.json` is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
+> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). **`~/.relaybase/workspace.json` is the source of truth for workspace configuration (`workerUrl`).** It is **not** a credentials file — passtoken, OAuth, and refresh tokens never live here. Older builds wrote `credentials.json`; the first load after upgrade rewrites the contents to `workspace.json` and deletes the old file. Keyring tokens (`owner-session`) authenticate an existing workspace on disk; keyring information must **never** be used to invent or restore a workspace when `~/.relaybase` is missing or deleted. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms show a **Worker URL select** (`WorkerUrlPicker`): the URL from `workspace.json` is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
 
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
@@ -164,7 +164,7 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/keyring_store.rs`,
 | service | `com.relaybase.desktop` |
 | account | `owner-session` |
 
-Blob (`camelCase`): `{ workerUrl, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. Keyring tokens authenticate an active workspace whose URL is configured on disk in `~/.relaybase/credentials.json`. When `~/.relaybase` is missing or deleted, keyring tokens are ignored and the app starts at the initial welcome/install screen (`choice` phase). This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
+Blob (`camelCase`): `{ workerUrl, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. Keyring tokens authenticate an active workspace whose URL is configured on disk in `~/.relaybase/workspace.json`. When `~/.relaybase` is missing or deleted, keyring tokens are ignored and the app starts at the initial welcome/install screen (`choice` phase). This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
 
 ### OS keyring (owner passtoken)
 
@@ -294,7 +294,7 @@ UI / store
 
 1. **Write (desktop):** must succeed on `~/.relaybase`. Failure must surface — do not pretend success after only writing `localStorage`.
 2. **Read (desktop):** prefer disk. Use `localStorage` only as a warm cache or one-time migration source. Empty or corrupt rebuildable JSON (`mail/**`, `cache/**`) is treated as a miss — do not throw (`sidebar.json` can be empty after an interrupted write).
-3. **Browser `pnpm next`:** credentials via `/api/local-credentials` → same `~/.relaybase/credentials.json`; API calls go to the Worker through `desktopAwareFetch`.
+3. **Browser `pnpm next`:** workspace via `/api/local-credentials` → same `~/.relaybase/workspace.json`; API calls go to the Worker through `desktopAwareFetch`.
 
 Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in `ui/sidebar.json`).
 
@@ -304,7 +304,7 @@ Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in
 
 When adding durable desktop state:
 
-1. Put it under `~/.relaybase/{scopeId}/` (usually `mail/desktop/ui/…`, `cache/…`, or extend `email.json` / `api-keys.json` with a Rust schema change). **Never** write tenant data at the `~/.relaybase/` root — only session files (`credentials.json`, `team-login.json`, `app-icon.png`, `storage-layout-v2.json`) live there.
+1. Put it under `~/.relaybase/{scopeId}/` (usually `mail/desktop/ui/…`, `cache/…`, or extend `email.json` / `api-keys.json` with a Rust schema change). **Never** write tenant data at the `~/.relaybase/` root — only session files (`workspace.json`, `team-login.json`, `app-icon.png`, `storage-layout-v2.json`) live there.
 2. **Never** use raw `relaybaseAccountId`, CF `accountId`, or `workerUrl` as a folder name. The `scopeId` is an opaque SHA-256 prefix resolved by Rust (`resolve_account_scope_id`).
 3. Go through existing Tauri commands — do **not** open ad-hoc files from the Next.js layer (except `/api/local-credentials` for browser next).
 4. Do **not** invent a second store in Application Support, Keychain, or `localhost` `localStorage`.

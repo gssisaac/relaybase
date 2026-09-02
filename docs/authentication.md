@@ -179,7 +179,7 @@ and is not kept in JS after submit.
 | `mailRefreshToken` + console `refreshToken` | OS keyring `owner-session` JSON (silent read) |
 | Mail / console access JWT | Tauri process memory (split) |
 | `AUTH_PEPPER` | Worker wrangler secret |
-| Worker URL | Keyring first, `credentials.json` mirror |
+| Worker URL | Keyring first, `workspace.json` mirror |
 
 ### Invited teammate
 
@@ -324,7 +324,7 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 | `owner_passtoken.rs` | `owner-passtoken` exists/store/load-after-auth |
 | `team_session.rs` | Team keyring, silent unlock, `team_worker_request` |
 | `keyring_store.rs` | OS secret store |
-| `secrets.rs` | `credentials.json`, `team-login.json` |
+| `secrets.rs` | `workspace.json`, `team-login.json` |
 
 ### App
 

@@ -1377,7 +1377,7 @@ async fn save_worker_connection(
 ) -> Result<StoredCredentials, String> {
     let base = normalize_worker_url(&worker_url)?;
     // Prefer merging into existing creds, but never block a successful verify
-    // on a legacy/unreadable credentials.json — overwrite with what we know.
+    // on a legacy/unreadable workspace.json — overwrite with what we know.
     let mut creds = match load_credentials() {
         Ok(existing) => existing.unwrap_or_default(),
         Err(e) => {

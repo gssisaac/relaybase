@@ -7,7 +7,7 @@
 //!   2. Ensure R2 bucket `relaybase-mailbox`.
 //!   3. Create D1 databases (empty D1s only — schema via POST /console/init-db).
 //!   4. Generate an admin token; PUT Worker secrets.
-//!   5. PUT `worker.js` with bindings; enable workers.dev.
+//!   5. PUT `worker.{version}.js` with bindings; enable workers.dev.
 //!   6. Empty D1s: POST /console/init-db. Reused or Worker-update: POST /console/migrate-db.
 //!
 //! Auth is `require_cf_oauth()` (in-memory CF OAuth session). The access

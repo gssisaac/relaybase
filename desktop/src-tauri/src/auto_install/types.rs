@@ -7,6 +7,9 @@ pub struct WorkerInstallManifest {
     pub zip_url: String,
     pub zip_sha256: String,
     pub published_at: String,
+    /// Hosted / ZIP filename, e.g. `worker.0.1.1.js`.
+    #[serde(default)]
+    pub worker_js: Option<String>,
     #[serde(default)]
     pub notes: Option<String>,
 }

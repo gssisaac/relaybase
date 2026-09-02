@@ -7,10 +7,10 @@ Rust module for background auto-install of the Relaybase routing Worker into the
 Each step streams `install-log` Tauri events to the frontend (`step`, `level`, `line`).
 
 0. **Probe** — `probe_install_resources` lists Worker / R2 / D1 and occupancy.
-1. **Manifest / ZIP** — Fetch `worker-install-manifest.json`, download versioned ZIP, verify SHA-256, stage `wrangler.toml` + `worker.js`.
+1. **Manifest / ZIP** — Fetch `worker-install-manifest.json`, download versioned ZIP, verify SHA-256, stage `wrangler.toml` + `worker.{version}.js` (falls back to `worker.js`).
 2. **R2** — Ensure bucket `relaybase-mailbox` (or reuse on Worker-only update).
 3. **D1** — Create or reuse `relaybase-logs`, `relaybase-mail`, `relaybase-db` (schema applied later).
-4. **Deploy** — Upload `worker.js` with bindings, set cron, enable workers.dev.
+4. **Deploy** — Upload the staged Worker module with bindings, set cron, enable workers.dev.
 5. **Secrets** — PUT `AUTH_PEPPER` (skipped when reusing D1 or Worker-only update), `CF_ACCOUNT_ID`, optional `CF_API_TOKEN`.
 6. **Warmup** — Poll `GET /health` (~30s backoff).
 7. **Schema** — Probe `GET /console/auth-status`. Empty D1s: `POST /console/init-db`. Reused D1: `POST /console/migrate-db`. Auth is console session, Cloudflare OAuth (`X-Cf-Access-Token` that can GET `/accounts/{CF_ACCOUNT_ID}`), or pepper bootstrap when no owner exists. OAuth upgrade must not fail when an owner already exists.

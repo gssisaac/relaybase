@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { AppSessionProvider } from "@/lib/desktop/app-session";
+import { AppUpdaterProvider } from "@/lib/desktop/updater/AppUpdaterContext";
 
 import { DesktopProvider } from "./DesktopContext";
 
@@ -20,7 +21,9 @@ import { DesktopProvider } from "./DesktopContext";
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <DesktopProvider>
-      <AppSessionProvider>{children}</AppSessionProvider>
+      <AppUpdaterProvider>
+        <AppSessionProvider>{children}</AppSessionProvider>
+      </AppUpdaterProvider>
     </DesktopProvider>
   );
 }

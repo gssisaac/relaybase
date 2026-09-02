@@ -307,7 +307,9 @@ curl -sI https://relaybase.xyz/release/latest.json | grep -i content-type
 curl -s https://relaybase.xyz/release/latest.json | head -c 400; echo
 ```
 
-Test in-app updates only with a **release** build, not `tauri dev`.
+Test in-app updates only with a **release** build, not `tauri dev`. The
+installed app checks `latest.json` ~8s after launch (then every 24h),
+downloads in the background, and shows **Restart to update** in the sidebar.
 
 ---
 

@@ -120,7 +120,7 @@ pub(crate) fn worker_js_is_current(source: &str) -> bool {
     source.contains("d1Bound") && source.contains("reconcile-v1")
 }
 
-/// Download the versioned install ZIP, verify SHA-256, and stage wrangler.toml + worker.js.
+/// Download the versioned install ZIP, verify SHA-256, and stage wrangler.toml + worker.{version}.js.
 pub(crate) async fn stage_install_package(
     app: &AppHandle,
     manifest: &WorkerInstallManifest,
@@ -156,13 +156,9 @@ pub(crate) async fn stage_install_package(
             "Install ZIP is missing wrangler.toml. Re-pack with pnpm pack:worker-install.".into(),
         );
     };
-    if !work_dir.join("worker.js").is_file() {
-        return Err(
-            "Install ZIP is missing worker.js. Re-pack with pnpm pack:worker-install.".into(),
-        );
-    }
-    let staged_js = std::fs::read_to_string(work_dir.join("worker.js"))
-        .map_err(|e| format!("Could not read staged worker.js: {e}"))?;
+    let js_path = staged_worker_js_path(&work_dir, manifest.worker_js.as_deref())?;
+    let staged_js = std::fs::read_to_string(&js_path)
+        .map_err(|e| format!("Could not read staged {}: {e}", js_path.display()))?;
     if !worker_js_is_current(&staged_js) {
         return Err(
             "The hosted install ZIP is too old to initialize an empty database (no d1Bound in worker.js). \
@@ -176,9 +172,68 @@ pub(crate) async fn stage_install_package(
         app,
         "prepare",
         "info",
-        format!("Staged Worker install v{staged} at {}", work_dir.display()),
+        format!(
+            "Staged Worker install v{staged} ({}) at {}",
+            js_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("worker.js"),
+            work_dir.display()
+        ),
     );
     Ok(work_dir)
+}
+
+fn toml_quoted_value<'a>(raw: &'a str, key: &str) -> Option<&'a str> {
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix(key) {
+            let rest = rest.trim_start();
+            if let Some(rest) = rest.strip_prefix('=') {
+                let v = rest.trim().trim_matches('"');
+                if !v.is_empty() {
+                    return Some(v);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Prefer `worker.{version}.js`, then wrangler `main`, then `worker.js`.
+pub(crate) fn staged_worker_js_path(
+    work_dir: &Path,
+    manifest_worker_js: Option<&str>,
+) -> Result<PathBuf, String> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(name) = manifest_worker_js.map(str::trim).filter(|s| !s.is_empty()) {
+        candidates.push(work_dir.join(name));
+    }
+    if let Some(version) = read_staged_version(work_dir) {
+        candidates.push(work_dir.join(format!("worker.{version}.js")));
+    }
+    let wrangler = work_dir.join("wrangler.toml");
+    if wrangler.is_file() {
+        if let Ok(raw) = std::fs::read_to_string(&wrangler) {
+            if let Some(main) = toml_quoted_value(&raw, "main") {
+                candidates.push(work_dir.join(main));
+            }
+        }
+    }
+    candidates.push(work_dir.join("worker.js"));
+
+    for path in &candidates {
+        if path.is_file() {
+            return Ok(path.clone());
+        }
+    }
+    Err(
+        "Install ZIP is missing worker.{version}.js (or worker.js). Re-pack with pnpm pack:worker-install."
+            .into(),
+    )
 }
 
 /// Read version from staged VERSION file or wrangler.toml WORKER_VERSION var.
@@ -195,16 +250,8 @@ pub(crate) fn read_staged_version(work_dir: &Path) -> Option<String> {
     let wrangler = work_dir.join("wrangler.toml");
     if wrangler.is_file() {
         if let Ok(raw) = std::fs::read_to_string(&wrangler) {
-            for line in raw.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("WORKER_VERSION") {
-                    if let Some(rest) = trimmed.split('=').nth(1) {
-                        let v = rest.trim().trim_matches('"');
-                        if !v.is_empty() {
-                            return Some(v.to_string());
-                        }
-                    }
-                }
+            if let Some(v) = toml_quoted_value(&raw, "WORKER_VERSION") {
+                return Some(v.to_string());
             }
         }
     }
@@ -213,7 +260,7 @@ pub(crate) fn read_staged_version(work_dir: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod worker_js_tests {
-    use super::worker_js_is_current;
+    use super::{staged_worker_js_path, worker_js_is_current};
 
     #[test]
     fn current_js_has_d1_bound() {
@@ -222,5 +269,38 @@ mod worker_js_tests {
         ));
         assert!(!worker_js_is_current(r#"return { d1Bound: { app: true } }"#));
         assert!(!worker_js_is_current(r#"export default { fetch() {} }"#));
+    }
+
+    #[test]
+    fn prefers_versioned_worker_js() {
+        let dir = std::env::temp_dir().join(format!("rb-worker-js-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("VERSION"), "0.1.2\n").unwrap();
+        std::fs::write(dir.join("worker.js"), "legacy").unwrap();
+        std::fs::write(dir.join("worker.0.1.2.js"), "versioned").unwrap();
+        let path = staged_worker_js_path(&dir, None).unwrap();
+        assert_eq!(path.file_name().unwrap(), "worker.0.1.2.js");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn falls_back_to_worker_js() {
+        let dir = std::env::temp_dir().join(format!("rb-worker-js-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("VERSION"), "0.1.1\n").unwrap();
+        std::fs::write(dir.join("worker.js"), "legacy").unwrap();
+        let path = staged_worker_js_path(&dir, None).unwrap();
+        assert_eq!(path.file_name().unwrap(), "worker.js");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn uses_manifest_worker_js_name() {
+        let dir = std::env::temp_dir().join(format!("rb-worker-js-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("worker.0.1.2.js"), "from-manifest").unwrap();
+        let path = staged_worker_js_path(&dir, Some("worker.0.1.2.js")).unwrap();
+        assert_eq!(path.file_name().unwrap(), "worker.0.1.2.js");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

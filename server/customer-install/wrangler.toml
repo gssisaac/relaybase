@@ -1,7 +1,7 @@
 # Customer install template — filled by pack-customer-install.mjs at release time.
 # auto_install patches REPLACE_WITH_* D1 placeholders after creating databases.
 name = "relaybase-api"
-main = "worker.js"
+main = "worker.0.0.0.js"
 compatibility_date = "2025-06-01"
 
 [vars]

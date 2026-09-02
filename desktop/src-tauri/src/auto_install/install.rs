@@ -20,7 +20,9 @@ use super::health::{
     fetch_owner_configured, fetch_worker_version, log_worker_health_shape, wait_for_worker_ready,
 };
 use super::log::emit_log;
-use super::manifest::{fetch_install_manifest, read_staged_version, stage_install_package};
+use super::manifest::{
+    fetch_install_manifest, read_staged_version, stage_install_package, staged_worker_js_path,
+};
 use super::schema::{init_worker_db_with_retry, migrate_worker_db_with_retry};
 use super::types::{AutoInstallResult, InstallDecision, InstallRunOptions, LogEvent};
 use super::url::{assert_worker_update_target_matches, preview_worker_update_target};
@@ -429,9 +431,9 @@ async fn deploy_worker(
     d1_ids: &[String],
     staged_version: Option<String>,
 ) -> Result<String, String> {
-    let js_path = work_dir.join("worker.js");
+    let js_path = staged_worker_js_path(work_dir, None)?;
     let js_source = std::fs::read_to_string(&js_path)
-        .map_err(|e| format!("read staged worker.js: {e}"))?;
+        .map_err(|e| format!("read staged {}: {e}", js_path.display()))?;
     let version = staged_version.unwrap_or_else(|| "unknown".into());
     let d1_for_upload: Vec<(&str, &str)> = D1_DATABASES
         .iter()

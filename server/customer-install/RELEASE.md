@@ -66,8 +66,9 @@ pnpm pack:worker-install
 ```
 
 Pack runs `build:bundle`, writes the versioned ZIP, a stable alias, and
-`worker-install-manifest.json` (includes `notes`). Older versioned ZIPs under
-`hq/website/public/downloads/` are removed.
+`worker-install-manifest.json` (includes `notes` and `workerJs`). Previous
+`worker.{version}.js` files and versioned ZIPs under
+`hq/website/public/downloads/` are kept.
 
 ### 4. Commit
 
@@ -75,6 +76,7 @@ Commit artifacts under `hq/website/public/downloads/`:
 
 - `relaybase-worker-install-{version}.zip`
 - `relaybase-worker-install.zip` (stable alias → latest)
+- `worker.{version}.js`
 - `worker-install-manifest.json`
 
 ### 5. Deploy the website
@@ -98,10 +100,11 @@ curl -sI https://relaybase.xyz/downloads/relaybase-worker-install-X.Y.Z.zip | gr
 
 | Output | Purpose |
 |--------|---------|
-| `worker.js` | Wrangler-bundled Worker (all deps inlined) |
-| `wrangler.toml` | `main = "worker.js"`, `WORKER_VERSION`, D1/R2 bindings |
+| `worker.{version}.js` | Wrangler-bundled Worker (all deps inlined) |
+| `worker.js` | Same bytes as `worker.{version}.js` (compat alias for 0.1.1 desktops) |
+| `wrangler.toml` | `main = "worker.{version}.js"`, `WORKER_VERSION`, D1/R2 bindings |
 | `VERSION` | Plaintext version for staging |
-| `worker-install-manifest.json` | `{ version, zipUrl, zipSha256, publishedAt, notes }` |
+| `worker-install-manifest.json` | `{ version, zipUrl, zipSha256, workerJs, publishedAt, notes }` |
 
 Desktop auto-install and Worker updates download the manifest, verify SHA-256,
 unzip, and upload the script — **no `npm install`**, no local overlay.

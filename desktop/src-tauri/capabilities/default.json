@@ -11,6 +11,7 @@
     "core:webview:allow-set-webview-zoom",
     "notification:default",
     "updater:default",
+    "process:default",
     "deep-link:default",
     "biometry:default"
   ]

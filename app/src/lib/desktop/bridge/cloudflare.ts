@@ -18,6 +18,8 @@ export type WorkerInstallManifest = {
   zipUrl: string;
   zipSha256: string;
   publishedAt: string;
+  /** Hosted / ZIP filename, e.g. `worker.0.1.1.js`. */
+  workerJs?: string;
   notes?: string;
 };
 

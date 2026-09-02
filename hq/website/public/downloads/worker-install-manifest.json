@@ -1,7 +1,8 @@
 {
-  "version": "0.1.1",
-  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.1.zip",
-  "zipSha256": "e40d938c803526a9097b2b28fa16c997c23b31e449b74de4126ea92f0be7d314",
-  "publishedAt": "2026-09-02T17:21:22.234Z",
-  "notes": "# Relaybase Worker 0.1.1\n\nFirst public release.\n\n## Highlights\n- Cloudflare OAuth install — Worker, R2, and D1 in the customer's account\n- Owner passtoken auth (`AUTH_PEPPER` + scoped sessions)\n- Single D1 app baseline — today's schema in one migration\n\n## Changes\n- `POST /console/init-db` / `migrate-db` / `setup-admin` with pepper bootstrap or OAuth\n- Mail index (`RELAYBASE_MAIL`), ops log (`RELAYBASE_LOGS`), mailbox R2 layout\n- Optional Worker `CF_ACCOUNT_ID`; domain/DNS via `CF_API_TOKEN`"
+  "version": "0.1.2",
+  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.2.zip",
+  "zipSha256": "bdd7fac5c771523290fb29a0de408ac4c0f289a7559f3c9bdc2bbe4112555434",
+  "workerJs": "worker.0.1.2.js",
+  "publishedAt": "2026-09-02T18:16:58.000Z",
+  "notes": "# Relaybase Worker 0.1.2\n\nFirst public release.\n\n## Highlights\n- Cloudflare OAuth install \u2014 Worker, R2, and D1 in the customer's account\n- Owner passtoken auth (`AUTH_PEPPER` + scoped sessions)\n- Single D1 app baseline \u2014 today's schema in one migration\n\n## Changes\n- `POST /console/init-db` / `migrate-db` / `setup-admin` with pepper bootstrap or OAuth\n- Mail index (`RELAYBASE_MAIL`), ops log (`RELAYBASE_LOGS`), mailbox R2 layout\n- Optional Worker `CF_ACCOUNT_ID`; domain/DNS via `CF_API_TOKEN`"
 }

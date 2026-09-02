@@ -23,20 +23,19 @@ import {
   desktopOwnerSetupAdmin,
   desktopPreviewWorkerUpdateTarget,
   desktopRegisterWorkerWithConsole,
-  desktopSaveDownloadFile,
   desktopSaveWorkerConnection,
   desktopStartCfOAuth,
   desktopVerifyWorkerConnection,
   explainCfOAuthError,
   explainDesktopError,
   explainWorkerUpdateTargetError,
-  isDesktopRuntime,
   listenCfOAuthResult,
   oauthAuthorizationIncompleteHelp,
   type DesktopErrorHelp,
   type WorkerUpdateTarget,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { useDesktop } from "@/lib/desktop/shell";
 import { ManualInstallScriptPanel } from "@/console/components/setup/AdminTokenPanel";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
@@ -79,15 +78,6 @@ function saveDraft(draft: Draft) {
   } catch {
     /* ignore quota */
   }
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const href = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(href);
 }
 
 export function WorkerInstallPanel({
@@ -358,22 +348,7 @@ export function WorkerInstallPanel({
 
   async function downloadPasstoken() {
     if (!revealedPasstoken) return;
-    const content = [
-      "# Relaybase owner passtoken — save this file securely",
-      `# Worker URL: ${doneUrl.trim()}`,
-      `# Generated: ${new Date().toISOString()}`,
-      "",
-      `PASSTOKEN=${revealedPasstoken}`,
-      "",
-    ].join("\n");
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const filename = "relaybase-passtoken.txt";
-    if (isDesktopRuntime()) {
-      const buffer = await blob.arrayBuffer();
-      await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
-    } else {
-      downloadBlob(blob, filename);
-    }
+    await downloadPasstokenBackup(revealedPasstoken);
     setTokenDownloaded(true);
     setTokenSaved(true);
   }

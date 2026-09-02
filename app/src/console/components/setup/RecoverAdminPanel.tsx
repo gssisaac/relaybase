@@ -5,22 +5,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { downloadBlob } from "@/lib/attachments/download";
 import {
   CF_OAUTH_AUTHORIZE_WAIT_MS,
   CF_OAUTH_RECOVER_SCOPES,
   desktopOpenExternal,
   desktopRegisterWorkerWithConsole,
-  desktopSaveDownloadFile,
   desktopStartCfOAuth,
   explainCfOAuthError,
   explainPasstokenResetError,
-  isDesktopRuntime,
   listenCfOAuthResult,
   oauthAuthorizationIncompleteHelp,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { useDesktop } from "@/lib/desktop/shell";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
@@ -161,22 +159,7 @@ export function RecoverAdminPanel() {
   async function downloadToken() {
     const revealed = store.revealedPasstoken;
     if (!revealed) return;
-    const content = [
-      "# Relaybase owner passtoken — save this file securely",
-      `# Worker URL: ${resolvedWorkerUrl}`,
-      `# Generated: ${new Date().toISOString()}`,
-      "",
-      `PASSTOKEN=${revealed.passtoken}`,
-      "",
-    ].join("\n");
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const filename = "relaybase-passtoken.txt";
-    if (isDesktopRuntime()) {
-      const buffer = await blob.arrayBuffer();
-      await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
-    } else {
-      downloadBlob(blob, filename);
-    }
+    await downloadPasstokenBackup(revealed.passtoken);
     setTokenDownloaded(true);
   }
 

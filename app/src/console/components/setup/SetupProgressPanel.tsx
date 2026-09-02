@@ -14,8 +14,6 @@ import {
   desktopPreviewWorkerUpdateTarget,
   desktopUpdateInstalledWorker,
   desktopOpenExternal,
-  desktopSaveDownloadFile,
-  isDesktopRuntime,
   desktopProbeInstall,
   desktopRollbackInstall,
   desktopOwnerSetupAdmin,
@@ -34,8 +32,8 @@ import {
   type InstallResourceProbe,
   type WorkerConnectResult,
 } from "@/lib/desktop/bridge";
-import { downloadBlob } from "@/lib/attachments/download";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { useDesktop } from "@/lib/desktop/shell";
 import { CloudflareModuleIcon } from "@/console/components/CloudflareModuleIcon";
@@ -710,22 +708,7 @@ export function SetupProgressPanel({
 
   async function downloadAutoToken() {
     if (!autoDone?.revealedPasstoken) return;
-    const content = [
-      "# Relaybase owner passtoken — save this file securely",
-      `# Worker URL: ${autoDone.workerUrl}`,
-      `# Generated: ${new Date().toISOString()}`,
-      "",
-      `PASSTOKEN=${autoDone.revealedPasstoken}`,
-      "",
-    ].join("\n");
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const filename = "relaybase-passtoken.txt";
-    if (isDesktopRuntime()) {
-      const buffer = await blob.arrayBuffer();
-      await desktopSaveDownloadFile(filename, new Uint8Array(buffer));
-    } else {
-      downloadBlob(blob, filename);
-    }
+    await downloadPasstokenBackup(autoDone.revealedPasstoken);
     setTokenDownloaded(true);
     setTokenSaved(true);
   }

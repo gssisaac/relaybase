@@ -803,11 +803,13 @@ async fn complete_cf_oauth_inner(
     });
 
     if inflight.purpose != "recover" && !refresh_token.is_empty() {
-        let _ = crate::cf_oauth::save_keyring_oauth_refresh(
+        if let Err(e) = crate::cf_oauth::save_keyring_oauth_refresh(
             &refresh_token,
             account_id.as_deref().unwrap_or(""),
             &inflight.client_id,
-        );
+        ) {
+            log::error!("Failed to persist CF OAuth refresh token to keyring: {e}");
+        }
     }
 
     let mut creds = load_credentials()?.unwrap_or_default();

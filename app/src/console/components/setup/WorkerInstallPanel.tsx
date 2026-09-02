@@ -121,6 +121,7 @@ export function WorkerInstallPanel({
   const [authorizedReady, setAuthorizedReady] = useState(false);
   const finishingRef = useRef(false);
   const modeRef = useRef(mode);
+  const silentPreviewIdRef = useRef(0);
   const oauthWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearOauthWaitTimer = useCallback(() => {
@@ -175,22 +176,14 @@ export function WorkerInstallPanel({
   useEffect(() => {
     if (purpose !== "worker-update") return;
 
-    let unmounted = false;
+    const requestId = ++silentPreviewIdRef.current;
     setAutoChecking(true);
     setOauthError(null);
-
-    const safetyTimer = setTimeout(() => {
-      if (!unmounted) {
-        setAutoChecking(false);
-        setAuthorizedReady(false);
-      }
-    }, 6000);
 
     void (async () => {
       try {
         const target = await desktopPreviewWorkerUpdateTarget();
-        if (unmounted) return;
-        clearTimeout(safetyTimer);
+        if (requestId !== silentPreviewIdRef.current) return;
         setTargetPreview(target);
         setAuthorizedReady(true);
         setAutoChecking(false);
@@ -202,8 +195,7 @@ export function WorkerInstallPanel({
           });
         }
       } catch (err) {
-        if (unmounted) return;
-        clearTimeout(safetyTimer);
+        if (requestId !== silentPreviewIdRef.current) return;
         setAutoChecking(false);
         setAuthorizedReady(false);
         const raw = formatDesktopError(err).toLowerCase();
@@ -211,8 +203,7 @@ export function WorkerInstallPanel({
           raw.includes("cloudflare_auth_expired") ||
           raw.includes("authorize with cloudflare again") ||
           raw.includes("invalid_grant") ||
-          raw.includes("no worker url") ||
-          raw.includes("timed out")
+          raw.includes("no worker url")
         ) {
           setOauthError(null);
         } else {
@@ -220,11 +211,6 @@ export function WorkerInstallPanel({
         }
       }
     })();
-
-    return () => {
-      unmounted = true;
-      clearTimeout(safetyTimer);
-    };
   }, [purpose]);
 
   useEffect(() => {
@@ -321,16 +307,7 @@ export function WorkerInstallPanel({
       setTargetChecking(true);
       setOauthError(null);
       try {
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Worker URL check timed out")),
-            10000,
-          ),
-        );
-        const target = await Promise.race([
-          desktopPreviewWorkerUpdateTarget(),
-          timeoutPromise,
-        ]);
+        const target = await desktopPreviewWorkerUpdateTarget();
         setTargetPreview(target);
         setAuthorizedReady(true);
         setTargetConfirmOpen(true);

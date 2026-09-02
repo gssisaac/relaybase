@@ -25,7 +25,7 @@ export function Footer() {
 
           <p className="max-w-md text-sm text-muted-foreground">
             The inbox for your Cloudflare domains. Now in beta — Mac for Apple
-            Silicon is available now. Intel Mac and Windows are coming soon.
+            Silicon is available now. Windows is coming soon.
           </p>
 
           <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">

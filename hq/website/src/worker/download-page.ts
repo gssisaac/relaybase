@@ -1,5 +1,3 @@
-import { INTEL_MAC_DOWNLOAD_ENABLED } from "./release";
-
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -10,23 +8,17 @@ function escapeHtml(value: string): string {
 
 export function renderDownloadPage(opts: {
   dmgUrlAarch64: string | null;
-  dmgUrlX86_64: string | null;
+  dmgUrlX86_64?: string | null;
   filePathAarch64: string;
-  filePathX86_64: string;
+  filePathX86_64?: string;
   version: string | null;
 }): Response {
   const versionLabel = opts.version ? escapeHtml(opts.version) : null;
   const siliconLabel = versionLabel
     ? `Download ${versionLabel} · Apple Silicon`
     : "Download · Apple Silicon";
-  const intelLabel = versionLabel
-    ? `Download ${versionLabel} · Intel`
-    : "Download · Intel";
 
   const siliconHref = opts.dmgUrlAarch64 ? opts.filePathAarch64 : null;
-  const intelEnabled =
-    INTEL_MAC_DOWNLOAD_ENABLED && Boolean(opts.dmgUrlX86_64);
-  const intelHref = intelEnabled ? opts.filePathX86_64 : null;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -136,7 +128,7 @@ export function renderDownloadPage(opts: {
     <img src="/icon.png" alt="" />
     <div class="badge">Beta</div>
     <h1>Download Relaybase</h1>
-    <p class="lead">Mac for Apple Silicon is available now. Intel Mac and Windows are coming soon.</p>
+    <p class="lead">Mac for Apple Silicon is available now. Windows is coming soon.</p>
     <div class="platforms">
       <div class="row">
         <div class="os">Mac · Apple Silicon</div>
@@ -145,16 +137,6 @@ export function renderDownloadPage(opts: {
             ? `<a class="btn" href="${siliconHref}">${siliconLabel}</a>
                <p class="hint">M1, M2, M3, M4 and later</p>`
             : `<p class="missing">The Apple Silicon installer is not available yet. Try again shortly.</p>`
-        }
-      </div>
-      <div class="row${intelEnabled ? "" : " soon"}">
-        <div class="os">Mac · Intel</div>
-        ${
-          intelHref
-            ? `<a class="btn" href="${intelHref}">${intelLabel}</a>
-               <p class="hint">Intel Macs (x86_64)</p>`
-            : `<span class="btn disabled" aria-disabled="true">${intelLabel}</span>
-               <p class="soon-label">Coming soon</p>`
         }
       </div>
       <div class="row soon">

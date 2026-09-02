@@ -22,14 +22,14 @@ import { pageSocialMeta, siteConfig } from "@/lib/site-config";
 export const metadata: Metadata = {
   title: siteConfig.beta.cta,
   description:
-    "Download the Relaybase app. Mac for Apple Silicon is available now. Intel Mac and Windows are coming soon.",
+    "Download the Relaybase app. Mac for Apple Silicon is available now. Windows is coming soon.",
   alternates: {
     canonical: siteConfig.getStartedPath,
   },
   ...pageSocialMeta({
     title: siteConfig.beta.cta,
     description:
-      "Leave your email and we will send a personal Mac download link. Intel Mac and Windows are coming soon.",
+      "Leave your email and we will send a personal Mac download link. Windows is coming soon.",
     path: siteConfig.getStartedPath,
   }),
 };
@@ -43,7 +43,7 @@ const promises = [
   {
     icon: MonitorSmartphone,
     title: "Mac app now, more platforms next",
-    desc: "The Mac app for Apple Silicon is available now. Intel Mac and Windows are coming soon — we will ship them to the same beta list.",
+    desc: "The Mac app for Apple Silicon is available now. Windows is coming soon — we will ship to the same beta list.",
   },
   {
     icon: Cloud,
@@ -77,8 +77,7 @@ export default function GetStartedPage() {
 
               <p className="mx-auto mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
                 Leave your email and we will send a personal download link.
-                Mac for Apple Silicon is available now. Intel Mac and Windows
-                are coming soon.
+                Mac for Apple Silicon is available now. Windows is coming soon.
               </p>
             </div>
 
@@ -118,14 +117,14 @@ export default function GetStartedPage() {
               <Card className="border-2 border-brand/20 bg-white shadow-md">
                 <CardHeader className="pb-2 text-center">
                   <Badge variant="teal" className="mx-auto w-fit">
-                    Apple Silicon now · Intel & Windows soon
+                    Apple Silicon now · Windows soon
                   </Badge>
                   <CardTitle className="mt-3 text-2xl">
                     {siteConfig.beta.cta}
                   </CardTitle>
                   <CardDescription>
                     We will email a welcome note and a Mac download link.
-                    Intel Mac and Windows are coming soon.
+                    Windows is coming soon.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-2">

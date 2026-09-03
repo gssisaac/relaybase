@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   ChevronDown,
+  Download,
   FilePen,
   Inbox,
   LayoutGrid,
@@ -26,7 +27,8 @@ import { useEffect, useMemo, useState } from "react";
 import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
 import { AppUpdateBanner } from "@/console/components/AppUpdateBanner";
 import { WorkerUpdateBanner } from "@/console/components/WorkerUpdateBanner";
-import { useDashboardPaths } from "@/console/lib/paths";
+import { useProductUpdateStatus } from "@/console/hooks/useProductUpdateStatus";
+import { SETTINGS_UPDATE_PATH, useDashboardPaths } from "@/console/lib/paths";
 import { AddEmailAccountDialog } from "@/email/components/accounts/AddEmailAccountDialog";
 import { AddTeamAccountDialog } from "@/email/components/accounts/AddTeamAccountDialog";
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
@@ -660,6 +662,17 @@ function SendFeedbackButton({
   );
 }
 
+function UpdateNavBadge() {
+  const { anyUpdateAvailable, loading } = useProductUpdateStatus();
+  if (loading || !anyUpdateAvailable) return null;
+  return (
+    <span
+      className="size-2 shrink-0 rounded-full bg-red-500"
+      aria-label="Update available"
+    />
+  );
+}
+
 function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const { tabs, domains, settingsBase } = useDashboardPaths();
@@ -667,6 +680,10 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   const { hrefWithDomain } = useDashboardDomain();
   const domainsWorking = domainStore.isWorking;
   const inSettings = pathname.startsWith("/settings");
+  const inUpdate =
+    pathname === SETTINGS_UPDATE_PATH ||
+    pathname.startsWith("/settings/worker/update") ||
+    pathname.startsWith("/settings/worker/progress");
 
   return (
     <>
@@ -674,7 +691,7 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
         const Icon = item.icon;
         const active =
           item.href === settingsBase
-            ? inSettings
+            ? inSettings && !inUpdate
             : isActive(item.href, pathname);
         const href = hrefWithDomain(item.href);
 
@@ -704,6 +721,25 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
           </Link>
         );
       })}
+      <Link
+        href={hrefWithDomain(SETTINGS_UPDATE_PATH)}
+        title={collapsed ? "Update" : undefined}
+        className={cn(
+          "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+          inUpdate
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+          collapsed ? "justify-center gap-0" : "gap-2",
+        )}
+      >
+        <Download className="size-3.5 shrink-0" aria-hidden />
+        {!collapsed ? (
+          <>
+            <span className="min-w-0 flex-1 truncate">Update</span>
+            <UpdateNavBadge />
+          </>
+        ) : null}
+      </Link>
     </>
   );
 }

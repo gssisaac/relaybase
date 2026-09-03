@@ -15,7 +15,18 @@ export function workerNeedsUpgrade(
   return !cur || cur === "unknown" || cur !== lat;
 }
 
-function compareSemver(a: string, b: string): number {
+/** True when the installed desktop app is behind the latest release. */
+export function desktopBehindRelease(
+  desktopVersion: string | null | undefined,
+  latestVersion: string | null | undefined,
+): boolean {
+  const desk = desktopVersion?.trim() ?? "";
+  const lat = latestVersion?.trim() ?? "";
+  if (!desk || !lat) return false;
+  return compareSemver(desk, lat) < 0;
+}
+
+export function compareSemver(a: string, b: string): number {
   const parse = (value: string) =>
     value.split(".").map((part) => Number.parseInt(part, 10));
   const av = parse(a);

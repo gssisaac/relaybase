@@ -180,7 +180,7 @@ export function explainDesktopError(
         "The running Worker is missing an API this app version needs. Secrets like CF_ACCOUNT_ID are fine — the script version does not match.",
       fix: "Open Worker update in Settings, then retry.",
       links: [
-        { label: "Open Worker update", href: "/settings/worker/update" },
+        { label: "Open Update", href: "/settings/update" },
       ],
     };
   }

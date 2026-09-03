@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { workerNeedsUpgrade } from "./worker-version.ts";
+import { desktopBehindRelease, workerNeedsUpgrade } from "./worker-version.ts";
 
 describe("workerNeedsUpgrade", () => {
   it("is false when latest is missing", () => {
@@ -32,5 +32,16 @@ describe("workerNeedsUpgrade", () => {
   it("offers worker behind desktop when manifest matches desktop", () => {
     assert.equal(workerNeedsUpgrade("0.1.0", "0.1.1", "0.1.1"), true);
     assert.equal(workerNeedsUpgrade("unknown", "0.1.1", "0.1.1"), true);
+  });
+});
+
+describe("desktopBehindRelease", () => {
+  it("is true when desktop is older than latest", () => {
+    assert.equal(desktopBehindRelease("0.1.1", "0.1.2"), true);
+  });
+
+  it("is false when desktop matches or exceeds latest", () => {
+    assert.equal(desktopBehindRelease("0.1.2", "0.1.2"), false);
+    assert.equal(desktopBehindRelease("0.1.3", "0.1.2"), false);
   });
 });

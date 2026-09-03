@@ -6,17 +6,21 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SETTINGS_UPDATE_PATH } from "@/console/lib/paths";
+import { workerNeedsUpgrade } from "@/lib/dashboard/worker-version";
 import {
   desktopCheckWorkerUpdate,
   isDesktopRuntime,
   type WorkerUpdateCheck,
 } from "@/lib/desktop/bridge";
+import { useOptionalAppUpdater } from "@/lib/desktop/updater/AppUpdaterContext";
 import { useDesktop } from "@/lib/desktop/shell";
 
 const DISMISS_KEY = "relaybase.worker-update-banner.dismissed";
 
 export function WorkerUpdateBanner() {
   const { credentials, teamLogin } = useDesktop();
+  const updater = useOptionalAppUpdater();
   const [check, setCheck] = useState<WorkerUpdateCheck | null>(null);
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -49,8 +53,18 @@ export function WorkerUpdateBanner() {
     };
   }, [credentials?.workerUrl, credentials?.workerVersion, teamLogin]);
 
+  const desktopVersion = updater?.currentVersion?.trim() || null;
+  const updateAvailable = Boolean(
+    check?.latestVersion &&
+      workerNeedsUpgrade(
+        check.currentVersion?.trim() || credentials?.workerVersion,
+        check.latestVersion,
+        desktopVersion,
+      ),
+  );
+
   if (teamLogin) return null;
-  if (loading || !check?.updateAvailable) return null;
+  if (loading || !updateAvailable || !check) return null;
   if (dismissedVersion === check.latestVersion) return null;
 
   const current = check.currentVersion?.trim() || "unknown";
@@ -83,7 +97,7 @@ export function WorkerUpdateBanner() {
             size="sm"
             variant="outline"
             nativeButton={false}
-            render={<Link href="/settings/worker/update" />}
+            render={<Link href={SETTINGS_UPDATE_PATH} />}
             className="h-7 w-full text-[11px]"
           >
             Update now
@@ -96,12 +110,26 @@ export function WorkerUpdateBanner() {
 
 export function WorkerVersionSettingsCard() {
   const { credentials } = useDesktop();
+  const updater = useOptionalAppUpdater();
   const [check, setCheck] = useState<WorkerUpdateCheck | null>(null);
   const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const current = credentials?.workerVersion?.trim() || "unknown";
+  const desktopVersion = updater?.currentVersion?.trim() || null;
+  const checkedWorker = check?.currentVersion?.trim() || current;
+  const latestVersion = check?.latestVersion?.trim() || null;
+  const showUpdateWorker = Boolean(
+    check &&
+      latestVersion &&
+      desktopVersion &&
+      workerNeedsUpgrade(
+        checkedWorker === "unknown" ? null : checkedWorker,
+        latestVersion,
+        desktopVersion,
+      ),
+  );
 
   async function handleCheck() {
     setChecking(true);
@@ -110,7 +138,13 @@ export function WorkerVersionSettingsCard() {
     try {
       const result = await desktopCheckWorkerUpdate();
       setCheck(result);
-      if (!result.updateAvailable) {
+      const workerVersion = result.currentVersion?.trim() || current;
+      const needs = workerNeedsUpgrade(
+        workerVersion === "unknown" ? null : workerVersion,
+        result.latestVersion,
+        desktopVersion,
+      );
+      if (!needs) {
         setMessage(`Worker v${result.latestVersion} is up to date.`);
       }
     } catch (err) {
@@ -125,8 +159,8 @@ export function WorkerVersionSettingsCard() {
       <div>
         <p className="text-sm font-medium">Worker version</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Pre-built bundle deployed to your Cloudflare account. Check relaybase.xyz
-          for newer releases.
+          Pre-built bundle deployed to your Cloudflare account. Matches the
+          desktop app version after both are updated.
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -136,13 +170,13 @@ export function WorkerVersionSettingsCard() {
           </p>
           <p className="font-mono text-sm">v{current}</p>
         </div>
-        {check?.updateAvailable ? (
+        {showUpdateWorker && latestVersion ? (
           <div>
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
               Available
             </p>
             <p className="font-mono text-sm text-amber-700 dark:text-amber-400">
-              v{check.latestVersion}
+              v{latestVersion}
             </p>
           </div>
         ) : null}
@@ -162,15 +196,15 @@ export function WorkerVersionSettingsCard() {
           {checking ? <Loader2 className="size-3.5 animate-spin" /> : null}
           Check for updates
         </Button>
-        <Button
-          size="sm"
-          nativeButton={false}
-          render={<Link href="/settings/worker/update" />}
-        >
-          {check?.updateAvailable
-            ? `Update Worker to v${check.latestVersion}`
-            : "Update Worker"}
-        </Button>
+        {showUpdateWorker && latestVersion ? (
+          <Button
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/settings/worker/update" />}
+          >
+            Update Worker to v{latestVersion}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

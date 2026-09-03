@@ -18,6 +18,10 @@ function tabFromPathname(pathname: string): SettingsTab {
   // /settings                 → cloudflare
   // /settings/d1              → d1
   // /settings/worker/update   → worker
+  // /settings/update          → standalone (no tab)
+  if (pathname === "/settings/update") {
+    return "cloudflare";
+  }
   const match = pathname.match(/^\/settings\/([^/]+)/);
   const seg = match?.[1];
   if (seg && (SETTINGS_TABS as readonly string[]).includes(seg)) {
@@ -60,9 +64,14 @@ export function SettingsTabLayout({ children }: { children: ReactNode }) {
   const tab = tabFromPathname(pathname);
   const { isDesktop: desktop } = useDesktopChrome();
   const desktopCtx = useOptionalDesktop();
+  const isStandaloneUpdate = pathname === "/settings/update";
 
   if (!desktop || !desktopCtx) {
     return <DesktopRequiredFallback />;
+  }
+
+  if (isStandaloneUpdate) {
+    return <>{children}</>;
   }
 
   return (

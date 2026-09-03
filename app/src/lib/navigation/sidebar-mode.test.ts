@@ -97,6 +97,10 @@ describe("normalizeEntryPath", () => {
       "/settings/mailbox",
     );
     assert.equal(
+      normalizeEntryPath("/settings/update"),
+      "/settings/update",
+    );
+    assert.equal(
       normalizeEntryPath("/settings/cloudflare"),
       "/settings",
     );

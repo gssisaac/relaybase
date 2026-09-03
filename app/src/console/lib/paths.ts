@@ -73,6 +73,8 @@ const SETTINGS_TABS: SettingsTab[] = [
 
 export { SETTINGS_TABS };
 
+export const SETTINGS_UPDATE_PATH = "/settings/update";
+
 export function settingsTabHref(tab: SettingsTab = "cloudflare"): string {
   if (tab === "cloudflare") return "/settings";
   return `/settings/${tab}`;

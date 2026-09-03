@@ -129,7 +129,7 @@ export function normalizeEntryPath(path: string): string {
         const qs = params.toString();
         return qs ? `/settings/worker?${qs}` : "/settings/worker";
       }
-      const allowed = ["worker", "inbound-r2", "d1", "mailbox"] as const;
+      const allowed = ["worker", "inbound-r2", "d1", "mailbox", "update"] as const;
       if ((allowed as readonly string[]).includes(tab)) {
         params.delete("tab");
         const qs = params.toString();
@@ -148,7 +148,14 @@ export function normalizeEntryPath(path: string): string {
       /* keep raw */
     }
     if (tab === "admin-token") return "/settings/worker";
-    const allowed = ["cloudflare", "worker", "inbound-r2", "d1", "mailbox"] as const;
+    const allowed = [
+      "cloudflare",
+      "worker",
+      "inbound-r2",
+      "d1",
+      "mailbox",
+      "update",
+    ] as const;
     if ((allowed as readonly string[]).includes(tab)) {
       return tab === "cloudflare" ? "/settings" : `/settings/${tab}`;
     }

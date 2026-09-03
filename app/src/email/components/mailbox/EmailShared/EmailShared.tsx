@@ -562,7 +562,7 @@ export function EmailAlerts({
                 variant="outline"
                 className="mt-2"
                 nativeButton={false}
-                render={<Link href="/settings/worker/update" />}
+                render={<Link href="/settings/update" />}
               >
                 Open Worker update
               </Button>

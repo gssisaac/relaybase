@@ -134,7 +134,7 @@ export function ImportCloudflareZonesDialog({
 
   function handleOpenWorkerUpdate() {
     setOpen(false);
-    router.push("/settings/worker/update");
+    router.push("/settings/update");
   }
 
   return (

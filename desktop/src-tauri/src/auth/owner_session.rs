@@ -6,8 +6,11 @@
 //! Boot: silent mail refresh (`owner_boot_mail`). Expired refresh: Touch ID
 //! then `owner_login_from_keyring`. Valid console refresh unlocks silently.
 
+use super::keyring_store;
+use super::owner_passtoken;
+use super::touch_id;
 use crate::cloudflare::{resolve_account_id_for_recover_with_hint, secrets_store_accessible};
-use crate::secrets::{get_cf_oauth_session, load_credentials, save_credentials};
+use crate::storage::{get_cf_oauth_session, load_credentials, save_credentials};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -61,7 +64,7 @@ fn normalize_keyring(mut blob: KeyringBlob) -> Option<KeyringBlob> {
 }
 
 fn load_keyring() -> Result<Option<KeyringBlob>, String> {
-    let json = match crate::keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)? {
+    let json = match keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)? {
         Some(json) => json,
         None => return Ok(None),
     };
@@ -72,11 +75,11 @@ fn load_keyring() -> Result<Option<KeyringBlob>, String> {
 
 fn save_keyring(blob: &KeyringBlob) -> Result<(), String> {
     let json = serde_json::to_string(blob).map_err(|e| e.to_string())?;
-    crate::keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)
+    keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)
 }
 
 fn delete_keyring() {
-    crate::keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
+    keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
 }
 
 fn set_scoped_access(
@@ -255,8 +258,8 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         has_console_access: console_access.is_some(),
         has_refresh: has_mail_refresh || has_console_refresh,
         has_access: mail_access.is_some() || console_access.is_some(),
-        has_passtoken: crate::owner_passtoken::is_stored(),
-        keyring_passtoken_prefix: crate::owner_passtoken::stored_prefix(),
+        has_passtoken: owner_passtoken::is_stored(),
+        keyring_passtoken_prefix: owner_passtoken::stored_prefix(),
         worker_url: creds_worker_url
             .or_else(|| mail_access.as_ref().map(|a| a.worker_url.clone()))
             .or_else(|| console_access.as_ref().map(|a| a.worker_url.clone()))
@@ -398,7 +401,7 @@ pub async fn owner_login(
     set_scoped_access("mail", base, mail_access, expires_in);
     clear_scoped_access("console");
     persist_worker_url(base)?;
-    crate::owner_passtoken::store(&passtoken, base)?;
+    owner_passtoken::store(&passtoken, base)?;
     owner_session_status()
 }
 
@@ -472,7 +475,7 @@ pub async fn owner_setup_admin(
     let passtoken = json_string(&value, "passtoken")
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;
     persist_worker_url(base)?;
-    crate::owner_passtoken::store(passtoken, base)?;
+    owner_passtoken::store(passtoken, base)?;
     Ok(OwnerSetupResult {
         passtoken: passtoken.to_string(),
     })
@@ -580,8 +583,8 @@ pub async fn owner_reset_admin(
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;
     delete_keyring();
     clear_all_access();
-    crate::owner_passtoken::delete();
-    crate::owner_passtoken::store(passtoken, base)?;
+    owner_passtoken::delete();
+    owner_passtoken::store(passtoken, base)?;
     Ok(OwnerSetupResult {
         passtoken: passtoken.to_string(),
     })
@@ -597,13 +600,13 @@ pub async fn owner_login_from_keyring(
 ) -> Result<OwnerSessionStatus, String> {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
-        crate::touch_id::authenticate(app, reason).await?;
+        touch_id::authenticate(app, reason).await?;
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (app, reason);
     }
-    let record = crate::owner_passtoken::load_after_auth()?
+    let record = owner_passtoken::load_after_auth()?
         .ok_or_else(|| "No stored passtoken.".to_string())?;
     let session = load_keyring()?;
     let worker_url = worker_url_override
@@ -647,7 +650,7 @@ pub async fn owner_login_from_keyring(
     match owner_login(worker_url, record.passtoken).await {
         Ok(status) => Ok(status),
         Err(err) if err.contains("Invalid credentials") => {
-            crate::owner_passtoken::delete();
+            owner_passtoken::delete();
             Err(
                 "Stored passtoken didn't match this Worker. Paste your current passtoken."
                     .into(),

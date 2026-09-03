@@ -98,13 +98,8 @@ pub fn clear_webkit_data() -> Result<String, String> {
         .join("Library/HTTPStorages")
         .join(format!("{LEGACY_BINARY_NAME}.binarycookies"));
     remove_file_if_exists(&cookies_legacy, "HTTPStorages cookies (legacy)");
-    cleared.push("HTTPStorages cookies");
+    cleared.push("HTTPCookies");
 
-    // 7. Preferences plist (window frame etc. — not auth, but stale state)
-    let prefs = home
-        .join("Library/Preferences")
-        .join(format!("{LEGACY_BINARY_NAME}.plist"));
-    remove_file_if_exists(&prefs, "Preferences plist");
-
-    Ok(cleared.join(", "))
+    log::info!("WebKit data cleanup completed: {:?}", cleared);
+    Ok(format!("Cleared: {}", cleared.join(", ")))
 }

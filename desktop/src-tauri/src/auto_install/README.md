@@ -1,115 +1,114 @@
-# auto_install — Desktop Worker install module
+# Auto Install Module (`desktop/src-tauri/src/auto_install`)
 
-Rust module for background auto-install of the Relaybase routing Worker into the user's Cloudflare account. Uses a pre-built install ZIP from `relaybase.xyz/downloads` and the Cloudflare HTTP API. Auth is `require_cf_oauth()` (in-memory CF OAuth session). The access token is not sent to the Relaybase console. Schema calls may send it to the product Worker as `X-Cf-Access-Token`.
+## 1. Module Overview & Boundaries
+The `auto_install` module provides background orchestration for automated provisioning, upgrading, database initialization/migration, and rollback of the Relaybase routing Worker in a user's Cloudflare account. It coordinates Cloudflare REST APIs (Workers, R2, D1) with pre-built distribution artifacts fetched from `relaybase.xyz/downloads`.
 
-## Install flow
+- **Primary Responsibility**: Automated Worker deploy/update, D1 database provisioning, R2 bucket setup, secret injection (`AUTH_PEPPER`, `CF_ACCOUNT_ID`, `CF_API_TOKEN`), and install progress streaming.
+- **Boundaries**:
+  - Uses `cloudflare::oauth::require_cf_oauth()` for Cloudflare authentication.
+  - Updates local credentials via `storage::save_credentials()`.
+  - Emits real-time progress events (`install-log`) directly to the Tauri frontend.
 
-Each step streams `install-log` Tauri events to the frontend (`step`, `level`, `line`).
+---
 
-0. **Probe** — `probe_install_resources` lists Worker / R2 / D1 and occupancy.
-1. **Manifest / ZIP** — Fetch `worker-install-manifest.json`, download versioned ZIP, verify SHA-256, stage `wrangler.toml` + `worker.{version}.js` (falls back to `worker.js`).
-2. **R2** — Ensure bucket `relaybase-mailbox` (or reuse on Worker-only update).
-3. **D1** — Create or reuse `relaybase-logs`, `relaybase-mail`, `relaybase-db` (schema applied later).
-4. **Deploy** — Upload the staged Worker module with bindings, set cron, enable workers.dev.
-5. **Secrets** — PUT `AUTH_PEPPER` (skipped when reusing D1 or Worker-only update), `CF_ACCOUNT_ID`, optional `CF_API_TOKEN`.
-6. **Warmup** — Poll `GET /health` (~30s backoff).
-7. **Schema** — Probe `GET /console/auth-status`. Empty D1s: `POST /console/init-db`. Reused D1: `POST /console/migrate-db`. Auth is console session, Cloudflare OAuth (`X-Cf-Access-Token` that can GET `/accounts/{CF_ACCOUNT_ID}`), or pepper bootstrap when no owner exists. OAuth upgrade must not fail when an owner already exists.
+## 2. File Map
 
-## Recovering a stuck install (`ownerConfigured: true`)
+| File | Purpose |
+|---|---|
+| `mod.rs` | Module root & public API re-exports |
+| `README.md` | AI agent documentation and architectural guide |
+| `commands.rs` | Tauri IPC command handlers for auto install, update checks, DB migration, and rollback |
+| `install.rs` | Main installation orchestrator (`auto_install_worker`, `update_installed_worker`) |
+| `probe.rs` | Resource probe to inspect existing Worker, R2 buckets, and D1 databases |
+| `rollback.rs` | Rollback orchestrator to delete provisioned Cloudflare resources on failure or user request |
+| `manifest.rs` | Install manifest fetcher, version comparator, and ZIP download/staging |
+| `schema.rs` | Worker database schema initialization (`init-db`) and migration (`migrate-db`) |
+| `health.rs` | Worker warmup poller (`GET /health`) and auth status inspection (`GET /console/auth-status`) |
+| `wipe.rs` | Safe wipe phrase validation (`DELETE ME`) and decision plan parser |
+| `url.rs` | Worker URL parsing, hostname extraction, and workers.dev domain matching |
+| `credentials.rs` | Post-install credential merging and Worker secret injection |
+| `cancel.rs` | Thread-safe install cancellation signal flag |
+| `log.rs` | Tauri event emitter for streaming install log lines |
+| `errors.rs` | Cloudflare API error payload parser and diagnostic message formatter |
+| `types.rs` | Serde data structures (manifest, probe, results, decisions, logs) |
+| `constants.rs` | Resource naming constants, download URLs, and polling timeouts |
 
-Cloudflare OAuth install / upgrade may call migrate-db with `X-Cf-Access-Token` (GET `/accounts/{CF_ACCOUNT_ID}`). An existing owner must not fail that path.
+---
 
-If you lost the passtoken and need to sign in:
+## 3. Public Rust API (`mod.rs`)
 
-1. **Do not** Rollback from Setup (that deletes D1 / R2).
-2. **Setup → I forgot my passtoken** (`/setup/recover-admin`) — Cloudflare OAuth (Secrets Store Write client) re-issues a passtoken for the current Worker.
-3. Sign in via **Already installed** (`/setup/connect`).
+```rust
+// Orchestrators & Probes
+pub async fn probe_install_resources(access_token: String, account_id: Option<String>) -> Result<InstallProbeResult, String>;
+pub async fn auto_install_worker(app: tauri::AppHandle, access_token: String, account_id: Option<String>, server_token: Option<String>, decisions: Vec<InstallDecision>, wipe_confirmation: Option<String>) -> Result<AutoInstallResult, String>;
+pub async fn update_installed_worker(app: tauri::AppHandle, access_token: String, account_id: Option<String>, server_token: Option<String>) -> Result<AutoInstallResult, String>;
+pub async fn rollback_all_install(app: tauri::AppHandle, access_token: String, account_id: Option<String>, wipe_confirmation: Option<String>) -> Result<(), String>;
+pub fn request_install_cancel();
 
-Rollback (`rollback_all_install`) deletes Worker, D1s, and R2 by name; occupied resources require wipe confirmation. Returns an error if any resource is still present after delete attempts (the UI does not show “Rolled back” on failure).
+// Manifest & Updates
+pub async fn check_worker_update(current_version: Option<String>, desktop_version: String) -> Result<WorkerUpdateCheck, String>;
+pub async fn fetch_install_manifest() -> Result<WorkerInstallManifest, String>;
+pub async fn preview_worker_update_target(access_token: &str, account_id: &str, current_worker_url: &str, worker_script_name: &str) -> Result<WorkerUpdateTarget, String>;
 
-## File map
+// DB Schema
+pub async fn init_worker_db(worker_url: &str, worker_token: Option<&str>, console_access_token: Option<&str>, cf_access_token: Option<&str>) -> Result<InitDbResult, String>;
+pub async fn migrate_worker_db(worker_url: &str, worker_token: Option<&str>, console_access_token: Option<&str>, cf_access_token: Option<&str>) -> Result<InitDbResult, String>;
 
-| File | Role |
-|------|------|
-| `mod.rs` | Module root; `pub use` re-exports for `lib.rs` |
-| `constants.rs` | `R2_BUCKET`, `D1_DATABASES`, manifest URL, wipe phrase, warmup backoff |
-| `types.rs` | Serde types: manifest, probe, result, `InitDbResult`, internal `LogEvent` / `InstallRunOptions` |
-| `cancel.rs` | Install cancel flag + `request_install_cancel` |
-| `log.rs` | `emit_log` → Tauri `install-log` event |
-| `errors.rs` | CF Worker HTTP error parsing and init-db failure hints |
-| `url.rs` | Worker URL host match; update-target preview vs OAuth account |
-| `wipe.rs` | `DELETE ME` / resource-name confirmation; `InstallPlan` from UI decisions |
-| `manifest.rs` | Manifest fetch, update check, ZIP download/stage, staged version |
-| `health.rs` | `/health` warmup, `/console/auth-status`, version fetch, post-deploy shape logging |
-| `probe.rs` | `probe_install_resources` |
-| `rollback.rs` | `rollback_all_install` |
-| `schema.rs` | `init_worker_db`, `migrate_worker_db` (+ retry) |
-| `credentials.rs` | `merge_into_credentials`, `push_cf_api_token_secret`, `now_iso` |
-| `install.rs` | `auto_install_worker`, `update_installed_worker`, orchestrator |
-
-## Public API (`mod.rs` re-exports)
-
-Functions and types consumed by `lib.rs` Tauri commands:
-
-- **Install:** `auto_install_worker`, `update_installed_worker`, `probe_install_resources`, `rollback_all_install`, `request_install_cancel`
-- **Updates:** `check_worker_update`, `fetch_install_manifest`, `preview_worker_update_target`, `assert_worker_update_target_matches`, `worker_urls_match`, `worker_url_host`
-- **Schema:** `init_worker_db`, `migrate_worker_db`
-- **Post-install:** `merge_into_credentials`, `push_cf_api_token_secret`, `now_iso`
-- **Wipe:** `wipe_confirmation_allows`, `WIPE_PHRASE_DELETE_ME`
-- **Types:** `AutoInstallResult`, `InitDbResult`, `InstallDecision`, `InstallProbeResult`, `InstallResourceProbe`, `WorkerInstallManifest`, `WorkerUpdateCheck`, `WorkerUpdateTarget`
-- **Constants:** `INSTALL_CANCELLED`, `WORKER_URL_ACCOUNT_MISMATCH`
-
-## Dependency rules
-
-- Leaf modules (`cancel`, `log`, `constants`, `types`, `errors`) have no `install` dependency.
-- Mid modules (`url`, `wipe`, `manifest`, `health`, `schema`, `probe`, `rollback`, `credentials`) must not import `install.rs`.
-- `install.rs` is the orchestrator; it calls all phase helpers.
-- External crate boundaries: `cloudflare`, `secrets`, `worker`, `owner_session`, `cf_oauth` (crate root modules). Commands obtain `{ access_token, account_id }` from `require_cf_oauth()` before calling this module.
-
-```
-cancel, log, constants, types, errors
-         ↓
-url, wipe, manifest, health, schema, credentials, probe, rollback
-         ↓
-install (orchestrator)
-         ↓
-mod.rs (re-exports) → lib.rs Tauri commands
+// Helpers & Secrets
+pub fn merge_into_credentials(existing: &crate::storage::StoredCredentials, result: &AutoInstallResult, account_id: Option<String>) -> crate::storage::StoredCredentials;
+pub async fn push_cf_api_token_secret(account_id: &str, script_name: &str, access_token: &str, server_token: &str) -> Result<String, String>;
 ```
 
-## `install.rs` phase functions
+---
 
-`auto_install_steps` delegates to private phase functions (same file):
+## 4. Tauri IPC Commands
 
-| Function | Responsibility |
-|----------|----------------|
-| `prepare_r2` | Worker-only URL guard; R2 subscription; reinstall or ensure bucket |
-| `prepare_d1` | D1 lookup / create / reuse → `(d1_ids, any_d1_reused)` |
-| `deploy_worker` | Upload script, verify bindings, cron, workers.dev URL |
-| `apply_secrets` | `AUTH_PEPPER` (skip when D1 reused or worker-only), optional `CF_ACCOUNT_ID`, optional `CF_API_TOKEN` |
-| `finalize_schema` | auth-status gate; init-db or migrate-db with console session or Cloudflare OAuth |
+| Tauri Command (`commands.rs`) | Frontend Invocation (`app/src/lib/desktop/bridge/*`) | Description |
+|---|---|---|
+| `probe_auto_install` | `desktop/bridge/index.ts` -> `probeAutoInstall()` | Probes account for existing Worker, R2, D1 resources |
+| `auto_install_routing_worker` | `desktop/bridge/index.ts` -> `autoInstallRoutingWorker()` | Executes full automated install flow |
+| `check_worker_update_cmd` | `desktop/bridge/index.ts` -> `checkWorkerUpdate()` | Checks if a newer Worker version is available |
+| `preview_worker_update_target_cmd` | `desktop/bridge/index.ts` -> `previewWorkerUpdateTarget()` | Inspects workers.dev URL before applying update |
+| `update_installed_worker_cmd` | `desktop/bridge/index.ts` -> `updateInstalledWorker()` | Downloads latest bundle and deploys over existing Worker |
+| `cancel_auto_install` | `desktop/bridge/index.ts` -> `cancelAutoInstall()` | Requests cooperative cancellation of in-flight install |
+| `rollback_auto_install` | `desktop/bridge/index.ts` -> `rollbackAutoInstall()` | Deletes provisioned Cloudflare resources |
+| `init_worker_db_cmd` | `desktop/bridge/index.ts` -> `initWorkerDb()` | Initializes schema on newly created empty D1 databases |
+| `migrate_worker_db_cmd` | `desktop/bridge/index.ts` -> `migrateWorkerDb()` | Applies non-destructive schema migrations to existing D1 databases |
+| `push_server_token` | `desktop/bridge/index.ts` -> `pushServerToken()` | Pushes CF API token as Worker secret `CF_API_TOKEN` |
 
-## Tauri command mapping (`lib.rs`)
+---
 
-| Command | auto_install entry |
-|---------|-------------------|
-| `probe_auto_install` | `probe_install_resources` |
-| `auto_install_routing_worker` | `auto_install_worker` + `merge_into_credentials` |
-| `check_worker_update_cmd` | `check_worker_update` |
-| `preview_worker_update_target_cmd` | `preview_worker_update_target` |
-| `update_installed_worker_cmd` | `update_installed_worker` + `merge_into_credentials` |
-| `cancel_auto_install` | `request_install_cancel` |
-| `rollback_auto_install` | `rollback_all_install` |
-| `init_worker_db_cmd` | `init_worker_db` |
-| `migrate_worker_db_cmd` | `migrate_worker_db` |
-| Settings CF API token push | `push_cf_api_token_secret` |
+## 5. Security & Invariants
 
-## Tests
+1. **OAuth Token In-Memory Only**:
+   - `access_token` is retrieved from `cloudflare::oauth::require_cf_oauth()` and passed in memory; it is never written to disk.
+2. **Safe Deletion Guards**:
+   - Occupied D1 or R2 resources cannot be overwritten or deleted without explicit `wipe_confirmation == "DELETE ME"`.
+3. **Rollback Verification**:
+   - `rollback_all_install` verifies complete resource removal from Cloudflare before returning success.
+4. **Pepper Protection**:
+   - `AUTH_PEPPER` is injected on initial install and preserved during Worker-only updates or D1 reuse.
 
-| Module | Test module |
-|--------|-------------|
-| `wipe.rs` | `wipe_phrase_tests` |
-| `url.rs` | `worker_url_match_tests` |
-| `manifest.rs` | `worker_js_tests` |
-| `errors.rs` | `worker_error_tests` |
+---
 
-Run: `cargo test auto_install` from `desktop/src-tauri`.
+## 6. Dependency Rules
+
+- **Allowed Inbound**: `lib.rs` (Tauri command registration).
+- **Allowed Outbound**:
+  - `auth` (`owner_session::current_console_access_token`)
+  - `cloudflare` (`oauth::{require_cf_oauth, cf_oauth_if_present}`)
+  - `storage` (`credentials::{load_credentials, save_credentials, StoredCredentials}`)
+- **Internal Layering**:
+  - `cancel`, `log`, `constants`, `types`, `errors` (Leaf)
+  - `url`, `wipe`, `manifest`, `health`, `schema`, `credentials`, `probe`, `rollback` (Mid)
+  - `install` (Orchestrator)
+  - `commands.rs` / `mod.rs` (Public Interface)
+
+---
+
+## 7. Testing
+
+Run unit tests for the auto-install module:
+```bash
+cargo test --manifest-path desktop/src-tauri/Cargo.toml auto_install
+```

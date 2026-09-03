@@ -9,8 +9,8 @@ use crate::cloudflare::{
     list_worker_bindings, list_worker_d1_bindings, list_worker_secrets, put_worker_schedules,
     put_worker_secret, upload_worker_script, CfClient, DEFAULT_WORKER_CRON,
 };
-use crate::secrets::load_credentials;
-use crate::worker::DEFAULT_SCRIPT;
+use crate::storage::load_credentials;
+use crate::cloudflare::worker::DEFAULT_SCRIPT;
 
 use super::cancel::{cancelled_error, check_cancelled, install_is_cancelled, reset_install_cancel};
 use super::constants::{D1_DATABASES, R2_BUCKET};
@@ -199,7 +199,7 @@ async fn auto_install_steps(
     wait_for_worker_ready(app, &worker_url).await?;
     log_worker_health_shape(app, &worker_url).await;
 
-    let console_access = crate::owner_session::current_console_access_token();
+    let console_access = crate::auth::owner_session::current_console_access_token();
     let (db_already_initialized, db_applied) = finalize_schema(
         app,
         &worker_url,

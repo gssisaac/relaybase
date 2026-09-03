@@ -1,8 +1,8 @@
-use crate::cloudflare::{
+use super::client::{
     assert_r2_subscription, enable_workers_dev, ensure_r2_bucket, find_r2_bucket,
     put_worker_secret, upload_worker_script, worker_health_ok, worker_script_exists, CfClient,
 };
-use crate::secrets::StoredCredentials;
+use crate::storage::StoredCredentials;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

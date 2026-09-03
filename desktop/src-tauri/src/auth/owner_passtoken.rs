@@ -5,6 +5,7 @@
 //! JS never sees a keyring read.
 
 use serde::{Deserialize, Serialize};
+use super::keyring_store;
 
 const KEYRING_SERVICE: &str = "com.relaybase.desktop";
 const KEYRING_USER: &str = "owner-passtoken";
@@ -60,7 +61,7 @@ fn parse_record(raw: &str) -> Option<PasstokenRecord> {
 }
 
 fn read_record() -> Option<PasstokenRecord> {
-    let raw = crate::keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)
+    let raw = keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)
         .ok()
         .flatten()?;
     let record = parse_record(&raw)?;
@@ -94,18 +95,18 @@ pub fn store(passtoken: &str, worker_url: &str) -> Result<(), String> {
         passtoken_prefix: passtoken_prefix(passtoken),
     };
     let json = serde_json::to_string(&record).map_err(|e| e.to_string())?;
-    crate::keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)?;
-    crate::keyring_store::forget_cached_password(KEYRING_SERVICE, KEYRING_USER);
+    keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)?;
+    keyring_store::forget_cached_password(KEYRING_SERVICE, KEYRING_USER);
     Ok(())
 }
 
 /// Read the stored passtoken. Caller must have already passed biometry
 /// (or be on a platform with no biometry).
 pub fn load_after_auth() -> Result<Option<PasstokenRecord>, String> {
-    let raw = crate::keyring_store::get_password_uncached(KEYRING_SERVICE, KEYRING_USER)?;
+    let raw = keyring_store::get_password_uncached(KEYRING_SERVICE, KEYRING_USER)?;
     Ok(raw.as_deref().and_then(parse_record))
 }
 
 pub fn delete() {
-    crate::keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
+    keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
 }

@@ -1,5 +1,5 @@
 use crate::cloudflare::{put_worker_secret, CfClient};
-use crate::secrets::StoredCredentials;
+use crate::storage::StoredCredentials;
 
 use super::types::AutoInstallResult;
 

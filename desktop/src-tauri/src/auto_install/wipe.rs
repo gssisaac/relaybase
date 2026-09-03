@@ -1,4 +1,4 @@
-use crate::worker::DEFAULT_SCRIPT;
+use crate::cloudflare::worker::DEFAULT_SCRIPT;
 
 use super::constants::WIPE_PHRASE_DELETE_ME;
 use super::types::{InstallDecision, InstallResourceProbe};
@@ -91,7 +91,7 @@ impl InstallPlan {
 
 #[cfg(test)]
 mod wipe_phrase_tests {
-    use crate::worker::DEFAULT_SCRIPT;
+    use crate::cloudflare::worker::DEFAULT_SCRIPT;
 
     use super::wipe_confirmation_allows;
     use super::super::constants::WIPE_PHRASE_DELETE_ME;

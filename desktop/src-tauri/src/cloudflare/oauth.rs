@@ -10,10 +10,13 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::secrets::{
+use crate::auth::keyring_store;
+use crate::storage::{
     clear_cf_oauth_session, get_cf_oauth_session, load_credentials, set_cf_oauth_session,
     CfOAuthSession,
 };
+use super::client::resolve_account_id;
+use super::loopback::console_base_url;
 
 pub const CLOUDFLARE_AUTH_EXPIRED: &str = "CLOUDFLARE_AUTH_EXPIRED";
 
@@ -46,11 +49,11 @@ pub fn save_keyring_oauth_refresh(
         client_id: client_id.trim().to_string(),
     };
     let json = serde_json::to_string(&blob).map_err(|e| e.to_string())?;
-    crate::keyring_store::set_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER, &json)
+    keyring_store::set_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER, &json)
 }
 
 pub fn load_keyring_oauth_refresh() -> Result<Option<KeyringCfOAuth>, String> {
-    let raw = match crate::keyring_store::get_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER)? {
+    let raw = match keyring_store::get_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER)? {
         Some(s) => s,
         None => return Ok(None),
     };
@@ -73,7 +76,7 @@ pub fn load_keyring_oauth_refresh() -> Result<Option<KeyringCfOAuth>, String> {
 }
 
 pub fn delete_keyring_oauth_refresh() {
-    crate::keyring_store::delete_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER);
+    keyring_store::delete_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER);
 }
 
 static OAUTH_SESSION_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
@@ -273,7 +276,7 @@ async fn refresh_oauth_session(
     session.client_id = client_id.clone();
 
     if session.account_id.trim().is_empty() {
-        if let Ok(acct) = crate::cloudflare::resolve_account_id(&access_token).await {
+        if let Ok(acct) = resolve_account_id(&access_token).await {
             session.account_id = acct;
         }
     }
@@ -297,7 +300,7 @@ async fn fetch_oauth_client_id(purpose: &str) -> Result<String, String> {
     };
     let url = format!(
         "{}/api/v1/oauth/config?purpose={purpose}",
-        crate::console_base_url().trim_end_matches('/')
+        console_base_url().trim_end_matches('/')
     );
     let res = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -326,7 +329,7 @@ fn expired(detail: &str) -> String {
 }
 
 /// ISO-8601 timestamp `expires_in` seconds from now.
-pub(crate) fn new_iso_expires(expires_in: u64) -> String {
+pub fn new_iso_expires(expires_in: u64) -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -427,7 +430,7 @@ mod tests {
         let temp_dir = std::env::temp_dir().join(format!("relaybase-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&temp_dir).unwrap();
         std::env::set_var("RELAYBASE_DEV_TMP_DIR", &temp_dir);
-        crate::keyring_store::delete_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER);
+        keyring_store::delete_password(CF_OAUTH_KEYRING_SERVICE, CF_OAUTH_KEYRING_USER);
         clear_cf_oauth_session();
         f();
         delete_keyring_oauth_refresh();

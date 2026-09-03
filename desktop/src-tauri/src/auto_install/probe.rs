@@ -2,7 +2,7 @@ use crate::cloudflare::{
     account_workers_dev_url, assert_r2_subscription, count_d1_user_rows, count_r2_objects,
     find_d1_id, find_r2_bucket, list_worker_d1_bindings, worker_script_exists, CfClient,
 };
-use crate::worker::DEFAULT_SCRIPT;
+use crate::cloudflare::worker::DEFAULT_SCRIPT;
 
 use super::constants::{D1_DATABASES, R2_BUCKET};
 use super::types::{InstallProbeResult, InstallResourceProbe};

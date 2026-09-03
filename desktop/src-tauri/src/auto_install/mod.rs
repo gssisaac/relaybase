@@ -15,6 +15,7 @@
 //! the product Worker as `X-Cf-Access-Token`.
 
 mod cancel;
+pub mod commands;
 mod constants;
 mod credentials;
 mod errors;
@@ -31,6 +32,7 @@ mod wipe;
 
 #[allow(unused_imports)]
 pub use cancel::{request_install_cancel, INSTALL_CANCELLED};
+pub use commands::*;
 #[allow(unused_imports)]
 pub use constants::WIPE_PHRASE_DELETE_ME;
 #[allow(unused_imports)]

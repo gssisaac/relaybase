@@ -96,7 +96,6 @@ pub fn setup_tray(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[tauri::command]
 pub fn set_tray_unread(app: AppHandle, has_unread: bool) -> Result<(), String> {
     apply_tray_unread(&app, has_unread);
     Ok(())

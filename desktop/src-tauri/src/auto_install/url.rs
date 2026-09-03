@@ -1,5 +1,5 @@
 use crate::cloudflare::{account_workers_dev_url, CfClient};
-use crate::worker::DEFAULT_SCRIPT;
+use crate::cloudflare::worker::DEFAULT_SCRIPT;
 
 use super::types::WorkerUpdateTarget;
 
@@ -94,7 +94,7 @@ pub async fn preview_worker_update_target(
         api_token: api_token.trim().to_string(),
     };
     let oauth_worker_url = account_workers_dev_url(&client, script).await?;
-    let access = crate::owner_session::current_access_token().unwrap_or_default();
+    let access = crate::auth::owner_session::current_access_token().unwrap_or_default();
     let connected_account_id = peek_worker_account_id(&expected, &access)
         .await
         .unwrap_or_default();

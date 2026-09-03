@@ -4,7 +4,7 @@ use crate::cloudflare::{
     delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket, find_d1_id,
     find_r2_bucket, worker_script_exists, CfClient,
 };
-use crate::worker::DEFAULT_SCRIPT;
+use crate::cloudflare::worker::DEFAULT_SCRIPT;
 
 use super::constants::{D1_DATABASES, R2_BUCKET};
 use super::log::emit_log;

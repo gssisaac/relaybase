@@ -1,7 +1,7 @@
 //! DEV-MODE TESTING ONLY — persist CF OAuth session to
 //! `~/.relaybase/tmp/cf-oauth-dev.json` during `tauri dev`.
 
-use crate::secrets::CfOAuthSession;
+use crate::storage::CfOAuthSession;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -115,7 +115,7 @@ pub fn hydrate(session_slot: &Mutex<Option<CfOAuthSession>>) {
         return;
     };
     if !session.refresh_token.trim().is_empty() {
-        let _ = crate::cf_oauth::save_keyring_oauth_refresh(
+        let _ = crate::cloudflare::oauth::save_keyring_oauth_refresh(
             &session.refresh_token,
             &session.account_id,
             &session.client_id,

@@ -20,7 +20,7 @@ use tauri::Emitter;
 use std::os::unix::fs::PermissionsExt;
 
 /// Embedded at compile time so notifications always match the built icon set.
-const APP_ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
+const APP_ICON_PNG: &[u8] = include_bytes!("../../icons/icon.png");
 
 #[cfg(target_os = "macos")]
 const MAX_CLICK_WAITERS: usize = 8;
@@ -60,7 +60,7 @@ fn store_and_emit_open_mail(app: &AppHandle, payload: OpenMailPayload) {
         *guard = Some(payload.clone());
     }
     let _ = app.emit("notification-open-mail", &payload);
-    crate::tray::show_main_window(app);
+    super::tray::show_main_window(app);
 }
 
 #[cfg(target_os = "macos")]
@@ -111,12 +111,10 @@ pub fn ensure_notification_icon() -> Result<PathBuf, String> {
 }
 
 /// Consume a notification-click payload that raced the first frontend listener.
-#[tauri::command]
 pub fn take_pending_open_mail() -> Option<OpenMailPayload> {
     PENDING_OPEN_MAIL.lock().ok().and_then(|mut guard| guard.take())
 }
 
-#[tauri::command]
 pub async fn show_notification(
     app: AppHandle,
     title: String,

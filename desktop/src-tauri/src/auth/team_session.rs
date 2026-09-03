@@ -2,7 +2,8 @@
 //! keyring. `team-login.json` keeps only the identity (worker URL +
 //! account email); the password is never written to disk.
 
-use crate::secrets::{clear_team_login, load_team_login, save_team_login, TeamLogin};
+use super::keyring_store;
+use crate::storage::{clear_team_login, load_team_login, save_team_login, TeamLogin};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -28,7 +29,7 @@ struct TeamMemory {
 static MEMORY: Mutex<Option<TeamMemory>> = Mutex::new(None);
 
 fn load_keyring() -> Result<Option<TeamKeyringBlob>, String> {
-    let json = match crate::keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)? {
+    let json = match keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)? {
         Some(json) => json,
         None => return Ok(None),
     };
@@ -45,11 +46,11 @@ fn load_keyring() -> Result<Option<TeamKeyringBlob>, String> {
 
 fn save_keyring(blob: &TeamKeyringBlob) -> Result<(), String> {
     let json = serde_json::to_string(blob).map_err(|e| e.to_string())?;
-    crate::keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)
+    keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)
 }
 
 fn delete_keyring() {
-    crate::keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
+    keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
 }
 
 fn set_memory(worker_url: &str, account_email: &str, mobile_password: &str) {

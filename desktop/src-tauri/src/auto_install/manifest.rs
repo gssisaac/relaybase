@@ -36,21 +36,58 @@ pub async fn fetch_install_manifest() -> Result<WorkerInstallManifest, String> {
         .map_err(|e| format!("Install manifest JSON invalid: {e}"))
 }
 
-fn versions_differ(current: Option<&str>, latest: &str) -> bool {
+/// Worker update is only available when:
+/// 1. The installed worker is behind the desktop version (current < desktop).
+/// 2. The hosted manifest version does not exceed the desktop version (latest <= desktop).
+/// This prevents offering a Worker update that is ahead of the desktop app.
+fn worker_update_eligible(
+    current: Option<&str>,
+    latest: &str,
+    desktop: &str,
+) -> bool {
     let cur = current.unwrap_or("").trim();
     let lat = latest.trim();
-    if lat.is_empty() {
+    let desk = desktop.trim();
+    if lat.is_empty() || desk.is_empty() {
         return false;
     }
-    cur.is_empty() || cur != lat
+    // Parse as semver (major.minor.patch); fall back to string comparison.
+    let parse = |s: &str| -> Option<(u32, u32, u32)> {
+        let parts: Vec<&str> = s.split('.').collect();
+        if parts.len() != 3 {
+            return None;
+        }
+        Some((
+            parts[0].parse().ok()?,
+            parts[1].parse().ok()?,
+            parts[2].parse().ok()?,
+        ))
+    };
+    let cur_v = parse(cur);
+    let lat_v = parse(lat);
+    let desk_v = parse(desk);
+    match (cur_v, lat_v, desk_v) {
+        (Some(cv), Some(lv), Some(dv)) => {
+            // Worker must be behind desktop, and manifest must not exceed desktop.
+            cv < dv && lv <= dv
+        }
+        _ => {
+            // Fallback: string comparison for non-standard versions.
+            cur < desk && lat <= desk
+        }
+    }
 }
 
 /// Compare stored worker_version against the hosted manifest.
+/// `desktop_version` constrains updates: only offer when the worker is behind
+/// the desktop and the manifest does not exceed the desktop version.
 pub async fn check_worker_update(
     current_version: Option<String>,
+    desktop_version: String,
 ) -> Result<WorkerUpdateCheck, String> {
     let manifest = fetch_install_manifest().await?;
-    let update_available = versions_differ(current_version.as_deref(), &manifest.version);
+    let update_available =
+        worker_update_eligible(current_version.as_deref(), &manifest.version, &desktop_version);
     Ok(WorkerUpdateCheck {
         update_available,
         latest_version: manifest.version.clone(),
@@ -260,7 +297,7 @@ pub(crate) fn read_staged_version(work_dir: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod worker_js_tests {
-    use super::{staged_worker_js_path, worker_js_is_current};
+    use super::{staged_worker_js_path, worker_js_is_current, worker_update_eligible};
 
     #[test]
     fn current_js_has_d1_bound() {
@@ -269,6 +306,39 @@ mod worker_js_tests {
         ));
         assert!(!worker_js_is_current(r#"return { d1Bound: { app: true } }"#));
         assert!(!worker_js_is_current(r#"export default { fetch() {} }"#));
+    }
+
+    #[test]
+    fn worker_update_eligible_when_behind_desktop() {
+        // Worker 0.1.0, desktop 0.1.1, manifest 0.1.1 → eligible
+        assert!(worker_update_eligible(Some("0.1.0"), "0.1.1", "0.1.1"));
+    }
+
+    #[test]
+    fn worker_update_not_eligible_when_same_as_desktop() {
+        // Worker 0.1.1, desktop 0.1.1, manifest 0.1.2 → not eligible
+        // (manifest exceeds desktop)
+        assert!(!worker_update_eligible(Some("0.1.1"), "0.1.2", "0.1.1"));
+    }
+
+    #[test]
+    fn worker_update_not_eligible_when_worker_ahead() {
+        // Worker 0.1.2, desktop 0.1.1 → not eligible (worker ahead of desktop)
+        assert!(!worker_update_eligible(Some("0.1.2"), "0.1.2", "0.1.1"));
+    }
+
+    #[test]
+    fn worker_update_not_eligible_when_manifest_exceeds_desktop() {
+        // Worker 0.1.0, desktop 0.1.1, manifest 0.1.2 → not eligible
+        // (manifest exceeds desktop even though worker is behind)
+        assert!(!worker_update_eligible(Some("0.1.0"), "0.1.2", "0.1.1"));
+    }
+
+    #[test]
+    fn worker_update_eligible_when_worker_unknown_and_manifest_at_desktop() {
+        // Worker unknown/missing, desktop 0.1.1, manifest 0.1.1 → eligible
+        assert!(worker_update_eligible(None, "0.1.1", "0.1.1"));
+        assert!(worker_update_eligible(Some(""), "0.1.1", "0.1.1"));
     }
 
     #[test]

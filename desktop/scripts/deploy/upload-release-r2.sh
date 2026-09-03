@@ -36,7 +36,7 @@ if [[ ! -d "$RELEASE_DIR" ]]; then
   exit 1
 fi
 
-VERSION="$(node -p "require('$ROOT/src-tauri/tauri.conf.json').version")"
+VERSION="${RELAYBASE_VERSION:-$(node -p "require('$ROOT/src-tauri/tauri.conf.json').version")}"
 CARGO_TARGET="${CARGO_TARGET_DIR:-$ROOT/src-tauri/target}"
 BUNDLE="$CARGO_TARGET/$RUST_TARGET/release/bundle"
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/relaybase-release.XXXXXX")"

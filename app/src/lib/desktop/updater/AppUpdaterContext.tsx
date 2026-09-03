@@ -120,11 +120,20 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
             },
           },
         });
-      } catch {
+      } catch (err) {
+        console.error("[updater] Update check/install failed:", err);
         if (!cancelled) {
           setPhase("idle");
           setVersion(null);
           setProgressLabel(null);
+          try {
+            const { toast } = await import("sonner");
+            toast.error(
+              `Desktop update failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          } catch {
+            // ignore toast load errors
+          }
         }
       } finally {
         busyRef.current = false;

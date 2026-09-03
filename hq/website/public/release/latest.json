@@ -1,11 +1,11 @@
 {
-  "version": "0.1.2",
-  "notes": "# Relaybase 0.1.2\n\nSame product as 0.1.1, with in-app desktop auto-update.\n\n## Highlights\n- Checks for app updates after launch and downloads in the background\n- Restart from the sidebar when an update is ready\n\n## Changes\n- Same features as 0.1.1",
-  "pub_date": "2026-09-02T19:50:16.938Z",
+  "version": "0.1.1",
+  "notes": "# Relaybase 0.1.1\n\nFirst public release.\n\n## Highlights\n- Guided Cloudflare install — deploy the Worker, create storage, set up owner passtoken\n- macOS desktop app (Apple Silicon) with in-app Worker update\n- Email + dashboard in one app\n\n## Changes\n- Setup Rollback deletes Worker, D1, and R2 — fails if anything remains\n- Owner passtoken in OS keyring; Touch ID read-gate for console unlock\n- Settings → Worker update reuses OAuth and runs `migrate-db` on existing installs",
+  "pub_date": "2026-09-02T20:53:40.222Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.2.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlVXL3JSclV4Rm9IRFYwZ0dWRXViQ2xzdjExZ2ZDY2U2V0QrWWUxa1ZIRE1GSVBGdDZ2SU1UajliaWNQU3dGemE1MkQ1QU9NQnFTak5mSFVuMDcvSXdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4Mzc4NTgxCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKTXV1Ty9BdVY0eE9LWTVCTjVha0QwTmh0VnhoTHdoMEg5cFFGZjVWUFBXV0pQNVNkeHkwbEpRZTdZb2FIdEJXcVFJb3NxRVJ6WkU5TytzeUl1Zk9IQXc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlkwZWZQb2NERVRVbjNTR2hDZWZEWFpqakVQWHFYRHVLa1JkbldVa1JlbFdydmZnQktTSDU0czJGdG9vL0VCNGtnbFNhdmhSSHhNaXZlb3pXUEg0WlFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4MzgyMzg3CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKV0M1UldGK2FGcndsUlF1QksvNUI0dG1kNE14TnBUVURlb3JEU2duUGVLS1kxOVhqQXpBWFhMbUtXbC9BTkdZdVRTQXNWUzhMZE9BYnB2cFE0ZFZwREE9PQo="
     }
   }
 }

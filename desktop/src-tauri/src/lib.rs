@@ -402,6 +402,8 @@ async fn auto_install_routing_worker(
 }
 
 /// Compare the deployed Worker version against the hosted install manifest.
+/// Only offers an update when the worker is behind the desktop version and
+/// the manifest does not exceed the desktop version.
 #[tauri::command]
 async fn check_worker_update_cmd() -> Result<WorkerUpdateCheck, String> {
     let creds = load_credentials_merged()?;
@@ -409,11 +411,15 @@ async fn check_worker_update_cmd() -> Result<WorkerUpdateCheck, String> {
         .worker_version
         .trim()
         .to_string();
-    check_worker_update(if current.is_empty() {
-        None
-    } else {
-        Some(current)
-    })
+    let desktop = env!("CARGO_PKG_VERSION").to_string();
+    check_worker_update(
+        if current.is_empty() {
+            None
+        } else {
+            Some(current)
+        },
+        desktop,
+    )
     .await
 }
 
@@ -1723,6 +1729,14 @@ pub fn run() {
                 )?;
                 // DEV-MODE TESTING ONLY: restore CF OAuth from ~/.relaybase/tmp/
                 secrets::hydrate_cf_oauth_session_dev_cache();
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Warn)
+                        .build(),
+                )?;
             }
             // Seed ~/.relaybase/icon.png for notification identity image.
             if let Err(e) = notify::ensure_notification_icon() {

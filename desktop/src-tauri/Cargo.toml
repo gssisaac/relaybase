@@ -51,3 +51,6 @@ objc2-foundation = "0.3"
 objc2-local-authentication = "0.3"
 block2 = "0.6"
 security-framework = { version = "3", features = ["OSX_10_15"] }
+
+[dev-dependencies]
+minisign-verify = "0.2.5"

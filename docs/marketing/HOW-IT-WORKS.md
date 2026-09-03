@@ -4,7 +4,7 @@
 
 **Target reader (end user):** people who already manage **multiple** email addresses — Cloudflare operators with several zones, or Google Workspace users paying seats for `billing@` / `support@` / product aliases.
 
-**Source:** shipped product (`app/`, `server/`, `mobile/`) and product docs — especially Setup → Install (`app/src/app/setup/install/page.tsx` → `WorkerInstallPanel`). This is the mechanism behind [`FEATURES.md`](./FEATURES.md), not a second feature list. Pitch the outcome first; name Cloudflare primitives (Worker, R2, D1) only when they help a Cloudflare-native reader trust the design.
+**Source:** shipped product (`app/`, sibling `relaybase-worker`, `mobile/`) and product docs — especially Setup → Install (`app/src/app/setup/install/page.tsx` → `WorkerInstallPanel`). This is the mechanism behind [`FEATURES.md`](./FEATURES.md), not a second feature list. Pitch the outcome first; name Cloudflare primitives (Worker, R2, D1) only when they help a Cloudflare-native reader trust the design.
 
 **Pricing / public-copy rules:** same as `FEATURES.md`. Do not publish prices, Free/Pro SKUs, or Team/Studio seats during private beta. Do not name other inbox apps. Do not imply Relaybase hosts the mailbox.
 

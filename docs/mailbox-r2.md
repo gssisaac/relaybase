@@ -6,13 +6,13 @@
 
 | Area | Paths |
 |------|--------|
-| Worker binding | `server/wrangler.toml` (`INBOUND` → bucket `relaybase-mailbox`, var `INBOUND_BUCKET_NAME`) |
-| Customer install template | `server/customer-install/wrangler.toml`, `server/customer-install/README.md` |
+| Worker binding | `../relaybase-worker/wrangler.toml` (`INBOUND` → bucket `relaybase-mailbox`, var `INBOUND_BUCKET_NAME`) |
+| Customer install template | `../relaybase-worker/customer-install/wrangler.toml`, `../relaybase-worker/customer-install/README.md` |
 | Desktop auto-install | `desktop/src-tauri/src/auto_install.rs`, `desktop/src-tauri/src/worker.rs` (`R2_BUCKET`) |
-| **Mailbox store (inbound + sent)** | `server/src/lib/mailbox-store.ts` |
-| Send history | `server/src/lib/send-logs.ts` (`sent/_sendlog/{id}.json`, no `_index.json`) |
-| Compose / API persist | `server/src/lib/mail/send-message.ts`, `server/routes/send.ts` |
-| One-time backfill | `server/src/routes/console/rebuild-mail.ts`, `rebuildDomain` in `mailbox-store.ts` |
+| **Mailbox store (inbound + sent)** | `../relaybase-worker/src/lib/mailbox-store.ts` |
+| Send history | `../relaybase-worker/src/lib/send-logs.ts` (`sent/_sendlog/{id}.json`, no `_index.json`) |
+| Compose / API persist | `../relaybase-worker/src/lib/mail/send-message.ts`, `server/routes/send.ts` |
+| One-time backfill | `../relaybase-worker/src/routes/console/rebuild-mail.ts`, `rebuildDomain` in `mailbox-store.ts` |
 | Bucket-to-bucket copy (Worker) | `server/scripts/copy-mailbox-r2.mjs`, `server/scripts/mailbox-copy-worker/` |
 
 Storage map and forbidden stores: **[storage-architecture.md](./storage-architecture.md)**. D1 mail index (`relaybase-mail`): **[mailbox-d1.md](./mailbox-d1.md)**. Ops-event D1 log (additive, not send history): **[ops-log-d1.md](./ops-log-d1.md)**.
@@ -78,7 +78,7 @@ Dashboard **Object count / Storage size** are eventual-consistency rollups. Afte
 ## Operator cutover (dogfood `relaybase-api`, account `3adf03…`)
 
 1. Create + bind `relaybase-mail` D1 (`wrangler d1 create relaybase-mail`, set `database_id` in `wrangler.toml`).
-2. `cd server && pnpm run build:bundle` → deploy.
+2. `cd ../relaybase-worker && pnpm run build:bundle` → deploy.
 3. `POST /console/migrate-db` (creates `mailbox_messages` + `mailbox_fts`).
 4. `POST /console/rebuild-mail` (one-time backfill: thin metas, materialize sent, fill D1+FTS, delete array keys). Pass `?domain=` to rebuild one domain at a time on large mailboxes.
 5. Confirm Inbox / Sent / search; then **delete `relaybase-inbox-index`** so the account stays at 3 D1s.

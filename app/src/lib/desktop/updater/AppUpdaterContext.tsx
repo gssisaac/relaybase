@@ -38,6 +38,11 @@ function releaseNotesPreview(body: string | undefined): string | null {
   return trimmed.length > 80 ? `${trimmed.slice(0, 77)}…` : trimmed;
 }
 
+function updaterErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  return String(err);
+}
+
 export function AppUpdaterProvider({ children }: { children: ReactNode }) {
   const [phase, setPhase] = useState<AppUpdaterPhase>("idle");
   const [version, setVersion] = useState<string | null>(null);
@@ -58,92 +63,79 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
     let startupTimeout: ReturnType<typeof setTimeout> | undefined;
     let periodicId: ReturnType<typeof setInterval> | undefined;
 
-    const attempt = async () => {
-      if (cancelled || busyRef.current || readyRef.current) return;
-      busyRef.current = true;
-      setPhase("checking");
-      setProgressLabel(null);
+    void (async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      if (getCurrentWindow().label !== "main") return;
 
-      try {
-        const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        if (getCurrentWindow().label !== "main") {
-          setPhase("idle");
-          return;
-        }
+      const attempt = async () => {
+        if (cancelled || busyRef.current || readyRef.current) return;
+        busyRef.current = true;
+        setPhase("checking");
+        setProgressLabel(null);
 
-        const { check } = await import("@tauri-apps/plugin-updater");
-        const update = await check({ timeout: 60_000 });
-        if (cancelled || !update) {
-          setPhase("idle");
-          setVersion(null);
+        try {
+          const { check } = await import("@tauri-apps/plugin-updater");
+          const update = await check({ timeout: 60_000 });
+          if (cancelled || !update) {
+            setPhase("idle");
+            setVersion(null);
+            setProgressLabel(null);
+            return;
+          }
+
+          const notes = releaseNotesPreview(update.body);
+          const versionLabel = update.version;
+          setVersion(versionLabel);
+          setPhase("downloading");
+          setProgressLabel(
+            notes
+              ? `Downloading v${versionLabel} — ${notes}`
+              : `Downloading v${versionLabel}…`,
+          );
+
+          let downloaded = 0;
+          let total: number | undefined;
+
+          await update.downloadAndInstall((event) => {
+            if (event.event === "Started") {
+              total = event.data.contentLength;
+            } else if (event.event === "Progress") {
+              downloaded += event.data.chunkLength;
+              if (total && total > 0) {
+                const pct = Math.min(100, Math.round((downloaded / total) * 100));
+                setProgressLabel(`Downloading v${versionLabel}… ${pct}%`);
+              }
+            }
+          });
+
+          if (cancelled) return;
+
+          readyRef.current = true;
+          setPhase("ready");
           setProgressLabel(null);
-          return;
-        }
-
-        const notes = releaseNotesPreview(update.body);
-        const versionLabel = update.version;
-        setVersion(versionLabel);
-        setPhase("downloading");
-        setProgressLabel(
-          notes
-            ? `Downloading v${versionLabel} — ${notes}`
-            : `Downloading v${versionLabel}…`,
-        );
-
-        let downloaded = 0;
-        let total: number | undefined;
-
-        await update.downloadAndInstall((event) => {
-          if (event.event === "Started") {
-            total = event.data.contentLength;
-          } else if (event.event === "Progress") {
-            downloaded += event.data.chunkLength;
-            if (total && total > 0) {
-              const pct = Math.min(100, Math.round((downloaded / total) * 100));
-              setProgressLabel(`Downloading v${versionLabel}… ${pct}%`);
+        } catch (err) {
+          console.error("[updater] Update check/install failed:", err);
+          if (!cancelled) {
+            setPhase("idle");
+            setVersion(null);
+            setProgressLabel(null);
+            try {
+              const { toast } = await import("sonner");
+              toast.error(`Desktop update failed: ${updaterErrorMessage(err)}`);
+            } catch {
+              // ignore toast load errors
             }
           }
-        });
-
-        if (cancelled) return;
-
-        readyRef.current = true;
-        setPhase("ready");
-        setProgressLabel(null);
-        const { toast } = await import("sonner");
-        toast.message(`Relaybase v${versionLabel} is ready`, {
-          duration: Infinity,
-          action: {
-            label: "Restart",
-            onClick: () => {
-              void restartToUpdate();
-            },
-          },
-        });
-      } catch (err) {
-        console.error("[updater] Update check/install failed:", err);
-        if (!cancelled) {
-          setPhase("idle");
-          setVersion(null);
-          setProgressLabel(null);
-          try {
-            const { toast } = await import("sonner");
-            toast.error(
-              `Desktop update failed: ${err instanceof Error ? err.message : String(err)}`,
-            );
-          } catch {
-            // ignore toast load errors
-          }
+        } finally {
+          busyRef.current = false;
         }
-      } finally {
-        busyRef.current = false;
-      }
-    };
+      };
 
-    startupTimeout = setTimeout(() => {
-      void attempt();
-      periodicId = setInterval(() => void attempt(), PERIODIC_CHECK_MS);
-    }, STARTUP_DELAY_MS);
+      startupTimeout = setTimeout(() => {
+        void attempt();
+        periodicId = setInterval(() => void attempt(), PERIODIC_CHECK_MS);
+      }, STARTUP_DELAY_MS);
+    })();
 
     return () => {
       cancelled = true;

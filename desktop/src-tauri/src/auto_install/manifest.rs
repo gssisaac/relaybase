@@ -342,6 +342,39 @@ mod worker_js_tests {
     }
 
     #[test]
+    fn local_updater_artifact_signature_matches() {
+        use base64::Engine;
+        use minisign_verify::{PublicKey, Signature};
+        use std::path::PathBuf;
+
+        fn b64(s: &str) -> String {
+            let decoded = base64::engine::general_purpose::STANDARD
+                .decode(s.trim())
+                .expect("base64");
+            String::from_utf8(decoded).expect("utf8")
+        }
+
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let release = root.join("../../hq/website/public/release");
+        for version in ["0.1.1", "0.1.2"] {
+            let archive = release.join(format!("Relaybase.{version}.aarch64.app.tar.gz"));
+            let sig_path = release.join(format!("Relaybase.{version}.aarch64.app.tar.gz.sig"));
+            let pub_path = root.join(".tauri-signing/updater.key.pub");
+            if !archive.is_file() || !sig_path.is_file() || !pub_path.is_file() {
+                continue;
+            }
+            let data = std::fs::read(&archive).expect("read archive");
+            let sig_b64 = std::fs::read_to_string(&sig_path).expect("read sig");
+            let pub_b64 = std::fs::read_to_string(&pub_path).expect("read pub");
+            let public_key = PublicKey::decode(&b64(&pub_b64)).expect("decode pub");
+            let signature = Signature::decode(&b64(&sig_b64)).expect("decode sig");
+            public_key
+                .verify(&data, &signature, true)
+                .unwrap_or_else(|e| panic!("{version} signature invalid: {e:?}"));
+        }
+    }
+
+    #[test]
     fn prefers_versioned_worker_js() {
         let dir = std::env::temp_dir().join(format!("rb-worker-js-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();

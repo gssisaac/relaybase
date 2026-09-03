@@ -4,7 +4,7 @@
 
 **Target reader (end user):** people who already manage **multiple** email addresses — Cloudflare operators with several zones, or Google Workspace users paying seats for `billing@` / `support@` / product aliases.
 
-**Source:** shipped product code (`app/`, `server/`, `mobile/`) and existing product docs. Ranked by importance for that persona, not by engineering surface area.
+**Source:** shipped product code (`app/`, sibling `relaybase-worker`, `mobile/`) and existing product docs. Ranked by importance for that persona, not by engineering surface area.
 
 **Pricing / public-copy rules:** `PRICING.md` and `STRATEGY.md` §9. The Free vs paid split below follows the **internal draft** (Free = 1 domain, 1 address, inbox + send/receive API; paid = unlimited domains/addresses, Audience/Broadcasts, teammate access). Dollar amounts and caps can change. Do not publish a price table until official paid launch. During private beta, do not name other inbox apps, do not imply Team/Studio seats, and do not advertise Free/Pro SKUs — testers get the full shipped product.
 

@@ -76,6 +76,9 @@ if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && -z "${TAURI_SIGNING_PRIVATE_KE
     TAURI_KEY_ABS="$ROOT/$TAURI_KEY_ABS"
   fi
   if [[ -f "$TAURI_KEY_ABS" ]]; then
+    if grep -q "encrypted secret key" <<< "$(base64 -d "$TAURI_KEY_ABS" 2>/dev/null || true)" && [[ -z "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]]; then
+      echo "⚠ Updater key is password-protected. Set TAURI_SIGNING_PRIVATE_KEY_PASSWORD in .env or ProductRail Release settings."
+    fi
     echo "→ Updater signing key: $TAURI_SIGNING_PRIVATE_KEY_PATH"
   else
     echo "⚠ TAURI_SIGNING_PRIVATE_KEY_PATH not found: $TAURI_KEY_ABS (updater bundles may be unsigned)"

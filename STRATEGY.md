@@ -1,7 +1,7 @@
 # Relaybase — 가격 및 시장 전략
 
 - 작성일: 2026-08-09 (v1), 업데이트: 2026-08-09 (v2 — 가격체계 재설계, 7번 섹션), **2026-08-23 (v3 — 프라이빗 베타 동안 가격 비공개, 현행 SKU는 Draft)**
-- 전제: `docs/pivot-byo-cloudflare.md` / `PRODUCT.md`의 확정 방향 — **Mac(→Windows) 데스크톱 앱**, Relaybase는 서버를 운영하지 않고 사용자가 자신의 Cloudflare 계정에 `server/`(라우팅 Worker)를 직접 설치(`server/customer-install/` ZIP + Wrangler)한다. **가격 숫자·티어 범위·갱신 규칙은 확정이 아니다.** 7번 섹션과 `PRICING.md`는 내부 초안이며, 프라이빗 베타 반응 후 달라질 수 있다. 공개 약속은 유료 정식 launch(첫 결제) 시점에만 한다 — **9번 섹션**.
+- 전제: `docs/pivot-byo-cloudflare.md` / `PRODUCT.md`의 확정 방향 — **Mac(→Windows) 데스크톱 앱**, Relaybase는 서버를 운영하지 않고 사용자가 자신의 Cloudflare 계정에 `../relaybase-worker/`(라우팅 Worker)를 직접 설치(`../relaybase-worker/customer-install/` ZIP + Wrangler)한다. **가격 숫자·티어 범위·갱신 규칙은 확정이 아니다.** 7번 섹션과 `PRICING.md`는 내부 초안이며, 프라이빗 베타 반응 후 달라질 수 있다. 공개 약속은 유료 정식 launch(첫 결제) 시점에만 한다 — **9번 섹션**.
 - 이 문서의 목적: 데스크톱 앱을 둘러싼 세 가지 열린 가격/시장 질문(Worker 오픈소스화, 멀티 디바이스/모바일 라이선싱, 팀 공유 가격)에 대해 코드 근거 기반으로 답하고, 실행 가능한 SKU 구조를 **초안으로** 제안한다.
 
 > **Draft / 비공개.** 7번 섹션의 Free $0 / Pro $69 / 갱신 $25 / Early Access $35와 `PRICING.md` 표는 **내부 가설**이다. 프라이빗 베타(이메일 신청 → 다운로드 링크) 동안 웹사이트·초대 메일에 가격표·캡·갱신·팀 시트를 올리지 않는다. 숫자·포함 기능 범위·과금 규칙은 베타 반응에 따라 바뀔 수 있다. 공개 커밋은 유료 정식 launch의 첫 결제 화면에서만 한다. 상세: **9번 섹션**, `PRICING.md` §0.
@@ -22,7 +22,7 @@
 
 - 라이선스는 이메일당 1개 키, 디바이스/기기 개념이 전혀 없다. `verifyLicense`는 키 해시가 KV에 있고 `active`이면 무조건 통과시킨다 — 몇 대에서 쓰든 제한이 없다.
 
-```62:75:server/src/lib/licenses.ts
+```62:75:../relaybase-worker/src/lib/licenses.ts
 export async function verifyLicense(
   kv: KVNamespace,
   licenseKey: string,
@@ -42,7 +42,7 @@ export async function verifyLicense(
 - 앱과 사용자 Worker 사이의 신뢰 모델은 "owner passtoken으로 로그인한 세션 = 전체 권한"이다. 팀원은 per-account 모바일 비밀번호로 그 메일함만 본다. 도메인/역할 단위 RBAC는 아직 없다.
 - 다만 `/v1/send`용 API 키는 이미 **도메인 단위 스코프**로 발급된다 — 이 패턴을 이메일(mailbox) 단위로 좁히면 3번 질문의 기술적 해법이 된다.
 
-```1:16:server/src/lib/keys.ts
+```1:16:../relaybase-worker/src/lib/keys.ts
 export type KeyRecord = {
   id: string;
   domain: string;
@@ -53,9 +53,9 @@ export type KeyRecord = {
 };
 ```
 
-- 사용자에게 배포되는 코드는 이미 한 번 "고객용으로 살균(sanitize)"되어 있다 — `account_id`, KV id, 커스텀 도메인이 빠진 템플릿이 `server/customer-install/`에 별도로 존재한다. 이는 오픈소스화 시 그대로 공개 대상이 될 수 있는 형태다.
+- 사용자에게 배포되는 코드는 이미 한 번 "고객용으로 살균(sanitize)"되어 있다 — `account_id`, KV id, 커스텀 도메인이 빠진 템플릿이 `../relaybase-worker/customer-install/`에 별도로 존재한다. 이는 오픈소스화 시 그대로 공개 대상이 될 수 있는 형태다.
 
-```10:19:server/customer-install/README.md
+```10:19:../relaybase-worker/customer-install/README.md
 ## 1. Create storage (exact names)
 
 ```bash
@@ -89,12 +89,12 @@ npx wrangler r2 bucket create relaybase-mailbox
 | 누군가 이 Worker만 가져다 무료로 쓰고 $39 데스크톱 앱을 안 산다 | **낮음** — 이미 지금도 가능(고객용 ZIP이 이미 공개적으로 다운로드 가능, `website/public/downloads/`). Worker만 raw HTTP API로 쓰는 사람은 UI/Compose/Inbox/Audience 대시보드가 없는 상태를 감당해야 한다. 이는 지금 구조가 이미 "공개나 다름없는" 상태라는 뜻이기도 하다. | 데스크톱 앱의 UX 완성도·업데이트·지원을 계속 유일한 유료 가치로 유지 |
 | owner passtoken + session 인증 모델의 취약점이 코드로 노출된다 | 낮음 | 해시+스코프 세션 모델은 이미 README에 문서화되어 있어 "코드를 몰라서 안전한" 상태가 아니다(Kerckhoffs 원칙). 오히려 공개 후 외부 보안 리뷰를 받는 편이 낫다 |
 | 라이선스 검증 로직(`licenses.ts`)이 노출되어 우회된다 | 낮음 | 키는 24바이트(192비트) 랜덤이고 KV 해시 조회로만 통과한다 — 알고리즘을 안다고 위조 불가능. 다만 **라이선스 서버(`/v1/license/*`, `admin/`)는 공개하지 않는다** — 이건 운영 비즈니스 로직이라 공개 이유가 없다 |
-| Relaybase 자체 운영 계정(`api.relaybase.xyz`) 관련 설정 노출 | 낮음, 관리 필요 | `server/wrangler.toml`(운영용, account_id·KV id·커스텀 도메인 포함)이 아니라 이미 존재하는 `server/customer-install/`(살균된 템플릿)을 공개 저장소의 소스로 삼는다. 운영용 `server/wrangler.toml`은 비공개 배포 파이프라인에만 남긴다 |
+| Relaybase 자체 운영 계정(`api.relaybase.xyz`) 관련 설정 노출 | 낮음, 관리 필요 | `../relaybase-worker/wrangler.toml`(운영용, account_id·KV id·커스텀 도메인 포함)이 아니라 이미 존재하는 `../relaybase-worker/customer-install/`(살균된 템플릿)을 공개 저장소의 소스로 삼는다. 운영용 `../relaybase-worker/wrangler.toml`은 비공개 배포 파이프라인에만 남긴다 |
 
 ### 1.4 무엇을, 어떤 라이선스로 공개할지
 
-- **공개**: `server/customer-install/`을 기준으로 한 독립 저장소(예: `relaybase/relaybase-worker`). 라우팅/발신/수신/웹훅/키 로직 전부 포함.
-- **비공개 유지**: `app/`(데스크톱 UI), `desktop/`(Tauri 셸), `admin/`(운영자 대시보드·라이선스 관리), 그리고 운영용 `server/wrangler.toml`/시크릿.
+- **공개**: `../relaybase-worker/customer-install/`을 기준으로 한 독립 저장소(예: `relaybase/relaybase-worker`). 라우팅/발신/수신/웹훅/키 로직 전부 포함.
+- **비공개 유지**: `app/`(데스크톱 UI), `desktop/`(Tauri 셸), `admin/`(운영자 대시보드·라이선스 관리), 그리고 운영용 `../relaybase-worker/wrangler.toml`/시크릿.
 - **라이선스 후보**:
   - **BSL(Business Source License)** 또는 **Fair Source License(FSL)**: 소스를 전부 볼 수 있고 개인/자기 계정 용도로 자유롭게 수정·재배포 가능하지만, "Relaybase와 경쟁하는 유료 호스팅 서비스"로 상업화하는 것만 금지. n8n, Sentry, PocketBase 계열이 쓰는 패턴과 동일한 목적.
   - 라이선스 조항에 "본인 소유 Cloudflare 계정에 배포해 자신의 이메일을 처리하는 용도"는 명시적으로 항상 허용된다고 적어야 한다 — 이게 제품의 핵심 약속이기 때문.
@@ -102,7 +102,7 @@ npx wrangler r2 bucket create relaybase-mailbox
 
 ### 1.5 실행 체크리스트
 
-- [ ] `server/customer-install/` 기준 별도 공개 저장소 생성, 라이선스 파일(BSL/FSL 텍스트) 추가
+- [ ] `../relaybase-worker/customer-install/` 기준 별도 공개 저장소 생성, 라이선스 파일(BSL/FSL 텍스트) 추가
 - [ ] 운영용 시크릿/계정 정보가 공개 저장소 히스토리에 전혀 없는지 재확인(스캐너로 1회 스캔)
 - [ ] `admin/`, `app/`, `desktop/`는 명시적으로 비공개 저장소로 분리(현재 모노레포 구조라면 공개 전 서브트리 분리 필요)
 - [ ] 웹사이트 신뢰 섹션(`website/src/components/cloudflare-trust.tsx`)에 "오픈소스 Worker" 배지 추가
@@ -124,7 +124,7 @@ npx wrangler r2 bucket create relaybase-mailbox
 
 ### 2.3 구현: 소프트 기기 캡 + 이상 탐지 (하드 DRM 지양)
 
-`LicenseRecord`(`server/src/lib/licenses.ts`)에 활성화 목록을 추가한다:
+`LicenseRecord`(`../relaybase-worker/src/lib/licenses.ts`)에 활성화 목록을 추가한다:
 
 ```ts
 type LicenseRecord = {
@@ -164,7 +164,7 @@ type LicenseRecord = {
 
 현재 owner 신뢰 모델은 이진법이다: passtoken으로 로그인한 사람은 모든 도메인, 모든 메일함, 키 발급, 웹훅, 대시보드 전체에 접근한다. 팀원은 per-account 모바일 비밀번호로 그 메일함만 본다. "billing@ 팀원 A에게는 support@ 딱 하나만, 그것도 읽기/답장만" 같은 요청은 **역할 기반 접근 제어(RBAC)가 아직 없어서** 지금은 owner 세션을 넘기는 것 외에 방법이 없다 — 이는 보안적으로도 받아들일 수 없다.
 
-다행히 확장할 기존 패턴이 있다: `/v1/send` API 키는 이미 **도메인 단위 스코프**로 발급된다(`server/src/lib/keys.ts`). 이 스코프 개념을 한 단계 더 좁혀 **메일함(email) 단위 + 역할(role) 단위**로 확장하면 된다.
+다행히 확장할 기존 패턴이 있다: `/v1/send` API 키는 이미 **도메인 단위 스코프**로 발급된다(`../relaybase-worker/src/lib/keys.ts`). 이 스코프 개념을 한 단계 더 좁혀 **메일함(email) 단위 + 역할(role) 단위**로 확장하면 된다.
 
 ```ts
 // keys.ts KeyRecord 확장 방향
@@ -208,7 +208,7 @@ Front, Missive, Help Scout 같은 "공유 인박스" 경쟁사들이 시트당 �
 
 ### 3.5 필요한 엔지니어링 (우선순위)
 
-1. `server/src/lib/keys.ts` 패턴을 확장해 `mailbox`+`role` 스코프 시트 레코드/발급/검증 API 추가
+1. `../relaybase-worker/src/lib/keys.ts` 패턴을 확장해 `mailbox`+`role` 스코프 시트 레코드/발급/검증 API 추가
 2. `app/` 대시보드에 "역할" 개념 도입 — `role: "email-only"`일 때 Domains/Accounts/API Keys/Settings 내비게이션 숨김, 인박스/컴포즈만 노출
 3. Owner 쪽 UI: Settings에 "Team" 섹션 — 초대 링크 생성(이메일 지정 + 대상 mailbox 지정), 시트 목록, 즉시 회수
 4. Stripe: Team SKU + 추가 시트 1회 결제 체크아웃, 결제 성공 시 시트 활성화 웹훅(기존 `license.ts`의 `stripe-webhook` 패턴 재사용 가능)
@@ -351,7 +351,7 @@ Free 티어는 사용자 자신의 Cloudflare Worker에서 실행되므로 Relay
 
 - Relaybase의 발신 경로 전체가 Cloudflare의 **Email Sending REST API** 한 엔드포인트에 물려 있다 — 대체 발신 경로가 없다.
 
-```227:230:server/src/lib/cloudflare-client.ts
+```227:230:../relaybase-worker/src/lib/cloudflare-client.ts
     if (replyTo) body.reply_to = replyTo;
 
     const path = `/accounts/${this.accountId}/email/sending/send`;
@@ -361,7 +361,7 @@ Free 티어는 사용자 자신의 Cloudflare Worker에서 실행되므로 Relay
 - 이 API는 **2026-04-16 "public beta" 발표** 기준으로도 여전히 베타다(그 이전엔 2025-11경부터 private beta). 공개 문서·블로그 어디에도 GA(정식 출시) 일정이 명시되어 있지 않다. Cloudflare 공식 확인: *"Email Sending is now in public beta... Start sending and receiving emails from Workers and agents today."* (2026-04-16 changelog), *"Email Sending graduates from private beta to public beta today."* (Cloudflare Blog, 같은 날).
 - 코드베이스는 이미 이 베타의 거친 모서리를 상당히 인지하고 대응해 두었다 — "도메인이 아직 onboarding 안 됨", "not_entitled", "sending_disabled" 같은 베타 특유의 에러코드를 사람이 읽을 수 있는 힌트로 변환하는 로직이 이미 존재한다:
 
-```9:15:server/src/lib/cloudflare-api-hints.ts
+```9:15:../relaybase-worker/src/lib/cloudflare-api-hints.ts
   if (p.includes("/email/sending/send")) {
     return [
       `Endpoint: ${m} /accounts/{{account_id}}/email/sending/send`,

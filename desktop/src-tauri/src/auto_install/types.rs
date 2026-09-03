@@ -10,6 +10,9 @@ pub struct WorkerInstallManifest {
     /// Hosted / ZIP filename, e.g. `worker.0.1.1.js`.
     #[serde(default)]
     pub worker_js: Option<String>,
+    /// Direct GitHub Release URL for `worker.{version}.js`.
+    #[serde(default)]
+    pub worker_js_url: Option<String>,
     #[serde(default)]
     pub notes: Option<String>,
 }

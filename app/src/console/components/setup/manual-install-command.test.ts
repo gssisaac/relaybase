@@ -11,7 +11,8 @@ import {
 } from "./manual-install-command.ts";
 
 const PEPPER = "ab".repeat(16);
-const ZIP = "https://relaybase.xyz/downloads/relaybase-worker-install.zip";
+const ZIP =
+  "https://github.com/strum-us/relaybase-worker/releases/latest/download/relaybase-worker-install.zip";
 const WORKER = "https://relaybase-api.gssisaac.workers.dev";
 
 describe("resolveManualWorkerUrl", () => {

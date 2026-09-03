@@ -108,7 +108,7 @@ if (health?.inbound?.bucketName) {
         : `Bucket mismatch — worker: ${health.inbound.bucketName}, expected: relaybase-mailbox`
       : "Worker bucket matches (relaybase-mailbox)",
     mismatch
-      ? "Redeploy worker: server/wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-mailbox, then npm run deploy --prefix server"
+      ? "Redeploy worker: ../relaybase-worker wrangler.toml bucket_name + INBOUND_BUCKET_NAME = relaybase-mailbox, then npm run deploy"
       : undefined,
   );
 }

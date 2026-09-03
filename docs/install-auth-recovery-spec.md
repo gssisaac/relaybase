@@ -60,7 +60,7 @@
   2. `finalize_schema` completes `migrate-db` using `AUTH_PEPPER`.
   3. `POST /console/setup-admin` with the new `AUTH_PEPPER` **force-overwrites** the previous owner record in D1 with a new passtoken hash.
   4. Show the new passtoken in the UI and write it to the keyring so the user is immediately recovered.
-- **Implementation:** `server/src/lib/owner-auth.ts` (`setupOwner`), `desktop/src-tauri/src/auto_install/install.rs` (`apply_secrets`, `finalize_schema`).
+- **Implementation:** `../relaybase-worker/src/lib/owner-auth.ts` (`setupOwner`), `desktop/src-tauri/src/auto_install/install.rs` (`apply_secrets`, `finalize_schema`).
 
 ### EC-2: `init-db` called when D1 tables already exist
 
@@ -68,7 +68,7 @@
 - **Desired state:**
   1. Worker returns `409 DB_ALREADY_INITIALIZED`.
   2. Desktop treats this as normal reuse and runs `migrate-db` to apply pending schema safely.
-- **Implementation:** `server/src/routes/console/init-db.ts`, `desktop/src-tauri/src/auto_install/install.rs` (`finalize_schema`).
+- **Implementation:** `../relaybase-worker/src/routes/console/init-db.ts`, `desktop/src-tauri/src/auto_install/install.rs` (`finalize_schema`).
 
 ### EC-3: Touch ID failure or user cancel
 
@@ -169,10 +169,10 @@
 
 ## 7. Implementation & Verification Checklist
 
-- [x] **D1 passtoken overwrite (`server/src/lib/owner-auth.ts`)**
+- [x] **D1 passtoken overwrite (`../relaybase-worker/src/lib/owner-auth.ts`)**
   - Remove `ownerIsConfigured` 409 guard in `setupOwner`; force-save new hash via `onConflictDoUpdate`.
   - Call `deleteAllOwnerSessions(db)` to revoke prior sessions.
-- [x] **Schema auth extension (`server/src/lib/auth.ts`)**
+- [x] **Schema auth extension (`../relaybase-worker/src/lib/auth.ts`)**
   - `requireSchemaAuth` always allows `AUTH_PEPPER` bootstrap regardless of `hasOwner`.
 - [x] **Remove `OWNER_ALREADY_CONFIGURED` from install pipeline (`desktop/src-tauri/src/auto_install/install.rs`)**
   - `apply_secrets` always generates new `AUTH_PEPPER` on Setup install/reinstall.

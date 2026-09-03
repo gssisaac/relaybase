@@ -247,7 +247,7 @@ export function explainDesktopError(
       title: "Worker ran before database setup",
       detail:
         "The uploaded Worker queried owner_config before init-db created that table. A current worker.js skips that on an empty D1.",
-      fix: "Re-pack with `pnpm pack:worker-install`, deploy the website, then Try again. Rollback does not replace worker.js.",
+      fix: "Publish a GitHub Release (`pnpm --dir ../relaybase-worker run publish:github`), then Try again. Rollback does not replace worker.js.",
     };
   }
 
@@ -260,7 +260,7 @@ export function explainDesktopError(
       title: "Installer does not have a current Worker script",
       detail:
         "The hosted install ZIP is missing d1Bound (current /health). Rolling back Cloudflare resources does not replace the package on this Mac.",
-      fix: "Re-pack with `pnpm pack:worker-install`, deploy the website, then Try again.",
+      fix: "Publish a GitHub Release (`pnpm --dir ../relaybase-worker run publish:github`), then Try again.",
     };
   }
 

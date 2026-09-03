@@ -4,12 +4,12 @@ Monorepo for **Relaybase** — domain-scoped transactional email (send + receive
 
 The repo is split into two service sets:
 
-- **End-user product** (shipped to customers): `app/`, `desktop/`, `mobile/`, `server/`.
+- **End-user product** (shipped to customers): `app/`, `desktop/`, `mobile/`; Worker in sibling `../relaybase-worker/`.
 - **HQ operations** (internal, ours): `hq/admin/`, `hq/console/`, `hq/website/`. Cloudflare resources for this set use the `strum-relaybase-*` worker names and D1 `strum-relaybase-ops` (binding `DB`; operator config only — optional `workerUrl`). Cloudflare credentials, end-user tokens, and plaintext API keys are **never** stored in that D1 — CF creds live on the product Worker as wrangler secrets, tokens in the product Worker's D1 `owner_sessions`, and plaintext keys locally in `~/.relaybase`.
 
 | Set | Package | Path | Port | Role |
 |-----|---------|------|------|------|
-| End-user | **Worker** | `server/` | 8787 (`wrangler dev`) | Installable routing Worker (send, inbound, keys) installed into the customer's CF account |
+| End-user | **Worker** | `../relaybase-worker/` | 8787 (`wrangler dev`) | Installable routing Worker (send, inbound, keys) installed into the customer's CF account |
 | End-user | **User app** | `app/` | 32830 | Email UI — `next dev` for HMR; static export for Tauri |
 | End-user | **Desktop** | `desktop/` | Tauri | Mac app shell (`devUrl` → `:32830`, prod → `app/out`) |
 | End-user | **Mobile** | `mobile/` | Flutter | Teammate inbox companion (per-account mobile password) |
@@ -62,7 +62,7 @@ Inbound path:
 ### 1. Worker
 
 ```bash
-cd server
+cd ../relaybase-worker
 npm install
 cp .dev.vars.example .dev.vars
 # Fill AUTH_PEPPER and CF_API_TOKEN (CF_ACCOUNT_ID is optional)
@@ -70,7 +70,7 @@ cp .dev.vars.example .dev.vars
 npm run dev          # wrangler dev → http://127.0.0.1:8787
 ```
 
-From the repo root you can also run `npm run dev` (delegates to `server/`).
+From the repo root you can also run `npm run dev` (delegates to `../relaybase-worker/`).
 
 ### 2. Admin dashboard
 
@@ -151,37 +151,29 @@ Reads `hq/admin/.env.local` and `data/products/relaybase/settings.json`, tests C
 ## Repo layout
 
 ```
-relaybase/
-├── server/                 # End-user Cloudflare Worker (Hono) — installed into customer's CF
-│   ├── src/
-│   │   ├── index.ts        # fetch + email() handlers
-│   │   ├── inbound.ts      # R2 storage for received mail
-│   │   ├── routes/         # send, console/*, mail/*, mobile/*, v1/*
-│   │   └── lib/            # auth, mime, webhooks, auth-tokens, keys
-│   ├── wrangler.toml       # Worker bindings (R2, D1)
-│   └── .dev.vars           # Worker secrets (local only, not committed)
-├── app/                    # End-user Next.js email UI (relaybase-email)
-├── desktop/                # End-user Tauri Mac shell
-├── mobile/                 # End-user Flutter companion
-├── hq/                  # HQ operations (internal, ours)
-│   ├── admin/              # Operator Next.js dashboard (worker: strum-relaybase-admin)
-│   ├── console/            # Account / license / billing (worker: strum-relaybase-console)
-│   └── website/            # Marketing Next.js (static export, worker: strum-relaybase-website)
-├── data/
-│   ├── users.json          # User registry (shared with admin Users)
-│   ├── users/<id>.json     # Per-user domain/email data (dev)
-│   └── products/relaybase/ # Admin operator settings (local fallback; dev)
-└── scripts/                # diagnose-relaybase
+productions/
+├── relaybase-worker/       # Sibling repo — product Worker (Hono) for customer CF accounts
+└── relaybase/
+    ├── app/                # End-user Next.js email UI (relaybase-email)
+    ├── desktop/            # End-user Tauri Mac shell
+    ├── mobile/             # End-user Flutter companion
+    ├── hq/                 # HQ operations (internal, ours)
+    │   ├── admin/          # Operator Next.js dashboard (worker: strum-relaybase-admin)
+    │   ├── console/        # Account / license / billing (worker: strum-relaybase-console)
+    │   └── website/        # Marketing Next.js (static export, worker: strum-relaybase-website)
+    └── scripts/            # diagnose-relaybase, run-worker
 ```
+
+Clone both repos as siblings. Override the Worker path with `RELAYBASE_WORKER_DIR`. Root scripts `npm run dev` / `deploy` / `typecheck` / `pack:worker-install` delegate to the sibling repo.
 
 ---
 
 ## Worker — deploy
 
-The product Worker (`server/`) deploys into the **customer's** Cloudflare account (end-user side). It binds the `INBOUND` R2 mailbox bucket and D1 databases (`RELAYBASE_DB`, `RELAYBASE_LOGS`, `RELAYBASE_MAIL`). No KV namespace.
+The product Worker (`../relaybase-worker/`) deploys into the **customer's** Cloudflare account (end-user side). It binds the `INBOUND` R2 mailbox bucket and D1 databases (`RELAYBASE_DB`, `RELAYBASE_LOGS`, `RELAYBASE_MAIL`). No KV namespace.
 
 ```bash
-cd server
+cd ../relaybase-worker
 
 # Secrets
 npx wrangler secret put AUTH_PEPPER
@@ -194,7 +186,7 @@ npm run deploy    # wrangler deploy
 
 HQ operations workers (`strum-relaybase-admin`, `strum-relaybase-console`, `strum-relaybase-website`) deploy separately from `hq/admin`, `hq/console`, `hq/website` via `pnpm run deploy:cf` in each package. They share D1 `strum-relaybase-ops` (binding `DB`) on account `3adf03d991843094a7343eebc0a98007`. The admin worker never stores end-user tokens or plaintext API keys.
 
-Bindings in `server/wrangler.toml`:
+Bindings in `../relaybase-worker/wrangler.toml`:
 
 | Binding | Resource | Purpose |
 |---------|----------|---------|
@@ -207,7 +199,7 @@ Bindings in `server/wrangler.toml`:
 
 ## Environment variables
 
-### Worker (`server/wrangler.toml` vars + secrets)
+### Worker (`../relaybase-worker/wrangler.toml` vars + secrets)
 
 | Variable | Type | Description |
 |----------|------|-------------|

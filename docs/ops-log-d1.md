@@ -6,20 +6,20 @@
 
 | Area | Paths |
 |------|------|
-| D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_LOGS`), `server/db/log/migrations/0001_ops_logs.sql` |
+| D1 binding + migration | `../relaybase-worker/wrangler.toml` (`RELAYBASE_LOGS`), `../relaybase-worker/db/log/migrations/0001_ops_logs.sql` |
 
 See also: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
-| Drizzle schema + helper | `server/db/log/` (`schema.ts`, `ops-log.ts`, `index.ts`) |
-| Env type | `server/src/env.ts` (`RELAYBASE_LOGS?: D1Database`) |
-| Log helper | `server/src/lib/ops-logs.ts` (`recordOpsLog`, `listOpsLogs`) |
-| Bounce detection | `server/src/lib/bounce-detect.ts` |
-| Compose send (writes log + returns Sent) | `server/src/routes/admin-send.ts` |
-| API send (dual-write KV + D1) | `server/src/routes/send.ts` |
-| Broadcast send (dual-write KV + D1) | `server/src/lib/catalog-broadcasts.ts` |
-| Inbound bounce logging | `server/src/inbound.ts`, `server/src/lib/inbound-store.ts` |
-| Logs API | `server/src/routes/console/ops-logs.ts` → `/console/ops-logs` |
-| D1 probe helper | `server/src/lib/d1-status.ts` (`probeD1Connection`) |
-| Connect probe (D1 + R2) | `server/src/routes/console/connect.ts` → `/console/connect` |
+| Drizzle schema + helper | `../relaybase-worker/db/log/` (`schema.ts`, `ops-log.ts`, `index.ts`) |
+| Env type | `../relaybase-worker/src/env.ts` (`RELAYBASE_LOGS?: D1Database`) |
+| Log helper | `../relaybase-worker/src/lib/ops-logs.ts` (`recordOpsLog`, `listOpsLogs`) |
+| Bounce detection | `../relaybase-worker/src/lib/bounce-detect.ts` |
+| Compose send (writes log + returns Sent) | `../relaybase-worker/src/routes/admin-send.ts` |
+| API send (dual-write KV + D1) | `../relaybase-worker/src/routes/send.ts` |
+| Broadcast send (dual-write KV + D1) | `../relaybase-worker/src/lib/catalog-broadcasts.ts` |
+| Inbound bounce logging | `../relaybase-worker/src/inbound.ts`, `../relaybase-worker/src/lib/inbound-store.ts` |
+| Logs API | `../relaybase-worker/src/routes/console/ops-logs.ts` → `/console/ops-logs` |
+| D1 probe helper | `../relaybase-worker/src/lib/d1-status.ts` (`probeD1Connection`) |
+| Connect probe (D1 + R2) | `../relaybase-worker/src/routes/console/connect.ts` → `/console/connect` |
 | Client mapping | `app/src/lib/desktop/api/email-api-map.ts` (`/api/email/logs` → `/console/ops-logs`) |
 | Connection status UI | `app/src/lib/dashboard/connection-status.ts`, `app/src/console/pages/dashboard/ConnectionStatusCards.tsx`, `app/src/console/pages/settings/SettingsTabLayout.tsx` |
 | Dashboard nav | `app/src/console/lib/paths.ts` (Log tab after API Keys) |
@@ -32,7 +32,7 @@ Read this before changing send/bounce logging, adding a Log page event kind, or 
 
 ## Why a second log store
 
-Relaybase already had send history in `server/src/lib/send-logs.ts` (now R2 `sent/_sendlog/*`; previously KV `srv:sendlog:*`). That store is **authoritative** for Account Logs (`/console/stats/account-logs`) and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route). Do **not** point those at D1.
+Relaybase already had send history in `../relaybase-worker/src/lib/send-logs.ts` (now R2 `sent/_sendlog/*`; previously KV `srv:sendlog:*`). That store is **authoritative** for Account Logs (`/console/stats/account-logs`) and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route). Do **not** point those at D1.
 
 Two gaps motivated D1 `RELAYBASE_LOGS`:
 
@@ -45,7 +45,7 @@ D1 `ops_log` is an **additional** event log that covers compose, API, broadcast,
 
 ## Schema
 
-`server/db/log/migrations/0001_ops_logs.sql`:
+`../relaybase-worker/db/log/migrations/0001_ops_logs.sql`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS ops_log (
@@ -71,7 +71,7 @@ CREATE INDEX IF NOT EXISTS ops_log_domain_idx ON ops_log (domain);
 CREATE INDEX IF NOT EXISTS ops_log_kind_idx ON ops_log (kind, at DESC);
 ```
 
-Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations/` and `db/mail/migrations/`) so D1 migration directories never collide. Applied by `POST /console/init-db` (empty D1) or `POST /console/migrate-db` (existing).
+Migrations live in `../relaybase-worker/db/log/migrations/` (separate from `db/app/migrations/` and `db/mail/migrations/`) so D1 migration directories never collide. Applied by `POST /console/init-db` (empty D1) or `POST /console/migrate-db` (existing).
 
 ---
 
@@ -82,7 +82,7 @@ Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations
 | Compose | `POST /mail/send` | `send`, `api_error` | Validation errors, all-bounce, CF exception, success, partial bounce. Also returns a `sent` object so the client upserts Sent. |
 | API | `POST /v1/send` | `send`, `api_error` | Dual-write: R2 `sent/_sendlog/*` + D1 `ops_log` (+ mailbox `sent/{domain}/{id}/` + D1 `mailbox_messages` `kind=sent` on success). Partial bounce keeps send-log `ok: true` but D1 `ok: false` so the dashboard catches it. |
 | Broadcast | `catalog-broadcasts.ts` | `send` | Dual-write per recipient (KV + D1). |
-| Inbound | `server/src/inbound.ts` / `email()` | `inbound`, `bounce` | Every `email()` store success or throw is `kind=inbound` (`created` in `meta_json`). Detected DSN bounces also write `kind=bounce` via `bounce-detect.ts`. Dashboard Log shows receive as empty when Routing never invokes `email()`. |
+| Inbound | `../relaybase-worker/src/inbound.ts` / `email()` | `inbound`, `bounce` | Every `email()` store success or throw is `kind=inbound` (`created` in `meta_json`). Detected DSN bounces also write `kind=bounce` via `bounce-detect.ts`. Dashboard Log shows receive as empty when Routing never invokes `email()`. |
 
 `recordOpsLog` soft-fails (returns `null`, logs to `console.error`) when `RELAYBASE_LOGS` is missing — customer installs without the binding keep working.
 
@@ -90,7 +90,7 @@ Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations
 
 ## Bounce detection
 
-`server/src/lib/bounce-detect.ts` flags a message as a bounce when:
+`../relaybase-worker/src/lib/bounce-detect.ts` flags a message as a bounce when:
 
 - `from` matches `bounces@cf-bounce.*` (Cloudflare Email Routing/Sending), or
 - the raw MIME head contains `content-type: multipart/report` / `message/delivery-status`, or
@@ -98,9 +98,9 @@ Migrations live in `server/db/log/migrations/` (separate from `db/app/migrations
 
 `parseBounceDiagnostic` scans the first ~8 KB of raw MIME for `Final-Recipient`, `Diagnostic-Code`, and `Status` headers (DSN RFC 3464). `buildBouncePreview` produces a human-readable string like `Bounce: Status 5.1.1 — 550 … — to isaac@wedesk.so`.
 
-`server/src/lib/inbound-store.ts` uses this so a bounce with an empty body still stores a non-empty `bodyText` / `bodyPreview` — the inbox no longer shows `(empty message)`.
+`../relaybase-worker/src/lib/inbound-store.ts` uses this so a bounce with an empty body still stores a non-empty `bodyText` / `bodyPreview` — the inbox no longer shows `(empty message)`.
 
-`server/src/inbound.ts` records the bounce as an `ops_log` row (`kind: "bounce"`, `ok: false`, `source: "inbound"`) after the inbound message is stored.
+`../relaybase-worker/src/inbound.ts` records the bounce as an `ops_log` row (`kind: "bounce"`, `ok: false`, `source: "inbound"`) after the inbound message is stored.
 
 Do **not** overwrite `bodyText` on normal mail — only fill the fallback when the parsed body is empty and the message is detected as a bounce.
 
@@ -114,7 +114,7 @@ Do **not** overwrite `bodyText` on normal mail — only fill the fallback when t
 
 ## D1 configured probe
 
-`server/src/lib/d1-status.ts` checks whether each D1 binding is present **and** migrated (expected table exists in `sqlite_master`):
+`../relaybase-worker/src/lib/d1-status.ts` checks whether each D1 binding is present **and** migrated (expected table exists in `sqlite_master`):
 
 | Binding | Table | Database name |
 |---------|-------|---------------|
@@ -160,7 +160,7 @@ Nav order in `app/src/console/lib/paths.ts`: … API Keys → **Log** → Settin
 
 Route: `/logs` → `LogsView` (`app/src/console/pages/logs/LogsView.tsx`).
 
-API: `GET /console/ops-logs?limit&status&domain` (`server/src/routes/console/ops-logs.ts`). Client maps `/api/email/logs` → `/console/ops-logs` in `email-api-map.ts`.
+API: `GET /console/ops-logs?limit&status&domain` (`../relaybase-worker/src/routes/console/ops-logs.ts`). Client maps `/api/email/logs` → `/console/ops-logs` in `email-api-map.ts`.
 
 UI columns: When · Source · Status · Kind · Subject · Peer · Domain. Filters: all/success/failed + domain search. Summary: total, failed, failed-24h, plus **D1 not configured** when `d1Configured` is false. Selecting a row shows full detail including `error` and `metaJson`.
 
@@ -172,10 +172,10 @@ Dashboard home (`ConnectionStatusCards`) and Settings show a **D1** status card 
 
 - **R2 `sent/_sendlog/*` stays authoritative** for Account Logs and the admin server's send-log reads (formerly the legacy `/admin/logs` worker route). Do not point those at D1.
 - **D1 `ops_log` is additive.** New event kinds go here; do not duplicate into the send-log store.
-- **Customer install ZIP keeps D1 optional.** `server/customer-install/wrangler.toml` has the binding commented out; `recordOpsLog` no-ops when the binding is missing.
+- **Customer install ZIP keeps D1 optional.** `../relaybase-worker/customer-install/wrangler.toml` has the binding commented out; `recordOpsLog` no-ops when the binding is missing.
 - **Soft-fail only.** A D1 write error must never break a send or an inbound store. Helpers catch + `console.error`; routes continue.
 - **Bounce detection is best-effort.** Missed bounces are acceptable; false bounce classification of normal mail is not. Only fill fallback `bodyText` when the parsed body is empty.
-- **Migrations dir is `server/db/log/migrations/`.** Do not add product-log migrations under `db/app/migrations/` or `db/mail/migrations/`.
+- **Migrations dir is `../relaybase-worker/db/log/migrations/`.** Do not add product-log migrations under `db/app/migrations/` or `db/mail/migrations/`.
 
 ---
 

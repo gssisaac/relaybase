@@ -11,7 +11,7 @@ export function AppUpdateBanner() {
   if (!updater) return null;
 
   const { phase, version, progressLabel, restartToUpdate } = updater;
-  if (phase === "idle" || phase === "checking") return null;
+  if (phase === "idle") return null;
 
   if (phase === "ready" && version) {
     return (
@@ -34,7 +34,9 @@ export function AppUpdateBanner() {
   }
 
   const statusText =
-    progressLabel ?? (version ? `Downloading v${version}…` : "Downloading update…");
+    phase === "checking"
+      ? "Checking for updates…"
+      : progressLabel ?? (version ? `Downloading v${version}…` : "Downloading update…");
 
   return (
     <div className="shrink-0 px-2 pb-2" role="status" aria-live="polite">

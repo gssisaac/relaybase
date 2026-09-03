@@ -1,9 +1,9 @@
 /// R2 bucket created during install.
 pub(crate) const R2_BUCKET: &str = "relaybase-mailbox";
 
-/// Default manifest URL (override via RELAYBASE_INSTALL_MANIFEST_URL).
+/// Default manifest URL — GitHub Release `latest` alias (override via RELAYBASE_INSTALL_MANIFEST_URL).
 pub(crate) const DEFAULT_MANIFEST_URL: &str =
-    "https://relaybase.xyz/downloads/worker-install-manifest.json";
+    "https://github.com/strum-us/relaybase-worker/releases/latest/download/worker-install-manifest.json";
 
 /// Typed confirmation required before wiping occupied R2 / D1.
 pub const WIPE_PHRASE_DELETE_ME: &str = "DELETE ME";

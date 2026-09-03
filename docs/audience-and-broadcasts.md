@@ -6,11 +6,11 @@
 
 | Area | Paths |
 |------|--------|
-| D1 schema + helpers | `server/db/app/schema.ts`, `server/db/app/audience.ts`, `server/db/app/broadcasts.ts` (D1 `RELAYBASE_DB` tables `audience_groups`, `audience_contacts`, `broadcasts`) |
-| Store / model | `server/src/lib/catalog-audience.ts`, `catalog-broadcasts.ts`, `catalog-types.ts` (now backed by D1, not KV) |
-| Audience APIs | `server/src/routes/console/audience-groups.ts` → `/console/audience-groups` |
-| Broadcast APIs | `server/src/routes/console/broadcasts.ts` → `/console/broadcasts` |
-| Cron | `server/src/index.ts` `scheduled()` + `server/wrangler.toml` triggers |
+| D1 schema + helpers | `../relaybase-worker/db/app/schema.ts`, `../relaybase-worker/db/app/audience.ts`, `../relaybase-worker/db/app/broadcasts.ts` (D1 `RELAYBASE_DB` tables `audience_groups`, `audience_contacts`, `broadcasts`) |
+| Store / model | `../relaybase-worker/src/lib/catalog-audience.ts`, `catalog-broadcasts.ts`, `catalog-types.ts` (now backed by D1, not KV) |
+| Audience APIs | `../relaybase-worker/src/routes/console/audience-groups.ts` → `/console/audience-groups` |
+| Broadcast APIs | `../relaybase-worker/src/routes/console/broadcasts.ts` → `/console/broadcasts` |
+| Cron | `../relaybase-worker/src/index.ts` `scheduled()` + `../relaybase-worker/wrangler.toml` triggers |
 | Client mapping | `app/src/lib/desktop/api/email-api-map.ts` (`/api/email/*` → Worker admin) |
 | Audience UI | `app/src/console/pages/audience/AudienceGroup*.tsx`, `AudienceGroupsView.tsx`, `AudienceDataSourceGuide.tsx` |
 | Broadcast UI | `app/src/console/pages/broadcasts/Broadcast*.tsx`, `BroadcastsView.tsx` |
@@ -74,7 +74,7 @@ Legacy `/audience/:groupId[/contacts|history|settings]` and `/broadcasts/:id[/au
 
 ## Data model (store)
 
-Defined in `server/src/lib/catalog-types.ts` and persisted in D1 `RELAYBASE_DB` tables `audience_groups` / `audience_contacts` / `broadcasts` (Drizzle schema in `server/db/app/schema.ts`; helpers in `server/db/app/audience.ts` and `server/db/app/broadcasts.ts`). D1 is the sole source of truth.
+Defined in `../relaybase-worker/src/lib/catalog-types.ts` and persisted in D1 `RELAYBASE_DB` tables `audience_groups` / `audience_contacts` / `broadcasts` (Drizzle schema in `../relaybase-worker/db/app/schema.ts`; helpers in `../relaybase-worker/db/app/audience.ts` and `../relaybase-worker/db/app/broadcasts.ts`). D1 is the sole source of truth.
 
 ### `DevAudienceDataSource`
 

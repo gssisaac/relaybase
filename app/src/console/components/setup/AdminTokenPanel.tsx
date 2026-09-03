@@ -15,9 +15,8 @@ import { Label } from "@/components/ui/label";
 import {
   desktopSaveDownloadFile,
   isDesktopRuntime,
-  WORKER_INSTALL_MANIFEST_URL,
   WORKER_INSTALL_ZIP_URL,
-  type WorkerInstallManifest,
+  fetchWorkerInstallManifest,
 } from "@/lib/desktop/bridge";
 import { parseDefaultWorkerSubdomain } from "@/lib/desktop/worker-url/worker-url";
 import { cn } from "@/lib/utils";
@@ -129,9 +128,8 @@ export function ManualInstallScriptPanel({
 
   useEffect(() => {
     let active = true;
-    void fetch(WORKER_INSTALL_MANIFEST_URL, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: WorkerInstallManifest | null) => {
+    void fetchWorkerInstallManifest()
+      .then((data) => {
         if (active && data?.zipUrl?.trim()) {
           setZipUrl(data.zipUrl.trim());
         }

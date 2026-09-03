@@ -6,10 +6,10 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | D1 `RELAYBASE_DB` (binding in `server/wrangler.toml`; Drizzle in `server/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (passtoken hash), `owner_sessions`, `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
+| **Remote** | D1 `RELAYBASE_DB` (binding in `../relaybase-worker/wrangler.toml`; Drizzle in `../relaybase-worker/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (passtoken hash), `owner_sessions`, `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
-| **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `server/db/log/`. |
-| **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `server/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
+| **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `../relaybase-worker/db/log/`. |
+| **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `../relaybase-worker/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
 | **Remote** | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared HQ store: `product_settings` (optional operator `workerUrl` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[hq-ops-d1.md](./hq-ops-d1.md)**. |
 | **Local** | `~/.relaybase` | Workspace config (`workspace.json`), API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login |
 
@@ -59,10 +59,10 @@ Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 
 ## Remote — D1 `RELAYBASE_DB` (durable product state)
 
-Binding: `server/wrangler.toml` → `RELAYBASE_DB` (database `relaybase-db`).  
-Env type: `server/src/env.ts`.  
-Drizzle schema + helpers: `server/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `settings.ts`, `inbound-events.ts`).  
-Migrations: `server/db/app/migrations/` — applied by the Worker via **`POST /console/init-db`** (empty D1 only) or **`POST /console/migrate-db`** (existing D1 / Worker update). The desktop never runs SQL. Ledger + baseline catch-up policy: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
+Binding: `../relaybase-worker/wrangler.toml` → `RELAYBASE_DB` (database `relaybase-db`).  
+Env type: `../relaybase-worker/src/env.ts`.  
+Drizzle schema + helpers: `../relaybase-worker/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `settings.ts`, `inbound-events.ts`).  
+Migrations: `../relaybase-worker/db/app/migrations/` — applied by the Worker via **`POST /console/init-db`** (empty D1 only) or **`POST /console/migrate-db`** (existing D1 / Worker update). The desktop never runs SQL. Ledger + baseline catch-up policy: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 
 This is the **sole source of truth** for product catalog state. No KV binding on the product Worker.
 
@@ -126,7 +126,7 @@ The product Worker manages domains / inbox routing / DNS with wrangler secret `C
 
 Account / license / billing are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`), not on the product Worker. The console no longer holds or verifies an admin token.
 
-Cron: `server/wrangler.toml` `*/15 * * * *` → `runAudienceCron` + `runInboundIndexCron` in `server/src/index.ts` (index reconcile + optional inbound prune; single catalog, no per-user fan-out).
+Cron: `../relaybase-worker/wrangler.toml` `*/15 * * * *` → `runAudienceCron` + `runInboundIndexCron` in `../relaybase-worker/src/index.ts` (index reconcile + optional inbound prune; single catalog, no per-user fan-out).
 
 ### R2 `INBOUND` (bucket `relaybase-mailbox`)
 
@@ -150,7 +150,7 @@ R2 holds **one folder per mail**. `meta.json` is THIN (headers + `bodyPreview` �
 
 ### D1 `RELAYBASE_MAIL` (mail index — list / counts / search)
 
-Binding `RELAYBASE_MAIL` (database `relaybase-mail`), Drizzle in `server/db/mail/`. Two tables: `mailbox_messages` (list/count/cursor, inbound **and** sent) and `mailbox_fts` (FTS5 over subject/from/to/cc/body). Derived from R2 thin `meta.json` + `raw.eml`; synced best-effort on ingest/prune/read-state and fully rebuildable via `POST /console/rebuild-mail`. Queried by `GET /mail/inbox`, `/mail/inbox/counts`, `/mail/inbox/search`, `/mail/sent`, `/v1/inbox/messages*`, and `/mobile/inbox*` (account-scoped via the `recipients` column). Without the binding those endpoints return **503** (no silent `_list.json` fallback).
+Binding `RELAYBASE_MAIL` (database `relaybase-mail`), Drizzle in `../relaybase-worker/db/mail/`. Two tables: `mailbox_messages` (list/count/cursor, inbound **and** sent) and `mailbox_fts` (FTS5 over subject/from/to/cc/body). Derived from R2 thin `meta.json` + `raw.eml`; synced best-effort on ingest/prune/read-state and fully rebuildable via `POST /console/rebuild-mail`. Queried by `GET /mail/inbox`, `/mail/inbox/counts`, `/mail/inbox/search`, `/mail/sent`, `/v1/inbox/messages*`, and `/mobile/inbox*` (account-scoped via the `recipients` column). Without the binding those endpoints return **503** (no silent `_list.json` fallback).
 
 Full design (schema, query safety, sync model, backfill, freshness): **[mailbox-d1.md](./mailbox-d1.md)**. R2 layout: **[mailbox-r2.md](./mailbox-r2.md)**.
 
@@ -164,7 +164,7 @@ Full design (schema, query safety, sync model, backfill, freshness): **[mailbox-
 - Hosted OpenNext `app.relaybase.xyz` as a product API (removed)
 - Cookie multi-tenant sessions for the Mac product
 
-Customer install template: three D1 databases (`relaybase-db`, `relaybase-logs`, `relaybase-mail`) bound as `RELAYBASE_DB` / `RELAYBASE_LOGS` / `RELAYBASE_MAIL` — no KV. See `server/customer-install/`.
+Customer install template: three D1 databases (`relaybase-db`, `relaybase-logs`, `relaybase-mail`) bound as `RELAYBASE_DB` / `RELAYBASE_LOGS` / `RELAYBASE_MAIL` — no KV. See `../relaybase-worker/customer-install/`.
 
 ---
 
@@ -214,8 +214,8 @@ Browser `pnpm next` (no Tauri): workspace via `/api/local-credentials` reading t
 
 When adding a dashboard/email feature that needs durable remote data:
 
-1. Persist in D1 `RELAYBASE_DB` under `server/db/app/` (new Drizzle table + helper module) — **not** under `app/` FS and **not** in Cloudflare KV.
-2. Expose `/console/…` (management) or `/mail/…` (mail ops) with `requireAdmin` + CORS (`server/src/lib/cors.ts`). Operator-only endpoints belong in the admin Next.js server, not the worker.
+1. Persist in D1 `RELAYBASE_DB` under `../relaybase-worker/db/app/` (new Drizzle table + helper module) — **not** under `app/` FS and **not** in Cloudflare KV.
+2. Expose `/console/…` (management) or `/mail/…` (mail ops) with `requireAdmin` + CORS (`../relaybase-worker/src/lib/cors.ts`). Operator-only endpoints belong in the admin Next.js server, not the worker.
 3. Map `/api/email/…` → that route in `email-api-map.ts`.
 4. Call through `desktopAwareFetch` / `readResponseJson` — never raw `fetch` to Next `/api/email` in the UI.
 5. Cache on disk under `~/.relaybase/cache/…` if the UI needs offline/stale-while-revalidate.
@@ -256,6 +256,6 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 
 1. Do **not** add `DevUser*` / `userdata:` / repo `data/users` for product state.
 2. Do **not** add a Cloudflare KV binding on the product Worker for app data.
-3. New durable product fields go in D1 `RELAYBASE_DB` (`server/db/app/` Drizzle schema + helper).
+3. New durable product fields go in D1 `RELAYBASE_DB` (`../relaybase-worker/db/app/` Drizzle schema + helper).
 4. Packaged and `next`/Tauri must share one fetch path — no `isPackagedDesktopShell`-only product API.
 5. Plaintext secrets that the Worker cannot store → `~/.relaybase` only (`api-keys.json`). Workspace config is `workspace.json` (no secrets).

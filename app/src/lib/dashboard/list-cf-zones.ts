@@ -2,8 +2,7 @@ import { desktopAwareFetch } from "@/lib/desktop/api/api-base";
 import {
   desktopCheckWorkerUpdate,
   desktopVerifyWorkerConnection,
-  WORKER_INSTALL_MANIFEST_URL,
-  type WorkerInstallManifest,
+  fetchWorkerInstallManifest,
   type ZoneSummary,
 } from "@/lib/desktop/bridge";
 import { workerNeedsUpgrade } from "@/lib/dashboard/worker-version";
@@ -38,10 +37,8 @@ export async function fetchPublicWorkerHealthVersion(
 
 async function fetchHostedInstallVersion(): Promise<string> {
   try {
-    const res = await fetch(WORKER_INSTALL_MANIFEST_URL, { cache: "no-store" });
-    if (!res.ok) return "";
-    const data = (await res.json().catch(() => ({}))) as WorkerInstallManifest;
-    return data.version?.trim() ?? "";
+    const data = await fetchWorkerInstallManifest();
+    return data?.version?.trim() ?? "";
   } catch {
     return "";
   }

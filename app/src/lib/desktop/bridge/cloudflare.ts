@@ -3,15 +3,68 @@ import { formatDesktopError } from "./invoke";
 export const CF_API_TOKENS_URL =
   "https://dash.cloudflare.com/profile/api-tokens";
 
-/** Hosted install ZIP (packed via `pnpm pack:worker-install`). */
+const GITHUB_WORKER_REPO = "strum-us/relaybase-worker";
+
+/** Latest GitHub Release install ZIP (stable filename). */
 export const WORKER_INSTALL_ZIP_URL =
   process.env.NEXT_PUBLIC_WORKER_INSTALL_ZIP_URL ??
-  "https://relaybase.xyz/downloads/relaybase-worker-install.zip";
+  `https://github.com/${GITHUB_WORKER_REPO}/releases/latest/download/relaybase-worker-install.zip`;
 
-/** Hosted install manifest (version, zipUrl, sha256). */
+/** Latest GitHub Release install manifest (version, zipUrl, sha256, workerJs). */
 export const WORKER_INSTALL_MANIFEST_URL =
   process.env.NEXT_PUBLIC_WORKER_INSTALL_MANIFEST_URL ??
-  "https://relaybase.xyz/downloads/worker-install-manifest.json";
+  `https://github.com/${GITHUB_WORKER_REPO}/releases/latest/download/worker-install-manifest.json`;
+
+/** Versioned Worker script on a GitHub Release, e.g. worker.0.1.1.js */
+export function workerJsReleaseUrl(version: string): string {
+  const v = version.trim().replace(/^v/, "");
+  return `https://github.com/${GITHUB_WORKER_REPO}/releases/download/v${v}/worker.${v}.js`;
+}
+
+type GithubReleaseAsset = { name?: string; browser_download_url?: string };
+type GithubRelease = {
+  tag_name?: string;
+  published_at?: string;
+  assets?: GithubReleaseAsset[];
+};
+
+/**
+ * Resolve latest install metadata via the GitHub API (CORS-friendly).
+ * Desktop Rust still downloads the ZIP from `WORKER_INSTALL_MANIFEST_URL`.
+ */
+export async function fetchWorkerInstallManifest(): Promise<WorkerInstallManifest | null> {
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${GITHUB_WORKER_REPO}/releases/latest`,
+      {
+        cache: "no-store",
+        headers: { Accept: "application/vnd.github+json" },
+      },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as GithubRelease;
+    const tag = (data.tag_name ?? "").trim().replace(/^v/, "");
+    if (!tag) return null;
+    const assets = data.assets ?? [];
+    const zip =
+      assets.find((a) => a.name === `relaybase-worker-install-${tag}.zip`) ??
+      assets.find((a) => a.name === "relaybase-worker-install.zip");
+    const js = assets.find((a) => a.name === `worker.${tag}.js`);
+    const zipUrl =
+      zip?.browser_download_url?.trim() ||
+      `https://github.com/${GITHUB_WORKER_REPO}/releases/download/v${tag}/relaybase-worker-install-${tag}.zip`;
+    return {
+      version: tag,
+      zipUrl,
+      zipSha256: "",
+      publishedAt: data.published_at ?? "",
+      workerJs: `worker.${tag}.js`,
+      workerJsUrl: js?.browser_download_url?.trim() || workerJsReleaseUrl(tag),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export type WorkerInstallManifest = {
   version: string;
@@ -20,6 +73,8 @@ export type WorkerInstallManifest = {
   publishedAt: string;
   /** Hosted / ZIP filename, e.g. `worker.0.1.1.js`. */
   workerJs?: string;
+  /** Direct GitHub Release URL for `worker.{version}.js`. */
+  workerJsUrl?: string;
   notes?: string;
 };
 

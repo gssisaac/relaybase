@@ -161,7 +161,7 @@ Errors use `explainCfOAuthError()`.
 | Desktop Rust | `desktop/src-tauri/src/cf_oauth.rs` (`require_cf_oauth`), `lib.rs`, `secrets.rs`, `auto_install/`, `tauri.conf.json` (`relaybase` scheme), `capabilities/default.json` |
 | App bridge + Settings | `app/src/lib/desktop/bridge/`, `SettingsConnectionContext.tsx`, `SettingsCloudflarePage.tsx`, `WorkerUpdateBanner.tsx`, `/settings/worker/update`, `/settings/worker/progress` |
 | Enable email API dialog | `app/src/console/components/setup/EnableEmailApiDialog.tsx`, `use-enable-email-api-dialog.tsx` (also opened from Domains → Refresh from Cloudflare when `GET /console/zones` reports the Worker token missing) |
-| Zone list (Refresh from Cloudflare) | `GET /console/zones` (`server/src/routes/console/zones.ts`) via `listCloudflareZones` — Worker `CF_API_TOKEN`, not desktop OAuth |
+| Zone list (Refresh from Cloudflare) | `GET /console/zones` (`../relaybase-worker/src/routes/console/zones.ts`) via `listCloudflareZones` — Worker `CF_API_TOKEN`, not desktop OAuth |
 | Setup install wizard | `app/src/console/components/setup/WorkerInstallPanel.tsx`, `SetupProgressPanel.tsx`, `app/src/app/setup/progress/page.tsx` |
 | Passtoken reissue (forgot) | `app/src/console/components/setup/RecoverAdminPanel.tsx`, `app/src/app/setup/recover-admin/page.tsx` → `desktopStartCfOAuth("recover")` → `POST /console/reset-admin` (Secrets Store on the pinned CF account) |
 

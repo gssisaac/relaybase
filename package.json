@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm run dev --prefix server",
-    "deploy": "npm run deploy --prefix server",
-    "typecheck": "npm run typecheck --prefix server",
+    "dev": "node scripts/run-worker.mjs dev",
+    "deploy": "node scripts/run-worker.mjs deploy",
+    "typecheck": "node scripts/run-worker.mjs typecheck",
+    "test:worker": "node scripts/run-worker.mjs test",
     "admin:dev": "npm run dev --prefix hq/admin",
     "admin:build": "npm run build --prefix hq/admin",
     "admin:start": "npm run start --prefix hq/admin",
@@ -35,7 +36,7 @@
     "mobile:build:ios": "cd mobile && flutter build ios --release",
     "mobile:build:apk": "cd mobile && flutter build apk --release",
     "mobile:test": "cd mobile && flutter test",
-    "pack:worker-install": "npm run pack:customer-install --prefix server",
+    "pack:worker-install": "node scripts/run-worker.mjs pack:customer-install",
     "website:dev": "pnpm --dir hq/website dev",
     "website:build": "pnpm --dir hq/website build",
     "website:start": "pnpm --dir hq/website start"

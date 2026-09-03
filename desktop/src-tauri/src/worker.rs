@@ -11,7 +11,7 @@ pub const R2_BUCKET: &str = "relaybase-mailbox";
 
 /// Minimal Worker stub shipped with the app when a full server build is not embedded.
 /// Production releases should replace this via `worker_js_override` from the release channel
-/// or by bundling `server/` build output under resources.
+/// or by bundling `relaybase-worker` build output under resources.
 const EMBEDDED_WORKER_STUB: &str = r#"
 export default {
   async fetch(request, env) {

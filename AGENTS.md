@@ -8,7 +8,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 |------------------------|------------|
 | **Where data lives** (D1, R2, `~/.relaybase`, API routing, new durable fields) | [docs/storage-architecture.md](docs/storage-architecture.md) |
 | **D1 migrations**, `POST /console/init-db` (empty only), `POST /console/migrate-db`, install probe, or `migrations_dir` paths | [docs/d1-migrations-and-init-db.md](docs/d1-migrations-and-init-db.md) |
-| **Product Worker code** (`server/src/`, `server/db/`, new `/console/*` or `/mail/*` routes) | Rebuild the Worker bundle — see **Worker bundle** below |
+| **Product Worker code** (sibling `../relaybase-worker/` — `src/`, `db/`, new `/console/*` or `/mail/*` routes) | Rebuild the Worker bundle — see **Worker bundle** below |
 | Mailbox R2 layout (`relaybase-mailbox`, `inbound|sent {domain}/{id}/` thin `meta.json` + `raw.eml`, send-log, bucket copy scripts) | [docs/mailbox-r2.md](docs/mailbox-r2.md) |
 | Desktop credentials, mail cache, UI prefs, API key vault, notifications, or any local persistence | [docs/relaybase-home-storage.md](docs/relaybase-home-storage.md) (`~/.relaybase` only) |
 | Settings → Cloudflare OAuth (install token), `hq/console` OAuth routes, or desktop CF API install | [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) |
@@ -29,7 +29,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/bimi-vmc-do-not-build.md](docs/bimi-vmc-do-not-build.md) (do **not** build) |
 | Marketing site feature clips (`hq/website` homepage videos) | [hq/website/docs/feature-video-encode.md](hq/website/docs/feature-video-encode.md) — also [hq/website/AGENT.md](hq/website/AGENT.md) |
-| **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [docs/version-sync.md](docs/version-sync.md) — **same semver for both** — then [desktop/docs/release.md](desktop/docs/release.md) and [server/customer-install/RELEASE.md](server/customer-install/RELEASE.md). **CRITICAL: Pre-launch version is strictly frozen at `0.1.1`. Do NOT bump versions before official launch.** |
+| **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [docs/version-sync.md](docs/version-sync.md) — **same semver for both** — then [desktop/docs/release.md](desktop/docs/release.md) and [`../relaybase-worker/docs/RELEASE.md`](../relaybase-worker/docs/RELEASE.md). **CRITICAL: Pre-launch version is strictly frozen at `0.1.1`. Do NOT bump versions before official launch.** |
 
 ## Storage (summary)
 
@@ -37,16 +37,16 @@ Two durable layers only — full map in **[docs/storage-architecture.md](docs/st
 
 | Layer | Store | Use for |
 |-------|--------|---------|
-| Remote | D1 `RELAYBASE_DB` (`server/db/app/`, binding `RELAYBASE_DB`) | All durable product state: domains, addresses, audience groups/contacts, broadcasts, branding, API keys, owner login (passtoken hash + sessions), mobile passwords, webhooks, owner config, `app_settings` (inbound retain-per-domain; default unlimited), pending inbound events. Sole source of truth — no KV. |
+| Remote | D1 `RELAYBASE_DB` (`../relaybase-worker/db/app/`, binding `RELAYBASE_DB`) | All durable product state: domains, addresses, audience groups/contacts, broadcasts, branding, API keys, owner login (passtoken hash + sessions), mobile passwords, webhooks, owner config, `app_settings` (inbound retain-per-domain; default unlimited), pending inbound events. Sole source of truth — no KV. |
 | Remote | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound|sent {domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. |
-| Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). R2 `sent/_sendlog/*` stays authoritative for send history. Drizzle schema/helper: `server/db/log/`. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
-| Remote | D1 `RELAYBASE_MAIL` (`server/db/mail/`, binding `RELAYBASE_MAIL`) | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. See **[docs/mailbox-d1.md](docs/mailbox-d1.md)**. |
+| Remote | D1 `RELAYBASE_LOGS` (hosted only) | Ops-event log: compose/API/broadcast sends + inbound bounces (Dashboard Log page). R2 `sent/_sendlog/*` stays authoritative for send history. Drizzle schema/helper: `../relaybase-worker/db/log/`. See **[docs/ops-log-d1.md](docs/ops-log-d1.md)**. |
+| Remote | D1 `RELAYBASE_MAIL` (`../relaybase-worker/db/mail/`, binding `RELAYBASE_MAIL`) | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. See **[docs/mailbox-d1.md](docs/mailbox-d1.md)**. |
 | Remote | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared HQ store: operator settings (`product_settings`), licenses, accounts, account_workers, account_recovery, waitlist, `beta_invites`. Drizzle in `hq/console/src/db/` (admin uses `product_settings` + `beta_invites` + `licenses`; website Worker uses `beta_invites` via raw SQL). See **[docs/hq-ops-d1.md](docs/hq-ops-d1.md)**. |
 | Local | `~/.relaybase` | Workspace config (`workspace.json`), team-login, API key plaintext vault (`api-keys.json`), mail/UI/dashboard cache |
 | Local | OS keyring | Owner refresh (`owner-session`, silent), owner passtoken (`owner-passtoken`, Touch ID to read), team mobile password (`team-session:{email}`), CF OAuth install refresh (`cf-oauth-install`, silent background update) |
 | Local (phone) | Flutter secure storage + Hive | Mobile email + password; inbox/draft cache — **[docs/mobile-email-companion.md](docs/mobile-email-companion.md)** |
 
-Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, a product Worker KV binding, or license/account/billing routes on the product Worker (those live on `console.relaybase.xyz`). Do **not** store Cloudflare credentials, end-user dashboard auth tokens, or plaintext API keys in D1 `strum-relaybase-ops` `product_settings` — that table holds only an optional `workerUrl`; domain / DNS API uses the Worker `CF_API_TOKEN` wrangler secret (`CF_ACCOUNT_ID` is optional — see [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) → *Worker CF_ACCOUNT_ID*), owner auth uses the `AUTH_PEPPER` wrangler secret (passtoken hashing + access-token HMAC; tokens live in the product Worker's D1 `owner_sessions` hash-only), and plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`. Do **not** re-introduce the `ADMIN_TOKEN` wrangler secret, `owner_config.admin_token`, D1 `auth_tokens` (`rb-auth-…`), `/console/recover-admin`, or `/console/auth-tokens` — the desktop god token is retired in favor of the Worker-issued passtoken (see [docs/storage-architecture.md](docs/storage-architecture.md) → *Owner auth*). The owner passtoken / access / refresh are never written to `~/.relaybase`, cookies, localStorage, or sessionStorage. After first enrollment the passtoken plaintext lives in OS keyring `owner-passtoken` (Touch ID to **read**); refresh tokens live in `owner-session` (silent read); access stays in Tauri memory. Do **not** reintroduce Cloudflare KV — HQ ops is D1 `strum-relaybase-ops` only. New durable product fields go in `server/db/app/` (Drizzle schema + helper), not as Cloudflare KV keys. All UI modes call the product Worker through `desktopAwareFetch` + `email-api-map.ts`; account/license/billing calls go to `console.relaybase.xyz`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**. Mobile uses `/mobile/*` with per-account password auth (not admin token).
+Do **not** reintroduce Next userdata / `DevUserEmailData`, cookie multi-tenant login, a product Worker KV binding, or license/account/billing routes on the product Worker (those live on `console.relaybase.xyz`). Do **not** store Cloudflare credentials, end-user dashboard auth tokens, or plaintext API keys in D1 `strum-relaybase-ops` `product_settings` — that table holds only an optional `workerUrl`; domain / DNS API uses the Worker `CF_API_TOKEN` wrangler secret (`CF_ACCOUNT_ID` is optional — see [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md) → *Worker CF_ACCOUNT_ID*), owner auth uses the `AUTH_PEPPER` wrangler secret (passtoken hashing + access-token HMAC; tokens live in the product Worker's D1 `owner_sessions` hash-only), and plaintext API keys live only in `~/.relaybase/{scopeId}/api-keys.json`. Do **not** re-introduce the `ADMIN_TOKEN` wrangler secret, `owner_config.admin_token`, D1 `auth_tokens` (`rb-auth-…`), `/console/recover-admin`, or `/console/auth-tokens` — the desktop god token is retired in favor of the Worker-issued passtoken (see [docs/storage-architecture.md](docs/storage-architecture.md) → *Owner auth*). The owner passtoken / access / refresh are never written to `~/.relaybase`, cookies, localStorage, or sessionStorage. After first enrollment the passtoken plaintext lives in OS keyring `owner-passtoken` (Touch ID to **read**); refresh tokens live in `owner-session` (silent read); access stays in Tauri memory. Do **not** reintroduce Cloudflare KV — HQ ops is D1 `strum-relaybase-ops` only. New durable product fields go in `../relaybase-worker/db/app/` (Drizzle schema + helper), not as Cloudflare KV keys. All UI modes call the product Worker through `desktopAwareFetch` + `email-api-map.ts`; account/license/billing calls go to `console.relaybase.xyz`. Local Mac details: **[docs/relaybase-home-storage.md](docs/relaybase-home-storage.md)**. Mobile uses `/mobile/*` with per-account password auth (not admin token).
 
 ## Email commands (summary)
 
@@ -83,23 +83,23 @@ Read **[desktop/docs/release.md](desktop/docs/release.md)** before any signed DM
 
 ## Worker bundle
 
-Desktop install and Settings → Worker update upload a **pre-built** `worker.js`, not TypeScript from `server/src/`. Editing `server/` does **not** change the running Worker until you rebuild.
+The product Worker lives in the sibling repo **`../relaybase-worker/`** (clone next to this monorepo, or set `RELAYBASE_WORKER_DIR`). Desktop install and Settings → Worker update upload a **pre-built** `worker.js`, not TypeScript from that repo. Editing Worker source does **not** change the running Worker until you rebuild.
 
-After any change that ships in the product Worker (routes, `/health`, `init-db` / `migrate-db`, auth, mail, D1 helpers, `server/db/migrations.ts`):
-
-```bash
-cd server && pnpm run build:bundle
-```
-
-That writes `server/dist/worker-build/index.js` for dogfood `wrangler deploy`. Desktop install/update uploads **only** the hosted ZIP — it does not overlay a local `worker.js`. Until you pack and deploy the website, Settings → Update Worker still uploads the old public script — new routes like `/console/migrate-db` 404.
-
-For the public install ZIP (`https://relaybase.xyz/downloads`):
+After any change that ships in the product Worker (routes, `/health`, `init-db` / `migrate-db`, auth, mail, D1 helpers, `db/migrations.ts`):
 
 ```bash
-pnpm pack:worker-install
+cd ../relaybase-worker && pnpm run build:bundle
 ```
 
-then deploy `hq/website`. Pack also runs `build:bundle` and refreshes `hq/website/public/downloads/`. See [server/customer-install/RELEASE.md](server/customer-install/RELEASE.md).
+That writes `../relaybase-worker/dist/worker-build/index.js` for dogfood `wrangler deploy`. Desktop install/update downloads the **GitHub Release** ZIP (`worker.{version}.js` inside) — it does not overlay a local `worker.js`. Until you publish a Worker GitHub Release, Settings → Update Worker still uploads the previous script.
+
+For the public install ZIP:
+
+```bash
+cd ../relaybase-worker && pnpm run publish:github
+```
+
+See [`../relaybase-worker/docs/RELEASE.md`](../relaybase-worker/docs/RELEASE.md).
 
 ## General
 

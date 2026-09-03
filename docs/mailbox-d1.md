@@ -8,20 +8,20 @@ This doc replaces the old `inbound-search-d1-fts5.md` (inbound-only FTS). Mail s
 
 | Area | Paths |
 |------|------|
-| D1 binding + migration | `server/wrangler.toml` (`RELAYBASE_MAIL`), `server/db/mail/migrations/0001_create_mailbox.sql` |
-| Drizzle schema + helpers | `server/db/mail/` (`schema.ts`, `index.ts`, `messages.ts`, `search.ts`) |
-| Env type | `server/src/env.ts` (`RELAYBASE_MAIL?: D1Database`) |
-| Unified store (R2 + D1) | `server/src/lib/mailbox-store.ts` (`storeInboundMail`, `storeSentMail`, `getMailMessage`, `setMailReadState`, `pruneMail`, `rebuildDomain`) |
-| Same-install send → Inbox | `server/src/lib/mail/local-deliver.ts` |
-| Counts (`total`/`unread`) | `server/db/mail/messages.ts` (`mailboxCounts`, `mailboxAddressCounts`, `mailboxFreshness`) |
-| List cursor | `server/db/mail/messages.ts` (`listMailboxPage`, `parseMailboxCursor`, `encodeMailboxCursor`) |
-| FTS5 query + sync | `server/db/mail/search.ts` (`buildMailboxFtsQuery`, `upsertMailboxFts`, `searchMailbox`) |
-| Cron reconcile | `server/src/lib/inbound-index-cron.ts` (R2 folders vs D1 ids; never GET `raw.eml` on request path) |
-| Backfill endpoint | `server/src/routes/console/rebuild-mail.ts` |
-| Freshness endpoint | `server/src/routes/console/mailbox-health.ts` |
-| Desktop routes | `server/src/routes/mail/inbox.ts`, `server/src/routes/mail/sent.ts` |
-| API v1 routes | `server/src/routes/v1-inbox.ts` |
-| Mobile (account-scoped) | `server/src/routes/mobile.ts`, `server/src/lib/mail/list-inbox.ts` |
+| D1 binding + migration | `../relaybase-worker/wrangler.toml` (`RELAYBASE_MAIL`), `../relaybase-worker/db/mail/migrations/0001_create_mailbox.sql` |
+| Drizzle schema + helpers | `../relaybase-worker/db/mail/` (`schema.ts`, `index.ts`, `messages.ts`, `search.ts`) |
+| Env type | `../relaybase-worker/src/env.ts` (`RELAYBASE_MAIL?: D1Database`) |
+| Unified store (R2 + D1) | `../relaybase-worker/src/lib/mailbox-store.ts` (`storeInboundMail`, `storeSentMail`, `getMailMessage`, `setMailReadState`, `pruneMail`, `rebuildDomain`) |
+| Same-install send → Inbox | `../relaybase-worker/src/lib/mail/local-deliver.ts` |
+| Counts (`total`/`unread`) | `../relaybase-worker/db/mail/messages.ts` (`mailboxCounts`, `mailboxAddressCounts`, `mailboxFreshness`) |
+| List cursor | `../relaybase-worker/db/mail/messages.ts` (`listMailboxPage`, `parseMailboxCursor`, `encodeMailboxCursor`) |
+| FTS5 query + sync | `../relaybase-worker/db/mail/search.ts` (`buildMailboxFtsQuery`, `upsertMailboxFts`, `searchMailbox`) |
+| Cron reconcile | `../relaybase-worker/src/lib/inbound-index-cron.ts` (R2 folders vs D1 ids; never GET `raw.eml` on request path) |
+| Backfill endpoint | `../relaybase-worker/src/routes/console/rebuild-mail.ts` |
+| Freshness endpoint | `../relaybase-worker/src/routes/console/mailbox-health.ts` |
+| Desktop routes | `../relaybase-worker/src/routes/mail/inbox.ts`, `../relaybase-worker/src/routes/mail/sent.ts` |
+| API v1 routes | `../relaybase-worker/src/routes/v1-inbox.ts` |
+| Mobile (account-scoped) | `../relaybase-worker/src/routes/mobile.ts`, `../relaybase-worker/src/lib/mail/list-inbox.ts` |
 | Client store | `app/src/email/stores/email-mailbox-store.ts` |
 | Disk cache | `app/src/email/lib/disk/email-disk-store.ts` |
 

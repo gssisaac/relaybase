@@ -6,7 +6,7 @@
 
 | Area | Path |
 |------|------|
-| Worker ingest / Message-ID dedupe | `server/src/lib/inbound-store.ts`, `server/src/inbound.ts`, `server/src/index.ts` |
+| Worker ingest / Message-ID dedupe | `../relaybase-worker/src/lib/inbound-store.ts`, `../relaybase-worker/src/inbound.ts`, `../relaybase-worker/src/index.ts` |
 | Conversation grouping | `app/src/email/lib/threading/conversation-threading.ts` |
 | Inbox list / account filter | `app/src/email/components/mailbox/MailListView/MailListView.tsx` |
 | Sender avatars (favicon cache) | `app/src/email/components/sender/SenderAvatar.tsx`, `app/src/email/stores/sender-icon-store.ts` — **[sender-favicon-cache.md](./sender-favicon-cache.md)** |
@@ -14,7 +14,7 @@
 | Enabled-account visibility | `app/src/email/stores/email-mailbox-store.ts` |
 | Compose → Sent upsert | `app/src/email/components/compose/useComposeDraftController.ts`, `email-send-events.ts` |
 | App send API | `app/src/app/api/email/send/route.ts` |
-| Read/unread state | `server/src/lib/inbound-store.ts` (`readAt`), `server/src/lib/inbound-counts.ts`, `app/src/email/stores/email-mailbox-store.ts`, `app/src/email/lib/read/read-store.ts` |
+| Read/unread state | `../relaybase-worker/src/lib/inbound-store.ts` (`readAt`), `../relaybase-worker/src/lib/inbound-counts.ts`, `app/src/email/stores/email-mailbox-store.ts`, `app/src/email/lib/read/read-store.ts` |
 
 ---
 
@@ -22,9 +22,9 @@
 
 Unread tracking used to be desktop-local only (`app/src/email/lib/read/read-store.ts` -> `~/.relaybase/mail/{userId}/ui/read.json`). It is now a field on the stored message itself, so it survives a fresh install and is consistent across the Accounts dashboard and the mail sidebar.
 
-- `InboundEmailMeta.readAt` (`server/src/lib/inbound-store.ts`): `null` = unread, an ISO timestamp = read. `storeInboundEmail` always sets `readAt: null` for genuinely new mail. Legacy rows written before this field existed have no `readAt` key at all; `normalizeReadState()` treats those as already read (matches the old "baseline on first load" behavior) so upgrading an existing install doesn't flood every historical message as unread.
+- `InboundEmailMeta.readAt` (`../relaybase-worker/src/lib/inbound-store.ts`): `null` = unread, an ISO timestamp = read. `storeInboundEmail` always sets `readAt: null` for genuinely new mail. Legacy rows written before this field existed have no `readAt` key at all; `normalizeReadState()` treats those as already read (matches the old "baseline on first load" behavior) so upgrading an existing install doesn't flood every historical message as unread.
 - `setInboundReadState(bucket, domain, ids, readAt)` bulk-updates `readAt` for a batch of message ids in one domain.
-- Worker routes: `POST /mail/inbox/read` (`{ domain, ids, read }`) and `GET /mail/inbox/counts?domain=` (per-address `{ total, unread }`, backed by `aggregateInboundCounts()` in `server/src/lib/inbound-counts.ts`, using the same To+Cc membership rule as `inboundMatchesAccount`). Both are mirrored under `v1Inbox` (`/v1/inbox/messages/read`, `/v1/inbox/messages/counts`) for API-key consumers.
+- Worker routes: `POST /mail/inbox/read` (`{ domain, ids, read }`) and `GET /mail/inbox/counts?domain=` (per-address `{ total, unread }`, backed by `aggregateInboundCounts()` in `../relaybase-worker/src/lib/inbound-counts.ts`, using the same To+Cc membership rule as `inboundMatchesAccount`). Both are mirrored under `v1Inbox` (`/v1/inbox/messages/read`, `/v1/inbox/messages/counts`) for API-key consumers.
 - Next.js proxy: `app/src/app/api/email/inbox/read/route.ts`, `app/src/app/api/email/inbox/counts/route.ts`, `getInboundCounts`/`setInboundReadState` in `app/src/lib/relaybase/worker-client.ts`. `RoutingActivityEvent.readAt` flows through the existing `GET /api/email/inbox` response unchanged.
 - Client: `EmailMailboxStore` (`app/src/email/stores/email-mailbox-store.ts`) keeps its existing public API (`markRead`, `markUnread`, `markReadMany`, `markUnreadMany`, `isUnread`, `unreadCount`, `unreadCountForAccount`) — only the backing store changed. Truth = `message.readAt`; `readOverrides` is a small optimistic/offline cache only, persisted via `read-store.ts` (`ui/read.json`, now `{ version: 2, overrides }`). Overrides are dropped once a fresh `/api/email/inbox` fetch confirms the same state (`pruneConfirmedOverrides()`).
 - One-time migration: on the first bootstrap after upgrading from the legacy local-only `{ keys }` file, `reconcileLegacyReadState()` compares the legacy list against the server's backlog fallback and issues corrective `markRead`/`markUnread` calls so mail the user genuinely hadn't opened doesn't silently flip to "read".
@@ -97,7 +97,7 @@ Do **not** reintroduce “every Sent is me” when an account filter is active.
 
 ## Same-install compose → Inbox (local deliver)
 
-Compose / API / mobile send persist Sent via `storeSentMail`, then **also** ingest a copy for each To/Cc address that exists on this Worker with `inboundEnabled !== false` (`server/src/lib/mail/local-deliver.ts`).
+Compose / API / mobile send persist Sent via `storeSentMail`, then **also** ingest a copy for each To/Cc address that exists on this Worker with `inboundEnabled !== false` (`../relaybase-worker/src/lib/mail/local-deliver.ts`).
 
 Cloudflare Email Sending `EMAIL` binding accept is not delivery into `email()`. Same-account hairpins (e.g. `jon@kloyapp.com` → `isaac@wedesk.so`) can succeed in Sent + ops_log while `email()` never runs. Local ingest writes the same R2/D1 inbound atom the handler would, then enqueues `inbound_events` so desktop polling can refresh.
 

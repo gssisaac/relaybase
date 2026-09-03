@@ -7,13 +7,13 @@
 | Area | Path |
 |------|------|
 | Flutter app | `mobile/lib/**` |
-| Worker mobile routes | `server/src/routes/mobile.ts` |
-| Mobile password auth | `server/src/lib/mobile-auth.ts`, `server/src/lib/mobile-config.ts` |
-| Console password APIs | `server/src/routes/console/mailbox.ts` (`/console/addresses/mobile-password`) |
+| Worker mobile routes | `../relaybase-worker/src/routes/mobile.ts` |
+| Mobile password auth | `../relaybase-worker/src/lib/mobile-auth.ts`, `../relaybase-worker/src/lib/mobile-config.ts` |
+| Console password APIs | `../relaybase-worker/src/routes/console/mailbox.ts` (`/console/addresses/mobile-password`) |
 | Desktop Other device tab | `app/src/console/pages/accounts/AccountOtherDeviceView.tsx` |
 | Desktop API helpers / deep link | `app/src/lib/desktop/mobile/mobile-config.ts` |
 | Desktop → Worker map | `app/src/lib/desktop/api/email-api-map.ts` (`/api/email/mobile-password`) |
-| Address `mobileEnabled` | `server/src/lib/catalog-store.ts`, `app/src/lib/dashboard/accounts-store.ts` |
+| Address `mobileEnabled` | `../relaybase-worker/src/lib/catalog-store.ts`, `app/src/lib/dashboard/accounts-store.ts` |
 
 Setup / run notes: **[mobile/README.md](../mobile/README.md)**.  
 Storage map: **[storage-architecture.md](./storage-architecture.md)**.
@@ -119,7 +119,7 @@ Mounted as a peer to `/v1/*` (mobile-password auth, not owner passtoken).
 | GET | `/mobile/notifications` | Poll new mail |
 | POST | `/mobile/notifications/ack` | Ack events |
 
-Shared mail helpers: `server/src/lib/mail/list-inbox.ts`, `send-message.ts` (also used by `/mail/*`).
+Shared mail helpers: `../relaybase-worker/src/lib/mail/list-inbox.ts`, `send-message.ts` (also used by `/mail/*`).
 
 Console (owner console access):
 

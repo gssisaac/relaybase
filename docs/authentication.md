@@ -116,7 +116,7 @@ D1 `owner_sessions.label` uses `mail:` / `console:` prefixes.
 `POST /console/refresh` body: `{ refreshToken, scope: "mail" | "console" }`.
 
 Middleware: `requireMailSession` on `/mail/*`, `requireConsoleSession` on
-`/console/*` (`server/src/lib/auth.ts`).
+`/console/*` (`../relaybase-worker/src/lib/auth.ts`).
 
 ---
 
@@ -268,7 +268,7 @@ Install / reinstall bootstrap: `setup-admin`, `init-db`, `migrate-db`. Proving `
 | `/console/*` | `console` access JWT |
 | `/mail/*` | `mail` access JWT (includes read-only `GET /mail/addresses`) |
 
-Handlers: `server/src/routes/console/owner-auth.ts`.
+Handlers: `../relaybase-worker/src/routes/console/owner-auth.ts`.
 
 ### Mobile password
 
@@ -311,13 +311,13 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 
 | File | Role |
 |------|------|
-| `server/src/lib/auth.ts` | `requireConsoleSession`, `requireMailSession`, API key, pepper |
-| `server/src/lib/owner-auth.ts` | Login, scoped refresh, logout, rotate, reset |
-| `server/src/lib/owner-tokens.ts` | Passtoken format, scoped access JWT, TTL constants |
-| `server/src/lib/mobile-auth.ts` | `/mobile/*` password check |
-| `server/src/routes/console/owner-auth.ts` | HTTP auth routes |
-| `server/src/routes/console/*.ts` | Console scope |
-| `server/src/routes/mail/*.ts` | Mail scope |
+| `../relaybase-worker/src/lib/auth.ts` | `requireConsoleSession`, `requireMailSession`, API key, pepper |
+| `../relaybase-worker/src/lib/owner-auth.ts` | Login, scoped refresh, logout, rotate, reset |
+| `../relaybase-worker/src/lib/owner-tokens.ts` | Passtoken format, scoped access JWT, TTL constants |
+| `../relaybase-worker/src/lib/mobile-auth.ts` | `/mobile/*` password check |
+| `../relaybase-worker/src/routes/console/owner-auth.ts` | HTTP auth routes |
+| `../relaybase-worker/src/routes/console/*.ts` | Console scope |
+| `../relaybase-worker/src/routes/mail/*.ts` | Mail scope |
 
 ### Tauri
 
@@ -341,7 +341,7 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 | `console/components/setup/ConsoleRouteGate.tsx` | Dashboard route blocker |
 | `console/components/setup/UnlockView.tsx` | First-login / bio-declined typed form |
 
-After Worker auth changes: **`cd server && pnpm run build:bundle`** (see **AGENTS.md**).
+After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`** (see **AGENTS.md**).
 
 ---
 
@@ -353,4 +353,4 @@ After Worker auth changes: **`cd server && pnpm run build:bundle`** (see **AGENT
 4. Touch ID **only** authorizes a read of `owner-passtoken`. Not on silent mail boot, not on teammate flows, not as a generic console privilege check.
 5. After first enrollment, do not show the typed passtoken form unless bio failed / was declined or the keyring item is missing.
 6. New desktop entry paths → `AppSessionStore` actions, not bypass routes.
-7. Rebuild Worker bundle after `server/` auth changes.
+7. Rebuild Worker bundle after `../relaybase-worker/` auth changes.

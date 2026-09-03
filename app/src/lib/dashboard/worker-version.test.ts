@@ -23,4 +23,14 @@ describe("workerNeedsUpgrade", () => {
     assert.equal(workerNeedsUpgrade("1.4.0", "1.4.0"), false);
     assert.equal(workerNeedsUpgrade(" 1.4.0 ", "1.4.0"), false);
   });
+
+  it("does not offer worker above desktop version", () => {
+    assert.equal(workerNeedsUpgrade("0.1.1", "0.1.2", "0.1.1"), false);
+    assert.equal(workerNeedsUpgrade("unknown", "0.1.2", "0.1.1"), false);
+  });
+
+  it("offers worker behind desktop when manifest matches desktop", () => {
+    assert.equal(workerNeedsUpgrade("0.1.0", "0.1.1", "0.1.1"), true);
+    assert.equal(workerNeedsUpgrade("unknown", "0.1.1", "0.1.1"), true);
+  });
 });

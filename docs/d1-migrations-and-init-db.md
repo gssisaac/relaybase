@@ -46,21 +46,21 @@ The Worker is the only process that applies product SQL. Desktop and Wrangler do
 
 **Do**
 
-- Add new schema only as a **new** numbered file + the same string in `server/db/migrations.ts`. Never edit an already-shipped file that live D1s have applied.
-- After `server/` changes, rebuild the Worker bundle (`pnpm run build:bundle` for dogfood `wrangler deploy`, or `pnpm pack:worker-install` for the public ZIP). See **AGENTS.md → Worker bundle**.
+- Add new schema only as a **new** numbered file + the same string in `../relaybase-worker/db/migrations.ts`. Never edit an already-shipped file that live D1s have applied.
+- After Worker repo changes, rebuild the Worker bundle (`pnpm run build:bundle` for dogfood `wrangler deploy`, or `pnpm pack:worker-install` for the public ZIP). See **AGENTS.md → Worker bundle**.
 - Confirm the new isolate with `/health` → `schemaMigrate: "reconcile-v1"`. If that field is missing, the uploaded `worker.js` is still the old migrate-db (it will 500 on `domains already exists`).
 
 ---
 
 ## File layout
 
-Each D1 binding has its own migration directory under `server/db/`:
+Each D1 binding has its own migration directory under `../relaybase-worker/db/`:
 
 | Binding | Database | SQL directory | Drizzle schema |
 |---------|----------|---------------|----------------|
-| `RELAYBASE_DB` | `relaybase-db` | `server/db/app/migrations/` | `server/db/app/schema.ts` (drizzle-kit) |
-| `RELAYBASE_LOGS` | `relaybase-logs` | `server/db/log/migrations/` | `server/db/log/schema.ts` (reference only) |
-| `RELAYBASE_MAIL` | `relaybase-mail` | `server/db/mail/migrations/` | `server/db/mail/schema.ts` (reference only) |
+| `RELAYBASE_DB` | `relaybase-db` | `../relaybase-worker/db/app/migrations/` | `../relaybase-worker/db/app/schema.ts` (drizzle-kit) |
+| `RELAYBASE_LOGS` | `relaybase-logs` | `../relaybase-worker/db/log/migrations/` | `../relaybase-worker/db/log/schema.ts` (reference only) |
+| `RELAYBASE_MAIL` | `relaybase-mail` | `../relaybase-worker/db/mail/migrations/` | `../relaybase-worker/db/mail/schema.ts` (reference only) |
 
 Wrangler paths (dogfood + customer-install template):
 
@@ -73,19 +73,19 @@ migrations_dir = "db/mail/migrations"           # RELAYBASE_MAIL
 **Removed (do not recreate):**
 
 - `server/migrations/` — legacy waitlist D1; unbound and deleted.
-- `server/migrations-app/`, `server/migrations-logs/`, `server/migrations-inbox/` — moved into `server/db/*/migrations/`.
-- `server/db/inbox-index/` — replaced by `server/db/mail/` (`RELAYBASE_INBOX_INDEX` → `RELAYBASE_MAIL`). Delete the old `relaybase-inbox-index` D1 after running `POST /console/rebuild-mail` so the account stays at 3 D1s.
+- `../relaybase-worker/migrations-app/`, `../relaybase-worker/migrations-logs/`, `../relaybase-worker/migrations-inbox/` — moved into `../relaybase-worker/db/*/migrations/`.
+- `../relaybase-worker/db/inbox-index/` — replaced by `../relaybase-worker/db/mail/` (`RELAYBASE_INBOX_INDEX` → `RELAYBASE_MAIL`). Delete the old `relaybase-inbox-index` D1 after running `POST /console/rebuild-mail` so the account stays at 3 D1s.
 
-Embedded migration strings for the Worker live in **`server/db/migrations.ts`**. Shared apply helper: **`server/src/lib/d1-migrations.ts`**. Keep `migrations.ts` in sync when adding `.sql` files so `init-db` / `migrate-db` and manual `wrangler d1 migrations apply` stay equivalent.
+Embedded migration strings for the Worker live in **`../relaybase-worker/db/migrations.ts`**. Shared apply helper: **`../relaybase-worker/src/lib/d1-migrations.ts`**. Keep `migrations.ts` in sync when adding `.sql` files so `init-db` / `migrate-db` and manual `wrangler d1 migrations apply` stay equivalent.
 
-**Rebuild after `server/` changes.** Desktop update uploads the hosted install ZIP, not live TypeScript and not a local overlay. `pnpm pack:worker-install` then deploy `hq/website`. Until that runs, `/console/migrate-db` 404s on the old script. See **AGENTS.md → Worker bundle**.
+**Rebuild after Worker repo changes.** Desktop update uploads the hosted install ZIP, not live TypeScript and not a local overlay. `pnpm pack:worker-install` then deploy `hq/website`. Until that runs, `/console/migrate-db` 404s on the old script. See **AGENTS.md → Worker bundle**.
 
 ---
 
 ## `POST /console/init-db`
 
-Route: `server/src/routes/console/init-db.ts`  
-Registered in `server/src/app.ts` as `/console/init-db`.
+Route: `../relaybase-worker/src/routes/console/init-db.ts`  
+Registered in `../relaybase-worker/src/app.ts` as `/console/init-db`.
 
 **Empty D1 only.** Before any CREATE/DROP/INSERT, the Worker probes `domains` / `ops_log` / `mailbox_messages`. If any exists:
 
@@ -112,8 +112,8 @@ curl -X POST "https://<worker-url>/console/init-db" \
 
 ## `POST /console/migrate-db`
 
-Route: `server/src/routes/console/migrate-db.ts`  
-Registered in `server/src/app.ts` as `/console/migrate-db`.
+Route: `../relaybase-worker/src/routes/console/migrate-db.ts`  
+Registered in `../relaybase-worker/src/app.ts` as `/console/migrate-db`.
 
 Applies only migrations not yet in each D1's `d1_migrations` table (names normalized, no `.sql`). No `clear` field. If the probe table exists but the baseline file is missing from the ledger, that file is **stamped, not re-executed**. Statements that fail with `already exists` / `duplicate column` are treated as already applied. If nothing is pending, `applied` is `[]`.
 
@@ -162,15 +162,15 @@ See also: [cf-oauth-install-token.md](./cf-oauth-install-token.md), [storage-arc
 
 ### Product DB (`RELAYBASE_DB`)
 
-1. Change `server/db/app/schema.ts`.
-2. Run `pnpm exec drizzle-kit generate --config=drizzle.app.config.ts` → new file under `server/db/app/migrations/`.
-3. Copy the new SQL into `server/db/migrations.ts` (`MIGRATIONS` array, `target: "app"`).
+1. Change `../relaybase-worker/db/app/schema.ts`.
+2. Run `pnpm exec drizzle-kit generate --config=drizzle.app.config.ts` → new file under `../relaybase-worker/db/app/migrations/`.
+3. Copy the new SQL into `../relaybase-worker/db/migrations.ts` (`MIGRATIONS` array, `target: "app"`).
 4. Deploy Worker; call **`POST /console/migrate-db`** on existing installs (or `init-db` only on empty D1). Do not rewrite a migration file that live D1s have already applied — add a new numbered file instead.
 
 ### Logs or mail index (hand-written SQL)
 
-1. Add `server/db/log/migrations/000X_….sql` or `server/db/mail/migrations/000X_….sql`.
-2. Add the same SQL string to `server/db/migrations.ts` with `target: "logs"` or `"mail"`.
+1. Add `../relaybase-worker/db/log/migrations/000X_….sql` or `../relaybase-worker/db/mail/migrations/000X_….sql`.
+2. Add the same SQL string to `../relaybase-worker/db/migrations.ts` with `target: "logs"` or `"mail"`.
 3. Deploy + `migrate-db` (existing) or `init-db` (empty).
 
 Never mix migration files across databases in one directory — each `migrations_dir` applies to one D1 only.
@@ -184,5 +184,5 @@ Never mix migration files across databases in one directory — each `migrations
 | Product D1 tables | [storage-architecture.md](./storage-architecture.md) |
 | Ops log schema | [ops-log-d1.md](./ops-log-d1.md) |
 | Mail index (list/search/counts) | [mailbox-d1.md](./mailbox-d1.md) |
-| Customer manual install | [server/customer-install/README.md](../server/customer-install/README.md) |
+| Customer manual install | [../relaybase-worker/README.md](../../relaybase-worker/README.md) |
 | OAuth install token | [cf-oauth-install-token.md](./cf-oauth-install-token.md) |

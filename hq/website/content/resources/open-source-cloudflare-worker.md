@@ -34,28 +34,7 @@ By open-sourcing the [**relaybase-worker**](https://github.com/strum-us/relaybas
 
 The open-source Worker acts as the central hub connecting Cloudflare's serverless primitives: **Cloudflare Workers**, **Cloudflare Email Routing**, **Cloudflare Email Sending**, **Cloudflare R2**, and **Cloudflare D1**.
 
-```text
-                               ┌────────────────────────────────────────┐
-                               │       YOUR CLOUDFLARE ACCOUNT          │
-                               │                                        │
-Inbound Email ───────────────▶ │  Cloudflare Email Routing              │
-                               │             │ (MIME Stream)            │
-                               │             ▼                          │
-                               │  ┌──────────────────────────────────┐  │
-                               │  │   relaybase-api (Worker)         │  │
-                               │  │   github.com/strum-us/           │  │
-                               │  │   relaybase-worker               │  │
-                               │  └───────┬──────────┬─────────┬─────┘  │
-                               │          │          │         │        │
-                               │          ▼          ▼         ▼        │
-                               │     ┌─────────┐ ┌───────┐ ┌────────┐   │
-                               │     │   R2    │ │  D1   │ │   D1   │   │
-                               │     │ Mailbox │ │  DB   │ │  Mail  │   │
-                               │     └─────────┘ └───────┘ └────────┘   │
-                               │          │                             │
-Outbound Send ───────────────▶ │  Cloudflare Email Sending (DKIM/SPF)   │
-                               └────────────────────────────────────────┘
-```
+![Architecture of the open-source Relaybase Worker inside your Cloudflare account: inbound mail through Email Routing into relaybase-api, then R2 Mailbox, D1 DB, and D1 Mail; outbound send through Email Sending with DKIM and SPF](/images/resources/worker-architecture.png)
 
 ### 1. Inbound Email Pipeline: MIME Parsing & R2 Storage
 

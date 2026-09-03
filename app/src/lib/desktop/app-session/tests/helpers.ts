@@ -1,8 +1,8 @@
 import type {
   OwnerSessionStatus,
   TeamSessionStatus,
-} from "../../bridge/index.ts";
-import { AppSessionStore } from "../store.ts";
+} from "../../bridge";
+import { AppSessionStore } from "../store";
 
 export function ownerStatus(
   partial: Partial<OwnerSessionStatus>,

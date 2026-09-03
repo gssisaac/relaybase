@@ -9,22 +9,15 @@ Relaybase has two customer-facing version numbers that **must always match**:
 | **Desktop** (macOS app + in-app updater) | `desktop/package.json`, `desktop/src-tauri/Cargo.toml`, `desktop/src-tauri/tauri.conf.json` |
 | **Worker** (hosted install ZIP + `/health`) | sibling `../relaybase-worker/package.json`, dogfood `../relaybase-worker/wrangler.local.toml` `[vars] WORKER_VERSION`, packed `wrangler.toml` inside the install ZIP |
 
-**First public release: `0.1.1`.** Pre-launch dogfood versions (`0.1.0`–`0.1.3`) are retired — do not reference them in release notes or manifests.
-
-### CRITICAL: Pre-launch Version Freeze (절대 금지 규칙)
-
-- **Do NOT bump version numbers before official public launch.** The version is frozen at **`0.1.1`**.
-- All bug fixes, bundle builds, and pack updates made during development/pre-launch MUST keep version `0.1.1`.
-- Agents and developers are **strictly prohibited** from incrementing to `0.1.2+` until launch is explicitly declared.
+**First public release: `0.1.1`.** Subsequent releases bump the patch (`0.1.2`, `0.1.3`, …).
 
 ## Policy
 
 1. **One semver for both** — e.g. Desktop `0.1.1` + Worker `0.1.1`. Never ship mismatched patch labels.
-2. **Pre-launch freeze** — Before public launch, version stays `0.1.1`. Do not bump to `0.1.2` for bug fixes.
-3. **Bump together (Post-launch)** — after public launch, every release touches Desktop **and** Worker, even when only one side changed materially (users compare Settings → Worker version against the app version).
-4. **Release notes in pairs** — `desktop/public/release-notes/X.Y.Z.md` and `../relaybase-worker/release-notes/X.Y.Z.md` with the **same version** and aligned Highlights (wording may differ per surface). The marketing site `/release-notes` page is built from the **desktop** files (synced into `hq/website/content/release-notes` on `pnpm run dev` / `build`).
-5. **Patch-only channel (Post-launch)** — after official launch of `0.1.1`, use `0.1.2`, `0.1.3`, … No separate dev / `+local` product channel.
-6. **HQ / app packages** (`hq/website`, `app/`, repo root) are **not** product version — leave them on their own package versions unless explicitly bumped for unrelated deploys.
+2. **Bump together** — every release touches Desktop **and** Worker, even when only one side changed materially (users compare Settings → Worker version against the app version).
+3. **Release notes in pairs** — `desktop/public/release-notes/X.Y.Z.md` and `../relaybase-worker/release-notes/X.Y.Z.md` with the **same version** and aligned Highlights (wording may differ per surface). The marketing site `/release-notes` page is built from the **desktop** files (synced into `hq/website/content/release-notes` on `pnpm run dev` / `build`).
+4. **Patch-only channel** — use `0.1.2`, `0.1.3`, … No separate dev / `+local` product channel.
+5. **HQ / app packages** (`hq/website`, `app/`, repo root) are **not** product version — leave them on their own package versions unless explicitly bumped for unrelated deploys.
 
 ## Release checklist (both sides)
 

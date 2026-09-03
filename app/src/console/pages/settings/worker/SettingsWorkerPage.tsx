@@ -2,6 +2,7 @@
 
 import { Loader2, Server } from "lucide-react";
 
+import { DesktopAppVersionSettingsCard } from "@/console/components/AppUpdateBanner";
 import { WorkerVersionSettingsCard } from "@/console/components/WorkerUpdateBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,6 +121,7 @@ export function SettingsWorkerPage() {
         )}
       </ConnectionCard>
 
+      <DesktopAppVersionSettingsCard />
       <WorkerVersionSettingsCard />
     </SettingsPageBody>
   );

@@ -356,7 +356,7 @@ mod worker_js_tests {
 
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let release = root.join("../../hq/website/public/release");
-        for version in ["0.1.1", "0.1.2"] {
+        for version in ["0.1.1"] {
             let archive = release.join(format!("Relaybase.{version}.aarch64.app.tar.gz"));
             let sig_path = release.join(format!("Relaybase.{version}.aarch64.app.tar.gz.sig"));
             let pub_path = root.join(".tauri-signing/updater.key.pub");

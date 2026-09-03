@@ -73,7 +73,7 @@ Product direction changes and architecture decision records (ADRs).
 
 ### Release (`docs/release/`)
 Release guides and version sync policy.
-- **[`version-sync.md`](./release/version-sync.md)** — Desktop (`.app`) and Worker (`worker.js`) semver must match (pre-launch freeze at `0.1.1`).
+- **[`version-sync.md`](./release/version-sync.md)** — Desktop (`.app`) and Worker (`worker.js`) semver must match.
 
 ### Marketing (`docs/marketing/`)
 Marketing copy and feature descriptions.

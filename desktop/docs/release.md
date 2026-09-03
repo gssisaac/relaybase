@@ -8,10 +8,7 @@ Binaries live on **Cloudflare R2** (`download.relaybase.xyz`); small metadata
 lives on `relaybase.xyz/release`.
 
 Desktop and Worker share **one product semver** — always bump both together.
-First public release: **0.1.1**. Policy: [docs/release/version-sync.md](../../docs/release/version-sync.md).
-
-**CRITICAL (Pre-launch):** Version is frozen at **`0.1.1`**. Do **NOT** bump versions before official launch. Later updates after launch bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate
-dev / `+local` channel.
+First public release: **0.1.1**. Policy: [docs/release/version-sync.md](../../docs/release/version-sync.md). Updates bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate dev / `+local` channel.
 
 Worker releases: [`relaybase-worker/docs/RELEASE.md`](../../../relaybase-worker/docs/RELEASE.md).
 

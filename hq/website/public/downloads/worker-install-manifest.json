@@ -1,8 +1,8 @@
 {
-  "version": "0.1.2",
-  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.2.zip",
-  "zipSha256": "bdd7fac5c771523290fb29a0de408ac4c0f289a7559f3c9bdc2bbe4112555434",
-  "workerJs": "worker.0.1.2.js",
-  "publishedAt": "2026-09-02T18:16:58.000Z",
-  "notes": "# Relaybase Worker 0.1.2\n\nFirst public release.\n\n## Highlights\n- Cloudflare OAuth install \u2014 Worker, R2, and D1 in the customer's account\n- Owner passtoken auth (`AUTH_PEPPER` + scoped sessions)\n- Single D1 app baseline \u2014 today's schema in one migration\n\n## Changes\n- `POST /console/init-db` / `migrate-db` / `setup-admin` with pepper bootstrap or OAuth\n- Mail index (`RELAYBASE_MAIL`), ops log (`RELAYBASE_LOGS`), mailbox R2 layout\n- Optional Worker `CF_ACCOUNT_ID`; domain/DNS via `CF_API_TOKEN`"
+  "version": "0.1.1",
+  "zipUrl": "https://relaybase.xyz/downloads/relaybase-worker-install-0.1.1.zip",
+  "zipSha256": "4a0a022c56f57f2edf9247344da0340bb4fc254fc7b12f22ca353cfaa9a55297",
+  "workerJs": "worker.0.1.1.js",
+  "publishedAt": "2026-09-03T07:53:03.000Z",
+  "notes": "# Relaybase Worker 0.1.1\n\nInitial public release of the Relaybase routing Worker.\n\nDeploy this Worker into **your** Cloudflare account. It sends and receives product email, stores mail in your R2 and D1, and exposes inbox, send, and API routes. Relaybase does not host your mail.\n\n## What's included\n\n- Send and receive on your domain (Cloudflare Email Sending and Routing)\n- Mailbox storage on R2, list/search index on D1\n- Owner setup and desktop connection\n- Domain-scoped API keys and inbound webhooks\n- Mobile companion routes (`/mobile/*`)"
 }

@@ -29,7 +29,7 @@ Instructions for coding agents working in this repository. Read the linked docs 
 | Dashboard page chrome (title bar, toolbar, content max-width) | [app/src/console/page-header-layout.md](app/src/console/page-header-layout.md) |
 | BIMI / VMC / “logo in Gmail” / inbox brand marks | [docs/decisions/bimi-vmc-do-not-build.md](docs/decisions/bimi-vmc-do-not-build.md) (do **not** build) |
 | Marketing site feature clips (`hq/website` homepage videos) | [hq/website/docs/feature-video-encode.md](hq/website/docs/feature-video-encode.md) — also [hq/website/AGENT.md](hq/website/AGENT.md) |
-| **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [docs/release/version-sync.md](docs/release/version-sync.md) — **same semver for both** — then [desktop/docs/release.md](desktop/docs/release.md) and [`../relaybase-worker/docs/RELEASE.md`](../relaybase-worker/docs/RELEASE.md). **CRITICAL: Pre-launch version is strictly frozen at `0.1.1`. Do NOT bump versions before official launch.** |
+| **Desktop or Worker release** (version bump, release notes, pack, website deploy) | [docs/release/version-sync.md](docs/release/version-sync.md) — **same semver for both** — then [desktop/docs/release.md](desktop/docs/release.md) and [`../relaybase-worker/docs/RELEASE.md`](../relaybase-worker/docs/RELEASE.md). |
 
 ## Storage (summary)
 

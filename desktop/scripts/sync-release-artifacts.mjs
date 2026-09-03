@@ -1,13 +1,10 @@
 import { fileURLToPath } from 'node:url';
 /**
- * After `tauri build`, copies macOS installers into website/public/release and
- * writes/merges `latest.json` for the Tauri in-app updater.
+ * After `tauri build`, writes updater metadata under website/public/release:
+ *   latest.json, Relaybase.<version>.<arch>.app.tar.gz.sig
  *
- * Per-arch only (Universal retired). Artifact names:
- *   Relaybase.<version>.aarch64.dmg
- *   Relaybase.<version>.aarch64.app.tar.gz
- *   Relaybase.<version>.x86_64.dmg
- *   …
+ * Large binaries (DMG + .app.tar.gz) stay in the Tauri bundle and upload to R2
+ * via upload-release-r2.sh — they are gitignored and must not be copied here.
  *
  * Env:
  *   RELAYBASE_MAC_ARCH — aarch64 (default) | x86_64
@@ -66,7 +63,6 @@ function main() {
   resolveReleaseBaseUrl(root); // reserved for future metadata URL embedding
   const downloadBase = resolveDownloadCdnBaseUrl();
 
-  const dmgDir = path.join(cargoTarget, rustTarget, 'release', 'bundle', 'dmg');
   const macosDir = path.join(cargoTarget, rustTarget, 'release', 'bundle', 'macos');
 
   fs.mkdirSync(websiteRelease, { recursive: true });
@@ -106,22 +102,8 @@ function main() {
   }
 
   let addedUpdaterPlatforms = 0;
-  const brandedDmg = `Relaybase.${version}.${arch}.dmg`;
   const brandedArchive = `Relaybase.${version}.${arch}.app.tar.gz`;
   const brandedSig = `${brandedArchive}.sig`;
-
-  if (fs.existsSync(dmgDir)) {
-    const dmgs = fs.readdirSync(dmgDir).filter((f) => f.endsWith('.dmg'));
-    if (dmgs.length === 0) {
-      console.warn('[sync-release] No .dmg files in bundle/dmg.');
-    } else {
-      const from = path.join(dmgDir, dmgs[0]);
-      fs.copyFileSync(from, path.join(websiteRelease, brandedDmg));
-      console.log(`[sync-release] Copied DMG → website/public/release/${brandedDmg}`);
-    }
-  } else {
-    console.warn(`[sync-release] No bundle/dmg folder at ${dmgDir}. Skipping DMG copy.`);
-  }
 
   if (fs.existsSync(macosDir)) {
     const files = fs.readdirSync(macosDir);
@@ -135,7 +117,6 @@ function main() {
       if (!fs.existsSync(sigPath)) {
         console.warn(`[sync-release] Missing signature for ${archive}, expected ${sigName}`);
       } else {
-        fs.copyFileSync(path.join(macosDir, archive), path.join(websiteRelease, brandedArchive));
         fs.copyFileSync(sigPath, path.join(websiteRelease, brandedSig));
         const signature = fs.readFileSync(sigPath, 'utf8').trim();
         const entry = { url: `${downloadBase}/${encodeURIComponent(brandedArchive)}`, signature };

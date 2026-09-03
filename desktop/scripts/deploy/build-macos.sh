@@ -162,7 +162,7 @@ if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
   spctl -a -vv -t install "$DMG" 2>&1 || true
 fi
 
-echo "→ Syncing DMG and updater artifacts to website/public/release ($ARCH)"
+echo "→ Syncing updater metadata to website/public/release ($ARCH)"
 RELAYBASE_MAC_ARCH="$ARCH" node "$ROOT/scripts/sync-release-artifacts.mjs"
 
 LATEST_JSON="$ROOT/../hq/website/public/release/latest.json"

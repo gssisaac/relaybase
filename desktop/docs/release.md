@@ -168,7 +168,7 @@ pnpm run build:macos                 # aarch64 (default ship)
   ├─ rustup target add aarch64-apple-darwin
   ├─ tauri build --target aarch64-apple-darwin --bundles app,dmg
   ├─ verify-arch-app.sh (arm64 only)
-  ├─ sync-release-artifacts.mjs      → hq/website/public/release/ (*.aarch64.*)
+  ├─ sync-release-artifacts.mjs      → hq/website/public/release/ (latest.json + .sig only)
   └─ upload-release-r2.sh            → R2 bucket relaybase-releases
 
 pnpm run build:macos:x86_64          # Intel when ready

@@ -267,26 +267,69 @@ export class AppSessionStore {
           await this.deps.refreshIdentity();
         }
       } else if (owner && !this.hasOwnerMailAccess()) {
+        let mailUnlocked = false;
         if (this.hasOwnerMailRefresh()) {
-          const status = await this.deps.ownerBootMail();
-          runInAction(() => {
-            this.ownerStatus = status;
-            this.markWorkerReachable();
-          });
-          await this.deps.refreshIdentity();
-        } else if (this.hasOwnerPasstoken()) {
+          try {
+            const status = await this.deps.ownerBootMail();
+            runInAction(() => {
+              this.ownerStatus = status;
+              this.markWorkerReachable();
+            });
+            await this.deps.refreshIdentity();
+            mailUnlocked = this.hasOwnerMailAccess();
+          } catch (bootErr) {
+            if (isWorkerUnreachableError(bootErr)) {
+              runInAction(() => {
+                this.markWorkerUnreachable();
+              });
+              return;
+            }
+            try {
+              const freshStatus = await this.deps.ownerSessionStatus();
+              runInAction(() => {
+                this.ownerStatus = freshStatus;
+              });
+            } catch {
+              /* keep last known */
+            }
+          }
+        }
+
+        if (!mailUnlocked && this.hasOwnerPasstoken()) {
           const workerUrl =
-            owner.workerUrl.trim() ||
+            this.ownerStatus?.workerUrl?.trim() ||
+            owner.workerUrl?.trim() ||
             this.identity.credentials?.workerUrl?.trim() ||
             "";
           if (workerUrl) {
             await this.refreshWorkerPasstokenPrefix(workerUrl);
           }
           if (this.canTryOwnerBio) {
-            await this.loginFromKeyringPasstoken(
-              "Unlock Relaybase",
-              workerUrl || undefined,
-            );
+            try {
+              await this.loginFromKeyringPasstoken(
+                "Unlock Relaybase",
+                workerUrl || undefined,
+              );
+            } catch (bioErr) {
+              if (isWorkerUnreachableError(bioErr)) {
+                runInAction(() => {
+                  this.markWorkerUnreachable();
+                });
+                return;
+              }
+              if (isUserDismissedBiometry(bioErr)) {
+                runInAction(() => {
+                  this.bioDismissed = true;
+                });
+              } else {
+                const shown = visibleUnlockError(bioErr, "owner");
+                if (shown) {
+                  runInAction(() => {
+                    this.error = shown;
+                  });
+                }
+              }
+            }
           }
         }
       }
@@ -297,6 +340,8 @@ export class AppSessionStore {
           (this.enrolledAsInvited() || this.enrolledAsOwner())
         ) {
           this.markWorkerUnreachable();
+        } else {
+          this.markWorkerReachable();
         }
         if (isUserDismissedBiometry(err)) {
           this.bioDismissed = true;
@@ -305,12 +350,12 @@ export class AppSessionStore {
           if (shown) this.error = shown;
         }
       });
+    } finally {
+      runInAction(() => {
+        this.silentBootPending = false;
+        this.reconcileFromStatuses();
+      });
     }
-
-    runInAction(() => {
-      this.silentBootPending = false;
-      this.reconcileFromStatuses();
-    });
   }
 
   private reconcileFromStatuses(): void {
@@ -357,8 +402,12 @@ export class AppSessionStore {
         this.phase = { kind: "choice" };
         return;
       }
-      if (this.enrolledAsOwner() && !this.workerUnreachable) {
-        this.phase = { kind: "unlock", role: "owner", mode: "secret" };
+      if (!this.workerUnreachable) {
+        if (this.hasOwnerWorkerUrl()) {
+          this.phase = { kind: "unlock", role: "owner", mode: "secret" };
+        } else if (this.identity.ready) {
+          this.phase = { kind: "choice" };
+        }
       }
       return;
     }
@@ -369,8 +418,12 @@ export class AppSessionStore {
         this.phase = { kind: "invitedLogin" };
         return;
       }
-      if (team?.hasSecret && !this.workerUnreachable) {
-        this.phase = { kind: "unlock", role: "invited", mode: "secret" };
+      if (!this.workerUnreachable) {
+        if (team?.hasSecret) {
+          this.phase = { kind: "unlock", role: "invited", mode: "secret" };
+        } else if (this.identity.ready) {
+          this.phase = { kind: "invitedLogin" };
+        }
       }
       return;
     }
@@ -1008,8 +1061,14 @@ export class AppSessionStore {
         this.deps.teamSessionStatus(),
       ]);
       runInAction(() => {
-        this.ownerStatus = owner;
-        this.teamStatus = team;
+        this.ownerStatus = {
+          ...owner,
+          hasMailAccess: false,
+        };
+        this.teamStatus = {
+          ...team,
+          hasAccess: false,
+        };
         this.statusesHydrated = true;
       });
 
@@ -1022,6 +1081,7 @@ export class AppSessionStore {
           const status = await this.deps.ownerBootMail();
           runInAction(() => {
             this.ownerStatus = status;
+            this.markWorkerReachable();
           });
           await this.deps.refreshIdentity();
           if (this.hasOwnerMailAccess()) {
@@ -1037,6 +1097,14 @@ export class AppSessionStore {
             });
             return;
           }
+          try {
+            const fresh = await this.deps.ownerSessionStatus();
+            runInAction(() => {
+              this.ownerStatus = fresh;
+            });
+          } catch {
+            /* keep last */
+          }
         }
       }
 
@@ -1046,7 +1114,11 @@ export class AppSessionStore {
         this.hasOwnerPasstoken()
       ) {
         try {
-          await this.loginFromKeyringPasstoken("Unlock Relaybase");
+          const status = await this.loginFromKeyringPasstoken("Unlock Relaybase");
+          runInAction(() => {
+            this.ownerStatus = status;
+            this.markWorkerReachable();
+          });
           if (this.hasOwnerMailAccess()) {
             runInAction(() => {
               this.reconcileFromStatuses();
@@ -1060,13 +1132,17 @@ export class AppSessionStore {
             });
             return;
           }
+          if (isUserDismissedBiometry(err)) {
+            runInAction(() => {
+              this.bioDismissed = true;
+            });
+          }
         }
       }
 
       if (
         this.phase.kind === "ownerReady" &&
         !this.hasOwnerMailAccess() &&
-        !this.hasOwnerMailRefresh() &&
         !this.workerUnreachable
       ) {
         runInAction(() => {
@@ -1077,8 +1153,7 @@ export class AppSessionStore {
 
       if (
         this.phase.kind === "invitedReady" &&
-        !team.hasAccess &&
-        !team.hasSecret &&
+        !this.teamStatus?.hasAccess &&
         !this.workerUnreachable
       ) {
         runInAction(() => {

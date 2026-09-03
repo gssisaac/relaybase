@@ -2,7 +2,7 @@ import {
   CF_WORKERS_PAID_REQUIRED_CODE,
   cloudflareSendErrorBody,
   isCloudflarePlanError,
-} from "./cloudflare-api-hints";
+} from "./cloudflare-api-hints.ts";
 
 export type SendingHealthStatus =
   | "ready"

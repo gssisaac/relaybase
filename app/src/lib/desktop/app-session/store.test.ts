@@ -984,4 +984,133 @@ describe("AppSessionStore", () => {
       assert.equal(store.phase.role, "owner");
     }
   });
+
+  it("boots to Touch ID login when mail refresh fails with 401 but owner-passtoken exists", async () => {
+    let keyringLogins = 0;
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailRefresh: true,
+        hasPasstoken: true,
+        workerUrl: WORKER_URL,
+      }),
+      ownerSessionStatus: () =>
+        Promise.resolve(
+          ownerStatus({
+            hasMailRefresh: false,
+            hasPasstoken: true,
+            workerUrl: WORKER_URL,
+          }),
+        ),
+      ownerBootMail: () =>
+        Promise.reject(
+          new Error("Session expired. Sign in with your passtoken."),
+        ),
+      ownerLoginFromKeyring: () => {
+        keyringLogins += 1;
+        return Promise.resolve(
+          ownerStatus({
+            hasPasstoken: true,
+            hasMailRefresh: true,
+            hasMailAccess: true,
+            workerUrl: WORKER_URL,
+          }),
+        );
+      },
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({
+        hasMailRefresh: true,
+        hasPasstoken: true,
+        workerUrl: WORKER_URL,
+      }),
+      teamStatus({}),
+    );
+    await waitUntil(() => store.phase.kind === "ownerReady", "fallback keyring boot");
+    assert.equal(keyringLogins, 1);
+    assert.equal(store.phase.kind, "ownerReady");
+    assert.equal(store.canShowApp, true);
+    assert.equal(store.workerUnreachable, false);
+  });
+
+  it("transitions to unlock phase when mail refresh and Touch ID both fail on boot", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailRefresh: true,
+        hasPasstoken: true,
+        workerUrl: WORKER_URL,
+      }),
+      ownerSessionStatus: () =>
+        Promise.resolve(
+          ownerStatus({
+            hasMailRefresh: false,
+            hasPasstoken: true,
+            workerUrl: WORKER_URL,
+          }),
+        ),
+      ownerBootMail: () =>
+        Promise.reject(
+          new Error("Session expired. Sign in with your passtoken."),
+        ),
+      ownerLoginFromKeyring: () =>
+        Promise.reject(
+          new Error("[UserCancel] - The user cancelled the authentication"),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({
+        hasMailRefresh: true,
+        hasPasstoken: true,
+        workerUrl: WORKER_URL,
+      }),
+      teamStatus({}),
+    );
+    await waitUntil(() => store.phase.kind === "unlock", "unlock after bio cancel");
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.role, "owner");
+    }
+    assert.equal(store.canShowApp, false);
+    assert.equal(store.workerUnreachable, false);
+    assert.equal(store.bioDismissed, true);
+  });
+
+  it("handleWorkerUnauthorized transitions to unlock phase when silent recovery fails", async () => {
+    const store = createStore({
+      ownerStatus: ownerStatus({
+        hasMailRefresh: true,
+        hasMailAccess: true,
+        workerUrl: WORKER_URL,
+      }),
+      ownerSessionStatus: () =>
+        Promise.resolve(
+          ownerStatus({
+            hasMailRefresh: false,
+            hasPasstoken: false,
+            workerUrl: WORKER_URL,
+          }),
+        ),
+      ownerBootMail: () =>
+        Promise.reject(
+          new Error("Session expired. Sign in with your passtoken."),
+        ),
+    });
+    connectOwner(store);
+    store.setStatuses(
+      ownerStatus({
+        hasMailRefresh: true,
+        hasMailAccess: true,
+        workerUrl: WORKER_URL,
+      }),
+      teamStatus({}),
+    );
+    assert.equal(store.phase.kind, "ownerReady");
+    await store.handleWorkerUnauthorized();
+    assert.equal(store.phase.kind, "unlock");
+    if (store.phase.kind === "unlock") {
+      assert.equal(store.phase.role, "owner");
+    }
+    assert.equal(store.canShowApp, false);
+  });
 });

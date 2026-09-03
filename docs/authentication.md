@@ -232,11 +232,14 @@ that cannot be repaired with `owner_boot_mail` uses the same gate.
 
 | Worker path | DOM event | Store action |
 |-------------|-----------|--------------|
-| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — retry `owner_boot_mail`; Worker unreachable stays in the mailbox; if refresh is truly expired, Touch ID → keyring passtoken → login |
+| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — retry `owner_boot_mail`; if refresh expired/invalid, Touch ID → keyring passtoken → login; if still unauthenticated, immediately transitions to `UnlockView` (never enters or remains in mailbox shell) |
 | `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
 
 Neither path wipes Worker URL or keyring (`owner-session` / `owner-passtoken`).
 Implemented in `api-base.ts` + `context.tsx`.
+
+**DMG Reinstall / Session Invalidation Rule:**
+If the app binary or DMG is replaced or reinstalled and the Worker returns 401 Unauthorized for mail requests, the app strictly transitions to `UnlockView` (or `/setup`). The mailbox (`/email/inbox`) is inaccessible without valid `hasMailAccess`. Offline status (`workerUnreachable`) is strictly limited to network transport failures, never 401/403/session-expired responses.
 
 ---
 

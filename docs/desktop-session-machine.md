@@ -75,17 +75,17 @@ settles. `UnlockView` is the secret form only — never the auto-login check.
 - **If no workspace is configured on disk** (`~/.relaybase/workspace.json` or `team-login.json` is missing or has no `workerUrl`): silent boot is skipped and the app transitions directly to `choice` phase (`/setup`). Keyring tokens are never used to invent or restore a workspace.
 - **Owner** with `mail_refresh_token` but no mail access → `owner_boot_mail`
   (silent, no Touch ID) → `ownerReady` when Worker URL is connected.
-- **Owner** whose mail refresh is missing / expired, but `owner-passtoken`
+- **Owner** whose mail refresh is missing / expired (or rejected with 401 during DMG update/reinstall), but `owner-passtoken`
   exists → Touch ID → read passtoken → `/console/login` → `ownerReady`.
   Stay on `unlock { mode: "secret" }` only if bio fails / is declined or the
-  passtoken item is missing.
+  passtoken item is missing/invalid.
 - **Invited** with keyring secret but no access → `team_unlock` (silent) →
   `invitedReady`.
-- **Worker unreachable / offline** (enrolled owner or teammate) → same
+- **Worker unreachable / offline** (enrolled owner or teammate with no network) → same
   `ownerReady` / `invitedReady` with `workerUnreachable`. Cached mailbox.
   `UnlockView` is not an offline screen — typing a passtoken or mobile
   password cannot succeed. Sidebar shows a pinned **Offline** badge.
-  Real 401 / expired refresh still uses silent retry, then the typed form.
+  Real 401 / expired refresh is strictly distinguished from offline and MUST NOT enter the mailbox; it uses silent retry, Touch ID passtoken fallback, then the typed `UnlockView` form.
   `window` `online` retries silent boot.
 
 App boot restores the last email path. It does not prompt Touch ID when mail
@@ -127,12 +127,18 @@ Scoped by Worker path prefix in `api-base.ts`:
 
 | Path | Event | Store handler |
 |------|-------|---------------|
-| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — silent `owner_boot_mail` retry; Worker unreachable stays in the mailbox; if that cannot repair, Touch ID → keyring passtoken → login |
+| `/mail/*` | `relaybase:unauthorized` | `handleWorkerUnauthorized()` — silent `owner_boot_mail` retry; if refresh expired/invalid, Touch ID → keyring passtoken → login; if unauthenticated, transitions directly to `unlock` phase (`UnlockView`) — never stays in the mailbox |
 | `/console/*` | `relaybase:console-unauthorized` | `handleConsoleUnauthorized()` — Worker 401 **or** a local “no saved console session” error from `worker_request` (refresh token empty, request never sent). Same console-gate flow (silent refresh, else Touch ID → keyring passtoken, else typed form) |
 
 Dashboard `EmailAlerts` also shows an **Unlock** button for those local console-session errors, so a stale page banner is never the only action.
 
 Neither handler wipes the worker URL or keyring (`owner-session` / `owner-passtoken`).
+
+### DMG Reinstall and Unauthenticated Policy
+
+When a DMG is replaced or reinstalled, existing keyring sessions may mismatch the deployed Worker (e.g. rotated `AUTH_PEPPER` or revoked D1 session).
+- **Rule:** Under NO circumstances may the app enter or remain in the mailbox shell when a 401 Unauthorized / missing session occurs.
+- **Rule:** `isWorkerUnreachableError` strictly classifies network transport failures (DNS, timeout, connection refused). HTTP 401, 403, and session expired errors are ALWAYS treated as authentication failures and route to `UnlockView` or `/setup`.
 
 ## Gate
 

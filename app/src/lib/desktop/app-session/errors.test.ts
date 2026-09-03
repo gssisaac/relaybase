@@ -4,8 +4,10 @@ import { describe, it } from "node:test";
 import {
   isConsoleAuthMissingError,
   isConsoleUnlockRequiredError,
+  isMailAuthMissingError,
   isMissingWorkerError,
   isMissingWorkerUnlockMessage,
+  isWorkerAuthMissingError,
   isWorkerUnreachableError,
   missingWorkerHelp,
   missingWorkerSummary,
@@ -111,6 +113,22 @@ describe("isWorkerUnreachableError", () => {
       ),
       false,
     );
+    assert.equal(
+      isWorkerUnreachableError(new Error("Unauthorized")),
+      false,
+    );
+    assert.equal(
+      isWorkerUnreachableError(new Error("Worker request failed (HTTP 401)")),
+      false,
+    );
+    assert.equal(
+      isWorkerUnreachableError(new Error("Worker request failed: Unauthorized")),
+      false,
+    );
+    assert.equal(
+      isWorkerUnreachableError(new Error("Not signed in")),
+      false,
+    );
   });
 });
 
@@ -146,6 +164,44 @@ describe("isConsoleAuthMissingError", () => {
     assert.equal(
       isConsoleAuthMissingError(new Error("Not signed in"), "/mail/inbox"),
       false,
+    );
+  });
+});
+
+describe("isMailAuthMissingError", () => {
+  it("treats mail-scope auth errors as needing mail re-auth", () => {
+    assert.equal(
+      isMailAuthMissingError(new Error("Not signed in"), "/mail/inbox"),
+      true,
+    );
+    assert.equal(
+      isMailAuthMissingError(new Error("Session expired. Sign in with your passtoken."), "/mail/inbox"),
+      true,
+    );
+    assert.equal(
+      isMailAuthMissingError(new Error("No saved mail session. Sign in with your passtoken."), "/mail/inbox"),
+      true,
+    );
+    assert.equal(
+      isMailAuthMissingError(new Error("Unauthorized"), "/mail/inbox"),
+      true,
+    );
+    assert.equal(
+      isMailAuthMissingError(new Error("Not signed in"), "/console/domains"),
+      false,
+    );
+  });
+});
+
+describe("isWorkerAuthMissingError", () => {
+  it("detects auth missing on either scope", () => {
+    assert.equal(
+      isWorkerAuthMissingError(new Error("Not signed in"), "/console/domains"),
+      true,
+    );
+    assert.equal(
+      isWorkerAuthMissingError(new Error("Not signed in"), "/mail/inbox"),
+      true,
     );
   });
 });

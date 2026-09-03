@@ -79,24 +79,63 @@ function normalizeOwnerLoginError(message: string): string {
   return message.trim();
 }
 
+const AUTH_OR_CLIENT_ERROR_PATTERNS = [
+  "unauthorized",
+  "401",
+  "403",
+  "forbidden",
+  "session expired",
+  "invalid credentials",
+  "not signed in",
+  "no saved session",
+  "no saved mail session",
+  "no saved console session",
+  "sign in with your passtoken",
+  "invalid passtoken",
+  "invalid token",
+  "token expired",
+  "stored passtoken didn't match",
+  "corrupt keyring",
+  "not found",
+  "404",
+];
+
+const TRANSPORT_UNREACHABLE_PATTERNS = [
+  "error sending request",
+  "error trying to connect",
+  "could not reach",
+  "timed out",
+  "timeout",
+  "connection refused",
+  "connection reset",
+  "network unreachable",
+  "failed to connect",
+  "dns error",
+  "name resolution failed",
+  "could not resolve host",
+  "cannot resolve",
+  "load failed",
+  "failed to fetch",
+  "network error",
+  "net::err_",
+];
+
 /**
  * Worker never answered (offline / DNS / timeout). Not a 401 and not a
  * dismissed Touch ID — enrolled users should stay in the mailbox.
  */
 export function isWorkerUnreachableError(err: unknown): boolean {
+  if (isUserDismissedBiometry(err)) return false;
   const message = err instanceof Error ? err.message : String(err ?? "");
   const lower = message.trim().toLowerCase();
   if (!lower) return false;
-  return (
-    lower.includes("worker request failed") ||
-    lower.includes("error sending request") ||
-    lower.includes("error trying to connect") ||
-    lower.includes("could not reach") ||
-    lower.includes("timed out") ||
-    lower.includes("connection refused") ||
-    lower.includes("network unreachable") ||
-    lower.includes("failed to connect")
-  );
+
+  // Explicit authentication / client errors must NEVER be classified as unreachable.
+  if (AUTH_OR_CLIENT_ERROR_PATTERNS.some((p) => lower.includes(p))) {
+    return false;
+  }
+
+  return TRANSPORT_UNREACHABLE_PATTERNS.some((p) => lower.includes(p));
 }
 
 /** @deprecated Use isWorkerUnreachableError or isUserDismissedBiometry */
@@ -131,11 +170,41 @@ export function isConsoleAuthMissingError(
   workerPath: string,
 ): boolean {
   if (isConsoleUnlockRequiredError(err)) return true;
-  if (!workerPath.startsWith("/console/")) return false;
+  if (!workerPath.startsWith("/console/") && workerPath !== "/console") return false;
   const lower = errorMessage(err).trim().toLowerCase();
   return (
     lower === "not signed in" ||
     lower.includes("no saved session") ||
-    lower.includes("sign in with your passtoken")
+    lower.includes("no saved console session") ||
+    lower.includes("sign in with your passtoken") ||
+    lower.includes("session expired")
+  );
+}
+
+/** Auth-missing errors on `/mail/*` that should trigger mail session recovery. */
+export function isMailAuthMissingError(
+  err: unknown,
+  workerPath: string,
+): boolean {
+  if (!workerPath.startsWith("/mail/") && workerPath !== "/mail") return false;
+  const lower = errorMessage(err).trim().toLowerCase();
+  return (
+    lower === "not signed in" ||
+    lower.includes("no saved session") ||
+    lower.includes("no saved mail session") ||
+    lower.includes("session expired") ||
+    lower.includes("sign in with your passtoken") ||
+    lower.includes("unauthorized")
+  );
+}
+
+/** Auth-missing errors on any scoped worker path. */
+export function isWorkerAuthMissingError(
+  err: unknown,
+  workerPath: string,
+): boolean {
+  return (
+    isConsoleAuthMissingError(err, workerPath) ||
+    isMailAuthMissingError(err, workerPath)
   );
 }

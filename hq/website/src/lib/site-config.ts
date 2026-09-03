@@ -12,6 +12,8 @@ export const siteConfig = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? defaultSiteUrl,
   apiUrl: process.env.NEXT_PUBLIC_RELAYBASE_API_URL ?? defaultApiUrl,
   consoleUrl: process.env.NEXT_PUBLIC_CONSOLE_URL ?? defaultConsoleUrl,
+  githubWorkerUrl: "https://github.com/strum-us/relaybase-worker",
+  githubUrl: "https://github.com/strum-us/relaybase-worker",
   getStartedPath: "/get-started",
   /**
    * Pricing numbers — source of truth is `PRICING.md` (repo root). Only

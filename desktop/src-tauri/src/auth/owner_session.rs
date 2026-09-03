@@ -1,7 +1,7 @@
 //! Owner session: mail + console refresh tokens live in OS keyring
-//! `owner-session`; scoped access tokens live in process memory. The
-//! passtoken lives in a **separate** `owner-passtoken` item (Touch ID to
-//! read). Never written to `~/.relaybase`.
+//! `owner-session:{workerUrl}`; scoped access tokens live in process memory.
+//! The passtoken lives in a **separate** `owner-passtoken:{url}` item
+//! (Touch ID to read). Never written to `~/.relaybase`.
 //!
 //! Boot: silent mail refresh (`owner_boot_mail`). Expired refresh: Touch ID
 //! then `owner_login_from_keyring`. Valid console refresh unlocks silently.
@@ -9,6 +9,10 @@
 use super::keyring_store;
 use super::owner_passtoken;
 use super::touch_id;
+use super::worker_accounts::{
+    self, known_worker_urls, remember_worker_url, session_account, worker_urls_equal,
+    KEYRING_SERVICE, LEGACY_SESSION_USER,
+};
 use crate::cloudflare::{resolve_account_id_for_recover_with_hint, secrets_store_accessible};
 use crate::storage::{get_cf_oauth_session, load_credentials, save_credentials};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -17,8 +21,6 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const KEYRING_SERVICE: &str = "com.relaybase.desktop";
-const KEYRING_USER: &str = "owner-session";
 const ACCESS_SKEW_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,23 +65,101 @@ fn normalize_keyring(mut blob: KeyringBlob) -> Option<KeyringBlob> {
     Some(blob)
 }
 
-fn load_keyring() -> Result<Option<KeyringBlob>, String> {
-    let json = match keyring_store::get_password(KEYRING_SERVICE, KEYRING_USER)? {
-        Some(json) => json,
-        None => return Ok(None),
-    };
-    let blob: KeyringBlob = serde_json::from_str(&json)
+fn parse_session_blob(json: &str) -> Result<Option<KeyringBlob>, String> {
+    let blob: KeyringBlob = serde_json::from_str(json)
         .map_err(|e| format!("Corrupt keyring session: {e}"))?;
     Ok(normalize_keyring(blob))
 }
 
-fn save_keyring(blob: &KeyringBlob) -> Result<(), String> {
-    let json = serde_json::to_string(blob).map_err(|e| e.to_string())?;
-    keyring_store::set_password(KEYRING_SERVICE, KEYRING_USER, &json)
+fn read_legacy_session() -> Result<Option<KeyringBlob>, String> {
+    let json = match keyring_store::get_password(KEYRING_SERVICE, LEGACY_SESSION_USER)? {
+        Some(json) => json,
+        None => return Ok(None),
+    };
+    parse_session_blob(&json)
 }
 
-fn delete_keyring() {
-    keyring_store::delete_password(KEYRING_SERVICE, KEYRING_USER);
+fn resolve_worker_url(override_url: Option<&str>) -> String {
+    if let Some(url) = override_url {
+        let normalized = worker_accounts::normalize_worker_url(url);
+        if !normalized.is_empty() {
+            return normalized;
+        }
+    }
+    if let Ok(Some(creds)) = load_credentials() {
+        let normalized = worker_accounts::normalize_worker_url(&creds.worker_url);
+        if !normalized.is_empty() {
+            return normalized;
+        }
+    }
+    if let Some(mem) = access_if_valid("mail").or_else(|| access_if_valid("console")) {
+        let normalized = worker_accounts::normalize_worker_url(&mem.worker_url);
+        if !normalized.is_empty() {
+            return normalized;
+        }
+    }
+    known_worker_urls()
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
+fn load_keyring(worker_url: Option<&str>) -> Result<Option<KeyringBlob>, String> {
+    let url = resolve_worker_url(worker_url);
+    if url.is_empty() {
+        return read_legacy_session();
+    }
+    let account = session_account(&url);
+    if let Some(json) = keyring_store::get_password(KEYRING_SERVICE, &account)? {
+        let _ = remember_worker_url(&url);
+        return parse_session_blob(&json);
+    }
+    if let Some(legacy) = read_legacy_session()? {
+        if worker_urls_equal(&legacy.worker_url, &url) {
+            save_keyring(&legacy)?;
+            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_SESSION_USER);
+            return Ok(Some(legacy));
+        }
+    }
+    Ok(None)
+}
+
+fn save_keyring(blob: &KeyringBlob) -> Result<(), String> {
+    let url = worker_accounts::normalize_worker_url(&blob.worker_url);
+    if url.is_empty() {
+        return Err("Worker URL is required".into());
+    }
+    remember_worker_url(&url)?;
+    let json = serde_json::to_string(blob).map_err(|e| e.to_string())?;
+    keyring_store::set_password(KEYRING_SERVICE, &session_account(&url), &json)?;
+    if let Ok(Some(legacy)) = read_legacy_session() {
+        if worker_urls_equal(&legacy.worker_url, &url) {
+            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_SESSION_USER);
+        }
+    }
+    Ok(())
+}
+
+fn delete_keyring(worker_url: &str) {
+    let url = worker_accounts::normalize_worker_url(worker_url);
+    if url.is_empty() {
+        return;
+    }
+    keyring_store::delete_password(KEYRING_SERVICE, &session_account(&url));
+    if let Ok(Some(legacy)) = read_legacy_session() {
+        if worker_urls_equal(&legacy.worker_url, &url) {
+            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_SESSION_USER);
+        }
+    }
+}
+
+fn access_if_valid_for(scope: &str, worker_url: &str) -> Option<AccessMemory> {
+    let mem = access_if_valid(scope)?;
+    if worker_urls_equal(&mem.worker_url, worker_url) {
+        Some(mem)
+    } else {
+        None
+    }
 }
 
 fn set_scoped_access(
@@ -197,8 +277,10 @@ fn normalize_passtoken(raw: &str) -> String {
 }
 
 fn persist_worker_url(worker_url: &str) -> Result<(), String> {
+    let url = worker_accounts::normalize_worker_url(worker_url);
+    remember_worker_url(&url)?;
     let mut creds = load_credentials()?.unwrap_or_default();
-    creds.worker_url = worker_url.trim().trim_end_matches('/').to_string();
+    creds.worker_url = url;
     save_credentials(&creds)
 }
 
@@ -213,11 +295,13 @@ pub struct OwnerSessionStatus {
     pub has_refresh: bool,
     /// Back-compat: mail OR console access in memory.
     pub has_access: bool,
-    /// Keyring `owner-passtoken` exists with valid format (secret is not returned).
+    /// Keyring `owner-passtoken:{url}` exists with valid format (secret is not returned).
     pub has_passtoken: bool,
     /// First 10 chars after `rb_pass_` from the keyring record (empty when none).
     pub keyring_passtoken_prefix: String,
     pub worker_url: String,
+    /// Worker URLs that have a keyring passtoken or session on this Mac.
+    pub known_worker_urls: Vec<String>,
     pub platform: String,
 }
 
@@ -233,10 +317,20 @@ fn platform_name() -> String {
     }
 }
 
-pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
-    let blob = load_keyring()?;
-    let mail_access = access_if_valid("mail");
-    let console_access = access_if_valid("console");
+pub fn owner_session_status(worker_url: Option<&str>) -> Result<OwnerSessionStatus, String> {
+    let url = resolve_worker_url(worker_url);
+    let url_ref = if url.is_empty() { None } else { Some(url.as_str()) };
+    let blob = load_keyring(url_ref)?;
+    let mail_access = if url.is_empty() {
+        access_if_valid("mail")
+    } else {
+        access_if_valid_for("mail", &url)
+    };
+    let console_access = if url.is_empty() {
+        access_if_valid("console")
+    } else {
+        access_if_valid_for("console", &url)
+    };
     let has_mail_refresh = blob
         .as_ref()
         .map(|b| !b.mail_refresh_token.trim().is_empty())
@@ -245,12 +339,10 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         .as_ref()
         .map(|b| !b.refresh_token.trim().is_empty())
         .unwrap_or(false);
-    let creds = load_credentials().ok().flatten().unwrap_or_default();
-    let creds_worker_url = if creds.worker_url.trim().is_empty() {
-        None
-    } else {
-        Some(creds.worker_url.trim().to_string())
-    };
+    let mut known = owner_passtoken::listed_worker_urls();
+    if !url.is_empty() && !known.iter().any(|existing| worker_urls_equal(existing, &url)) {
+        known.push(url.clone());
+    }
     Ok(OwnerSessionStatus {
         has_mail_refresh,
         has_console_refresh,
@@ -258,12 +350,10 @@ pub fn owner_session_status() -> Result<OwnerSessionStatus, String> {
         has_console_access: console_access.is_some(),
         has_refresh: has_mail_refresh || has_console_refresh,
         has_access: mail_access.is_some() || console_access.is_some(),
-        has_passtoken: owner_passtoken::is_stored(),
-        keyring_passtoken_prefix: owner_passtoken::stored_prefix(),
-        worker_url: creds_worker_url
-            .or_else(|| mail_access.as_ref().map(|a| a.worker_url.clone()))
-            .or_else(|| console_access.as_ref().map(|a| a.worker_url.clone()))
-            .unwrap_or_default(),
+        has_passtoken: owner_passtoken::is_stored(url_ref),
+        keyring_passtoken_prefix: owner_passtoken::stored_prefix(url_ref),
+        worker_url: url,
+        known_worker_urls: known,
         platform: platform_name(),
     })
 }
@@ -296,7 +386,7 @@ async fn refresh_scope(blob: &KeyringBlob, scope: &str) -> Result<KeyringBlob, S
                 let mut wiped = blob.clone();
                 wiped.mail_refresh_token.clear();
                 if wiped.refresh_token.trim().is_empty() {
-                    delete_keyring();
+                    delete_keyring(&blob.worker_url);
                     clear_all_access();
                 } else if let Some(normalized) = normalize_keyring(wiped) {
                     let _ = save_keyring(&normalized);
@@ -306,7 +396,7 @@ async fn refresh_scope(blob: &KeyringBlob, scope: &str) -> Result<KeyringBlob, S
                 let mut wiped = blob.clone();
                 wiped.refresh_token.clear();
                 if wiped.mail_refresh_token.trim().is_empty() {
-                    delete_keyring();
+                    delete_keyring(&blob.worker_url);
                     clear_all_access();
                 } else if let Some(normalized) = normalize_keyring(wiped) {
                     let _ = save_keyring(&normalized);
@@ -402,19 +492,20 @@ pub async fn owner_login(
     clear_scoped_access("console");
     persist_worker_url(base)?;
     owner_passtoken::store(&passtoken, base)?;
-    owner_session_status()
+    owner_session_status(Some(base))
 }
 
 /// Silent boot mail unlock — no biometry.
 pub async fn owner_boot_mail() -> Result<OwnerSessionStatus, String> {
     let creds = load_credentials()?.unwrap_or_default();
-    if creds.worker_url.trim().is_empty() {
+    let url = worker_accounts::normalize_worker_url(&creds.worker_url);
+    if url.is_empty() {
         return Err("No worker URL configured in ~/.relaybase".into());
     }
-    if access_if_valid("mail").is_some() {
-        return owner_session_status();
+    if access_if_valid_for("mail", &url).is_some() {
+        return owner_session_status(Some(&url));
     }
-    let blob = load_keyring()?.ok_or_else(|| {
+    let blob = load_keyring(Some(&url))?.ok_or_else(|| {
         "No saved session. Sign in with your passtoken.".to_string()
     })?;
     if blob.mail_refresh_token.trim().is_empty() {
@@ -423,15 +514,16 @@ pub async fn owner_boot_mail() -> Result<OwnerSessionStatus, String> {
         );
     }
     refresh_scope(&blob, "mail").await?;
-    owner_session_status()
+    owner_session_status(Some(&url))
 }
 
 /// Console unlock from a valid console refresh — no biometry.
 pub async fn owner_unlock_console() -> Result<OwnerSessionStatus, String> {
-    if access_if_valid("console").is_some() {
-        return owner_session_status();
+    let url = resolve_worker_url(None);
+    if !url.is_empty() && access_if_valid_for("console", &url).is_some() {
+        return owner_session_status(Some(&url));
     }
-    let blob = load_keyring()?.ok_or_else(|| {
+    let blob = load_keyring(if url.is_empty() { None } else { Some(&url) })?.ok_or_else(|| {
         "No saved session. Sign in with your passtoken.".to_string()
     })?;
     if blob.refresh_token.trim().is_empty() {
@@ -440,7 +532,7 @@ pub async fn owner_unlock_console() -> Result<OwnerSessionStatus, String> {
         );
     }
     refresh_scope(&blob, "console").await?;
-    owner_session_status()
+    owner_session_status(Some(&blob.worker_url))
 }
 
 pub async fn owner_logout() -> Result<(), String> {
@@ -581,16 +673,16 @@ pub async fn owner_reset_admin(
     }
     let passtoken = json_string(&value, "passtoken")
         .ok_or_else(|| "Worker did not return a passtoken".to_string())?;
-    delete_keyring();
+    delete_keyring(base);
     clear_all_access();
-    owner_passtoken::delete();
+    owner_passtoken::delete(base);
     owner_passtoken::store(passtoken, base)?;
     Ok(OwnerSetupResult {
         passtoken: passtoken.to_string(),
     })
 }
 
-/// Touch ID (macOS / Windows) then read `owner-passtoken` and POST `/console/login`.
+/// Touch ID (macOS / Windows) then read `owner-passtoken:{url}` and POST `/console/login`.
 /// Linux / no-biometry platforms read the item without a prompt.
 /// The passtoken is never returned to JS.
 pub async fn owner_login_from_keyring(
@@ -598,6 +690,13 @@ pub async fn owner_login_from_keyring(
     reason: String,
     worker_url_override: Option<String>,
 ) -> Result<OwnerSessionStatus, String> {
+    let worker_url = resolve_worker_url(worker_url_override.as_deref());
+    if worker_url.is_empty() {
+        return Err("Worker URL is required".into());
+    }
+    if !owner_passtoken::is_stored(Some(&worker_url)) {
+        return Err("No stored passtoken for this Worker.".into());
+    }
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         touch_id::authenticate(app, reason).await?;
@@ -606,51 +705,12 @@ pub async fn owner_login_from_keyring(
     {
         let _ = (app, reason);
     }
-    let record = owner_passtoken::load_after_auth()?
-        .ok_or_else(|| "No stored passtoken.".to_string())?;
-    let session = load_keyring()?;
-    let worker_url = worker_url_override
-        .map(|url| url.trim().trim_end_matches('/').to_string())
-        .filter(|url| !url.is_empty())
-        .or_else(|| {
-            let url = record.worker_url.trim().trim_end_matches('/').to_string();
-            if url.is_empty() {
-                None
-            } else {
-                Some(url)
-            }
-        })
-        .or_else(|| {
-            session.as_ref().and_then(|blob| {
-                let url = blob.worker_url.trim().trim_end_matches('/').to_string();
-                if url.is_empty() {
-                    None
-                } else {
-                    Some(url)
-                }
-            })
-        })
-        .or_else(|| {
-            load_credentials()
-                .ok()
-                .flatten()
-                .and_then(|c| {
-                    let url = c.worker_url.trim().trim_end_matches('/').to_string();
-                    if url.is_empty() {
-                        None
-                    } else {
-                        Some(url)
-                    }
-                })
-        })
-        .unwrap_or_default();
-    if worker_url.is_empty() {
-        return Err("Worker URL is required".into());
-    }
-    match owner_login(worker_url, record.passtoken).await {
+    let record = owner_passtoken::load_after_auth(Some(&worker_url))?
+        .ok_or_else(|| "No stored passtoken for this Worker.".to_string())?;
+    match owner_login(worker_url.clone(), record.passtoken).await {
         Ok(status) => Ok(status),
         Err(err) if err.contains("Invalid credentials") => {
-            owner_passtoken::delete();
+            owner_passtoken::delete(&worker_url);
             Err(
                 "Stored passtoken didn't match this Worker. Paste your current passtoken."
                     .into(),
@@ -664,9 +724,9 @@ async fn ensure_access(scope: &str) -> Result<AccessMemory, String> {
     if let Some(mem) = access_if_valid(scope) {
         return Ok(mem);
     }
-    let blob = load_keyring()?.ok_or_else(|| "Not signed in".to_string())?;
+    let blob = load_keyring(None)?.ok_or_else(|| "Not signed in".to_string())?;
     refresh_scope(&blob, scope).await?;
-    access_if_valid(scope).ok_or_else(|| "Not signed in".to_string())
+    access_if_valid_for(scope, &blob.worker_url).ok_or_else(|| "Not signed in".to_string())
 }
 
 #[derive(Debug, Deserialize)]
@@ -727,9 +787,11 @@ pub async fn worker_request(input: WorkerRequestInput) -> Result<WorkerRequestOu
 
     let mut res = do_fetch(access.access_token.clone()).await?;
     if res.status().as_u16() == 401 {
-        let blob = load_keyring()?.ok_or_else(|| "Not signed in".to_string())?;
+        let blob = load_keyring(Some(&access.worker_url))?
+            .ok_or_else(|| "Not signed in".to_string())?;
         refresh_scope(&blob, scope).await?;
-        access = access_if_valid(scope).ok_or_else(|| "Not signed in".to_string())?;
+        access = access_if_valid_for(scope, &access.worker_url)
+            .ok_or_else(|| "Not signed in".to_string())?;
         res = do_fetch(access.access_token.clone()).await?;
     }
 

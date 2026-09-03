@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { DownloadCtaLabel } from "@/components/download-cta-label";
+import { GithubIcon } from "@/components/icons/github";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
@@ -45,9 +46,33 @@ export function SiteHeader() {
               {item.label}
             </Link>
           ))}
+          <a
+            href={siteConfig.githubWorkerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            GitHub
+          </a>
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            render={
+              <a
+                href={siteConfig.githubWorkerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="GitHub repository"
+              />
+            }
+            className="hidden sm:inline-flex gap-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <GithubIcon className="size-3.5" />
+            <span>GitHub</span>
+          </Button>
           <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
             <DownloadCtaLabel />
             <ArrowRight data-icon="inline-end" />

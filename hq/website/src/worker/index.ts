@@ -22,7 +22,7 @@ const EMAIL_RE =
 
 const SITE_ORIGIN = "https://relaybase.xyz";
 
-export default {
+const worker = {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -42,6 +42,8 @@ export default {
     return env.ASSETS.fetch(request);
   },
 };
+
+export default worker;
 
 function matchDownload(path: string): {
   uuid: string;

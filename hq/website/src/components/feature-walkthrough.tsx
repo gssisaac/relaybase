@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ImageIcon, Video } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -398,9 +399,11 @@ function FeatureClip({ feature }: { feature: WalkthroughFeature }) {
 function PaidStill({ item }: { item: PaidItem }) {
   if (item.src) {
     return (
-      <img
+      <Image
         src={item.src}
         alt=""
+        width={1536}
+        height={1008}
         className="aspect-[3290/2160] w-full object-cover object-top"
       />
     );

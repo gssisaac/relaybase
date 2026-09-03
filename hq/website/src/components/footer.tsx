@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { DownloadCtaLabel } from "@/components/download-cta-label";
+import { GithubIcon } from "@/components/icons/github";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
 
@@ -28,9 +29,26 @@ export function Footer() {
             Silicon is available now. Windows is coming soon.
           </p>
 
-          <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-            <DownloadCtaLabel />
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
+              <DownloadCtaLabel />
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              render={
+                <a
+                  href={siteConfig.githubWorkerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                />
+              }
+              className="gap-2"
+            >
+              <GithubIcon className="size-4" />
+              <span>GitHub (Open Source Worker)</span>
+            </Button>
+          </div>
 
           <div className="flex flex-wrap justify-center gap-4 text-sm">
             <a
@@ -69,6 +87,15 @@ export function Footer() {
             <Link href="/release-notes" className="hover:text-foreground">
               Release notes
             </Link>
+            <a
+              href={siteConfig.githubWorkerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:text-foreground"
+            >
+              <GithubIcon className="size-3.5" />
+              <span>GitHub</span>
+            </a>
           </nav>
 
           <div className="flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">

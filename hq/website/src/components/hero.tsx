@@ -1,13 +1,14 @@
 import Link from "next/link";
 import {
   ArrowRight,
-  KeyRound,
+  Code2,
   Layers,
   Mail,
   MonitorSmartphone,
 } from "lucide-react";
 
 import { DownloadCtaLabel } from "@/components/download-cta-label";
+import { GithubIcon } from "@/components/icons/github";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
@@ -29,9 +30,9 @@ const highlights = [
     desc: "Fast, keyboard-first inbox",
   },
   {
-    icon: KeyRound,
-    title: "You own the Worker",
-    desc: "installed in your CF account",
+    icon: Code2,
+    title: "Open Source Worker",
+    desc: "100% in your CF account",
   },
 ] as const;
 
@@ -45,9 +46,20 @@ export function Hero() {
       <div className="relative mx-auto max-w-6xl px-6 py-16 md:py-20 lg:py-24">
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-12 xl:gap-14">
           <div className="max-w-xl lg:max-w-none">
-            <Badge variant="teal" className="mb-6 px-3 py-1">
-              Beta
-            </Badge>
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+              <Badge variant="teal" className="px-3 py-1">
+                Beta
+              </Badge>
+              <a
+                href={siteConfig.githubWorkerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-brand/40 hover:text-foreground"
+              >
+                <GithubIcon className="size-3.5" />
+                <span>Open Source Worker</span>
+              </a>
+            </div>
 
             <h1 className="text-4xl font-bold leading-[1.08] tracking-tight text-foreground md:text-5xl lg:text-[3.25rem] lg:leading-[1.06]">
               Fast email client
@@ -60,10 +72,25 @@ export function Hero() {
               {siteConfig.description}
             </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
                 <DownloadCtaLabel />
                 <ArrowRight data-icon="inline-end" />
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                render={
+                  <a
+                    href={siteConfig.githubWorkerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
+                className="gap-2"
+              >
+                <GithubIcon className="size-4" />
+                <span>GitHub</span>
               </Button>
             </div>
           </div>

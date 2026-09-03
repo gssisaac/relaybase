@@ -1,6 +1,9 @@
-import { Cloud, KeyRound, MonitorSmartphone, Shield, Zap } from "lucide-react";
+import { Cloud, Code, KeyRound, MonitorSmartphone, Shield, Zap } from "lucide-react";
 
+import { GithubIcon } from "@/components/icons/github";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { siteConfig } from "@/lib/site-config";
 
 export function CloudflareTrust() {
   return (
@@ -11,18 +14,26 @@ export function CloudflareTrust() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
-            <Badge
-              variant="outline"
-              className="mb-4 border-slate-700 bg-slate-800 text-slate-300"
-            >
-              Your infrastructure
-            </Badge>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className="border-slate-700 bg-slate-800 text-slate-300"
+              >
+                Your infrastructure
+              </Badge>
+              <Badge
+                variant="outline"
+                className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+              >
+                100% Open Source Worker
+              </Badge>
+            </div>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
               Built for{" "}
               <span className="text-[#f6821f]">your Cloudflare account</span>
             </h2>
             <p className="mt-4 text-lg text-slate-400">
-              Relaybase does not host email for you. You deploy our routing Worker
+              Relaybase does not host email for you. You deploy our open-source routing Worker
               into your Cloudflare account with Wrangler; the Mac app only needs
               your Worker URL and owner passtoken — then you get an inbox UX over
               Cloudflare Email Sending and Routing.
@@ -30,6 +41,10 @@ export function CloudflareTrust() {
 
             <ul className="mt-8 space-y-4">
               {[
+                {
+                  icon: Code,
+                  text: "100% Open Source Worker (strum-us/relaybase-worker) — full transparency, audit, and zero vendor lock-in",
+                },
                 {
                   icon: KeyRound,
                   text: "No Workers/D1/R2 API token in the Mac app — you deploy; we never hold account edit rights",
@@ -56,6 +71,24 @@ export function CloudflareTrust() {
                 </li>
               ))}
             </ul>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                render={
+                  <a
+                    href={siteConfig.githubWorkerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
+                className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white gap-2"
+              >
+                <GithubIcon className="size-4" />
+                <span>View Worker on GitHub</span>
+              </Button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8">
@@ -72,8 +105,8 @@ export function CloudflareTrust() {
             </div>
 
             <div className="mt-8 rounded-lg border border-slate-800 bg-slate-900 p-4 font-mono text-xs text-slate-400">
-              <p className="text-slate-500">{"// You deploy"}</p>
-              <p>wrangler deploy ──▶ relaybase-api in your account</p>
+              <p className="text-slate-500">{"// 1. Open source Worker in your account"}</p>
+              <p>wrangler deploy ──▶ relaybase-api (github.com/strum-us/relaybase-worker)</p>
               <p className="text-[#f6821f]">
                 Relaybase.app ──▶ your Worker URL + owner passtoken
               </p>

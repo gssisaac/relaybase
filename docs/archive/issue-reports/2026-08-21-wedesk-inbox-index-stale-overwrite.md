@@ -82,4 +82,4 @@ A later folder vs list check showed **2,692** on `_list.json` (four folders with
 ## Related
 
 - Architecture: [inbound-search-d1-fts5.md](../inbound-search-d1-fts5.md) (Self-heal)
-- Storage: [mailbox-r2.md](../mailbox-r2.md), [storage-architecture.md](../storage-architecture.md)
+- Storage: [mailbox-r2.md](../../architecture/mailbox-r2.md), [storage-architecture.md](../../architecture/storage-architecture.md)

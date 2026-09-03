@@ -284,7 +284,7 @@ export function EmailSenderBrandingView() {
             protects against spoofing. It does not control any inbox logo —
             Relaybase does not offer BIMI/VMC logo display; see{" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs">
-              docs/bimi-vmc-do-not-build.md
+              docs/decisions/bimi-vmc-do-not-build.md
             </code>{" "}
             for why.
           </CardDescription>

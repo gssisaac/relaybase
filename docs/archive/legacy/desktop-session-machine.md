@@ -1,5 +1,5 @@
 > **ARCHIVED** — pre–console-only bio gate. See [README](./README.md) and
-> [../desktop-session-machine.md](../desktop-session-machine.md).
+> [../../auth/desktop-session-machine.md](../../auth/desktop-session-machine.md).
 
 # Desktop session state machine
 
@@ -14,7 +14,7 @@ that decides "who can enter the app right now".
 For where the secrets live (keyring, `~/.relaybase`), see
 **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
 For the remote owner auth model (passtoken + sessions, `AUTH_PEPPER`), see
-**[storage-architecture.md](./storage-architecture.md)** → *Owner auth*.
+**[storage-architecture.md](../../architecture/storage-architecture.md)** → *Owner auth*.
 
 ---
 

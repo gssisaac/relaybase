@@ -76,7 +76,7 @@ DMARC/BIMI program. Building this into a $10 product would mean either:
    economics of a flat $10/domain plan.
 
 Neither is compatible with this product's positioning. See
-[PRODUCT.md](../PRODUCT.md) — the value proposition is `billing@`/`support@`
+[PRODUCT.md](../../PRODUCT.md) — the value proposition is `billing@`/`support@`
 addresses, transactional send, inbound receive, and API/webhooks, not an
 inbox-logo/branding product.
 
@@ -140,5 +140,5 @@ been verified, do not build it.
 The desktop mail UI shows **sender-domain favicons** (when the site serves one)
 or **two-letter initials** as a fallback — not BIMI logos in the recipient's
 Gmail. That is a local list/thread decoration only; it does not change how
-Gmail renders mail for recipients. Implementation: **[sender-favicon-cache.md](./sender-favicon-cache.md)**.
+Gmail renders mail for recipients. Implementation: **[sender-favicon-cache.md](../desktop/sender-favicon-cache.md)**.
 Do not conflate this favicon cache with BIMI/VMC inbox branding.

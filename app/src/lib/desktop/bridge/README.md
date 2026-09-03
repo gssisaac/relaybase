@@ -36,8 +36,8 @@ Do not deep-import `./invoke` or sibling files from app code — keeps the publi
 
 ## Related docs
 
-- Cloudflare OAuth install token: [`docs/cf-oauth-install-token.md`](../../../../../docs/cf-oauth-install-token.md)
-- Desktop session phases: [`docs/desktop-session-machine.md`](../../../../../docs/desktop-session-machine.md)
-- Local persistence: [`docs/relaybase-home-storage.md`](../../../../../docs/relaybase-home-storage.md)
+- Cloudflare OAuth install token: [`docs/auth/cf-oauth-install-token.md`](../../../../../docs/auth/cf-oauth-install-token.md)
+- Desktop session phases: [`docs/auth/desktop-session-machine.md`](../../../../../docs/auth/desktop-session-machine.md)
+- Local persistence: [`docs/desktop/home-storage.md`](../../../../../docs/desktop/home-storage.md)
 
 Rust command implementations live in `desktop/src-tauri/src/`.

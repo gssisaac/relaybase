@@ -8,7 +8,7 @@ Binaries live on **Cloudflare R2** (`download.relaybase.xyz`); small metadata
 lives on `relaybase.xyz/release`.
 
 Desktop and Worker share **one product semver** — always bump both together.
-First public release: **0.1.1**. Policy: [docs/version-sync.md](../../docs/version-sync.md).
+First public release: **0.1.1**. Policy: [docs/release/version-sync.md](../../docs/release/version-sync.md).
 
 **CRITICAL (Pre-launch):** Version is frozen at **`0.1.1`**. Do **NOT** bump versions before official launch. Later updates after launch bump the **patch** only (`0.1.2`, `0.1.3`, …). There is no separate
 dev / `+local` channel.
@@ -105,7 +105,7 @@ Owner/team secrets use the **login keychain** via `SecItem` in
 entitlement to “fix” keychain prompts without testing a full signed release on
 macOS 26.
 
-Incident: pre-launch dogfood used mismatched Worker/Desktop versions and a multi-step D1 migration chain — retired before **0.1.1** (see [docs/version-sync.md](../../docs/version-sync.md)).
+Incident: pre-launch dogfood used mismatched Worker/Desktop versions and a multi-step D1 migration chain — retired before **0.1.1** (see [docs/release/version-sync.md](../../docs/release/version-sync.md)).
 
 ### Codesign needs a real terminal + network
 
@@ -315,6 +315,6 @@ downloads in the background, and shows **Restart to update** in the sidebar.
 
 ## Versioning
 
-- Patch only after **0.1.1** (`0.1.2`, `0.1.3`, …). Desktop and Worker semver must match — [docs/version-sync.md](../../docs/version-sync.md).
+- Patch only after **0.1.1** (`0.1.2`, `0.1.3`, …). Desktop and Worker semver must match — [docs/release/version-sync.md](../../docs/release/version-sync.md).
 - Desktop and Worker do **not** have to ship together.
 - Do not reuse an older `release-*` branch for a new version.

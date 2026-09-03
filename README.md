@@ -17,7 +17,7 @@ The repo is split into two service sets:
 | HQ | **Console** | `hq/console/` | 32830 | Account / license / billing / recovery (worker `strum-relaybase-console` at `console.relaybase.xyz`) |
 | HQ | **Website** | `hq/website/` | 32828 | Marketing site (worker `strum-relaybase-website` at `relaybase.xyz`; BYO-CF / $39 one-time positioning) |
 
-**Product pivot:** Relaybase is a one-time Mac app that installs the Worker into the **user's** Cloudflare account. See `docs/pivot-byo-cloudflare.md` and `PRODUCT.md`.
+**Product pivot:** Relaybase is a one-time Mac app that installs the Worker into the **user's** Cloudflare account. See `docs/decisions/pivot-byo-cloudflare.md` and `PRODUCT.md`.
 
 Production API: `https://api.relaybase.xyz`. Marketing: [relaybase.xyz](https://relaybase.xyz).
 
@@ -204,7 +204,7 @@ Bindings in `../relaybase-worker/wrangler.toml`:
 | Variable | Type | Description |
 |----------|------|-------------|
 | `CF_API_TOKEN` | secret | Token with Email Sending + Email Routing + Zone Read (required for domain / DNS API) |
-| `CF_ACCOUNT_ID` | secret | Optional. Account id is not required at runtime — see [docs/cf-oauth-install-token.md](docs/cf-oauth-install-token.md). |
+| `CF_ACCOUNT_ID` | secret | Optional. Account id is not required at runtime — see [docs/auth/cf-oauth-install-token.md](docs/auth/cf-oauth-install-token.md). |
 | `AUTH_PEPPER` | secret | Install/hash pepper for owner passtoken (not a login token) |
 | `WORKER_SCRIPT_NAME` | var | Worker name for routing helpers |
 | `INBOUND_BUCKET_NAME` | var | R2 bucket name label |

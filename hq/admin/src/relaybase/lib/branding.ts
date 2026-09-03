@@ -16,7 +16,7 @@ export type BrandingDnsRecordStatus = {
 
 /**
  * Sender authentication status for a domain. BIMI/VMC (inbox logo) is not
- * part of this product — see docs/bimi-vmc-do-not-build.md before adding it
+ * part of this product — see docs/decisions/bimi-vmc-do-not-build.md before adding it
  * back.
  */
 export type DomainBrandingStatus = {

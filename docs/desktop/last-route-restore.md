@@ -18,7 +18,7 @@ Without entry restore, every open hard-redirected to `/dashboard`, which opened 
 
 **Desktop source of truth:** `~/.relaybase/mail/desktop/ui/sidebar.json`  
 (WebKit / Application Support `localStorage` is only a mirror — do not rely on it across binary renames.)  
-Full home-dir contract: [relaybase-home-storage.md](./relaybase-home-storage.md).
+Full home-dir contract: [home-storage.md](./home-storage.md).
 
 Browser / mirror keys (scoped by fixed local operator id `"desktop"`):
 
@@ -75,7 +75,7 @@ Client gate:
 app/src/components/RestoreLastRoute.tsx
 ```
 
-While resolving, it renders **`AppLoadingScreen`** (same icon + spinner as `BootScreen`) so the boot → restore handoff does not flicker. Do not put a different "Loading…" layout here — [docs/app-loading-screen.md](./app-loading-screen.md).
+While resolving, it renders **`AppLoadingScreen`** (same icon + spinner as `BootScreen`) so the boot → restore handoff does not flicker. Do not put a different "Loading…" layout here — [app-loading-screen.md](./app-loading-screen.md).
 
 `RestoreLastRoute` resolves `userId` as: prop → `fallbackUserId` (`"desktop"`). Cookie login is removed.
 

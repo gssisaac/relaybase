@@ -1,11 +1,11 @@
 > **ARCHIVED** — pre–console-only bio gate. See [README](./README.md) and
-> [../authentication.md](../authentication.md).
+> [../../auth/authentication.md](../../auth/authentication.md).
 
 # Authentication architecture
 
 **Audience:** humans and coding agents changing owner login, invited (team) login, Worker auth middleware, desktop unlock, or mobile companion auth.
 
-This document is the **map** for authentication across Relaybase. For phase-machine UX details see **[desktop-session-machine.md](./desktop-session-machine.md)**. For secret storage locations see **[storage-architecture.md](./storage-architecture.md)** → *Owner auth* and **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
+This document is the **map** for authentication across Relaybase. For phase-machine UX details see **[desktop-session-machine.md](./desktop-session-machine.md)**. For secret storage locations see **[storage-architecture.md](../../architecture/storage-architecture.md)** → *Owner auth* and **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
 
 ---
 
@@ -103,7 +103,7 @@ flowchart TB
 | Account email + password | `flutter_secure_storage` |
 | Worker URL | Baked into build (`AppConfig.defaultWorkerUrl`) |
 
-See **[mobile-email-companion.md](./mobile-email-companion.md)** for provisioning and scope rules.
+See **[mobile-companion.md](../../features/mobile-companion.md)** for provisioning and scope rules.
 
 ---
 
@@ -617,7 +617,7 @@ sequenceDiagram
   end
 ```
 
-See **[mobile-email-companion.md](./mobile-email-companion.md)**.
+See **[mobile-companion.md](../../features/mobile-companion.md)**.
 
 ---
 
@@ -674,10 +674,10 @@ Access tokens are **not** stored in D1 — HMAC self-contained JWT-like tokens s
 | Phase state diagram | [desktop-session-machine.md](./desktop-session-machine.md) |
 | Launch race / Touch ID | [desktop-unlock-unresolved.md](./desktop-unlock-unresolved.md) |
 | Local file layout | [relaybase-home-storage.md](./relaybase-home-storage.md) |
-| Remote storage + owner auth summary | [storage-architecture.md](./storage-architecture.md) |
-| CF OAuth install token | [cf-oauth-install-token.md](./cf-oauth-install-token.md) |
-| Mobile companion policy | [mobile-email-companion.md](./mobile-email-companion.md) |
-| D1 migrations at install | [d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md) |
+| Remote storage + owner auth summary | [storage-architecture.md](../../architecture/storage-architecture.md) |
+| CF OAuth install token | [cf-oauth-install-token.md](../../auth/cf-oauth-install-token.md) |
+| Mobile companion policy | [mobile-companion.md](../../features/mobile-companion.md) |
+| D1 migrations at install | [d1-migrations-and-init-db.md](../../architecture/d1-migrations-and-init-db.md) |
 
 ---
 

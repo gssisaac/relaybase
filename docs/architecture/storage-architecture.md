@@ -6,7 +6,7 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | D1 `RELAYBASE_DB` (binding in `../relaybase-worker/wrangler.toml`; Drizzle in `../relaybase-worker/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (passtoken hash), `owner_sessions`, `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**. |
+| **Remote** | D1 `RELAYBASE_DB` (binding in `../relaybase-worker/wrangler.toml`; Drizzle in `../relaybase-worker/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (passtoken hash), `owner_sessions`, `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](../features/audience-and-broadcasts.md)**. |
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `../relaybase-worker/db/log/`. |
 | **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `../relaybase-worker/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
@@ -15,8 +15,8 @@
 
 Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
 
-Local Mac layout and Tauri commands: **[relaybase-home-storage.md](./relaybase-home-storage.md)**.  
-Audience/broadcast product rules: **[audience-and-broadcasts.md](./audience-and-broadcasts.md)**.
+Local Mac layout and Tauri commands: **[home-storage.md](../desktop/home-storage.md)**.  
+Audience/broadcast product rules: **[audience-and-broadcasts.md](../features/audience-and-broadcasts.md)**.
 
 ---
 
@@ -51,7 +51,7 @@ flowchart TB
   console --> HqD1
 ```
 
-All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** product path: map `/api/email/*` → product Worker `/console/*` (management) and `/mail/*` (mail operations) via [`app/src/lib/desktop/api/email-api-map.ts`](../app/src/lib/desktop/api/email-api-map.ts) and [`desktopAwareFetch`](../app/src/lib/desktop/api/api-base.ts). Account/license/billing calls go to `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
+All run modes (`pnpm next`, `tauri dev`, packaged `.app`) use the **same** product path: map `/api/email/*` → product Worker `/console/*` (management) and `/mail/*` (mail operations) via [`app/src/lib/desktop/api/email-api-map.ts`](../../app/src/lib/desktop/api/email-api-map.ts) and [`desktopAwareFetch`](../../app/src/lib/desktop/api/api-base.ts). Account/license/billing calls go to `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`). There is no Next `/api/email` product store and no cookie `relaybase_user` login.
 
 Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 
@@ -81,12 +81,12 @@ The desktop **god token is retired**. Owner auth is now a **Worker-issued passto
 
 The desktop **unlock flow** — silent mail boot, keyring passtoken + Touch ID
 as the read-gate, owner/invited phase machine, team keyring, scoped 401 — is
-documented in **[desktop-session-machine.md](./desktop-session-machine.md)**
-and **[authentication.md](./authentication.md)** → *Owner passtoken in the
+documented in **[desktop-session-machine.md](../auth/desktop-session-machine.md)**
+and **[authentication.md](../auth/authentication.md)** → *Owner passtoken in the
 keyring*.
 Invited (team) mobile passwords live in the OS keyring
 (`team-session:{email}`), mirroring the owner keyring; see
-**[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
+**[home-storage.md](../desktop/home-storage.md)** → *OS keyring*.
 
 Mobile passwords (`/mobile/*`) and product API keys (`/v1/*`, `~/.relaybase/{scopeId}/api-keys.json`) are unchanged and separate from the owner passtoken.
 
@@ -97,7 +97,7 @@ Mobile passwords (`/mobile/*`) and product API keys (`/v1/*`, `~/.relaybase/{sco
 
 ### HTTP surface (Bearer owner access token)
 
-The product Worker manages domains / inbox routing / DNS with wrangler secret `CF_API_TOKEN` (set after install). `CF_ACCOUNT_ID` is **optional** — not required for mail API readiness. Listing, importing, and resolving zones uses only the pinned account (caller `accountId` → env → D1). Other Cloudflare accounts on the same token are never listed. Policy: **[cf-oauth-install-token.md](./cf-oauth-install-token.md)** → *Worker CF_ACCOUNT_ID*. Owner auth uses `AUTH_PEPPER` (passtoken hashing + access-token HMAC) — see **Owner auth** above. The Worker exposes:
+The product Worker manages domains / inbox routing / DNS with wrangler secret `CF_API_TOKEN` (set after install). `CF_ACCOUNT_ID` is **optional** — not required for mail API readiness. Listing, importing, and resolving zones uses only the pinned account (caller `accountId` → env → D1). Other Cloudflare accounts on the same token are never listed. Policy: **[cf-oauth-install-token.md](../auth/cf-oauth-install-token.md)** → *Worker CF_ACCOUNT_ID*. Owner auth uses `AUTH_PEPPER` (passtoken hashing + access-token HMAC) — see **Owner auth** above. The Worker exposes:
 
 | Route | Purpose |
 |-------|---------|
@@ -121,8 +121,8 @@ The product Worker manages domains / inbox routing / DNS with wrangler secret `C
 | `/console/auth-status` | Public probe: is an owner configured yet? |
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
 | `/console/addresses/mobile-password` | Per-account mobile password (owner session) |
-| `/mail/inbox`, `/mail/send`, `/mail/favicon`, … | Mail I/O (desktop / owner access token). Favicon proxy: **[sender-favicon-cache.md](./sender-favicon-cache.md)** |
-| `/mobile/*` | Flutter companion + desktop team-user login (mobile-password auth; single-account scope) — **[mobile-email-companion.md](./mobile-email-companion.md)** |
+| `/mail/inbox`, `/mail/send`, `/mail/favicon`, … | Mail I/O (desktop / owner access token). Favicon proxy: **[sender-favicon-cache.md](../desktop/sender-favicon-cache.md)** |
+| `/mobile/*` | Flutter companion + desktop team-user login (mobile-password auth; single-account scope) — **[mobile-companion.md](../features/mobile-companion.md)** |
 
 Account / license / billing are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`), not on the product Worker. The console no longer holds or verifies an admin token.
 
@@ -182,7 +182,7 @@ Licenses, console accounts, worker registration, recovery tokens, the legacy wai
 
 Cloudflare credentials, DMARC branding, and send logs are **not** stored here:
 
-- CF credentials → Worker wrangler secret `CF_API_TOKEN` (required for domain / routing / DNS). `CF_ACCOUNT_ID` is optional. The install token is obtained via Cloudflare OAuth (PKCE; callback on `console.relaybase.xyz`); the `refresh_token` lives in the OS Keyring (`cf-oauth-install`) for silent background updates, while short-lived `access_token` lives in Tauri process memory only, never in `workspace.json`. See **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
+- CF credentials → Worker wrangler secret `CF_API_TOKEN` (required for domain / routing / DNS). `CF_ACCOUNT_ID` is optional. The install token is obtained via Cloudflare OAuth (PKCE; callback on `console.relaybase.xyz`); the `refresh_token` lives in the OS Keyring (`cf-oauth-install`) for silent background updates, while short-lived `access_token` lives in Tauri process memory only, never in `workspace.json`. See **[cf-oauth-install-token.md](../auth/cf-oauth-install-token.md)**.
 - DMARC branding → Worker D1 `domain_branding` via `/console/branding`.
 - Send logs → Worker R2 `sent/_sendlog/*` via `/console/send-logs`.
 
@@ -192,7 +192,7 @@ Legacy settings fields (`workerScriptName`, `cloudflareAccountId`, `cloudflareAp
 
 ## Local — `~/.relaybase`
 
-See **[relaybase-home-storage.md](./relaybase-home-storage.md)** for the full tree and Tauri commands.
+See **[home-storage.md](../desktop/home-storage.md)** for the full tree and Tauri commands.
 
 Highlights for the consolidated model:
 

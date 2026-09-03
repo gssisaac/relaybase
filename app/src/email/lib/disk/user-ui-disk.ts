@@ -10,7 +10,7 @@ import {
  * Durable UI state under ~/.relaybase/mail/{userId}/ui/*.json
  *
  * Desktop: disk is required. localStorage is a warm mirror only — never the
- * source of truth (see docs/relaybase-home-storage.md).
+ * source of truth (see docs/desktop/home-storage.md).
  */
 
 function safeUserId(userId: string): string {

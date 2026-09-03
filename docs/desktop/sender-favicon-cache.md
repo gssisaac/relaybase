@@ -16,7 +16,7 @@
 | Initials fallback | `app/src/lib/email/format-sender.ts` (`senderInitials`) |
 | Persisted status (desktop) | `~/.relaybase/cache/favicon-status.json` via `desktopGetCacheJson` / `desktopSaveCacheJson` |
 
-Related: **[bimi-vmc-do-not-build.md](./bimi-vmc-do-not-build.md)** (do **not** build BIMI/VMC inbox logos), **[relaybase-home-storage.md](./relaybase-home-storage.md)** (local cache layout), **[storage-architecture.md](./storage-architecture.md)** (Worker `/mail/*` routes).
+Related: **[bimi-vmc-do-not-build.md](../decisions/bimi-vmc-do-not-build.md)** (do **not** build BIMI/VMC inbox logos), **[home-storage.md](./home-storage.md)** (local cache layout), **[storage-architecture.md](../architecture/storage-architecture.md)** (Worker `/mail/*` routes).
 
 ---
 
@@ -43,7 +43,7 @@ flowchart LR
   Provider[SenderIconProvider] --> Store
 ```
 
-**Not used:** Gravatar, Google favicon mirrors, BIMI/VMC, R2/KV persistence of image bytes, or mobile Flutter avatars (mobile uses initials + color only — see **[mobile-email-companion.md](./mobile-email-companion.md)**).
+**Not used:** Gravatar, Google favicon mirrors, BIMI/VMC, R2/KV persistence of image bytes, or mobile Flutter avatars (mobile uses initials + color only — see **[mobile-companion.md](../features/mobile-companion.md)**).
 
 ---
 
@@ -160,7 +160,7 @@ Wrapped in `memo(observer(...))` to limit re-renders when unrelated row props ch
 When changing sender avatars:
 
 1. **Do not** revert to per-row `https://<domain>/favicon.ico` `<img>` loads.
-2. **Do not** add Gravatar, favicon mirrors, or BIMI — see **[bimi-vmc-do-not-build.md](./bimi-vmc-do-not-build.md)**.
+2. **Do not** add Gravatar, favicon mirrors, or BIMI — see **[bimi-vmc-do-not-build.md](../decisions/bimi-vmc-do-not-build.md)**.
 3. Keep fetch logic in `SenderIconStore` — not scattered in list components.
 4. New mail surfaces that show a sender avatar should use `SenderAvatar` (or call `useSenderIconStore().load(domain)` if a custom layout is required).
 5. Worker changes stay on `/mail/favicon` with `requireAdmin`; update `email-api-map.ts` if the app path changes.

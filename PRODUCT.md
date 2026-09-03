@@ -12,7 +12,7 @@
 
 Relaybase is **software**, not a hosted multi-tenant email intermediary. You deploy the routing Worker into your Cloudflare account (Wrangler install ZIP); the Mac app connects with your Worker URL and an owner passtoken the Worker issues once. We never ask you to point nameservers at Relaybase or place domains under our account.
 
-See `docs/pivot-byo-cloudflare.md`.
+See `docs/decisions/pivot-byo-cloudflare.md`.
 
 ---
 

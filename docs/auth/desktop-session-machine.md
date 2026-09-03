@@ -17,9 +17,9 @@ authentication / unlock flow, the owner or invited (team) session, or anything
 that decides "who can enter the app right now".
 
 For where the secrets live (keyring, `~/.relaybase`), see
-**[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring*.
+**[home-storage.md](../desktop/home-storage.md)** → *OS keyring*.
 For the remote owner auth model (passtoken + scoped sessions, `AUTH_PEPPER`), see
-**[storage-architecture.md](./storage-architecture.md)** → *Owner auth* and
+**[storage-architecture.md](../architecture/storage-architecture.md)** → *Owner auth* and
 **[authentication.md](./authentication.md)**.
 
 ---

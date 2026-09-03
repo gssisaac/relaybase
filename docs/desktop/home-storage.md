@@ -5,7 +5,7 @@
 **Source of truth (desktop):** `$HOME/.relaybase` only.  
 Implemented in `desktop/src-tauri/src/secrets.rs`, `desktop/src-tauri/src/notify.rs`, and the TS facades under `app/src/email/*-disk*` / `email-prefs.ts` / `api-key-vault.ts`.
 
-For the full two-layer model (Worker D1 + R2 + this directory), see **[storage-architecture.md](./storage-architecture.md)**.
+For the full two-layer model (Worker D1 + R2 + this directory), see **[storage-architecture.md](../architecture/storage-architecture.md)**.
 
 ---
 
@@ -138,7 +138,7 @@ paths under the new `{scopeId}/`).
 
 ### `workspace.json`
 
-> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). **`~/.relaybase/workspace.json` is the source of truth for workspace configuration (`workerUrl`).** It is **not** a credentials file — passtoken, OAuth, and refresh tokens never live here. Older builds wrote `credentials.json`; the first load after upgrade rewrites the contents to `workspace.json` and deletes the old file. Keyring tokens (`owner-session`) authenticate an existing workspace on disk; keyring information must **never** be used to invent or restore a workspace when `~/.relaybase` is missing or deleted. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms show a **Worker URL select** (`WorkerUrlPicker`): the URL from `workspace.json` is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
+> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](../architecture/storage-architecture.md) → *Owner auth*). **`~/.relaybase/workspace.json` is the source of truth for workspace configuration (`workerUrl`).** It is **not** a credentials file — passtoken, OAuth, and refresh tokens never live here. Older builds wrote `credentials.json`; the first load after upgrade rewrites the contents to `workspace.json` and deletes the old file. Keyring tokens (`owner-session`) authenticate an existing workspace on disk; keyring information must **never** be used to invent or restore a workspace when `~/.relaybase` is missing or deleted. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms show a **Worker URL select** (`WorkerUrlPicker`): the URL from `workspace.json` is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
 
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
@@ -153,7 +153,7 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `relaybaseSession` | Signed console session token (local only; Bearer to console APIs) — written only when non-empty |
 | ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext in OS keyring `owner-passtoken` + the user's one-time download). |
 
-Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. Cloudflare OAuth install `refresh_token` lives in the OS Keyring (`cf-oauth-install`), while short-lived `access_token` lives in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`). Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
+Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. Cloudflare OAuth install `refresh_token` lives in the OS Keyring (`cf-oauth-install`), while short-lived `access_token` lives in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`). Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](../auth/cf-oauth-install-token.md)**.
 
 ### OS keyring (owner refresh)
 
@@ -177,7 +177,7 @@ Same service, **different account**, so silent mail boot cannot load the passtok
 
 Contents: the owner passtoken plaintext. **Write** at first login, `setup-admin` reveal, rotate, `reset-admin`, and typed fallback — no Touch ID (the user just created or typed it). **Read** only after Touch ID / Windows Hello succeeds (or on platforms with no biometry, if the item exists). Fail or cancel → do not read; show the typed form.
 
-Prefer an OS user-presence / biometry ACL on this item so the platform itself refuses the read without bio. JS never sees the value. Ordinary sign-out does **not** delete this item. Policy: **[authentication.md](./authentication.md)** → *Owner passtoken in the keyring*.
+Prefer an OS user-presence / biometry ACL on this item so the platform itself refuses the read without bio. JS never sees the value. Ordinary sign-out does **not** delete this item. Policy: **[authentication.md](../auth/authentication.md)** → *Owner passtoken in the keyring*.
 
 ### OS keyring (team mobile password)
 

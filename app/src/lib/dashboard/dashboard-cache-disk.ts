@@ -6,7 +6,7 @@ import {
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
 
-/** Dashboard API response cache → ~/.relaybase/cache/** (see docs/relaybase-home-storage.md). */
+/** Dashboard API response cache → ~/.relaybase/cache/** (see docs/desktop/home-storage.md). */
 
 /** Re-fetch when cached data is older than this on render. */
 export const DASHBOARD_CACHE_REFRESH_AFTER_MS = 60_000;

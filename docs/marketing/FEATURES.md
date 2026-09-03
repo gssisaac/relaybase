@@ -125,7 +125,7 @@ Draft Pro: unlimited domains and addresses on that Worker, Audience / Broadcasts
 | Item | Why |
 |------|-----|
 | Team / Studio seat SKUs | Modeled in `STRATEGY.md` / `PRICING.md`; not shipped. Do not publish. |
-| BIMI / VMC / “logo in Gmail” | Do not build — `docs/bimi-vmc-do-not-build.md`. |
+| BIMI / VMC / “logo in Gmail” | Do not build — `docs/decisions/bimi-vmc-do-not-build.md`. |
 | Operator console (`hq/admin`, licenses) | Internal. Not an end-user feature. |
 | Stars, labels, archive (Gmail extras) | Not shipped. Do not imply them. |
 
@@ -137,6 +137,6 @@ Draft Pro: unlimited domains and addresses on that Worker, Audience / Broadcasts
 - Product positioning: [`PRODUCT.md`](../../PRODUCT.md)
 - Pricing draft (not public until paid launch): [`PRICING.md`](../../PRICING.md)
 - Pre-launch audience and copy rules: [`PRE-LAUNCH.md`](../../PRE-LAUNCH.md)
-- Inbox / multi-account behavior: [`inbox-threading-and-multi-account.md`](../inbox-threading-and-multi-account.md)
-- Audience / broadcasts: [`audience-and-broadcasts.md`](../audience-and-broadcasts.md)
-- Mobile companion: [`mobile-email-companion.md`](../mobile-email-companion.md)
+- Inbox / multi-account behavior: [`../features/inbox-threading.md`](../features/inbox-threading.md)
+- Audience / broadcasts: [`../features/audience-and-broadcasts.md`](../features/audience-and-broadcasts.md)
+- Mobile companion: [`../features/mobile-companion.md`](../features/mobile-companion.md)

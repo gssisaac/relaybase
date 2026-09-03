@@ -103,7 +103,7 @@ Rules:
 
 ## Compose open / Esc / draft resume
 
-**Source of truth:** [`app/src/email/lib/compose/compose-open.ts`](../app/src/email/lib/compose/compose-open.ts)
+**Source of truth:** [`app/src/email/lib/compose/compose-open.ts`](../../app/src/email/lib/compose/compose-open.ts)
 
 Callers must **not** call `emailComposeHref`, `forceNew`, or `findResumableComposeDraft` directly. Consume adapter hooks / helpers only:
 
@@ -116,7 +116,7 @@ Callers must **not** call `emailComposeHref`, `forceNew`, or `findResumableCompo
 | `exactDraftComposeHref(id)` | Open a specific standalone draft |
 | `resolveReplyOpenDraftId(...)` | `?reply=` / Unsend panel restore |
 
-Inline thread compose state (mode / draft id / Esc dismiss) lives in [`useThreadComposeState`](../app/src/email/components/reply/useThreadComposeState.ts). `ComposeView` only renders from URL — no resume policy.
+Inline thread compose state (mode / draft id / Esc dismiss) lives in [`useThreadComposeState`](../../app/src/email/components/reply/useThreadComposeState.ts). `ComposeView` only renders from URL — no resume policy.
 
 Esc in compose (standalone, inline reply, inline forward) **closes the composer without discarding**. Drafts autosave; recovery is reopen, not Undo. Esc/back must `flushNow()` before navigate so the just-edited draft wins `updatedAt`.
 

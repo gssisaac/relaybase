@@ -126,7 +126,7 @@ export class EmailMailboxStore {
    * Local read/unread overrides, keyed by message key. Truth lives on the
    * Worker (`RoutingActivityEvent.readAt`) — this is only an optimistic
    * cache for in-flight/offline mark-read/unread requests. See
-   * docs/inbox-threading-and-multi-account.md.
+   * docs/features/inbox-threading.md.
    */
   readOverrides: ReadOverrides = {};
   /** Legacy local `{ keys }` read state, reconciled once against the server. */

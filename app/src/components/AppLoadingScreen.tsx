@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 /**
  * Full-viewport wait: app icon + spinner.
  * Use for boot, last-route restore, and any other whole-window handoff.
- * Do not invent a second "Loading…" layout — see docs/app-loading-screen.md.
+ * Do not invent a second "Loading…" layout — see docs/desktop/app-loading-screen.md.
  */
 export function AppLoadingScreen() {
   return (

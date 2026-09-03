@@ -154,7 +154,7 @@ UI reuses Setup method + progress modules (`purpose: "worker-update"`):
 
 OAuth install `access_token` expires in ~1 hour, while the `refresh_token` (30-day sliding TTL) is stored in the OS Keyring (`cf-oauth-install`). Update Worker silently exchanges the refresh token in the background without prompting the user. Browser re-authorization is only needed if the refresh token was revoked or unused for >30 days.
 
-See also: [cf-oauth-install-token.md](./cf-oauth-install-token.md), [storage-architecture.md](./storage-architecture.md).
+See also: [cf-oauth-install-token.md](../auth/cf-oauth-install-token.md), [storage-architecture.md](./storage-architecture.md).
 
 ---
 
@@ -185,4 +185,4 @@ Never mix migration files across databases in one directory — each `migrations
 | Ops log schema | [ops-log-d1.md](./ops-log-d1.md) |
 | Mail index (list/search/counts) | [mailbox-d1.md](./mailbox-d1.md) |
 | Customer manual install | [../relaybase-worker/README.md](../../relaybase-worker/README.md) |
-| OAuth install token | [cf-oauth-install-token.md](./cf-oauth-install-token.md) |
+| OAuth install token | [cf-oauth-install-token.md](../auth/cf-oauth-install-token.md) |

@@ -1,5 +1,5 @@
 > **ARCHIVED** — keyring blobs included `biometryEnabled`. See
-> [README](./README.md) and [../relaybase-home-storage.md](../relaybase-home-storage.md).
+> [README](./README.md) and [../../desktop/home-storage.md](../../desktop/home-storage.md).
 
 # Desktop storage — `~/.relaybase`
 
@@ -8,7 +8,7 @@
 **Source of truth (desktop):** `$HOME/.relaybase` only.  
 Implemented in `desktop/src-tauri/src/secrets.rs`, `desktop/src-tauri/src/notify.rs`, and the TS facades under `app/src/email/*-disk*` / `email-prefs.ts` / `api-key-vault.ts`.
 
-For the full two-layer model (Worker D1 + R2 + this directory), see **[storage-architecture.md](./storage-architecture.md)**.
+For the full two-layer model (Worker D1 + R2 + this directory), see **[storage-architecture.md](../../architecture/storage-architecture.md)**.
 
 ---
 
@@ -123,7 +123,7 @@ paths under the new `{scopeId}/`).
 
 ### `credentials.json`
 
-> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](./storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. **Daily unlock** resolves the Worker URL from the OS keyring first (`owner-session` blob `workerUrl`); `credentials.json` `workerUrl` is an optional disk mirror for install scope, CF linkage, and browser `pnpm next`. The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** is stored in the OS keyring (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Daily unlock uses Touch ID or Windows Hello (`tauri-plugin-biometry`, device PIN fallback), then Rust reads the keyring. The Worker URL input on UnlockView appears only when neither keyring nor disk has a URL.
+> **Deprecation in progress (Worker owner login).** The desktop **god token is being retired** in favor of a Worker-issued passtoken + session (see [storage-architecture.md](../../architecture/storage-architecture.md) → *Owner auth*). The `adminToken` field is **no longer read** by the app; the Worker no longer accepts it. **Daily unlock** resolves the Worker URL from the OS keyring first (`owner-session` blob `workerUrl`); `credentials.json` `workerUrl` is an optional disk mirror for install scope, CF linkage, and browser `pnpm next`. The owner **passtoken is never written to disk** — the user keeps the one-time download. Owner **refresh** is stored in the OS keyring (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Daily unlock uses Touch ID or Windows Hello (`tauri-plugin-biometry`, device PIN fallback), then Rust reads the keyring. The Worker URL input on UnlockView appears only when neither keyring nor disk has a URL.
 
 Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
 
@@ -138,7 +138,7 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `relaybaseSession` | Signed console session token (local only; Bearer to console APIs) — written only when non-empty |
 | ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext only in the user's download). |
 
-Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. CF OAuth access/refresh tokens live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](./cf-oauth-install-token.md)**.
+Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. CF OAuth access/refresh tokens live in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`) and are cleared on app restart. Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](../../auth/cf-oauth-install-token.md)**.
 
 ### OS keyring (owner refresh)
 
@@ -213,7 +213,7 @@ Path: `~/.relaybase/{scopeId}/mail/desktop/*.json`. Opaque JSON via `get_mail_js
 
 ### `cache/**`
 
-Path: `~/.relaybase/{scopeId}/cache/**`. Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelopes (`dashboard-cache-disk.ts`), TTL write-through (`dashboard-client-cache.ts` → `dashboard/ttl-*.json`), and sender favicon **status** (`favicon-status.json` — image bytes stay memory-only; see **[sender-favicon-cache.md](./sender-favicon-cache.md)**).
+Path: `~/.relaybase/{scopeId}/cache/**`. Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelopes (`dashboard-cache-disk.ts`), TTL write-through (`dashboard-client-cache.ts` → `dashboard/ttl-*.json`), and sender favicon **status** (`favicon-status.json` — image bytes stay memory-only; see **[sender-favicon-cache.md](../../desktop/sender-favicon-cache.md)**).
 
 #### `cache/favicon-status.json`
 
@@ -239,7 +239,7 @@ UI / store
 2. **Read (desktop):** prefer disk. Use `localStorage` only as a warm cache or one-time migration source.
 3. **Browser `pnpm next`:** credentials via `/api/local-credentials` → same `~/.relaybase/credentials.json`; API calls go to the Worker through `desktopAwareFetch`.
 
-Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in `ui/sidebar.json`).
+Related: [last-route-restore.md](../../desktop/last-route-restore.md) (sidebar paths live in `ui/sidebar.json`).
 
 ---
 

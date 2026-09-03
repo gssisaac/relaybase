@@ -11,7 +11,7 @@ import type {
   SentEmail,
 } from "@/email/components/mailbox/types";
 
-/** Desktop mail lists/details → ~/.relaybase/mail (see docs/relaybase-home-storage.md). */
+/** Desktop mail lists/details → ~/.relaybase/mail (see docs/desktop/home-storage.md). */
 
 function safeProductId(productId: string): string {
   const cleaned = productId.trim().replace(/[^a-zA-Z0-9._%-]/g, "_");

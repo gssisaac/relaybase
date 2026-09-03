@@ -18,7 +18,7 @@ Inbox / Drafts / Sent / Trash list + detail UI. **Public entry point:** `@/email
 | List toolbar + rows + empty state | `MailListPane.tsx` |
 | Draft / thread / single-message detail | `MailDetailPane.tsx` |
 
-Shortcut and compose-open **policy** is not documented here. Source of truth: [docs/email-command-system.md](../../../../docs/email-command-system.md).
+Shortcut and compose-open **policy** is not documented here. Source of truth: [docs/desktop/email-command-system.md](../../../../docs/desktop/email-command-system.md).
 
 ## Architecture
 
@@ -73,7 +73,7 @@ Related (outside this folder):
 2. **`useMailListItems`** reads the MobX mailbox store and returns `items`, `selected`, `selectedThread`, `listHref`, etc. Search string is owned by the orchestrator and passed in.
 3. **`useThreadComposeState`** manages inline reply/forward when a thread is open (`?reply=` URL params are consumed here).
 4. **`useEmailCommandRuntimeAdapter`** builds per-row command runtimes for context menu + palette scope.
-5. **`useMailListKeyboard`** registers the mail keyboard layer (behavior defined in [email-command-system.md](../../../../docs/email-command-system.md)).
+5. **`useMailListKeyboard`** registers the mail keyboard layer (behavior defined in [email-command-system.md](../../../../docs/desktop/email-command-system.md)).
 6. **Panes** are presentational: props in, JSX out. No direct store reads in panes.
 
 ## Split-pane layout
@@ -87,7 +87,7 @@ Related (outside this folder):
 |--------|----------------|
 | New list column / row badge | `MailListPane.tsx` |
 | New detail view for a message kind | `MailDetailPane.tsx` |
-| New shortcut or compose-open rule | [email-command-system.md](../../../../docs/email-command-system.md) (+ `useMailListKeyboard.ts` / `compose-open.ts` as needed) |
+| New shortcut or compose-open rule | [email-command-system.md](../../../../docs/desktop/email-command-system.md) (+ `useMailListKeyboard.ts` / `compose-open.ts` as needed) |
 | New mail command (Cmd+K / context menu) | `app/src/email/commands/` — not MailListView |
 | Thread grouping / selection logic | `useMailListItems.ts` |
 
@@ -98,5 +98,5 @@ Related (outside this folder):
 - [ ] List navigation and selection across inbox / drafts / sent / trash
 - [ ] Draft detail edit + discard
 - [ ] Trash restore / empty trash
-- [ ] Mail shortcuts and compose policy per [email-command-system.md](../../../../docs/email-command-system.md)
+- [ ] Mail shortcuts and compose policy per [email-command-system.md](../../../../docs/desktop/email-command-system.md)
 - [ ] `pnpm exec tsc --noEmit` (from `app/`)

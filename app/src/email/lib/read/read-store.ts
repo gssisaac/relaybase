@@ -6,8 +6,8 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge";
  * set via `POST /api/email/inbox/read`). This file only persists a small
  * local *override* cache — optimistic UI while a mark-read/unread request is
  * in flight, and a resilience buffer if the app is offline — never the
- * source of truth. See docs/relaybase-home-storage.md and
- * docs/inbox-threading-and-multi-account.md.
+ * source of truth. See docs/desktop/home-storage.md and
+ * docs/features/inbox-threading.md.
  *
  * `true` = force-read, `false` = force-unread. A key is removed from the map
  * once a subsequent server fetch confirms the same state, so this map should

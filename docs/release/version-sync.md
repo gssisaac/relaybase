@@ -36,7 +36,7 @@ Relaybase has two customer-facing version numbers that **must always match**:
 6. Desktop signed build → `sync-release-artifacts` → commit `hq/website/public/release/latest.json` + `artifacts.json`.
 7. Deploy `hq/website`.
 
-Detailed steps: [desktop/docs/release.md](../desktop/docs/release.md), [`../relaybase-worker/docs/RELEASE.md`](../../relaybase-worker/docs/RELEASE.md).
+Detailed steps: [desktop/docs/release.md](../../desktop/docs/release.md), [`../relaybase-worker/docs/RELEASE.md`](../../relaybase-worker/docs/RELEASE.md).
 
 ## Verify
 

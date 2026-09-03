@@ -15,8 +15,8 @@
 | Desktop → Worker map | `app/src/lib/desktop/api/email-api-map.ts` (`/api/email/mobile-password`) |
 | Address `mobileEnabled` | `../relaybase-worker/src/lib/catalog-store.ts`, `app/src/lib/dashboard/accounts-store.ts` |
 
-Setup / run notes: **[mobile/README.md](../mobile/README.md)**.  
-Storage map: **[storage-architecture.md](./storage-architecture.md)**.
+Setup / run notes: **[mobile/README.md](../../mobile/README.md)**.  
+Storage map: **[storage-architecture.md](../architecture/storage-architecture.md)**.
 
 ---
 
@@ -44,7 +44,7 @@ These override older plan drafts (global mobile password, Worker URL login, “a
 | **Worker URL** | Baked into the Flutter build as `AppConfig.defaultWorkerUrl` (`https://relaybase-api.gssisaac.worker.dev` for the dogfood build; customer builds bake in the customer's own Worker URL). Change the constant + rebuild to retarget. |
 | **Account scope** | Every `/mobile/*` request is scoped to the authenticated email only. No full mailbox catalog, no “All inboxes”, no account switcher across other addresses. |
 | **Desktop provisioning** | Owner enables the address + generates the password in Accounts → account detail → **Other device**. |
-| **Secrets** | Plain password shown once on desktop after generate/regenerate; stored on Worker in D1 `mobile_passwords`. Mobile stores email + password in `flutter_secure_storage`. The **desktop** app, when a teammate signs in there, stores the same password in the OS keyring (`team-session:{email}`), not in `team-login.json` — see **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring (team mobile password)* and **[desktop-session-machine.md](./desktop-session-machine.md)**. |
+| **Secrets** | Plain password shown once on desktop after generate/regenerate; stored on Worker in D1 `mobile_passwords`. Mobile stores email + password in `flutter_secure_storage`. The **desktop** app, when a teammate signs in there, stores the same password in the OS keyring (`team-session:{email}`), not in `team-login.json` — see **[home-storage.md](../desktop/home-storage.md)** → *OS keyring (team mobile password)* and **[desktop-session-machine.md](../auth/desktop-session-machine.md)**. |
 | **Dashboard on mobile** | Out of scope. Do not add management UIs to `mobile/`. |
 
 ### Forbidden (do not reintroduce)
@@ -191,4 +191,4 @@ A teammate may store more than one mailbox address on the same device and switch
 3. Is the password still per-account in D1 `mobile_passwords`?
 4. Did you update `email-api-map` / Other device UI if console paths changed?
 5. After auth success, does the UI leave Connect and enter the mail shell?
-6. Read this doc + [storage-architecture.md](./storage-architecture.md) before adding durable fields.
+6. Read this doc + [storage-architecture.md](../architecture/storage-architecture.md) before adding durable fields.

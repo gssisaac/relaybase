@@ -7,7 +7,7 @@ Compose) with a Gmail-like list → thread → compose flow. It connects **direc
 to the Worker `/mobile/*` routes using a **per-account** mobile password
 provisioned from the desktop app.
 
-**Policy (source of truth):** [docs/mobile-email-companion.md](../docs/mobile-email-companion.md)
+**Policy (source of truth):** [docs/features/mobile-companion.md](../docs/features/mobile-companion.md)
 
 ## Sign-in
 

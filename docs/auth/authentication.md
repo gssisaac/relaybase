@@ -6,9 +6,9 @@ login, Worker auth middleware, desktop unlock, or mobile companion auth.
 **Related docs:**
 
 - Phase machine + console gate: **[desktop-session-machine.md](./desktop-session-machine.md)**
-- Local secrets: **[relaybase-home-storage.md](./relaybase-home-storage.md)** → *OS keyring* (`owner-session` + `owner-passtoken`)
-- Remote owner model: **[storage-architecture.md](./storage-architecture.md)** → *Owner auth*
-- Archived pre–console-gate docs: **[legacy/](./legacy/)**
+- Local secrets: **[home-storage.md](../desktop/home-storage.md)** → *OS keyring* (`owner-session` + `owner-passtoken`)
+- Remote owner model: **[storage-architecture.md](../architecture/storage-architecture.md)** → *Owner auth*
+- Archived pre–console-gate docs: **[legacy/](../archive/legacy/)**
 
 ---
 
@@ -188,7 +188,7 @@ and is not kept in JS after submit.
 | Mobile password | OS keyring `team-session:{email}` |
 | URL + email identity | `~/.relaybase/team-login.json` (no password) |
 
-Full layout: **[relaybase-home-storage.md](./relaybase-home-storage.md)**.
+Full layout: **[home-storage.md](../desktop/home-storage.md)**.
 
 ---
 

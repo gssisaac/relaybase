@@ -1,7 +1,7 @@
 # Relaybase — 가격 및 시장 전략
 
 - 작성일: 2026-08-09 (v1), 업데이트: 2026-08-09 (v2 — 가격체계 재설계, 7번 섹션), **2026-08-23 (v3 — 프라이빗 베타 동안 가격 비공개, 현행 SKU는 Draft)**
-- 전제: `docs/pivot-byo-cloudflare.md` / `PRODUCT.md`의 확정 방향 — **Mac(→Windows) 데스크톱 앱**, Relaybase는 서버를 운영하지 않고 사용자가 자신의 Cloudflare 계정에 `../relaybase-worker/`(라우팅 Worker)를 직접 설치(`../relaybase-worker/customer-install/` ZIP + Wrangler)한다. **가격 숫자·티어 범위·갱신 규칙은 확정이 아니다.** 7번 섹션과 `PRICING.md`는 내부 초안이며, 프라이빗 베타 반응 후 달라질 수 있다. 공개 약속은 유료 정식 launch(첫 결제) 시점에만 한다 — **9번 섹션**.
+- 전제: `docs/decisions/pivot-byo-cloudflare.md` / `PRODUCT.md`의 확정 방향 — **Mac(→Windows) 데스크톱 앱**, Relaybase는 서버를 운영하지 않고 사용자가 자신의 Cloudflare 계정에 `../relaybase-worker/`(라우팅 Worker)를 직접 설치(`../relaybase-worker/customer-install/` ZIP + Wrangler)한다. **가격 숫자·티어 범위·갱신 규칙은 확정이 아니다.** 7번 섹션과 `PRICING.md`는 내부 초안이며, 프라이빗 베타 반응 후 달라질 수 있다. 공개 약속은 유료 정식 launch(첫 결제) 시점에만 한다 — **9번 섹션**.
 - 이 문서의 목적: 데스크톱 앱을 둘러싼 세 가지 열린 가격/시장 질문(Worker 오픈소스화, 멀티 디바이스/모바일 라이선싱, 팀 공유 가격)에 대해 코드 근거 기반으로 답하고, 실행 가능한 SKU 구조를 **초안으로** 제안한다.
 
 > **Draft / 비공개.** 7번 섹션의 Free $0 / Pro $69 / 갱신 $25 / Early Access $35와 `PRICING.md` 표는 **내부 가설**이다. 프라이빗 베타(이메일 신청 → 다운로드 링크) 동안 웹사이트·초대 메일에 가격표·캡·갱신·팀 시트를 올리지 않는다. 숫자·포함 기능 범위·과금 규칙은 베타 반응에 따라 바뀔 수 있다. 공개 커밋은 유료 정식 launch의 첫 결제 화면에서만 한다. 상세: **9번 섹션**, `PRICING.md` §0.
@@ -183,7 +183,7 @@ type SeatRecord = {
 
 ### 3.2 이 기능의 가격을 정할 때 반드시 고려해야 할 구조적 사실
 
-Front, Missive, Help Scout 같은 "공유 인박스" 경쟁사들이 시트당 월 $20~50를 받는 이유는 **그들이 메일을 자기 서버에서 호스팅하기 때문에 시트가 늘수록 실제 운영비(스토리지, 처리량, 지원)가 늘어난다**. Relaybase는 이 전제가 아예 없다 — 메일은 사용자 자신의 Cloudflare 계정(R2/KV)에서 처리되고, Relaybase는 그 경로에 개입하지 않는다(`docs/pivot-byo-cloudflare.md`). **팀원이 몇 명이든 Relaybase가 지는 추가 인프라 비용은 0에 수렴한다.**
+Front, Missive, Help Scout 같은 "공유 인박스" 경쟁사들이 시트당 월 $20~50를 받는 이유는 **그들이 메일을 자기 서버에서 호스팅하기 때문에 시트가 늘수록 실제 운영비(스토리지, 처리량, 지원)가 늘어난다**. Relaybase는 이 전제가 아예 없다 — 메일은 사용자 자신의 Cloudflare 계정(R2/KV)에서 처리되고, Relaybase는 그 경로에 개입하지 않는다(`docs/decisions/pivot-byo-cloudflare.md`). **팀원이 몇 명이든 Relaybase가 지는 추가 인프라 비용은 0에 수렴한다.**
 
 즉 "시트당 월 구독"을 붙이는 순간, Relaybase는 자신이 이기려는 바로 그 경쟁 모델(무과금 인프라 위에서 셋업비만 받는 소프트웨어)을 스스로 버리고 "우리도 결국 SaaS 시트 장사"가 되어버린다. 이는 브랜드 포지셔닝(`README.md`의 "We do not host your mail")과 정면으로 충돌한다.
 

@@ -9,7 +9,7 @@
 | Worker ingest / Message-ID dedupe | `../relaybase-worker/src/lib/inbound-store.ts`, `../relaybase-worker/src/inbound.ts`, `../relaybase-worker/src/index.ts` |
 | Conversation grouping | `app/src/email/lib/threading/conversation-threading.ts` |
 | Inbox list / account filter | `app/src/email/components/mailbox/MailListView/MailListView.tsx` |
-| Sender avatars (favicon cache) | `app/src/email/components/sender/SenderAvatar.tsx`, `app/src/email/stores/sender-icon-store.ts` — **[sender-favicon-cache.md](./sender-favicon-cache.md)** |
+| Sender avatars (favicon cache) | `app/src/email/components/sender/SenderAvatar.tsx`, `app/src/email/stores/sender-icon-store.ts` — **[sender-favicon-cache.md](../desktop/sender-favicon-cache.md)** |
 | Thread UI (`(me)`) | `app/src/email/components/thread/ConversationThreadView.tsx` |
 | Enabled-account visibility | `app/src/email/stores/email-mailbox-store.ts` |
 | Compose → Sent upsert | `app/src/email/components/compose/useComposeDraftController.ts`, `email-send-events.ts` |

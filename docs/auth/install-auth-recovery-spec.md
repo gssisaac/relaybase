@@ -5,8 +5,8 @@
 **Related documents:**
 - **[authentication.md](./authentication.md)** — Authentication architecture & token scoping
 - **[desktop-session-machine.md](./desktop-session-machine.md)** — Desktop `AppSessionStore` phase machine
-- **[storage-architecture.md](./storage-architecture.md)** — D1, R2, and keyring storage layout
-- **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)** — Schema initialization & migration contracts
+- **[storage-architecture.md](../architecture/storage-architecture.md)** — D1, R2, and keyring storage layout
+- **[d1-migrations-and-init-db.md](../architecture/d1-migrations-and-init-db.md)** — Schema initialization & migration contracts
 - **[cf-oauth-install-token.md](./cf-oauth-install-token.md)** — Cloudflare OAuth client scopes & tokens
 
 ---

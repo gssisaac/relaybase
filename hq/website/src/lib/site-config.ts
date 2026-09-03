@@ -79,11 +79,11 @@ export const siteConfig = {
     "multi-domain email manager",
   ],
   ogImage: {
-    url: "/og.svg",
+    url: "/og.png",
     width: 1200,
     height: 630,
     alt: "Relaybase — the inbox for your Cloudflare domains",
-    type: "image/svg+xml",
+    type: "image/png",
   },
   standardAddresses: [
     { role: "billing", address: "billing@yourdomain.com", purpose: "Invoices, receipts, payment updates" },

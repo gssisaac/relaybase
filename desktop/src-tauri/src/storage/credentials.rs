@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::ErrorKind;
+use std::path::Path;
 
 use super::layout::{
     ensure_dir, legacy_credentials_path, relaybase_dir, remove_file_if_exists,
@@ -90,6 +90,34 @@ fn stored_from_disk(disk: DiskCredentials) -> StoredCredentials {
     }
 }
 
+/// Empty or corrupt workspace JSON (e.g. interrupted write) → treat as unconfigured.
+fn parse_workspace_json(json: &str) -> Option<serde_json::Value> {
+    let trimmed = json.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    serde_json::from_str(trimmed).ok()
+}
+
+fn write_json_atomic(path: &Path, json: &str) -> Result<(), String> {
+    let unique = uuid::Uuid::new_v4().simple();
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    let tmp = path.with_file_name(format!("{filename}.{unique}.tmp"));
+    fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    restrict_file_permissions(&tmp);
+    fs::rename(&tmp, path).map_err(|e| e.to_string())?;
+    restrict_file_permissions(path);
+    Ok(())
+}
+
+fn discard_unreadable_workspace(path: &Path, reason: &str) {
+    log::warn!(
+        "Unreadable workspace file {} ({reason}); treating as unconfigured",
+        path.display()
+    );
+    remove_file_if_exists(path);
+}
+
 fn workspace_json_is_dirty(value: &serde_json::Value) -> bool {
     let Some(obj) = value.as_object() else {
         return true;
@@ -119,23 +147,21 @@ pub fn save_credentials(creds: &StoredCredentials) -> Result<(), String> {
     let disk = credentials_for_disk(creds);
     let json = serde_json::to_string_pretty(&disk).map_err(|e| e.to_string())?;
 
-    match fs::write(&path, &json) {
+    match write_json_atomic(&path, &json) {
         Ok(()) => {
-            restrict_file_permissions(&path);
             remove_file_if_exists(&dir.join(LEGACY_CREDENTIALS_FILE));
             Ok(())
         }
-        Err(e) if e.kind() == ErrorKind::NotFound => {
+        Err(e) if e.contains("No such file") || e.contains("not found") => {
             // Parent vanished between ensure and write — recreate and retry once.
             ensure_dir()?;
-            fs::write(&path, &json).map_err(|e2| {
+            write_json_atomic(&path, &json).map_err(|e2| {
                 format!(
                     "Failed to write workspace to {} after creating {}: {e2}",
                     path.display(),
                     dir.display()
                 )
             })?;
-            restrict_file_permissions(&path);
             remove_file_if_exists(&dir.join(LEGACY_CREDENTIALS_FILE));
             Ok(())
         }
@@ -164,18 +190,14 @@ pub fn load_credentials() -> Result<Option<StoredCredentials>, String> {
             path.display()
         )
     })?;
-    let value: serde_json::Value = serde_json::from_str(&json).map_err(|e| {
-        format!(
-            "Invalid workspace file {}: {e}. Delete the file and verify again.",
-            path.display()
-        )
-    })?;
-    let disk: DiskCredentials = serde_json::from_value(value.clone()).map_err(|e| {
-        format!(
-            "Invalid workspace file {}: {e}. Delete the file and verify again.",
-            path.display()
-        )
-    })?;
+    let Some(value) = parse_workspace_json(&json) else {
+        discard_unreadable_workspace(&path, "empty or invalid JSON");
+        return Ok(None);
+    };
+    let Ok(disk) = serde_json::from_value(value.clone()) else {
+        discard_unreadable_workspace(&path, "invalid schema");
+        return Ok(None);
+    };
     let creds = stored_from_disk(disk);
     // Drop leftover tokens / empty console keys, and migrate credentials.json
     // → workspace.json so both never stay on disk together.
@@ -258,8 +280,7 @@ pub fn save_team_login(login: &TeamLogin) -> Result<(), String> {
         mobile_password: String::new(),
     };
     let json = serde_json::to_string_pretty(&identity).map_err(|e| e.to_string())?;
-    fs::write(&path, &json).map_err(|e| format!("Failed to write team login: {e}"))?;
-    restrict_file_permissions(&path);
+    write_json_atomic(&path, &json).map_err(|e| format!("Failed to write team login: {e}"))?;
     Ok(())
 }
 
@@ -269,9 +290,22 @@ pub fn load_team_login() -> Result<Option<TeamLogin>, String> {
         return Ok(None);
     }
     let json = fs::read_to_string(&path).map_err(|e| format!("Failed to read team login: {e}"))?;
-    let login: TeamLogin = serde_json::from_str(&json).map_err(|e| {
-        format!("Invalid team login file: {e}. Delete it and sign in again.")
-    })?;
+    let Some(value) = parse_workspace_json(&json) else {
+        log::warn!(
+            "Unreadable team login file {} (empty or invalid JSON); treating as signed out",
+            path.display()
+        );
+        remove_file_if_exists(&path);
+        return Ok(None);
+    };
+    let Ok(login) = serde_json::from_value(value) else {
+        log::warn!(
+            "Invalid team login schema in {}; treating as signed out",
+            path.display()
+        );
+        remove_file_if_exists(&path);
+        return Ok(None);
+    };
     Ok(Some(login))
 }
 

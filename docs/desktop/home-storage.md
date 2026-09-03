@@ -162,20 +162,22 @@ Not a file under `~/.relaybase`. Rust (`desktop/src-tauri/src/keyring_store.rs`,
 | Field | Service / account |
 |-------|-------------------|
 | service | `com.relaybase.desktop` |
-| account | `owner-session` |
+| account | `owner-session:{normalizedWorkerUrl}` |
 
-Blob (`camelCase`): `{ workerUrl, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. Keyring tokens authenticate an active workspace whose URL is configured on disk in `~/.relaybase/workspace.json`. When `~/.relaybase` is missing or deleted, keyring tokens are ignored and the app starts at the initial welcome/install screen (`choice` phase). This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
+Blob (`camelCase`): `{ workerUrl, refreshToken, mailRefreshToken }`. **`refreshToken`** is the console refresh (30 min TTL); **`mailRefreshToken`** is the long-lived mail refresh. Each Worker URL has its own keyring item so a second install does not overwrite the first. Legacy unscoped `owner-session` migrates on first matching read. Keyring tokens authenticate an active workspace whose URL is configured on disk in `~/.relaybase/workspace.json`. When `~/.relaybase` is missing or deleted, keyring tokens are ignored and the app starts at the initial welcome/install screen (`choice` phase). This blob is **silent-read** (mail boot / valid console refresh). It must **not** contain the passtoken — that is a separate item below. Access tokens stay in split process memory (mail vs console).
 
 ### OS keyring (owner passtoken)
 
-Same service, **different account**, so silent mail boot cannot load the passtoken.
+Same service, **different account per Worker**, so silent mail boot cannot load the passtoken.
 
 | Field | Service / account |
 |-------|-------------------|
 | service | `com.relaybase.desktop` |
-| account | `owner-passtoken` |
+| account | `owner-passtoken:{normalizedWorkerUrl}` |
 
-Contents: the owner passtoken plaintext. **Write** at first login, `setup-admin` reveal, rotate, `reset-admin`, and typed fallback — no Touch ID (the user just created or typed it). **Read** only after Touch ID / Windows Hello succeeds (or on platforms with no biometry, if the item exists). Fail or cancel → do not read; show the typed form.
+Contents: the owner passtoken plaintext for that Worker. **Write** at first login, `setup-admin` reveal, rotate, `reset-admin`, and typed fallback — no Touch ID (the user just created or typed it). **Read** only after Touch ID / Windows Hello succeeds (or on platforms with no biometry, if the item exists). Fail or cancel → do not read; show the typed form. Invalid login deletes **only this Worker's** item.
+
+An index item `owner-workers` lists Worker URLs that have a keyring passtoken or session, so Unlock can offer them in the Worker URL picker.
 
 Prefer an OS user-presence / biometry ACL on this item so the platform itself refuses the read without bio. JS never sees the value. Ordinary sign-out does **not** delete this item. Policy: **[authentication.md](../auth/authentication.md)** → *Owner passtoken in the keyring*.
 

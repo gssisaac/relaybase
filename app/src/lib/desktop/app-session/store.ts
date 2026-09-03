@@ -2,7 +2,7 @@
 
 import { makeAutoObservable, runInAction } from "mobx";
 
-import { isUserDismissedBiometry } from "../biometry/dismiss";
+import { isSystemCanceledBiometry, isUserDismissedBiometry } from "../biometry/dismiss";
 import type { OwnerSessionStatus, TeamSessionStatus } from "../bridge";
 import { createDefaultDeps } from "./defaults";
 import { isWorkerUnreachableError, visibleUnlockError } from "./errors";
@@ -45,6 +45,8 @@ export class AppSessionStore {
   workerPasstokenPrefix: string | null = null;
   /** Set when the user dismissed Touch ID on the unlock form. */
   bioDismissed = false;
+  /** UnlockView already started a Touch ID prompt this boot (avoids remount loops). */
+  unlockBioPrompted = false;
   private consoleUnauthorizedInFlight = false;
 
   private identity: IdentitySnapshot = {
@@ -317,7 +319,9 @@ export class AppSessionStore {
                 });
                 return;
               }
-              if (isUserDismissedBiometry(bioErr)) {
+              if (isSystemCanceledBiometry(bioErr)) {
+                /* window was not key; UnlockView retries once it is visible */
+              } else if (isUserDismissedBiometry(bioErr)) {
                 runInAction(() => {
                   this.bioDismissed = true;
                 });
@@ -343,7 +347,9 @@ export class AppSessionStore {
         } else {
           this.markWorkerReachable();
         }
-        if (isUserDismissedBiometry(err)) {
+        if (isSystemCanceledBiometry(err)) {
+          /* UnlockView will retry */
+        } else if (isUserDismissedBiometry(err)) {
           this.bioDismissed = true;
         } else {
           const shown = visibleUnlockError(err, "owner");
@@ -494,6 +500,21 @@ export class AppSessionStore {
     });
   }
 
+  /** Reload keyring flags for the Worker selected on Unlock / console gate. */
+  async refreshOwnerForWorker(workerUrl: string): Promise<void> {
+    const url = workerUrl.trim().replace(/\/$/, "");
+    if (!url) return;
+    try {
+      const status = await this.deps.ownerSessionStatus(url);
+      runInAction(() => {
+        this.ownerStatus = status;
+      });
+    } catch {
+      /* keep last known */
+    }
+    await this.refreshWorkerPasstokenPrefix(url);
+  }
+
   clearBioDismissed(): void {
     this.bioDismissed = false;
   }
@@ -566,7 +587,7 @@ export class AppSessionStore {
       this.error = null;
       try {
         if (resolvedUrl) {
-          await this.refreshWorkerPasstokenPrefix(resolvedUrl);
+          await this.refreshOwnerForWorker(resolvedUrl);
         }
         if (!this.canTryOwnerBio) {
           runInAction(() => {
@@ -677,7 +698,7 @@ export class AppSessionStore {
 
   /** Touch ID then read keyring passtoken — UnlockView retry after boot decline. */
   async loginOwnerFromKeyring(workerUrl?: string): Promise<void> {
-    if (!this.canTryOwnerBio) return;
+    this.unlockBioPrompted = true;
     this.busy = true;
     this.error = null;
     this.bioDismissed = false;

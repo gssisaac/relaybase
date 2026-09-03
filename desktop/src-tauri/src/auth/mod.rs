@@ -1,8 +1,8 @@
 //! Authentication and session management module.
 //!
 //! Manages:
-//! - Owner session (mail + console refresh tokens in OS keyring `owner-session`, scoped access tokens in memory)
-//! - Owner passtoken in OS keyring `owner-passtoken` (read-gated with Touch ID / biometry)
+//! - Owner session (mail + console refresh tokens in OS keyring `owner-session:{workerUrl}`, scoped access tokens in memory)
+//! - Owner passtoken in OS keyring `owner-passtoken:{workerUrl}` (read-gated with Touch ID / biometry)
 //! - Team session (mobile password in OS keyring `team-session`)
 //! - OS keyring store abstraction (`keyring_store`)
 //! - Biometric prompt (`touch_id`)
@@ -14,6 +14,10 @@ pub mod owner_passtoken;
 pub mod owner_session;
 pub mod team_session;
 pub mod touch_id;
+pub mod worker_accounts;
+
+#[cfg(test)]
+mod tests;
 
 pub use commands::*;
 pub use keyring_store::{

@@ -26,6 +26,7 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasPasstoken: false,
   keyringPasstokenPrefix: "",
   workerUrl: "",
+  knownWorkerUrls: [],
   platform: "macos",
 };
 
@@ -220,6 +221,12 @@ export function useAppSession(): AppSessionStore {
           consoleGateOpen: ctx.consoleGateOpen,
           hasConsoleAccess: ctx.hasConsoleAccess,
           hasPasstoken: Boolean(ctx.ownerStatus?.hasPasstoken),
+          canTryOwnerBio: ctx.canTryOwnerBio,
+          bioDismissed: ctx.bioDismissed,
+          keyringPrefix: ctx.ownerStatus?.keyringPasstokenPrefix ?? "",
+          workerPrefix: ctx.workerPasstokenPrefix ?? "",
+          knownWorkers: (ctx.ownerStatus?.knownWorkerUrls ?? []).join("|"),
+          unlockBioPrompted: ctx.unlockBioPrompted,
           workerUnreachable: ctx.workerUnreachable,
           workerUrl: ctx.ownerStatus?.workerUrl ?? "",
           hasRefresh: Boolean(ctx.ownerStatus?.hasRefresh),

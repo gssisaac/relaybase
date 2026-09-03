@@ -8,11 +8,13 @@ export type OwnerSessionStatus = {
   /** Back-compat shims from Rust. */
   hasRefresh: boolean;
   hasAccess: boolean;
-  /** OS keyring `owner-passtoken` with valid format (secret is never returned). */
+  /** OS keyring `owner-passtoken:{workerUrl}` with valid format (secret is never returned). */
   hasPasstoken: boolean;
   /** First 10 chars after `rb_pass_` from keyring (empty when none). */
   keyringPasstokenPrefix: string;
   workerUrl: string;
+  /** Worker URLs that have a keyring passtoken or session on this Mac. */
+  knownWorkerUrls: string[];
   platform: string;
 };
 
@@ -30,15 +32,20 @@ const EMPTY_OWNER: OwnerSessionStatus = {
   hasPasstoken: false,
   keyringPasstokenPrefix: "",
   workerUrl: "",
+  knownWorkerUrls: [],
   platform: "other",
 };
 
 /** Throws if the OS keyring cannot be read. Missing session is `hasRefresh: false`. */
-export async function desktopOwnerSessionStatus(): Promise<OwnerSessionStatus> {
+export async function desktopOwnerSessionStatus(
+  workerUrl?: string,
+): Promise<OwnerSessionStatus> {
   if (!isDesktopRuntime()) {
     return { ...EMPTY_OWNER };
   }
-  return invoke("owner_session_status_cmd");
+  return invoke("owner_session_status_cmd", {
+    workerUrl: workerUrl?.trim() || null,
+  });
 }
 
 export async function desktopOwnerLogin(input: {

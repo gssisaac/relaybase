@@ -23,8 +23,8 @@ use super::touch_id;
 use crate::cloudflare::require_cf_oauth_access_token;
 
 #[tauri::command]
-pub fn owner_session_status_cmd() -> Result<OwnerSessionStatus, String> {
-    owner_session_status()
+pub fn owner_session_status_cmd(worker_url: Option<String>) -> Result<OwnerSessionStatus, String> {
+    owner_session_status(worker_url.as_deref())
 }
 
 #[tauri::command]

@@ -6,7 +6,7 @@ login, Worker auth middleware, desktop unlock, or mobile companion auth.
 **Related docs:**
 
 - Phase machine + console gate: **[desktop-session-machine.md](./desktop-session-machine.md)**
-- Local secrets: **[home-storage.md](../desktop/home-storage.md)** → *OS keyring* (`owner-session` + `owner-passtoken`)
+- Local secrets: **[home-storage.md](../desktop/home-storage.md)** → *OS keyring* (`owner-session:{workerUrl}` + `owner-passtoken:{workerUrl}`)
 - Remote owner model: **[storage-architecture.md](../architecture/storage-architecture.md)** → *Owner auth*
 - Archived pre–console-gate docs: **[legacy/](../archive/legacy/)**
 
@@ -63,11 +63,11 @@ passtoken in **different** keyring accounts:
 
 | Keyring account | Contents | Read gate |
 |-----------------|----------|-----------|
-| `owner-session` | `workerUrl`, `refreshToken`, `mailRefreshToken` | Silent |
-| `owner-passtoken` | passtoken plaintext | Touch ID / Windows Hello |
+| `owner-session:{workerUrl}` | `workerUrl`, `refreshToken`, `mailRefreshToken` | Silent |
+| `owner-passtoken:{workerUrl}` | passtoken plaintext | Touch ID / Windows Hello |
 
-Service for both: `com.relaybase.desktop`. Prefer an OS user-presence /
-biometry ACL on `owner-passtoken` so the platform itself refuses the read
+Service for both: `com.relaybase.desktop`. Account names are **per Worker URL** so two installs on the same Mac do not overwrite each other. Legacy unscoped `owner-session` / `owner-passtoken` items migrate on first matching read. Prefer an OS user-presence /
+biometry ACL on `owner-passtoken:{url}` so the platform itself refuses the read
 without bio.
 
 Still never: `~/.relaybase`, cookies, localStorage, sessionStorage. The Worker
@@ -174,9 +174,9 @@ and is not kept in JS after submit.
 
 | Secret | Where |
 |--------|-------|
-| Passtoken plaintext | OS keyring `owner-passtoken` (Touch ID to **read**). Also the one-time user download. Never `~/.relaybase` |
+| Passtoken plaintext | OS keyring `owner-passtoken:{workerUrl}` (Touch ID to **read**). Also the one-time user download. Never `~/.relaybase` |
 | Passtoken hash | D1 `owner_config` |
-| `mailRefreshToken` + console `refreshToken` | OS keyring `owner-session` JSON (silent read) |
+| `mailRefreshToken` + console `refreshToken` | OS keyring `owner-session:{workerUrl}` JSON (silent read) |
 | Mail / console access JWT | Tauri process memory (split) |
 | `AUTH_PEPPER` | Worker wrangler secret |
 | Worker URL | Keyring first, `workspace.json` mirror |
@@ -323,9 +323,10 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 
 | File | Role |
 |------|------|
-| `owner_session.rs` | Dual keyring refresh, `owner_login_from_keyring`, split memory, boot/unlock/logout, scoped `worker_request` |
-| `owner_passtoken.rs` | `owner-passtoken` exists/store/load-after-auth |
-| `team_session.rs` | Team keyring, silent unlock, `team_worker_request` |
+| `auth/owner_session.rs` | Dual keyring refresh **per Worker URL**, `owner_login_from_keyring`, split memory, boot/unlock/logout, scoped `worker_request` |
+| `auth/owner_passtoken.rs` | `owner-passtoken:{url}` exists/store/load-after-auth |
+| `auth/worker_accounts.rs` | Worker URL → keyring account names + `owner-workers` index |
+| `auth/team_session.rs` | Team keyring, silent unlock, `team_worker_request` |
 | `keyring_store.rs` | OS secret store |
 | `secrets.rs` | `workspace.json`, `team-login.json` |
 
@@ -334,6 +335,7 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 | File | Role |
 |------|------|
 | `lib/desktop/app-session/store.ts` | Phase machine, `bootFromKeyring`, `ensureConsoleAccess` |
+| `lib/desktop/app-session/tests/` | Session store / error / Worker-URL unit tests |
 | `lib/desktop/app-session/context.tsx` | Boot hydrate, scoped 401 listeners |
 | `lib/desktop/bridge/owner.ts` | `desktopOwnerBootMail`, `desktopOwnerUnlockConsole`, `desktopOwnerLoginFromKeyring`, `desktopOwnerTouchId` |
 | `lib/desktop/api/api-base.ts` | Scoped 401 dispatch |
@@ -348,7 +350,7 @@ After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`**
 ## Agent checklist
 
 1. Read this doc + **desktop-session-machine.md** before changing unlock flow.
-2. Persist owner passtoken plaintext **only** in OS keyring `owner-passtoken`. Never `~/.relaybase`, cookies, localStorage, or sessionStorage. JS never reads it from the keyring.
+2. Persist owner passtoken plaintext **only** in OS keyring `owner-passtoken:{workerUrl}`. Never `~/.relaybase`, cookies, localStorage, or sessionStorage. JS never reads it from the keyring.
 3. `/console/*` → console scope; `/mail/*` → mail scope.
 4. Touch ID **only** authorizes a read of `owner-passtoken`. Not on silent mail boot, not on teammate flows, not as a generic console privilege check.
 5. After first enrollment, do not show the typed passtoken form unless bio failed / was declined or the keyring item is missing.

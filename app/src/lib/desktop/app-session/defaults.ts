@@ -20,8 +20,8 @@ export function createDefaultDeps(
     isDesktop: defaultIsDesktop,
     authenticateBiometry: (reason) =>
       bridge().then((b) => b.desktopOwnerTouchId(reason)),
-    ownerSessionStatus: () =>
-      bridge().then((b) => b.desktopOwnerSessionStatus()),
+    ownerSessionStatus: (workerUrl) =>
+      bridge().then((b) => b.desktopOwnerSessionStatus(workerUrl)),
     ownerLogin: (input) => bridge().then((b) => b.desktopOwnerLogin(input)),
     ownerBootMail: () => bridge().then((b) => b.desktopOwnerBootMail()),
     ownerUnlockConsole: () =>

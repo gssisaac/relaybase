@@ -95,12 +95,12 @@ refresh can unlock silently.
 
 | | Owner mail (boot) | Owner console (dashboard) | Invited daily |
 |---|---|---|---|
-| Keyring account | `owner-session` | same blob, `refresh_token` = console refresh. New login also reads `owner-passtoken` | `team-session:{email}` |
-| Keyring secret | `mail_refresh_token` (long TTL) | `refresh_token` (30 min TTL); passtoken in `owner-passtoken` | `mobilePassword` |
+| Keyring account | `owner-session:{workerUrl}` | same blob, `refresh_token` = console refresh. New login also reads `owner-passtoken:{url}` | `team-session:{email}` |
+| Keyring secret | `mail_refresh_token` (long TTL) | `refresh_token` (30 min TTL); passtoken in `owner-passtoken:{url}` | `mobilePassword` |
 | Unlock action | `owner_boot_mail` (silent). Refresh gone → Touch ID → keyring passtoken → login | Valid console refresh → silent `owner_unlock_console`. Expired → Touch ID → keyring passtoken → login | `team_unlock` (silent) |
 | Worker scope | `/mail/*` mail access JWT | `/console/*` console access JWT | `/mobile/*` mobile password |
-| First-time | install → `setup-admin` → reveal + **write** `owner-passtoken` | same login mints both refreshes | `invitedLogin` → `invitedReady` |
-| Recover | `ownerRecover` → CF OAuth (Secrets Store) → `/console/reset-admin` → write new `owner-passtoken` | n/a | n/a (admin re-issues mobile password) |
+| First-time | install → `setup-admin` → reveal + **write** `owner-passtoken:{url}` | same login mints both refreshes | `invitedLogin` → `invitedReady` |
+| Recover | `ownerRecover` → CF OAuth (Secrets Store) → `/console/reset-admin` → write new `owner-passtoken:{url}` | n/a | n/a (admin re-issues mobile password) |
 
 Both roles use the same `unlock` phase and the same `UnlockView` for the secret
 form; the store drives the difference via `role`.
@@ -158,7 +158,7 @@ The last-route restore (`app/src/app/page.tsx`) waits for `store.canShowApp`
 | File | Role |
 |------|------|
 | `app/src/lib/desktop/app-session/` | MobX store, phases, provider, 401 listeners |
-| `app/src/lib/desktop/app-session/store.test.ts` | Transition tests (injected Tauri mock) |
+| `app/src/lib/desktop/app-session/tests/` | Transition tests (injected Tauri mock) |
 | `app/src/console/components/setup/ConsoleGateView.tsx` | Owner console: Touch ID reads keyring passtoken; typed form is fallback |
 | `app/src/console/components/setup/ConsoleRouteGate.tsx` | Blocks dashboard until console access |
 | `app/src/lib/desktop/biometry/dismiss.ts` | Touch ID dismiss / system-cancel detection |
@@ -167,9 +167,10 @@ The last-route restore (`app/src/app/page.tsx`) waits for `store.canShowApp`
 | `app/src/console/components/setup/UnlockView.tsx` | First-login / bio-declined typed form |
 | `app/src/console/components/setup/WorkerUrlPicker.tsx` | Worker URL select + enter-URL dialog |
 | `app/src/console/components/setup/TeamLoginView.tsx` | Invited login form |
-| `desktop/src-tauri/src/owner_session.rs` | Dual refresh keyring, `owner_login_from_keyring`, split memory |
-| `desktop/src-tauri/src/owner_passtoken.rs` | `owner-passtoken` item (Touch ID to read) |
-| `desktop/src-tauri/src/team_session.rs` | Team keyring (no biometry) |
+| `desktop/src-tauri/src/auth/owner_session.rs` | Dual refresh keyring per Worker URL, `owner_login_from_keyring`, split memory |
+| `desktop/src-tauri/src/auth/owner_passtoken.rs` | `owner-passtoken:{url}` item (Touch ID to read) |
+| `desktop/src-tauri/src/auth/worker_accounts.rs` | Worker URL → keyring account names + index |
+| `desktop/src-tauri/src/auth/team_session.rs` | Team keyring (no biometry) |
 
 ## Adding to the machine
 
@@ -179,6 +180,6 @@ The last-route restore (`app/src/app/page.tsx`) waits for `store.canShowApp`
 3. Add a `case` to the gate `switch` and a view that only renders.
 4. If it ships in the Worker, rebuild the bundle (see `AGENTS.md` → *Worker
    bundle*).
-5. Add a transition test in `app/src/lib/desktop/app-session/store.test.ts`.
+5. Add a transition test in `app/src/lib/desktop/app-session/tests/`.
 6. After first enrollment, do not add a path that asks for a typed passtoken
    unless bio failed / was declined or `owner-passtoken` is missing.

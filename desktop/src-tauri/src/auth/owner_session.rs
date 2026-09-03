@@ -339,10 +339,7 @@ pub fn owner_session_status(worker_url: Option<&str>) -> Result<OwnerSessionStat
         .as_ref()
         .map(|b| !b.refresh_token.trim().is_empty())
         .unwrap_or(false);
-    let mut known = owner_passtoken::listed_worker_urls();
-    if !url.is_empty() && !known.iter().any(|existing| worker_urls_equal(existing, &url)) {
-        known.push(url.clone());
-    }
+    let known = owner_passtoken::listed_worker_urls();
     Ok(OwnerSessionStatus {
         has_mail_refresh,
         has_console_refresh,
@@ -787,10 +784,11 @@ pub async fn worker_request(input: WorkerRequestInput) -> Result<WorkerRequestOu
 
     let mut res = do_fetch(access.access_token.clone()).await?;
     if res.status().as_u16() == 401 {
-        let blob = load_keyring(Some(&access.worker_url))?
+        let worker_url = access.worker_url.clone();
+        let blob = load_keyring(Some(&worker_url))?
             .ok_or_else(|| "Not signed in".to_string())?;
         refresh_scope(&blob, scope).await?;
-        access = access_if_valid_for(scope, &access.worker_url)
+        access = access_if_valid_for(scope, &worker_url)
             .ok_or_else(|| "Not signed in".to_string())?;
         res = do_fetch(access.access_token.clone()).await?;
     }

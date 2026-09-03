@@ -54,11 +54,17 @@ export function UnlockView({
     () =>
       role === "invited"
         ? [teamLogin?.workerUrl]
-        : [credentials?.workerUrl],
+        : [
+            credentials?.workerUrl,
+            store.ownerStatus?.workerUrl,
+            ...(store.ownerStatus?.knownWorkerUrls ?? []),
+          ],
     [
       role,
       credentials?.workerUrl,
       teamLogin?.workerUrl,
+      store.ownerStatus?.workerUrl,
+      store.ownerStatus?.knownWorkerUrls,
     ],
   );
 
@@ -75,8 +81,25 @@ export function UnlockView({
 
   useEffect(() => {
     if (role !== "owner" || !selectedUrl) return;
-    void store.refreshWorkerPasstokenPrefix(selectedUrl);
+    void store.refreshOwnerForWorker(selectedUrl);
   }, [role, selectedUrl, store]);
+
+  useEffect(() => {
+    if (role !== "owner" || !canTryBio || store.bioDismissed || busy) return;
+    if (store.unlockBioPrompted) return;
+    const statusUrl = normalizeWorkerUrl(store.ownerStatus?.workerUrl);
+    if (!selectedUrl || statusUrl !== selectedUrl) return;
+    void store.loginOwnerFromKeyring(selectedUrl);
+  }, [
+    role,
+    canTryBio,
+    busy,
+    selectedUrl,
+    store,
+    store.bioDismissed,
+    store.unlockBioPrompted,
+    store.ownerStatus?.workerUrl,
+  ]);
 
   async function submitSecret(e: React.FormEvent) {
     e.preventDefault();
@@ -138,9 +161,11 @@ export function UnlockView({
               type="button"
               variant="ghost"
               disabled={busy}
+              data-tauri-drag-region="false"
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={() => {
                 store.clearBioDismissed();
-                void store.loginOwnerFromKeyring(selectedUrl ?? undefined);
+                void store.loginOwnerFromKeyring(selectedUrl || undefined);
               }}
               aria-label={`Sign in with ${bioLabel}`}
               className="h-auto flex-col gap-3 self-center px-6 py-4"

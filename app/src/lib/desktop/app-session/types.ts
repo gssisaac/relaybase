@@ -35,7 +35,7 @@ export type IdentitySnapshot = {
 export type AppSessionDeps = {
   isDesktop: () => boolean;
   authenticateBiometry: (reason: string) => Promise<void>;
-  ownerSessionStatus: () => Promise<OwnerSessionStatus>;
+  ownerSessionStatus: (workerUrl?: string) => Promise<OwnerSessionStatus>;
   ownerLogin: (input: {
     workerUrl: string;
     passtoken: string;

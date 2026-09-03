@@ -144,8 +144,9 @@
 
 | Item | Keyring service / account | Contents | Read gate |
 |:---|:---|:---|:---|
-| **Owner session** | `com.relaybase.desktop` / `owner-session` | `workerUrl`, `refreshToken` (console), `mailRefreshToken` (mail) | **Silent** — auto-read on boot and mailbox entry |
-| **Owner passtoken** | `com.relaybase.desktop` / `owner-passtoken` | `rb_pass_...` plaintext | **Touch ID / Windows Hello only** |
+| **Owner session** | `com.relaybase.desktop` / `owner-session:{workerUrl}` | `workerUrl`, `refreshToken` (console), `mailRefreshToken` (mail) | **Silent** — auto-read on boot and mailbox entry |
+| **Owner passtoken** | `com.relaybase.desktop` / `owner-passtoken:{workerUrl}` | `rb_pass_...` plaintext | **Touch ID / Windows Hello only** |
+| **Known workers index** | `com.relaybase.desktop` / `owner-workers` | List of Worker URLs that have a keyring item | Silent |
 | **Teammate session** | `com.relaybase.desktop` / `team-session:{email}` | `workerUrl`, `email`, `mobilePassword` | **Silent** — team shell boot |
 | **CF OAuth install refresh** | `com.relaybase.desktop` / `cf-oauth-install` | `refreshToken` (Cloudflare OAuth) | **Silent** — background Worker updates without browser re-auth |
 | **API key vault** | `~/.relaybase/{scopeId}/api-keys.json` | API key plaintext | Local file read |

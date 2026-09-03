@@ -53,8 +53,16 @@ export function ConsoleGateView() {
   const prefixMismatch = store.ownerBioPrefixMismatch;
 
   const workerUrlSeeds = useMemo(
-    () => [credentials?.workerUrl, store.ownerStatus?.workerUrl],
-    [credentials?.workerUrl, store.ownerStatus?.workerUrl],
+    () => [
+      credentials?.workerUrl,
+      store.ownerStatus?.workerUrl,
+      ...(store.ownerStatus?.knownWorkerUrls ?? []),
+    ],
+    [
+      credentials?.workerUrl,
+      store.ownerStatus?.workerUrl,
+      store.ownerStatus?.knownWorkerUrls,
+    ],
   );
 
   const canSubmit = Boolean(selectedUrl) && Boolean(secret);
@@ -62,7 +70,7 @@ export function ConsoleGateView() {
 
   useEffect(() => {
     if (!selectedUrl) return;
-    void store.refreshWorkerPasstokenPrefix(selectedUrl);
+    void store.refreshOwnerForWorker(selectedUrl);
   }, [selectedUrl, store]);
 
   async function submitPasstoken(e: React.FormEvent) {
@@ -115,9 +123,11 @@ export function ConsoleGateView() {
               type="button"
               variant="ghost"
               disabled={busy}
+              data-tauri-drag-region="false"
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={() => {
                 store.clearBioDismissed();
-                void store.ensureConsoleAccess(selectedUrl ?? undefined);
+                void store.ensureConsoleAccess(selectedUrl || undefined);
               }}
               aria-label={`Unlock console with ${label}`}
               className="h-auto flex-col gap-3 self-center px-6 py-4"

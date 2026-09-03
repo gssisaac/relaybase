@@ -4,8 +4,8 @@ Rust module managing owner/team credentials, OS keyring persistence, biometric a
 
 ## 1. Module Overview & Boundaries
 
-- **Owner Authentication:** Dual refresh tokens (`mail` long TTL, `console` 30m TTL) stored in OS keyring (`owner-session`), access tokens kept in process memory only.
-- **Owner Passtoken:** Secret token (`rb_pass_...`) stored in a separate OS keyring item (`owner-passtoken`), read-gated behind Touch ID / system biometric prompt. Never exposed to JavaScript.
+- **Owner Authentication:** Dual refresh tokens (`mail` long TTL, `console` 30m TTL) stored in OS keyring (`owner-session:{workerUrl}`), access tokens kept in process memory only.
+- **Owner Passtoken:** Secret token (`rb_pass_...`) stored in a separate OS keyring item (`owner-passtoken:{workerUrl}`), read-gated behind Touch ID / system biometric prompt. Never exposed to JavaScript.
 - **Team Authentication:** Teammate mobile password stored in OS keyring (`team-session`). Identity kept in `~/.relaybase/team-login.json`.
 - **Keyring Abstraction:** Uses `SecItem` on macOS login keychain (avoiding ACL prompts) and `keyring` crate on Windows/Linux. Debug builds delegate to `dev::keyring_store`.
 - **Worker Request Proxy:** Handles authenticated HMAC/bearer requests to the user's deployed Cloudflare Worker (`worker_request_cmd`, `team_worker_request_cmd`).
@@ -16,8 +16,10 @@ Rust module managing owner/team credentials, OS keyring persistence, biometric a
 |------|-------------|
 | `mod.rs` | Module root & public re-exports |
 | `commands.rs` | Tauri IPC commands (16 commands for owner/team session and worker requests) |
-| `owner_session.rs` | Owner session state machine, dual refresh tokens, access tokens in memory, proxy requests |
-| `owner_passtoken.rs` | Secure storage & biometry-gated reading of the owner passtoken |
+| `owner_session.rs` | Owner session state machine, dual refresh tokens **per Worker URL**, access tokens in memory, proxy requests |
+| `owner_passtoken.rs` | Secure storage & biometry-gated reading of the owner passtoken **per Worker URL** |
+| `worker_accounts.rs` | Normalized Worker URL → keyring account names + `owner-workers` index |
+| `tests/` | Unit tests (`cargo test auth::tests::worker_accounts`) |
 | `team_session.rs` | Teammate mobile password lifecycle & proxy requests |
 | `keyring_store.rs` | OS keychain/keyring abstraction with in-memory caching |
 | `touch_id.rs` | Touch ID (macOS AppKit main thread) & Windows Hello biometry integration |
@@ -53,8 +55,8 @@ Rust module managing owner/team credentials, OS keyring persistence, biometric a
 
 ## 5. Security & Invariants
 
-1. **Passtoken Isolation:** The plaintext passtoken is **never** sent to JavaScript or written to `~/.relaybase`. It resides strictly in OS keyring `owner-passtoken`.
-2. **Biometric Gate:** Reading `owner-passtoken` requires biometry via `touch_id::authenticate` on macOS/Windows before calling `load_owner_passtoken_after_auth`.
+1. **Passtoken Isolation:** The plaintext passtoken is **never** sent to JavaScript or written to `~/.relaybase`. It resides strictly in OS keyring `owner-passtoken:{workerUrl}`.
+2. **Biometric Gate:** Reading `owner-passtoken:{url}` requires biometry via `touch_id::authenticate` on macOS/Windows before calling `load_owner_passtoken_after_auth`.
 3. **Dual Refresh Scopes:** `mail` refresh token has a long TTL for background checks; `console` refresh token has a 30-minute Worker TTL.
 4. **Keyring Cache Invalidation:** Passtoken reads bypass the in-process cache (`get_password_uncached`) to guarantee Touch ID verification on every unlock.
 
@@ -68,7 +70,8 @@ Rust module managing owner/team credentials, OS keyring persistence, biometric a
 
 ## 7. Testing
 
-Run unit tests for auth:
+Unit tests live in `tests/` (not inline in production files).
+
 ```bash
-cargo test auth --manifest-path desktop/src-tauri/Cargo.toml
+cargo test auth::tests::worker_accounts --manifest-path desktop/src-tauri/Cargo.toml
 ```

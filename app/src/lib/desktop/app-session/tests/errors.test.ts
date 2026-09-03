@@ -12,7 +12,7 @@ import {
   missingWorkerHelp,
   missingWorkerSummary,
   visibleUnlockError,
-} from "./errors.ts";
+} from "../errors.ts";
 
 describe("isMissingWorkerError", () => {
   it("detects Hono notFound and HTTP 404 login failures", () => {

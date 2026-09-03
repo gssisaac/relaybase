@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { resolveWorkerUrl } from "./resolve-worker-url.ts";
+import { resolveWorkerUrl } from "../resolve-worker-url.ts";
 
 const WORKER_URL = "https://relaybase-api.example.workers.dev";
 const KEYRING_URL = "https://relaybase-api.keyring.workers.dev";

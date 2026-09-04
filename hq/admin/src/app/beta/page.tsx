@@ -27,6 +27,8 @@ const BETA_FROM = "beta@relaybase.xyz";
 type BetaInvite = {
   uuid: string;
   email: string;
+  kind: "email" | "direct";
+  identifier: string;
   createdAt: string;
   locale: {
     country?: string;
@@ -67,6 +69,17 @@ function formatLocation(locale: BetaInvite["locale"]) {
 function isBetaInviteLog(log: EmailSenderLogEntry) {
   const from = log.from?.trim().toLowerCase() ?? "";
   return from === BETA_FROM || from.endsWith(`<${BETA_FROM}>`);
+}
+
+function formatIdentifier(invite: BetaInvite) {
+  if (invite.kind === "direct") {
+    return (
+      <span className="font-mono text-xs text-muted-foreground">
+        {invite.identifier}
+      </span>
+    );
+  }
+  return <span className="text-sm">{invite.identifier}</span>;
 }
 
 function lastInviteEmail(
@@ -150,7 +163,10 @@ export default function BetaPage() {
   const neverDownloaded = invites.length - downloaded;
 
   const selectedEmail = useMemo(
-    () => (selected ? lastInviteEmail(selected.email, logs) : null),
+    () =>
+      selected && selected.kind === "email"
+        ? lastInviteEmail(selected.email, logs)
+        : null,
     [logs, selected],
   );
 
@@ -170,7 +186,7 @@ export default function BetaPage() {
         <div className="grid gap-3 sm:grid-cols-3">
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Applicants</CardDescription>
+              <CardDescription>Records</CardDescription>
               <CardTitle className="text-2xl">{invites.length}</CardTitle>
             </CardHeader>
           </Card>
@@ -193,8 +209,7 @@ export default function BetaPage() {
             <div>
               <CardTitle>Beta</CardTitle>
               <CardDescription>
-                Marketing signups from relaybase.xyz — applicants, personal
-                download links, and invite-email send logs.
+                Email signups and anonymous Mac downloads from relaybase.xyz.
               </CardDescription>
             </div>
             <Button
@@ -218,13 +233,14 @@ export default function BetaPage() {
               </p>
             ) : invites.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No beta applicants yet.
+                No beta records yet.
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Email</TableHead>
+                    <TableHead>Identifier</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Signed up</TableHead>
                     <TableHead>Location</TableHead>
                     <TableHead>Client</TableHead>
@@ -235,7 +251,10 @@ export default function BetaPage() {
                 </TableHeader>
                 <TableBody>
                   {invites.map((invite) => {
-                    const lastEmail = lastInviteEmail(invite.email, logs);
+                    const lastEmail =
+                      invite.kind === "email"
+                        ? lastInviteEmail(invite.email, logs)
+                        : null;
                     return (
                       <TableRow
                         key={invite.uuid}
@@ -249,7 +268,12 @@ export default function BetaPage() {
                           )
                         }
                       >
-                        <TableCell className="text-sm">{invite.email}</TableCell>
+                        <TableCell>{formatIdentifier(invite)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {invite.kind === "direct" ? "Direct" : "Email"}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {formatDate(invite.createdAt)}
                         </TableCell>
@@ -297,9 +321,12 @@ export default function BetaPage() {
         {selected ? (
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">{selected.email}</CardTitle>
+              <CardTitle className="text-sm">
+                {selected.kind === "direct" ? "Device download" : selected.email}
+              </CardTitle>
               <CardDescription>
-                Signed up {formatDate(selected.createdAt)}
+                {selected.kind === "direct" ? "Device ID " : "Signed up "}
+                {formatDate(selected.createdAt)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -318,6 +345,16 @@ export default function BetaPage() {
                     {selected.browser} · {selected.os}
                   </dd>
                 </div>
+                {selected.kind === "direct" ? (
+                  <div>
+                    <dt className="inline font-medium text-foreground">
+                      Device ID:{" "}
+                    </dt>
+                    <dd className="inline break-all font-mono text-muted-foreground">
+                      {selected.identifier}
+                    </dd>
+                  </div>
+                ) : null}
                 {selected.userAgent ? (
                   <div>
                     <dt className="inline font-medium text-foreground">

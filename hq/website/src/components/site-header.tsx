@@ -59,6 +59,7 @@ export function SiteHeader() {
           <Button
             variant="outline"
             size="sm"
+            nativeButton={false}
             render={
               <a
                 href={siteConfig.githubWorkerUrl}
@@ -72,7 +73,7 @@ export function SiteHeader() {
             <GithubIcon className="size-3.5" />
             <span>GitHub</span>
           </Button>
-          <DownloadMacButton size="sm" showArrow />
+          <DownloadMacButton size="sm" showArrow location="header" />
         </div>
       </div>
     </header>

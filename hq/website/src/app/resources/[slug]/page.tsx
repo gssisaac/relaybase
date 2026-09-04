@@ -157,7 +157,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                     download link for the Mac app.
                   </p>
                 </div>
-                <Button size="lg" render={<Link href={siteConfig.getStartedPath} />}>
+                <Button size="lg" nativeButton={false} render={<Link href={siteConfig.getStartedPath} />}>
                   <DownloadCtaLabel />
                 </Button>
               </div>

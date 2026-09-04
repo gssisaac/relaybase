@@ -2,6 +2,9 @@ import { betaInvites } from "@/db/schema";
 import { getDb } from "@/lib/cloudflare/kv";
 
 const DOWNLOAD_ORIGIN = "https://relaybase.xyz";
+const DEVICE_EMAIL_PREFIX = "device:";
+
+export type BetaInviteKind = "email" | "direct";
 
 export type BetaInviteLocale = {
   country?: string;
@@ -17,6 +20,8 @@ export type BetaInviteDownload = {
 export type BetaInviteRow = {
   uuid: string;
   email: string;
+  kind: BetaInviteKind;
+  identifier: string;
   createdAt: string;
   locale: BetaInviteLocale;
   browser: string;
@@ -36,6 +41,7 @@ export type ListBetaInvitesResult = {
 
 type InviteDataBlob = {
   email?: string;
+  source?: BetaInviteKind;
   createdAt?: string;
   locale?: BetaInviteLocale;
   browser?: string;
@@ -52,6 +58,13 @@ function parseInviteData(raw: string): InviteDataBlob {
   }
 }
 
+function inviteKind(email: string, source?: BetaInviteKind): BetaInviteKind {
+  if (source === "direct" || email.startsWith(DEVICE_EMAIL_PREFIX)) {
+    return "direct";
+  }
+  return "email";
+}
+
 function toInviteRow(row: {
   uuid: string;
   email: string;
@@ -61,10 +74,13 @@ function toInviteRow(row: {
   const downloads = Array.isArray(parsed.downloads) ? parsed.downloads : [];
   const lastDownloadAt =
     downloads.length > 0 ? (downloads[downloads.length - 1]?.at ?? null) : null;
+  const kind = inviteKind(row.email, parsed.source);
 
   return {
     uuid: row.uuid,
     email: row.email,
+    kind,
+    identifier: row.email,
     createdAt: parsed.createdAt ?? "",
     locale: parsed.locale ?? {},
     browser: parsed.browser ?? "Unknown",

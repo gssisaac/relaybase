@@ -2,6 +2,8 @@ import Image from "next/image";
 
 import type { ReleaseInfo } from "@/lib/resolve-release";
 
+import { TrackedDownloadAnchor } from "@/features/download-access/client";
+
 type BetaDownloadCardProps = {
   release: ReleaseInfo;
 };
@@ -40,12 +42,13 @@ export function BetaDownloadCard({ release }: BetaDownloadCardProps) {
             </div>
             {siliconHref ? (
               <>
-                <a
+                <TrackedDownloadAnchor
                   href={siliconHref}
+                  location="beta-page"
                   className="mt-2.5 inline-block rounded-[0.6rem] bg-[#e85d2a] px-[1.15rem] py-2.5 text-[0.95rem] font-semibold text-white no-underline hover:brightness-95"
                 >
                   {siliconLabel}
-                </a>
+                </TrackedDownloadAnchor>
                 <p className="mt-1.5 text-xs leading-snug text-[#64748b]">
                   M1, M2, M3, M4 and later
                 </p>

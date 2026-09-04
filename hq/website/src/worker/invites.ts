@@ -55,10 +55,34 @@ export async function appendDownload(
   return next;
 }
 
+export async function patchInviteClientIfUnknown(
+  env: WorkerEnv,
+  uuid: string,
+  patch: { userAgent: string; browser: string; os: string },
+): Promise<void> {
+  const invite = await getInviteByUuid(env, uuid);
+  if (!invite) return;
+  if (invite.data.browser !== "Unknown" && invite.data.os !== "Unknown") {
+    return;
+  }
+  if (!patch.userAgent.trim()) return;
+
+  const next: InviteData = {
+    ...invite.data,
+    browser: patch.browser,
+    os: patch.os,
+    userAgent: patch.userAgent,
+  };
+  await env.DB.prepare("UPDATE beta_invites SET data = ? WHERE uuid = ?")
+    .bind(JSON.stringify(next), uuid)
+    .run();
+}
+
 function parseInviteData(raw: string): InviteData {
   const parsed = JSON.parse(raw) as InviteData;
   return {
     email: parsed.email,
+    source: parsed.source,
     createdAt: parsed.createdAt,
     locale: parsed.locale ?? {},
     browser: parsed.browser ?? "Unknown",

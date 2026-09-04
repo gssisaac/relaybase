@@ -66,10 +66,11 @@ export function Hero() {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <DownloadMacButton size="lg" showArrow />
+              <DownloadMacButton size="lg" showArrow location="hero" />
               <Button
                 variant="outline"
                 size="lg"
+                nativeButton={false}
                 render={
                   <a
                     href={siteConfig.githubWorkerUrl}

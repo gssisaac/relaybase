@@ -76,6 +76,7 @@ export function CloudflareTrust() {
               <Button
                 variant="outline"
                 size="sm"
+                nativeButton={false}
                 render={
                   <a
                     href={siteConfig.githubWorkerUrl}

@@ -1,15 +1,15 @@
-import { ArrowRight } from "lucide-react";
-
-import { DownloadCtaLabel } from "@/components/download-cta-label";
-import { Button } from "@/components/ui/button";
 import { resolveRelease } from "@/lib/resolve-release";
 
+import { DownloadMacButtonClient } from "@/features/download-access/client";
+
 type DownloadMacButtonProps = {
+  location: "header" | "hero" | "footer";
   size?: "default" | "sm" | "lg";
   showArrow?: boolean;
 };
 
 export function DownloadMacButton({
+  location,
   size = "lg",
   showArrow = false,
 }: DownloadMacButtonProps) {
@@ -17,17 +17,22 @@ export function DownloadMacButton({
 
   if (!dmgUrlAarch64) {
     return (
-      <Button size={size} disabled>
-        <DownloadCtaLabel />
-        {showArrow ? <ArrowRight data-icon="inline-end" /> : null}
-      </Button>
+      <DownloadMacButtonClient
+        href=""
+        location={location}
+        size={size}
+        showArrow={showArrow}
+        disabled
+      />
     );
   }
 
   return (
-    <Button size={size} render={<a href={dmgUrlAarch64} />}>
-      <DownloadCtaLabel />
-      {showArrow ? <ArrowRight data-icon="inline-end" /> : null}
-    </Button>
+    <DownloadMacButtonClient
+      href={dmgUrlAarch64}
+      location={location}
+      size={size}
+      showArrow={showArrow}
+    />
   );
 }

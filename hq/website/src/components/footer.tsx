@@ -30,10 +30,11 @@ export function Footer() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <DownloadMacButton size="lg" />
+            <DownloadMacButton size="lg" location="footer" />
             <Button
               variant="outline"
               size="lg"
+              nativeButton={false}
               render={
                 <a
                   href={siteConfig.githubWorkerUrl}

@@ -1,3 +1,5 @@
+import { handleDirectDownloadTrack } from "@/features/download-access/worker";
+
 import { renderDownloadPage, renderNotFound } from "./download-page";
 import {
   appendDownload,
@@ -29,6 +31,10 @@ const worker = {
 
     if (path === "/api/beta" || path === "/api/beta/") {
       return handleBeta(request, env, url.origin);
+    }
+
+    if (path === "/api/beta/download" || path === "/api/beta/download/") {
+      return handleDirectDownloadTrack(request, env);
     }
 
     const download = matchDownload(path);
@@ -129,6 +135,7 @@ async function handleBeta(
     const cf = (request as Request & { cf?: IncomingCf }).cf;
     const data: InviteData = {
       email,
+      source: "email",
       createdAt: new Date().toISOString(),
       locale: {
         country: cf?.country,

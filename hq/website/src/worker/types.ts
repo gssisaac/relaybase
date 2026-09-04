@@ -9,8 +9,11 @@ export type InviteDownload = {
   at: string;
 };
 
+export type InviteSource = "email" | "direct";
+
 export type InviteData = {
   email: string;
+  source?: InviteSource;
   createdAt: string;
   locale: InviteLocale;
   browser: string;

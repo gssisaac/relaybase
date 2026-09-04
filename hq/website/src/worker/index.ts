@@ -39,11 +39,33 @@ const worker = {
       return handleDownload(env, download.uuid, download.file, download.arch);
     }
 
+    const betaDownload = matchBetaDownload(path);
+    if (betaDownload) {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response("Method not allowed", { status: 405 });
+      }
+      return handleBetaDownload(env, betaDownload.file, betaDownload.arch);
+    }
+
     return env.ASSETS.fetch(request);
   },
 };
 
 export default worker;
+
+function matchBetaDownload(path: string): {
+  file: boolean;
+  arch: MacArch | null;
+} | null {
+  const match = path.match(
+    /^\/beta-download(?:\/file(?:\/(aarch64|x86_64))?)?\/?$/i,
+  );
+  if (!match) return null;
+  const archRaw = match[1]?.toLowerCase();
+  const arch: MacArch | null =
+    archRaw === "aarch64" || archRaw === "x86_64" ? archRaw : null;
+  return { file: path.includes("/file"), arch };
+}
 
 function matchDownload(path: string): {
   uuid: string;
@@ -138,6 +160,37 @@ async function handleBeta(
   }
 
   return json({ ok: true, alreadyJoined }, 200, request);
+}
+
+async function handleBetaDownload(
+  env: WorkerEnv,
+  file: boolean,
+  arch: MacArch | null,
+): Promise<Response> {
+  const release = await resolveRelease(env);
+
+  if (file) {
+    const selected: MacArch = arch ?? "aarch64";
+    if (selected === "x86_64" && !INTEL_MAC_DOWNLOAD_ENABLED) {
+      return new Response("Intel Mac installer is not available yet", {
+        status: 503,
+      });
+    }
+    const dmgUrl =
+      selected === "x86_64" ? release.dmgUrlX86_64 : release.dmgUrlAarch64;
+    if (!dmgUrl) {
+      return new Response("Installer unavailable", { status: 503 });
+    }
+    return Response.redirect(dmgUrl, 302);
+  }
+
+  return renderDownloadPage({
+    dmgUrlAarch64: release.dmgUrlAarch64,
+    dmgUrlX86_64: release.dmgUrlX86_64,
+    filePathAarch64: "/beta-download/file/aarch64",
+    filePathX86_64: "/beta-download/file/x86_64",
+    version: release.version,
+  });
 }
 
 async function handleDownload(

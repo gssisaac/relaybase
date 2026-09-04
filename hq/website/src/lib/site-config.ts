@@ -15,6 +15,7 @@ export const siteConfig = {
   githubWorkerUrl: "https://github.com/strum-us/relaybase-worker",
   githubUrl: "https://github.com/strum-us/relaybase-worker",
   getStartedPath: "/get-started",
+  betaDownloadPath: "/beta-download",
   /**
    * Pricing numbers — source of truth is `PRICING.md` (repo root). Only
    * `free`, `pro`, and `earlyAccess` are public; Team/Studio exist in the

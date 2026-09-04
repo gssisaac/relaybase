@@ -1,11 +1,11 @@
 {
-  "version": "0.1.1",
-  "notes": "# Relaybase 0.1.1\n\nFirst public release.\n\n## Highlights\n- Guided Cloudflare install — deploy the Worker, create storage, set up owner passtoken\n- macOS desktop app (Apple Silicon) with in-app Worker update\n- Email + dashboard in one app\n\n## Changes\n- Setup Rollback deletes Worker, D1, and R2 — fails if anything remains\n- Owner passtoken in OS keyring; Touch ID read-gate for console unlock\n- Settings → Worker update reuses OAuth and runs `migrate-db` on existing installs",
-  "pub_date": "2026-09-04T07:39:52.344Z",
+  "version": "0.1.2",
+  "notes": "# Relaybase 0.1.2\n\nDesktop-only patch. Worker install bundle stays **0.1.1** — no Worker script changes.\n\n## Highlights\n- Fix install success so overwrite/reinstall always issues a new owner passtoken\n- Enable email API opens only from its button on the success screen\n- Go to Mailbox stays locked until the passtoken is copied or downloaded\n\n## Changes\n- Always show Issue passtoken on install success (remove Already installed fallback)\n- Stop auto-opening Enable email API after install\n- New `Relaybase.0.1.2.aarch64.dmg` on download CDN (avoids stale 0.1.1 cache)",
+  "pub_date": "2026-09-04T07:58:51.755Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.1.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmIxSG9yYlZoZW94aTkvY3RkWUNXZ3ROZ2dyaFR6YzdwWm5XelhsKzBhQ21oSGxEdnZoRUg0ajROYW9SRzRIVTdnNCswQ2JQRER0NWZFcVRnVVdDdWdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NTA3NTY1CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKZ3BHamlNc1hwelVUN0FabDBlamRSNTRCbWJoNG9SNTRuYnBEMi82MGpGbmMzMEp0NkkwUU0yek1NTnJVM0d0aGx0R3FJRzJBcGVVVG9MU2prZXVNQ2c9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.2.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmZON3lQM2tUY29IdGNPZnJUbUhjMFhFMUpLOC9xdlNaMWhGREp1U1hPbUlmdEtic1kzdWx0emhzbHEwanFOWFJVZFNlM2xlNlJjV1R0V01Idm45M0FJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NTA4NzAxCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKL0xRMzNtWkJncTBiWnMzZzhjSFhYc1VIRjN3YjNnSXlnK0ZhVzloeGFpMi8vMTkyTlVpS0dRZFdVWHoybElUdHdJTXdzdEVnWHpkbUNleUJBRDZCQmc9PQo="
     }
   }
 }

@@ -43,6 +43,11 @@ import {
   resourceIsOccupied,
   wipePhraseIsValid,
 } from "@/console/components/setup/InstallWipeConfirmDialog";
+import {
+  canEnterMailboxAfterInstall,
+  issuePasstokenWithRetry,
+  mustIssuePasstokenOnSetupInstall,
+} from "@/console/components/setup/install-success-gate";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
@@ -95,28 +100,6 @@ function resourceKindLabel(kind: string): "Worker" | "R2" | "D1" {
 
 function isR2InactiveError(error: DesktopErrorHelp | null): boolean {
   return Boolean(error?.title.toLowerCase().includes("r2 is not active"));
-}
-
-function fireInstallConfetti() {
-  void import("canvas-confetti").then(({ default: confetti }) => {
-    const defaults = {
-      startVelocity: 28,
-      spread: 360,
-      ticks: 90,
-      zIndex: 9999,
-      particleCount: 80,
-    };
-    const origins = [
-      { x: 0.5, y: 0.45 },
-      { x: 0.2, y: 0.55 },
-      { x: 0.8, y: 0.55 },
-    ];
-    for (const [i, origin] of origins.entries()) {
-      window.setTimeout(() => {
-        confetti({ ...defaults, origin });
-      }, i * 220);
-    }
-  });
 }
 
 export function SetupProgressPanel({
@@ -190,8 +173,6 @@ export function SetupProgressPanel({
   const [creatingOwner, setCreatingOwner] = useState(false);
   const [mailApiDone, setMailApiDone] = useState(false);
   const [mailApiVerified, setMailApiVerified] = useState(false);
-  const emailDialogShownRef = useRef(false);
-  const confettiFiredRef = useRef(false);
   const [leavingToMailbox, setLeavingToMailbox] = useState(false);
   const [installLogExpanded, setInstallLogExpanded] = useState(false);
   const [r2DashboardOpened, setR2DashboardOpened] = useState(false);
@@ -220,6 +201,7 @@ export function SetupProgressPanel({
           setMailApiDone(true);
         },
         onSkip: () => {
+          // Dismiss only. Must not unlock Go to Mailbox.
           setMailApiVerified(false);
           setMailApiDone(true);
         },
@@ -259,29 +241,12 @@ export function SetupProgressPanel({
   useEffect(() => {
     if (purpose === "worker-update") return;
     if (!autoDone) {
-      confettiFiredRef.current = false;
       setTokenDownloaded(false);
       setTokenSaved(false);
       return;
     }
     setInstallLogExpanded(false);
-    if (!confettiFiredRef.current) {
-      confettiFiredRef.current = true;
-      fireInstallConfetti();
-    }
-    if (mailApiDone || emailDialogShownRef.current) return;
-    if (needsOwnerSetup) return;
-    if (autoDone.revealedPasstoken && !tokenSaved) return;
-    emailDialogShownRef.current = true;
-    openMailApiDialog(autoDone);
-  }, [
-    autoDone,
-    mailApiDone,
-    needsOwnerSetup,
-    openMailApiDialog,
-    purpose,
-    tokenSaved,
-  ]);
+  }, [autoDone, purpose]);
 
   useEffect(() => {
     if (!credentials) return;
@@ -331,6 +296,8 @@ export function SetupProgressPanel({
     setNeedsOwnerSetup(false);
     setInstallPepper(null);
     setTokenSaved(false);
+    setMailApiDone(false);
+    setMailApiVerified(false);
     try {
       if (!(await ensureOauthSession())) {
         return;
@@ -410,9 +377,35 @@ export function SetupProgressPanel({
       return;
     }
     const pepper = result.authPepper?.trim() ?? "";
+    let ownerConfigured = false;
+    try {
+      ownerConfigured = (await ownerAuthStatusForWorkerUrl(workerUrl))
+        .ownerConfigured;
+    } catch {
+      ownerConfigured = false;
+    }
+    // Overwrite / reinstall must issue a new passtoken even when D1 already
+    // has an owner. Never treat "owner already configured" as success.
+    if (
+      !mustIssuePasstokenOnSetupInstall({
+        purpose: "install",
+        ownerAlreadyConfigured: ownerConfigured,
+      })
+    ) {
+      setNeedsOwnerSetup(true);
+      setInstallPepper(pepper || null);
+      setAutoDone({ workerUrl, revealedPasstoken: "" });
+      setError({
+        title: "Could not issue a passtoken",
+        detail:
+          "Setup install must issue a new passtoken even when this Worker already has an owner.",
+        fix: "Try again from Setup. If you already have the passtoken, use Already installed.",
+      });
+      return;
+    }
     if (pepper) {
       try {
-        const issued = await desktopOwnerSetupAdmin({
+        const issued = await issuePasstokenWithRetry(desktopOwnerSetupAdmin, {
           workerUrl,
           pepper,
         });
@@ -425,28 +418,15 @@ export function SetupProgressPanel({
           workerUrl,
           revealedPasstoken: issued.passtoken,
         });
-        fireInstallConfetti();
         return;
       } catch (err) {
         console.error("Auto setup-admin failed, falling back to manual issue", err);
         setNeedsOwnerSetup(true);
         setInstallPepper(pepper);
         setAutoDone({ workerUrl, revealedPasstoken: "" });
+        setError(explainDesktopError(err, "Could not issue a passtoken"));
         return;
       }
-    }
-    let ownerConfigured = false;
-    try {
-      ownerConfigured = (await ownerAuthStatusForWorkerUrl(workerUrl))
-        .ownerConfigured;
-    } catch {
-      ownerConfigured = false;
-    }
-    if (ownerConfigured) {
-      setNeedsOwnerSetup(false);
-      setInstallPepper(null);
-      setAutoDone({ workerUrl, revealedPasstoken: "" });
-      return;
     }
     setNeedsOwnerSetup(true);
     setInstallPepper(null);
@@ -454,7 +434,7 @@ export function SetupProgressPanel({
     setError({
       title: "Could not issue a passtoken",
       detail:
-        "Install finished but AUTH_PEPPER was not available in memory to create the first owner.",
+        "Install finished but AUTH_PEPPER was not available in memory to create the owner login. Reinstall still needs a new passtoken even if this Worker already had an owner.",
       fix: "Try again from Setup. If this Worker already has an owner, use I forgot my passtoken.",
     });
   }
@@ -541,6 +521,8 @@ export function SetupProgressPanel({
     setAutoDone(null);
     setPendingVerify(null);
     setVerifyError(null);
+    setMailApiDone(false);
+    setMailApiVerified(false);
     const chosen =
       plan ??
       existing.map((r) => ({
@@ -704,7 +686,7 @@ export function SetupProgressPanel({
     setCreatingOwner(true);
     setError(null);
     try {
-      const issued = await desktopOwnerSetupAdmin({
+      const issued = await issuePasstokenWithRetry(desktopOwnerSetupAdmin, {
         workerUrl: autoDone.workerUrl,
         pepper,
       });
@@ -717,7 +699,6 @@ export function SetupProgressPanel({
         workerUrl: autoDone.workerUrl,
         revealedPasstoken: issued.passtoken,
       });
-      fireInstallConfetti();
     } catch (err) {
       setError(explainDesktopError(err, "Could not create owner"));
     } finally {
@@ -1363,17 +1344,18 @@ export function SetupProgressPanel({
                   if you are not signed in yet.
                 </p>
               )}
-              {!mailApiDone ? (
-                <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  Enable the email API on your Worker to unlock Go to Mailbox.
-                </p>
-              ) : mailApiVerified ? (
+              {mailApiVerified ? (
                 <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
                   Email API verified on the Worker.
                 </p>
-              ) : (
+              ) : mailApiDone ? (
                 <p className="text-[11px] text-muted-foreground">
                   Email API skipped — finish it later in Settings → Cloudflare.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Optional: enable the email API for domain and routing. This
+                  does not unlock the mailbox — save your passtoken first.
                 </p>
               )}
               {!mailApiDone ? (
@@ -1422,35 +1404,37 @@ export function SetupProgressPanel({
               type="button"
               className="w-full"
               disabled={
-                leavingToMailbox ||
-                needsOwnerSetup ||
-                (Boolean(autoDone.revealedPasstoken) && !tokenSaved) ||
-                !mailApiDone
+                !canEnterMailboxAfterInstall({
+                  revealedPasstoken: autoDone.revealedPasstoken,
+                  tokenSaved,
+                  needsOwnerSetup,
+                  leavingToMailbox,
+                })
               }
               onClick={() => {
                 void (async () => {
-                  setLeavingToMailbox(true);
-                  if (autoDone.revealedPasstoken) {
-                    try {
-                      await store.loginWithPasstoken({
-                        workerUrl: autoDone.workerUrl,
-                        passtoken: autoDone.revealedPasstoken,
-                      });
-                      router.replace("/email/inbox");
-                      return;
-                    } catch {
-                      setLeavingToMailbox(false);
-                      store.openAlreadyInstalled();
-                      router.replace("/setup/connect");
-                      return;
-                    }
-                  }
-                  if (store.canShowApp) {
-                    router.replace("/email/inbox");
+                  const passtoken = autoDone.revealedPasstoken.trim();
+                  if (
+                    !canEnterMailboxAfterInstall({
+                      revealedPasstoken: passtoken,
+                      tokenSaved,
+                      needsOwnerSetup,
+                    })
+                  ) {
                     return;
                   }
-                  store.openAlreadyInstalled();
-                  router.replace("/setup/connect");
+                  setLeavingToMailbox(true);
+                  try {
+                    await store.loginWithPasstoken({
+                      workerUrl: autoDone.workerUrl,
+                      passtoken,
+                    });
+                    router.replace("/email/inbox");
+                  } catch {
+                    setLeavingToMailbox(false);
+                    store.openAlreadyInstalled();
+                    router.replace("/setup/connect");
+                  }
                 })();
               }}
             >

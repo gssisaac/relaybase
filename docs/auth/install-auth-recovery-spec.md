@@ -181,8 +181,8 @@
 - [x] **Remove error bridge mapping (`app/src/lib/desktop/bridge/errors.ts`)**
   - Delete `owner_already_configured` / "Owner already configured on this Worker" block.
 - [x] **Auto-install passtoken reveal (`app/src/console/components/setup/SetupProgressPanel.tsx`)**
-  - On install complete, call `desktopOwnerSetupAdmin` with in-memory `authPepper`; show one-time copy/download UI.
-  - Enable Email API dialog and Go to Mailbox after token saved.
+  - On install complete, call `desktopOwnerSetupAdmin` with in-memory `AUTH_PEPPER`; show one-time copy/download UI. Overwrite / reinstall must not skip this when D1 already has an owner.
+  - Enable email API is **button-only** (never auto-open on Success). **Do this later** must not unlock Go to Mailbox. Mailbox unlocks only after the issued passtoken is copied or downloaded (`install-success-gate.ts`).
 - [x] **Manual install UI (`app/src/console/components/setup/WorkerInstallPanel.tsx`)**
   - When `installPepper` is present, issue new passtoken and log in regardless of D1 owner state.
 - [x] **Public install bundle refresh (`hq/website/public/downloads/`)**

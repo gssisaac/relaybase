@@ -157,7 +157,21 @@ After every release build, confirm:
 
 ```bash
 git diff hq/website/public/release/latest.json   # version should match tauri.conf.json
+node scripts/deploy/verify-release-bundle.mjs \
+  --tgz src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Relaybase.app.tar.gz
 ```
+
+### Never ship metadata without a fresh binary
+
+These caused a **0.1.2** incident where `latest.json` pointed at a new filename but the CDN object was an older **0.1.1** build:
+
+- **Do not** bump `tauri.conf.json`, `latest.json`, or `artifacts.json` without running `RELAYBASE_NOTARIZE=1 pnpm run build:macos` in the **same session**.
+- **Do not** rename, copy, or re-upload an existing DMG or `.app.tar.gz` under a new version filename to “bust CDN cache” or skip a rebuild.
+- **Do not** overwrite an existing `Relaybase.X.Y.Z.*` object on R2 for the same version. CDN objects use `Cache-Control: immutable`; the **first** upload for a version key can be served forever even after R2 overwrite. Bump the patch (`0.1.3`) instead.
+- **Do not** commit release metadata when `src-tauri/target/.../bundle/macos/` has no freshly built artifacts for that version.
+- Filename version (`Relaybase.X.Y.Z.*`) must equal `CFBundleShortVersionString` inside the app.
+
+`verify-release-bundle.mjs` runs automatically before sync, R2 upload, and inside `build-macos.sh`. It fails when the bundle version or embedded static routes do not match `tauri.conf.json`.
 
 ---
 
@@ -168,6 +182,7 @@ pnpm run build:macos                 # aarch64 (default ship)
   ├─ rustup target add aarch64-apple-darwin
   ├─ tauri build --target aarch64-apple-darwin --bundles app,dmg
   ├─ verify-arch-app.sh (arm64 only)
+  ├─ verify-release-bundle.mjs       → CFBundle version + embedded routes
   ├─ sync-release-artifacts.mjs      → hq/website/public/release/ (latest.json + .sig only)
   └─ upload-release-r2.sh            → R2 bucket relaybase-releases
 
@@ -302,6 +317,10 @@ are already live on `download.relaybase.xyz` after the R2 upload.
 curl -sI https://relaybase.xyz/release/latest.json | grep -i content-type
 # expect: application/json
 curl -s https://relaybase.xyz/release/latest.json | head -c 400; echo
+
+# Bundle matches declared version (run on macOS after build):
+pnpm run verify:release -- \
+  --tgz src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Relaybase.app.tar.gz
 ```
 
 Test in-app updates only with a **release** build, not `tauri dev`. The
@@ -312,6 +331,6 @@ downloads in the background, and shows **Restart to update** in the sidebar.
 
 ## Versioning
 
-- Patch only after **0.1.1** (`0.1.2`, `0.1.3`, …). Desktop and Worker semver must match — [docs/release/version-sync.md](../../docs/release/version-sync.md).
-- Desktop and Worker do **not** have to ship together.
+- Patch only after **0.1.1** (`0.1.2`, `0.1.3`, …). Desktop and Worker share one product semver label — see [docs/release/version-sync.md](../../docs/release/version-sync.md).
+- A desktop-only code change still requires a **full macOS rebuild and R2 upload**; never metadata-only bumps.
 - Do not reuse an older `release-*` branch for a new version.

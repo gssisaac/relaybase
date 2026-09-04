@@ -19,6 +19,17 @@ Relaybase has two customer-facing version numbers that **must always match**:
 4. **Patch-only channel** — use `0.1.2`, `0.1.3`, … No separate dev / `+local` product channel.
 5. **HQ / app packages** (`hq/website`, `app/`, repo root) are **not** product version — leave them on their own package versions unless explicitly bumped for unrelated deploys.
 
+## Desktop-only material changes
+
+When only the macOS app changed (no Worker script diff), you may **skip** republishing the Worker install ZIP **only if** the running Worker version label stays on the previous patch (e.g. desktop `0.1.2`, Worker still `0.1.1`). Users will not see a Worker update prompt until both sides share the same patch again.
+
+That is **not** a metadata-only desktop release:
+
+- Still run a **full** `RELAYBASE_NOTARIZE=1 pnpm run build:macos` in the same session as the version bump.
+- Still upload the **new** DMG and updater `.tar.gz` built from that run.
+- **Never** rename, copy, or re-upload an older DMG/tar.gz under a new version filename to “bust CDN cache” or avoid a rebuild.
+- `verify-release-bundle.mjs` (wired into build, sync, and R2 upload) refuses when `CFBundleShortVersionString` ≠ `tauri.conf.json` or required embedded routes are missing.
+
 ## Release checklist (both sides)
 
 1. Pick the next patch (both packages get the same string).
@@ -44,4 +55,8 @@ curl -sL https://github.com/strum-us/relaybase-worker/releases/latest/download/w
 curl -s https://relaybase.xyz/release/latest.json | jq .version
 ```
 
-Deployed Worker: `GET /health` → `version` should match the install manifest.
+# Deployed Worker: `GET /health` → `version` should match the install manifest.
+
+# After desktop build / R2 upload (on macOS):
+node desktop/scripts/deploy/verify-release-bundle.mjs \
+  --tgz desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Relaybase.app.tar.gz

@@ -17,7 +17,10 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 RELEASE_DIR="$ROOT/../hq/website/public/release"
 BUCKET="${RELAYBASE_RELEASE_R2_BUCKET:-relaybase-releases}"
 META_PATH="$RELEASE_DIR/artifacts.json"
-IMMUTABLE_CACHE_CONTROL="public, max-age=31536000, immutable"
+# Versioned keys use immutable CDN caching. Never overwrite an existing object for
+# the same version — Cloudflare can keep serving the first upload forever.
+# Bump the patch and upload Relaybase.<newVersion>.* instead.
+CDN_CACHE_CONTROL="public, max-age=31536000, immutable"
 CDN_HOST="${DOWNLOAD_CDN_BASE_URL:-https://download.relaybase.xyz}"
 CDN_HOST="${CDN_HOST%/}"
 
@@ -73,6 +76,36 @@ DMG="$(stage_or_release "$DMG_NAME" "$RELEASE_DIR/$DMG_NAME" "$BUNDLE_DMG")"
 TGZ="$(stage_or_release "$TGZ_NAME" "$RELEASE_DIR/$TGZ_NAME" "$BUNDLE/macos/Relaybase.app.tar.gz")"
 SIG="$(stage_or_release "$SIG_NAME" "$RELEASE_DIR/$SIG_NAME" "$BUNDLE/macos/Relaybase.app.tar.gz.sig")"
 
+if [[ ! -f "$TGZ" ]]; then
+  echo "✗ Missing updater archive for ${VERSION} (${ARCH}). Run RELAYBASE_NOTARIZE=1 pnpm run build:macos first." >&2
+  exit 1
+fi
+
+if [[ -f "$RELEASE_DIR/$DMG_NAME" || -f "$RELEASE_DIR/$TGZ_NAME" ]]; then
+  echo "✗ Refusing to upload ${VERSION}: artifacts already exist under hq/website/public/release/." >&2
+  echo "  Bump the patch version instead of overwriting Relaybase.${VERSION}.* on R2/CDN." >&2
+  exit 1
+fi
+
+if [[ -f "$META_PATH" ]]; then
+  META_PATH="$META_PATH" VERSION="$VERSION" ARCH="$ARCH" node -e "
+    const fs = require('fs');
+    const meta = JSON.parse(fs.readFileSync(process.env.META_PATH, 'utf8'));
+    const names = [
+      \`Relaybase.\${process.env.VERSION}.\${process.env.ARCH}.dmg\`,
+      \`Relaybase.\${process.env.VERSION}.\${process.env.ARCH}.app.tar.gz\`,
+    ];
+    const hit = names.find((n) => meta[n]);
+    if (hit) {
+      console.error('✗ Refusing to overwrite existing R2 key ' + hit + ' (immutable CDN cache). Bump the patch version.');
+      process.exit(1);
+    }
+  "
+fi
+
+echo "→ Verifying staged binaries before R2 upload (${VERSION})"
+node "$ROOT/scripts/deploy/verify-release-bundle.mjs" --tgz "$TGZ"
+
 WEBSITE_DIR="$(cd "$ROOT/../hq/website" && pwd)"
 # Prefer website wrangler if present; otherwise use desktop's pnpm dlx.
 if [[ -f "$WEBSITE_DIR/package.json" ]]; then
@@ -105,11 +138,11 @@ upload_one() {
     echo "⚠ skip missing $key"
     return 0
   fi
-  echo "→ R2 put ${BUCKET}/${key} ($(du -h "$file" | cut -f1), Cache-Control: ${IMMUTABLE_CACHE_CONTROL})"
+  echo "→ R2 put ${BUCKET}/${key} ($(du -h "$file" | cut -f1), Cache-Control: ${CDN_CACHE_CONTROL})"
   local args=(r2 object put "${BUCKET}/${key}" \
     --file="$file" \
     --content-type="$content_type" \
-    --cache-control="$IMMUTABLE_CACHE_CONTROL" \
+    --cache-control="$CDN_CACHE_CONTROL" \
     --remote)
   if [[ "$attach" == "1" ]]; then
     args+=(--content-disposition="attachment; filename=\"${key}\"")
@@ -121,6 +154,12 @@ echo "→ Uploading release ${VERSION} (${ARCH}) binaries to R2 bucket ${BUCKET}
 upload_one "$DMG" "application/x-apple-diskimage"
 upload_one "$TGZ" "application/gzip"
 upload_one "$SIG" "text/plain" 0
+
+echo "→ Verifying CDN serves the uploaded updater archive (${VERSION})"
+node "$ROOT/scripts/deploy/verify-cdn-release.mjs" \
+  --tgz "$TGZ" \
+  --version "$VERSION" \
+  --cdn-base "$CDN_HOST"
 
 if [[ -f "$SIG" ]]; then
   cp "$SIG" "$RELEASE_DIR/$SIG_NAME"

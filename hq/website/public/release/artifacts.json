@@ -10,13 +10,23 @@
     "arch": "aarch64"
   },
   "Relaybase.0.1.2.aarch64.dmg": {
-    "sizeBytes": 11089602,
+    "sizeBytes": 11086416,
     "version": "0.1.2",
     "arch": "aarch64"
   },
   "Relaybase.0.1.2.aarch64.app.tar.gz": {
-    "sizeBytes": 10465884,
+    "sizeBytes": 10462331,
     "version": "0.1.2",
+    "arch": "aarch64"
+  },
+  "Relaybase.0.1.3.aarch64.dmg": {
+    "sizeBytes": 11092968,
+    "version": "0.1.3",
+    "arch": "aarch64"
+  },
+  "Relaybase.0.1.3.aarch64.app.tar.gz": {
+    "sizeBytes": 10468456,
+    "version": "0.1.3",
     "arch": "aarch64"
   }
 }

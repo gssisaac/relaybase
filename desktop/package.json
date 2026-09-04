@@ -1,6 +1,6 @@
 {
   "name": "relaybase-desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Relaybase desktop shell (Tauri + Next.js dual-mode)",
   "packageManager": "pnpm@9.12.0",
@@ -24,6 +24,7 @@
     "upload:r2": "RELAYBASE_MAC_ARCH=aarch64 bash scripts/deploy/upload-release-r2.sh",
     "upload:r2:aarch64": "RELAYBASE_MAC_ARCH=aarch64 bash scripts/deploy/upload-release-r2.sh",
     "upload:r2:x86_64": "RELAYBASE_MAC_ARCH=x86_64 bash scripts/deploy/upload-release-r2.sh",
+    "verify:release": "node scripts/deploy/verify-release-bundle.mjs",
     "tauri": "tauri"
   },
   "devDependencies": {

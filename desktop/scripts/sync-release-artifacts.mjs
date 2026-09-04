@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { execFileSync } from 'node:child_process';
+
 import { resolveDownloadCdnBaseUrl, resolveReleaseBaseUrl } from './lib/release-base-url.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -117,6 +119,12 @@ function main() {
       if (!fs.existsSync(sigPath)) {
         console.warn(`[sync-release] Missing signature for ${archive}, expected ${sigName}`);
       } else {
+        const tgzPath = path.join(macosDir, archive);
+        execFileSync(
+          'node',
+          [path.join(root, 'scripts/deploy/verify-release-bundle.mjs'), '--tgz', tgzPath],
+          { stdio: 'inherit' },
+        );
         fs.copyFileSync(sigPath, path.join(websiteRelease, brandedSig));
         const signature = fs.readFileSync(sigPath, 'utf8').trim();
         const entry = { url: `${downloadBase}/${encodeURIComponent(brandedArchive)}`, signature };

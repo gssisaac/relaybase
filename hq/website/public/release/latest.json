@@ -1,11 +1,11 @@
 {
-  "version": "0.1.2",
-  "notes": "# Relaybase 0.1.2\n\nDesktop-only patch. Worker install bundle stays **0.1.1** — no Worker script changes.\n\n## Highlights\n- Fix install success so overwrite/reinstall always issues a new owner passtoken\n- Enable email API opens only from its button on the success screen\n- Go to Mailbox stays locked until the passtoken is copied or downloaded\n\n## Changes\n- Always show Issue passtoken on install success (remove Already installed fallback)\n- Stop auto-opening Enable email API after install\n- New `Relaybase.0.1.2.aarch64.dmg` on download CDN (avoids stale 0.1.1 cache)",
-  "pub_date": "2026-09-04T07:58:51.755Z",
+  "version": "0.1.3",
+  "notes": "# Relaybase 0.1.3\n\nHotfix release. Replaces a bad **0.1.2** CDN object that served an older build under the same filename.\n\n## Highlights\n- Correct desktop build with Settings → Update and install-success fixes\n- New download filenames (`0.1.3`) so poisoned `0.1.2` CDN cache cannot be reused\n\n## Changes\n- Ship the intended 0.1.2 desktop changes under patch **0.1.3**\n- Worker install bundle stays **0.1.1** — no Worker script changes",
+  "pub_date": "2026-09-04T16:26:33.844Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.2.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmZON3lQM2tUY29IdGNPZnJUbUhjMFhFMUpLOC9xdlNaMWhGREp1U1hPbUlmdEtic1kzdWx0emhzbHEwanFOWFJVZFNlM2xlNlJjV1R0V01Idm45M0FJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NTA4NzAxCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKL0xRMzNtWkJncTBiWnMzZzhjSFhYc1VIRjN3YjNnSXlnK0ZhVzloeGFpMi8vMTkyTlVpS0dRZFdVWHoybElUdHdJTXdzdEVnWHpkbUNleUJBRDZCQmc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.3.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmVJZkhacWFnVFlBblRJOGt3VjJBUnpkbXpxR3pETTNEczQ3ODc2VnJoWGVEQ1F1dFdycjNxeDI3Ly8rU0VuQWRGYXNldlVIWUE5ODlDeVB1cVJOTGdFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NTM5MTYzCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKUkhwaWpXQmNKcnQzRzV1Q0RUVjJzTXFONWlyeHVEbExOWTMxUytKbjVMMmhsZnJlVjJvOUoyYXJvSTV2aW50TE40cnBJUDc3SmNvRGd5NUZWZ29BQkE9PQo="
     }
   }
 }

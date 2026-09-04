@@ -1,6 +1,6 @@
 [package]
 name = "relaybase_desktop"
-version = "0.1.2"
+version = "0.1.3"
 description = "Relaybase desktop application"
 authors = ["Relaybase"]
 edition = "2021"

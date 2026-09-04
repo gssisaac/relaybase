@@ -155,6 +155,13 @@ if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then
   bash "$ROOT/scripts/deploy/notarize-dmg.sh" "$BUNDLE_ROOT/dmg"
 fi
 
+APP_BUNDLE="$BUNDLE_ROOT/macos/Relaybase.app"
+UPDATER_TGZ="$BUNDLE_ROOT/macos/Relaybase.app.tar.gz"
+echo "→ Verifying bundle version matches tauri.conf.json (${VERSION})"
+node "$ROOT/scripts/deploy/verify-release-bundle.mjs" \
+  --app "$APP_BUNDLE" \
+  --tgz "$UPDATER_TGZ"
+
 echo "→ Verifying DMG signature"
 codesign -dv --verbose=2 "$DMG" 2>&1 | head -15 || true
 if [[ "${RELAYBASE_NOTARIZE:-0}" == "1" ]]; then

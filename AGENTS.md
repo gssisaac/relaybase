@@ -74,6 +74,9 @@ Full policy: **[docs/features/mobile-companion.md](docs/features/mobile-companio
 
 Read **[desktop/docs/release.md](desktop/docs/release.md)** before any signed DMG / R2 / updater work.
 
+- **Never metadata-only desktop releases** — always run a full `RELAYBASE_NOTARIZE=1 pnpm run build:macos` in the same session as the version bump. Do not rename or re-upload an older DMG/tar.gz under a new version filename. `verify-release-bundle.mjs` gates sync and R2 upload.
+- **Never overwrite an existing `Relaybase.X.Y.Z.*` object on R2** — CDN uses `immutable` caching; the first upload for a version string can stick at the edge forever. Bump the patch and upload new keys (`0.1.3`, not re-upload `0.1.2`). `verify-cdn-release.mjs` checks the public URL after upload.
+
 - **Ship / R2 / updater (Apple Silicon):** `cd desktop && RELAYBASE_NOTARIZE=1 pnpm run build:macos` (same as `pnpm run build` inside `desktop/`). Run from a normal terminal with network — sandboxed/agent runs can fail codesign timestamp.
 - **Intel (ready, not default):** `pnpm run build:macos:x86_64` — same pipeline with `.x86_64.` artifact names. Download page keeps Intel disabled until `INTEL_MAC_DOWNLOAD_ENABLED` is flipped.
 - **Local install smoke test (not a release):** `pnpm run desktop:install:local` from repo root, or `pnpm run install:local` in `desktop/`. Output under `src-tauri/target/release/bundle/`. See *Local install test* in `desktop/docs/release.md`.

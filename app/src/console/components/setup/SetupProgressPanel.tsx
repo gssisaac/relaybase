@@ -46,7 +46,6 @@ import {
 import {
   canEnterMailboxAfterInstall,
   issuePasstokenWithRetry,
-  mustIssuePasstokenOnSetupInstall,
 } from "@/console/components/setup/install-success-gate";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
@@ -168,7 +167,6 @@ export function SetupProgressPanel({
   const [copiedToken, setCopiedToken] = useState(false);
   const [tokenDownloaded, setTokenDownloaded] = useState(false);
   const [tokenSaved, setTokenSaved] = useState(false);
-  const [needsOwnerSetup, setNeedsOwnerSetup] = useState(false);
   const [installPepper, setInstallPepper] = useState<string | null>(null);
   const [creatingOwner, setCreatingOwner] = useState(false);
   const [mailApiDone, setMailApiDone] = useState(false);
@@ -293,7 +291,6 @@ export function SetupProgressPanel({
     setWorkerOwnerConfigured(null);
     setWorkerVersions(null);
     setProbedWorkerUrl(null);
-    setNeedsOwnerSetup(false);
     setInstallPepper(null);
     setTokenSaved(false);
     setMailApiDone(false);
@@ -370,39 +367,12 @@ export function SetupProgressPanel({
     setTokenSaved(false);
     setMessage(`Connected to ${workerUrl}`);
     if (purpose === "worker-update") {
-      setNeedsOwnerSetup(false);
       setInstallPepper(null);
       setAutoDone({ workerUrl, revealedPasstoken: "" });
       router.replace(workerUpdateHomeHref);
       return;
     }
     const pepper = result.authPepper?.trim() ?? "";
-    let ownerConfigured = false;
-    try {
-      ownerConfigured = (await ownerAuthStatusForWorkerUrl(workerUrl))
-        .ownerConfigured;
-    } catch {
-      ownerConfigured = false;
-    }
-    // Overwrite / reinstall must issue a new passtoken even when D1 already
-    // has an owner. Never treat "owner already configured" as success.
-    if (
-      !mustIssuePasstokenOnSetupInstall({
-        purpose: "install",
-        ownerAlreadyConfigured: ownerConfigured,
-      })
-    ) {
-      setNeedsOwnerSetup(true);
-      setInstallPepper(pepper || null);
-      setAutoDone({ workerUrl, revealedPasstoken: "" });
-      setError({
-        title: "Could not issue a passtoken",
-        detail:
-          "Setup install must issue a new passtoken even when this Worker already has an owner.",
-        fix: "Try again from Setup. If you already have the passtoken, use Already installed.",
-      });
-      return;
-    }
     if (pepper) {
       try {
         const issued = await issuePasstokenWithRetry(desktopOwnerSetupAdmin, {
@@ -410,7 +380,6 @@ export function SetupProgressPanel({
           pepper,
         });
         setInstallPepper(null);
-        setNeedsOwnerSetup(false);
         setTokenSaved(false);
         setTokenDownloaded(false);
         setCopiedToken(false);
@@ -421,14 +390,12 @@ export function SetupProgressPanel({
         return;
       } catch (err) {
         console.error("Auto setup-admin failed, falling back to manual issue", err);
-        setNeedsOwnerSetup(true);
         setInstallPepper(pepper);
         setAutoDone({ workerUrl, revealedPasstoken: "" });
         setError(explainDesktopError(err, "Could not issue a passtoken"));
         return;
       }
     }
-    setNeedsOwnerSetup(true);
     setInstallPepper(null);
     setAutoDone({ workerUrl, revealedPasstoken: "" });
     setError({
@@ -691,7 +658,6 @@ export function SetupProgressPanel({
         pepper,
       });
       setInstallPepper(null);
-      setNeedsOwnerSetup(false);
       setTokenSaved(false);
       setTokenDownloaded(false);
       setCopiedToken(false);
@@ -1308,7 +1274,7 @@ export function SetupProgressPanel({
                     </p>
                   )}
                 </>
-              ) : needsOwnerSetup ? (
+              ) : (
                 <form
                   className="space-y-2"
                   onSubmit={(e) => {
@@ -1332,17 +1298,6 @@ export function SetupProgressPanel({
                     Issue passtoken
                   </Button>
                 </form>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Sign in with your passtoken to open the mailbox. Use{" "}
-                  <Link
-                    href="/setup/connect"
-                    className="underline underline-offset-2"
-                  >
-                    Already installed
-                  </Link>{" "}
-                  if you are not signed in yet.
-                </p>
               )}
               {mailApiVerified ? (
                 <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
@@ -1407,7 +1362,6 @@ export function SetupProgressPanel({
                 !canEnterMailboxAfterInstall({
                   revealedPasstoken: autoDone.revealedPasstoken,
                   tokenSaved,
-                  needsOwnerSetup,
                   leavingToMailbox,
                 })
               }
@@ -1418,7 +1372,6 @@ export function SetupProgressPanel({
                     !canEnterMailboxAfterInstall({
                       revealedPasstoken: passtoken,
                       tokenSaved,
-                      needsOwnerSetup,
                     })
                   ) {
                     return;

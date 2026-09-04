@@ -4,46 +4,15 @@ import { describe, it } from "node:test";
 import {
   canEnterMailboxAfterInstall,
   issuePasstokenWithRetry,
-  mustIssuePasstokenOnSetupInstall,
   shouldAutoOpenEnableEmailApiAfterInstall,
 } from "./install-success-gate.ts";
 
-describe("mustIssuePasstokenOnSetupInstall", () => {
-  it("always issues on Setup install, including overwrite of an existing owner", () => {
-    assert.equal(
-      mustIssuePasstokenOnSetupInstall({
-        purpose: "install",
-        ownerAlreadyConfigured: true,
-      }),
-      true,
-    );
-    assert.equal(
-      mustIssuePasstokenOnSetupInstall({
-        purpose: "install",
-        ownerAlreadyConfigured: false,
-      }),
-      true,
-    );
-  });
-
-  it("does not rotate passtoken on Settings Worker update", () => {
-    assert.equal(
-      mustIssuePasstokenOnSetupInstall({
-        purpose: "worker-update",
-        ownerAlreadyConfigured: true,
-      }),
-      false,
-    );
-  });
-});
-
 describe("canEnterMailboxAfterInstall", () => {
-  it("stays locked when overwrite skipped passtoken issuance", () => {
+  it("stays locked when no passtoken was issued yet", () => {
     assert.equal(
       canEnterMailboxAfterInstall({
         revealedPasstoken: "",
         tokenSaved: false,
-        needsOwnerSetup: false,
       }),
       false,
     );
@@ -54,7 +23,6 @@ describe("canEnterMailboxAfterInstall", () => {
       canEnterMailboxAfterInstall({
         revealedPasstoken: "",
         tokenSaved: false,
-        needsOwnerSetup: false,
       }),
       false,
     );
@@ -65,7 +33,6 @@ describe("canEnterMailboxAfterInstall", () => {
       canEnterMailboxAfterInstall({
         revealedPasstoken: "rb_pass_0123456789abcdef",
         tokenSaved: false,
-        needsOwnerSetup: false,
       }),
       false,
     );
@@ -76,20 +43,8 @@ describe("canEnterMailboxAfterInstall", () => {
       canEnterMailboxAfterInstall({
         revealedPasstoken: "rb_pass_0123456789abcdef",
         tokenSaved: true,
-        needsOwnerSetup: false,
       }),
       true,
-    );
-  });
-
-  it("stays locked while Issue passtoken is still required", () => {
-    assert.equal(
-      canEnterMailboxAfterInstall({
-        revealedPasstoken: "rb_pass_0123456789abcdef",
-        tokenSaved: true,
-        needsOwnerSetup: true,
-      }),
-      false,
     );
   });
 });

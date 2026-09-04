@@ -10,24 +10,12 @@
  *    The only mailbox gate is: issued passtoken copied or downloaded.
  */
 
-export function mustIssuePasstokenOnSetupInstall(opts: {
-  purpose: "install" | "worker-update";
-  /** D1 already has owner_config from a previous install. */
-  ownerAlreadyConfigured: boolean;
-}): boolean {
-  if (opts.purpose === "worker-update") return false;
-  void opts.ownerAlreadyConfigured;
-  return true;
-}
-
 export function canEnterMailboxAfterInstall(opts: {
   revealedPasstoken: string;
   tokenSaved: boolean;
-  needsOwnerSetup: boolean;
   leavingToMailbox?: boolean;
 }): boolean {
   if (opts.leavingToMailbox) return false;
-  if (opts.needsOwnerSetup) return false;
   return Boolean(opts.revealedPasstoken.trim()) && opts.tokenSaved;
 }
 

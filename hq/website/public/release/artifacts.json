@@ -1,11 +1,11 @@
 {
   "Relaybase.0.1.1.aarch64.dmg": {
-    "sizeBytes": 11097560,
+    "sizeBytes": 11093011,
     "version": "0.1.1",
     "arch": "aarch64"
   },
   "Relaybase.0.1.1.aarch64.app.tar.gz": {
-    "sizeBytes": 10467741,
+    "sizeBytes": 10468275,
     "version": "0.1.1",
     "arch": "aarch64"
   }

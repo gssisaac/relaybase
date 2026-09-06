@@ -23,7 +23,7 @@ import {
   desktopOwnerSetupAdmin,
   desktopPreviewWorkerUpdateTarget,
   desktopRegisterWorkerWithConsole,
-  desktopSaveWorkerConnection,
+  saveUserConnection,
   desktopStartCfOAuth,
   desktopVerifyWorkerConnection,
   explainCfOAuthError,
@@ -339,17 +339,18 @@ export function WorkerInstallPanel({
     await handleStartCfOAuth();
   }
 
-  function finishAfterEmailApi(opts?: { url: string; scriptName?: string }) {
+  function finishAfterEmailApi(opts?: { url: string; scriptName?: string; accountId?: string }) {
     const next = opts ?? pendingContinue;
     if (!next || finishingRef.current) return;
     finishingRef.current = true;
     void persistAndContinue(next);
   }
 
-  async function persistAndContinue(opts: { url: string; scriptName?: string }) {
-    await desktopSaveWorkerConnection({
+  async function persistAndContinue(opts: { url: string; scriptName?: string; accountId?: string }) {
+    await saveUserConnection({
       workerUrl: opts.url,
       workerScriptName: opts.scriptName,
+      accountId: opts.accountId,
     });
     void desktopRegisterWorkerWithConsole(opts.url).catch(() => {
       /* best-effort */
@@ -407,8 +408,9 @@ export function WorkerInstallPanel({
       }
 
       const result = await desktopVerifyWorkerConnection(url);
-      await desktopSaveWorkerConnection({
+      await saveUserConnection({
         workerUrl: result.workerUrl,
+        accountId: result.accountId,
         workerScriptName: result.workerScriptName,
         workerVersion: result.version,
       });
@@ -416,6 +418,7 @@ export function WorkerInstallPanel({
       const next = {
         url: result.workerUrl,
         scriptName: result.workerScriptName,
+        accountId: result.accountId,
       };
       if (purpose === "worker-update") {
         setDoneOpen(false);

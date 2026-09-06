@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { connectedCfAccountId, displayCfAccountId, mailApiReady, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl } from "./cloudflare.ts";
+import { connectedCfAccountId, displayCfAccountId, resolveEffectiveCfAccountId, mailApiReady, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl } from "./cloudflare.ts";
 
 describe("mailApiReady", () => {
   it("is ready when the token is set and the probe is not false", () => {
@@ -26,6 +26,36 @@ describe("mailApiReady", () => {
       mailApiReady({ cfApiTokenSet: true, cfApiTokenValid: false }),
       false,
     );
+  });
+});
+
+describe("resolveEffectiveCfAccountId", () => {
+  it("prefers workerAccountId, then credentials accountId, then OAuth accountId", () => {
+    assert.equal(
+      resolveEffectiveCfAccountId({
+        workerAccountId: "aa".repeat(16),
+        credentialsAccountId: "bb".repeat(16),
+        cfOauthAccountId: "cc".repeat(16),
+      }),
+      "aa".repeat(16),
+    );
+    assert.equal(
+      resolveEffectiveCfAccountId({
+        workerAccountId: "",
+        credentialsAccountId: "bb".repeat(16),
+        cfOauthAccountId: "cc".repeat(16),
+      }),
+      "bb".repeat(16),
+    );
+    assert.equal(
+      resolveEffectiveCfAccountId({
+        workerAccountId: "",
+        credentialsAccountId: "",
+        cfOauthAccountId: "cc".repeat(16),
+      }),
+      "cc".repeat(16),
+    );
+    assert.equal(resolveEffectiveCfAccountId(null), "");
   });
 });
 

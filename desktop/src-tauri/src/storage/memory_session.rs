@@ -62,18 +62,12 @@ pub fn apply_cf_oauth_session(creds: &mut StoredCredentials) {
         creds.cf_oauth_refresh_token = session.refresh_token.clone();
         creds.cf_oauth_access_expires_at = session.access_expires_at.clone();
         creds.cf_oauth_account_id = session.account_id.clone();
-        if !session.account_id.is_empty() {
-            creds.account_id = session.account_id.clone();
-        }
     }
     if creds.cf_oauth_refresh_token.trim().is_empty() {
         if let Ok(Some(keyring_blob)) = load_keyring_oauth_refresh() {
             creds.cf_oauth_refresh_token = keyring_blob.refresh_token;
             if !keyring_blob.account_id.is_empty() {
-                creds.cf_oauth_account_id = keyring_blob.account_id.clone();
-                if creds.account_id.is_empty() {
-                    creds.account_id = keyring_blob.account_id;
-                }
+                creds.cf_oauth_account_id = keyring_blob.account_id;
             }
         }
     }

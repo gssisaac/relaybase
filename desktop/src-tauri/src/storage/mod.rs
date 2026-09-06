@@ -16,10 +16,12 @@ pub mod layout;
 pub mod mail_store;
 pub mod memory_session;
 pub mod prefs;
+pub mod user_data;
 pub mod vault;
 pub mod webkit;
 
 pub use commands::*;
+pub use user_data::*;
 pub use credentials::{
     clear_all_relaybase_data, clear_credentials, clear_team_login, load_credentials,
     load_credentials_merged, load_team_login, save_credentials, save_team_login,

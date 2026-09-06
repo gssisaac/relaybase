@@ -496,30 +496,10 @@ pub async fn save_worker_connection(
     worker_script_name: Option<String>,
     worker_version: Option<String>,
 ) -> Result<StoredCredentials, String> {
-    let base = normalize_worker_url(&worker_url)?;
-    // Prefer merging into existing creds, but never block a successful verify
-    // on a legacy/unreadable workspace.json — overwrite with what we know.
-    let mut creds = match load_credentials() {
-        Ok(existing) => existing.unwrap_or_default(),
-        Err(e) => {
-            log::warn!("load_credentials failed during save_worker_connection: {e}");
-            StoredCredentials::default()
-        }
-    };
-    creds.worker_url = base;
-    creds.worker_script_name = worker_script_name
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if creds.worker_script_name.is_empty() {
-        creds.worker_script_name = "relaybase-api".into();
-    }
-    if let Some(version) = worker_version {
-        let v = version.trim();
-        if !v.is_empty() {
-            creds.worker_version = v.to_string();
-        }
-    }
-    save_credentials(&creds)?;
-    load_credentials_merged()
+    crate::storage::save_user_connection_data(
+        &worker_url,
+        None,
+        worker_script_name.as_deref(),
+        worker_version.as_deref(),
+    )
 }

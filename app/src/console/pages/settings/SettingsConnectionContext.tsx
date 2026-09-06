@@ -15,7 +15,7 @@ import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
   desktopGetCredentials,
   desktopPushServerToken,
-  desktopSaveWorkerConnection,
+  saveUserConnection,
   desktopStartCfOAuth,
   listenCfOAuthResult,
   desktopVerifyCfToken,
@@ -327,8 +327,9 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     setWorkerMessage(null);
     try {
       const result = await desktopVerifyWorkerConnection(workerUrl);
-      await desktopSaveWorkerConnection({
+      await saveUserConnection({
         workerUrl: result.workerUrl,
+        accountId: result.accountId,
         workerScriptName: result.workerScriptName,
         workerVersion: result.version,
       });

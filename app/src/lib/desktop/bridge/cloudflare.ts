@@ -181,26 +181,45 @@ export function mailApiReady(result: {
   return true;
 }
 
-/** Worker-reported id, else desktop credentials. For dashboard links only. */
-export function displayCfAccountId(opts: {
+/**
+ * Single source of truth for resolving the effective Cloudflare Account ID:
+ * 1. Worker pinned/reported account ID (from /console/connect)
+ * 2. Saved workspace account ID (from ~/.relaybase/workspace.json)
+ * 3. In-memory OAuth session account ID (fallback)
+ */
+export function resolveEffectiveCfAccountId(opts?: {
   workerAccountId?: string | null;
   credentialsAccountId?: string | null;
-}): string {
-  return (
-    opts.workerAccountId?.trim() || opts.credentialsAccountId?.trim() || ""
-  );
-}
-
-/** Account this Mac connected via Cloudflare OAuth (`workspace.json`). */
-export function connectedCfAccountId(credentials?: {
   accountId?: string | null;
   cfOauthAccountId?: string | null;
 } | null): string {
+  if (!opts) return "";
   return (
-    credentials?.accountId?.trim() ||
-    credentials?.cfOauthAccountId?.trim() ||
+    opts.workerAccountId?.trim() ||
+    opts.credentialsAccountId?.trim() ||
+    opts.accountId?.trim() ||
+    opts.cfOauthAccountId?.trim() ||
     ""
   );
+}
+
+/** Worker-reported id, else desktop credentials. For dashboard links and status display. */
+export function displayCfAccountId(opts: {
+  workerAccountId?: string | null;
+  credentialsAccountId?: string | null;
+  accountId?: string | null;
+  cfOauthAccountId?: string | null;
+}): string {
+  return resolveEffectiveCfAccountId(opts);
+}
+
+/** Account this Mac connected via Cloudflare OAuth / Worker pin (`workspace.json`). */
+export function connectedCfAccountId(credentials?: {
+  accountId?: string | null;
+  cfOauthAccountId?: string | null;
+  workerAccountId?: string | null;
+} | null): string {
+  return resolveEffectiveCfAccountId(credentials);
 }
 
 /** Cloudflare dashboard → this account's Email Sending page. */

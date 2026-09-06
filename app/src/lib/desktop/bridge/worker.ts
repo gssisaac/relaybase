@@ -188,44 +188,15 @@ export async function desktopVerifyWorkerConnection(
   };
 }
 
+import { saveUserConnection } from "../user-data";
+
 export async function desktopSaveWorkerConnection(input: {
   workerUrl: string;
+  accountId?: string;
   workerScriptName?: string;
   workerVersion?: string;
 }): Promise<DesktopCredentials> {
-  if (isDesktopRuntime()) {
-    return invoke("save_worker_connection", {
-      workerUrl: input.workerUrl,
-      workerScriptName: input.workerScriptName ?? null,
-      workerVersion: input.workerVersion?.trim() ? input.workerVersion.trim() : null,
-    });
-  }
-  const existing = await loadLocalCredentialsFile();
-  const next: DesktopCredentials = {
-    accountId: existing?.accountId ?? "",
-    installToken: existing?.installToken ?? "",
-    workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
-    workerScriptName:
-      input.workerScriptName?.trim() || existing?.workerScriptName || "",
-    workerVersion:
-      input.workerVersion?.trim() || existing?.workerVersion || "",
-    relaybaseAccountId: existing?.relaybaseAccountId ?? "",
-    relaybaseEmail: existing?.relaybaseEmail ?? "",
-    relaybaseSession: existing?.relaybaseSession ?? "",
-    cfOauthAccessToken: existing?.cfOauthAccessToken ?? "",
-    cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
-    cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
-    cfOauthAccountId: existing?.cfOauthAccountId ?? "",
-  };
-  const res = await fetch("/api/local-credentials", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to save credentials to ~/.relaybase");
-  }
-  return next;
+  return saveUserConnection(input);
 }
 
 export async function desktopWorkerRequest(input: {

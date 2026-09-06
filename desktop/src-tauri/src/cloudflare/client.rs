@@ -74,6 +74,54 @@ async fn cf_get_status(client: &CfClient, path: &str) -> Result<reqwest::StatusC
     Ok(res.status())
 }
 
+async fn probe_edit_permission(client: &CfClient, path: &str) -> Result<bool, String> {
+    let url = format!("{CF_API}{path}");
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+    let res = http
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", client.api_token))
+        .header("Content-Type", "application/json")
+        .json(&json!({}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let status = res.status();
+    if status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::UNAUTHORIZED {
+        return Ok(false);
+    }
+    let value: Value = res.json().await.unwrap_or_else(|_| json!({}));
+    if let Some(errors) = value.get("errors").and_then(|e| e.as_array()) {
+        for err in errors {
+            if let Some(code) = err.get("code").and_then(|c| c.as_i64()) {
+                if code == 9109 || code == 10000 || code == 10001 {
+                    return Ok(false);
+                }
+            }
+            if let Some(msg) = err.get("message").and_then(|m| m.as_str()) {
+                let lower = msg.to_lowercase();
+                if lower.contains("unauthorized")
+                    || lower.contains("permission")
+                    || lower.contains("forbidden")
+                    || lower.contains("authentication")
+                {
+                    return Ok(false);
+                }
+            }
+        }
+    }
+    if status == reqwest::StatusCode::BAD_REQUEST
+        || status == reqwest::StatusCode::UNPROCESSABLE_ENTITY
+        || status.is_success()
+    {
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 pub async fn verify_token(
     account_id: &str,
     api_token: &str,
@@ -107,46 +155,42 @@ pub async fn verify_token(
             let first_zone_name = &zones[0].name;
 
             // 1. Probe Email Routing permissions
-            match cf_request(
+            match probe_edit_permission(
                 &client,
-                reqwest::Method::GET,
-                &format!("/zones/{first_zone}/email/routing"),
-                None,
+                &format!("/zones/{first_zone}/email/routing/rules"),
             )
             .await
             {
-                Ok(_) => {
-                    checked.push("Email Routing");
+                Ok(true) => {
+                    checked.push("Email Routing Rules Edit");
                 }
-                Err(err) => {
+                _ => {
                     return Ok(TokenVerifyResult {
                         ok: false,
                         account_id: account_id.to_string(),
                         message: format!(
-                            "Token lacks Email Routing permissions on zone '{first_zone_name}'. Ensure Zone → Email Routing Rules → Edit permission is granted. ({err})"
+                            "Token lacks Email Routing Edit permissions on zone '{first_zone_name}'. Ensure Zone → Email Routing Rules → Edit permission is granted."
                         ),
                     });
                 }
             }
 
             // 2. Probe DNS permissions
-            match cf_request(
+            match probe_edit_permission(
                 &client,
-                reqwest::Method::GET,
-                &format!("/zones/{first_zone}/dns_records?per_page=1"),
-                None,
+                &format!("/zones/{first_zone}/dns_records"),
             )
             .await
             {
-                Ok(_) => {
-                    checked.push("DNS");
+                Ok(true) => {
+                    checked.push("DNS Edit");
                 }
-                Err(err) => {
+                _ => {
                     return Ok(TokenVerifyResult {
                         ok: false,
                         account_id: account_id.to_string(),
                         message: format!(
-                            "Token lacks DNS permissions on zone '{first_zone_name}'. Ensure Zone → DNS → Edit permission is granted. ({err})"
+                            "Token lacks DNS Edit permissions on zone '{first_zone_name}'. Ensure Zone → DNS → Edit permission is granted."
                         ),
                     });
                 }

@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -166,10 +167,15 @@ export function EnableEmailApiDialog({
       if (!mailApiReady(result)) {
         throw new Error("Cloudflare API is not ready on this Worker.");
       }
+      toast.success("Cloudflare API token and permissions verified successfully.");
       onVerified();
       onOpenChange(false);
     } catch (err) {
-      setVerifyError(explainDesktopError(err, "Could not verify Cloudflare API"));
+      const errorHelp = explainDesktopError(err, "Could not verify Cloudflare API");
+      setVerifyError(errorHelp);
+      toast.error(errorHelp.title, {
+        description: errorHelp.detail,
+      });
     } finally {
       setVerifyBusy(false);
     }
@@ -383,8 +389,10 @@ export function EnableEmailApiDialog({
                 disabled={busy || !canVerify}
                 onClick={() => void handleVerify()}
               >
-                {verifyBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                I have done this — verify
+                {verifyBusy ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : null}
+                {verifyBusy ? "Verifying…" : "I have done this — verify"}
               </Button>
             </div>
           ) : null}

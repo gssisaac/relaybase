@@ -1,6 +1,6 @@
 "use client";
 
-import { Shield } from "lucide-react";
+import { Loader2, Shield } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,13 +15,17 @@ import {
   maskAccountId,
 } from "@/console/pages/settings/settings-shared";
 import { displayCfAccountId } from "@/lib/desktop/bridge";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 export function SettingsCloudflarePage() {
   const {
     credentials,
     workerStatus,
     cfConnected,
-    handleRefreshStatus,
+    cfBusy,
+    cfError,
+    cfMessage,
+    handleVerifyCf,
     resetCfDraft,
   } = useSettingsConnection();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
@@ -61,12 +65,20 @@ export function SettingsCloudflarePage() {
         }
       >
         <HealthStatus
-          tone={cfConnected ? "ok" : "bad"}
-          label={cfConnected ? "Configured" : "Not configured"}
+          tone={cfBusy ? "pending" : cfConnected ? "ok" : "bad"}
+          label={
+            cfBusy
+              ? "Verifying API token…"
+              : cfConnected
+                ? "Configured"
+                : "Not configured"
+          }
           detail={
-            cfConnected
-              ? "The API token is set on the Worker and Cloudflare accepted it."
-              : "Use Enable email API to add the token, then verify."
+            cfBusy
+              ? "Probing Cloudflare API token permissions on the Worker."
+              : cfConnected
+                ? "The API token is set on the Worker and Cloudflare accepted it."
+                : "Use Enable email API to add the token, then verify."
           }
         />
 
@@ -88,10 +100,18 @@ export function SettingsCloudflarePage() {
           </div>
         ) : null}
 
+        <DesktopErrorBanner error={cfError} />
+        {cfMessage ? (
+          <p className="text-sm text-emerald-700 dark:text-emerald-400">
+            {cfMessage}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             size="sm"
+            disabled={cfBusy}
             onClick={() => {
               resetCfDraft();
               openEnableEmailApiDialog({
@@ -107,8 +127,12 @@ export function SettingsCloudflarePage() {
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => void handleRefreshStatus()}
+            disabled={cfBusy}
+            onClick={() => void handleVerifyCf()}
           >
+            {cfBusy ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : null}
             Verify again
           </Button>
         </div>

@@ -18,16 +18,17 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CF_API_TOKENS_URL,
-  CF_REQUIRED_TOKEN_PERMISSIONS,
+  cfTokenPermissionChecks,
   cloudflareWorkerSettingsUrl,
   desktopOpenExternal,
   desktopVerifyWorkerConnection,
   explainDesktopError,
+  cfTokenPermissionErrorHelp,
   isCloudflareAuthExpired,
   mailApiReady,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
-import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { CfApiTokenPermissionRows, DesktopErrorBanner } from "@/lib/desktop/shell";
 
 function CreateCustomTokenGuide() {
   return (
@@ -44,29 +45,14 @@ function CreateCustomTokenGuide() {
         grant these 3 required permissions:
       </p>
       <div className="rounded-md border border-border/70 bg-muted/30 p-2.5">
-        <ul className="space-y-1.5 text-xs">
-          <li className="flex items-start gap-2">
-            <span className="mt-1 size-1.5 shrink-0 rounded-full bg-brand" />
-            <div>
-              <span className="font-medium text-foreground">Zone — Email Routing Rules — Edit</span>
-              <p className="text-[11px] text-muted-foreground">Creates and manages inbox routing rules for each address</p>
-            </div>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="mt-1 size-1.5 shrink-0 rounded-full bg-brand" />
-            <div>
-              <span className="font-medium text-foreground">Zone — Zone — Read</span>
-              <p className="text-[11px] text-muted-foreground">Looks up zone IDs for your domains</p>
-            </div>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="mt-1 size-1.5 shrink-0 rounded-full bg-brand" />
-            <div>
-              <span className="font-medium text-foreground">Zone — DNS — Edit</span>
-              <p className="text-[11px] text-muted-foreground">Resolves MX conflicts and configures DMARC records</p>
-            </div>
-          </li>
-        </ul>
+        <CfApiTokenPermissionRows
+          checks={cfTokenPermissionChecks({
+            zoneRead: "ok",
+            emailRoutingEdit: "ok",
+            dnsEdit: "ok",
+          })}
+          variant="reference"
+        />
         <div className="mt-2.5 border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
           <span className="font-medium text-foreground">Zone Resources:</span> Set to{" "}
           <span className="font-medium text-foreground">Include — All zones</span> (or include all domains you plan to use).
@@ -160,9 +146,12 @@ export function EnableEmailApiDialog({
         );
       }
       if (result.cfApiTokenValid === false) {
-        throw new Error(
-          "CF_API_TOKEN is set but Cloudflare rejected it. Please verify that your token has 'Zone → Email Routing Rules → Edit', 'Zone → Zone → Read', and 'Zone → DNS → Edit' permissions on your zones.",
-        );
+        const help = cfTokenPermissionErrorHelp(result.cfApiTokenPermissions, {
+          workerVersion: result.version,
+        });
+        setVerifyError(help);
+        toast.error(help.title, { description: help.detail });
+        return;
       }
       if (!mailApiReady(result)) {
         throw new Error("Cloudflare API is not ready on this Worker.");

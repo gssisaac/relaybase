@@ -1,5 +1,10 @@
 import {
   cloudflareR2DashboardUrl,
+  CF_API_TOKENS_URL,
+  cfTokenPermissionChecks,
+  isCfTokenPermissionFailure,
+  type CfApiTokenPermissions,
+  type CfTokenPermissionCheck,
   isCloudflareAuthExpired,
 } from "./cloudflare";
 import { formatDesktopError } from "./invoke";
@@ -19,6 +24,8 @@ export type DesktopErrorHelp = {
   versions?: { current: string; latest: string };
   /** Cloudflare API token scopes to grant when the error is auth/permission related. */
   permissions?: readonly string[];
+  /** Per-row Cloudflare token permission probe, shown as dashboard-style rows. */
+  permissionChecks?: readonly CfTokenPermissionCheck[];
 };
 
 function stripRawApiNoise(raw: string): string {
@@ -43,6 +50,54 @@ function accountIdFromCfError(raw: string): string {
   if (dash?.[1]) return dash[1];
   const accounts = raw.match(/\/accounts\/([a-f0-9]{32})\//i);
   return accounts?.[1] ?? "";
+}
+
+export function cfTokenPermissionErrorHelp(
+  probe?: CfApiTokenPermissions | null,
+  options?: { workerVersion?: string | null },
+): DesktopErrorHelp {
+  const checks = cfTokenPermissionChecks(probe);
+  const failing = checks.filter((row) => isCfTokenPermissionFailure(row.status));
+
+  let title = "Cloudflare token permissions missing";
+  if (failing.length === 1) {
+    const row = failing[0];
+    title =
+      row.status === "read_only"
+        ? `${row.name} is Read, not ${row.requiredAccess}`
+        : `${row.name} permission is missing`;
+  }
+
+  const workerVersion = options?.workerVersion?.trim() || "";
+  const versionHint = workerVersion
+    ? ` Running Worker v${workerVersion}.`
+    : "";
+
+  const detail =
+    failing.length === 1
+      ? failing[0].status === "read_only"
+        ? `Your token has ${failing[0].category} → ${failing[0].name} set to Read. Change it to ${failing[0].requiredAccess}.`
+        : failing[0].status === "missing"
+          ? `Your token is missing ${failing[0].category} → ${failing[0].name} → ${failing[0].requiredAccess}. Add that permission row.`
+          : "Cloudflare rejected one or more API token permissions on this Worker."
+      : failing.length > 0
+        ? "Cloudflare rejected one or more API token permissions on this Worker."
+        : probe
+          ? `CF_API_TOKEN is set on the Worker, but Cloudflare rejected the probe.${versionHint}`
+          : `CF_API_TOKEN is set on the Worker, but Cloudflare rejected the probe.${versionHint} Update the Worker (Settings → Worker update), then verify again so Relaybase can show which row failed.`;
+
+  const fix =
+    failing.length > 0
+      ? "Open Cloudflare → API Tokens, edit this token using the row below, then verify again."
+      : `Deploy the latest Worker (Settings → Worker update), then verify again.${versionHint ? ` Current: v${workerVersion}.` : ""}`;
+
+  return {
+    title,
+    detail,
+    fix,
+    permissionChecks: failing.length > 0 ? failing : undefined,
+    links: [{ label: "Open Cloudflare API Tokens", href: CF_API_TOKENS_URL }],
+  };
 }
 
 export function oauthAuthorizationIncompleteHelp(

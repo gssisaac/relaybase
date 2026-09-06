@@ -14,7 +14,7 @@ import {
   SummaryRow,
   maskAccountId,
 } from "@/console/pages/settings/settings-shared";
-import { displayCfAccountId, cloudflareWorkerSettingsUrl } from "@/lib/desktop/bridge";
+import { displayCfAccountId, cloudflareWorkerSettingsUrl, cfApiTokenHealth, cfApiTokenPermissionsRejected } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 export function SettingsCloudflarePage() {
@@ -41,6 +41,9 @@ export function SettingsCloudflarePage() {
     "relaybase-api";
   const workerUrl =
     workerStatus?.workerUrl?.trim() || credentials?.workerUrl?.trim() || "";
+  const cfHealth = cfApiTokenHealth(workerStatus, { pending: cfBusy });
+  const cfTokenOnWorker = Boolean(workerStatus?.cfApiTokenSet);
+  const cfPermissionsRejected = cfApiTokenPermissionsRejected(workerStatus);
 
   return (
     <SettingsPageBody>
@@ -69,38 +72,37 @@ export function SettingsCloudflarePage() {
         }
       >
         <HealthStatus
-          tone={cfBusy ? "pending" : cfConnected ? "ok" : "bad"}
-          label={
-            cfBusy
-              ? "Verifying API token…"
-              : cfConnected
-                ? "Configured"
-                : "Not configured"
-          }
-          detail={
-            cfBusy
-              ? "Probing Cloudflare API token permissions on the Worker."
-              : cfConnected
-                ? "The API token is set on the Worker and Cloudflare accepted it."
-                : "Use Enable email API to add the token, then verify."
-          }
+          tone={cfHealth.tone}
+          label={cfHealth.label}
+          detail={cfHealth.detail}
         />
 
-        {cfConnected ? (
+        {cfConnected || cfTokenOnWorker ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <SummaryRow
               label="Account ID"
               value={accountId ? maskAccountId(accountId) : "—"}
             />
-            <SummaryRow label="API token" value="Set on Worker" />
             <SummaryRow
-              label="Sending"
+              label="API token"
               value={
-                workerStatus?.emailBindingConfigured
-                  ? "EMAIL binding"
-                  : "REST fallback (no EMAIL binding)"
+                cfConnected
+                  ? "Set on Worker"
+                  : cfPermissionsRejected
+                    ? "Set on Worker — permissions rejected"
+                    : "Set on Worker"
               }
             />
+            {cfConnected ? (
+              <SummaryRow
+                label="Sending"
+                value={
+                  workerStatus?.emailBindingConfigured
+                    ? "EMAIL binding"
+                    : "REST fallback (no EMAIL binding)"
+                }
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -125,7 +127,9 @@ export function SettingsCloudflarePage() {
               });
             }}
           >
-            {cfConnected ? "Set up again" : "Enable email API"}
+            {cfConnected || cfPermissionsRejected
+              ? "Set up again"
+              : "Enable email API"}
           </Button>
           <Button
             type="button"

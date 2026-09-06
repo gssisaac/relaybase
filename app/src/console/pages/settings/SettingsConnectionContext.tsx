@@ -21,6 +21,7 @@ import {
   desktopVerifyCfToken,
   desktopVerifyWorkerConnection,
   desktopOpenExternal,
+  cfTokenPermissionErrorHelp,
   explainDesktopError,
   explainCfOAuthError,
   isCloudflareAuthExpired,
@@ -370,12 +371,11 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
         return false;
       }
       if (result.cfApiTokenValid === false) {
-        setCfError({
-          title: "Cloudflare token permissions missing",
-          detail:
-            "CF_API_TOKEN is set on the Worker, but Cloudflare rejected the probe. The token lacks required permissions.",
-          fix: "Ensure your token has Zone → Email Routing Rules → Edit, Zone → Zone → Read, and Zone → DNS → Edit permissions on your zones.",
-        });
+        setCfError(
+          cfTokenPermissionErrorHelp(result.cfApiTokenPermissions, {
+            workerVersion: result.version,
+          }),
+        );
         await refreshConnectionStatus();
         return false;
       }

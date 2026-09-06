@@ -5,6 +5,7 @@ export {
   useOptionalDesktop,
 } from "./DesktopContext";
 export { DesktopErrorBanner } from "./DesktopErrorBanner";
+export { CfApiTokenPermissionRows } from "./CfApiTokenPermissionRows";
 export {
   clearDesktopSessionCache,
   clearScopeDependentLocalStorage,

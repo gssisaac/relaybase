@@ -89,15 +89,135 @@ export type WorkerUpdateCheck = {
   zipSha256?: string | null;
 };
 
+export type CfTokenPermissionStatus =
+  | "ok"
+  | "missing"
+  | "read_only"
+  | "skipped"
+  | "unknown";
+
+export type CfApiTokenPermissions = {
+  zoneRead: CfTokenPermissionStatus;
+  emailRoutingEdit: CfTokenPermissionStatus;
+  dnsEdit: CfTokenPermissionStatus;
+};
+
+export type CfTokenPermissionCheckId =
+  | "emailRoutingEdit"
+  | "zoneRead"
+  | "dnsEdit";
+
+export type CfTokenPermissionCheck = {
+  id: CfTokenPermissionCheckId;
+  category: "Zone";
+  name: "Email Routing Rules" | "Zone" | "DNS";
+  requiredAccess: "Edit" | "Read";
+  status: CfTokenPermissionStatus;
+};
+
+export const CF_TOKEN_PERMISSION_DEFS: readonly Omit<
+  CfTokenPermissionCheck,
+  "status"
+>[] = [
+  {
+    id: "emailRoutingEdit",
+    category: "Zone",
+    name: "Email Routing Rules",
+    requiredAccess: "Edit",
+  },
+  {
+    id: "zoneRead",
+    category: "Zone",
+    name: "Zone",
+    requiredAccess: "Read",
+  },
+  {
+    id: "dnsEdit",
+    category: "Zone",
+    name: "DNS",
+    requiredAccess: "Edit",
+  },
+] as const;
+
 /**
  * Optional Cloudflare API token scopes for Zone / Email Routing assist
  * (Domains import, routing automation, DMARC DNS). Not required for Worker self-install.
  */
-export const CF_REQUIRED_TOKEN_PERMISSIONS = [
-  "Zone — Email Routing Rules — Edit",
-  "Zone — Zone — Read",
-  "Zone — DNS — Edit",
-] as const;
+export const CF_REQUIRED_TOKEN_PERMISSIONS = CF_TOKEN_PERMISSION_DEFS.map(
+  (row) => `${row.category} — ${row.name} — ${row.requiredAccess}`,
+);
+
+const CF_TOKEN_PERMISSION_STATUSES = new Set<CfTokenPermissionStatus>([
+  "ok",
+  "missing",
+  "read_only",
+  "skipped",
+  "unknown",
+]);
+
+function asCfTokenPermissionStatus(value: unknown): CfTokenPermissionStatus {
+  return typeof value === "string" &&
+    CF_TOKEN_PERMISSION_STATUSES.has(value as CfTokenPermissionStatus)
+    ? (value as CfTokenPermissionStatus)
+    : "unknown";
+}
+
+export function parseCfApiTokenPermissions(
+  value: unknown,
+): CfApiTokenPermissions | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  if (
+    !("zoneRead" in raw) &&
+    !("emailRoutingEdit" in raw) &&
+    !("dnsEdit" in raw)
+  ) {
+    return undefined;
+  }
+  return {
+    zoneRead: asCfTokenPermissionStatus(raw.zoneRead),
+    emailRoutingEdit: asCfTokenPermissionStatus(raw.emailRoutingEdit),
+    dnsEdit: asCfTokenPermissionStatus(raw.dnsEdit),
+  };
+}
+
+export function cfTokenPermissionChecks(
+  probe?: CfApiTokenPermissions | null,
+): CfTokenPermissionCheck[] {
+  return CF_TOKEN_PERMISSION_DEFS.map((row) => ({
+    ...row,
+    status: probe ? probe[row.id] : "unknown",
+  }));
+}
+
+export function isCfTokenPermissionFailure(
+  status: CfTokenPermissionStatus,
+): boolean {
+  return status === "missing" || status === "read_only";
+}
+
+/** Third-column label for permission error rows (e.g. Read → Edit, Missing → Edit). */
+export function formatCfTokenAccessFix(check: CfTokenPermissionCheck): string {
+  if (check.status === "read_only") {
+    return `Read → ${check.requiredAccess}`;
+  }
+  if (check.status === "missing") {
+    return `Missing → ${check.requiredAccess}`;
+  }
+  return check.requiredAccess;
+}
+
+export function describeCfTokenPermissionFailure(
+  check: CfTokenPermissionCheck,
+): string | null {
+  if (check.status === "read_only") {
+    return `${check.category} → ${check.name} is set to Read; it must be ${check.requiredAccess}.`;
+  }
+  if (check.status === "missing") {
+    return `${check.category} → ${check.name} → ${check.requiredAccess} is missing.`;
+  }
+  return null;
+}
 
 /** Scopes needed for desktop auto-install (Wrangler deploy + R2 + D1). */
 export const CF_INSTALL_TOKEN_PERMISSIONS = [
@@ -182,6 +302,58 @@ export function mailApiReady(result: {
   if (!result.cfApiTokenSet) return false;
   if (result.cfApiTokenValid === false) return false;
   return true;
+}
+
+export type CfApiTokenProbeState = {
+  cfApiTokenSet?: boolean;
+  cfApiTokenValid?: boolean;
+};
+
+/** True when CF_API_TOKEN exists on the Worker but Cloudflare rejected the probe. */
+export function cfApiTokenPermissionsRejected(
+  state: CfApiTokenProbeState | null | undefined,
+): boolean {
+  return Boolean(state?.cfApiTokenSet) && state?.cfApiTokenValid === false;
+}
+
+export type CfApiTokenHealth = {
+  tone: "ok" | "bad" | "pending";
+  label: string;
+  detail: string;
+};
+
+/** Settings / dashboard copy for CF_API_TOKEN presence and permission probes. */
+export function cfApiTokenHealth(
+  state: CfApiTokenProbeState | null | undefined,
+  options?: { pending?: boolean },
+): CfApiTokenHealth {
+  if (options?.pending) {
+    return {
+      tone: "pending",
+      label: "Verifying API token…",
+      detail: "Probing Cloudflare API token permissions on the Worker.",
+    };
+  }
+  if (!state?.cfApiTokenSet) {
+    return {
+      tone: "bad",
+      label: "Not configured",
+      detail: "Use Enable email API to add the token, then verify.",
+    };
+  }
+  if (state.cfApiTokenValid === false) {
+    return {
+      tone: "bad",
+      label: "Permissions need fixing",
+      detail:
+        "CF_API_TOKEN is on the Worker, but Cloudflare rejected one or more permissions. Verify again to see which row to fix.",
+    };
+  }
+  return {
+    tone: "ok",
+    label: "Configured",
+    detail: "The API token is set on the Worker and Cloudflare accepted it.",
+  };
 }
 
 /**

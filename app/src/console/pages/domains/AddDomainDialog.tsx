@@ -1,9 +1,13 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { ExternalLink, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { useDomain } from "@/lib/dashboard/DomainContext";
+import {
+  GOOGLE_WORKSPACE_MIGRATION_DOC_URL,
+  desktopOpenExternal,
+} from "@/lib/desktop/bridge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -106,9 +110,25 @@ export function AddDomainDialog({
         <Button className="w-full" disabled={!canSubmit} onClick={handleSubmit}>
           Add domain
         </Button>
-        <p className="text-xs text-muted-foreground">
-          Only domains already managed on your Cloudflare account can be added.
-        </p>
+        <div className="rounded-md border border-border/70 bg-muted/30 p-2.5 text-xs space-y-1.5">
+          <p className="text-muted-foreground">
+            Only domains already managed on your Cloudflare account can be added.
+          </p>
+          <p className="text-muted-foreground leading-relaxed">
+            Using Google Workspace or another mail provider? Root domains cannot share MX records with Email Routing.{" "}
+            <button
+              type="button"
+              className="inline-flex items-center gap-0.5 font-medium text-brand hover:underline"
+              onClick={() =>
+                void desktopOpenExternal(GOOGLE_WORKSPACE_MIGRATION_DOC_URL)
+              }
+            >
+              Read Coexistence Guide
+              <ExternalLink className="size-2.5" />
+            </button>{" "}
+            or add a subdomain (e.g. <span className="font-mono">mail.yourdomain.com</span>).
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   );

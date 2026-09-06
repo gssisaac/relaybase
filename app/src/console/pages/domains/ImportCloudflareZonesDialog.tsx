@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, RefreshCw } from "lucide-react";
+import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -15,7 +15,9 @@ import {
   loadWorkerVersionCompare,
 } from "@/lib/dashboard/list-cf-zones";
 import {
+  GOOGLE_WORKSPACE_MIGRATION_DOC_URL,
   connectedCfAccountId,
+  desktopOpenExternal,
   explainDesktopError,
   type DesktopErrorHelp,
   type ZoneSummary,
@@ -205,6 +207,21 @@ export function ImportCloudflareZonesDialog({
             {selectedNames.length > 0 ? ` (${selectedNames.length})` : ""}
           </Button>
         ) : null}
+        <div className="rounded-md border border-border/70 bg-muted/30 p-2.5 text-xs space-y-1">
+          <p className="text-muted-foreground leading-relaxed">
+            Note: If any zone already has Google Workspace or other mail provider MX records, apex MX records must be replaced to enable Email Routing. To keep Google Workspace active, use a subdomain instead.{" "}
+            <button
+              type="button"
+              className="inline-flex items-center gap-0.5 font-medium text-brand hover:underline"
+              onClick={() =>
+                void desktopOpenExternal(GOOGLE_WORKSPACE_MIGRATION_DOC_URL)
+              }
+            >
+              Learn more
+              <ExternalLink className="size-2.5" />
+            </button>
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   );

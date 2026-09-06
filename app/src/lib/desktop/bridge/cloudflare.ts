@@ -3,6 +3,9 @@ import { formatDesktopError } from "./invoke";
 export const CF_API_TOKENS_URL =
   "https://dash.cloudflare.com/profile/api-tokens";
 
+export const GOOGLE_WORKSPACE_MIGRATION_DOC_URL =
+  "https://relaybase.xyz/resources/google-workspace-coexistence-and-migration";
+
 const GITHUB_WORKER_REPO = "strum-us/relaybase-worker";
 
 /** Latest GitHub Release install ZIP (stable filename). */

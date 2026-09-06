@@ -7,6 +7,7 @@ import { useAppSession } from "@/lib/desktop/app-session";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import {
   DomainStore,
+  DomainMxConflictError,
   type DomainAddJob,
   type DomainOnboardingStep,
   type DomainOnboardingSummary,
@@ -34,6 +35,7 @@ export {
   DEFAULT_ADDRESS_DISPLAY_NAMES,
   DEFAULT_ADDRESS_LOCAL_PARTS,
   DomainStore,
+  DomainMxConflictError,
   defaultInboundEnabledForLocalPart,
   suggestedDisplayNameForLocalPart,
 } from "@/lib/dashboard/domain-store";
@@ -121,6 +123,9 @@ export function useDomain(): DomainStore {
         ]),
         isWorking: store.isWorking,
         hasProgress: store.hasProgress,
+        mxConflictDomain: store.mxConflictDomain,
+        mxConflictsCount: store.mxConflicts.length,
+        mxResolving: store.mxResolving,
       }),
       () => setTick((t) => t + 1),
     );

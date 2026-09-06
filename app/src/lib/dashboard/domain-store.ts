@@ -37,6 +37,18 @@ export type OnboardingOverallStatus =
 
 export type OnboardingFailureCode = "ZONE_NOT_FOUND" | "MX_CONFLICT";
 
+export class DomainMxConflictError extends Error {
+  mxConflicts: MxConflictRecord[];
+  domain: string;
+
+  constructor(domain: string, mxConflicts: MxConflictRecord[]) {
+    super("Non-Cloudflare MX records exist for this domain.");
+    this.name = "DomainMxConflictError";
+    this.domain = domain;
+    this.mxConflicts = mxConflicts;
+  }
+}
+
 export type MxConflictRecord = {
   id: string;
   name: string;
@@ -182,6 +194,10 @@ export class DomainStore {
   loading = true;
   error: string | null = null;
   addJobs: DomainAddJob[] = [];
+  /** Pending domain add or onboarding blocked by a non-Cloudflare MX conflict. */
+  mxConflictDomain: string | null = null;
+  mxConflicts: MxConflictRecord[] = [];
+  mxResolving = false;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private pollInFlight = false;
@@ -396,24 +412,59 @@ export class DomainStore {
     }
   }
 
-  async addDomain(domain: string) {
+  async addDomain(
+    domain: string,
+    opts: { forceMxResolve?: boolean } = {},
+  ) {
     this.error = null;
+    const key = domain.trim().toLowerCase();
     try {
       const res = await desktopAwareFetch("/api/email/domains", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain }),
+        body: JSON.stringify({
+          domain: key,
+          ...(opts.forceMxResolve ? { forceMxResolve: true } : {}),
+        }),
         signal: timeoutSignal(),
       });
       const data = await readResponseJson<{
         domains?: DomainSummary[];
         message?: string;
         error?: string;
+        mxConflict?: boolean;
+        domain?: string;
+        mxConflicts?: MxConflictRecord[];
+        onboarding?: DomainOnboardingSummary | null;
       }>(res);
+
+      if (data.domains) {
+        this.applyDomains(data.domains);
+      }
+
+      if (data.mxConflict) {
+        const conflicts = data.mxConflicts ?? [];
+        runInAction(() => {
+          this.mxConflictDomain = data.domain ?? key;
+          this.mxConflicts = conflicts;
+        });
+        throw new DomainMxConflictError(data.domain ?? key, conflicts);
+      }
+
       if (!res.ok) throw new Error(data.error ?? "Failed to add domain");
-      this.applyDomains(data.domains ?? []);
+
+      runInAction(() => {
+        if (this.mxConflictDomain === key) {
+          this.mxConflictDomain = null;
+          this.mxConflicts = [];
+        }
+      });
+
       return { message: data.message ?? "Domain added" };
     } catch (e) {
+      if (e instanceof DomainMxConflictError) {
+        throw e;
+      }
       throw new Error(timeoutErrorMessage("Failed to add domain", e));
     }
   }
@@ -474,6 +525,17 @@ export class DomainStore {
     const ids = this.addJobs.map((j) => j.id);
     for (const id of ids) this.dismissJob(id);
     for (const domain of domains) this.waiters.delete(domain);
+  }
+
+  clearMxConflict() {
+    this.mxConflictDomain = null;
+    this.mxConflicts = [];
+    this.mxResolving = false;
+  }
+
+  setMxConflict(domain: string, conflicts: MxConflictRecord[]) {
+    this.mxConflictDomain = domain;
+    this.mxConflicts = conflicts;
   }
 
   clearError() {
@@ -654,12 +716,32 @@ export class DomainStore {
   /** Delete conflicting apex MX records, then continue Email Routing enable. */
   async resolveMxConflict(domain: string) {
     this.error = null;
+    const key = domain.trim().toLowerCase();
+    runInAction(() => {
+      this.mxResolving = true;
+    });
     try {
-      const result = await postOnboard(domain, "resolve_mx_conflict");
-      this.applyDomains(result.domains);
-      return { message: result.message };
+      const result = await this.addDomain(key, { forceMxResolve: true });
+      runInAction(() => {
+        this.mxConflictDomain = null;
+        this.mxConflicts = [];
+      });
+      return {
+        message:
+          result.message ?? "MX conflict resolved and Email Routing enabled",
+      };
     } catch (e) {
+      if (e instanceof DomainMxConflictError) {
+        runInAction(() => {
+          this.mxConflictDomain = e.domain;
+          this.mxConflicts = e.mxConflicts;
+        });
+      }
       throw new Error(timeoutErrorMessage("Failed to resolve MX conflict", e));
+    } finally {
+      runInAction(() => {
+        this.mxResolving = false;
+      });
     }
   }
 
@@ -686,6 +768,17 @@ export class DomainStore {
       this.ensurePolling();
     } catch (e) {
       if (isJobTerminal(job) || this.completingJobIds.has(job.id)) return;
+      if (e instanceof DomainMxConflictError) {
+        runInAction(() => {
+          this.mxConflictDomain = e.domain;
+          this.mxConflicts = e.mxConflicts;
+          job.phase = "failed";
+          job.error =
+            "Non-Cloudflare MX records exist for this domain. Remove them to enable Email Routing.";
+          job.message = job.error;
+        });
+        return;
+      }
       runInAction(() => {
         job.phase = "failed";
         job.error = timeoutErrorMessage(

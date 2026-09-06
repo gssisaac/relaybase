@@ -253,6 +253,18 @@ export function cloudflareR2OverviewUrl(accountId: string): string {
   return `https://dash.cloudflare.com/${id}/r2/overview`;
 }
 
+/** Cloudflare dashboard → a specific R2 bucket (falls back to overview). */
+export function cloudflareR2BucketUrl(
+  accountId: string,
+  bucketName: string,
+): string {
+  const id = accountId.trim();
+  const bucket = bucketName.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  if (!bucket) return cloudflareR2OverviewUrl(id);
+  return `https://dash.cloudflare.com/${id}/r2/default/buckets/${encodeURIComponent(bucket)}`;
+}
+
 /** Cloudflare dashboard → this account's D1 databases. */
 export function cloudflareD1DashboardUrl(accountId: string): string {
   const id = accountId.trim();

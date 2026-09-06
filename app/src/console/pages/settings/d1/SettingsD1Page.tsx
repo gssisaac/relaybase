@@ -4,6 +4,10 @@ import { Database } from "lucide-react";
 
 import { D1_DATABASE_SIZE_LIMIT_BYTES } from "@/lib/dashboard/d1-binding-status";
 import type { D1BindingSnapshot } from "@/lib/dashboard/d1-binding-status";
+import {
+  cloudflareD1DashboardUrl,
+  displayCfAccountId,
+} from "@/lib/desktop/bridge";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
 import {
   SettingsPageBody,
@@ -47,7 +51,13 @@ function d1Status(
 }
 
 export function SettingsD1Page() {
-  const { workerStatus, hasWorker, statusBusy } = useSettingsConnection();
+  const { workerStatus, hasWorker, statusBusy, credentials } =
+    useSettingsConnection();
+
+  const accountId = displayCfAccountId({
+    workerAccountId: workerStatus?.accountId,
+    credentialsAccountId: credentials?.accountId,
+  });
 
   const logs = workerStatus?.d1Logs;
   const mail = workerStatus?.d1Mail;
@@ -88,6 +98,9 @@ export function SettingsD1Page() {
       <StorageBindingCard
         icon={Database}
         title="Ops log"
+        consoleLink={{
+          href: cloudflareD1DashboardUrl(accountId),
+        }}
         description="Compose/API/broadcast sends and inbound bounces for the Dashboard Log page."
         status={d1Status(
           hasWorker,

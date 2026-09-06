@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import {
+  cloudflareWorkersDashboardUrl,
+  displayCfAccountId,
+} from "@/lib/desktop/bridge";
 import { useSettingsConnection } from "@/console/pages/settings/SettingsConnectionContext";
 import {
   ConnectionCard,
@@ -30,11 +34,23 @@ export function SettingsWorkerPage() {
     handleSaveWorker,
   } = useSettingsConnection();
 
+  const accountId = displayCfAccountId({
+    workerAccountId: workerStatus?.accountId,
+    credentialsAccountId: credentials?.accountId,
+  });
+  const scriptName =
+    workerStatus?.workerScriptName?.trim() ||
+    credentials?.workerScriptName?.trim() ||
+    "relaybase-api";
+
   return (
     <SettingsPageBody>
       <ConnectionCard
         icon={Server}
         title="Routing Worker"
+        consoleLink={{
+          href: cloudflareWorkersDashboardUrl(accountId, scriptName),
+        }}
         description="Paste the workers.dev URL. Verify uses your owner passtoken session."
         editing={workerEditing}
         onEdit={() => {

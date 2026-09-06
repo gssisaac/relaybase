@@ -8,10 +8,19 @@ import {
   SettingsPageBody,
   StorageBindingCard,
 } from "@/console/pages/settings/settings-shared";
+import {
+  cloudflareR2BucketUrl,
+  displayCfAccountId,
+} from "@/lib/desktop/bridge";
 
 export function SettingsInboundR2Page() {
-  const { workerStatus, r2Health, hasWorker, statusBusy } =
+  const { workerStatus, r2Health, hasWorker, statusBusy, credentials } =
     useSettingsConnection();
+
+  const accountId = displayCfAccountId({
+    workerAccountId: workerStatus?.accountId,
+    credentialsAccountId: credentials?.accountId,
+  });
 
   const pending = statusBusy && workerStatus == null;
   const configured = workerStatus?.r2Configured ?? false;
@@ -29,6 +38,9 @@ export function SettingsInboundR2Page() {
       <StorageBindingCard
         icon={HardDrive}
         title="Mailbox R2"
+        consoleLink={{
+          href: cloudflareR2BucketUrl(accountId, bucketName),
+        }}
         description="Raw MIME for received mail under inbound/, plus sent mail under sent/. Create the bucket in your account before deploy."
         status={r2Health}
         resourceLabel="Bucket"

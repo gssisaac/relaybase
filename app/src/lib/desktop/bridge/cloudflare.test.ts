@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { connectedCfAccountId, displayCfAccountId, resolveEffectiveCfAccountId, mailApiReady, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl } from "./cloudflare.ts";
+import { connectedCfAccountId, displayCfAccountId, resolveEffectiveCfAccountId, mailApiReady, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl, cloudflareR2BucketUrl } from "./cloudflare.ts";
 
 describe("mailApiReady", () => {
   it("is ready when the token is set and the probe is not false", () => {
@@ -116,5 +116,17 @@ describe("cloudflare dashboard urls", () => {
   it("falls back to dashboard home without account id", () => {
     assert.equal(cloudflareEmailSendingUrl(""), "https://dash.cloudflare.com/");
     assert.equal(cloudflareDomainsOverviewUrl("  "), "https://dash.cloudflare.com/");
+  });
+
+  it("builds R2 bucket deep links", () => {
+    assert.equal(
+      cloudflareR2BucketUrl(accountId, "relaybase-mailbox"),
+      `https://dash.cloudflare.com/${accountId}/r2/default/buckets/relaybase-mailbox`,
+    );
+    assert.equal(
+      cloudflareR2BucketUrl(accountId, ""),
+      `https://dash.cloudflare.com/${accountId}/r2/overview`,
+    );
+    assert.equal(cloudflareR2BucketUrl("", "relaybase-mailbox"), "https://dash.cloudflare.com/");
   });
 });

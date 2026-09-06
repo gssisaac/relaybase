@@ -14,7 +14,7 @@ import {
   SummaryRow,
   maskAccountId,
 } from "@/console/pages/settings/settings-shared";
-import { displayCfAccountId } from "@/lib/desktop/bridge";
+import { displayCfAccountId, cloudflareWorkerSettingsUrl } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 export function SettingsCloudflarePage() {
@@ -47,6 +47,10 @@ export function SettingsCloudflarePage() {
       <ConnectionCard
         icon={Shield}
         title="Cloudflare API (domains and routing)"
+        consoleLink={{
+          href: cloudflareWorkerSettingsUrl(accountId, scriptName),
+          label: "Worker settings",
+        }}
         description={
           <>
             The API token is for the Cloudflare REST API — inbox routing, MX,

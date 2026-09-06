@@ -103,15 +103,58 @@ pub async fn verify_token(
         checked.push("active");
         if !zones.is_empty() {
             checked.push("Zone Read");
-        }
-        // Email Routing Rules Edit and DNS Edit have no clean read-only probe;
-        // we confirm active status and Zone Read.
-        let msg = if !zones.is_empty() {
-            format!(
-                "Token verified ({}). Email Routing Rules Edit and DNS Edit could not be \
-                 probed — ensure they are granted in Cloudflare if you manage routing and DNS.",
-                checked.join(", ")
+            let first_zone = &zones[0].id;
+            let first_zone_name = &zones[0].name;
+
+            // 1. Probe Email Routing permissions
+            match cf_request(
+                &client,
+                reqwest::Method::GET,
+                &format!("/zones/{first_zone}/email/routing"),
+                None,
             )
+            .await
+            {
+                Ok(_) => {
+                    checked.push("Email Routing");
+                }
+                Err(err) => {
+                    return Ok(TokenVerifyResult {
+                        ok: false,
+                        account_id: account_id.to_string(),
+                        message: format!(
+                            "Token lacks Email Routing permissions on zone '{first_zone_name}'. Ensure Zone → Email Routing Rules → Edit permission is granted. ({err})"
+                        ),
+                    });
+                }
+            }
+
+            // 2. Probe DNS permissions
+            match cf_request(
+                &client,
+                reqwest::Method::GET,
+                &format!("/zones/{first_zone}/dns_records?per_page=1"),
+                None,
+            )
+            .await
+            {
+                Ok(_) => {
+                    checked.push("DNS");
+                }
+                Err(err) => {
+                    return Ok(TokenVerifyResult {
+                        ok: false,
+                        account_id: account_id.to_string(),
+                        message: format!(
+                            "Token lacks DNS permissions on zone '{first_zone_name}'. Ensure Zone → DNS → Edit permission is granted. ({err})"
+                        ),
+                    });
+                }
+            }
+        }
+
+        let msg = if !zones.is_empty() {
+            format!("Token verified ({}).", checked.join(", "))
         } else {
             "Token is active. No zones found in this account — ensure Zone → Zone → Read, \
              Zone → Email Routing Rules → Edit, and Zone → DNS → Edit are granted."

@@ -85,20 +85,15 @@ function useEnableEmailApiPasteBridge() {
   return pasteBridge;
 }
 
-export function isEmailApiNotConfiguredError(message: string): boolean {
-  const m = message.toLowerCase();
-  return (
-    m.includes("cloudflare email sending is not configured") ||
-    m.includes("cloudflare api is not configured") ||
-    m.includes("add a cf_api_token") ||
-    m.includes("cf_api_token secret") ||
-    m.includes("cf_account_id") ||
-    (m.includes("could not configure inbox") &&
-      (m.includes("not configured") ||
-        m.includes("api token") ||
-        m.includes("ops-dashboard")))
-  );
-}
+import {
+  isEmailApiNotConfiguredError,
+  isEmailRoutingPermissionError,
+} from "@/lib/cloudflare/email-api-errors";
+
+export {
+  isEmailApiNotConfiguredError,
+  isEmailRoutingPermissionError,
+};
 
 export function toastEmailApiAwareError(message: string) {
   if (isConsoleUnlockRequiredError(message)) {
@@ -117,8 +112,23 @@ export function toastEmailApiAwareError(message: string) {
     });
     return;
   }
+  if (isEmailRoutingPermissionError(message)) {
+    toast.error("Cloudflare API token lacks Email Routing permissions", {
+      description:
+        "Your Worker's CF_API_TOKEN needs Zone → Email Routing Rules → Edit and Zone → DNS → Edit permissions in Cloudflare.",
+      duration: Infinity,
+      closeButton: true,
+      action: {
+        label: "Update API token",
+        onClick: () => openEnableEmailApiDialog(),
+      },
+    });
+    return;
+  }
   if (isEmailApiNotConfiguredError(message)) {
-    toast.error(message, {
+    toast.error("Cloudflare API is not configured", {
+      description:
+        "Add a CF_API_TOKEN secret to your Worker to manage email routing and domain settings.",
       duration: Infinity,
       closeButton: true,
       action: {

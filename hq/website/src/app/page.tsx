@@ -1,5 +1,6 @@
 import { CloudflareTrust } from "@/components/cloudflare-trust";
 import { CodeEmbed } from "@/components/code-embed";
+import { FaqSection } from "@/components/faq-section";
 import { FeatureWalkthrough } from "@/components/feature-walkthrough";
 import { Features } from "@/components/features";
 import { HowItWorks } from "@/components/how-it-works";
@@ -54,6 +55,7 @@ export default function Home() {
         <CodeEmbed />
         <Features />
         <CloudflareTrust />
+        <FaqSection />
       </main>
       <Footer />
     </>

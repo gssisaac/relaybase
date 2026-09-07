@@ -98,19 +98,23 @@ export type CfTokenPermissionStatus =
 
 export type CfApiTokenPermissions = {
   zoneRead: CfTokenPermissionStatus;
+  emailRoutingRead: CfTokenPermissionStatus;
   emailRoutingEdit: CfTokenPermissionStatus;
+  emailSendingEdit: CfTokenPermissionStatus;
   dnsEdit: CfTokenPermissionStatus;
 };
 
 export type CfTokenPermissionCheckId =
+  | "emailRoutingRead"
   | "emailRoutingEdit"
+  | "emailSendingEdit"
   | "zoneRead"
   | "dnsEdit";
 
 export type CfTokenPermissionCheck = {
   id: CfTokenPermissionCheckId;
-  category: "Zone";
-  name: "Email Routing Rules" | "Zone" | "DNS";
+  category: "Zone" | "Account";
+  name: "Email Routing" | "Email Routing Rules" | "Email Sending" | "Zone" | "DNS";
   requiredAccess: "Edit" | "Read";
   status: CfTokenPermissionStatus;
 };
@@ -120,9 +124,21 @@ export const CF_TOKEN_PERMISSION_DEFS: readonly Omit<
   "status"
 >[] = [
   {
+    id: "emailRoutingRead",
+    category: "Zone",
+    name: "Email Routing",
+    requiredAccess: "Read",
+  },
+  {
     id: "emailRoutingEdit",
     category: "Zone",
     name: "Email Routing Rules",
+    requiredAccess: "Edit",
+  },
+  {
+    id: "emailSendingEdit",
+    category: "Account",
+    name: "Email Sending",
     requiredAccess: "Edit",
   },
   {
@@ -169,14 +185,18 @@ export function parseCfApiTokenPermissions(
   const raw = value as Record<string, unknown>;
   if (
     !("zoneRead" in raw) &&
+    !("emailRoutingRead" in raw) &&
     !("emailRoutingEdit" in raw) &&
+    !("emailSendingEdit" in raw) &&
     !("dnsEdit" in raw)
   ) {
     return undefined;
   }
   return {
     zoneRead: asCfTokenPermissionStatus(raw.zoneRead),
+    emailRoutingRead: asCfTokenPermissionStatus(raw.emailRoutingRead),
     emailRoutingEdit: asCfTokenPermissionStatus(raw.emailRoutingEdit),
+    emailSendingEdit: asCfTokenPermissionStatus(raw.emailSendingEdit),
     dnsEdit: asCfTokenPermissionStatus(raw.dnsEdit),
   };
 }

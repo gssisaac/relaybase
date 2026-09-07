@@ -18,7 +18,6 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CF_API_TOKENS_URL,
-  cfTokenPermissionChecks,
   cloudflareWorkerSettingsUrl,
   desktopOpenExternal,
   desktopVerifyWorkerConnection,
@@ -28,35 +27,25 @@ import {
   mailApiReady,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
-import { CfApiTokenPermissionRows, DesktopErrorBanner } from "@/lib/desktop/shell";
+import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 function CreateCustomTokenGuide() {
   return (
     <div className="space-y-3">
-      <img
-        src="/setup/cf-create-custom-token.png"
-        alt="Cloudflare Create API Token page. Custom token section with Get started."
-        className="w-full rounded-md border border-border"
-      />
       <p className="text-xs text-muted-foreground">
         Open Create API Token and choose{" "}
         <span className="font-medium text-foreground">Custom token</span> (click{" "}
         <span className="font-medium text-foreground">Get started</span>). Then
-        grant these 3 required permissions:
+        grant these 5 required permissions:
       </p>
-      <div className="rounded-md border border-border/70 bg-muted/30 p-2.5">
-        <CfApiTokenPermissionRows
-          checks={cfTokenPermissionChecks({
-            zoneRead: "ok",
-            emailRoutingEdit: "ok",
-            dnsEdit: "ok",
-          })}
-          variant="reference"
-        />
-        <div className="mt-2.5 border-t border-border/50 pt-2 text-[11px] text-muted-foreground">
-          <span className="font-medium text-foreground">Zone Resources:</span> Set to{" "}
-          <span className="font-medium text-foreground">Include — All zones</span> (or include all domains you plan to use).
-        </div>
+      <img
+        src="/setup/cf-token-permissions.png"
+        alt="Cloudflare API token Permissions section showing the 5 required rows: Zone → Email Routing Rules → Edit, Zone → Zone Settings → Edit, Zone → Zone → Read, Zone → DNS → Edit, Account → Email Sending → Edit."
+        className="w-full rounded-md border border-border"
+      />
+      <div className="text-[11px] text-muted-foreground">
+        <span className="font-medium text-foreground">Zone Resources:</span> Set to{" "}
+        <span className="font-medium text-foreground">Include — All zones</span> (or include all domains you plan to use).
       </div>
       <button
         type="button"

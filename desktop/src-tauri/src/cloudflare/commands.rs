@@ -133,14 +133,26 @@ fn default_d1_app() -> D1BindingSnapshot {
 fn parse_cf_api_token_permissions(value: &Value) -> Option<CfApiTokenPermissions> {
     let obj = value.get("cfApiTokenPermissions")?.as_object()?;
     let zone_read = obj.get("zoneRead")?.as_str()?.to_string();
+    let email_routing_read = obj
+        .get("emailRoutingRead")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
     let email_routing_edit = obj.get("emailRoutingEdit")?.as_str()?.to_string();
+    let email_sending_edit = obj
+        .get("emailSendingEdit")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
     let dns_edit = obj.get("dnsEdit")?.as_str()?.to_string();
     if zone_read.is_empty() || email_routing_edit.is_empty() || dns_edit.is_empty() {
         return None;
     }
     Some(CfApiTokenPermissions {
         zone_read,
+        email_routing_read,
         email_routing_edit,
+        email_sending_edit,
         dns_edit,
     })
 }
@@ -155,7 +167,8 @@ async fn fetch_cf_token_permissions_fallback(
         .get(&url)
         .header("Authorization", format!("Bearer {token}"))
         .send()
-        .await?;
+        .await
+        .ok()?;
     if !res.status().is_success() {
         return None;
     }
@@ -228,7 +241,9 @@ fn parse_d1_binding(value: &Value, kind: &str) -> D1BindingSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct CfApiTokenPermissions {
     pub zone_read: String,
+    pub email_routing_read: String,
     pub email_routing_edit: String,
+    pub email_sending_edit: String,
     pub dns_edit: String,
 }
 

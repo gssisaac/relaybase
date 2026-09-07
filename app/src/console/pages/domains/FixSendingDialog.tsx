@@ -9,8 +9,17 @@ import {
 import { formatWorkerApiError } from "@/lib/dashboard/worker-api-error";
 import { type SendingHealthDomain } from "@/lib/dashboard/sending-health";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
-import { connectedCfAccountId, cloudflareDomainsOverviewUrl, cloudflareEmailSendingUrl } from "@/lib/desktop/bridge";
+import {
+  connectedCfAccountId,
+  cloudflareDomainsOverviewUrl,
+  cloudflareEmailSendingUrl,
+  cfTokenPermissionChecks,
+  parseCfApiTokenPermissions,
+  type CfApiTokenPermissions,
+  type CfTokenPermissionCheck,
+} from "@/lib/desktop/bridge";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
+import { CfApiTokenPermissionRows } from "@/lib/desktop/shell";
 import {
   CF_PLAN_DIALOG_MESSAGE,
   CF_WORKERS_PAID_REQUIRED_CODE,
@@ -79,6 +88,7 @@ async function postSendingOnboard(
   | { kind: "no_zone"; error: string }
   | { kind: "plan_required"; error: string }
   | { kind: "unavailable"; error: string; cloudflareSendingUrl: string | null }
+  | { kind: "permission_error"; error: string; permissionChecks: CfTokenPermissionCheck[] }
 > {
   const res = await desktopAwareFetch("/api/email/sending-onboard", {
     method: "POST",
@@ -91,6 +101,7 @@ async function postSendingOnboard(
     error?: string;
     code?: string;
     cloudflareSendingUrl?: string | null;
+    cfApiTokenPermissions?: unknown;
   }>(res);
   if (res.status === 409) {
     return {
@@ -113,6 +124,14 @@ async function postSendingOnboard(
         data.code === CF_WORKERS_PAID_REQUIRED_CODE && data.error
           ? data.error
           : CF_PLAN_DIALOG_MESSAGE,
+    };
+  }
+  if (data.code === "cf_token_permission_missing") {
+    const probe = parseCfApiTokenPermissions(data.cfApiTokenPermissions);
+    return {
+      kind: "permission_error",
+      error: data.error ?? "Cloudflare API token lacks a required permission.",
+      permissionChecks: cfTokenPermissionChecks(probe),
     };
   }
   if (data.code === "unavailable" || res.status === 502) {
@@ -167,6 +186,7 @@ export function FixSendingDialog({
   const [records, setRecords] = useState<SendingDnsConflict[]>([]);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [planFromOnboard, setPlanFromOnboard] = useState(false);
+  const [permissionChecks, setPermissionChecks] = useState<CfTokenPermissionCheck[]>([]);
 
   const live = domain ? sendingHealth.statusForDomain(domain) ?? entry : entry;
   const isNoZone = live?.status === "no_zone";
@@ -183,6 +203,7 @@ export function FixSendingDialog({
     setError(null);
     setRecords([]);
     setPlanFromOnboard(false);
+    setPermissionChecks([]);
     setFallbackUrl(live?.cloudflareSendingUrl ?? null);
   }, [open, domain, live?.cloudflareSendingUrl]);
 
@@ -230,6 +251,12 @@ export function FixSendingDialog({
         }
         setFallbackUrl(result.cloudflareSendingUrl);
         setError(result.error);
+        setSteps(markSteps("onboard", "failed"));
+        return;
+      }
+      if (result.kind === "permission_error") {
+        setPermissionChecks(result.permissionChecks);
+        setError(null);
         setSteps(markSteps("onboard", "failed"));
         return;
       }
@@ -393,6 +420,18 @@ export function FixSendingDialog({
               <p className="min-w-0 break-words whitespace-pre-wrap text-sm text-destructive">
                 {error}
               </p>
+            ) : null}
+            {permissionChecks.length > 0 ? (
+              <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                <p className="text-xs font-medium text-destructive">
+                  Cloudflare API token permission missing
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Open Cloudflare → API Tokens, edit this token, add the missing
+                  permission row, then click Start fix again.
+                </p>
+                <CfApiTokenPermissionRows checks={permissionChecks} />
+              </div>
             ) : null}
           </div>
         )}

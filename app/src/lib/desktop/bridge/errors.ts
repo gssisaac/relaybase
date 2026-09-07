@@ -88,7 +88,7 @@ export function cfTokenPermissionErrorHelp(
 
   const fix =
     failing.length > 0
-      ? "Open Cloudflare → API Tokens, edit this token using the row below, then verify again."
+      ? "Open Cloudflare → API Tokens, edit this token using the row below, then click Verify again. If you created a new token instead, click Update API token (or Set up again) to save it to your Worker."
       : `Deploy the latest Worker (Settings → Worker update), then verify again.${versionHint ? ` Current: v${workerVersion}.` : ""}`;
 
   return {

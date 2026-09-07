@@ -74,6 +74,7 @@ describe("formatCfTokenAccessFix", () => {
   it("shows Read → Edit when the row exists but is read-only", () => {
     const checks = cfTokenPermissionChecks({
       zoneRead: "ok",
+      emailRoutingRead: "ok",
       emailRoutingEdit: "ok",
       dnsEdit: "read_only",
     });
@@ -84,6 +85,7 @@ describe("formatCfTokenAccessFix", () => {
   it("shows Missing → Edit when the permission row is absent", () => {
     const checks = cfTokenPermissionChecks({
       zoneRead: "ok",
+      emailRoutingRead: "ok",
       emailRoutingEdit: "missing",
       dnsEdit: "ok",
     });
@@ -97,11 +99,26 @@ describe("formatCfTokenAccessFix", () => {
   it("shows Missing → Read when Zone Read is absent", () => {
     const checks = cfTokenPermissionChecks({
       zoneRead: "missing",
+      emailRoutingRead: "skipped",
       emailRoutingEdit: "skipped",
       dnsEdit: "skipped",
     });
     const zone = checks.find((row) => row.id === "zoneRead");
     assert.equal(zone && formatCfTokenAccessFix(zone), "Missing → Read");
+  });
+
+  it("shows Missing → Read when Email Routing Read is absent", () => {
+    const checks = cfTokenPermissionChecks({
+      zoneRead: "ok",
+      emailRoutingRead: "missing",
+      emailRoutingEdit: "ok",
+      dnsEdit: "ok",
+    });
+    const routing = checks.find((row) => row.id === "emailRoutingRead");
+    assert.equal(
+      routing && formatCfTokenAccessFix(routing),
+      "Missing → Read",
+    );
   });
 });
 

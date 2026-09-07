@@ -127,9 +127,11 @@ export function SettingsCloudflarePage() {
               });
             }}
           >
-            {cfConnected || cfPermissionsRejected
+            {cfConnected
               ? "Set up again"
-              : "Enable email API"}
+              : cfPermissionsRejected
+                ? "Update API token"
+                : "Enable email API"}
           </Button>
           <Button
             type="button"

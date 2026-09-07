@@ -424,6 +424,19 @@ export function cloudflareEmailSendingUrl(accountId: string): string {
   return `https://dash.cloudflare.com/${id}/email-service/sending`;
 }
 
+/** Cloudflare dashboard → this account's Email Routing page for a zone. */
+export function cloudflareEmailRoutingUrl(
+  accountId: string,
+  zoneId?: string,
+): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  if (zoneId) {
+    return `https://dash.cloudflare.com/${id}/${zoneId}/email-service/routing`;
+  }
+  return `https://dash.cloudflare.com/${id}/email-service/routing`;
+}
+
 /** Cloudflare dashboard → this account's domain overview (add a site). */
 export function cloudflareDomainsOverviewUrl(accountId: string): string {
   const id = accountId.trim();

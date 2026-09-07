@@ -10,7 +10,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useDomain,
@@ -30,6 +30,7 @@ import {
 import { AddDomainDialog } from "@/console/pages/domains/AddDomainDialog";
 import { FixSendingDialog } from "@/console/pages/domains/FixSendingDialog";
 import { ImportCloudflareZonesDialog } from "@/console/pages/domains/ImportCloudflareZonesDialog";
+import { SubdomainOnboardDialog } from "@/console/pages/domains/SubdomainOnboardDialog";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { useDesktopChrome } from "@/lib/desktop/shell";
@@ -245,6 +246,8 @@ export function DomainsView() {
   const [mxConflictDomain, setMxConflictDomain] = useState<string | null>(null);
   const [mxResolving, setMxResolving] = useState(false);
   const [fixDomain, setFixDomain] = useState<string | null>(null);
+  const [subdomainDomain, setSubdomainDomain] = useState<string | null>(null);
+  const [subdomainParentZone, setSubdomainParentZone] = useState<string | null>(null);
   const { isDesktop: desktop } = useDesktopChrome();
   const mailboxHealth = useMailboxHealth();
   const sendingHealth = useSendingHealth();
@@ -259,6 +262,24 @@ export function DomainsView() {
     mxConflictEntry.onboarding.mxConflicts.length > 0
       ? mxConflictEntry.onboarding.mxConflicts
       : store.mxConflicts;
+
+  // Auto-open SubdomainOnboardDialog when the store detects a subdomain candidate.
+  useEffect(() => {
+    if (store.subdomainCandidateDomain && !subdomainDomain) {
+      setSubdomainDomain(store.subdomainCandidateDomain);
+      setSubdomainParentZone(store.subdomainCandidateParentZone);
+      store.clearSubdomainCandidate();
+    }
+  }, [store.subdomainCandidateDomain, store.subdomainCandidateParentZone, subdomainDomain, store]);
+
+  function handleUseSubdomainFromMxConflict() {
+    const parentDomain = activeMxConflictDomain;
+    if (!parentDomain) return;
+    const suggested = `mail.${parentDomain}`;
+    handleCloseMxConflict();
+    setSubdomainDomain(suggested);
+    setSubdomainParentZone(parentDomain);
+  }
 
   async function confirmRemove() {
     const domain = removeTarget;
@@ -632,8 +653,29 @@ export function DomainsView() {
           setFixDomain(null);
           setRefreshOpen(true);
         }}
+        onSubdomainOnboard={(domain) => {
+          setFixDomain(null);
+          setSubdomainDomain(domain);
+          setSubdomainParentZone(null);
+        }}
         onFixed={() => {
           setFixDomain(null);
+          sendingHealth.refresh();
+        }}
+      />
+
+      <SubdomainOnboardDialog
+        open={Boolean(subdomainDomain)}
+        domain={subdomainDomain}
+        parentZone={subdomainParentZone}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSubdomainDomain(null);
+            setSubdomainParentZone(null);
+          }
+        }}
+        onFixed={() => {
+          void refresh();
           sendingHealth.refresh();
         }}
       />
@@ -773,6 +815,15 @@ export function DomainsView() {
               onClick={handleCloseMxConflict}
             >
               Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isMxResolving}
+              onClick={handleUseSubdomainFromMxConflict}
+            >
+              Use subdomain instead
             </Button>
             <Button
               type="button"

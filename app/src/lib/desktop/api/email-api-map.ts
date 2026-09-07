@@ -38,6 +38,9 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/sending-onboard" || rest.startsWith("/sending-onboard/")) {
     return `/console/sending-onboard${search}`;
   }
+  if (rest === "/subdomain-onboard" || rest.startsWith("/subdomain-onboard/")) {
+    return `/console/subdomain-onboard${search}`;
+  }
   if (rest === "/sending-health" || rest.startsWith("/sending-health/")) {
     return `/mail/sending-health${search}`;
   }

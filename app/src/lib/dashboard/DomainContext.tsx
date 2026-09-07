@@ -8,6 +8,7 @@ import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import {
   DomainStore,
   DomainMxConflictError,
+  DomainSubdomainCandidateError,
   type DomainAddJob,
   type DomainOnboardingStep,
   type DomainOnboardingSummary,
@@ -36,6 +37,7 @@ export {
   DEFAULT_ADDRESS_LOCAL_PARTS,
   DomainStore,
   DomainMxConflictError,
+  DomainSubdomainCandidateError,
   defaultInboundEnabledForLocalPart,
   suggestedDisplayNameForLocalPart,
 } from "@/lib/dashboard/domain-store";
@@ -126,6 +128,8 @@ export function useDomain(): DomainStore {
         mxConflictDomain: store.mxConflictDomain,
         mxConflictsCount: store.mxConflicts.length,
         mxResolving: store.mxResolving,
+        subdomainCandidateDomain: store.subdomainCandidateDomain,
+        subdomainCandidateParentZone: store.subdomainCandidateParentZone,
       }),
       () => setTick((t) => t + 1),
     );

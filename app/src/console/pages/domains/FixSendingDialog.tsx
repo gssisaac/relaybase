@@ -166,6 +166,7 @@ export function FixSendingDialog({
   entry,
   onOpenChange,
   onImportZones,
+  onSubdomainOnboard,
   onFixed,
 }: {
   open: boolean;
@@ -173,6 +174,7 @@ export function FixSendingDialog({
   entry: SendingHealthDomain | null;
   onOpenChange: (open: boolean) => void;
   onImportZones: () => void;
+  onSubdomainOnboard?: (domain: string) => void;
   onFixed: () => void;
 }) {
   const sendingHealth = useSendingHealth();
@@ -467,6 +469,16 @@ export function FixSendingDialog({
               >
                 Import zones
               </Button>
+              {onSubdomainOnboard && domain ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSubdomainOnboard(domain)}
+                >
+                  Onboard as subdomain
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 size="sm"

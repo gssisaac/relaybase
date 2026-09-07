@@ -49,6 +49,18 @@ export class DomainMxConflictError extends Error {
   }
 }
 
+export class DomainSubdomainCandidateError extends Error {
+  domain: string;
+  parentZone: string;
+
+  constructor(domain: string, parentZone: string, message: string) {
+    super(message);
+    this.name = "DomainSubdomainCandidateError";
+    this.domain = domain;
+    this.parentZone = parentZone;
+  }
+}
+
 export type MxConflictRecord = {
   id: string;
   name: string;
@@ -198,6 +210,9 @@ export class DomainStore {
   mxConflictDomain: string | null = null;
   mxConflicts: MxConflictRecord[] = [];
   mxResolving = false;
+  /** Pending domain add that is a subdomain of an existing CF zone. */
+  subdomainCandidateDomain: string | null = null;
+  subdomainCandidateParentZone: string | null = null;
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private pollInFlight = false;
@@ -432,14 +447,30 @@ export class DomainStore {
         domains?: DomainSummary[];
         message?: string;
         error?: string;
+        code?: string;
         mxConflict?: boolean;
         domain?: string;
+        parentZone?: string;
         mxConflicts?: MxConflictRecord[];
         onboarding?: DomainOnboardingSummary | null;
       }>(res);
 
       if (data.domains) {
         this.applyDomains(data.domains);
+      }
+
+      // Subdomain candidate: domain is a subdomain of an existing CF zone.
+      // Don't add to D1 — open SubdomainOnboardDialog instead.
+      if (res.status === 400 && data.code === "subdomain_candidate") {
+        runInAction(() => {
+          this.subdomainCandidateDomain = data.domain ?? key;
+          this.subdomainCandidateParentZone = data.parentZone ?? null;
+        });
+        throw new DomainSubdomainCandidateError(
+          data.domain ?? key,
+          data.parentZone ?? "",
+          data.error ?? "This domain is a subdomain.",
+        );
       }
 
       if (data.mxConflict) {
@@ -463,6 +494,9 @@ export class DomainStore {
       return { message: data.message ?? "Domain added" };
     } catch (e) {
       if (e instanceof DomainMxConflictError) {
+        throw e;
+      }
+      if (e instanceof DomainSubdomainCandidateError) {
         throw e;
       }
       throw new Error(timeoutErrorMessage("Failed to add domain", e));
@@ -531,6 +565,16 @@ export class DomainStore {
     this.mxConflictDomain = null;
     this.mxConflicts = [];
     this.mxResolving = false;
+  }
+
+  clearSubdomainCandidate() {
+    this.subdomainCandidateDomain = null;
+    this.subdomainCandidateParentZone = null;
+  }
+
+  setSubdomainCandidate(domain: string, parentZone: string) {
+    this.subdomainCandidateDomain = domain;
+    this.subdomainCandidateParentZone = parentZone;
   }
 
   setMxConflict(domain: string, conflicts: MxConflictRecord[]) {
@@ -775,6 +819,16 @@ export class DomainStore {
           job.phase = "failed";
           job.error =
             "Non-Cloudflare MX records exist for this domain. Remove them to enable Email Routing.";
+          job.message = job.error;
+        });
+        return;
+      }
+      if (e instanceof DomainSubdomainCandidateError) {
+        runInAction(() => {
+          this.subdomainCandidateDomain = e.domain;
+          this.subdomainCandidateParentZone = e.parentZone;
+          job.phase = "failed";
+          job.error = `${e.domain} is a subdomain of ${e.parentZone}. Onboard it as a subdomain.`;
           job.message = job.error;
         });
         return;

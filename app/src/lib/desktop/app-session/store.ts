@@ -874,8 +874,11 @@ export class AppSessionStore {
         await this.deps.teamLogout();
         await this.deps.clearTeamDisk();
       } else {
+        // Owner sign-out: clear in-memory access only. The workspaces.json
+        // keymap + OS keyring (owner-session, owner-passtoken) are preserved
+        // so the next sign-in restores the same scope id and on-disk data
+        // directory (mail, drafts, ui state, cache).
         await this.deps.ownerLogout();
-        await this.deps.clearOwnerDisk();
       }
     } catch {
       /* best-effort */

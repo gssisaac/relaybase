@@ -62,6 +62,7 @@ export const SAMPLE_CREDENTIALS = {
   cfOauthRefreshToken: "",
   cfOauthAccessExpiresAt: "",
   cfOauthAccountId: "",
+  scopeId: "",
 };
 
 function makeDeps(

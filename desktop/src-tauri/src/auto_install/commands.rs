@@ -1,7 +1,7 @@
 use crate::auth::owner_session::current_console_access_token;
 use crate::cloudflare::oauth::{cf_oauth_if_present, require_cf_oauth};
 use crate::storage::{
-    load_credentials, load_credentials_merged, save_credentials,
+    load_active_workspace, load_credentials_merged, upsert_active_workspace,
 };
 
 use super::cancel::request_install_cancel;
@@ -55,9 +55,9 @@ pub async fn auto_install_routing_worker(
         wipe_confirmation,
     )
     .await?;
-    let existing = load_credentials()?.unwrap_or_default();
+    let existing = load_active_workspace()?.unwrap_or_default();
     let next = merge_into_credentials(&existing, &result, Some(id));
-    save_credentials(&next)?;
+    upsert_active_workspace(next)?;
     Ok(result)
 }
 
@@ -128,9 +128,9 @@ pub async fn update_installed_worker_cmd(
         // Same account, custom domain — keep the URL the user already uses.
         result.worker_url = creds.worker_url.trim().trim_end_matches('/').to_string();
     }
-    let existing = load_credentials()?.unwrap_or_default();
+    let existing = load_active_workspace()?.unwrap_or_default();
     let next = merge_into_credentials(&existing, &result, Some(oauth.account_id));
-    save_credentials(&next)?;
+    upsert_active_workspace(next)?;
     Ok(result)
 }
 
@@ -154,11 +154,11 @@ pub async fn rollback_auto_install(
         .filter(|s| !s.is_empty())
         .unwrap_or(oauth.account_id);
     rollback_all_install(app, oauth.access_token, Some(id), wipe_confirmation).await?;
-    if let Ok(Some(mut creds)) = load_credentials() {
-        creds.worker_url.clear();
-        creds.worker_script_name.clear();
-        creds.worker_version.clear();
-        let _ = save_credentials(&creds);
+    if let Ok(Some(mut entry)) = load_active_workspace() {
+        entry.worker_url.clear();
+        entry.worker_script_name.clear();
+        entry.worker_version.clear();
+        let _ = upsert_active_workspace(entry);
     }
     Ok(())
 }

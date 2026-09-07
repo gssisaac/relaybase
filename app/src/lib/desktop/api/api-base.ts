@@ -80,6 +80,7 @@ function readDesktopCredentialsFromWindow(): DesktopCredentials | null {
     cfOauthRefreshToken: "",
     cfOauthAccessExpiresAt: "",
     cfOauthAccountId: "",
+    scopeId: "",
   };
 }
 

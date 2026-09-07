@@ -23,15 +23,16 @@ pub mod webkit;
 pub use commands::*;
 pub use user_data::*;
 pub use credentials::{
-    clear_all_relaybase_data, clear_credentials, clear_team_login, load_credentials,
-    load_credentials_merged, load_team_login, save_credentials, save_team_login,
-    StoredCredentials, TeamLogin,
+    clear_all_relaybase_data, clear_credentials, clear_team_login, list_workspaces,
+    load_active_workspace, load_credentials, load_credentials_merged, load_team_login,
+    remove_workspace, save_credentials, save_team_login, set_active_workspace,
+    upsert_active_workspace, StoredCredentials, TeamLogin, WorkspaceEntry, Workspaces,
 };
 pub use layout::{
     current_scope_id, ensure_dir, home_dir, legacy_credentials_path, migrate_mail_to_desktop_user,
     migrate_storage_layout_v2, relaybase_dir, resolve_account_scope_id, scoped_dir, workspace_path,
     StorageLayoutMarker, API_KEYS_FILE, EMAIL_PREFS_FILE, LEGACY_CREDENTIALS_FILE,
-    STORAGE_LAYOUT_MARKER_FILE, TEAM_LOGIN_FILE, WORKSPACE_FILE,
+    STORAGE_LAYOUT_MARKER_FILE, TEAM_LOGIN_FILE, WORKSPACE_FILE, WORKSPACES_FILE,
 };
 pub use mail_store::{
     delete_mail_binary, delete_mail_binary_dir, load_cache_json, load_mail_binary, load_mail_json,

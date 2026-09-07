@@ -43,7 +43,8 @@ Server/worker data (Cloudflare D1 + R2) is separate — that is the remote produ
 
 ```text
 ~/.relaybase/                          # mode 0700
-├── workspace.json                     # Worker URL + CF account id + Worker script/version (0600; session, global). Secrets are not stored here.
+├── workspaces.json                    # Workspace keymap: { version, lastActiveKey, workspaces: { key: { accountId, workerUrl, workerScriptName, workerVersion, relaybaseAccountId, relaybaseEmail, relaybaseSession, scopeId, lastUsedAt } } }. Single active workspace selected by lastActiveKey. Secrets never live here.
+├── workspace.json                     # Legacy single-workspace file (migrated to workspaces.json on first boot; deleted after migration)
 ├── team-login.json                    # team-user identity only (workerUrl + accountEmail; 0600; session, global). Mobile password lives in the OS keyring.
 ├── app-icon.png                       # notification identity image (global)
 ├── storage-layout-v2.json            # migration marker (version, migratedAt, scopeId, from)
@@ -124,7 +125,7 @@ and the marker is written.
 | First launch after upgrade | Move flat `mail/`, `cache/`, `email.json`, `api-keys.json` → `{scopeId}/` |
 | CF / invite account switch | New `{scopeId}/` created empty; old folder retained |
 | Same account reconnects same worker | Same `{scopeId}/` → data restored |
-| Sign out | Clear `workspace.json` only; scoped folders remain |
+| Sign out | Clear in-memory access only; `workspaces.json` keymap + scoped folders remain |
 
 On scope change, `DesktopContext` clears the in-memory session cache, all
 scope-dependent `localStorage` mirrors, and the dashboard client cache
@@ -136,11 +137,35 @@ paths under the new `{scopeId}/`).
 
 ## File contracts
 
-### `workspace.json`
+### `workspaces.json`
 
-> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](../architecture/storage-architecture.md) → *Owner auth*). **`~/.relaybase/workspace.json` is the source of truth for workspace configuration (`workerUrl`).** It is **not** a credentials file — passtoken, OAuth, and refresh tokens never live here. Older builds wrote `credentials.json`; the first load after upgrade rewrites the contents to `workspace.json` and deletes the old file. Keyring tokens (`owner-session`) authenticate an existing workspace on disk; keyring information must **never** be used to invent or restore a workspace when `~/.relaybase` is missing or deleted. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms show a **Worker URL select** (`WorkerUrlPicker`): the URL from `workspace.json` is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
+> The retired desktop **god token** (`ADMIN_TOKEN` / `adminToken`) is gone. Owner login is a Worker-issued passtoken + session (see [storage-architecture.md](../architecture/storage-architecture.md) → *Owner auth*). **`~/.relaybase/workspaces.json` is the source of truth for workspace configuration (keymap of all connected workspaces).** It is **not** a credentials file — passtoken, OAuth, and refresh tokens never live here. Older builds wrote a single `workspace.json`; the first load after upgrade migrates it into `workspaces.json` (computing and persisting the `scopeId` for the existing entry) and deletes the old file. Keyring tokens (`owner-session`) authenticate an existing workspace on disk; keyring information must **never** be used to invent or restore a workspace when `~/.relaybase` is missing or deleted. The owner **passtoken is never written to disk** (`~/.relaybase`, cookies, localStorage) — after first enrollment it lives in OS keyring `owner-passtoken`; the one-time download is a backup. Owner **refresh** is stored in OS keyring `owner-session` (macOS Keychain / Windows Credential Manager); **access** lives in process memory only. Touch ID / Windows Hello only decides whether Rust may **read** `owner-passtoken` for a new login. Login/unlock forms show a **Worker URL select** (`WorkerUrlPicker`): the URL from the active workspace is pre-selected; recents are mirrored in `localStorage` (`relaybase.recentWorkerUrls`) for quick re-pick only.
 
-Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-credentials`. Shape (camelCase):
+Keymap shape (camelCase):
+
+```json
+{
+  "version": 1,
+  "lastActiveKey": "cf123...|https://relaybase-api.example.workers.dev",
+  "workspaces": {
+    "cf123...|https://relaybase-api.example.workers.dev": {
+      "accountId": "cf123...",
+      "workerUrl": "https://relaybase-api.example.workers.dev",
+      "workerScriptName": "relaybase-api",
+      "workerVersion": "1.2.3",
+      "relaybaseAccountId": "rb456...",
+      "relaybaseEmail": "admin@example.com",
+      "relaybaseSession": "signed-token",
+      "scopeId": "s-7f3a2b1e9c4d8012",
+      "lastUsedAt": "2026-09-07T12:00:00Z"
+    }
+  }
+}
+```
+
+Key = `{effectiveAccountId}|{normalizedWorkerUrl}` where `effectiveAccountId` is `relaybaseAccountId` > CF `accountId` > (empty). The `scopeId` is computed once at first creation (`resolve_account_scope_id`) and **persisted** so sign-out → sign-in restores the same `~/.relaybase/{scopeId}/` data directory (mail, drafts, ui state, cache). Sign-out clears in-memory access only — the keymap and OS keyring are preserved. Factory reset (`factory_reset_cmd`) deletes the entire `~/.relaybase` tree.
+
+Per-entry fields:
 
 | Field | Purpose |
 |-------|---------|
@@ -151,9 +176,10 @@ Written by Rust (`secrets.rs`) or, in browser `pnpm next`, via `/api/local-crede
 | `relaybaseAccountId` | Relaybase console account id — written only when non-empty |
 | `relaybaseEmail` | Relaybase console account email — written only when non-empty |
 | `relaybaseSession` | Signed console session token (local only; Bearer to console APIs) — written only when non-empty |
-| ~~`adminToken`~~ | **Removed.** Replaced by the Worker-issued passtoken (hash-only on the Worker; plaintext in OS keyring `owner-passtoken` + the user's one-time download). |
+| `scopeId` | Opaque `s-{16hex}` persisted at first creation; restored on sign-in |
+| `lastUsedAt` | ISO timestamp updated on each active-workspace switch |
 
-Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) and rewrites the file to this allowlist. Cloudflare OAuth install `refresh_token` lives in the OS Keyring (`cf-oauth-install`), while short-lived `access_token` lives in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`). Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](../auth/cf-oauth-install-token.md)**.
+Load strips any other key (including `installToken`, `serverToken`, `licenseKey`, `cfOauth*`) from each entry. Cloudflare OAuth install `refresh_token` lives in the OS Keyring (`cf-oauth-install`), while short-lived `access_token` lives in Tauri process memory only (`CF_OAUTH_SESSION` in `desktop/src-tauri/src/secrets.rs`). Paste-and-push of `CF_API_TOKEN` is one-shot — the token is never stored on disk. CF OAuth for the install token is documented in **[cf-oauth-install-token.md](../auth/cf-oauth-install-token.md)**.
 
 ### OS keyring (owner refresh)
 

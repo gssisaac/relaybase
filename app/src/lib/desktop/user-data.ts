@@ -68,6 +68,7 @@ export async function saveUserConnection(
     cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
     cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
     cfOauthAccountId: existing?.cfOauthAccountId ?? "",
+    scopeId: existing?.scopeId ?? "",
   };
   const res = await fetch("/api/local-credentials", {
     method: "PUT",
@@ -101,6 +102,7 @@ export async function clearUserConnection(): Promise<void> {
     cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
     cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
     cfOauthAccountId: existing?.cfOauthAccountId ?? "",
+    scopeId: existing?.scopeId ?? "",
   };
   await fetch("/api/local-credentials", {
     method: "PUT",

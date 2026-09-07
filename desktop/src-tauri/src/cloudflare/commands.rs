@@ -12,7 +12,8 @@ use super::worker::{
 };
 use crate::auth::current_console_access_token;
 use crate::storage::{
-    load_credentials, load_credentials_merged, save_credentials, StoredCredentials,
+    load_active_workspace, load_credentials, load_credentials_merged, upsert_active_workspace,
+    StoredCredentials,
 };
 
 #[tauri::command]
@@ -34,19 +35,29 @@ pub async fn probe_routing_worker() -> Result<ProbeResult, String> {
 #[tauri::command]
 pub async fn adopt_routing_worker() -> Result<InstallResult, String> {
     let oauth = require_cf_oauth().await?;
-    let creds = load_credentials()?.unwrap_or_default();
-    let (result, next) = adopt_worker(&oauth.account_id, &oauth.access_token, &creds).await?;
-    save_credentials(&next)?;
+    let existing = load_active_workspace()?.unwrap_or_default();
+    let existing_creds = StoredCredentials::from_entry(&existing);
+    let (result, next_creds) = adopt_worker(&oauth.account_id, &oauth.access_token, &existing_creds).await?;
+    let mut entry = next_creds.merge_into_entry(&existing);
+    if entry.scope_id.trim().is_empty() {
+        entry.scope_id = crate::storage::resolve_account_scope_id(&next_creds, None);
+    }
+    upsert_active_workspace(entry)?;
     Ok(result)
 }
 
 #[tauri::command]
 pub async fn install_routing_worker(worker_js: Option<String>) -> Result<InstallResult, String> {
     let oauth = require_cf_oauth().await?;
-    let creds = load_credentials()?.unwrap_or_default();
-    let (result, next) =
-        install_worker(&oauth.account_id, &oauth.access_token, worker_js, &creds).await?;
-    save_credentials(&next)?;
+    let existing = load_active_workspace()?.unwrap_or_default();
+    let existing_creds = StoredCredentials::from_entry(&existing);
+    let (result, next_creds) =
+        install_worker(&oauth.account_id, &oauth.access_token, worker_js, &existing_creds).await?;
+    let mut entry = next_creds.merge_into_entry(&existing);
+    if entry.scope_id.trim().is_empty() {
+        entry.scope_id = crate::storage::resolve_account_scope_id(&next_creds, None);
+    }
+    upsert_active_workspace(entry)?;
     Ok(result)
 }
 

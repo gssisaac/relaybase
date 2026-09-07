@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use super::credentials::{load_credentials, load_team_login, StoredCredentials, TeamLogin};
 
 pub const WORKSPACE_FILE: &str = "workspace.json";
+pub const WORKSPACES_FILE: &str = "workspaces.json";
 pub const LEGACY_CREDENTIALS_FILE: &str = "credentials.json";
 pub const EMAIL_PREFS_FILE: &str = "email.json";
 pub const API_KEYS_FILE: &str = "api-keys.json";
@@ -144,8 +145,18 @@ pub fn resolve_account_scope_id(
     format!("s-{}", &hex[..16])
 }
 
-/// Resolve the current scope id by loading credentials + team login from disk.
+/// Resolve the current scope id. Prefers the persisted `scope_id` on the
+/// active workspace entry in `workspaces.json` so sign-out → sign-in restores
+/// the same on-disk data directory. Falls back to recomputing from
+/// credentials + team login for the migration window where a legacy
+/// `workspace.json` exists but `workspaces.json` has not been written yet.
 pub fn current_scope_id() -> Result<String, String> {
+    if let Ok(Some(entry)) = crate::storage::credentials::load_active_workspace() {
+        let persisted = entry.scope_id.trim();
+        if !persisted.is_empty() {
+            return Ok(persisted.to_string());
+        }
+    }
     let creds = load_credentials()?.unwrap_or_default();
     let team = load_team_login()?;
     Ok(resolve_account_scope_id(&creds, team.as_ref()))

@@ -102,6 +102,11 @@ pub fn run() {
             storage::get_team_login,
             storage::save_team_login_cmd,
             storage::clear_team_login_cmd,
+            storage::list_workspaces_cmd,
+            storage::get_active_workspace,
+            storage::set_active_workspace_cmd,
+            storage::remove_workspace_cmd,
+            storage::upsert_active_workspace_cmd,
             // cloudflare commands
             cloudflare::verify_cf_token,
             cloudflare::probe_routing_worker,

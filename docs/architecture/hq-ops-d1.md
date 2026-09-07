@@ -38,7 +38,18 @@ Public marketing signup (`POST /api/v1/waitlist`). Unique `email`. `source` + `u
 
 ### `beta_invites`
 
-Public marketing beta signup (`POST /api/beta` on `strum-relaybase-website`). PK `uuid` is the download token at `relaybase.xyz/downloads/{uuid}`. Unique `email` reuses the same invite. `data` is the invite JSON as one blob: `email`, `createdAt`, `locale` (country/city/region/timezone), `browser`, `os`, `userAgent`, `downloads` (`{ at }` timestamps). Website Worker uses raw SQL; do not add a second schema copy.
+Public marketing beta records on `strum-relaybase-website`. PK `uuid` is the personal download token at `relaybase.xyz/downloads/{uuid}` for email signups. Unique `email` reuses the same row.
+
+`data` JSON blob: `email`, optional `source` (`email` | `direct`), `createdAt`, `locale` (country/city/region/timezone), `browser`, `os`, `userAgent`, `downloads` (`{ at }` timestamps).
+
+Two entry paths share this table:
+
+| Path | Identifier in `email` column | Tracking |
+|------|------------------------------|----------|
+| `POST /api/beta` (email signup) | user email | invite email + `GET /downloads/{uuid}/file` |
+| `POST /api/beta/download` (direct Mac CTA) | `device:{clientId}` (1st-party UUID from browser) | fire-and-forget beacon; DMG from CDN directly |
+
+Website Worker uses raw SQL; module lives in `hq/website/src/features/download-access/`. Do not add a second schema copy.
 
 The website no longer calls `POST /api/v1/waitlist`. The `waitlist` table stays for existing rows.
 
@@ -80,6 +91,7 @@ Console Next routes live under `/api/v1/…`. `next.config.ts` rewrites `/v1/:pa
 |-------|------|-------|
 | `POST /api/v1/waitlist` | CORS allowlist (legacy) | `waitlist` |
 | `POST /api/beta` on `relaybase.xyz` | public (website Worker) | `beta_invites` |
+| `POST /api/beta/download` on `relaybase.xyz` | public (website Worker) | `beta_invites` |
 | `GET /api/beta` on `admin.relaybase.xyz` | admin (direct D1 read) | `beta_invites` |
 | `GET /downloads/:uuid` on `relaybase.xyz` | public; 404 if unknown uuid | `beta_invites` |
 | `/api/v1/account?action=…` | public signup/login/recover; session for worker register | `accounts`, `account_workers`, `account_recovery` |

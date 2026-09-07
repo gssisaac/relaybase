@@ -13,7 +13,7 @@
     "directory": "./out",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/beta", "/api/beta/", "/downloads/*"]
+    "run_worker_first": ["/api/beta", "/api/beta/", "/api/beta/download", "/api/beta/download/", "/downloads/*", "/beta-download", "/beta-download/*"]
   },
   "d1_databases": [
     {

@@ -427,6 +427,15 @@ export class AccountsStore {
     });
     // Don't persist optimistic create rows — only confirmed addresses go to disk.
 
+    let data: {
+      address?: Address;
+      addresses?: Address[];
+      error?: string;
+      mxConflict?: boolean;
+      domain?: string;
+      mxConflicts?: MxConflictRecord[];
+      cfApiTokenPermissions?: unknown;
+    } | null = null;
     try {
       const res = await desktopAwareFetch(
         `${this.apiBase}/addresses?domain=${encodeURIComponent(key)}`,
@@ -439,18 +448,20 @@ export class AccountsStore {
           }),
         },
       );
-      const data = await readResponseJson<{
+      data = await readResponseJson<{
         address?: Address;
         addresses?: Address[];
         error?: string;
         mxConflict?: boolean;
         domain?: string;
         mxConflicts?: MxConflictRecord[];
+        cfApiTokenPermissions?: unknown;
       }>(res);
+      if (!data) throw new Error("Failed to add");
       if (data.mxConflict) {
         const conflicts = data.mxConflicts ?? [];
         runInAction(() => {
-          this.mxConflictDomain = data.domain ?? key;
+          this.mxConflictDomain = data!.domain ?? key;
           this.mxConflicts = conflicts;
           this.mxConflictPending = { domain: key, input };
         });
@@ -539,7 +550,7 @@ export class AccountsStore {
         reverted = [...byEmail.values()];
         this.addressesByDomain[key] = reverted;
       });
-      toastEmailApiAwareError(message);
+      toastEmailApiAwareError(message, data?.cfApiTokenPermissions ?? undefined);
       throw e instanceof Error ? e : new Error(message);
     } finally {
       runInAction(() => {
@@ -639,16 +650,23 @@ export class AccountsStore {
     });
     void this.persistCache(key, optimisticList);
 
+    let data: {
+      address?: Address;
+      error?: string;
+      cfApiTokenPermissions?: unknown;
+    } | null = null;
     try {
       const res = await desktopAwareFetch(`${this.apiBase}/addresses`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailKey, inboundEnabled }),
       });
-      const data = await readResponseJson<{
+      data = await readResponseJson<{
         address?: Address;
         error?: string;
+        cfApiTokenPermissions?: unknown;
       }>(res);
+      if (!data) throw new Error("Failed to update inbound");
       if (!res.ok) throw new Error(data.error ?? "Failed to update inbound");
 
       const confirmed = data.address
@@ -695,7 +713,7 @@ export class AccountsStore {
         }
       });
       void this.persistCache(key, reverted);
-      toastEmailApiAwareError(message);
+      toastEmailApiAwareError(message, data?.cfApiTokenPermissions ?? undefined);
     } finally {
       runInAction(() => {
         this.inboundPendingEmails = this.inboundPendingEmails.filter(

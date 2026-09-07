@@ -1,3 +1,5 @@
+import type { CfApiTokenPermissions } from "./cloudflare";
+import { parseCfApiTokenPermissions } from "./cloudflare";
 import {
   d1BindingFromPayload,
   type D1BindingSnapshot,
@@ -36,8 +38,10 @@ export type WorkerConnectResult = {
   r2UsageTruncated?: boolean | null;
   /** True when the Worker has a CF_API_TOKEN wrangler secret set. */
   cfApiTokenSet?: boolean;
-  /** True when that secret passed a Cloudflare Zone Read probe. */
+  /** True when that secret passed Zone Read + routing/DNS Edit probes. */
   cfApiTokenValid?: boolean;
+  /** Per-row Cloudflare token probe from `/console/connect`. */
+  cfApiTokenPermissions?: CfApiTokenPermissions;
   /** True when the Worker has a send_email EMAIL binding. */
   emailBindingConfigured?: boolean;
   d1Logs: D1BindingSnapshot;
@@ -141,6 +145,7 @@ export async function desktopVerifyWorkerConnection(
     d1?: Parameters<typeof d1BindingFromPayload>[0];
     cfApiTokenSet?: boolean;
     cfApiTokenValid?: boolean;
+    cfApiTokenPermissions?: unknown;
     emailBindingConfigured?: boolean;
   };
   const usage = value.inbound?.usage;
@@ -163,6 +168,17 @@ export async function desktopVerifyWorkerConnection(
     }
   }
 
+  let cfApiTokenPermissions = parseCfApiTokenPermissions(
+    value.cfApiTokenPermissions,
+  );
+  if (
+    !cfApiTokenPermissions &&
+    value.cfApiTokenValid === false &&
+    value.cfApiTokenSet
+  ) {
+    cfApiTokenPermissions = await fetchCfTokenPermissionsFallback(base, access);
+  }
+
   return {
     ok: true,
     product: "relaybase",
@@ -180,6 +196,7 @@ export async function desktopVerifyWorkerConnection(
       typeof value.cfApiTokenValid === "boolean"
         ? value.cfApiTokenValid
         : undefined,
+    cfApiTokenPermissions,
     emailBindingConfigured: Boolean(value.emailBindingConfigured),
     d1Logs,
     d1Mail,
@@ -188,44 +205,33 @@ export async function desktopVerifyWorkerConnection(
   };
 }
 
+async function fetchCfTokenPermissionsFallback(
+  base: string,
+  access: string,
+): Promise<CfApiTokenPermissions | undefined> {
+  try {
+    const res = await fetch(`${base}/console/cf-token-permissions`, {
+      headers: { Authorization: `Bearer ${access}` },
+    });
+    if (!res.ok) return undefined;
+    const value = (await res.json().catch(() => ({}))) as {
+      cfApiTokenPermissions?: unknown;
+    };
+    return parseCfApiTokenPermissions(value.cfApiTokenPermissions);
+  } catch {
+    return undefined;
+  }
+}
+
+import { saveUserConnection } from "../user-data";
+
 export async function desktopSaveWorkerConnection(input: {
   workerUrl: string;
+  accountId?: string;
   workerScriptName?: string;
   workerVersion?: string;
 }): Promise<DesktopCredentials> {
-  if (isDesktopRuntime()) {
-    return invoke("save_worker_connection", {
-      workerUrl: input.workerUrl,
-      workerScriptName: input.workerScriptName ?? null,
-      workerVersion: input.workerVersion?.trim() ? input.workerVersion.trim() : null,
-    });
-  }
-  const existing = await loadLocalCredentialsFile();
-  const next: DesktopCredentials = {
-    accountId: existing?.accountId ?? "",
-    installToken: existing?.installToken ?? "",
-    workerUrl: input.workerUrl.trim().replace(/\/$/, ""),
-    workerScriptName:
-      input.workerScriptName?.trim() || existing?.workerScriptName || "",
-    workerVersion:
-      input.workerVersion?.trim() || existing?.workerVersion || "",
-    relaybaseAccountId: existing?.relaybaseAccountId ?? "",
-    relaybaseEmail: existing?.relaybaseEmail ?? "",
-    relaybaseSession: existing?.relaybaseSession ?? "",
-    cfOauthAccessToken: existing?.cfOauthAccessToken ?? "",
-    cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
-    cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
-    cfOauthAccountId: existing?.cfOauthAccountId ?? "",
-  };
-  const res = await fetch("/api/local-credentials", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to save credentials to ~/.relaybase");
-  }
-  return next;
+  return saveUserConnection(input);
 }
 
 export async function desktopWorkerRequest(input: {

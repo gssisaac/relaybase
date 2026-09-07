@@ -4,6 +4,8 @@ import {
   desktopVerifyWorkerConnection,
   isDesktopRuntime,
   mailApiReady,
+  cfApiTokenHealth,
+  type CfApiTokenPermissions,
 } from "@/lib/desktop/bridge";
 import { ensureAccessToken } from "@/lib/desktop/auth";
 import {
@@ -42,8 +44,10 @@ export type ConnectionStatusSnapshot = {
     r2UsageTruncated?: boolean | null;
     /** True when the Worker reports a CF_API_TOKEN wrangler secret is set. */
     cfApiTokenSet: boolean;
-    /** True when that secret passed a Cloudflare Zone Read probe. */
+    /** True when that secret passed Zone Read + routing/DNS Edit probes. */
     cfApiTokenValid?: boolean;
+    /** Per-row Cloudflare token probe from `/console/connect`. */
+    cfApiTokenPermissions?: CfApiTokenPermissions;
     /** True when the Worker has a send_email EMAIL binding. */
     emailBindingConfigured: boolean;
     d1Logs: D1BindingSnapshot;
@@ -79,6 +83,7 @@ export function workerStatusFromConnect(
     r2UsageTruncated: result.r2UsageTruncated ?? null,
     cfApiTokenSet: Boolean(result.cfApiTokenSet),
     cfApiTokenValid: result.cfApiTokenValid,
+    cfApiTokenPermissions: result.cfApiTokenPermissions,
     emailBindingConfigured: Boolean(result.emailBindingConfigured),
     d1Logs: result.d1Logs,
     d1Mail: result.d1Mail,
@@ -139,6 +144,7 @@ export async function probeConnectionStatus(
           r2UsageTruncated: null,
           cfApiTokenSet: false,
           cfApiTokenValid: undefined,
+          cfApiTokenPermissions: undefined,
           emailBindingConfigured: false,
           d1Logs: { ...D1_LOGS_DEFAULT },
           d1Mail: { ...D1_MAIL_DEFAULT },
@@ -195,6 +201,7 @@ export async function probeConnectionStatus(
         r2UsageTruncated: null,
         cfApiTokenSet: false,
         cfApiTokenValid: undefined,
+        cfApiTokenPermissions: undefined,
         emailBindingConfigured: false,
         d1Logs: { ...D1_LOGS_DEFAULT },
         d1Mail: { ...D1_MAIL_DEFAULT },
@@ -226,12 +233,23 @@ export function connectionHealthFromSnapshot(
         detail:
           "CF_API_TOKEN is set on the Worker and Cloudflare accepted it. Domain, address, and DNS API calls can run. Sending uses the EMAIL binding.",
       }
-    : {
-        tone: "bad",
-        label: "Not configured",
-        detail:
-          "Add a CF_API_TOKEN secret on the Worker in Cloudflare so Relaybase can manage domains and inbox routing.",
-      };
+    : (() => {
+        const health = cfApiTokenHealth(snapshot?.worker ?? null);
+        if (health.label === "Permissions need fixing") {
+          return {
+            tone: "bad",
+            label: health.label,
+            detail:
+              "CF_API_TOKEN is on the Worker, but Cloudflare rejected one or more permissions. Open Settings → Cloudflare and verify again.",
+          };
+        }
+        return {
+          tone: "bad",
+          label: health.label,
+          detail:
+            "Add a CF_API_TOKEN secret on the Worker in Cloudflare so Relaybase can manage domains and inbox routing.",
+        };
+      })();
 
   const worker: HealthStatus = !hasWorker
     ? {

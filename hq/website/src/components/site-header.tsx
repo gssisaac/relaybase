@@ -1,8 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 
-import { DownloadCtaLabel } from "@/components/download-cta-label";
+import { DownloadMacButton } from "@/components/download-mac-button";
 import { GithubIcon } from "@/components/icons/github";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +59,7 @@ export function SiteHeader() {
           <Button
             variant="outline"
             size="sm"
+            nativeButton={false}
             render={
               <a
                 href={siteConfig.githubWorkerUrl}
@@ -73,10 +73,7 @@ export function SiteHeader() {
             <GithubIcon className="size-3.5" />
             <span>GitHub</span>
           </Button>
-          <Button render={<Link href={siteConfig.getStartedPath} />} size="sm">
-            <DownloadCtaLabel />
-            <ArrowRight data-icon="inline-end" />
-          </Button>
+          <DownloadMacButton size="sm" showArrow location="header" />
         </div>
       </div>
     </header>

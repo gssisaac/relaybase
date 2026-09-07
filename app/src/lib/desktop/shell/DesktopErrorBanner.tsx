@@ -7,6 +7,7 @@ import {
   desktopOpenExternal,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
+import { CfApiTokenPermissionRows } from "./CfApiTokenPermissionRows";
 
 function ActionLink({
   href,
@@ -82,7 +83,11 @@ export function DesktopErrorBanner({
           </div>
         </div>
       ) : null}
-      {help.permissions && help.permissions.length > 0 ? (
+      {help.permissionChecks && help.permissionChecks.length > 0 ? (
+        <div className="rounded-md border border-border/80 bg-background/60 p-3">
+          <CfApiTokenPermissionRows checks={help.permissionChecks} />
+        </div>
+      ) : help.permissions && help.permissions.length > 0 ? (
         <div className="rounded-md border border-border/80 bg-background/60 px-3 py-2">
           <p className="text-xs font-medium text-foreground">
             Required API token permissions

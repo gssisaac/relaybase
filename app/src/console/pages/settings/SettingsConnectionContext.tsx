@@ -15,12 +15,13 @@ import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
   desktopGetCredentials,
   desktopPushServerToken,
-  desktopSaveWorkerConnection,
+  saveUserConnection,
   desktopStartCfOAuth,
   listenCfOAuthResult,
   desktopVerifyCfToken,
   desktopVerifyWorkerConnection,
   desktopOpenExternal,
+  cfTokenPermissionErrorHelp,
   explainDesktopError,
   explainCfOAuthError,
   isCloudflareAuthExpired,
@@ -73,6 +74,7 @@ type SettingsConnectionContextValue = {
   handleSaveServerToken: () => Promise<void>;
   handlePasteServerToken: (token: string) => Promise<boolean>;
   handleSaveWorker: () => Promise<void>;
+  handleVerifyCf: () => Promise<boolean>;
   handleRefreshStatus: () => Promise<void>;
 };
 
@@ -327,8 +329,9 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     setWorkerMessage(null);
     try {
       const result = await desktopVerifyWorkerConnection(workerUrl);
-      await desktopSaveWorkerConnection({
+      await saveUserConnection({
         workerUrl: result.workerUrl,
+        accountId: result.accountId,
         workerScriptName: result.workerScriptName,
         workerVersion: result.version,
       });
@@ -343,6 +346,63 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     }
   }
 
+  async function handleVerifyCf(): Promise<boolean> {
+    const url = credentials?.workerUrl?.trim() || workerUrl.trim();
+    if (!url) {
+      setCfError({
+        title: "Worker not connected",
+        detail: "Save a Worker URL first.",
+        fix: "Go to the Routing Worker tab and configure your Worker URL, then verify.",
+      });
+      return false;
+    }
+    setCfBusy(true);
+    setCfError(null);
+    setCfMessage(null);
+    try {
+      const result = await desktopVerifyWorkerConnection(url);
+      if (!result.cfApiTokenSet) {
+        setCfError({
+          title: "API token not configured",
+          detail: "The Worker has no CF_API_TOKEN secret configured yet.",
+          fix: "Add CF_API_TOKEN under Worker settings → Runtime variables and secrets, or click Set up again.",
+        });
+        await refreshConnectionStatus();
+        return false;
+      }
+      if (result.cfApiTokenValid === false) {
+        setCfError(
+          cfTokenPermissionErrorHelp(result.cfApiTokenPermissions, {
+            workerVersion: result.version,
+          }),
+        );
+        await refreshConnectionStatus();
+        return false;
+      }
+      if (!mailApiReady(result)) {
+        setCfError({
+          title: "Cloudflare API not ready",
+          detail: "The Worker reported that Cloudflare API is not ready.",
+          fix: "Verify your Cloudflare API token and permissions.",
+        });
+        await refreshConnectionStatus();
+        return false;
+      }
+      setCfMessage("Cloudflare API token and permissions verified successfully.");
+      await refreshCredentials();
+      await refreshConnectionStatus();
+      return true;
+    } catch (err) {
+      setCfError(
+        explainDesktopError(err, "Could not verify Cloudflare API token"),
+      );
+      await refreshConnectionStatus().catch(() => {});
+      return false;
+    } finally {
+      setCfBusy(false);
+    }
+  }
+
   async function handleRefreshStatus() {
     const url = credentials?.workerUrl?.trim() || workerUrl.trim();
     if (!url) {
@@ -354,6 +414,8 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       return;
     }
     setWorkerError(null);
+    setCfError(null);
+    setCfMessage(null);
     await refreshConnectionStatus();
   }
 
@@ -505,6 +567,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       handleSaveServerToken,
       handlePasteServerToken,
       handleSaveWorker,
+      handleVerifyCf,
       handleRefreshStatus,
     }),
     [

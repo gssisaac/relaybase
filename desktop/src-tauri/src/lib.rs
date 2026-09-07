@@ -73,6 +73,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             // storage commands
+            storage::get_user_connection,
+            storage::save_user_connection,
+            storage::clear_user_connection,
             storage::save_cf_credentials,
             storage::get_credentials,
             storage::clear_stored_credentials,

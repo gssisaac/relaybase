@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, ExternalLink, Loader2, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,11 +18,11 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CF_API_TOKENS_URL,
-  CF_REQUIRED_TOKEN_PERMISSIONS,
   cloudflareWorkerSettingsUrl,
   desktopOpenExternal,
   desktopVerifyWorkerConnection,
   explainDesktopError,
+  cfTokenPermissionErrorHelp,
   isCloudflareAuthExpired,
   mailApiReady,
   type DesktopErrorHelp,
@@ -31,28 +32,27 @@ import { DesktopErrorBanner } from "@/lib/desktop/shell";
 function CreateCustomTokenGuide() {
   return (
     <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Open Create API Token and choose{" "}
+        <span className="font-medium text-foreground">Custom token</span> (click{" "}
+        <span className="font-medium text-foreground">Get started</span>). Then
+        grant these 5 required permissions:
+      </p>
       <img
-        src="/setup/cf-create-custom-token.png"
-        alt="Cloudflare Create API Token page. Custom token section with Get started."
+        src="/setup/cf-token-permissions.png"
+        alt="Cloudflare API token Permissions section showing the 5 required rows: Zone → Email Routing Rules → Edit, Zone → Zone Settings → Edit, Zone → Zone → Read, Zone → DNS → Edit, Account → Email Sending → Edit."
         className="w-full rounded-md border border-border"
       />
-      <p className="text-xs text-muted-foreground">
-        Open Create API Token and use{" "}
-        <span className="font-medium text-foreground">Custom token</span>. Click{" "}
-        <span className="font-medium text-foreground">Get started</span>, then
-        grant these permissions:
-      </p>
-      <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
-        {CF_REQUIRED_TOKEN_PERMISSIONS.map((p) => (
-          <li key={p}>{p}</li>
-        ))}
-      </ul>
+      <div className="text-[11px] text-muted-foreground">
+        <span className="font-medium text-foreground">Zone Resources:</span> Set to{" "}
+        <span className="font-medium text-foreground">Include — All zones</span> (or include all domains you plan to use).
+      </div>
       <button
         type="button"
-        className="inline-flex items-center gap-1 text-xs text-brand hover:underline"
+        className="inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline"
         onClick={() => void desktopOpenExternal(CF_API_TOKENS_URL)}
       >
-        Create token in Cloudflare
+        Open Cloudflare API Tokens
         <ExternalLink className="size-3" />
       </button>
     </div>
@@ -135,17 +135,25 @@ export function EnableEmailApiDialog({
         );
       }
       if (result.cfApiTokenValid === false) {
-        throw new Error(
-          "CF_API_TOKEN is set but Cloudflare rejected it. Check permissions (Email Routing Rules Edit, Zone Read, DNS Edit) and try again.",
-        );
+        const help = cfTokenPermissionErrorHelp(result.cfApiTokenPermissions, {
+          workerVersion: result.version,
+        });
+        setVerifyError(help);
+        toast.error(help.title, { description: help.detail });
+        return;
       }
       if (!mailApiReady(result)) {
         throw new Error("Cloudflare API is not ready on this Worker.");
       }
+      toast.success("Cloudflare API token and permissions verified successfully.");
       onVerified();
       onOpenChange(false);
     } catch (err) {
-      setVerifyError(explainDesktopError(err, "Could not verify Cloudflare API"));
+      const errorHelp = explainDesktopError(err, "Could not verify Cloudflare API");
+      setVerifyError(errorHelp);
+      toast.error(errorHelp.title, {
+        description: errorHelp.detail,
+      });
     } finally {
       setVerifyBusy(false);
     }
@@ -359,8 +367,10 @@ export function EnableEmailApiDialog({
                 disabled={busy || !canVerify}
                 onClick={() => void handleVerify()}
               >
-                {verifyBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                I have done this — verify
+                {verifyBusy ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : null}
+                {verifyBusy ? "Verifying…" : "I have done this — verify"}
               </Button>
             </div>
           ) : null}

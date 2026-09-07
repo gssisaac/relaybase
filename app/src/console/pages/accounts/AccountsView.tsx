@@ -13,7 +13,9 @@ import {
 } from "@/console/lib/paths";
 import { fetchEmailCached } from "@/email/components/mailbox/email-cached-fetch";
 import {
+  ExternalLink,
   Globe,
+  Info,
   Loader2,
   MailX,
   MoreHorizontal,
@@ -45,6 +47,10 @@ import {
   desktopAwareFetch,
   readResponseJson,
 } from "@/lib/desktop/api";
+import {
+  GOOGLE_WORKSPACE_MIGRATION_DOC_URL,
+  desktopOpenExternal,
+} from "@/lib/desktop/bridge";
 
 import {
   CloudflareConfigAlert,
@@ -1179,17 +1185,50 @@ export function AccountsView() {
                   {accountsStore.mxConflictDomain}
                 </span>{" "}
                 already has apex MX records for another mail provider (for
-                example Google Workspace). Cloudflare Email Routing cannot
-                share those records.
+                example Google Workspace or Microsoft 365). Cloudflare Email
+                Routing cannot share root domain MX records with another provider.
               </DialogDescription>
             </DialogHeader>
+
+            <div className="rounded-lg border border-border/80 bg-muted/40 p-3 space-y-2 text-xs">
+              <div className="flex items-start gap-2">
+                <Info className="size-4 shrink-0 text-brand mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-foreground">
+                    Why can&apos;t Google Workspace and Cloudflare share a root domain?
+                  </p>
+                  <p className="text-muted-foreground leading-relaxed">
+                    DNS MX records route all inbound mail for a domain to a single provider. Sending mail servers cannot split traffic between Google Workspace and Cloudflare on the same root domain.
+                  </p>
+                </div>
+              </div>
+              <div className="border-t border-border/60 pt-2 space-y-1.5">
+                <p className="font-medium text-foreground">
+                  Want to keep Google Workspace active for personal inboxes?
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  Add a <span className="font-medium text-foreground">subdomain</span> (such as <span className="font-mono text-foreground">mail.{accountsStore.mxConflictDomain}</span> or <span className="font-mono text-foreground">app.{accountsStore.mxConflictDomain}</span>) in Relaybase instead. This allows Google Workspace on the root domain and Relaybase on the subdomain to run side-by-side without paying for extra Google seats.
+                </p>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 font-medium text-brand hover:underline pt-0.5"
+                  onClick={() =>
+                    void desktopOpenExternal(GOOGLE_WORKSPACE_MIGRATION_DOC_URL)
+                  }
+                >
+                  Read the Google Workspace Coexistence & Migration Guide
+                  <ExternalLink className="size-3" />
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-2 text-sm">
               <p className="font-medium text-destructive">
                 Deleting them will stop inbound mail delivery to the previous
-                provider. Existing Workspace (or other) inboxes for this domain
-                will no longer receive mail.
+                provider. Existing Google Workspace (or other) inboxes on this root
+                domain will no longer receive mail.
               </p>
-              <p className="text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Sending DNS on{" "}
                 <span className="font-mono">
                   cf-bounce.{accountsStore.mxConflictDomain}
@@ -1198,9 +1237,9 @@ export function AccountsView() {
               </p>
             </div>
             {accountsStore.mxConflicts.length ? (
-              <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border p-3">
+              <div className="max-h-36 space-y-1.5 overflow-y-auto rounded-md border p-3">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Records to delete
+                  Apex MX records to delete
                 </p>
                 <ul className="space-y-1.5 font-mono text-xs">
                   {accountsStore.mxConflicts.map((mx) => (
@@ -1212,7 +1251,7 @@ export function AccountsView() {
                 </ul>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 No conflicting apex MX records are listed. Confirming will retry
                 enabling Email Routing.
               </p>

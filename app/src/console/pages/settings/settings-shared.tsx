@@ -1,9 +1,10 @@
 "use client";
 
-import { Loader2, Pencil, type LucideIcon } from "lucide-react";
+import { ExternalLink, Loader2, Pencil, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { desktopOpenExternal } from "@/lib/desktop/bridge";
 import {
   Card,
   CardContent,
@@ -35,6 +36,43 @@ export function maskAccountId(value: string): string {
   if (!trimmed) return "—";
   if (trimmed.length <= 8) return "*".repeat(trimmed.length);
   return `${trimmed.slice(0, 4)}${"*".repeat(trimmed.length - 8)}${trimmed.slice(-4)}`;
+}
+
+export type CloudflareConsoleLinkProps = {
+  href: string;
+  label?: string;
+  className?: string;
+};
+
+export function CloudflareConsoleLink({
+  href,
+  label = "Open in Cloudflare",
+  className,
+}: CloudflareConsoleLinkProps) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 text-xs font-medium text-brand hover:underline",
+        className,
+      )}
+      onClick={() => void desktopOpenExternal(href)}
+    >
+      {label}
+      <ExternalLink className="size-3" aria-hidden />
+    </button>
+  );
+}
+
+export function SettingsCfConsoleLink({
+  href,
+  label,
+}: CloudflareConsoleLinkProps) {
+  return (
+    <div className="flex justify-end">
+      <CloudflareConsoleLink href={href} label={label} />
+    </div>
+  );
 }
 
 export function HealthStatus({
@@ -86,6 +124,7 @@ export function ConnectionCard({
   description,
   editing,
   onEdit,
+  consoleLink,
   children,
 }: {
   icon: LucideIcon;
@@ -94,6 +133,7 @@ export function ConnectionCard({
   /** When provided, an "Edit" toggle is shown. Omit for always-on cards. */
   editing?: boolean;
   onEdit?: () => void;
+  consoleLink?: CloudflareConsoleLinkProps;
   children: ReactNode;
 }) {
   return (
@@ -101,7 +141,13 @@ export function ConnectionCard({
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <CardTitle className="text-sm">{title}</CardTitle>
+          <CardTitle className="min-w-0 flex-1 text-sm">{title}</CardTitle>
+          {consoleLink ? (
+            <CloudflareConsoleLink
+              href={consoleLink.href}
+              label={consoleLink.label}
+            />
+          ) : null}
           {!editing && onEdit ? (
             <Button
               type="button"
@@ -195,6 +241,7 @@ export function StorageBindingCard({
   pending,
   truncated,
   footer,
+  consoleLink,
 }: {
   icon: LucideIcon;
   title: string;
@@ -208,13 +255,20 @@ export function StorageBindingCard({
   pending?: boolean;
   truncated?: boolean;
   footer?: ReactNode;
+  consoleLink?: CloudflareConsoleLinkProps;
 }) {
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <CardTitle className="text-sm">{title}</CardTitle>
+          <CardTitle className="min-w-0 flex-1 text-sm">{title}</CardTitle>
+          {consoleLink ? (
+            <CloudflareConsoleLink
+              href={consoleLink.href}
+              label={consoleLink.label}
+            />
+          ) : null}
         </div>
         <CardDescription>{description}</CardDescription>
       </CardHeader>

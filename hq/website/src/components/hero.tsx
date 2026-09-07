@@ -1,13 +1,6 @@
-import Link from "next/link";
-import {
-  ArrowRight,
-  Code2,
-  Layers,
-  Mail,
-  MonitorSmartphone,
-} from "lucide-react";
+import { Code2, Layers, Mail, MonitorSmartphone } from "lucide-react";
 
-import { DownloadCtaLabel } from "@/components/download-cta-label";
+import { DownloadMacButton } from "@/components/download-mac-button";
 import { GithubIcon } from "@/components/icons/github";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,13 +66,11 @@ export function Hero() {
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-                <DownloadCtaLabel />
-                <ArrowRight data-icon="inline-end" />
-              </Button>
+              <DownloadMacButton size="lg" showArrow location="hero" />
               <Button
                 variant="outline"
                 size="lg"
+                nativeButton={false}
                 render={
                   <a
                     href={siteConfig.githubWorkerUrl}

@@ -281,13 +281,15 @@ pub async fn complete_cf_oauth_inner(
     }
 
     let mut creds = load_credentials()?.unwrap_or_default();
-    if let Some(acct) = account_id {
-        let acct = acct.trim();
-        if !acct.is_empty() {
-            creds.account_id = acct.to_string();
+    if creds.account_id.trim().is_empty() {
+        if let Some(acct) = account_id {
+            let acct = acct.trim();
+            if !acct.is_empty() {
+                creds.account_id = acct.to_string();
+                save_credentials(&creds)?;
+            }
         }
     }
-    save_credentials(&creds)?;
     load_credentials_merged()
 }
 

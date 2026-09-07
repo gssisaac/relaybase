@@ -130,6 +130,52 @@ fn default_d1_app() -> D1BindingSnapshot {
     }
 }
 
+fn parse_cf_api_token_permissions(value: &Value) -> Option<CfApiTokenPermissions> {
+    let obj = value.get("cfApiTokenPermissions")?.as_object()?;
+    let zone_read = obj.get("zoneRead")?.as_str()?.to_string();
+    let email_routing_read = obj
+        .get("emailRoutingRead")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let email_routing_edit = obj.get("emailRoutingEdit")?.as_str()?.to_string();
+    let email_sending_edit = obj
+        .get("emailSendingEdit")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let dns_edit = obj.get("dnsEdit")?.as_str()?.to_string();
+    if zone_read.is_empty() || email_routing_edit.is_empty() || dns_edit.is_empty() {
+        return None;
+    }
+    Some(CfApiTokenPermissions {
+        zone_read,
+        email_routing_read,
+        email_routing_edit,
+        email_sending_edit,
+        dns_edit,
+    })
+}
+
+async fn fetch_cf_token_permissions_fallback(
+    http: &reqwest::Client,
+    base: &str,
+    token: &str,
+) -> Option<CfApiTokenPermissions> {
+    let url = format!("{base}/console/cf-token-permissions");
+    let res = http
+        .get(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .ok()?;
+    if !res.status().is_success() {
+        return None;
+    }
+    let value: Value = res.json().await.ok()?;
+    parse_cf_api_token_permissions(&value)
+}
+
 fn parse_d1_binding(value: &Value, kind: &str) -> D1BindingSnapshot {
     let defaults = match kind {
         "logs" => default_d1_logs(),
@@ -191,6 +237,16 @@ fn parse_d1_binding(value: &Value, kind: &str) -> D1BindingSnapshot {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CfApiTokenPermissions {
+    pub zone_read: String,
+    pub email_routing_read: String,
+    pub email_routing_edit: String,
+    pub email_sending_edit: String,
+    pub dns_edit: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkerConnectResult {
@@ -210,9 +266,12 @@ pub struct WorkerConnectResult {
     pub r2_usage_truncated: Option<bool>,
     /// True when the Worker has a CF_API_TOKEN wrangler secret set.
     pub cf_api_token_set: bool,
-    /// True when that secret passed a Cloudflare Zone Read probe.
+    /// True when that secret passed Zone Read + routing/DNS Edit probes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cf_api_token_valid: Option<bool>,
+    /// Per-row Cloudflare token probe from `/console/connect`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cf_api_token_permissions: Option<CfApiTokenPermissions>,
     /// True when the Worker has a send_email EMAIL binding.
     #[serde(default)]
     pub email_binding_configured: bool,
@@ -435,6 +494,15 @@ pub async fn verify_worker_connection(
         d1_mail.configured = mail;
     }
 
+    let cf_api_token_valid = value
+        .get("cfApiTokenValid")
+        .and_then(|v| v.as_bool());
+    let mut cf_api_token_permissions = parse_cf_api_token_permissions(&value);
+    if cf_api_token_permissions.is_none() && cf_api_token_valid == Some(false) {
+        cf_api_token_permissions =
+            fetch_cf_token_permissions_fallback(&http, &base, &token).await;
+    }
+
     Ok(WorkerConnectResult {
         ok: true,
         product: "relaybase".into(),
@@ -477,9 +545,8 @@ pub async fn verify_worker_connection(
             .get("cfApiTokenSet")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
-        cf_api_token_valid: value
-            .get("cfApiTokenValid")
-            .and_then(|v| v.as_bool()),
+        cf_api_token_valid,
+        cf_api_token_permissions,
         email_binding_configured: value
             .get("emailBindingConfigured")
             .and_then(|v| v.as_bool())
@@ -496,30 +563,10 @@ pub async fn save_worker_connection(
     worker_script_name: Option<String>,
     worker_version: Option<String>,
 ) -> Result<StoredCredentials, String> {
-    let base = normalize_worker_url(&worker_url)?;
-    // Prefer merging into existing creds, but never block a successful verify
-    // on a legacy/unreadable workspace.json — overwrite with what we know.
-    let mut creds = match load_credentials() {
-        Ok(existing) => existing.unwrap_or_default(),
-        Err(e) => {
-            log::warn!("load_credentials failed during save_worker_connection: {e}");
-            StoredCredentials::default()
-        }
-    };
-    creds.worker_url = base;
-    creds.worker_script_name = worker_script_name
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if creds.worker_script_name.is_empty() {
-        creds.worker_script_name = "relaybase-api".into();
-    }
-    if let Some(version) = worker_version {
-        let v = version.trim();
-        if !v.is_empty() {
-            creds.worker_version = v.to_string();
-        }
-    }
-    save_credentials(&creds)?;
-    load_credentials_merged()
+    crate::storage::save_user_connection_data(
+        &worker_url,
+        None,
+        worker_script_name.as_deref(),
+        worker_version.as_deref(),
+    )
 }

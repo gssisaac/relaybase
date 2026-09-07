@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { DownloadCtaLabel } from "@/components/download-cta-label";
+import { DownloadMacButton } from "@/components/download-mac-button";
 import { GithubIcon } from "@/components/icons/github";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/site-config";
@@ -30,12 +30,11 @@ export function Footer() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button render={<Link href={siteConfig.getStartedPath} />} size="lg">
-              <DownloadCtaLabel />
-            </Button>
+            <DownloadMacButton size="lg" location="footer" />
             <Button
               variant="outline"
               size="lg"
+              nativeButton={false}
               render={
                 <a
                   href={siteConfig.githubWorkerUrl}
@@ -59,6 +58,9 @@ export function Footer() {
             </Link>
             <Link href="/#infrastructure" className="hover:text-foreground">
               Infrastructure
+            </Link>
+            <Link href="/#faq" className="hover:text-foreground">
+              FAQ
             </Link>
             <Link href="/resources" className="hover:text-foreground">
               Resources

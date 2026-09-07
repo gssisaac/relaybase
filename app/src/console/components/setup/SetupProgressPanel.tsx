@@ -18,7 +18,7 @@ import {
   desktopRollbackInstall,
   desktopOwnerSetupAdmin,
   desktopRegisterWorkerWithConsole,
-  desktopSaveWorkerConnection,
+  saveUserConnection,
   desktopVerifyWorkerConnection,
   explainDesktopError,
   explainWorkerUpdateTargetError,
@@ -350,8 +350,9 @@ export function SetupProgressPanel({
     connect?: WorkerConnectResult,
   ) {
     const workerUrl = connect?.workerUrl || result.workerUrl;
-    await desktopSaveWorkerConnection({
+    await saveUserConnection({
       workerUrl,
+      accountId: connect?.accountId || cfOAuthAccountId || null,
       workerScriptName:
         connect?.workerScriptName || result.workerScriptName || "relaybase-api",
       workerVersion: result.workerVersion || connect?.version,

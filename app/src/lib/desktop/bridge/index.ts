@@ -9,3 +9,4 @@ export * from "./owner";
 export * from "./team";
 export * from "./storage";
 export * from "./files";
+export * from "../user-data";

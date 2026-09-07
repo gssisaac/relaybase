@@ -2,7 +2,6 @@
 
 import { AlertTriangle } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -49,19 +48,20 @@ export function SendingWarningIcon({
   return (
     <Popover>
       <PopoverTrigger
+        nativeButton={false}
         render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+          <span
             className={cn(
-              "p-0 text-amber-600 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-400",
-              size === "sm" ? "h-4 w-4" : "h-7 w-7",
+              "inline-flex shrink-0 items-center justify-center rounded-md text-amber-600 hover:text-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-400 dark:hover:text-amber-400",
+              size === "sm" ? "size-4" : "size-7",
               className,
             )}
             aria-label="Sending restriction"
             onClick={(event) => {
               event.preventDefault();
+              event.stopPropagation();
+            }}
+            onPointerDown={(event) => {
               event.stopPropagation();
             }}
           />

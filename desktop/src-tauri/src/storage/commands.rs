@@ -1,7 +1,8 @@
 use super::credentials::{
-    clear_all_relaybase_data, clear_credentials, clear_team_login, load_credentials,
-    load_credentials_merged, load_team_login, save_credentials, save_team_login,
-    StoredCredentials, TeamLogin,
+    clear_all_relaybase_data, clear_credentials, clear_team_login, list_workspaces,
+    load_active_workspace, load_credentials, load_credentials_merged, load_team_login,
+    remove_workspace, save_credentials, save_team_login, set_active_workspace,
+    upsert_active_workspace, StoredCredentials, TeamLogin, WorkspaceEntry,
 };
 use super::layout::{
     current_scope_id, migrate_mail_to_desktop_user, migrate_storage_layout_v2,
@@ -217,4 +218,31 @@ pub async fn save_team_login_cmd(
 #[tauri::command]
 pub async fn clear_team_login_cmd() -> Result<(), String> {
     clear_team_login()
+}
+
+// --- Workspaces keymap commands ---
+
+#[tauri::command]
+pub async fn list_workspaces_cmd() -> Result<crate::storage::Workspaces, String> {
+    list_workspaces()
+}
+
+#[tauri::command]
+pub async fn get_active_workspace() -> Result<Option<WorkspaceEntry>, String> {
+    load_active_workspace()
+}
+
+#[tauri::command]
+pub async fn set_active_workspace_cmd(key: String) -> Result<(), String> {
+    set_active_workspace(key.trim())
+}
+
+#[tauri::command]
+pub async fn remove_workspace_cmd(key: String) -> Result<(), String> {
+    remove_workspace(key.trim())
+}
+
+#[tauri::command]
+pub async fn upsert_active_workspace_cmd(entry: WorkspaceEntry) -> Result<String, String> {
+    upsert_active_workspace(entry)
 }

@@ -14,7 +14,10 @@ use super::worker_accounts::{
     KEYRING_SERVICE, LEGACY_SESSION_USER,
 };
 use crate::cloudflare::{resolve_account_id_for_recover_with_hint, secrets_store_accessible};
-use crate::storage::{get_cf_oauth_session, load_credentials, save_credentials};
+use crate::storage::{
+    get_cf_oauth_session, load_active_workspace, load_credentials, save_credentials,
+    upsert_active_workspace,
+};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -279,9 +282,19 @@ fn normalize_passtoken(raw: &str) -> String {
 fn persist_worker_url(worker_url: &str) -> Result<(), String> {
     let url = worker_accounts::normalize_worker_url(worker_url);
     remember_worker_url(&url)?;
-    let mut creds = load_credentials()?.unwrap_or_default();
-    creds.worker_url = url;
-    save_credentials(&creds)
+    // Upsert the active workspace entry, preserving any existing account id
+    // / relaybase account / persisted scope id. This keeps sign-out → sign-in
+    // pointing at the same `~/.relaybase/{scopeId}/` tree.
+    let existing = load_active_workspace()?.unwrap_or_default();
+    let mut entry = existing.clone();
+    if !url.is_empty() {
+        entry.worker_url = url;
+    }
+    if entry.worker_script_name.trim().is_empty() {
+        entry.worker_script_name = "relaybase-api".to_string();
+    }
+    upsert_active_workspace(entry)?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -487,7 +500,20 @@ pub async fn owner_login(
     })?;
     set_scoped_access("mail", base, mail_access, expires_in);
     clear_scoped_access("console");
-    persist_worker_url(base)?;
+    // Upsert the active workspace, capturing the CF account id when the
+    // worker reports one so the scope id is stable across sign-out / sign-in.
+    let cf_account_id = json_string(&value, "accountId").unwrap_or("").to_string();
+    let existing = load_active_workspace()?.unwrap_or_default();
+    let mut entry = existing.clone();
+    entry.worker_url = base.to_string();
+    if !cf_account_id.is_empty() {
+        entry.account_id = cf_account_id;
+    }
+    if entry.worker_script_name.trim().is_empty() {
+        entry.worker_script_name = "relaybase-api".to_string();
+    }
+    upsert_active_workspace(entry)?;
+    remember_worker_url(base)?;
     owner_passtoken::store(&passtoken, base)?;
     owner_session_status(Some(base))
 }

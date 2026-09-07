@@ -1,5 +1,5 @@
 use crate::cloudflare::{put_worker_secret, CfClient};
-use crate::storage::StoredCredentials;
+use crate::storage::WorkspaceEntry;
 
 use super::types::AutoInstallResult;
 
@@ -10,13 +10,13 @@ pub(crate) fn generate_auth_pepper() -> String {
     format!("{a}{b}")
 }
 
-/// Merge an auto-install result into stored credentials (preserves
-/// Relaybase account + CF account id if already present).
+/// Merge an auto-install result into a workspace entry (preserves
+/// Relaybase account + CF account id + persisted scope id if already present).
 pub fn merge_into_credentials(
-    existing: &StoredCredentials,
+    existing: &WorkspaceEntry,
     result: &AutoInstallResult,
     account_id: Option<String>,
-) -> StoredCredentials {
+) -> WorkspaceEntry {
     let mut next = existing.clone();
     next.account_id = account_id
         .filter(|a| !a.trim().is_empty())

@@ -22,6 +22,27 @@ export type DesktopCredentials = {
   cfOauthAccessExpiresAt: string;
   // Cloudflare account id resolved from the OAuth flow.
   cfOauthAccountId: string;
+  /** Persisted opaque scope id for the active workspace. */
+  scopeId: string;
+};
+
+export type WorkspaceEntry = {
+  accountId: string;
+  workerUrl: string;
+  workerScriptName: string;
+  workerVersion: string;
+  relaybaseAccountId: string;
+  relaybaseEmail: string;
+  relaybaseSession: string;
+  /** Persisted opaque scope id (`s-{16hex}`). */
+  scopeId: string;
+  lastUsedAt: string;
+};
+
+export type Workspaces = {
+  version: number;
+  lastActiveKey: string;
+  workspaces: Record<string, WorkspaceEntry>;
 };
 
 export async function desktopGetCredentials(): Promise<DesktopCredentials | null> {
@@ -60,6 +81,7 @@ export async function desktopSaveRelaybaseAccount(input: {
     cfOauthRefreshToken: existing?.cfOauthRefreshToken ?? "",
     cfOauthAccessExpiresAt: existing?.cfOauthAccessExpiresAt ?? "",
     cfOauthAccountId: existing?.cfOauthAccountId ?? "",
+    scopeId: existing?.scopeId ?? "",
   };
   const res = await fetch("/api/local-credentials", {
     method: "PUT",
@@ -104,4 +126,35 @@ export async function desktopClearCredentials(): Promise<void> {
       workerVersion: "",
     }),
   });
+}
+
+// --- Workspaces keymap ---
+
+export async function desktopListWorkspaces(): Promise<Workspaces> {
+  if (!isDesktopRuntime()) {
+    return { version: 1, lastActiveKey: "", workspaces: {} };
+  }
+  return invoke("list_workspaces_cmd");
+}
+
+export async function desktopGetActiveWorkspace(): Promise<WorkspaceEntry | null> {
+  if (!isDesktopRuntime()) return null;
+  return invoke("get_active_workspace");
+}
+
+export async function desktopSetActiveWorkspace(key: string): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  await invoke("set_active_workspace_cmd", { key });
+}
+
+export async function desktopRemoveWorkspace(key: string): Promise<void> {
+  if (!isDesktopRuntime()) return;
+  await invoke("remove_workspace_cmd", { key });
+}
+
+export async function desktopUpsertActiveWorkspace(
+  entry: WorkspaceEntry,
+): Promise<string> {
+  if (!isDesktopRuntime()) return "";
+  return invoke("upsert_active_workspace_cmd", { entry });
 }

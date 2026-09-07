@@ -4,8 +4,8 @@ Rust module managing local disk storage under `~/.relaybase`, account scoping (l
 
 ## 1. Module Overview & Boundaries
 
-- **Account Scoping (Layout v2):** Tenant-owned data (mail, cache, preferences, API keys) is isolated under `~/.relaybase/{scopeId}/`, where `scopeId` is an opaque SHA-256 prefix `s-{16hex}` derived from account and worker URL (`layout.rs`).
-- **Workspace Credentials:** `workspace.json` holds non-sensitive endpoint configurations (`accountId`, `workerUrl`, `workerScriptName`, `relaybaseAccountId`, etc.) (`credentials.rs`).
+- **Account Scoping (Layout v2):** Tenant-owned data (mail, cache, preferences, API keys) is isolated under `~/.relaybase/{scopeId}/`, where `scopeId` is an opaque SHA-256 prefix `s-{16hex}` derived from account and worker URL (`layout.rs`). The `scopeId` is persisted in `workspaces.json` so sign-out → sign-in restores the same data directory.
+- **Workspace Keymap:** `workspaces.json` holds a keymap of all connected workspaces (single active selected by `lastActiveKey`). Each entry stores non-sensitive endpoint configuration + the persisted `scopeId` (`credentials.rs`).
 - **In-Memory OAuth State:** Transient Cloudflare OAuth access tokens and metadata live only in process RAM (`memory_session.rs`).
 - **Mail & Cache Store:** Atomic JSON and binary file I/O with path validation to prevent directory traversal (`mail_store.rs`).
 - **API Key Vault:** User API keys stored encrypted/permission-restricted on disk (`vault.rs`).
@@ -17,7 +17,7 @@ Rust module managing local disk storage under `~/.relaybase`, account scoping (l
 |------|-------------|
 | `mod.rs` | Module root & public re-exports |
 | `layout.rs` | Storage layout v2 scoping (`s-{hash}`), migrations, home dir resolution |
-| `credentials.rs` | `workspace.json` credentials, `team-login.json` identity, global wipe |
+| `credentials.rs` | `workspaces.json` keymap (workspace entries + persisted `scopeId`), `team-login.json` identity, global wipe |
 | `memory_session.rs` | Process-memory CF OAuth session holder (`CF_OAUTH_SESSION`) |
 | `mail_store.rs` | Local mail atom JSON, binary attachments, and cache JSON read/write |
 | `prefs.rs` | Email UI preferences (`email.json`) |
@@ -27,7 +27,7 @@ Rust module managing local disk storage under `~/.relaybase`, account scoping (l
 
 ## 3. Public Rust API (`mod.rs`)
 
-- **Credentials & Workspace:** `load_credentials`, `load_credentials_merged`, `save_credentials`, `clear_credentials`, `clear_all_relaybase_data`, `load_team_login`, `save_team_login`, `clear_team_login`
+- **Credentials & Workspace:** `load_credentials`, `load_credentials_merged`, `save_credentials`, `clear_credentials` (sign-out: in-memory only), `clear_all_relaybase_data`, `load_team_login`, `save_team_login`, `clear_team_login`, `list_workspaces`, `load_active_workspace`, `set_active_workspace`, `upsert_active_workspace`, `remove_workspace`
 - **Scoping & Layout:** `resolve_account_scope_id`, `current_scope_id`, `migrate_storage_layout_v2`, `migrate_mail_to_desktop_user`, `relaybase_dir`, `scoped_dir`, `workspace_path`, `ensure_dir`
 - **Mail Store:** `save_mail_json`, `load_mail_json`, `save_mail_binary`, `load_mail_binary`, `delete_mail_binary`, `delete_mail_binary_dir`, `save_cache_json`, `load_cache_json`
 - **In-Memory Session:** `get_cf_oauth_session`, `set_cf_oauth_session`, `clear_cf_oauth_session`, `apply_cf_oauth_session`

@@ -46,6 +46,9 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
     if (rest.startsWith("/domains/onboard")) {
       return `/console/domains${search}`;
     }
+    if (rest.startsWith("/domains/routing")) {
+      return `/console/domains/routing${rest.slice("/domains/routing".length)}${search}`;
+    }
     if (rest.startsWith("/domains/")) return null;
     return `/console/domains${search}`;
   }

@@ -126,6 +126,13 @@ export function useDomain(): DomainStore {
         mxConflictDomain: store.mxConflictDomain,
         mxConflictsCount: store.mxConflicts.length,
         mxResolving: store.mxResolving,
+        routingHealth: Array.from(store.routingHealth.values()).map((h) => [
+          h.domain,
+          h.routingEnabled,
+          h.disabledCount,
+          h.error,
+          h.checkedAt,
+        ]),
       }),
       () => setTick((t) => t + 1),
     );

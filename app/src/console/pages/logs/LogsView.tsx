@@ -29,7 +29,7 @@ type StatusFilter = "all" | "failed" | "success";
 type OpsLogEntry = {
   id: string;
   at: string;
-  kind: "send" | "bounce" | "api_error" | "inbound";
+  kind: "send" | "bounce" | "api_error" | "inbound" | "routing_repair";
   ok: boolean;
   status: number | null;
   source: "compose" | "api" | "broadcast" | "inbound";
@@ -96,6 +96,8 @@ function kindLabel(kind: OpsLogEntry["kind"]) {
       return "API Error";
     case "inbound":
       return "Receive";
+    case "routing_repair":
+      return "Routing repair";
     default:
       return kind;
   }

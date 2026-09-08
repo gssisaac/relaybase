@@ -1,11 +1,12 @@
 {
   "name": "relaybase-desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Relaybase desktop shell (Tauri + Next.js dual-mode)",
   "packageManager": "pnpm@9.12.0",
   "scripts": {
     "dev": "tauri dev",
+    "ensure:dev": "node scripts/ensure-dev.mjs",
     "build": "bash scripts/deploy/build-macos.sh aarch64",
     "build:macos": "bash scripts/deploy/build-macos.sh aarch64",
     "build:macos:aarch64": "bash scripts/deploy/build-macos.sh aarch64",

@@ -23,6 +23,7 @@ use super::log::emit_log;
 use super::manifest::{
     fetch_install_manifest, read_staged_version, stage_install_package, staged_worker_js_path,
 };
+use super::routing::repair_email_routing_for_all_domains;
 use super::schema::{init_worker_db_with_retry, migrate_worker_db_with_retry};
 use super::types::{AutoInstallResult, InstallDecision, InstallRunOptions, LogEvent};
 use super::url::{assert_worker_update_target_matches, preview_worker_update_target};
@@ -210,6 +211,8 @@ async fn auto_install_steps(
         Some(api_token),
     )
     .await?;
+
+    repair_email_routing_for_all_domains(app, &worker_url, console_access.as_deref()).await;
 
     let worker_version = fetch_worker_version(&worker_url)
         .await

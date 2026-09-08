@@ -25,6 +25,7 @@ mod log;
 mod manifest;
 mod probe;
 mod rollback;
+mod routing;
 mod schema;
 mod types;
 mod url;

@@ -2,7 +2,12 @@
   "hooks": {
     "stop": [
       {
-        "command": ".cursor/hooks/dev-app-launcher-stop.sh"
+        "command": ".cursor/hooks/duck-launcher-stop.sh"
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": ".cursor/hooks/duck-launcher-stop.sh"
       }
     ]
   },

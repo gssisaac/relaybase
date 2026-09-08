@@ -90,6 +90,32 @@ export type DomainSummary = {
   onboarding: DomainOnboardingSummary | null;
 };
 
+/**
+ * Cloudflare Email Routing health for one domain — flags literal-To rules
+ * left `enabled: false` after a Worker script upload, which bounce inbound
+ * mail with `550 5.1.1 Address not found`.
+ */
+export type DomainRoutingHealth = {
+  domain: string;
+  routingEnabled: boolean;
+  disabledCount: number;
+  disabledAddresses: string[];
+  error: string | null;
+  checkedAt: string;
+};
+
+type RoutingStatusEntry =
+  | {
+      domain: string;
+      routingEnabled: boolean;
+      rules: Array<{
+        address: string | null;
+        enabled: boolean;
+        action: string;
+      }>;
+    }
+  | { domain: string; error: string };
+
 export type DomainAddPhase =
   | "submitting"
   | "onboarding"
@@ -198,6 +224,7 @@ export class DomainStore {
   mxConflictDomain: string | null = null;
   mxConflicts: MxConflictRecord[] = [];
   mxResolving = false;
+  routingHealth: Map<string, DomainRoutingHealth> = new Map();
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private pollInFlight = false;
@@ -401,6 +428,7 @@ export class DomainStore {
       }>(res);
       if (!res.ok) throw new Error(data.error ?? "Failed to load domains");
       this.applyDomains(data.domains ?? [], { clearLoading: true });
+      void this.refreshRoutingHealth();
     } catch (e) {
       runInAction(() => {
         // Packaged app has no Next /api — keep UI usable on disk/cache without a red banner.
@@ -410,6 +438,73 @@ export class DomainStore {
         this.loading = false;
       });
     }
+  }
+
+  routingHealthForDomain(domain: string): DomainRoutingHealth | null {
+    return this.routingHealth.get(domain.trim().toLowerCase()) ?? null;
+  }
+
+  /** Refresh Email Routing rule status for one domain, or every domain when omitted. */
+  async refreshRoutingHealth(domain?: string) {
+    const key = domain?.trim().toLowerCase();
+    try {
+      const res = await desktopAwareFetch(
+        `/api/email/domains/routing${key ? `?domain=${encodeURIComponent(key)}` : ""}`,
+        { cache: "no-store", signal: timeoutSignal() },
+      );
+      const data = await readResponseJson<{
+        domains?: RoutingStatusEntry[];
+        error?: string;
+      }>(res);
+      if (!res.ok) throw new Error(data.error ?? "Failed to load routing status");
+      const checkedAt = new Date().toISOString();
+      runInAction(() => {
+        for (const entry of data.domains ?? []) {
+          const entryKey = entry.domain.trim().toLowerCase();
+          if ("error" in entry) {
+            this.routingHealth.set(entryKey, {
+              domain: entryKey,
+              routingEnabled: false,
+              disabledCount: 0,
+              disabledAddresses: [],
+              error: entry.error,
+              checkedAt,
+            });
+            continue;
+          }
+          const disabled = entry.rules.filter(
+            (rule) => rule.action === "worker" && rule.enabled === false,
+          );
+          this.routingHealth.set(entryKey, {
+            domain: entryKey,
+            routingEnabled: entry.routingEnabled,
+            disabledCount: disabled.length,
+            disabledAddresses: disabled
+              .map((rule) => rule.address ?? "")
+              .filter(Boolean),
+            error: null,
+            checkedAt,
+          });
+        }
+      });
+    } catch {
+      // Routing health is supplementary — leave prior state, dashboard can retry.
+    }
+  }
+
+  /** Re-apply Email Routing rules for every registered address on a domain. */
+  async repairRouting(domain: string): Promise<{ message: string }> {
+    const key = domain.trim().toLowerCase();
+    const res = await desktopAwareFetch("/api/email/domains/routing/repair", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain: key }),
+      signal: timeoutSignal(),
+    });
+    const data = await readResponseJson<{ error?: string }>(res);
+    if (!res.ok) throw new Error(data.error ?? "Failed to repair routing");
+    await this.refreshRoutingHealth(key);
+    return { message: `Repaired routing for ${key}` };
   }
 
   async addDomain(

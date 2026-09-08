@@ -106,10 +106,15 @@ export function AppSessionProvider({
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const desktopNow = isDesktopRuntime();
+      let desktopNow = isDesktopRuntime();
       if (!desktopNow && !desktop.isDesktop) {
-        store.setStatuses(EMPTY_OWNER, EMPTY_TEAM);
-        return;
+        const ready = await waitForDesktopRuntime(2_500);
+        if (cancelled) return;
+        desktopNow = ready || isDesktopRuntime();
+        if (!desktopNow && !desktop.isDesktop) {
+          store.setStatuses(EMPTY_OWNER, EMPTY_TEAM);
+          return;
+        }
       }
       if (!desktopNow) {
         const ready = await waitForDesktopRuntime(2_500);

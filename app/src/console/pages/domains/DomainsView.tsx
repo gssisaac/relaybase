@@ -245,6 +245,7 @@ export function DomainsView() {
   const [mxConflictDomain, setMxConflictDomain] = useState<string | null>(null);
   const [mxResolving, setMxResolving] = useState(false);
   const [fixDomain, setFixDomain] = useState<string | null>(null);
+  const [repairingDomain, setRepairingDomain] = useState<string | null>(null);
   const { isDesktop: desktop } = useDesktopChrome();
   const mailboxHealth = useMailboxHealth();
   const sendingHealth = useSendingHealth();
@@ -317,6 +318,22 @@ export function DomainsView() {
     queueRetryOnboarding(domain);
   }
 
+  async function handleRepairRouting(domain: string) {
+    setLocalError(null);
+    setMessage(null);
+    setRepairingDomain(domain);
+    try {
+      const result = await store.repairRouting(domain);
+      setMessage(result.message);
+    } catch (err) {
+      setLocalError(
+        err instanceof Error ? err.message : "Failed to repair routing",
+      );
+    } finally {
+      setRepairingDomain(null);
+    }
+  }
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar
@@ -386,6 +403,7 @@ export function DomainsView() {
                   <TableHead>Domain</TableHead>
                   <TableHead>Onboarding</TableHead>
                   <TableHead>Sending</TableHead>
+                  <TableHead>Routing</TableHead>
                   <TableHead>Senders</TableHead>
                   <TableHead>Audience</TableHead>
                   <TableHead>Inbound R2</TableHead>
@@ -468,6 +486,63 @@ export function DomainsView() {
                                   Fix issue
                                 </Button>
                               ) : null}
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const routing = store.routingHealthForDomain(
+                            entry.domain,
+                          );
+                          if (!routing) {
+                            return (
+                              <span className="text-xs text-muted-foreground">
+                                —
+                              </span>
+                            );
+                          }
+                          if (routing.error) {
+                            return (
+                              <span
+                                className="text-xs text-muted-foreground"
+                                title={routing.error}
+                              >
+                                Unknown
+                              </span>
+                            );
+                          }
+                          if (routing.disabledCount === 0) {
+                            return (
+                              <Badge variant="outline" className="text-[10px]">
+                                Ready
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400"
+                              >
+                                <AlertCircle className="mr-1 size-3" />
+                                {routing.disabledCount} rule
+                                {routing.disabledCount === 1 ? "" : "s"} disabled
+                              </Badge>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[11px]"
+                                disabled={repairingDomain === entry.domain}
+                                onClick={() =>
+                                  void handleRepairRouting(entry.domain)
+                                }
+                              >
+                                {repairingDomain === entry.domain
+                                  ? "Repairing…"
+                                  : "Repair routing"}
+                              </Button>
                             </div>
                           );
                         })()}

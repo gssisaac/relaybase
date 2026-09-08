@@ -1,11 +1,11 @@
 {
-  "version": "0.1.5",
-  "notes": "# Relaybase 0.1.5\n\nPairs with Worker install bundle **0.1.2**.\n\n## Highlights\n- Mail accounts and drafts survive sign-out and sign-in again\n\n## Changes\n- Replace single `workspace.json` with a `workspaces.json` keymap that persists `scopeId` per workspace\n- Stop clearing workspace config on owner sign-out so desktop data stays in the same scope directory\n- Migrate existing `workspace.json` entries to the new format on first launch",
-  "pub_date": "2026-09-07T05:23:24.311Z",
+  "version": "0.1.6",
+  "notes": "# Relaybase 0.1.6\n\nPairs with Worker install bundle **0.1.3**.\n\n## Highlights\n- Email Routing self-heal after Worker install and from the Domains dashboard\n- Fix desktop dev reload loops when Duck Launcher already runs the Next.js app\n\n## Changes\n- Auto-repair disabled Email Routing rules for all domains after Worker deploy\n- Domains dashboard shows routing health and a manual Repair routing action\n- Reuse an existing Next.js dev server in Duck Launcher instead of spawning duplicates\n- Wait for Tauri invoke before session boot to avoid startup race errors",
+  "pub_date": "2026-09-08T17:25:56.395Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.5.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlV5QnRvdVRmZFN5YVNQczNXbWRuYStsRU9yenVsMjlRYTQrcmdtTVQwYS8zOFJML0VocXhVZWJXZE80L2prekZRRWVQQTRhNm80WndDV1Jpamd6a1FJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4NzU4NTczCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKOFE1MWNKNnhnajR4cGZ3N0hGNXlmbFhIaWw3cDhzdGFDRnUxQkNvRWJuR01Xa1FFWjRNeXowOXhSQzQxU1MvUFp3b0dGcUtsT0U3aXlXS2lQNzdiQnc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.6.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WmE5NTA0N3o3eHh5ZlROdmZGTUh2eUtsUUpwNk10VVdVUGVhV0E5Vy9JdGRocGdXNG5xRzR5MzJhYnFFTFFZVzlTTzFsNFFxeXFxcVdOM1F6K2hvZ3dFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODg4MzI0CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKZkRieEkvK05vd0JHWS9WMjRPYTJXV1gxTmJPNi9vczdoTENBWUVaMk10M2NGN2RiMmVwRDFxd3lRcGVwaFpCaGJSZDZ3cVp5VWJkOVdnZEZXclRyRFE9PQo="
     }
   }
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { connectedCfAccountId, displayCfAccountId, resolveEffectiveCfAccountId, mailApiReady, cfApiTokenHealth, cfApiTokenPermissionsRejected, formatCfTokenAccessFix, cfTokenPermissionChecks, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl, cloudflareR2BucketUrl } from "./cloudflare.ts";
+import { connectedCfAccountId, displayCfAccountId, resolveEffectiveCfAccountId, mailApiReady, cfApiTokenHealth, cfApiTokenPermissionsRejected, formatCfTokenAccessFix, cfTokenPermissionChecks, cloudflareEmailSendingUrl, cloudflareDomainsOverviewUrl, cloudflareR2BucketUrl, cloudflareEmailRoutingOverviewUrl, cloudflareEmailRoutingRulesUrl } from "./cloudflare.ts";
 
 describe("mailApiReady", () => {
   it("is ready when the token is set and the probe is not false", () => {
@@ -221,5 +221,32 @@ describe("cloudflare dashboard urls", () => {
       `https://dash.cloudflare.com/${accountId}/r2/overview`,
     );
     assert.equal(cloudflareR2BucketUrl("", "relaybase-mailbox"), "https://dash.cloudflare.com/");
+  });
+
+  it("builds zone-scoped email routing deep links", () => {
+    const zoneId = "b".repeat(32);
+    assert.equal(
+      cloudflareEmailRoutingOverviewUrl(accountId, zoneId),
+      `https://dash.cloudflare.com/${accountId}/email-service/routing/${zoneId}/overview`,
+    );
+    assert.equal(
+      cloudflareEmailRoutingRulesUrl(accountId, zoneId),
+      `https://dash.cloudflare.com/${accountId}/email-service/routing/${zoneId}/routing-rules`,
+    );
+  });
+
+  it("falls back to the routing zone list without a zone id, dashboard home without an account id", () => {
+    assert.equal(
+      cloudflareEmailRoutingOverviewUrl(accountId, null),
+      `https://dash.cloudflare.com/${accountId}/email-service/routing`,
+    );
+    assert.equal(
+      cloudflareEmailRoutingRulesUrl(accountId, "  "),
+      `https://dash.cloudflare.com/${accountId}/email-service/routing`,
+    );
+    assert.equal(
+      cloudflareEmailRoutingOverviewUrl("", "b".repeat(32)),
+      "https://dash.cloudflare.com/",
+    );
   });
 });

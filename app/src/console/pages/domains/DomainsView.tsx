@@ -18,6 +18,8 @@ import {
 } from "@/lib/dashboard/DomainContext";
 import {
   GOOGLE_WORKSPACE_MIGRATION_DOC_URL,
+  cloudflareEmailRoutingOverviewUrl,
+  connectedCfAccountId,
   desktopOpenExternal,
 } from "@/lib/desktop/bridge";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
@@ -32,7 +34,7 @@ import { FixSendingDialog } from "@/console/pages/domains/FixSendingDialog";
 import { ImportCloudflareZonesDialog } from "@/console/pages/domains/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { useDesktopChrome } from "@/lib/desktop/shell";
+import { useDesktopChrome, useOptionalDesktop } from "@/lib/desktop/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -249,6 +251,8 @@ export function DomainsView() {
   const { isDesktop: desktop } = useDesktopChrome();
   const mailboxHealth = useMailboxHealth();
   const sendingHealth = useSendingHealth();
+  const desktopShell = useOptionalDesktop();
+  const cfAccountId = connectedCfAccountId(desktopShell?.credentials);
 
   const activeMxConflictDomain = mxConflictDomain ?? store.mxConflictDomain;
   const isMxResolving = mxResolving || store.mxResolving;
@@ -512,7 +516,7 @@ export function DomainsView() {
                               </span>
                             );
                           }
-                          if (routing.disabledCount === 0) {
+                          if (routing.disabledCount === 0 && routing.missingCount === 0) {
                             return (
                               <Badge variant="outline" className="text-[10px]">
                                 Ready
@@ -521,14 +525,27 @@ export function DomainsView() {
                           }
                           return (
                             <div className="flex flex-wrap items-center gap-1">
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400"
-                              >
-                                <AlertCircle className="mr-1 size-3" />
-                                {routing.disabledCount} rule
-                                {routing.disabledCount === 1 ? "" : "s"} disabled
-                              </Badge>
+                              {routing.disabledCount > 0 ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-amber-300 text-amber-700 dark:border-amber-800 dark:text-amber-400"
+                                >
+                                  <AlertCircle className="mr-1 size-3" />
+                                  {routing.disabledCount} rule
+                                  {routing.disabledCount === 1 ? "" : "s"} disabled
+                                </Badge>
+                              ) : null}
+                              {routing.missingCount > 0 ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-destructive/50 text-destructive"
+                                  title={routing.missingAddresses.join(", ")}
+                                >
+                                  <AlertCircle className="mr-1 size-3" />
+                                  {routing.missingCount} address
+                                  {routing.missingCount === 1 ? "" : "es"} not routed
+                                </Badge>
+                              ) : null}
                               <Button
                                 type="button"
                                 variant="outline"
@@ -648,6 +665,19 @@ export function DomainsView() {
                               <MoreHorizontal className="size-3.5" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void desktopOpenExternal(
+                                    cloudflareEmailRoutingOverviewUrl(
+                                      cfAccountId,
+                                      entry.onboarding?.zoneId,
+                                    ),
+                                  )
+                                }
+                              >
+                                <ExternalLink className="size-3.5" />
+                                Open in Cloudflare
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 variant="destructive"
                                 disabled={workingDomain === entry.domain}

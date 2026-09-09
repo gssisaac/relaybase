@@ -13,6 +13,7 @@ import {
 } from "@/console/lib/paths";
 import { fetchEmailCached } from "@/email/components/mailbox/email-cached-fetch";
 import {
+  AlertCircle,
   ExternalLink,
   Globe,
   Info,
@@ -49,8 +50,11 @@ import {
 } from "@/lib/desktop/api";
 import {
   GOOGLE_WORKSPACE_MIGRATION_DOC_URL,
+  cloudflareEmailRoutingRulesUrl,
+  connectedCfAccountId,
   desktopOpenExternal,
 } from "@/lib/desktop/bridge";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 
 import {
   CloudflareConfigAlert,
@@ -185,10 +189,13 @@ export function AccountsView() {
     useDashboardPaths();
   const searchParams = useSearchParams();
   const accountDetail = accountDetailFromSearch(searchParams);
-  const { domains, loading: domainsLoading } = useDomain();
+  const domainStore = useDomain();
+  const { domains, loading: domainsLoading } = domainStore;
   const accountsStore = useAccounts();
   const mailboxHealth = useMailboxHealth();
   const sendingHealth = useSendingHealth();
+  const desktop = useOptionalDesktop();
+  const cfAccountId = connectedCfAccountId(desktop?.credentials);
 
   const readyDomains = useMemo(
     () =>
@@ -224,6 +231,23 @@ export function AccountsView() {
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(
     () => new Set(),
   );
+  const [repairingRoutingDomain, setRepairingRoutingDomain] = useState<
+    string | null
+  >(null);
+
+  async function handleRepairRouting(domain: string) {
+    setRepairingRoutingDomain(domain);
+    accountsStore.clearError();
+    try {
+      const result = await domainStore.repairRouting(domain);
+      toast.success(result.message);
+      await domainStore.refreshRoutingHealth(domain);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to repair routing");
+    } finally {
+      setRepairingRoutingDomain(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -619,6 +643,10 @@ export function AccountsView() {
                 const countsReady = accountsStore.hasHydratedCounts(
                   entry.domain,
                 );
+                const missingRoutingSet = new Set(
+                  domainStore.routingHealthForDomain(entry.domain)
+                    ?.missingAddresses ?? [],
+                );
                 const domainUnread = countsReady
                   ? accountsStore
                       .addressesFor(entry.domain)
@@ -676,6 +704,16 @@ export function AccountsView() {
                                 </span>
                               );
                             })()}
+                            {missingRoutingSet.size > 0 ? (
+                              <span
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-destructive/50 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
+                                title={`No Cloudflare routing rule for: ${[...missingRoutingSet].join(", ")}. Mail to these addresses is silently dropped.`}
+                              >
+                                <AlertCircle className="size-3" />
+                                {missingRoutingSet.size} not routed in
+                                Cloudflare
+                              </span>
+                            ) : null}
                           </CardTitle>
                           <CardDescription>
                             {accountSummary}
@@ -690,6 +728,37 @@ export function AccountsView() {
                           ) : null}
                         </div>
                       </button>
+                      {missingRoutingSet.size > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-destructive/50 text-destructive hover:text-destructive"
+                          disabled={repairingRoutingDomain === entry.domain}
+                          onClick={() =>
+                            void handleRepairRouting(entry.domain)
+                          }
+                        >
+                          {repairingRoutingDomain === entry.domain
+                            ? "Repairing…"
+                            : `Repair routing (${missingRoutingSet.size})`}
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title="Open this domain's routing rules in the Cloudflare dashboard — verify an address actually has a rule there, not just in Relaybase"
+                        onClick={() =>
+                          void desktopOpenExternal(
+                            cloudflareEmailRoutingRulesUrl(
+                              cfAccountId,
+                              entry.onboarding?.zoneId,
+                            ),
+                          )
+                        }
+                      >
+                        <ExternalLink className="size-4" />
+                        Cloudflare
+                      </Button>
                       <Button
                         size="sm"
                         onClick={() => openAddDialog(entry.domain)}
@@ -722,6 +791,10 @@ export function AccountsView() {
                                   const creating = accountsStore.isCreating(
                                     address.email,
                                   );
+                                  const notRoutedInCloudflare =
+                                    missingRoutingSet.has(
+                                      address.email.toLowerCase(),
+                                    );
                                   return (
                                     <TableRow
                                       key={address.email}
@@ -747,6 +820,17 @@ export function AccountsView() {
                                               address.email,
                                             )}
                                           />
+                                          {notRoutedInCloudflare ? (
+                                            <span
+                                              className="inline-flex shrink-0"
+                                              title="No Cloudflare routing rule — mail to this address is silently dropped"
+                                            >
+                                              <AlertCircle
+                                                className="size-3.5 text-destructive"
+                                                aria-label="No Cloudflare routing rule — mail to this address is silently dropped"
+                                              />
+                                            </span>
+                                          ) : null}
                                         </span>
                                       </TableCell>
                                       <TableCell className="w-[22%] max-w-0 px-4 py-3 text-muted-foreground">

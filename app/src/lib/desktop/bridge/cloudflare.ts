@@ -431,6 +431,41 @@ export function cloudflareDomainsOverviewUrl(accountId: string): string {
   return `https://dash.cloudflare.com/${id}/domains/overview`;
 }
 
+/**
+ * Cloudflare dashboard → this zone's Email Routing page. Zone-scoped, not
+ * account-scoped: falls back to the account's zone list when `zoneId` is
+ * unknown (e.g. onboarding hasn't resolved one yet).
+ */
+export function cloudflareEmailRoutingUrl(
+  accountId: string,
+  zoneId: string | null | undefined,
+  page: "overview" | "routing-rules" = "overview",
+): string {
+  const id = accountId.trim();
+  if (!id) return "https://dash.cloudflare.com/";
+  const zone = zoneId?.trim();
+  if (!zone) return `https://dash.cloudflare.com/${id}/email-service/routing`;
+  return `https://dash.cloudflare.com/${id}/email-service/routing/${encodeURIComponent(zone)}/${page}`;
+}
+
+/** Cloudflare dashboard → this zone's Email Routing overview page. */
+export function cloudflareEmailRoutingOverviewUrl(
+  accountId: string,
+  zoneId: string | null | undefined,
+): string {
+  return cloudflareEmailRoutingUrl(accountId, zoneId, "overview");
+}
+
+/** Cloudflare dashboard → this zone's Email Routing rules page (to verify a
+ * specific address actually has a routing rule, not just what Relaybase's
+ * own DB says). */
+export function cloudflareEmailRoutingRulesUrl(
+  accountId: string,
+  zoneId: string | null | undefined,
+): string {
+  return cloudflareEmailRoutingUrl(accountId, zoneId, "routing-rules");
+}
+
 /** Cloudflare dashboard → this account's R2 home (not checkout). */
 export function cloudflareR2DashboardUrl(accountId: string): string {
   const id = accountId.trim();

@@ -100,6 +100,14 @@ export type DomainRoutingHealth = {
   routingEnabled: boolean;
   disabledCount: number;
   disabledAddresses: string[];
+  /**
+   * Registered addresses (Relaybase's own D1 catalog) with no Cloudflare
+   * routing rule at all — e.g. written straight to D1 without ever calling
+   * Cloudflare (see `PUT /console/mailbox`). Distinct from `disabledCount`:
+   * a rule exists there, just switched off; here there is no rule to find.
+   */
+  missingCount: number;
+  missingAddresses: string[];
   error: string | null;
   checkedAt: string;
 };
@@ -113,6 +121,7 @@ type RoutingStatusEntry =
         enabled: boolean;
         action: string;
       }>;
+      missingAddresses?: string[];
     }
   | { domain: string; error: string };
 
@@ -467,6 +476,8 @@ export class DomainStore {
               routingEnabled: false,
               disabledCount: 0,
               disabledAddresses: [],
+              missingCount: 0,
+              missingAddresses: [],
               error: entry.error,
               checkedAt,
             });
@@ -475,6 +486,7 @@ export class DomainStore {
           const disabled = entry.rules.filter(
             (rule) => rule.action === "worker" && rule.enabled === false,
           );
+          const missing = entry.missingAddresses ?? [];
           this.routingHealth.set(entryKey, {
             domain: entryKey,
             routingEnabled: entry.routingEnabled,
@@ -482,6 +494,8 @@ export class DomainStore {
             disabledAddresses: disabled
               .map((rule) => rule.address ?? "")
               .filter(Boolean),
+            missingCount: missing.length,
+            missingAddresses: missing,
             error: null,
             checkedAt,
           });

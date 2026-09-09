@@ -153,6 +153,9 @@ export type SentEmail = {
   cc?: string;
   subject: string;
   bodyPreview: string;
+  /** Full body text — only present once the message detail has been fetched. */
+  bodyText?: string;
+  bodyHtml?: string | null;
   sentAt: string;
   messageId?: string;
   inReplyTo?: string;
@@ -161,6 +164,8 @@ export type SentEmail = {
   replyKey?: string;
   attachmentCount?: number;
   attachments?: InboundAttachment[];
+  /** Transient client-side state for an in-flight send; absent once confirmed sent. */
+  status?: "sending" | "failed";
 };
 
 export type DraftEmail = {

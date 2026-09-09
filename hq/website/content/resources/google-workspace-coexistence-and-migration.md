@@ -1,8 +1,8 @@
 ---
-title: "Using Relaybase with Google Workspace: Subdomain Coexistence & MBOX Migration"
+title: "Using Relaybase with Google Workspace: MX Conflict & MBOX Migration"
 navTitle: "Google Workspace & Relaybase"
-description: "Why Google Workspace and Cloudflare Email Routing can't share a root domain, how to run side-by-side using subdomains, and how to migrate past Gmail archives to Cloudflare R2."
-keyword: "Google Workspace Cloudflare email routing subdomain migration"
+description: "Why Google Workspace and Cloudflare Email Routing can't share a domain, and how to migrate past Gmail archives to Cloudflare R2 if you replace Workspace entirely."
+keyword: "Google Workspace Cloudflare email routing MX migration"
 order: 14
 date: "2026-09-07"
 image: "/images/resources/google-workspace-coexistence-hero.png"
@@ -15,15 +15,15 @@ The initial goal is simple: *Keep existing human inboxes in Google Workspace, bu
 
 However, as soon as they try configuring Cloudflare Email Routing on their primary domain, they hit a fundamental DNS roadblock.
 
-Here is why Google Workspace and Cloudflare Email Routing cannot share the exact same root domain, how to run both systems side-by-side seamlessly using **subdomains**, and how to perform a **full, zero-data-custody migration** using the open-source [`relaybase-mbox-migration`](https://github.com/strum-us/relaybase-mbox-migration) tool if you decide to replace Google Workspace entirely.
+Here is why Google Workspace and Cloudflare Email Routing cannot share the same domain, and how to perform a **full, zero-data-custody migration** using the open-source [`relaybase-mbox-migration`](https://github.com/strum-us/relaybase-mbox-migration) tool if you decide to replace Google Workspace entirely.
 
 ---
 
-## Why Google Workspace and Cloudflare Can't Share a Single Root Domain
+## Why Google Workspace and Cloudflare Can't Share a Domain
 
-A common first question is: *"Can I keep `alex@yourcompany.com` in Google Workspace and route `support@yourcompany.com` to Relaybase on the same root domain?"*
+A common first question is: *"Can I keep `alex@yourcompany.com` in Google Workspace and route `support@yourcompany.com` to Relaybase on the same domain?"*
 
-The short answer is **no, not on the exact same root domain**. This is not a limitation of Relaybase or Cloudflare; it is a fundamental rule of how DNS Mail Exchange (MX) records work on the internet.
+The short answer is **no**. This is not a limitation of Relaybase or Cloudflare; it is a fundamental rule of how DNS Mail Exchange (MX) records work on the internet. Putting Relaybase on a subdomain of the same zone (for example `mail.yourcompany.com`) does not work either — incoming mail still fails in practice.
 
 ### How DNS MX Resolution Works
 
@@ -43,47 +43,11 @@ Sending Mail Server
 2. **MX priority is not a fallback between different providers**: MX priorities exist so mail servers can reach *redundant backup servers of the same provider*. If Google's servers (Priority 1) are online, the sending server connects to Google. When Google sees that `support@yourcompany.com` does not have an active Google Workspace paid seat, it immediately rejects the email with a permanent bounce (`550 5.1.1 User unknown`). It will **never** forward or pass the connection to Cloudflare (Priority 10).
 3. **Equal priorities cause split-brain delivery**: If you configure both Google and Cloudflare with equal MX priority, sending servers will alternate between them randomly. Some emails will land in Google Workspace, while others land in Cloudflare, resulting in dropped messages and broken email threads.
 
-Because of this DNS reality, you have two practical, production-ready paths.
+Because of this DNS reality, Relaybase and Google Workspace cannot run on the same domain. If you want product addresses on Relaybase, either use a **separate registered domain**, or **migrate the existing domain** off Google Workspace entirely.
 
 ---
 
-## Option 1: Side-by-Side Coexistence via Subdomain (Recommended & Instant)
-
-If your team relies on Google Workspace for personal human mailboxes, Google Meet, and Drive, the industry-standard architecture is to **isolate your product emails on a subdomain**.
-
-The good news: you do not have to pick one provider for everything. A **subdomain** gives Relaybase its own MX records while your team keeps Gmail on the root domain.
-
-### How It Works
-
-- **Root Domain (`yourcompany.com`)**: Kept on Google Workspace. Personal emails like `alex@yourcompany.com` and `sarah@yourcompany.com` continue working in Gmail without any interruption.
-- **Subdomain (`mail.yourcompany.com` or `app.yourcompany.com`)**: Delegated to Cloudflare Email Routing and Relaybase. Product addresses like `support@mail.yourcompany.com`, `billing@mail.yourcompany.com`, and `notifications@app.yourcompany.com` route directly to your Relaybase Worker and R2 mailbox.
-
-### DNS Record Comparison
-
-In your Cloudflare DNS dashboard, the records coexist cleanly:
-
-| Type | Name | Content / Target | Priority | Purpose |
-| :--- | :--- | :--- | :---: | :--- |
-| **MX** | `@` (root) | `aspmx.l.google.com` | `1` | Google Workspace personal email |
-| **MX** | `@` (root) | `alt1.aspmx.l.google.com` | `5` | Google Workspace backup |
-| **TXT** | `@` (root) | `v=spf1 include:_spf.google.com ~all` | — | Google SPF authentication |
-| **MX** | `mail` (subdomain) | `isaac.mx.cloudflare.net` | `10` | **Relaybase product email** |
-| **MX** | `mail` (subdomain) | `amir.mx.cloudflare.net` | `20` | **Relaybase product email** |
-| **TXT** | `mail` (subdomain) | `v=spf1 include:_spf.mx.cloudflare.net ~all` | — | **Cloudflare SPF authentication** |
-
-### Why This Pattern Is Standard Practice
-
-1. **Zero Disruption**: You don't need to touch your team's Google Workspace accounts or migrate any past emails.
-2. **Domain Reputation Protection**: High-volume transactional emails, password resets, and marketing broadcasts won't risk damaging the deliverability of your team's day-to-day corporate communication.
-3. **Industry Standard**: Major tech products follow this exact convention. For example:
-   - GitHub sends notifications from `@reply.github.com`
-   - Stripe routes receipts from `@support.stripe.com`
-   - Slack routes system notices from `@mail.slack.com`
-4. **Instant Setup**: You can add the subdomain in Relaybase Desktop, verify DNS records, and start sending and receiving in under 3 minutes.
-
----
-
-## Option 2: Full Migration to Relaybase (Eliminate Seat Fees & Own Your Data)
+## Full Migration to Relaybase (Eliminate Seat Fees & Own Your Data)
 
 For solo founders, bootstrapped startups, or agencies looking to eliminate monthly Google Workspace bills entirely ($7 to $28 per user per month), you can migrate your root domain completely to Relaybase.
 
@@ -204,10 +168,6 @@ When creating a custom Cloudflare API Token in your Cloudflare dashboard for Rel
 
 If your token lacks `Email Routing Rules → Edit`, the Relaybase Worker will return a permission error when attempting to verify or activate an address.
 
-### Q: Does using a subdomain look unprofessional to customers?
-
-Not at all. In fact, receiving transactional receipts or support updates from `support@mail.yourdomain.com` or `help@support.yourdomain.com` is standard across thousands of modern companies, including Stripe, GitHub, Uber, and Figma. It also provides clean sender reputation separation.
-
 ### Q: Can I migrate multiple team members' mailboxes?
 
 Yes. Each team member can generate a Google Takeout `.mbox` archive for their respective account. Run the `relaybase-mbox-migration` CLI for each file, passing their corresponding email address in the `--email` parameter:
@@ -226,24 +186,10 @@ The CLI computes deterministic message pointers based on RFC `Message-ID` hashes
 
 ---
 
-## Comparison: Subdomain Coexistence vs. Full Migration
-
-| Factor | Option 1: Subdomain Coexistence | Option 2: Full Migration |
-| :--- | :--- | :--- |
-| **Best For** | Teams keeping Google Workspace for personal email | Founders wanting $0 seat fees & 100% data control |
-| **Setup Time** | **2–3 minutes** (Instant DNS addition) | **15–30 minutes** (Takeout export + CLI upload) |
-| **Email Format** | `support@mail.yourdomain.com` | `support@yourdomain.com` |
-| **Google Workspace Status** | Active (keeps existing seats) | Cancelled (saves $7–$28/user/month) |
-| **Historical Email Access** | Kept in Gmail | Uploaded to R2 via `relaybase-mbox-migration` |
-| **Data Custody** | Split (Google + Cloudflare) | **100% Self-Sovereign** (Your Cloudflare Account) |
-
----
-
 ## Summary
 
-You don't have to choose between breaking your existing Google Workspace setup and paying high per-seat costs for product addresses:
+Google Workspace and Cloudflare Email Routing cannot share a domain. MX records send all mail for that domain to one provider, and a subdomain of the same zone is not a working workaround.
 
-- If you want an **instant, zero-friction setup**, keep Google Workspace on your root domain and connect Relaybase on a **subdomain** like `mail.yourdomain.com`.
-- If you want **complete data sovereignty and zero seat fees**, run the open-source [**`relaybase-mbox-migration`**](https://github.com/strum-us/relaybase-mbox-migration) CLI to import your Google Takeout archives directly into your Cloudflare R2 bucket.
+If you want **complete data sovereignty and zero seat fees**, run the open-source [**`relaybase-mbox-migration`**](https://github.com/strum-us/relaybase-mbox-migration) CLI to import your Google Takeout archives directly into your Cloudflare R2 bucket, then point the domain's MX records to Cloudflare.
 
 Learn more about how Relaybase stores emails with zero egress costs in [Why Relaybase Stores Mail in Cloudflare R2](/resources/why-cloudflare-r2-for-email), or inspect the open-source architecture in [The Open Source Cloudflare Email Worker](/resources/open-source-cloudflare-worker). Ready to get started? [Download Relaybase](/get-started).

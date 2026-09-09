@@ -51,16 +51,43 @@ export async function rasterImageDimensions(
   }
 }
 
-/** Convert raster images to WebP (GIF unchanged; WebP passthrough when small enough). */
-export async function optimizeImageToWebp(
+const HEIC_EXT_RE = /\.(heic|heif)$/i;
+
+/**
+ * HEIC/HEIF (default iPhone photo format) has essentially no viewer support
+ * outside Apple's own ecosystem — Gmail, Outlook, and most non-Apple mail
+ * clients can't preview or open it. Browsers are also inconsistent about
+ * reporting its MIME type (Firefox reports `application/octet-stream`), so
+ * detect it by extension too.
+ */
+function isHeicFile(file: File): boolean {
+  const type = (file.type || "").toLowerCase();
+  return (
+    type === "image/heic" || type === "image/heif" || HEIC_EXT_RE.test(file.name)
+  );
+}
+
+/**
+ * Resize/compress raster images that exceed the email-friendly budget,
+ * keeping the original format (GIF always passes through unchanged).
+ * HEIC/HEIF is always transcoded to JPEG regardless of size, since it's
+ * unopenable for most recipients. WebP is deliberately avoided as an output
+ * format for the same reason: it's poorly and inconsistently supported as a
+ * mail attachment (e.g. Gmail's attachment viewer often reports "Unsupported
+ * file type" for it).
+ */
+export async function optimizeImageForEmail(
   file: File,
 ): Promise<{ blob: Blob; mimeType: string; filename: string }> {
-  const mimeType = file.type || "application/octet-stream";
-  if (mimeType === "image/gif") {
-    return { blob: file, mimeType, filename: file.name };
-  }
-  if (!mimeType.startsWith("image/")) {
-    return { blob: file, mimeType, filename: file.name };
+  const heic = isHeicFile(file);
+  const mimeType = heic ? "image/heic" : file.type || "application/octet-stream";
+  if (!heic) {
+    if (mimeType === "image/gif") {
+      return { blob: file, mimeType, filename: file.name };
+    }
+    if (!mimeType.startsWith("image/")) {
+      return { blob: file, mimeType, filename: file.name };
+    }
   }
 
   const dims = await rasterImageDimensions(file);
@@ -70,24 +97,28 @@ export async function optimizeImageToWebp(
   const shouldResize =
     longestSide !== undefined &&
     longestSide > maxWidth + DIMENSION_TOLERANCE_PX;
-  const shouldConvertWebp = mimeType !== "image/webp";
+  const shouldCompress =
+    heic ||
+    shouldResize ||
+    file.size > EMAIL_IMAGE_MAX_SIZE_MB * 1024 * 1024;
 
-  if (!shouldResize && !shouldConvertWebp) {
+  if (!shouldCompress) {
     return { blob: file, mimeType, filename: file.name };
   }
 
+  const targetType = heic ? "image/jpeg" : mimeType;
   const output = await imageCompression(file, {
     initialQuality: EMAIL_IMAGE_QUALITY,
     maxSizeMB: EMAIL_IMAGE_MAX_SIZE_MB,
     useWebWorker: true,
-    fileType: "image/webp",
+    fileType: targetType,
     ...(shouldResize ? { maxWidthOrHeight: maxWidth } : {}),
   });
 
-  const outMime = output.type || "image/webp";
-  const baseName = file.name.replace(/\.[^.]+$/, "") || "image";
-  const filename =
-    outMime === "image/webp" ? `${baseName}.webp` : file.name;
+  const outMime = output.type || targetType;
+  const filename = heic
+    ? `${file.name.replace(/\.[^.]+$/, "") || "image"}.jpg`
+    : file.name;
   return { blob: output, mimeType: outMime, filename };
 }
 

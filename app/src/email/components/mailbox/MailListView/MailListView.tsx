@@ -104,6 +104,7 @@ export const MailListView = observer(function MailListView({
     selectedThread,
     activityDetail,
     detailLoading,
+    sentDetail,
     serverSearch,
     searchTotal,
     searchLoading,
@@ -276,6 +277,7 @@ export const MailListView = observer(function MailListView({
               messageId={messageId}
               activityDetail={activityDetail}
               detailLoading={detailLoading}
+              sentDetail={sentDetail}
               addresses={store.visibleAddresses}
               accountFilter={accountFilter}
               listHref={listHref}

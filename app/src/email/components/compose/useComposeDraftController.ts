@@ -6,6 +6,7 @@ import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
 import { scheduleEmailSend } from "@/email/components/compose/email-pending-send";
 import {
   dispatchEmailSendFailed,
+  dispatchEmailSendStarted,
   dispatchEmailSendSucceeded,
   dispatchEmailSendUndone,
 } from "@/email/components/compose/email-send-events";
@@ -561,6 +562,20 @@ export function useComposeDraftController({
     if (restoreDraftId) {
       store.removeDraft(restoreDraftId, { keepAttachmentBytes: true });
     }
+
+    const pendingId = crypto.randomUUID();
+    const placeholder: SentEmail = {
+      id: pendingId,
+      from,
+      to: toParsed.emails.join(", "),
+      cc: ccParsed.emails.length ? ccParsed.emails.join(", ") : undefined,
+      subject: sendSubject,
+      bodyPreview: sendText.replace(/\s+/g, " ").trim().slice(0, 140),
+      sentAt: new Date().toISOString(),
+      attachmentCount: attachments.length || undefined,
+    };
+    dispatchEmailSendStarted({ pendingId, placeholder });
+
     onAfterSendRef.current({ from });
 
     scheduleEmailSend({
@@ -573,6 +588,7 @@ export function useComposeDraftController({
             currentMode.kind === "reply" ? currentMode.replyKey : undefined,
           replyAll:
             currentMode.kind === "reply" ? currentMode.replyAll : undefined,
+          pendingId,
         });
       },
       execute: async () => {
@@ -619,6 +635,7 @@ export function useComposeDraftController({
           }>(res);
           if (!res.ok) {
             dispatchEmailSendFailed({
+              pendingId,
               error: data.error ?? "Send failed",
               code: data.code,
             });
@@ -633,20 +650,22 @@ export function useComposeDraftController({
           void deleteDraftAttachmentsDir(productId, restoreDraftId);
           clearEmailCache(productId, `sent:${domainKey}`);
           const sent = data.sent;
-          dispatchEmailSendSucceeded(
-            sent?.id
+          dispatchEmailSendSucceeded({
+            pendingId,
+            ...(sent?.id
               ? {
                   sent: {
                     ...sent,
                     bodyPreview: sent.bodyPreview ?? "",
                   },
                 }
-              : undefined,
-          );
+              : {}),
+          });
         } catch (e) {
           store.upsertDraft(restoreDraft);
           if (!sendFailedDispatched) {
             dispatchEmailSendFailed({
+              pendingId,
               error: e instanceof Error ? e.message : "Send failed",
             });
           }

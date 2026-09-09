@@ -11,7 +11,7 @@ use super::owner_passtoken;
 use super::touch_id;
 use super::worker_accounts::{
     self, known_worker_urls, remember_worker_url, session_account, worker_urls_equal,
-    KEYRING_SERVICE, LEGACY_SESSION_USER,
+    KEYRING_SERVICE,
 };
 use crate::cloudflare::{resolve_account_id_for_recover_with_hint, secrets_store_accessible};
 use crate::storage::{
@@ -74,14 +74,6 @@ fn parse_session_blob(json: &str) -> Result<Option<KeyringBlob>, String> {
     Ok(normalize_keyring(blob))
 }
 
-fn read_legacy_session() -> Result<Option<KeyringBlob>, String> {
-    let json = match keyring_store::get_password(KEYRING_SERVICE, LEGACY_SESSION_USER)? {
-        Some(json) => json,
-        None => return Ok(None),
-    };
-    parse_session_blob(&json)
-}
-
 fn resolve_worker_url(override_url: Option<&str>) -> String {
     if let Some(url) = override_url {
         let normalized = worker_accounts::normalize_worker_url(url);
@@ -110,19 +102,12 @@ fn resolve_worker_url(override_url: Option<&str>) -> String {
 fn load_keyring(worker_url: Option<&str>) -> Result<Option<KeyringBlob>, String> {
     let url = resolve_worker_url(worker_url);
     if url.is_empty() {
-        return read_legacy_session();
+        return Ok(None);
     }
     let account = session_account(&url);
     if let Some(json) = keyring_store::get_password(KEYRING_SERVICE, &account)? {
         let _ = remember_worker_url(&url);
         return parse_session_blob(&json);
-    }
-    if let Some(legacy) = read_legacy_session()? {
-        if worker_urls_equal(&legacy.worker_url, &url) {
-            save_keyring(&legacy)?;
-            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_SESSION_USER);
-            return Ok(Some(legacy));
-        }
     }
     Ok(None)
 }
@@ -135,11 +120,6 @@ fn save_keyring(blob: &KeyringBlob) -> Result<(), String> {
     remember_worker_url(&url)?;
     let json = serde_json::to_string(blob).map_err(|e| e.to_string())?;
     keyring_store::set_password(KEYRING_SERVICE, &session_account(&url), &json)?;
-    if let Ok(Some(legacy)) = read_legacy_session() {
-        if worker_urls_equal(&legacy.worker_url, &url) {
-            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_SESSION_USER);
-        }
-    }
     Ok(())
 }
 
@@ -149,11 +129,6 @@ fn delete_keyring(worker_url: &str) {
         return;
     }
     keyring_store::delete_password(KEYRING_SERVICE, &session_account(&url));
-    if let Ok(Some(legacy)) = read_legacy_session() {
-        if worker_urls_equal(&legacy.worker_url, &url) {
-            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_SESSION_USER);
-        }
-    }
 }
 
 fn access_if_valid_for(scope: &str, worker_url: &str) -> Option<AccessMemory> {

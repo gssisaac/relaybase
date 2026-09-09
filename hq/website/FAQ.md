@@ -10,9 +10,7 @@ This document outlines the proposed Frequently Asked Questions (FAQ) section to 
 **Answer:**
 No, not on the exact same root domain (`yourcompany.com`). DNS Mail Exchange (MX) records operate at the domain level, directing all incoming email for a domain to a single provider. DNS cannot split incoming traffic by username (e.g., routing `alex@` to Google and `support@` to Cloudflare).
 
-You have two clean options:
-1. **Subdomain Coexistence (Recommended & Instant):** Keep your personal inboxes on Google Workspace (`alex@yourcompany.com`) and connect a subdomain like `mail.yourcompany.com` or `app.yourcompany.com` to Relaybase. Product addresses like `support@mail.yourcompany.com` and `billing@mail.yourcompany.com` will route directly to your Relaybase inbox and API with zero conflict.
-2. **Full Migration:** If you are eliminating Google Workspace seat fees ($7–$28/user/mo), you can migrate your past email archives directly into Cloudflare R2 using our open-source migration tool and point your root MX records to Cloudflare.
+A subdomain of the same zone (for example `mail.yourcompany.com`) does not work either. To use Relaybase, either point a **separate registered domain** at Cloudflare, or **migrate the existing domain** off Google Workspace: import past archives into Cloudflare R2 with the open-source migration tool, then point root MX records to Cloudflare.
 
 ---
 

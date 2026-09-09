@@ -90,7 +90,7 @@ ID, not typing.
 - Keyring item missing or corrupt
 - After `rotate-passtoken` / `reset-admin`, until the new token is written back
 
-Those are the **only** times. Expired console refresh (30 min) or expired mail
+Those are the **only** times. Expired console refresh (30 days) or expired mail
 refresh (90 days) is **not** a reason to type — Touch ID reads the stored
 passtoken and logs in again.
 
@@ -110,7 +110,7 @@ Login mints **two refresh tokens** and two in-memory access tokens:
 | Scope | Refresh TTL | Access TTL | Worker routes | Desktop command |
 |-------|-------------|------------|---------------|-------------------|
 | `mail` | 90 days | 60 min | `/mail/*` (inbox, sent, send, favicon, **GET `/mail/addresses`**) | `owner_boot_mail_cmd` (silent, no bio) |
-| `console` | 30 min | 30 min | `/console/*` | `owner_unlock_console_cmd` when console refresh is still valid (silent). If expired: Touch ID → keyring passtoken → `/console/login` |
+| `console` | 30 days | 30 min | `/console/*` | `owner_unlock_console_cmd` when console refresh is still valid (silent). If expired: Touch ID → keyring passtoken → `/console/login` |
 
 D1 `owner_sessions.label` uses `mail:` / `console:` prefixes.
 `POST /console/refresh` body: `{ refreshToken, scope: "mail" | "console" }`.

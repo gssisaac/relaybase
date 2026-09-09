@@ -4,6 +4,8 @@ import * as React from "react";
 
 import { AppSessionProvider } from "@/lib/desktop/app-session";
 import { AppUpdaterProvider } from "@/lib/desktop/updater/AppUpdaterContext";
+import { WorkerUpdateCheckProvider } from "@/lib/desktop/worker-update/WorkerUpdateCheckContext";
+import { WorkerUpdateRunnerProvider } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
 
 import { DesktopProvider } from "./DesktopContext";
 
@@ -22,7 +24,11 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <DesktopProvider>
       <AppUpdaterProvider>
-        <AppSessionProvider>{children}</AppSessionProvider>
+        <AppSessionProvider>
+          <WorkerUpdateCheckProvider>
+            <WorkerUpdateRunnerProvider>{children}</WorkerUpdateRunnerProvider>
+          </WorkerUpdateCheckProvider>
+        </AppSessionProvider>
       </AppUpdaterProvider>
     </DesktopProvider>
   );

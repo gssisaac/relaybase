@@ -16,8 +16,10 @@ import {
   type ReactNode,
 } from "react";
 
-const STARTUP_DELAY_MS = 8_000;
-const PERIODIC_CHECK_MS = 24 * 60 * 60 * 1000;
+import { useRouteStaleScheduler } from "@/lib/desktop/scheduler/useRouteStaleScheduler";
+
+/** Re-check on console entry / route change once a check is this stale. */
+const STALE_CHECK_MS = 10 * 60 * 1000;
 
 export type AppUpdaterPhase =
   | "idle"
@@ -110,6 +112,62 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
     setStatusMessage(`Update v${versionLabel} is ready. Restart to apply.`);
   }, []);
 
+  /** Release builds, main window only — background checks stay off in dev. */
+  const backgroundCheckEnabled = useCallback(() => {
+    if (process.env.NODE_ENV !== "production" || !isTauri()) return false;
+    try {
+      return getCurrentWindow().label === "main";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Silent check driven by the route-stale scheduler below — never surfaces
+  // the manual-check errors, just logs and toasts.
+  const silentCheck = useCallback(async () => {
+    if (busyRef.current || readyRef.current) return;
+    busyRef.current = true;
+    setPhase("checking");
+    setProgressLabel(null);
+    setLastError(null);
+
+    try {
+      const update = await check({ timeout: 60_000 });
+      if (!update) {
+        setPhase("idle");
+        setVersion(null);
+        setProgressLabel(null);
+        return;
+      }
+
+      pendingUpdateRef.current = update;
+      await installPending(update);
+    } catch (err) {
+      console.error("[updater] Update check/install failed:", err);
+      setPhase("idle");
+      setVersion(null);
+      setProgressLabel(null);
+      setLastError(updaterErrorMessage(err));
+      try {
+        const { toast } = await import("sonner");
+        toast.error(`Desktop update failed: ${updaterErrorMessage(err)}`);
+      } catch {
+        // ignore toast load errors
+      }
+    } finally {
+      busyRef.current = false;
+    }
+  }, [installPending]);
+
+  // Recheck on console entry / route change, and as an idle safety net,
+  // whenever the last check is older than STALE_CHECK_MS.
+  const scheduler = useRouteStaleScheduler({
+    enabled: backgroundCheckEnabled,
+    isBusy: () => busyRef.current || readyRef.current,
+    check: silentCheck,
+    staleMs: STALE_CHECK_MS,
+  });
+
   const checkNow = useCallback(async () => {
     if (!isTauri()) {
       setLastError("Desktop updates require the Relaybase app.");
@@ -118,6 +176,7 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
     if (busyRef.current || readyRef.current) return;
 
     busyRef.current = true;
+    scheduler.markChecked();
     setPhase("checking");
     setProgressLabel(null);
     setLastError(null);
@@ -163,7 +222,7 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
     } finally {
       busyRef.current = false;
     }
-  }, [currentVersion]);
+  }, [currentVersion, scheduler]);
 
   const installNow = useCallback(async () => {
     if (!isTauri()) {
@@ -180,6 +239,7 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
       let update = pendingUpdateRef.current;
       if (!update) {
         setPhase("checking");
+        scheduler.markChecked();
         update = await check({ timeout: 60_000 });
         if (!update) {
           setPhase("idle");
@@ -210,7 +270,7 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
     } finally {
       busyRef.current = false;
     }
-  }, [currentVersion, installPending]);
+  }, [currentVersion, installPending, scheduler]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -218,75 +278,6 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
       .then(setCurrentVersion)
       .catch(() => setCurrentVersion(null));
   }, []);
-
-  // Background auto-check (release builds only, main window only).
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "production" || !isTauri()) {
-      return;
-    }
-
-    try {
-      if (getCurrentWindow().label !== "main") {
-        return;
-      }
-    } catch {
-      return;
-    }
-
-    let cancelled = false;
-    let startupTimeout: ReturnType<typeof setTimeout> | undefined;
-    let periodicId: ReturnType<typeof setInterval> | undefined;
-
-    const attempt = async () => {
-      if (cancelled || busyRef.current || readyRef.current) return;
-      busyRef.current = true;
-      setPhase("checking");
-      setProgressLabel(null);
-      setLastError(null);
-
-      try {
-        const update = await check({ timeout: 60_000 });
-        if (cancelled || !update) {
-          setPhase("idle");
-          setVersion(null);
-          setProgressLabel(null);
-          return;
-        }
-
-        pendingUpdateRef.current = update;
-        await installPending(update);
-      } catch (err) {
-        console.error("[updater] Update check/install failed:", err);
-        if (!cancelled) {
-          setPhase("idle");
-          setVersion(null);
-          setProgressLabel(null);
-          setLastError(updaterErrorMessage(err));
-          try {
-            const { toast } = await import("sonner");
-            toast.error(
-              `Desktop update failed: ${updaterErrorMessage(err)}`,
-            );
-          } catch {
-            // ignore toast load errors
-          }
-        }
-      } finally {
-        busyRef.current = false;
-      }
-    };
-
-    startupTimeout = setTimeout(() => {
-      void attempt();
-      periodicId = setInterval(() => void attempt(), PERIODIC_CHECK_MS);
-    }, STARTUP_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      if (startupTimeout) clearTimeout(startupTimeout);
-      if (periodicId) clearInterval(periodicId);
-    };
-  }, [installPending]);
 
   const value = useMemo(
     () => ({

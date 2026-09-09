@@ -11,7 +11,7 @@ import {
 } from "@/email/lib/attachments/limits";
 import {
   collectTransferFiles,
-  optimizeImageToWebp,
+  optimizeImageForEmail,
 } from "@/email/lib/attachments/image-optimize";
 
 export type IngestAttachmentResult =
@@ -20,7 +20,9 @@ export type IngestAttachmentResult =
 
 function slugFilename(name: string): string {
   const trimmed = name.trim() || "attachment";
-  return trimmed.replace(/[^\w.\-()+ ]+/g, "_").slice(0, 120);
+  // \w is ASCII-only, so non-Latin filenames (Korean, Japanese, etc.) would
+  // otherwise collapse to underscores — keep any Unicode letter/number.
+  return trimmed.replace(/[^\p{L}\p{N}.\-()+ ]+/gu, "_").slice(0, 120);
 }
 
 async function fileToDraftAttachment(
@@ -29,7 +31,7 @@ async function fileToDraftAttachment(
   draftId: string,
 ): Promise<DraftAttachment> {
   const isImage = (file.type || "").startsWith("image/");
-  const optimized = isImage ? await optimizeImageToWebp(file) : null;
+  const optimized = isImage ? await optimizeImageForEmail(file) : null;
   const blob = optimized?.blob ?? file;
   const contentType =
     optimized?.mimeType ?? (file.type || "application/octet-stream");

@@ -57,8 +57,10 @@ export function emailInboxAttachmentPath(
   messageKey: string,
   attachmentId: string,
   domain?: string,
+  kind: "inbound" | "sent" = "inbound",
 ): string {
-  const base = `/api/email/inbox/${encodeURIComponent(messageKey)}/attachments/${encodeURIComponent(attachmentId)}`;
+  const folder = kind === "sent" ? "sent" : "inbox";
+  const base = `/api/email/${folder}/${encodeURIComponent(messageKey)}/attachments/${encodeURIComponent(attachmentId)}`;
   return domain ? `${base}?domain=${encodeURIComponent(domain)}` : base;
 }
 
@@ -203,6 +205,7 @@ export function InboundEmailDetail({
   plain = false,
   attachments = [],
   quoteText = null,
+  kind = "inbound",
 }: {
   productId: string;
   messageKey: string;
@@ -214,9 +217,11 @@ export function InboundEmailDetail({
   attachments?: InboundAttachment[];
   /** Trailing quoted history to hide behind a `···` expander. */
   quoteText?: string | null;
+  /** Which mailbox this message belongs to — controls the attachment API route. */
+  kind?: "inbound" | "sent";
 }) {
   const attachmentPath = (attachmentId: string) =>
-    emailInboxAttachmentPath(messageKey, attachmentId, domain);
+    emailInboxAttachmentPath(messageKey, attachmentId, domain, kind);
 
   const safeHtml = useMemo(() => {
     if (!bodyHtml) return "";
@@ -224,7 +229,7 @@ export function InboundEmailDetail({
       ? bodyHtml
       : rewriteInlineAttachmentUrls(bodyHtml, attachments, attachmentPath);
     return sanitizeEmailHtml(withInline);
-  }, [attachments, bodyHtml, domain, messageKey]);
+  }, [attachments, bodyHtml, domain, messageKey, kind]);
 
   const imageAttachments = attachments.filter((attachment) =>
     attachment.contentType.startsWith("image/"),
@@ -239,7 +244,7 @@ export function InboundEmailDetail({
         path: attachmentPath(attachment.id),
         filename: attachment.filename,
       })),
-    [attachments, domain, messageKey],
+    [attachments, domain, messageKey, kind],
   );
 
   const handleDownloadAll = useCallback(async () => {

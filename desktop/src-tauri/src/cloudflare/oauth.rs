@@ -249,8 +249,15 @@ async fn refresh_oauth_session(
     let status = res.status();
     let body = res.text().await.unwrap_or_default();
     if !status.is_success() {
-        let lower = body.to_lowercase();
-        if status.as_u16() == 400 || lower.contains("invalid_grant") || lower.contains("invalid") {
+        // Only `invalid_grant` (RFC 6749 §5.2) means the refresh token itself
+        // is dead — expired, revoked, or already used. Every other 400 (rate
+        // limit, transient client_id hiccup, malformed request) must not wipe
+        // a refresh token that is otherwise still good for its 30-day window;
+        // doing so was forcing a full browser re-auth far more often than that.
+        let oauth_error = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(str::to_string));
+        if oauth_error.as_deref() == Some("invalid_grant") {
             invalidate_refresh_after_failure(&session.refresh_token);
             return Err(expired(AUTH_AGAIN));
         }

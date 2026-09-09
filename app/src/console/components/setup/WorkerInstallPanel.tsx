@@ -38,6 +38,7 @@ import {
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { useDesktop } from "@/lib/desktop/shell";
+import { useWorkerUpdateRunner } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
 import { ManualInstallScriptPanel } from "@/console/components/setup/AdminTokenPanel";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
@@ -91,7 +92,13 @@ export function WorkerInstallPanel({
 }) {
   const router = useRouter();
   const { refresh, credentials } = useDesktop();
+  const { start: startWorkerUpdate } = useWorkerUpdateRunner();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
+  /** Skip-the-dialog shortcut only applies to the Settings path, not recover. */
+  const skipMatchConfirm = purpose === "worker-update" && !backHref;
+  const progressHref = backHref
+    ? "/setup/worker-update/progress"
+    : "/settings/worker/progress";
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [workerUrl, setWorkerUrl] = useState("");
   const [installPepper, setInstallPepper] = useState("");
@@ -187,6 +194,11 @@ export function WorkerInstallPanel({
         setTargetPreview(target);
         setAuthorizedReady(true);
         setAutoChecking(false);
+        if (skipMatchConfirm && target.matches) {
+          void startWorkerUpdate();
+          router.push(progressHref);
+          return;
+        }
         if (!target.matches) {
           setOauthError({
             title: "Wrong Cloudflare account",
@@ -211,7 +223,7 @@ export function WorkerInstallPanel({
         }
       }
     })();
-  }, [purpose]);
+  }, [purpose, skipMatchConfirm, startWorkerUpdate, router, progressHref]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -233,6 +245,12 @@ export function WorkerInstallPanel({
               if (!active) return;
               setTargetPreview(target);
               setAuthorizedReady(true);
+              if (skipMatchConfirm && target.matches) {
+                finishOauthWait({ error: null });
+                void startWorkerUpdate();
+                router.push(progressHref);
+                return;
+              }
               setTargetConfirmOpen(true);
               finishOauthWait({
                 error: target.matches
@@ -297,6 +315,11 @@ export function WorkerInstallPanel({
   async function handleAuthorize() {
     if (purpose === "worker-update") {
       if (authorizedReady && targetPreview?.matches) {
+        if (skipMatchConfirm) {
+          void startWorkerUpdate();
+          router.push(progressHref);
+          return;
+        }
         setTargetConfirmOpen(true);
         return;
       }
@@ -310,6 +333,11 @@ export function WorkerInstallPanel({
         const target = await desktopPreviewWorkerUpdateTarget();
         setTargetPreview(target);
         setAuthorizedReady(true);
+        if (skipMatchConfirm && target.matches) {
+          void startWorkerUpdate();
+          router.push(progressHref);
+          return;
+        }
         setTargetConfirmOpen(true);
         if (!target.matches) {
           setOauthError({

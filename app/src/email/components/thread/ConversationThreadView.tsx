@@ -245,6 +245,17 @@ export const ConversationThreadView = observer(function ConversationThreadView({
     thread.threadId,
   ]);
 
+  // Sent parts of a thread carry attachments/full body only once fetched —
+  // the list row only has a short bodyPreview and an attachment count.
+  useEffect(() => {
+    for (const msg of thread.messages) {
+      if (msg.kind !== "sent") continue;
+      const domain = domainOf(extractFirstEmail(msg.message.from) ?? msg.message.from);
+      if (!domain) continue;
+      void store.loadSentDetail(msg.id, domain);
+    }
+  }, [store, thread.messages, thread.threadId]);
+
   const composeFocusId = composeMode
     ? (composeSourceId ?? expandedId)
     : expandedId;
@@ -581,14 +592,31 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                           ) : null}
                         </div>
                         {(() => {
+                          const sentDetail = store.getCachedSentDetail(msg.id);
                           const sentTrimmed = trimQuotedHistoryForThread({
-                            bodyText: msg.message.bodyPreview,
+                            bodyText:
+                              sentDetail?.bodyText ?? msg.message.bodyPreview,
+                            bodyHtml: sentDetail?.bodyHtml ?? undefined,
                           });
                           return (
                             <>
-                              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                                {sentTrimmed.bodyText}
-                              </pre>
+                              <InboundEmailDetail
+                                productId={productId}
+                                messageKey={msg.id}
+                                domain={domainOf(
+                                  extractFirstEmail(msg.message.from) ??
+                                    msg.message.from,
+                                )}
+                                bodyText={sentTrimmed.bodyText}
+                                bodyHtml={sentTrimmed.bodyHtml}
+                                plain
+                                attachments={
+                                  sentDetail?.attachments ??
+                                  msg.message.attachments ??
+                                  []
+                                }
+                                kind="sent"
+                              />
                               {sentTrimmed.quoteText ? (
                                 <QuotedReplyBlock
                                   quote={normalizeQuoteForDisplay(

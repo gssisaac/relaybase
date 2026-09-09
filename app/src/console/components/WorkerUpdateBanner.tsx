@@ -2,56 +2,48 @@
 
 import { Loader2, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SETTINGS_UPDATE_PATH } from "@/console/lib/paths";
 import { workerNeedsUpgrade } from "@/lib/dashboard/worker-version";
-import {
-  desktopCheckWorkerUpdate,
-  isDesktopRuntime,
-  type WorkerUpdateCheck,
-} from "@/lib/desktop/bridge";
 import { useOptionalAppUpdater } from "@/lib/desktop/updater/AppUpdaterContext";
 import { useDesktop } from "@/lib/desktop/shell";
+import { useWorkerUpdateCheck } from "@/lib/desktop/worker-update/WorkerUpdateCheckContext";
+import { useWorkerUpdateRunner } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
+
+/**
+ * Already authorized with Cloudflare and the saved Worker still matches?
+ * Skip the Approve screen and the URL-confirm dialog entirely and jump
+ * straight to the (backgroundable) progress view. Otherwise fall back to
+ * the Approve screen, which re-authorizes or explains an account mismatch.
+ */
+async function goUpdateWorker(
+  router: ReturnType<typeof useRouter>,
+  start: ReturnType<typeof useWorkerUpdateRunner>["start"],
+) {
+  const res = await start();
+  if (res.ok) {
+    router.push("/settings/worker/progress");
+  } else {
+    router.push("/settings/worker/update");
+  }
+}
 
 const DISMISS_KEY = "relaybase.worker-update-banner.dismissed";
 
 export function WorkerUpdateBanner() {
   const { credentials, teamLogin } = useDesktop();
   const updater = useOptionalAppUpdater();
-  const [check, setCheck] = useState<WorkerUpdateCheck | null>(null);
+  const { check, checking } = useWorkerUpdateCheck();
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     setDismissedVersion(sessionStorage.getItem(DISMISS_KEY));
   }, []);
-
-  useEffect(() => {
-    if (!isDesktopRuntime()) return;
-    if (teamLogin) return;
-    if (!credentials?.workerUrl?.trim()) {
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    void desktopCheckWorkerUpdate()
-      .then((result) => {
-        if (active) setCheck(result);
-      })
-      .catch(() => {
-        if (active) setCheck(null);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [credentials?.workerUrl, credentials?.workerVersion, teamLogin]);
 
   const desktopVersion = updater?.currentVersion?.trim() || null;
   const updateAvailable = Boolean(
@@ -64,7 +56,7 @@ export function WorkerUpdateBanner() {
   );
 
   if (teamLogin) return null;
-  if (loading || !updateAvailable || !check) return null;
+  if (checking || !updateAvailable || !check) return null;
   if (dismissedVersion === check.latestVersion) return null;
 
   const current = check.currentVersion?.trim() || "unknown";
@@ -109,12 +101,12 @@ export function WorkerUpdateBanner() {
 }
 
 export function WorkerVersionSettingsCard() {
+  const router = useRouter();
   const { credentials } = useDesktop();
   const updater = useOptionalAppUpdater();
-  const [check, setCheck] = useState<WorkerUpdateCheck | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { start: startWorkerUpdate } = useWorkerUpdateRunner();
+  const { check, checking, error, checkNow } = useWorkerUpdateCheck();
+  const [starting, setStarting] = useState(false);
 
   const current = credentials?.workerVersion?.trim() || "unknown";
   const desktopVersion = updater?.currentVersion?.trim() || null;
@@ -130,27 +122,17 @@ export function WorkerVersionSettingsCard() {
         desktopVersion,
       ),
   );
+  const message =
+    check && latestVersion && !showUpdateWorker
+      ? `Worker v${latestVersion} is up to date.`
+      : null;
 
-  async function handleCheck() {
-    setChecking(true);
-    setError(null);
-    setMessage(null);
+  async function handleUpdateClick() {
+    setStarting(true);
     try {
-      const result = await desktopCheckWorkerUpdate();
-      setCheck(result);
-      const workerVersion = result.currentVersion?.trim() || current;
-      const needs = workerNeedsUpgrade(
-        workerVersion === "unknown" ? null : workerVersion,
-        result.latestVersion,
-        desktopVersion,
-      );
-      if (!needs) {
-        setMessage(`Worker v${result.latestVersion} is up to date.`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not check for updates");
+      await goUpdateWorker(router, startWorkerUpdate);
     } finally {
-      setChecking(false);
+      setStarting(false);
     }
   }
 
@@ -191,17 +173,19 @@ export function WorkerVersionSettingsCard() {
           size="sm"
           variant="outline"
           disabled={checking}
-          onClick={() => void handleCheck()}
+          onClick={() => void checkNow()}
         >
           {checking ? <Loader2 className="size-3.5 animate-spin" /> : null}
           Check for updates
         </Button>
         {showUpdateWorker && latestVersion ? (
           <Button
+            type="button"
             size="sm"
-            nativeButton={false}
-            render={<Link href="/settings/worker/update" />}
+            disabled={starting}
+            onClick={() => void handleUpdateClick()}
           >
+            {starting ? <Loader2 className="size-3.5 animate-spin" /> : null}
             Update Worker to v{latestVersion}
           </Button>
         ) : null}

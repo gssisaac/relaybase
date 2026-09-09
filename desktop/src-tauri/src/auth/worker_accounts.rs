@@ -4,16 +4,11 @@
 //! same Mac can hold more than one install (different `workers.dev` URLs or
 //! Cloudflare accounts). Account names are therefore scoped by normalized
 //! Worker URL so a second login does not overwrite the first.
-//!
-//! Legacy unscoped items (`owner-passtoken`, `owner-session`) are migrated
-//! on first read that matches their stored `workerUrl`.
 
 use super::keyring_store;
 use serde::{Deserialize, Serialize};
 
 pub const KEYRING_SERVICE: &str = "com.relaybase.desktop";
-pub const LEGACY_PASSTOKEN_USER: &str = "owner-passtoken";
-pub const LEGACY_SESSION_USER: &str = "owner-session";
 const INDEX_USER: &str = "owner-workers";
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

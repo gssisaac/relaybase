@@ -9,8 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::keyring_store;
 use super::worker_accounts::{
-    self, known_worker_urls, passtoken_account, remember_worker_url, worker_urls_equal,
-    KEYRING_SERVICE, LEGACY_PASSTOKEN_USER,
+    self, known_worker_urls, passtoken_account, remember_worker_url, KEYRING_SERVICE,
 };
 
 const PASSTOKEN_PREFIX: &str = "rb_pass_";
@@ -85,38 +84,14 @@ fn read_account(account: &str, uncached: bool) -> Option<PasstokenRecord> {
     valid_record(parse_record(&raw)?)
 }
 
-fn legacy_matches(record: &PasstokenRecord, worker_url: &str) -> bool {
-    record.worker_url.trim().is_empty()
-        || worker_urls_equal(&record.worker_url, worker_url)
-}
-
-fn read_legacy(uncached: bool) -> Option<PasstokenRecord> {
-    read_account(LEGACY_PASSTOKEN_USER, uncached)
-}
-
-fn migrate_legacy_if_matches(worker_url: &str, record: &PasstokenRecord) {
-    if !legacy_matches(record, worker_url) {
-        return;
-    }
-    let _ = store(&record.passtoken, worker_url);
-    keyring_store::delete_password(KEYRING_SERVICE, LEGACY_PASSTOKEN_USER);
-}
-
 fn read_for_worker(worker_url: &str, uncached: bool) -> Option<PasstokenRecord> {
     let url = worker_accounts::normalize_worker_url(worker_url);
     if url.is_empty() {
         return None;
     }
-    if let Some(record) = read_account(&passtoken_account(&url), uncached) {
-        let _ = remember_worker_url(&url);
-        return Some(record);
-    }
-    let legacy = read_legacy(uncached)?;
-    if !legacy_matches(&legacy, &url) {
-        return None;
-    }
-    migrate_legacy_if_matches(&url, &legacy);
-    Some(legacy)
+    let record = read_account(&passtoken_account(&url), uncached)?;
+    let _ = remember_worker_url(&url);
+    Some(record)
 }
 
 /// Valid stored passtoken for this Worker (format-checked; secret is not returned to JS).
@@ -156,11 +131,6 @@ pub fn store(passtoken: &str, worker_url: &str) -> Result<(), String> {
     let account = passtoken_account(&url);
     keyring_store::set_password(KEYRING_SERVICE, &account, &json)?;
     keyring_store::forget_cached_password(KEYRING_SERVICE, &account);
-    if let Some(legacy) = read_legacy(false) {
-        if legacy_matches(&legacy, &url) {
-            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_PASSTOKEN_USER);
-        }
-    }
     Ok(())
 }
 
@@ -183,11 +153,6 @@ pub fn delete(worker_url: &str) {
         return;
     }
     keyring_store::delete_password(KEYRING_SERVICE, &passtoken_account(&url));
-    if let Some(legacy) = read_legacy(false) {
-        if legacy_matches(&legacy, &url) {
-            keyring_store::delete_password(KEYRING_SERVICE, LEGACY_PASSTOKEN_USER);
-        }
-    }
 }
 
 pub fn listed_worker_urls() -> Vec<String> {

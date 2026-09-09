@@ -34,25 +34,15 @@ export const faqGroups: FaqGroup[] = [
               username (e.g., routing <code>alex@</code> to Google and{" "}
               <code>support@</code> to Cloudflare).
             </p>
-            <p>You have two clean options:</p>
-            <ol>
-              <li>
-                <strong>Subdomain Coexistence (Recommended &amp; Instant):</strong>{" "}
-                Keep your personal inboxes on Google Workspace (
-                <code>alex@yourcompany.com</code>) and connect a subdomain like{" "}
-                <code>mail.yourcompany.com</code> or{" "}
-                <code>app.yourcompany.com</code> to Relaybase. Product addresses
-                like <code>support@mail.yourcompany.com</code> and{" "}
-                <code>billing@mail.yourcompany.com</code> will route directly to
-                your Relaybase inbox and API with zero conflict.
-              </li>
-              <li>
-                <strong>Full Migration:</strong> If you are eliminating Google
-                Workspace seat fees ($7–$28/user/mo), you can migrate your past
-                email archives directly into Cloudflare R2 using our open-source
-                migration tool and point your root MX records to Cloudflare.
-              </li>
-            </ol>
+            <p>
+              A subdomain of the same zone (for example{" "}
+              <code>mail.yourcompany.com</code>) does not work either. To use
+              Relaybase, either point a <strong>separate registered domain</strong>{" "}
+              at Cloudflare, or <strong>migrate the existing domain</strong> off
+              Google Workspace: import past archives into Cloudflare R2 with the
+              open-source migration tool, then point root MX records to
+              Cloudflare.
+            </p>
             <p>
               <a href={googleWorkspaceGuideUrl}>
                 Read the full Google Workspace coexistence guide

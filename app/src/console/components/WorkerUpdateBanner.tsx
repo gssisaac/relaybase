@@ -2,6 +2,7 @@
 
 import { Loader2, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,25 @@ import {
 } from "@/lib/desktop/bridge";
 import { useOptionalAppUpdater } from "@/lib/desktop/updater/AppUpdaterContext";
 import { useDesktop } from "@/lib/desktop/shell";
+import { useWorkerUpdateRunner } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
+
+/**
+ * Already authorized with Cloudflare and the saved Worker still matches?
+ * Skip the Approve screen and the URL-confirm dialog entirely and jump
+ * straight to the (backgroundable) progress view. Otherwise fall back to
+ * the Approve screen, which re-authorizes or explains an account mismatch.
+ */
+async function goUpdateWorker(
+  router: ReturnType<typeof useRouter>,
+  start: ReturnType<typeof useWorkerUpdateRunner>["start"],
+) {
+  const res = await start();
+  if (res.ok) {
+    router.push("/settings/worker/progress");
+  } else {
+    router.push("/settings/worker/update");
+  }
+}
 
 const DISMISS_KEY = "relaybase.worker-update-banner.dismissed";
 
@@ -109,10 +129,13 @@ export function WorkerUpdateBanner() {
 }
 
 export function WorkerVersionSettingsCard() {
+  const router = useRouter();
   const { credentials } = useDesktop();
   const updater = useOptionalAppUpdater();
+  const { start: startWorkerUpdate } = useWorkerUpdateRunner();
   const [check, setCheck] = useState<WorkerUpdateCheck | null>(null);
   const [checking, setChecking] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,6 +153,15 @@ export function WorkerVersionSettingsCard() {
         desktopVersion,
       ),
   );
+
+  async function handleUpdateClick() {
+    setStarting(true);
+    try {
+      await goUpdateWorker(router, startWorkerUpdate);
+    } finally {
+      setStarting(false);
+    }
+  }
 
   async function handleCheck() {
     setChecking(true);
@@ -198,10 +230,12 @@ export function WorkerVersionSettingsCard() {
         </Button>
         {showUpdateWorker && latestVersion ? (
           <Button
+            type="button"
             size="sm"
-            nativeButton={false}
-            render={<Link href="/settings/worker/update" />}
+            disabled={starting}
+            onClick={() => void handleUpdateClick()}
           >
+            {starting ? <Loader2 className="size-3.5 animate-spin" /> : null}
             Update Worker to v{latestVersion}
           </Button>
         ) : null}

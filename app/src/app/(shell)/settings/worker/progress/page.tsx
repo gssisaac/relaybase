@@ -1,5 +1,5 @@
-import { SetupProgressPanel } from "@/console/components/setup/SetupProgressPanel";
+import { WorkerUpdateProgressView } from "@/console/components/setup/WorkerUpdateProgressView";
 
 export default function Page() {
-  return <SetupProgressPanel purpose="worker-update" />;
+  return <WorkerUpdateProgressView />;
 }

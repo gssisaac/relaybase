@@ -364,6 +364,24 @@ export function useMailListItems({
     void store.loadMessageDetail(messageId, detailDomain);
   }, [detailDomain, folder, messageId, selectedThread, store]);
 
+  // Sent detail (body + attachments) — not carried by the list row, so it
+  // needs its own fetch keyed by the sender's domain (sent rows are stored
+  // under the sending domain, not the recipient's).
+  const sentDetailDomain = useMemo(() => {
+    if (!messageId || (folder !== "sent" && folder !== "trash")) return "";
+    const sentPool = folder === "trash" ? trashedSent : sentMessages;
+    const listHit = sentPool.find((m) => m.id === messageId);
+    return listHit ? domainOf(listHit.from) : "";
+  }, [folder, messageId, sentMessages, trashedSent]);
+
+  useEffect(() => {
+    if (!messageId || !sentDetailDomain) return;
+    if (folder !== "sent" && folder !== "trash") return;
+    void store.loadSentDetail(messageId, sentDetailDomain);
+  }, [folder, messageId, sentDetailDomain, store]);
+
+  const sentDetail = messageId ? store.getCachedSentDetail(messageId) : null;
+
   useEffect(() => {
     if (folder === "sent" && searchParams.get("sent") === "1") {
       router.replace(`${sent}${accountQuery(accountFilter)}`);
@@ -402,6 +420,7 @@ export function useMailListItems({
     activityDetail,
     detailLoading,
     detailDomain,
+    sentDetail,
     serverSearch,
     searchTotal: serverSearch ? store.searchTotal : null,
     searchLoading: serverSearch ? store.searchLoading : false,

@@ -69,7 +69,7 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
     return `/mail/favicon${search}`;
   }
   if (rest === "/sent" || rest.startsWith("/sent/")) {
-    return `/mail/sent${search}`;
+    return `/mail/sent${rest.slice("/sent".length)}${search}`;
   }
   if (rest === "/inbox/notifications") {
     return `/mail/inbox/notifications${search}`;

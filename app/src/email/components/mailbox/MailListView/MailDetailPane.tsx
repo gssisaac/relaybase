@@ -25,6 +25,7 @@ import type { EmailMailboxStore } from "@/email/stores/email-mailbox-store";
 import type {
   Address,
   RoutingActivityEvent,
+  SentEmail,
 } from "@/email/components/mailbox/types";
 import type { EmailAccountFilter } from "@/email/components/accounts/EmailAccountSelect";
 import { SenderHoverCard } from "@/email/components/sender/SenderHoverCard";
@@ -37,6 +38,7 @@ export type MailDetailPaneProps = {
   messageId?: string;
   activityDetail: RoutingActivityEvent | null;
   detailLoading: boolean;
+  sentDetail: SentEmail | null;
   addresses: Address[];
   accountFilter: EmailAccountFilter;
   listHref: string;
@@ -92,6 +94,7 @@ export function MailDetailPane({
   onDraftDiscard,
   onDraftSend,
   router,
+  sentDetail,
 }: MailDetailPaneProps) {
   function trashActions(kind: "inbox" | "sent", id: string) {
     if (folder === "trash") {
@@ -228,6 +231,7 @@ export function MailDetailPane({
 
   if (selected.kind === "sent") {
     const m = selected.message;
+    const detail = sentDetail?.id === m.id ? sentDetail : null;
     return (
       <DetailView
         title={m.subject || "(no subject)"}
@@ -290,9 +294,21 @@ export function MailDetailPane({
             {formatDetailDate(m.sentAt)}
           </p>
         </div>
-        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-          {m.bodyPreview}
-        </pre>
+        {detail ? (
+          <InboundEmailDetail
+            productId={productId}
+            messageKey={m.id}
+            domain={domainOf(extractFirstEmail(m.from) ?? m.from)}
+            bodyText={detail.bodyText ?? detail.bodyPreview ?? ""}
+            bodyHtml={detail.bodyHtml ?? undefined}
+            attachments={detail.attachments ?? []}
+            kind="sent"
+          />
+        ) : (
+          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+            {m.bodyPreview}
+          </pre>
+        )}
       </DetailView>
     );
   }

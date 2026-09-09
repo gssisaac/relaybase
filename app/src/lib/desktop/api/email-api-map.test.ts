@@ -80,6 +80,20 @@ describe("mapEmailApiToWorker", () => {
   it("handles sent and onboard specials", () => {
     assert.equal(mapEmailApiToWorker("/api/email/sent"), "/mail/sent");
     assert.equal(
+      mapEmailApiToWorker("/api/email/sent?domain=a.com"),
+      "/mail/sent?domain=a.com",
+    );
+    assert.equal(
+      mapEmailApiToWorker("/api/email/sent/abc123?domain=a.com"),
+      "/mail/sent/abc123?domain=a.com",
+    );
+    assert.equal(
+      mapEmailApiToWorker(
+        "/api/email/sent/abc123/attachments/0?domain=a.com",
+      ),
+      "/mail/sent/abc123/attachments/0?domain=a.com",
+    );
+    assert.equal(
       mapEmailApiToWorker("/api/email/domains/onboard"),
       "/console/domains",
     );

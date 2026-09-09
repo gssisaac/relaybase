@@ -18,8 +18,11 @@ import {
   EMAIL_SEND_FAILED,
   EMAIL_SEND_STARTED,
   EMAIL_SEND_SUCCEEDED,
+  EMAIL_SEND_UNDONE,
   type EmailSendFailedDetail,
+  type EmailSendStartedDetail,
   type EmailSendSucceededDetail,
+  type EmailSendUndoneDetail,
 } from "@/email/components/compose/email-send-events";
 import { notifyIfCloudflarePlanError } from "@/lib/cloudflare/CloudflarePlanDialog";
 import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
@@ -906,6 +909,7 @@ export class EmailMailboxStore {
           subject: string;
           bodyPreview: string;
           bodyText?: string;
+          bodyHtml?: string | null;
           sentAt: string;
           messageId?: string | null;
           inReplyTo?: string | null;
@@ -925,6 +929,8 @@ export class EmailMailboxStore {
         cc: row.ccEmails?.length ? row.ccEmails.join(", ") : listHit?.cc,
         subject: row.subject,
         bodyPreview: row.bodyPreview || row.bodyText || listHit?.bodyPreview || "",
+        bodyText: row.bodyText,
+        bodyHtml: row.bodyHtml,
         sentAt: row.sentAt,
         messageId: row.messageId ?? undefined,
         inReplyTo: row.inReplyTo ?? undefined,
@@ -1838,17 +1844,26 @@ export class EmailMailboxStore {
     void this.refresh(true);
   };
 
-  private onSendStarted = () => {
+  private onSendStarted = (event: Event) => {
+    const detail = (event as CustomEvent<EmailSendStartedDetail>).detail;
     this.error = null;
-    toast.loading("Sending…", { id: SEND_TOAST_ID });
+    if (detail?.pendingId && detail.placeholder) {
+      const without = this.sent.filter((msg) => msg.id !== detail.pendingId);
+      this.sent = [
+        { ...detail.placeholder, status: "sending" },
+        ...without,
+      ];
+    }
   };
 
   private onSendSucceeded = (event: Event) => {
     const detail = (event as CustomEvent<EmailSendSucceededDetail>).detail;
     const sent = detail?.sent;
+    const without = this.sent.filter(
+      (msg) => msg.id !== detail?.pendingId && msg.id !== sent?.id,
+    );
+    this.sent = sent?.id ? [sent, ...without] : without;
     if (sent?.id) {
-      const without = this.sent.filter((msg) => msg.id !== sent.id);
-      this.sent = [sent, ...without];
       void this.persistMailLists();
     }
     this.error = null;
@@ -1862,6 +1877,11 @@ export class EmailMailboxStore {
   private onSendFailed = (event: Event) => {
     const detail = (event as CustomEvent<EmailSendFailedDetail>).detail;
     const error = detail?.error || "Send failed";
+    if (detail?.pendingId) {
+      this.sent = this.sent.map((msg) =>
+        msg.id === detail.pendingId ? { ...msg, status: "failed" } : msg,
+      );
+    }
     if (
       notifyIfCloudflarePlanError({
         error,
@@ -1874,6 +1894,12 @@ export class EmailMailboxStore {
     }
     toast.error(error, { id: SEND_TOAST_ID });
     this.error = null;
+  };
+
+  private onSendUndone = (event: Event) => {
+    const detail = (event as CustomEvent<EmailSendUndoneDetail>).detail;
+    if (!detail?.pendingId) return;
+    this.sent = this.sent.filter((msg) => msg.id !== detail.pendingId);
   };
 
   private onVisibilityOrFocus = () => {
@@ -1991,6 +2017,7 @@ export class EmailMailboxStore {
     window.addEventListener(EMAIL_SEND_STARTED, this.onSendStarted);
     window.addEventListener(EMAIL_SEND_SUCCEEDED, this.onSendSucceeded);
     window.addEventListener(EMAIL_SEND_FAILED, this.onSendFailed);
+    window.addEventListener(EMAIL_SEND_UNDONE, this.onSendUndone);
   }
 
   private unbindEvents() {
@@ -2003,6 +2030,7 @@ export class EmailMailboxStore {
     window.removeEventListener(EMAIL_SEND_STARTED, this.onSendStarted);
     window.removeEventListener(EMAIL_SEND_SUCCEEDED, this.onSendSucceeded);
     window.removeEventListener(EMAIL_SEND_FAILED, this.onSendFailed);
+    window.removeEventListener(EMAIL_SEND_UNDONE, this.onSendUndone);
   }
 }
 

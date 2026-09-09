@@ -387,6 +387,7 @@ const MailRow = memo(
           {primary}
         </SenderHoverLabel>
       );
+    const sendStatus = isInbox ? undefined : item.message.status;
     return (
       <div style={style} className="overflow-hidden" onMouseEnter={onMouseEnter}>
         <EmailCommandContextMenu runtime={runtime}>
@@ -403,6 +404,17 @@ const MailRow = memo(
             }
             preview={preview}
             date={date}
+            status={
+              sendStatus === "sending" ? (
+                <Badge variant="secondary" className="text-[10px]">
+                  Sending…
+                </Badge>
+              ) : sendStatus === "failed" ? (
+                <Badge variant="destructive" className="text-[10px]">
+                  Failed
+                </Badge>
+              ) : undefined
+            }
           />
         </EmailCommandContextMenu>
       </div>

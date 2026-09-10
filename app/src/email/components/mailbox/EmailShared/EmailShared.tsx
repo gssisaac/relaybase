@@ -14,6 +14,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { sanitizeEmailHtml } from "@/lib/email/parse-raw";
+import {
+  extractPlainTextFromEmailHtml,
+  isPlainTextEmailHtml,
+} from "@/email/lib/html/plain-text-html-detect";
 
 import { EmailHtmlFrame } from "./EmailHtmlFrame";
 import { QuotedReplyBlock } from "@/email/components/reply/QuotedReplyBlock";
@@ -158,8 +162,12 @@ export function InboundEmailBody({
     () => (bodyHtml ? sanitizeEmailHtml(bodyHtml) : ""),
     [bodyHtml],
   );
+  const isTextOnly = useMemo(
+    () => Boolean(safeHtml) && isPlainTextEmailHtml(safeHtml),
+    [safeHtml],
+  );
 
-  if (safeHtml) {
+  if (safeHtml && !isTextOnly) {
     return (
       <EmailHtmlFrame
         html={safeHtml}
@@ -170,7 +178,7 @@ export function InboundEmailBody({
 
   return (
     <p className="w-full whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-      {bodyText}
+      {isTextOnly ? extractPlainTextFromEmailHtml(safeHtml) : bodyText}
     </p>
   );
 }
@@ -230,6 +238,13 @@ export function InboundEmailDetail({
       : rewriteInlineAttachmentUrls(bodyHtml, attachments, attachmentPath);
     return sanitizeEmailHtml(withInline);
   }, [attachments, bodyHtml, domain, messageKey, kind]);
+  const isTextOnly = useMemo(
+    () => Boolean(safeHtml) && isPlainTextEmailHtml(safeHtml),
+    [safeHtml],
+  );
+  const displayText = isTextOnly
+    ? extractPlainTextFromEmailHtml(safeHtml)
+    : bodyText;
 
   const imageAttachments = attachments.filter((attachment) =>
     attachment.contentType.startsWith("image/"),
@@ -270,7 +285,7 @@ export function InboundEmailDetail({
 
   return (
     <div className="space-y-4">
-      {safeHtml ? (
+      {safeHtml && !isTextOnly ? (
         <EmailHtmlFrame
           html={safeHtml}
           className={
@@ -281,12 +296,12 @@ export function InboundEmailDetail({
         />
       ) : plain ? (
         <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-          {bodyText || "(empty message)"}
+          {displayText || "(empty message)"}
         </p>
       ) : (
         <div className="rounded-md border border-border bg-muted/20 p-4">
           <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-            {bodyText || "(empty message)"}
+            {displayText || "(empty message)"}
           </p>
         </div>
       )}

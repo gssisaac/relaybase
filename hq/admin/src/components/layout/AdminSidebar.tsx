@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { FlaskConical, KeyRound, LayoutDashboard } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { FlaskConical, KeyRound, LayoutDashboard, LogOut } from "lucide-react";
+import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { useRelaybasePaths } from "@/relaybase/components/useEmailSenderPaths";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +15,19 @@ function isActive(href: string, pathname: string) {
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { tabs } = useRelaybasePaths();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  }
 
   const nav = [
     { href: "/status", label: "Dashboard", icon: LayoutDashboard },
@@ -63,7 +77,16 @@ export function AdminSidebar() {
       </nav>
 
       <div className="border-t border-sidebar-border px-4 py-3">
-        <span className="text-xs text-muted-foreground">Dev — no auth</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground"
+          disabled={signingOut}
+          onClick={() => void handleSignOut()}
+        >
+          <LogOut className="size-4" aria-hidden />
+          Sign out
+        </Button>
       </div>
     </aside>
   );

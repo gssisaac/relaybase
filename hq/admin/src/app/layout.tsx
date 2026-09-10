@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
-import { AdminSidebar } from "@/components/layout/AdminSidebar";
+import { AppShell } from "@/components/layout/AppShell";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -31,12 +31,7 @@ export default function RootLayout({
       >
         <ThemeProvider>
           <TooltipProvider delay={200}>
-            <div className="flex min-h-screen bg-background">
-              <AdminSidebar />
-              <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                {children}
-              </main>
-            </div>
+            <AppShell>{children}</AppShell>
           </TooltipProvider>
         </ThemeProvider>
       </body>

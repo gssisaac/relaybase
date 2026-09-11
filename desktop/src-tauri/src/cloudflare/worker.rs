@@ -205,6 +205,7 @@ pub async fn install_worker(
         R2_BUCKET,
         &[],
         "",
+        "",
     )
     .await?;
 
@@ -251,6 +252,7 @@ pub async fn update_worker(
         &source,
         R2_BUCKET,
         &[],
+        "",
         "",
     )
     .await?;

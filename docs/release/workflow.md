@@ -77,6 +77,7 @@ Both pack scripts **fail** if notes are missing. Website `/release-notes` syncs 
 
 - `worker/package.json`
 - `worker/wrangler.toml` → `WORKER_VERSION`
+- `worker/wrangler.toml` → `DESKTOP_VERSION` (desktop app version this Worker build is compatible with; reported in `/health` as `desktopVersion` and read back by `pack-customer-install.mjs` into the packed install ZIP)
 
 ### 4. Build desktop (macOS release Mac, normal terminal + network)
 

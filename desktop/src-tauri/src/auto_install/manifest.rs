@@ -295,6 +295,25 @@ pub(crate) fn read_staged_version(work_dir: &Path) -> Option<String> {
     None
 }
 
+/// Read the staged desktop-version ceiling from wrangler.toml DESKTOP_VERSION.
+///
+/// Unlike `read_staged_version`, there is no `VERSION`-file equivalent — this
+/// value only ever lives in the staged `wrangler.toml` (mirroring what the
+/// pack script writes from the repo's hand-maintained `wrangler.toml`). Used
+/// to re-add `DESKTOP_VERSION` on every desktop-driven Worker deploy, since
+/// `upload_worker_script` rebuilds the bindings array from scratch.
+pub(crate) fn read_staged_desktop_version(work_dir: &Path) -> Option<String> {
+    let wrangler = work_dir.join("wrangler.toml");
+    if wrangler.is_file() {
+        if let Ok(raw) = std::fs::read_to_string(&wrangler) {
+            if let Some(v) = toml_quoted_value(&raw, "DESKTOP_VERSION") {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod worker_js_tests {
     use super::{staged_worker_js_path, worker_js_is_current, worker_update_eligible};

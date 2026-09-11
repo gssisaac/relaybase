@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { desktopBehindRelease, workerNeedsUpgrade } from "./worker-version.ts";
+import {
+  desktopBehindRelease,
+  teamDesktopBehindWorker,
+  teamDesktopUpdateAllowed,
+  workerNeedsUpgrade,
+} from "./worker-version.ts";
 
 describe("workerNeedsUpgrade", () => {
   it("is false when latest is missing", () => {
@@ -43,5 +48,47 @@ describe("desktopBehindRelease", () => {
   it("is false when desktop matches or exceeds latest", () => {
     assert.equal(desktopBehindRelease("0.1.2", "0.1.2"), false);
     assert.equal(desktopBehindRelease("0.1.3", "0.1.2"), false);
+  });
+});
+
+describe("teamDesktopUpdateAllowed", () => {
+  it("fails open when the Worker has not reported a ceiling", () => {
+    assert.equal(teamDesktopUpdateAllowed("0.1.9", ""), true);
+    assert.equal(teamDesktopUpdateAllowed("0.1.9", null), true);
+    assert.equal(teamDesktopUpdateAllowed("0.1.9", "unknown"), true);
+  });
+
+  it("fails open when the candidate version is unknown", () => {
+    assert.equal(teamDesktopUpdateAllowed("", "0.1.8"), true);
+    assert.equal(teamDesktopUpdateAllowed(null, "0.1.8"), true);
+  });
+
+  it("allows a candidate at or below the Worker's ceiling", () => {
+    assert.equal(teamDesktopUpdateAllowed("0.1.8", "0.1.8"), true);
+    assert.equal(teamDesktopUpdateAllowed("0.1.7", "0.1.8"), true);
+    assert.equal(teamDesktopUpdateAllowed(" 0.1.8 ", "0.1.8"), true);
+  });
+
+  it("blocks a candidate ahead of the Worker's ceiling", () => {
+    assert.equal(teamDesktopUpdateAllowed("0.1.9", "0.1.8"), false);
+    assert.equal(teamDesktopUpdateAllowed("0.2.0", "0.1.8"), false);
+  });
+});
+
+describe("teamDesktopBehindWorker", () => {
+  it("is false when either side is missing or unknown", () => {
+    assert.equal(teamDesktopBehindWorker("", "0.1.8"), false);
+    assert.equal(teamDesktopBehindWorker("0.1.7", ""), false);
+    assert.equal(teamDesktopBehindWorker("0.1.7", "unknown"), false);
+    assert.equal(teamDesktopBehindWorker(null, null), false);
+  });
+
+  it("is true when the local app is behind the Worker's ceiling", () => {
+    assert.equal(teamDesktopBehindWorker("0.1.7", "0.1.8"), true);
+  });
+
+  it("is false when the local app matches or exceeds the Worker's ceiling", () => {
+    assert.equal(teamDesktopBehindWorker("0.1.8", "0.1.8"), false);
+    assert.equal(teamDesktopBehindWorker("0.1.9", "0.1.8"), false);
   });
 });

@@ -485,6 +485,7 @@ pub async fn upload_worker_script(
     r2_bucket: &str,
     d1_bindings: &[(&str, &str)],
     worker_version: &str,
+    desktop_version: &str,
 ) -> Result<(), String> {
     let url = format!(
         "{CF_API}/accounts/{}/workers/scripts/{script_name}",
@@ -504,6 +505,16 @@ pub async fn upload_worker_script(
         "type": "plain_text",
         "name": "WORKER_VERSION",
         "text": version
+    }));
+    let desktop = if desktop_version.trim().is_empty() {
+        "unknown"
+    } else {
+        desktop_version.trim()
+    };
+    bindings.push(json!({
+        "type": "plain_text",
+        "name": "DESKTOP_VERSION",
+        "text": desktop
     }));
     bindings.push(json!({ "type": "send_email", "name": "EMAIL" }));
     for (binding, id) in d1_bindings {

@@ -11,7 +11,7 @@ See the full checklist: **[workflow.md](workflow.md)**.
 | Component | Where the version lives |
 |-----------|-------------------------|
 | **Desktop** (macOS app + in-app updater) | `desktop/package.json`, `desktop/src-tauri/Cargo.toml`, `desktop/src-tauri/tauri.conf.json` |
-| **Worker** (hosted install ZIP + `/health`) | sibling `worker/package.json`, `worker/wrangler.toml` `[vars] WORKER_VERSION`, packed `wrangler.toml` inside the install ZIP |
+| **Worker** (hosted install ZIP + `/health`) | sibling `worker/package.json`, `worker/wrangler.toml` `[vars] WORKER_VERSION`, `worker/wrangler.toml` `[vars] DESKTOP_VERSION` (packed `wrangler.toml` inside the install ZIP mirrors both) |
 
 **First public release: `0.1.1`.** Subsequent releases bump the patch (`0.1.2`, `0.1.3`, …). No separate dev / `+local` channel.
 
@@ -55,10 +55,10 @@ When only the macOS app changed (no Worker script diff):
 ```bash
 node -p "require('./desktop/package.json').version"
 node -p "require('../worker/package.json').version"
-rg 'WORKER_VERSION' ../worker/wrangler.toml
+rg 'WORKER_VERSION|DESKTOP_VERSION' ../worker/wrangler.toml
 
 curl -sL https://github.com/strum-us/relaybase-worker/releases/latest/download/worker-install-manifest.json | jq .version
 curl -s https://relaybase.xyz/release/latest.json | jq .version
 ```
 
-Deployed Worker: `GET /health` → `version` should match what the user deployed (not necessarily the desktop patch label when desktop-only releases skipped Worker).
+Deployed Worker: `GET /health` → `version` should match what the user deployed (not necessarily the desktop patch label when desktop-only releases skipped Worker). `GET /health` → `desktopVersion` is the desktop app ceiling this Worker build advertises to mailbox-mode (invited/team) desktop sessions; it gates team-member desktop auto-updates so they never self-update past what the connected Worker supports. Bump `DESKTOP_VERSION` in `worker/wrangler.toml` whenever a Worker build is cut to pair with a new desktop release.

@@ -17,16 +17,13 @@ import {
 } from "react";
 
 import { useRouteStaleScheduler } from "@/lib/desktop/scheduler/useRouteStaleScheduler";
+import { teamDesktopUpdateAllowed } from "@/lib/dashboard/worker-version";
 
 /** Re-check on console entry / route change once a check is this stale. */
 const STALE_CHECK_MS = 10 * 60 * 1000;
 
 export type AppUpdaterPhase =
-  | "idle"
-  | "checking"
-  | "available"
-  | "downloading"
-  | "ready";
+  "idle" | "checking" | "available" | "downloading" | "ready";
 
 type AppUpdaterContextValue = {
   phase: AppUpdaterPhase;
@@ -42,6 +39,13 @@ type AppUpdaterContextValue = {
   /** Download + install a previously discovered update. */
   installNow: () => Promise<void>;
   restartToUpdate: () => Promise<void>;
+  /**
+   * Set the desktop-version ceiling for mailbox-mode (invited/team) sessions.
+   * `null` (the default) means no cap — owner sessions and any Worker that
+   * hasn't reported `DESKTOP_VERSION` stay on today's unconditional behavior.
+   * A non-null value blocks auto/manual install of any candidate ahead of it.
+   */
+  setUpdateCeiling: (version: string | null) => void;
 };
 
 const AppUpdaterContext = createContext<AppUpdaterContextValue | null>(null);
@@ -72,6 +76,12 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
   const busyRef = useRef(false);
   const readyRef = useRef(false);
   const pendingUpdateRef = useRef<Update | null>(null);
+  /** Desktop-version ceiling set by `TeamDesktopUpdateGate` for team sessions. */
+  const updateCeilingRef = useRef<string | null>(null);
+
+  const setUpdateCeiling = useCallback((v: string | null) => {
+    updateCeilingRef.current = v;
+  }, []);
 
   const restartToUpdate = useCallback(async () => {
     await relaunch();
@@ -134,6 +144,18 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
     try {
       const update = await check({ timeout: 60_000 });
       if (!update) {
+        setPhase("idle");
+        setVersion(null);
+        setProgressLabel(null);
+        return;
+      }
+
+      // Mailbox-mode (invited/team) gate: never auto-install a release ahead
+      // of what the connected Worker advertises as its desktop ceiling. Treat
+      // it exactly like "no update found" — don't stash it either, so the
+      // sidebar banner / manual install path can't bypass this.
+      const ceiling = updateCeilingRef.current;
+      if (ceiling && !teamDesktopUpdateAllowed(update.version, ceiling)) {
         setPhase("idle");
         setVersion(null);
         setProgressLabel(null);
@@ -253,6 +275,21 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
         setVersion(update.version);
       }
 
+      // Defense in depth: the same mailbox-mode gate as silentCheck. The
+      // sidebar "Download & install" button (AppUpdateBanner) is rendered for
+      // team sessions too, so a manual click must not install past the
+      // Worker's reported ceiling either.
+      const ceiling = updateCeilingRef.current;
+      if (ceiling && !teamDesktopUpdateAllowed(update.version, ceiling)) {
+        setPhase("idle");
+        setVersion(null);
+        setProgressLabel(null);
+        setStatusMessage(
+          `Desktop v${currentVersion ?? (await getVersion())} is up to date.`,
+        );
+        return;
+      }
+
       await installPending(update);
     } catch (err) {
       console.error("[updater] Download/install failed:", err);
@@ -290,6 +327,7 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
       checkNow,
       installNow,
       restartToUpdate,
+      setUpdateCeiling,
     }),
     [
       phase,
@@ -301,11 +339,14 @@ export function AppUpdaterProvider({ children }: { children: ReactNode }) {
       checkNow,
       installNow,
       restartToUpdate,
+      setUpdateCeiling,
     ],
   );
 
   return (
-    <AppUpdaterContext.Provider value={value}>{children}</AppUpdaterContext.Provider>
+    <AppUpdaterContext.Provider value={value}>
+      {children}
+    </AppUpdaterContext.Provider>
   );
 }
 

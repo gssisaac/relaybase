@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { AppSessionProvider } from "@/lib/desktop/app-session";
+import { TeamDesktopUpdateGate } from "@/lib/desktop/updater/TeamDesktopUpdateGate";
 import { AppUpdaterProvider } from "@/lib/desktop/updater/AppUpdaterContext";
 import { WorkerUpdateCheckProvider } from "@/lib/desktop/worker-update/WorkerUpdateCheckContext";
 import { WorkerUpdateRunnerProvider } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
@@ -24,6 +25,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <DesktopProvider>
       <AppUpdaterProvider>
+        <TeamDesktopUpdateGate />
         <AppSessionProvider>
           <WorkerUpdateCheckProvider>
             <WorkerUpdateRunnerProvider>{children}</WorkerUpdateRunnerProvider>

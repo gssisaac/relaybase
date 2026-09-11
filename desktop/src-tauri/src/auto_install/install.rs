@@ -21,7 +21,8 @@ use super::health::{
 };
 use super::log::emit_log;
 use super::manifest::{
-    fetch_install_manifest, read_staged_version, stage_install_package, staged_worker_js_path,
+    fetch_install_manifest, read_staged_desktop_version, read_staged_version,
+    stage_install_package, staged_worker_js_path,
 };
 use super::routing::repair_email_routing_for_all_domains;
 use super::schema::{init_worker_db_with_retry, migrate_worker_db_with_retry};
@@ -79,6 +80,7 @@ pub async fn auto_install_worker(
         &InstallPlan::from_decisions(&decisions),
         &InstallRunOptions::default(),
         read_staged_version(&work_dir),
+        read_staged_desktop_version(&work_dir),
         wipe_confirmation.as_deref(),
     )
     .await;
@@ -143,6 +145,7 @@ pub async fn update_installed_worker(
         &InstallPlan::default(),
         &run_opts,
         read_staged_version(&work_dir),
+        read_staged_desktop_version(&work_dir),
         None,
     )
     .await;
@@ -159,6 +162,7 @@ async fn auto_install_steps(
     plan: &InstallPlan,
     run_opts: &InstallRunOptions,
     staged_version: Option<String>,
+    staged_desktop_version: Option<String>,
     wipe_confirmation: Option<&str>,
 ) -> Result<AutoInstallResult, String> {
     check_cancelled()?;
@@ -185,7 +189,8 @@ async fn auto_install_steps(
 
     check_cancelled()?;
     let worker_url =
-        deploy_worker(app, &client, work_dir, &d1_ids, staged_version.clone()).await?;
+        deploy_worker(app, &client, work_dir, &d1_ids, staged_version.clone(), staged_desktop_version.clone())
+            .await?;
 
     let auth_pepper = apply_secrets(
         app,
@@ -433,11 +438,17 @@ async fn deploy_worker(
     work_dir: &Path,
     d1_ids: &[String],
     staged_version: Option<String>,
+    staged_desktop_version: Option<String>,
 ) -> Result<String, String> {
     let js_path = staged_worker_js_path(work_dir, None)?;
     let js_source = std::fs::read_to_string(&js_path)
         .map_err(|e| format!("read staged {}: {e}", js_path.display()))?;
     let version = staged_version.unwrap_or_else(|| "unknown".into());
+    let desktop_version = staged_desktop_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("unknown");
     let d1_for_upload: Vec<(&str, &str)> = D1_DATABASES
         .iter()
         .zip(d1_ids.iter())
@@ -456,6 +467,7 @@ async fn deploy_worker(
         R2_BUCKET,
         &d1_for_upload,
         &version,
+        desktop_version,
     )
     .await?;
     match list_worker_bindings(client, DEFAULT_SCRIPT).await {

@@ -1,7 +1,7 @@
 {
   "version": "0.1.8",
-  "notes": "# Relaybase 0.1.8\n\nPairs with Worker install bundle **0.1.4**.\n\n## Highlights\n- Plain-text emails now render as text instead of being wrapped in an iframe\n- Cloudflare Email Routing drift detection with dashboard deep links\n- Passkey-gated login for hq/admin\n\n## Changes\n- Detect structurally plain-text HTML email bodies and render them as text, not an iframe\n- Surface Cloudflare Email Routing drift and add dashboard deep links\n- Add passkey gate to hq/admin (login, session middleware, app shell)\n- Consolidate OS keyring secrets into a single vault item",
-  "pub_date": "2026-09-11T04:15:07.027Z",
+  "notes": "# Relaybase 0.1.8\n\nPairs with Worker install bundle **0.1.5**.\n\n## Highlights\n- Plain-text emails now render as text instead of being wrapped in an iframe\n- Cloudflare Email Routing drift detection with dashboard deep links\n- Passkey-gated login for hq/admin\n\n## Changes\n- Detect structurally plain-text HTML email bodies and render them as text, not an iframe\n- Surface Cloudflare Email Routing drift and add dashboard deep links\n- Add passkey gate to hq/admin (login, session middleware, app shell)\n- Consolidate OS keyring secrets into a single vault item",
+  "pub_date": "2026-09-11T04:36:47.646Z",
   "platforms": {
     "darwin-aarch64": {
       "url": "https://download.relaybase.xyz/Relaybase.0.1.8.aarch64.app.tar.gz",

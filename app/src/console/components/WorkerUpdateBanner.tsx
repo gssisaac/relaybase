@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { SETTINGS_UPDATE_PATH } from "@/console/lib/paths";
+import { SETTINGS_UPDATE_PATH, SETTINGS_WORKER_PROGRESS_PATH } from "@/console/lib/paths";
 import { workerNeedsUpgrade } from "@/lib/dashboard/worker-version";
 import { useOptionalAppUpdater } from "@/lib/desktop/updater/AppUpdaterContext";
 import { useDesktop } from "@/lib/desktop/shell";
@@ -34,16 +34,45 @@ async function goUpdateWorker(
 
 const DISMISS_KEY = "relaybase.worker-update-banner.dismissed";
 
+/** Sidebar status shown while a Worker update is actually running. */
+function WorkerInstallingBanner() {
+  const runner = useWorkerUpdateRunner();
+  if (!runner.isInstalling) return null;
+  return (
+    <div className="shrink-0 px-2 pb-2">
+      <Card size="sm" className="gap-2 py-2.5 shadow-none">
+        <CardContent className="px-2.5">
+          <Link
+            href={SETTINGS_WORKER_PROGRESS_PATH}
+            className="flex items-center gap-2 text-[11px] leading-tight text-foreground hover:underline"
+          >
+            <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">
+              {runner.phase === "checking" ? "Checking…" : "Installing Worker…"}
+            </span>
+          </Link>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function WorkerUpdateBanner() {
   const { credentials, teamLogin } = useDesktop();
   const updater = useOptionalAppUpdater();
   const { check, checking } = useWorkerUpdateCheck();
+  const runner = useWorkerUpdateRunner();
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     setDismissedVersion(sessionStorage.getItem(DISMISS_KEY));
   }, []);
+
+  // While an update is in flight, show the global installing status instead
+  // of the "Update now" button — the run is managed by the runner store and
+  // survives navigation, so the sidebar reflects live progress.
+  if (runner.isInstalling) return <WorkerInstallingBanner />;
 
   const desktopVersion = updater?.currentVersion?.trim() || null;
   const updateAvailable = Boolean(

@@ -55,7 +55,7 @@ export function WorkerUpdateProgressView() {
   const running = runner.phase === "checking" || runner.phase === "running";
 
   return (
-    <SetupScrollPage maxWidth="max-w-md">
+    <SetupScrollPage maxWidth="max-w-[600px]">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">

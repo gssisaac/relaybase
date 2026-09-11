@@ -60,6 +60,15 @@ observed via `logs` (streamed `InstallLogEvent`s) and `phase`
 run; `reset()` clears a finished/errored run so the progress view can start
 over.
 
+The runner state lives in a MobX store —
+[`WorkerUpdateRunnerStore`](./worker-update-runner-store.ts) — instantiated
+once in `WorkerUpdateRunnerProvider` (in `AppProviders`), so the run survives
+route changes and any component can subscribe. The sidebar's
+`WorkerUpdateBanner` reads `isInstalling` from the store: while an update is
+in flight it swaps the "Update now" button for a clickable "Installing
+Worker…" status that links to `/settings/worker/progress`, instead of
+offering an update that's already running.
+
 On success it re-verifies the connection, saves the new `workerUrl` /
 `workerVersion` to credentials, and best-effort registers the Worker with the
 console — which is what feeds back into `WorkerUpdateCheckContext`'s

@@ -83,7 +83,7 @@ export function SetupScrollPage({
   maxWidth = "max-w-3xl",
 }: {
   children: ReactNode;
-  maxWidth?: "max-w-md" | "max-w-3xl";
+  maxWidth?: "max-w-md" | "max-w-3xl" | "max-w-[600px]";
 }) {
   return (
     <div className={cn("mx-auto w-full px-6 py-6", maxWidth)}>{children}</div>

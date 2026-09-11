@@ -1,11 +1,11 @@
 {
-  "version": "0.1.7",
-  "notes": "# Relaybase 0.1.7\n\nPairs with Worker install bundle **0.1.4**.\n\n## Highlights\n- Fix frequent Cloudflare re-authentication caused by refresh-token invalidation on transient errors\n- Streamlined Worker updates run in the background without extra approval screens\n- Live send status on the Sent list with full sent-message bodies\n\n## Changes\n- Stop wiping a valid CF OAuth refresh token on any HTTP 400 response\n- Worker update: skip approve/confirm screens and run download/deploy in the background\n- Recheck for desktop and Worker updates on route change via a new stale scheduler\n- Remove pre-launch legacy unscoped keyring fallback\n- Show live send status on the Sent list; render full sent-message bodies\n- Remove Google Workspace subdomain coexistence from website docs",
-  "pub_date": "2026-09-09T07:18:18.726Z",
+  "version": "0.1.8",
+  "notes": "# Relaybase 0.1.8\n\nPairs with Worker install bundle **0.1.4**.\n\n## Highlights\n- Plain-text emails now render as text instead of being wrapped in an iframe\n- Cloudflare Email Routing drift detection with dashboard deep links\n- Passkey-gated login for hq/admin\n\n## Changes\n- Detect structurally plain-text HTML email bodies and render them as text, not an iframe\n- Surface Cloudflare Email Routing drift and add dashboard deep links\n- Add passkey gate to hq/admin (login, session middleware, app shell)\n- Consolidate OS keyring secrets into a single vault item",
+  "pub_date": "2026-09-11T04:15:07.027Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.7.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlhBUDY4RTZpei9HUVQ5YXVjbWZ1M2o0S3RKeFNRbnVqamVUTkNoYkp3ejhCd0NkMDVoL0JELzNPcTNqWVdpalZ6VGFqdzBTUkh2WXBKcmF0c282clE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4OTM4MjczCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKVDRLck9jQ2JlVHJkWERWSXJuNE1ZcVoySENTOGFHVlJUcVF1T2dUM09sbU5Qc0p0aGpPNXpjYmpOL3VZNEkyQmZyai9uUGRVbUQzdG05Y0pyWEl4QVE9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.8.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WldaVVZvMVo3bEgxMTI3aStDa3Q2SmlCVm55bnRqeXJ0aVVvU2YrVTZORkFQL3ErNGZJSVcyQnJNdkRuRm5MV24wK0xPU0pOcUJJYlJpekU1STNYQWc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5MTAwMDc3CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKeTNnVU83WmEwNWJaNTBITEg4SWU2eE45QkJFbW9EaHpSMXlZdGpKZ3BOMThWV3ppZ0hzNG1hcWlXN2tuM2hLWEFPdGVWTzFnN0V4NjlZZ3BUbVpXRGc9PQo="
     }
   }
 }

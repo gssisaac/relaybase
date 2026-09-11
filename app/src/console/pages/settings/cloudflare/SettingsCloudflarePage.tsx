@@ -23,6 +23,7 @@ export function SettingsCloudflarePage() {
     workerStatus,
     cfConnected,
     cfBusy,
+    statusBusy,
     cfError,
     cfMessage,
     handleVerifyCf,
@@ -41,7 +42,9 @@ export function SettingsCloudflarePage() {
     "relaybase-api";
   const workerUrl =
     workerStatus?.workerUrl?.trim() || credentials?.workerUrl?.trim() || "";
-  const cfHealth = cfApiTokenHealth(workerStatus, { pending: cfBusy });
+  const cfHealth = cfApiTokenHealth(workerStatus, {
+    pending: cfBusy || (statusBusy && !workerStatus?.cfApiTokenSet),
+  });
   const cfTokenOnWorker = Boolean(workerStatus?.cfApiTokenSet);
   const cfPermissionsRejected = cfApiTokenPermissionsRejected(workerStatus);
 

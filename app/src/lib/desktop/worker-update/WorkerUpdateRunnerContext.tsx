@@ -1,46 +1,29 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { toast } from "sonner";
+import { reaction } from "mobx";
+import * as React from "react";
 
-import {
-  desktopCancelAutoInstall,
-  desktopPreviewWorkerUpdateTarget,
-  desktopRegisterWorkerWithConsole,
-  desktopUpdateInstalledWorker,
-  desktopVerifyWorkerConnection,
-  explainDesktopError,
-  explainWorkerUpdateTargetError,
-  isInstallCancelledError,
-  listenInstallLog,
-  saveUserConnection,
-  type DesktopErrorHelp,
-  type InstallLogEvent,
-  type WorkerUpdateTarget,
-} from "@/lib/desktop/bridge";
 import { useDesktop } from "@/lib/desktop/shell";
+import {
+  WorkerUpdateRunnerStore,
+  type WorkerUpdatePhase,
+  type WorkerUpdateRefresh,
+  type WorkerUpdateStartResult,
+} from "@/lib/desktop/worker-update/worker-update-runner-store";
 
-export type WorkerUpdatePhase = "idle" | "checking" | "running" | "done" | "error";
-
-export type WorkerUpdateStartResult =
-  | { ok: true }
-  | { ok: false; reason: "auth"; error: DesktopErrorHelp }
-  | { ok: false; reason: "mismatch"; target: WorkerUpdateTarget };
+export type {
+  WorkerUpdatePhase,
+  WorkerUpdateStartResult,
+} from "@/lib/desktop/worker-update/worker-update-runner-store";
 
 type WorkerUpdateRunnerValue = {
   phase: WorkerUpdatePhase;
-  logs: InstallLogEvent[];
-  error: DesktopErrorHelp | null;
-  updatedWorkerUrl: string | null;
-  updatedVersion: string | null;
+  logs: ReturnType<WorkerUpdateRunnerStore["logs"]["slice"]>;
+  error: WorkerUpdateRunnerStore["error"];
+  updatedWorkerUrl: WorkerUpdateRunnerStore["updatedWorkerUrl"];
+  updatedVersion: WorkerUpdateRunnerStore["updatedVersion"];
+  /** True while an update is in flight (preview check or actual install). */
+  isInstalling: boolean;
   /**
    * Silently confirms OAuth + the saved Worker still match, then runs the
    * update in the background (survives navigating away). Already-running
@@ -54,135 +37,96 @@ type WorkerUpdateRunnerValue = {
 };
 
 const WorkerUpdateRunnerContext =
-  createContext<WorkerUpdateRunnerValue | null>(null);
+  React.createContext<WorkerUpdateRunnerStore | null>(null);
 
 export function WorkerUpdateRunnerProvider({
   children,
 }: {
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   const { refresh } = useDesktop();
-  const [phase, setPhase] = useState<WorkerUpdatePhase>("idle");
-  const [logs, setLogs] = useState<InstallLogEvent[]>([]);
-  const [error, setError] = useState<DesktopErrorHelp | null>(null);
-  const [updatedWorkerUrl, setUpdatedWorkerUrl] = useState<string | null>(null);
-  const [updatedVersion, setUpdatedVersion] = useState<string | null>(null);
-  const runningRef = useRef(false);
+  // Lazy initializer creates the store once and keeps it across re-renders
+  // without touching a ref during render (avoids react-hooks/refs lint).
+  const [store] = React.useState(() => new WorkerUpdateRunnerStore());
 
-  const runUpdate = useCallback(async () => {
-    runningRef.current = true;
-    setPhase("running");
-    setLogs([]);
-    setError(null);
-    let unlisten: (() => void) | null = null;
-    try {
-      unlisten = await listenInstallLog((event) => {
-        setLogs((prev) => [...prev, event]);
-      });
-      const result = await desktopUpdateInstalledWorker();
-      let connect: Awaited<ReturnType<typeof desktopVerifyWorkerConnection>> | null =
-        null;
-      try {
-        connect = await desktopVerifyWorkerConnection(result.workerUrl);
-      } catch {
-        connect = null;
-      }
-      const workerUrl = connect?.workerUrl || result.workerUrl;
-      await saveUserConnection({
-        workerUrl,
-        accountId: connect?.accountId,
-        workerScriptName:
-          connect?.workerScriptName || result.workerScriptName || "relaybase-api",
-        workerVersion: result.workerVersion || connect?.version,
-      });
-      void desktopRegisterWorkerWithConsole(workerUrl).catch(() => {
-        /* best-effort */
-      });
-      await refresh();
-      const version = result.workerVersion || connect?.version || null;
-      setUpdatedWorkerUrl(workerUrl);
-      setUpdatedVersion(version);
-      setPhase("done");
-      toast.success(version ? `Worker updated to v${version}` : "Worker updated");
-    } catch (err) {
-      if (isInstallCancelledError(err)) {
-        setPhase("idle");
-      } else {
-        const help = explainDesktopError(err, "Worker update failed");
-        setError(help);
-        setPhase("error");
-        toast.error(help.title || "Worker update failed");
-      }
-    } finally {
-      if (unlisten) unlisten();
-      runningRef.current = false;
-    }
-  }, [refresh]);
-
-  const start = useCallback(async (): Promise<WorkerUpdateStartResult> => {
-    if (runningRef.current) return { ok: true };
-    setPhase("checking");
-    setError(null);
-    setUpdatedWorkerUrl(null);
-    setUpdatedVersion(null);
-    try {
-      const target = await desktopPreviewWorkerUpdateTarget();
-      if (!target.matches) {
-        setPhase("idle");
-        return { ok: false, reason: "mismatch", target };
-      }
-      void runUpdate();
-      return { ok: true };
-    } catch (err) {
-      setPhase("idle");
-      return { ok: false, reason: "auth", error: explainWorkerUpdateTargetError(err) };
-    }
-  }, [runUpdate]);
-
-  const cancel = useCallback(async () => {
-    try {
-      await desktopCancelAutoInstall();
-    } catch {
-      /* install promise rejects when cancel lands */
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    if (runningRef.current) return;
-    setPhase("idle");
-    setError(null);
-    setLogs([]);
-    setUpdatedWorkerUrl(null);
-    setUpdatedVersion(null);
-  }, []);
-
-  const value = useMemo(
-    () => ({
-      phase,
-      logs,
-      error,
-      updatedWorkerUrl,
-      updatedVersion,
-      start,
-      cancel,
-      reset,
-    }),
-    [phase, logs, error, updatedWorkerUrl, updatedVersion, start, cancel, reset],
-  );
+  // Keep the store bound to the latest desktop refresh fn (it never changes
+  // in practice, but this avoids stale-closure lint churn).
+  React.useEffect(() => {
+    store.bindRefresh(refresh as WorkerUpdateRefresh | null);
+  }, [store, refresh]);
 
   return (
-    <WorkerUpdateRunnerContext.Provider value={value}>
+    <WorkerUpdateRunnerContext.Provider value={store}>
       {children}
     </WorkerUpdateRunnerContext.Provider>
   );
 }
 
+/**
+ * Subscribe to the global Worker update runner store. Re-renders on any
+ * observable change (phase, logs, error, updatedVersion, …) via a MobX
+ * reaction, so the sidebar banner and the progress page stay in sync
+ * without prop drilling.
+ */
 export function useWorkerUpdateRunner(): WorkerUpdateRunnerValue {
-  const ctx = useContext(WorkerUpdateRunnerContext);
-  if (!ctx) {
+  const store = React.useContext(WorkerUpdateRunnerContext);
+  if (!store) {
     throw new Error(
       "useWorkerUpdateRunner must be used within WorkerUpdateRunnerProvider",
     );
   }
-  return ctx;
+  const [, setTick] = React.useState(0);
+
+  React.useEffect(() => {
+    return reaction(
+      () => ({
+        phase: store.phase,
+        logsLen: store.logs.length,
+        logsTail: store.logs.slice(-1)[0],
+        error: store.error,
+        updatedWorkerUrl: store.updatedWorkerUrl,
+        updatedVersion: store.updatedVersion,
+        isInstalling: store.isInstalling,
+      }),
+      () => setTick((t) => t + 1),
+    );
+  }, [store]);
+
+  return {
+    phase: store.phase,
+    logs: store.logs,
+    error: store.error,
+    updatedWorkerUrl: store.updatedWorkerUrl,
+    updatedVersion: store.updatedVersion,
+    isInstalling: store.isInstalling,
+    start: store.start,
+    cancel: store.cancel,
+    reset: store.reset,
+  };
+}
+
+/** Raw store accessor for components that want to read `phase`/`isInstalling`
+ *  without subscribing to the full value shape. */
+export function useWorkerUpdateRunnerStore(): WorkerUpdateRunnerStore {
+  const store = React.useContext(WorkerUpdateRunnerContext);
+  if (!store) {
+    throw new Error(
+      "useWorkerUpdateRunnerStore must be used within WorkerUpdateRunnerProvider",
+    );
+  }
+  const [, setTick] = React.useState(0);
+
+  React.useEffect(() => {
+    return reaction(
+      () => ({
+        phase: store.phase,
+        isInstalling: store.isInstalling,
+        error: store.error,
+        updatedVersion: store.updatedVersion,
+      }),
+      () => setTick((t) => t + 1),
+    );
+  }, [store]);
+
+  return store;
 }

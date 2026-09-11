@@ -79,6 +79,7 @@ function CompactConnectionCard({
                 "text-sm font-medium",
                 health.tone === "ok" && "text-emerald-700 dark:text-emerald-400",
                 health.tone === "bad" && "text-red-700 dark:text-red-400",
+                health.tone === "pending" && "text-muted-foreground",
               )}
             >
               {health.label}

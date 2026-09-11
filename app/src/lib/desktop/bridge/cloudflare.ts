@@ -350,7 +350,7 @@ export function cfApiTokenHealth(
   if (options?.pending) {
     return {
       tone: "pending",
-      label: "Verifying API token…",
+      label: "Checking…",
       detail: "Probing Cloudflare API token permissions on the Worker.",
     };
   }

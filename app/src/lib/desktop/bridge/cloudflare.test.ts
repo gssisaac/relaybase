@@ -53,6 +53,11 @@ describe("cfApiTokenHealth", () => {
         detail: "The API token is set on the Worker and Cloudflare accepted it.",
       },
     );
+    assert.deepEqual(cfApiTokenHealth(null, { pending: true }), {
+      tone: "pending",
+      label: "Checking…",
+      detail: "Probing Cloudflare API token permissions on the Worker.",
+    });
   });
 
   it("flags rejected permissions without treating the token as missing", () => {

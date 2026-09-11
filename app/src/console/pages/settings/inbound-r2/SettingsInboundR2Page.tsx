@@ -22,11 +22,11 @@ export function SettingsInboundR2Page() {
     credentialsAccountId: credentials?.accountId,
   });
 
-  const pending = statusBusy && workerStatus == null;
   const configured = workerStatus?.r2Configured ?? false;
   const bucketName = workerStatus?.inboundBucketName || "relaybase-mailbox";
   const sizePending =
-    pending || (statusBusy && configured && workerStatus?.r2TotalBytes == null);
+    (statusBusy && workerStatus == null) ||
+    (statusBusy && configured && workerStatus?.r2TotalBytes == null);
 
   return (
     <SettingsPageBody>

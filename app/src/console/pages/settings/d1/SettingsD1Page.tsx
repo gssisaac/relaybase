@@ -29,18 +29,18 @@ function d1Status(
       detail: "Connect a routing Worker first.",
     };
   }
-  if (pending) {
-    return {
-      tone: "pending" as const,
-      label: "Checking…",
-      detail: probeDetail,
-    };
-  }
   if (binding?.configured) {
     return {
       tone: "ok" as const,
       label: "Configured",
       detail: okDetail,
+    };
+  }
+  if (pending) {
+    return {
+      tone: "pending" as const,
+      label: "Checking…",
+      detail: probeDetail,
     };
   }
   return {
@@ -62,7 +62,7 @@ export function SettingsD1Page() {
   const logs = workerStatus?.d1Logs;
   const mail = workerStatus?.d1Mail;
   const app = workerStatus?.d1App;
-  const pending = statusBusy && workerStatus == null;
+  const pending = statusBusy;
 
   const logsBinding =
     logs ?? {

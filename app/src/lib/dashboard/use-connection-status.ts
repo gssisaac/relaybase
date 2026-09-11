@@ -38,13 +38,9 @@ export function useConnectionStatus() {
       if (cached?.data) {
         setSnapshot(cached.data);
         setLoading(false);
-      } else {
-        setSnapshot({
-          cfConnected: false,
-          cfInstallTokenPresent: cfInstallTokenPresent(credentials),
-          worker: null,
-        });
       }
+      // Leave snapshot null on a cache miss so the UI can show Checking…
+      // instead of a false "Not configured" while the probe is in flight.
 
       const needsNetwork =
         force === true ||

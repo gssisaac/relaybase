@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { type HealthTone } from "@/lib/dashboard/connection-status";
+import { checkingHealth, type HealthTone } from "@/lib/dashboard/connection-status";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
   desktopGetCredentials,
@@ -424,70 +424,63 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const searchOk = workerStatus?.d1Mail?.configured === true;
   const appOk = workerStatus?.d1App?.configured === true;
 
-  const workerHealth: HealthBlock = !hasWorker
-    ? {
-        tone: "bad",
-        label: "Not connected",
-        detail:
-          "No Worker URL saved. Deploy the install ZIP, then verify with your owner session.",
-      }
-    : statusBusy && !workerStatus
-      ? {
-          tone: "pending",
-          label: "Checking connection…",
-          detail: "Probing GET /console/connect on your Worker.",
-        }
-      : workerStatus?.ok
+  const workerHealth: HealthBlock =
+    statusBusy && !workerStatus?.ok
+      ? checkingHealth("Probing GET /console/connect on your Worker.")
+      : !hasWorker
         ? {
-            tone: "ok",
-            label: "Connected — healthy",
-            detail:
-              "Worker is reachable and your owner session is accepted. No connection problems detected.",
-          }
-        : {
             tone: "bad",
-            label: "Unreachable or unhealthy",
+            label: "Not connected",
             detail:
-              "Could not verify the Worker. Check the URL, owner session, and that the deploy is live.",
-          };
+              "No Worker URL saved. Deploy the install ZIP, then verify with your owner session.",
+          }
+        : workerStatus?.ok
+          ? {
+              tone: "ok",
+              label: "Connected — healthy",
+              detail:
+                "Worker is reachable and your owner session is accepted. No connection problems detected.",
+            }
+          : {
+              tone: "bad",
+              label: "Unreachable or unhealthy",
+              detail:
+                "Could not verify the Worker. Check the URL, owner session, and that the deploy is live.",
+            };
 
-  const r2Health: HealthBlock = !hasWorker
-    ? {
-        tone: "bad",
-        label: "Unavailable",
-        detail: "Connect a routing Worker first to check inbound R2.",
-      }
-    : statusBusy && !workerStatus
-      ? {
-          tone: "pending",
-          label: "Checking R2…",
-          detail: "Listing the inbound bucket through the Worker binding.",
-        }
-      : workerStatus?.r2Configured
+  const r2Health: HealthBlock =
+    statusBusy && !workerStatus?.r2Configured
+      ? checkingHealth("Listing the inbound bucket through the Worker binding.")
+      : !hasWorker
         ? {
-            tone: "ok",
-            label: "Configured — healthy",
-            detail: "Inbound R2 binding works. Raw email storage is ready.",
-          }
-        : {
             tone: "bad",
-            label: "Not configured",
-            detail:
-              "Create the R2 bucket, bind it as INBOUND in wrangler.toml, redeploy, then refresh.",
-          };
+            label: "Unavailable",
+            detail: "Connect a routing Worker first to check inbound R2.",
+          }
+        : workerStatus?.r2Configured
+          ? {
+              tone: "ok",
+              label: "Configured — healthy",
+              detail: "Inbound R2 binding works. Raw email storage is ready.",
+            }
+          : {
+              tone: "bad",
+              label: "Not configured",
+              detail:
+                "Create the R2 bucket, bind it as INBOUND in wrangler.toml, redeploy, then refresh.",
+            };
 
-  const d1Health: HealthBlock = !hasWorker
-    ? {
-        tone: "bad",
-        label: "Unavailable",
-        detail: "Connect a routing Worker first to check D1.",
-      }
-    : statusBusy && !workerStatus
-      ? {
-          tone: "pending",
-          label: "Checking D1…",
-          detail: "Probing ops log, inbox search, and product DB bindings.",
-        }
+  const d1Health: HealthBlock =
+    statusBusy && !logsOk && !searchOk && !appOk
+      ? checkingHealth(
+          "Probing ops log, inbox search, and product DB bindings.",
+        )
+      : !hasWorker
+        ? {
+            tone: "bad",
+            label: "Unavailable",
+            detail: "Connect a routing Worker first to check D1.",
+          }
       : logsOk && searchOk && appOk
         ? {
             tone: "ok",

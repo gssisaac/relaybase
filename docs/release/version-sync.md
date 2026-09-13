@@ -39,6 +39,21 @@ So the Worker GitHub release must be published before “Check for updates” sh
 
 ---
 
+## Web console update rules (browser)
+
+The web owner console (no Tauri, no `desktop/package.json` version) draws a hard line between the two release tracks:
+
+- **Desktop Update is fully hidden.** No Mac app version lock, no updater card, no "There is no desktop app in the browser" filler text. `Settings → Update` renders only the Worker card when `isDesktopRuntime()` is `false` ([`SettingsUpdatePage.tsx`](../../app/src/console/pages/settings/update/SettingsUpdatePage.tsx)).
+- **Worker Update works the same as desktop**, just without the desktop-version gate:
+  - `desktopCheckWorkerUpdate()` ([`bridge/install.ts`](../../app/src/lib/desktop/bridge/install.ts)) branches off `isDesktopRuntime()`: desktop calls the Tauri `check_worker_update_cmd`; web instead calls `fetchWorkerInstallManifest()` (GitHub Releases API, CORS-friendly) and diffs it against the locally saved `workerVersion`.
+  - `WorkerUpdateCheckProvider.enabled()` ([`WorkerUpdateCheckContext.tsx`](../../app/src/lib/desktop/worker-update/WorkerUpdateCheckContext.tsx)) no longer requires desktop runtime — it only needs a saved Worker URL and no active team login, so the auto/manual check runs in both runtimes.
+  - `workerNeedsUpgrade(current, latest, desktopVersion)` is desktop-version-optional by design (an empty `desktopVersion` skips that half of the gate). `WorkerVersionSettingsCard` ([`WorkerUpdateBanner.tsx`](../../app/src/console/components/WorkerUpdateBanner.tsx)) and `useProductUpdateStatus` ([`useProductUpdateStatus.ts`](../../app/src/console/hooks/useProductUpdateStatus.ts)) both pass `null` for `desktopVersion` on web instead of requiring a known desktop app version before showing "Update Worker to vX.Y.Z" — the old code required a truthy `desktopVersion`, which is never set in a browser and silently hid the button forever.
+  - `useProductUpdateStatus` also forces `desktopUpdateAvailable` and `desktopBlocksWorker` to `false` on web — there is no desktop app to block anything.
+  - Clicking **Update Worker** on web skips the desktop-only `WorkerUpdateRunnerStore.start()` path (which calls Tauri-only `update_installed_worker_cmd` and would throw) and routes straight to `/settings/worker/update`, which already runs a browser-native flow (`WorkerInstallPanel purpose="worker-update"` → `/api/install/stream` SSE).
+  - "Installed" version fields fall back from `credentials.workerVersion` to the update-check's `currentVersion` so a freshly-connected web console doesn't show `vunknown` before its first background check completes.
+
+---
+
 ## Desktop-only material changes
 
 When only the macOS app changed (no Worker script diff):

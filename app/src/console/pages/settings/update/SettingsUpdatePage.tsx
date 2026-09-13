@@ -7,7 +7,6 @@ import { WorkerVersionSettingsCard } from "@/console/components/WorkerUpdateBann
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { SettingsPageBody } from "@/console/pages/settings/settings-shared";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function SettingsUpdatePage() {
   const desktop = isDesktopRuntime();
@@ -35,15 +34,7 @@ export function SettingsUpdatePage() {
               Relaybase ships desktop and Worker releases together. The Worker cannot run ahead of
               the desktop app version installed on this Mac.
             </p>
-          ) : (
-            <Alert>
-              <AlertTitle>Web console</AlertTitle>
-              <AlertDescription>
-                There is no desktop app in the browser — use Worker update under Settings → Worker
-                when a new routing Worker release is available.
-              </AlertDescription>
-            </Alert>
-          )}
+          ) : null}
         </SettingsPageBody>
       </div>
     </div>

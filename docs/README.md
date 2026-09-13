@@ -28,6 +28,7 @@ Technical documentation index for AI agents and engineers. Read the relevant doc
 | **Inbox threading / multi-account mail** | [`features/inbox-threading.md`](./features/inbox-threading.md) | [`architecture/mailbox-d1.md`](./architecture/mailbox-d1.md) |
 | **Flutter mobile companion / teammate mail scoping** | [`features/mobile-companion.md`](./features/mobile-companion.md) | [`auth/authentication.md`](./auth/authentication.md) |
 | **Desktop / Worker release and version sync** | [`release/version-sync.md`](./release/version-sync.md) | `desktop/docs/release.md` |
+| **Web console Worker update (Desktop Update hidden, no desktop-version gate)** | [`release/version-sync.md`](./release/version-sync.md#web-console-update-rules-browser) | [`architecture/mail-platform-auth.md`](./architecture/mail-platform-auth.md) |
 | **BYO Cloudflare architecture pivot** | [`decisions/pivot-byo-cloudflare.md`](./decisions/pivot-byo-cloudflare.md) | [`architecture/storage-architecture.md`](./architecture/storage-architecture.md) |
 | **BIMI / VMC inbox logo — do not build** | [`decisions/bimi-vmc-do-not-build.md`](./decisions/bimi-vmc-do-not-build.md) | [`desktop/sender-favicon-cache.md`](./desktop/sender-favicon-cache.md) |
 
@@ -73,7 +74,7 @@ Product direction changes and architecture decision records (ADRs).
 
 ### Release (`docs/release/`)
 Release guides and version sync policy.
-- **[`version-sync.md`](./release/version-sync.md)** — Desktop (`.app`) and Worker (`worker.js`) semver must match.
+- **[`version-sync.md`](./release/version-sync.md)** — Desktop (`.app`) and Worker (`worker.js`) semver must match. Includes web-console-specific update rules (Desktop Update hidden, Worker Update ungated by desktop version).
 
 ### Marketing (`docs/marketing/`)
 Marketing copy and feature descriptions.

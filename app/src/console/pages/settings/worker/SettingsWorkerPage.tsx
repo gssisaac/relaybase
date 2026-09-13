@@ -17,6 +17,7 @@ import {
   SettingsPageBody,
   SummaryRow,
 } from "@/console/pages/settings/settings-shared";
+import { useWorkerUpdateCheck } from "@/lib/desktop/worker-update/WorkerUpdateCheckContext";
 
 export function SettingsWorkerPage() {
   const {
@@ -33,6 +34,7 @@ export function SettingsWorkerPage() {
     resetWorkerDraft,
     handleSaveWorker,
   } = useSettingsConnection();
+  const { check } = useWorkerUpdateCheck();
 
   const accountId = displayCfAccountId({
     workerAccountId: workerStatus?.accountId,
@@ -127,7 +129,11 @@ export function SettingsWorkerPage() {
               />
               <SummaryRow
                 label="Version"
-                value={`v${credentials?.workerVersion?.trim() || "unknown"}`}
+                value={`v${
+                  credentials?.workerVersion?.trim() ||
+                  check?.currentVersion?.trim() ||
+                  "unknown"
+                }`}
               />
             </div>
             <DesktopErrorBanner error={workerError} />

@@ -13,7 +13,6 @@ import {
 
 import {
   desktopCheckWorkerUpdate,
-  isDesktopRuntime,
   type WorkerUpdateCheck,
 } from "@/lib/desktop/bridge";
 import { useRouteStaleScheduler } from "@/lib/desktop/scheduler/useRouteStaleScheduler";
@@ -66,7 +65,7 @@ export function WorkerUpdateCheckProvider({
   }, []);
 
   const enabled = useCallback(
-    () => isDesktopRuntime() && !teamLogin && Boolean(workerUrl),
+    () => !teamLogin && Boolean(workerUrl),
     [teamLogin, workerUrl],
   );
 

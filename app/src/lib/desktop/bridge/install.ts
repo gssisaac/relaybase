@@ -1,4 +1,4 @@
-import type { WorkerUpdateCheck } from "./cloudflare";
+import { fetchWorkerInstallManifest, type WorkerUpdateCheck } from "./cloudflare";
 import { loadLocalCredentialsFile } from "./credentials-local";
 import { formatDesktopError, invoke, isDesktopRuntime } from "./invoke";
 
@@ -130,6 +130,21 @@ export async function desktopAutoInstallWorker(
 
 /** Compare stored Worker version against relaybase.xyz install manifest. */
 export async function desktopCheckWorkerUpdate(): Promise<WorkerUpdateCheck> {
+  if (!isDesktopRuntime()) {
+    const creds = await loadLocalCredentialsFile();
+    const currentVersion = creds?.workerVersion?.trim() || null;
+    const manifest = await fetchWorkerInstallManifest();
+    const latestVersion = manifest?.version?.trim() || "";
+    return {
+      updateAvailable: Boolean(
+        latestVersion && currentVersion !== latestVersion,
+      ),
+      latestVersion,
+      currentVersion,
+      zipUrl: manifest?.zipUrl || null,
+      zipSha256: manifest?.zipSha256 || null,
+    };
+  }
   return invoke("check_worker_update_cmd");
 }
 

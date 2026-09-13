@@ -52,6 +52,9 @@ export {
   useConsoleSession,
   type ConsoleSessionAdapter,
   type StoredWebSession,
+  WebOwnerSession,
+  createWebOwnerSession,
+  hasWebOwnerSession,
 } from "./session";
 
 export { createWebStorage, createDesktopStorage } from "./storage";
@@ -69,4 +72,5 @@ export {
   useOptionalMailRuntime,
   EmailAppProviders,
   ConsoleAppProviders,
+  WebConsoleAppProviders,
 } from "./runtime";

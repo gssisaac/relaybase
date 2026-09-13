@@ -5,3 +5,4 @@ export {
 } from "./MailRuntimeContext";
 export { EmailAppProviders } from "./EmailAppProviders";
 export { ConsoleAppProviders } from "./ConsoleAppProviders";
+export { WebConsoleAppProviders } from "./WebConsoleAppProviders";

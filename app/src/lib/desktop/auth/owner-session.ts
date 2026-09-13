@@ -5,62 +5,94 @@ import { resolveEmailApiBase } from "@/lib/desktop/api";
 /**
  * Owner session held in **JS process memory only**.
  *
- * The passtoken, access token, and refresh token are NEVER written to disk,
- * cookies, localStorage, or sessionStorage. The user keeps the one-time
- * passtoken download; the app holds the session in memory for the lifetime
- * of the process. On desktop, mail refresh lives in the OS keyring and boot
- * unlock is silent (`owner_boot_mail`). Console dashboard access uses Touch ID
- * via `owner_unlock_console` / `ConsoleGateView`. This module is the browser `pnpm next` in-memory session; the Tauri
- * webview uses Rust `worker_request` so JS never sees tokens.
+ * The passtoken, access tokens, and refresh tokens are NEVER written to
+ * disk, cookies, localStorage, or sessionStorage. The user keeps the
+ * one-time passtoken download; the app holds the session in memory for the
+ * lifetime of the process. On desktop, mail refresh lives in the OS keyring
+ * and boot unlock is silent (`owner_boot_mail`). Console dashboard access
+ * uses Touch ID via `owner_unlock_console` / `ConsoleGateView`. This module
+ * is the browser `pnpm next` in-memory session; the Tauri webview uses Rust
+ * `worker_request` so JS never sees tokens.
+ *
+ * The Worker's owner tokens are scoped (`OwnerScope = "mail" | "console"`,
+ * see `worker/src/lib/owner-auth.ts`) — a mail-scoped access token 401s on
+ * `/console/*` routes and vice versa (`requireOwnerSession` enforces the
+ * scope match). `POST /console/login` mints a mail access token directly
+ * plus two refresh tokens (mail, console); a console access token needs one
+ * extra `POST /console/refresh { refreshToken, scope: "console" }` exchange.
+ * This module tracks both scopes so `ensureAccessToken(scope)` always
+ * returns a token valid for the routes the caller is about to hit.
  */
+
+export type OwnerScope = "mail" | "console";
 
 export type OwnerSession = {
   accessToken: string;
   refreshToken: string;
   /** Unix ms when the access token expires. */
   accessExpiresAt: number;
-  /** Seconds until access expiry, as returned by /console/login. */
+  /** Seconds until access expiry, as returned by the Worker. */
   expiresIn: number;
 };
 
-let session: OwnerSession | null = null;
-let refreshPromise: Promise<OwnerSession | null> | null = null;
+let mailSession: OwnerSession | null = null;
+let consoleSession: OwnerSession | null = null;
+const refreshPromises: Partial<Record<OwnerScope, Promise<OwnerSession | null>>> = {};
 
-export function getOwnerSession(): OwnerSession | null {
-  return session;
+function sessionFor(scope: OwnerScope): OwnerSession | null {
+  return scope === "mail" ? mailSession : consoleSession;
 }
 
-export function hasOwnerSession(): boolean {
-  return Boolean(session && session.accessToken);
-}
-
-export function setOwnerSession(next: OwnerSession): void {
-  session = {
+function normalizeSession(next: OwnerSession): OwnerSession {
+  return {
     ...next,
     accessExpiresAt:
-      next.accessExpiresAt ||
-      Date.now() + Math.max(5, next.expiresIn) * 1000,
+      next.accessExpiresAt || Date.now() + Math.max(5, next.expiresIn) * 1000,
   };
-  refreshPromise = null;
+}
+
+function setSessionFor(scope: OwnerScope, next: OwnerSession | null): void {
+  if (scope === "mail") mailSession = next;
+  else consoleSession = next;
+  delete refreshPromises[scope];
+}
+
+/** Console session by default — that's what dashboard/API routes need. */
+export function getOwnerSession(scope: OwnerScope = "console"): OwnerSession | null {
+  return sessionFor(scope);
+}
+
+/** True when either scope has a live session (i.e. the owner is signed in at all). */
+export function hasOwnerSession(): boolean {
+  return Boolean(consoleSession?.accessToken || mailSession?.accessToken);
+}
+
+export function setOwnerSession(next: OwnerSession, scope: OwnerScope = "console"): void {
+  setSessionFor(scope, normalizeSession(next));
 }
 
 export function clearOwnerSession(): void {
-  session = null;
-  refreshPromise = null;
+  mailSession = null;
+  consoleSession = null;
+  delete refreshPromises.mail;
+  delete refreshPromises.console;
 }
 
-/** Current access token, or null when not logged in. */
-export function getAccessToken(): string | null {
-  return session?.accessToken ?? null;
+/** Current access token for a scope, or null when not logged in. */
+export function getAccessToken(scope: OwnerScope = "console"): string | null {
+  return sessionFor(scope)?.accessToken ?? null;
 }
 
-/** Access token, refreshing when it expires within 30s. */
-export async function ensureAccessToken(): Promise<string | null> {
-  if (!session?.accessToken) return null;
-  if (session.accessExpiresAt - Date.now() > 30_000) {
-    return session.accessToken;
+/** Access token for a scope, refreshing when it expires within 30s. */
+export async function ensureAccessToken(
+  scope: OwnerScope = "console",
+): Promise<string | null> {
+  const current = sessionFor(scope);
+  if (!current?.accessToken) return null;
+  if (current.accessExpiresAt - Date.now() > 30_000) {
+    return current.accessToken;
   }
-  const next = await ownerRefresh();
+  const next = await ownerRefresh(scope);
   return next?.accessToken ?? null;
 }
 
@@ -86,9 +118,39 @@ async function readJson<T>(res: Response): Promise<T & { error?: string }> {
   return (await res.json().catch(() => ({}))) as T & { error?: string };
 }
 
+/** POST /console/refresh { refreshToken, scope } — mint a fresh scoped access + refresh pair. */
+async function exchangeRefreshToken(
+  refreshToken: string,
+  scope: OwnerScope,
+): Promise<OwnerSession | null> {
+  try {
+    const res = await postJson("/console/refresh", { refreshToken, scope });
+    const data = await readJson<{
+      accessToken?: string;
+      refreshToken?: string;
+      expiresIn?: number;
+    }>(res);
+    if (!res.ok || !data.accessToken || !data.refreshToken) {
+      return null;
+    }
+    const next = normalizeSession({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      expiresIn: data.expiresIn ?? 600,
+      accessExpiresAt: 0,
+    });
+    setSessionFor(scope, next);
+    return next;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * POST /console/login — exchange passtoken for an access + refresh
- * pair. The passtoken is consumed here and not retained.
+ * POST /console/login — exchange passtoken for a mail access token plus
+ * mail + console refresh tokens. The passtoken is consumed here and not
+ * retained. Returns the console session (dashboard access); the mail
+ * session is stored alongside it for `/mail/*` calls.
  */
 export async function ownerLogin(input: {
   passtoken: string;
@@ -99,72 +161,71 @@ export async function ownerLogin(input: {
     label: input.label ?? "desktop",
   });
   const data = await readJson<{
-    accessToken?: string;
-    refreshToken?: string;
-    expiresIn?: number;
+    mailAccessToken?: string;
+    mailRefreshToken?: string;
+    consoleRefreshToken?: string;
+    mailExpiresIn?: number;
   }>(res);
-  if (!res.ok || !data.accessToken || !data.refreshToken) {
+  if (
+    !res.ok ||
+    !data.mailAccessToken ||
+    !data.mailRefreshToken ||
+    !data.consoleRefreshToken
+  ) {
     throw new Error(data.error || `Login failed (${res.status})`);
   }
-  const next: OwnerSession = {
-    accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
-    expiresIn: data.expiresIn ?? 600,
-    accessExpiresAt: Date.now() + Math.max(5, data.expiresIn ?? 600) * 1000,
-  };
-  setOwnerSession(next);
-  return next;
+  setSessionFor(
+    "mail",
+    normalizeSession({
+      accessToken: data.mailAccessToken,
+      refreshToken: data.mailRefreshToken,
+      expiresIn: data.mailExpiresIn ?? 600,
+      accessExpiresAt: 0,
+    }),
+  );
+  const consoleNext = await exchangeRefreshToken(data.consoleRefreshToken, "console");
+  if (!consoleNext) {
+    clearOwnerSession();
+    throw new Error("Signed in, but console access could not be established.");
+  }
+  return consoleNext;
 }
 
 /**
  * POST /console/refresh — rotate the refresh token and mint a new access
- * token. Single-flighted: concurrent callers share one in-flight refresh.
- * Returns null if there is no session to refresh.
+ * token for one scope. Single-flighted per scope. Returns null (and clears
+ * that scope) if there is no session, or the refresh is rejected.
  */
-export async function ownerRefresh(): Promise<OwnerSession | null> {
-  if (!session?.refreshToken) return null;
-  if (refreshPromise) return refreshPromise;
-  refreshPromise = (async () => {
-    try {
-      const res = await postJson("/console/refresh", {
-        refreshToken: session!.refreshToken,
-      });
-      const data = await readJson<{
-        accessToken?: string;
-        refreshToken?: string;
-        expiresIn?: number;
-      }>(res);
-      if (!res.ok || !data.accessToken || !data.refreshToken) {
-        clearOwnerSession();
-        return null;
-      }
-      const next: OwnerSession = {
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        expiresIn: data.expiresIn ?? 600,
-        accessExpiresAt:
-          Date.now() + Math.max(5, data.expiresIn ?? 600) * 1000,
-      };
-      setOwnerSession(next);
-      return next;
-    } catch {
-      clearOwnerSession();
-      return null;
-    }
+export async function ownerRefresh(
+  scope: OwnerScope = "console",
+): Promise<OwnerSession | null> {
+  const current = sessionFor(scope);
+  if (!current?.refreshToken) return null;
+  const inFlight = refreshPromises[scope];
+  if (inFlight) return inFlight;
+  const promise = (async () => {
+    const next = await exchangeRefreshToken(current.refreshToken, scope);
+    if (!next) setSessionFor(scope, null);
+    return next;
   })();
-  return refreshPromise;
+  refreshPromises[scope] = promise;
+  return promise;
 }
 
-/** POST /console/logout — revoke this device's refresh token. */
+/** POST /console/logout — revoke this device's refresh tokens (both scopes, best-effort). */
 export async function ownerLogout(): Promise<void> {
-  const refreshToken = session?.refreshToken;
+  const mailRefresh = mailSession?.refreshToken;
+  const consoleRefresh = consoleSession?.refreshToken;
   clearOwnerSession();
-  if (!refreshToken) return;
-  try {
-    await postJson("/console/logout", { refreshToken });
-  } catch {
-    // Best-effort; the local session is already cleared.
-  }
+  const revoke = async (refreshToken: string | undefined) => {
+    if (!refreshToken) return;
+    try {
+      await postJson("/console/logout", { refreshToken });
+    } catch {
+      // Best-effort; the local session is already cleared.
+    }
+  };
+  await Promise.all([revoke(mailRefresh), revoke(consoleRefresh)]);
 }
 
 /**
@@ -194,9 +255,10 @@ export async function ownerSetupAdmin(input: {
 export async function ownerRotatePasstoken(): Promise<{
   passtoken: string;
 }> {
-  if (!session?.accessToken) throw new Error("Not logged in.");
+  const access = consoleSession?.accessToken;
+  if (!access) throw new Error("Not logged in.");
   const res = await postJson("/console/rotate-passtoken", null, {
-    Authorization: `Bearer ${session.accessToken}`,
+    Authorization: `Bearer ${access}`,
   });
   const data = await readJson<{ passtoken?: string }>(res);
   if (!res.ok || !data.passtoken) {

@@ -6,10 +6,12 @@ import { useRouter } from "next/navigation";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 /**
  * "I was invited" entry from the welcome choice. Enter TeamLoginView on `/` via
  * the shared phase screen — same trampoline pattern as `/setup/connect`.
+ * Web has no phase screen; it goes straight to the unified Account Login.
  */
 export default function TeamLoginPage() {
   const router = useRouter();
@@ -18,8 +20,9 @@ export default function TeamLoginPage() {
 
   useEffect(() => {
     if (!isDesktop) {
-      const auth = getWebTeamAuth();
-      if (auth) {
+      if (hasWebOwnerSession()) {
+        router.replace("/dashboard");
+      } else if (getWebTeamAuth()) {
         router.replace("/inbox");
       } else {
         router.replace("/sign-in");

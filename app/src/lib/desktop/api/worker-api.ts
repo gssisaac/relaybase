@@ -74,10 +74,13 @@ export async function workerFetch(
 
   const base = creds.workerUrl.replace(/\/$/, "");
   const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  // Owner access tokens are scoped ("mail" | "console") server-side — a
+  // console-scoped token 401s on /mail/* and vice versa.
+  const scope = path.startsWith("/mail/") ? "mail" : "console";
   const headers = new Headers(init?.headers);
   if (!headers.has("Authorization")) {
     const { ensureAccessToken } = await import("@/lib/desktop/auth");
-    const access = await ensureAccessToken();
+    const access = await ensureAccessToken(scope);
     if (access) {
       headers.set("Authorization", `Bearer ${access}`);
     }
@@ -90,7 +93,7 @@ export async function workerFetch(
     return res;
   }
   const { ownerRefresh } = await import("@/lib/desktop/auth");
-  const next = await ownerRefresh();
+  const next = await ownerRefresh(scope);
   if (!next?.accessToken) return res;
   const retryHeaders = new Headers(headers);
   retryHeaders.set("Authorization", `Bearer ${next.accessToken}`);

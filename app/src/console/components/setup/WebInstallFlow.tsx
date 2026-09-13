@@ -6,10 +6,12 @@
 // in a sealed cookie (see app/src/server/cloudflare/session.ts) and the
 // install pipeline streams over SSE from /api/install/stream.
 import { Check, Copy, Download, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
+import { ownerLogin } from "@/lib/desktop/auth";
 
 type InstallLogEvent = { step: string; level: "info" | "stderr"; line: string };
 
@@ -44,6 +46,7 @@ export function WebAuthorizeCard() {
 
 /** Runs after the Cloudflare OAuth redirect lands the browser on /setup/progress. */
 export function WebInstallProgress() {
+  const router = useRouter();
   const [logs, setLogs] = useState<InstallLogEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<InstallDone | null>(null);
@@ -95,24 +98,28 @@ export function WebInstallProgress() {
     if (!done) return;
     setContinuing(true);
     try {
+      const workerUrl = done.workerUrl.replace(/\/$/, "");
       if (done.passtoken) {
         // Bootstrap an owner session directly against the deployed Worker —
-        // the browser talks to it the same way the desktop app's console
-        // shell does after `owner_login`.
-        const res = await fetch(`${done.workerUrl.replace(/\/$/, "")}/console/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ passtoken: done.passtoken, label: "web" }),
-        });
-        if (res.ok) {
-          const session = await res.json();
-          sessionStorage.setItem(
-            "relaybase.owner-session",
-            JSON.stringify({ workerUrl: done.workerUrl, ...session }),
-          );
+        // same ownerLogin() the Account Login screen's owner tab uses, so
+        // the rest of the app (workerFetch's Bearer path, WebOwnerSession)
+        // picks it up. router.push (not a hard navigation) keeps this
+        // in-memory-only session alive across the move to /dashboard.
+        if (typeof window !== "undefined") {
+          const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+          w.__RELAYBASE_WORKER_URL__ = workerUrl;
         }
+        await ownerLogin({ passtoken: done.passtoken, label: "web" });
+        router.push("/dashboard");
+      } else {
+        // An owner was already configured on this Worker — nothing to log
+        // in with here. Send them to sign in with their existing passtoken.
+        router.push(
+          `/sign-in?workerUrl=${encodeURIComponent(workerUrl)}`,
+        );
       }
-      window.location.href = "/dashboard";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed");
     } finally {
       setContinuing(false);
     }

@@ -7,7 +7,7 @@ import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { UserSidebar } from "@/components/layout/UserSidebar";
-import { ConsoleAppProviders } from "@/mail-platform/runtime";
+import { ConsoleAppProviders, WebConsoleAppProviders } from "@/mail-platform/runtime";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
 import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
@@ -19,6 +19,7 @@ import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -30,6 +31,7 @@ import { SenderIconProvider } from "@/email/components/sender/SenderIconContext"
 import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
+const WEB_OWNER_USER_ID = "web-owner";
 
 /** Console-scoped dashboard stores — mount only after the route gate passes. */
 function OwnerConsoleDashboard({ children }: { children: ReactNode }) {
@@ -154,6 +156,21 @@ function GateInner({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Web owner: no keyring / Touch ID phase machine — `hasWebOwnerSession()`
+ * (in-memory access token from `ownerLogin()`, see AccountLoginView /
+ * WebInstallFlow) is the whole gate. Reuses the same DashboardShell as
+ * desktop's owner path, just under WebConsoleAppProviders instead of
+ * DesktopShell + ConsoleAppProviders.
+ */
+function WebOwnerGate({ children }: { children: ReactNode }) {
+  return (
+    <WebConsoleAppProviders>
+      <DashboardShell userId={WEB_OWNER_USER_ID}>{children}</DashboardShell>
+    </WebConsoleAppProviders>
+  );
+}
+
+/**
  * Single dashboard chrome for every run mode. The phase switch is the only
  * gate — no scattered `hasOwnerSession()` / `ownerAccess` checks. Credentials
  * come from the root `DesktopProvider` (see `AppProviders`).
@@ -168,33 +185,37 @@ export function DesktopDashboardGate({
   const router = useRouter();
   const pathname = usePathname();
   const isDesktop = isDesktopRuntime();
+  const webOwner = !isDesktop && hasWebOwnerSession();
 
   useEffect(() => {
-    if (!isDesktop) {
-      const search =
-        typeof window !== "undefined" ? window.location.search : "";
-      if (pathname === "/email/inbox" || pathname === "/email") {
+    if (isDesktop || webOwner) return;
+    const search =
+      typeof window !== "undefined" ? window.location.search : "";
+    if (pathname === "/email/inbox" || pathname === "/email") {
+      router.replace(`/inbox${search}`);
+    } else if (pathname === "/email/sent") {
+      router.replace(`/sent${search}`);
+    } else if (pathname === "/email/drafts") {
+      router.replace(`/drafts${search}`);
+    } else if (pathname === "/email/trash") {
+      router.replace(`/trash${search}`);
+    } else if (pathname === "/email/compose") {
+      router.replace(`/compose${search}`);
+    } else if (pathname === "/email/settings") {
+      router.replace(`/mail-settings${search}`);
+    } else {
+      const auth = getWebTeamAuth();
+      if (auth) {
         router.replace(`/inbox${search}`);
-      } else if (pathname === "/email/sent") {
-        router.replace(`/sent${search}`);
-      } else if (pathname === "/email/drafts") {
-        router.replace(`/drafts${search}`);
-      } else if (pathname === "/email/trash") {
-        router.replace(`/trash${search}`);
-      } else if (pathname === "/email/compose") {
-        router.replace(`/compose${search}`);
-      } else if (pathname === "/email/settings") {
-        router.replace(`/mail-settings${search}`);
       } else {
-        const auth = getWebTeamAuth();
-        if (auth) {
-          router.replace(`/inbox${search}`);
-        } else {
-          router.replace("/sign-in");
-        }
+        router.replace("/sign-in");
       }
     }
-  }, [isDesktop, pathname, router]);
+  }, [isDesktop, webOwner, pathname, router]);
+
+  if (webOwner) {
+    return <WebOwnerGate>{children}</WebOwnerGate>;
+  }
 
   if (!isDesktop) {
     return null;

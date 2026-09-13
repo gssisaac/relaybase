@@ -20,6 +20,7 @@ import {
 } from "./session-cache";
 import { clearAllDashboardClientCache } from "@/lib/dashboard/shared/dashboard-client-cache";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasOwnerSession } from "@/lib/desktop/auth";
 
 type DesktopContextValue = {
   isDesktop: boolean;
@@ -43,8 +44,13 @@ function applyCredentialGlobals(creds: DesktopCredentials | null) {
   const w = window as unknown as {
     __RELAYBASE_WORKER_URL__?: string;
   };
-  if (creds?.workerUrl) w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
-  else delete w.__RELAYBASE_WORKER_URL__;
+  if (creds?.workerUrl) {
+    w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
+  } else if (!hasOwnerSession()) {
+    // Don't clobber the worker URL a web owner session (AccountLoginView /
+    // WebInstallFlow) just set — this module has no concept of that session.
+    delete w.__RELAYBASE_WORKER_URL__;
+  }
 }
 
 async function loadLocalCredentials(): Promise<DesktopCredentials | null> {

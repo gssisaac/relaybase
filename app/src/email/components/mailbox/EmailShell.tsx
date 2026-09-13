@@ -44,12 +44,18 @@ export function EmailShell({
       pathname.startsWith(`${href}/`) ||
       pathname.startsWith(`${href}?`),
   );
+  // Web owner console uses `/email/*` in the shell; team web mail uses `/inbox`, etc.
+  const isEmailAppRoute =
+    pathname === "/email" ||
+    pathname.startsWith("/email/") ||
+    pathname.startsWith("/emails/") ||
+    pathname === "/emails";
+
   const isMailbox =
     forceFullBleed ||
+    isEmailAppRoute ||
     pathname === email ||
     pathname.startsWith(`${email}/`) ||
-    pathname.startsWith("/emails/") ||
-    pathname === "/emails" ||
     dashboardScoped;
 
   return (

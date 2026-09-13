@@ -11,6 +11,7 @@ import {
   type AccountDetailTab,
   useDashboardPaths,
 } from "@/console/lib/paths";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { fetchEmailCached } from "@/email/components/mailbox/email-cached-fetch";
 import {
   AlertCircle,
@@ -595,7 +596,7 @@ export function AccountsView() {
       </DesktopTitleBar>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+      <div className={dashboardScrollBodyClassName("space-y-4")}>
         <EmailAlerts error={error} message={message} />
         <CloudflareConfigAlert show={!config?.cloudflareConfigured} />
 

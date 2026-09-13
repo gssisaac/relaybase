@@ -12,6 +12,7 @@ import { useOptionalDesktop } from "@/lib/desktop/shell";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -45,7 +46,7 @@ function DesktopRequiredFallback() {
         </div>
       </DesktopTitleBar>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+        <div className={dashboardScrollBodyClassName("space-y-4")}>
           <Alert>
             <AlertTitle>Desktop app required</AlertTitle>
             <AlertDescription>

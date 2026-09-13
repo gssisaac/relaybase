@@ -22,6 +22,7 @@ import {
   friendlyDesktopFetchError,
   readResponseJson,
 } from "@/lib/desktop/api";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "failed" | "success";
@@ -227,7 +228,7 @@ export function LogsView() {
       </DesktopTitleBar>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+        <div className={dashboardScrollBodyClassName("space-y-4")}>
           <EmailAlerts error={error} message={null} />
 
           {summary ? (

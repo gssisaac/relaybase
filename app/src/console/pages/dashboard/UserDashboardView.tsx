@@ -20,6 +20,7 @@ import {
   readResponseJson,
 } from "@/lib/desktop/api";
 import { useDashboardPaths } from "@/console/lib/paths";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -204,7 +205,7 @@ export function UserDashboardView() {
       </DesktopTitleBar>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-        <div className="mx-auto w-full max-w-[1200px] space-y-6 p-4">
+        <div className={dashboardScrollBodyClassName("space-y-6")}>
           <EmailAlerts error={error} message={null} />
 
           {!domains.length && !loading ? (

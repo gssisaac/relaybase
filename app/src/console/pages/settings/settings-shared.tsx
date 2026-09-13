@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { HealthTone } from "@/lib/dashboard/connection-status";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { cn } from "@/lib/utils";
 
 export function formatBytes(bytes: number): string {
@@ -181,7 +182,7 @@ export function SummaryRow({ label, value }: { label: string; value: string }) {
 
 export function SettingsPageBody({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">{children}</div>
+    <div className={dashboardScrollBodyClassName("space-y-4")}>{children}</div>
   );
 }
 

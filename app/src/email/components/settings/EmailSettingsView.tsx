@@ -263,17 +263,26 @@ export function EmailSettingsView() {
     if (!activeEmail) return;
     removeEnabledAccount(activeEmail);
     setDisableOpen(false);
-    router.push("/email/inbox");
+    router.push(inbox);
   }
 
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOutRelaybase(isTeam, session);
-      router.replace(signOutRedirectPath(isTeam, session));
+      if (!mailSession.isDesktop) {
+        await mailSession.logout();
+        router.replace("/sign-in");
+      } else {
+        await signOutRelaybase(isTeam, session);
+        router.replace(signOutRedirectPath(isTeam, session));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign out failed");
-      router.replace(signOutRedirectPath(isTeam, session));
+      router.replace(
+        mailSession.isDesktop
+          ? signOutRedirectPath(isTeam, session)
+          : "/sign-in",
+      );
     } finally {
       setSigningOut(false);
     }

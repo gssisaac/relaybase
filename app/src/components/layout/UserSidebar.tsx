@@ -791,10 +791,12 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const mode: SidebarMode = isTeam ? "email" : detectedMode;
   const {
     isDesktop,
+    isMacOS,
     dragRegionClassName,
     dragRegionProps,
     noDragClassName,
   } = useDesktopChrome();
+  const macDesktopChrome = isDesktop && isMacOS;
 
   useEffect(() => {
     let cancelled = false;
@@ -942,21 +944,23 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
           </div>
         ) : (
           <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "fixed top-1 left-[84px] z-20 shrink-0",
-                noDragClassName,
-              )}
-              data-tauri-drag-region="false"
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-              onClick={toggleCollapsed}
-            >
-              <PanelLeftClose />
-            </Button>
+            {macDesktopChrome ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "fixed top-1 left-[84px] z-20 shrink-0",
+                  noDragClassName,
+                )}
+                data-tauri-drag-region="false"
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                onClick={toggleCollapsed}
+              >
+                <PanelLeftClose />
+              </Button>
+            ) : null}
             <div
               className={cn("space-y-2 px-3 py-3", noDragClassName)}
               {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
@@ -995,13 +999,28 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {isTeam ? null : (
-                  <ModeSwitchButton
-                    mode={mode}
-                    collapsed={false}
-                    onClick={switchModeTarget}
-                  />
-                )}
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {isTeam ? null : (
+                    <ModeSwitchButton
+                      mode={mode}
+                      collapsed={false}
+                      onClick={switchModeTarget}
+                    />
+                  )}
+                  {macDesktopChrome ? null : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0"
+                      aria-label="Collapse sidebar"
+                      title="Collapse sidebar"
+                      onClick={toggleCollapsed}
+                    >
+                      <PanelLeftClose />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </>

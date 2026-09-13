@@ -45,6 +45,8 @@ import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCl
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 import { WhatWeInstall } from "@/console/components/setup/SetupWizardParts";
 import { WorkerUpdateTargetDialog } from "@/console/components/setup/WorkerUpdateTargetDialog";
+import { WebAuthorizeCard } from "@/console/components/setup/WebInstallFlow";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 
 const DRAFT_KEY = "relaybase.setup.install.draft";
@@ -501,6 +503,31 @@ export function WorkerInstallPanel({
 
   const canContinueAfterReveal =
     Boolean(revealedPasstoken) && (tokenSaved || tokenDownloaded);
+
+  if (!isDesktopRuntime() && purpose === "install") {
+    return (
+      <SetupScrollPage>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Get ready</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Relaybase runs entirely in your Cloudflare account. Your email, API keys, and
+              routing data never touch Relaybase servers. Install and receive mail on the free
+              plan; sending email requires a Cloudflare Workers Paid plan (~$5/mo, billed by
+              Cloudflare).
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <SetupBackLink href="/setup" label="Back to start" />
+          </div>
+          <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
+            <WebAuthorizeCard />
+          </div>
+          <WhatWeInstall />
+        </div>
+      </SetupScrollPage>
+    );
+  }
 
   return (
     <SetupScrollPage>

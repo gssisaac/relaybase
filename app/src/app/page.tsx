@@ -1,15 +1,36 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { RestoreLastRoute } from "@/components/RestoreLastRoute";
 import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 
 /**
- * App entry. `/` is outside `(shell)`, so it used to show BootScreen for
- * every non-ready phase and never mount the unlock / setup UI. The shared
- * phase screen now renders passtoken / invited login here; last route restore
- * runs only after the session is ready. Console Touch ID is not on this path.
+ * App entry.
+ * Desktop: SessionPhaseScreen handles keyring unlock / touch ID / setup.
+ * Web: Redirects to /inbox if active web session exists, else /sign-in.
  */
 export default function HomePage() {
+  const router = useRouter();
+  const isDesktop = isDesktopRuntime();
+
+  useEffect(() => {
+    if (!isDesktop) {
+      const auth = getWebTeamAuth();
+      if (auth) {
+        router.replace("/inbox");
+      } else {
+        router.replace("/sign-in");
+      }
+    }
+  }, [isDesktop, router]);
+
+  if (!isDesktop) {
+    return null;
+  }
+
   return (
     <SessionPhaseScreen>
       {() => <RestoreLastRoute userId="desktop" />}

@@ -75,7 +75,39 @@ export function createEmailTransport(
         return jsonResponse({ sent: [], items: [] });
       }
       if (mapped) {
-        return fetchMobile(mapped, init);
+        let workerPath = mapped;
+        const method = (init?.method ?? "GET").toUpperCase();
+
+        // Notifications ack mapping
+        if (
+          method === "POST" &&
+          workerPath.startsWith("/mobile/notifications") &&
+          !workerPath.startsWith("/mobile/notifications/ack")
+        ) {
+          const q = workerPath.includes("?")
+            ? workerPath.slice(workerPath.indexOf("?"))
+            : "";
+          workerPath = `/mobile/notifications/ack${q}`;
+        }
+
+        // Config normalization for EmailMailboxStore
+        if (workerPath.startsWith("/mobile/config")) {
+          try {
+            const res = await fetchMobile(workerPath, init);
+            const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+            const identity = getIdentity();
+            return jsonResponse({
+              relaybaseConfigured: true,
+              ...data,
+              email: identity?.accountEmail ?? data.email,
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new Error(msg);
+          }
+        }
+
+        return fetchMobile(workerPath, init);
       }
       // Not a mail path, or console-only route in email mode.
       if (path.startsWith("/api/email")) {

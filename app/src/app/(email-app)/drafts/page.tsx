@@ -1,24 +1,5 @@
-"use client";
+import { DraftsPage } from "@/email/pages/drafts";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useMailRuntime } from "@/mail-platform/runtime";
-
-export default function DraftsPage() {
-  const router = useRouter();
-  const { session } = useMailRuntime();
-
-  useEffect(() => {
-    if (session.ready && !session.identity) {
-      router.replace("/sign-in");
-    }
-  }, [session.ready, session.identity, router]);
-
-  if (!session.ready || !session.identity) return null;
-
-  return (
-    <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
-      Drafts — mail UI will be wired in the next step.
-    </div>
-  );
+export default function Page() {
+  return <DraftsPage />;
 }

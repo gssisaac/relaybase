@@ -2,8 +2,7 @@
  * Email-mode session — web-only mail login.
  *
  * Stores `{ workerUrl, accountEmail, mobilePassword }` in memory and
- * mirrors the non-secret parts to `sessionStorage` so a page refresh
- * keeps the identity (the password is re-prompted on cold boot).
+ * mirrors to `sessionStorage` so a page refresh keeps the session active.
  *
  * Login verifies against `GET /mobile/config` on the customer Worker.
  * Logout clears both memory and `sessionStorage`.
@@ -13,14 +12,52 @@ import type { MailSession, EmailIdentity } from "../types";
 
 const STORAGE_KEY = "relaybase:email-session";
 
-type StoredIdentity = {
+export type StoredWebSession = {
   workerUrl: string;
   accountEmail: string;
+  mobilePassword?: string | null;
 };
 
 type SessionSnapshot = {
-  identity: StoredIdentity | null;
+  identity: { workerUrl: string; accountEmail: string } | null;
+  mobilePassword?: string | null;
 };
+
+export function getWebTeamAuth(): StoredWebSession | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    __RELAYBASE_TEAM_AUTH__?: StoredWebSession;
+  };
+  if (w.__RELAYBASE_TEAM_AUTH__?.workerUrl && w.__RELAYBASE_TEAM_AUTH__?.mobilePassword) {
+    return w.__RELAYBASE_TEAM_AUTH__;
+  }
+  const stored = readStored();
+  if (stored.identity?.workerUrl && stored.mobilePassword) {
+    const auth: StoredWebSession = {
+      workerUrl: stored.identity.workerUrl,
+      accountEmail: stored.identity.accountEmail,
+      mobilePassword: stored.mobilePassword,
+    };
+    w.__RELAYBASE_TEAM_AUTH__ = auth;
+    return auth;
+  }
+  return null;
+}
+
+export function setWebTeamAuth(auth: StoredWebSession | null): void {
+  if (typeof window === "undefined") return;
+  const w = window as unknown as {
+    __RELAYBASE_TEAM_AUTH__?: StoredWebSession;
+    __RELAYBASE_WORKER_URL__?: string;
+  };
+  if (auth) {
+    w.__RELAYBASE_TEAM_AUTH__ = auth;
+    w.__RELAYBASE_WORKER_URL__ = auth.workerUrl;
+  } else {
+    delete w.__RELAYBASE_TEAM_AUTH__;
+    delete w.__RELAYBASE_WORKER_URL__;
+  }
+}
 
 function readStored(): SessionSnapshot {
   if (typeof window === "undefined") return { identity: null };
@@ -28,17 +65,20 @@ function readStored(): SessionSnapshot {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return { identity: null };
     const parsed = JSON.parse(raw) as SessionSnapshot;
-    return { identity: parsed.identity ?? null };
+    return {
+      identity: parsed.identity ?? null,
+      mobilePassword: parsed.mobilePassword ?? null,
+    };
   } catch {
     return { identity: null };
   }
 }
 
-function writeStored(identity: StoredIdentity | null): void {
+function writeStored(snapshot: SessionSnapshot | null): void {
   if (typeof window === "undefined") return;
   try {
-    if (identity) {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ identity }));
+    if (snapshot?.identity) {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } else {
       sessionStorage.removeItem(STORAGE_KEY);
     }
@@ -50,7 +90,6 @@ function writeStored(identity: StoredIdentity | null): void {
 export class EmailSessionStore implements MailSession {
   ready = false;
   identity: EmailIdentity | null = null;
-  /** Mobile password — memory only, never persisted. */
   mobilePassword: string | null = null;
 
   private listeners = new Set<() => void>();
@@ -59,15 +98,21 @@ export class EmailSessionStore implements MailSession {
     makeAutoObservable(this, {}, { autoBind: true });
   }
 
-  /** Restore identity from sessionStorage on boot. Password must be re-entered. */
+  /** Restore identity from sessionStorage on boot. */
   hydrate(): void {
     const stored = readStored();
     runInAction(() => {
       this.identity = stored.identity;
-      // Password is not restored — user must log in again after a cold boot.
-      this.mobilePassword = null;
+      this.mobilePassword = stored.mobilePassword ?? null;
       this.ready = true;
     });
+    if (stored.identity && stored.mobilePassword) {
+      setWebTeamAuth({
+        workerUrl: stored.identity.workerUrl,
+        accountEmail: stored.identity.accountEmail,
+        mobilePassword: stored.mobilePassword,
+      });
+    }
     this.emit();
   }
 
@@ -100,7 +145,11 @@ export class EmailSessionStore implements MailSession {
       this.mobilePassword = password;
       this.ready = true;
     });
-    writeStored({ workerUrl, accountEmail });
+    writeStored({
+      identity: { workerUrl, accountEmail },
+      mobilePassword: password,
+    });
+    setWebTeamAuth({ workerUrl, accountEmail, mobilePassword: password });
     this.emit();
   }
 
@@ -110,6 +159,7 @@ export class EmailSessionStore implements MailSession {
       this.mobilePassword = null;
     });
     writeStored(null);
+    setWebTeamAuth(null);
     this.emit();
   }
 

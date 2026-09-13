@@ -41,6 +41,12 @@ export function mapEmailApiToMobile(path: string): EmailModeMapResult {
 
   const rest = pathname.slice("/api/email".length) || "/";
 
+  // Notifications → /mobile/notifications
+  if (rest === "/inbox/notifications" || rest.startsWith("/inbox/notifications/")) {
+    const sub = rest.slice("/inbox/notifications".length);
+    return `/mobile/notifications${sub}${search}`;
+  }
+
   // Mail operations → /mobile/*
   if (rest === "/inbox" || rest.startsWith("/inbox/")) {
     return `/mobile/inbox${rest.slice("/inbox".length)}${search}`;
@@ -56,6 +62,12 @@ export function mapEmailApiToMobile(path: string): EmailModeMapResult {
   }
   if (rest === "/sending-health" || rest.startsWith("/sending-health/")) {
     return `/mobile/sending-health${search}`;
+  }
+  if (rest === "/profile" || rest.startsWith("/profile/")) {
+    return `/mobile/profile${rest.slice("/profile".length)}${search}`;
+  }
+  if (rest === "/config" || rest.startsWith("/config/")) {
+    return `/mobile/config${search}`;
   }
   // Addresses: in email mode the authenticated account is the only one.
   if (rest === "/addresses") {

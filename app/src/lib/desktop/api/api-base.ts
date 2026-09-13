@@ -1,6 +1,8 @@
 import { isDesktopRuntime, type DesktopCredentials } from "@/lib/desktop/bridge";
 import { isUnauthorizedGraceActive } from "@/lib/desktop/auth";
 import { isWorkerAuthMissingError } from "@/lib/desktop/app-session/errors";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { mapEmailApiToMobile } from "@/mail-platform/transport/map-email-mobile";
 import {
   isAnyApiPath,
   isEmailApiPath,
@@ -197,6 +199,65 @@ export async function desktopAwareFetch(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
+  const teamAuth = !isDesktopRuntime() ? getWebTeamAuth() : null;
+
+  // In web mode with active team session, route /api/email/* directly to /mobile/*
+  if (teamAuth && isEmailApiPath(path)) {
+    const mappedMobile = mapEmailApiToMobile(path);
+    if (mappedMobile === "empty-sent") {
+      return jsonResponse({ sent: [], items: [] });
+    }
+    if (mappedMobile) {
+      let workerPath = mappedMobile;
+      const method = (init?.method ?? "GET").toUpperCase();
+
+      if (
+        method === "POST" &&
+        workerPath.startsWith("/mobile/notifications") &&
+        !workerPath.startsWith("/mobile/notifications/ack")
+      ) {
+        const q = workerPath.includes("?")
+          ? workerPath.slice(workerPath.indexOf("?"))
+          : "";
+        workerPath = `/mobile/notifications/ack${q}`;
+      }
+
+      const base = teamAuth.workerUrl.replace(/\/$/, "");
+      const url = `${base}${workerPath.startsWith("/") ? workerPath : `/${workerPath}`}`;
+      const headers = new Headers(init?.headers);
+      headers.set("Authorization", `Bearer ${teamAuth.mobilePassword}`);
+      headers.set("X-Account-Email", teamAuth.accountEmail);
+      if (init?.body && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+
+      if (workerPath.startsWith("/mobile/config")) {
+        try {
+          const res = await fetch(url, { ...init, headers });
+          const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+          return jsonResponse({
+            relaybaseConfigured: true,
+            ...data,
+            email: teamAuth.accountEmail,
+          });
+        } catch (err) {
+          throw new Error(friendlyDesktopFetchError(err, "Worker request failed"));
+        }
+      }
+
+      try {
+        const res = await fetch(url, { ...init, headers });
+        if (res.status === 401) {
+          dispatchWorkerUnauthorized("/mail/");
+        }
+        return res;
+      } catch (err) {
+        throw new Error(friendlyDesktopFetchError(err, "Worker request failed"));
+      }
+    }
+    throw new Error(API_NOT_WIRED);
+  }
+
   const mapped = mapEmailApiToWorker(path);
   if (mapped === "empty-sent") {
     return jsonResponse({ sent: [], items: [] });

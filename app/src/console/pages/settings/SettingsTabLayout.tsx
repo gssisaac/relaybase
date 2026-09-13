@@ -10,9 +10,10 @@ import {
 } from "@/console/lib/paths";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
 import { useDesktopChrome } from "@/lib/desktop/shell";
+import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 function tabFromPathname(pathname: string): SettingsTab {
   // /settings                 → cloudflare
@@ -65,8 +66,21 @@ export function SettingsTabLayout({ children }: { children: ReactNode }) {
   const { isDesktop: desktop } = useDesktopChrome();
   const desktopCtx = useOptionalDesktop();
   const isStandaloneUpdate = pathname === "/settings/update";
+  const [webOwner, setWebOwner] = useState(false);
 
-  if (!desktop || !desktopCtx) {
+  useEffect(() => {
+    setWebOwner(hasWebOwnerSession());
+  }, []);
+
+  if (!desktopCtx?.ready) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+        Loading settings…
+      </div>
+    );
+  }
+
+  if (!desktop && !webOwner) {
     return <DesktopRequiredFallback />;
   }
 

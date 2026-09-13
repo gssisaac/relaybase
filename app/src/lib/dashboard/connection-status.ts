@@ -7,7 +7,8 @@ import {
   cfApiTokenHealth,
   type CfApiTokenPermissions,
 } from "@/lib/desktop/bridge";
-import { ensureAccessToken } from "@/lib/desktop/auth";
+import { ensureAccessToken, hasOwnerSession } from "@/lib/desktop/auth";
+import { fetchWebCfOAuthSessionPresent } from "@/lib/desktop/bridge/web-oauth-complete";
 import {
   D1_APP_DEFAULT,
   D1_MAIL_DEFAULT,
@@ -92,12 +93,25 @@ export function workerStatusFromConnect(
   };
 }
 
+function resolveWorkerUrlForProbe(
+  credentials: DesktopCredentials | null | undefined,
+): string {
+  let url = credentials?.workerUrl?.trim() ?? "";
+  if (!url && typeof window !== "undefined") {
+    const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+    url = w.__RELAYBASE_WORKER_URL__?.trim() ?? "";
+  }
+  return url;
+}
+
 export async function probeConnectionStatus(
   credentials: DesktopCredentials | null | undefined,
   options?: { hasConsoleAccess?: boolean },
 ): Promise<ConnectionStatusSnapshot> {
-  const cfInstallTokenPresentVal = cfInstallTokenPresent(credentials);
-  let url = credentials?.workerUrl?.trim() ?? "";
+  const webOauth = await fetchWebCfOAuthSessionPresent();
+  const cfInstallTokenPresentVal =
+    cfInstallTokenPresent(credentials) || webOauth;
+  let url = resolveWorkerUrlForProbe(credentials);
 
   if (isDesktopRuntime()) {
     const owner = await desktopOwnerSessionStatus();
@@ -156,18 +170,21 @@ export async function probeConnectionStatus(
   }
 
   const access = await ensureAccessToken();
+  const hasConsole =
+    options?.hasConsoleAccess ?? hasOwnerSession();
 
   if (!url) {
     return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
   }
 
   try {
-    if (!access) {
+    if (!access && !hasConsole) {
       return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
     }
     const result = await desktopVerifyWorkerConnection(url);
     const worker = workerStatusFromConnect(result);
     if (
+      access &&
       worker.ok &&
       !worker.d1Logs.configured &&
       !worker.d1Mail.configured

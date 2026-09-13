@@ -1,7 +1,9 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+
+import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
@@ -175,6 +177,8 @@ function WebOwnerGate({ children }: { children: ReactNode }) {
  * gate — no scattered `hasOwnerSession()` / `ownerAccess` checks. Credentials
  * come from the root `DesktopProvider` (see `AppProviders`).
  */
+type DashboardGateMode = "loading" | "desktop" | "web-owner" | "web-redirect";
+
 export function DesktopDashboardGate({
   children,
 }: {
@@ -184,11 +188,23 @@ export function DesktopDashboardGate({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const isDesktop = isDesktopRuntime();
-  const webOwner = !isDesktop && hasWebOwnerSession();
+  const [gateMode, setGateMode] = useState<DashboardGateMode>("loading");
 
   useEffect(() => {
-    if (isDesktop || webOwner) return;
+    const desktop = isDesktopRuntime();
+    if (desktop) {
+      setGateMode("desktop");
+      return;
+    }
+    if (hasWebOwnerSession()) {
+      setGateMode("web-owner");
+      return;
+    }
+    setGateMode("web-redirect");
+  }, []);
+
+  useEffect(() => {
+    if (gateMode !== "web-redirect") return;
     const search =
       typeof window !== "undefined" ? window.location.search : "";
     if (pathname === "/email/inbox" || pathname === "/email") {
@@ -211,14 +227,14 @@ export function DesktopDashboardGate({
         router.replace("/sign-in");
       }
     }
-  }, [isDesktop, webOwner, pathname, router]);
+  }, [gateMode, pathname, router]);
 
-  if (webOwner) {
-    return <WebOwnerGate>{children}</WebOwnerGate>;
+  if (gateMode === "loading" || gateMode === "web-redirect") {
+    return <AppLoadingScreen />;
   }
 
-  if (!isDesktop) {
-    return null;
+  if (gateMode === "web-owner") {
+    return <WebOwnerGate>{children}</WebOwnerGate>;
   }
 
   return (

@@ -19,6 +19,9 @@ export type PkceState = {
   verifier: string;
   clientId: string;
   redirectUri: string;
+  /** Relative in-app path after OAuth (e.g. /settings/cloudflare). */
+  returnTo?: string;
+  purpose?: "install" | "recover";
 };
 
 function sessionKey(): Buffer {

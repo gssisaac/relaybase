@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import { UnlockView } from "@/console/components/setup/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 /**
  * Already-installed / post-setup sign-in. Shows the passtoken form here.
@@ -15,8 +17,12 @@ export default function SetupConnectPage() {
   const store = useAppSession();
 
   useEffect(() => {
+    if (!isDesktopRuntime()) {
+      router.replace(hasWebOwnerSession() ? "/dashboard" : "/sign-in");
+      return;
+    }
     store.openAlreadyInstalled();
-  }, [store]);
+  }, [store, router]);
 
   useEffect(() => {
     if (store.canShowApp) {

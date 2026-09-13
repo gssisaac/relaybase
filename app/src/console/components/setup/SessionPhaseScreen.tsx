@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { BootScreen } from "@/console/components/setup/BootScreen";
 import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
@@ -23,6 +23,11 @@ export function SessionPhaseScreen({
   const store = useAppSession();
   const router = useRouter();
   const phase = store.phase;
+  const [phaseReady, setPhaseReady] = useState(false);
+
+  useEffect(() => {
+    setPhaseReady(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -60,6 +65,10 @@ export function SessionPhaseScreen({
       router.replace("/setup");
     }
   }, [phase.kind, router, store.canShowApp]);
+
+  if (!phaseReady) {
+    return <BootScreen />;
+  }
 
   switch (phase.kind) {
     case "boot":

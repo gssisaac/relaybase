@@ -1,5 +1,8 @@
 import { invoke, isDesktopRuntime } from "./bridge/invoke";
-import { loadLocalCredentialsFile } from "./bridge/credentials-local";
+import {
+  loadLocalCredentialsFile,
+  persistLocalCredentialsFile,
+} from "./bridge/credentials-local";
 import type { DesktopCredentials } from "./bridge/credentials";
 
 export type UserConnectionData = {
@@ -70,13 +73,10 @@ export async function saveUserConnection(
     cfOauthAccountId: existing?.cfOauthAccountId ?? "",
     scopeId: existing?.scopeId ?? "",
   };
-  const res = await fetch("/api/local-credentials", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to save credentials to ~/.relaybase");
+  await persistLocalCredentialsFile(next);
+  if (typeof window !== "undefined" && next.workerUrl) {
+    const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+    w.__RELAYBASE_WORKER_URL__ = next.workerUrl;
   }
   return next;
 }
@@ -104,9 +104,9 @@ export async function clearUserConnection(): Promise<void> {
     cfOauthAccountId: existing?.cfOauthAccountId ?? "",
     scopeId: existing?.scopeId ?? "",
   };
-  await fetch("/api/local-credentials", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
-  });
+  await persistLocalCredentialsFile(next);
+  if (typeof window !== "undefined") {
+    const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+    delete w.__RELAYBASE_WORKER_URL__;
+  }
 }

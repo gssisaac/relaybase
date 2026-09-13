@@ -1,5 +1,8 @@
 import { invoke, isDesktopRuntime } from "./invoke";
-import { loadLocalCredentialsFile } from "./credentials-local";
+import {
+  loadLocalCredentialsFile,
+  persistLocalCredentialsFile,
+} from "./credentials-local";
 
 export type DesktopCredentials = {
   accountId: string;
@@ -46,6 +49,9 @@ export type Workspaces = {
 };
 
 export async function desktopGetCredentials(): Promise<DesktopCredentials | null> {
+  if (!isDesktopRuntime()) {
+    return loadLocalCredentialsFile();
+  }
   return invoke("get_credentials");
 }
 
@@ -83,12 +89,7 @@ export async function desktopSaveRelaybaseAccount(input: {
     cfOauthAccountId: existing?.cfOauthAccountId ?? "",
     scopeId: existing?.scopeId ?? "",
   };
-  const res = await fetch("/api/local-credentials", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
-  });
-  if (!res.ok) throw new Error("Failed to save Relaybase account to ~/.relaybase");
+  await persistLocalCredentialsFile(next);
   return next;
 }
 
@@ -105,26 +106,28 @@ export async function desktopClearRelaybaseAccount(): Promise<void> {
     relaybaseEmail: "",
     relaybaseSession: "",
   };
-  await fetch("/api/local-credentials", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
-  });
+  await persistLocalCredentialsFile(next);
 }
 
 export async function desktopClearCredentials(): Promise<void> {
   if (isDesktopRuntime()) {
     return invoke("clear_stored_credentials");
   }
-  await fetch("/api/local-credentials", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      accountId: "",
-      workerUrl: "",
-      workerScriptName: "",
-      workerVersion: "",
-    }),
+  const existing = await loadLocalCredentialsFile();
+  await persistLocalCredentialsFile({
+    accountId: "",
+    installToken: existing?.installToken ?? "",
+    workerUrl: "",
+    workerScriptName: "",
+    workerVersion: "",
+    relaybaseAccountId: existing?.relaybaseAccountId ?? "",
+    relaybaseEmail: existing?.relaybaseEmail ?? "",
+    relaybaseSession: existing?.relaybaseSession ?? "",
+    cfOauthAccessToken: "",
+    cfOauthRefreshToken: "",
+    cfOauthAccessExpiresAt: "",
+    cfOauthAccountId: "",
+    scopeId: existing?.scopeId ?? "",
   });
 }
 

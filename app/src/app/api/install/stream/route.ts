@@ -76,6 +76,8 @@ export async function GET(request: NextRequest) {
     decisions = [];
   }
   const wipeConfirmation = request.nextUrl.searchParams.get("wipeConfirmation");
+  const mode =
+    request.nextUrl.searchParams.get("mode") === "update" ? "update" : "install";
 
   const client: CfClient = { accountId, apiToken: session.accessToken };
   const encoder = new TextEncoder();
@@ -171,23 +173,37 @@ export async function GET(request: NextRequest) {
           (): string[] => [],
         );
         const alreadyHasPepper = existingSecrets.includes("AUTH_PEPPER");
-        const authPepper = generateAuthPepper();
-        await putWorkerSecret(client, DEFAULT_SCRIPT, "AUTH_PEPPER", authPepper);
-        log("secret", "info", alreadyHasPepper ? "AUTH_PEPPER rotated" : "AUTH_PEPPER secret set");
+        let authPepper: string | undefined;
+        if (mode === "update" && alreadyHasPepper) {
+          log("secret", "info", "AUTH_PEPPER unchanged (Worker update)");
+        } else {
+          authPepper = generateAuthPepper();
+          await putWorkerSecret(client, DEFAULT_SCRIPT, "AUTH_PEPPER", authPepper);
+          log("secret", "info", alreadyHasPepper ? "AUTH_PEPPER rotated" : "AUTH_PEPPER secret set");
+        }
         await putWorkerSecret(client, DEFAULT_SCRIPT, "CF_ACCOUNT_ID", accountId);
         log("secret", "info", "CF_ACCOUNT_ID secret set");
 
         // 5. Warm up + schema
         await waitForWorkerReady(workerUrl, (line) => log("warmup", "info", line));
 
-        const ownerAlreadyConfigured = await fetchOwnerConfigured(workerUrl);
-        const useMigrate = anyD1Reused || ownerAlreadyConfigured;
+        const ownerAlreadyConfigured =
+          mode === "update" ? true : await fetchOwnerConfigured(workerUrl);
+        const useMigrate = mode === "update" || anyD1Reused || ownerAlreadyConfigured;
         const step = useMigrate ? "migrate-db" : "init-db";
-        const schemaFn = useMigrate ? migrateWorkerDb : initWorkerDb;
+        const cfAccessForSchema =
+          mode === "update" && !authPepper ? session.accessToken : undefined;
         let dbApplied: string[] = [];
         let dbAlreadyInitialized = false;
         try {
-          const result = await schemaFn(workerUrl, authPepper, (line) => log(step, "info", line));
+          const result = useMigrate
+            ? await migrateWorkerDb(
+                workerUrl,
+                authPepper,
+                (line) => log(step, "info", line),
+                cfAccessForSchema,
+              )
+            : await initWorkerDb(workerUrl, authPepper, (line) => log(step, "info", line));
           dbApplied = result.applied;
           dbAlreadyInitialized = useMigrate || result.alreadyInitialized;
           log(
@@ -208,6 +224,9 @@ export async function GET(request: NextRequest) {
         // their passtoken; re-issuing needs the separate reset-admin flow).
         let passtoken: string | null = null;
         if (!ownerAlreadyConfigured) {
+          if (!authPepper) {
+            throw new Error("AUTH_PEPPER is required to issue the owner passtoken");
+          }
           const issued = await ownerSetupAdmin(workerUrl, authPepper);
           passtoken = issued.passtoken;
           log("setup-admin", "info", "Owner passtoken issued");

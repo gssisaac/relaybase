@@ -1,4 +1,5 @@
 import type { WorkerUpdateCheck } from "./cloudflare";
+import { loadLocalCredentialsFile } from "./credentials-local";
 import { formatDesktopError, invoke, isDesktopRuntime } from "./invoke";
 
 export type InstallResult = {
@@ -134,6 +135,37 @@ export async function desktopCheckWorkerUpdate(): Promise<WorkerUpdateCheck> {
 
 /** Compare saved Worker URL with the OAuth account's workers.dev URL. No upload. */
 export async function desktopPreviewWorkerUpdateTarget(): Promise<WorkerUpdateTarget> {
+  if (!isDesktopRuntime()) {
+    const creds = await loadLocalCredentialsFile();
+    let saved = creds?.workerUrl?.trim().replace(/\/$/, "") ?? "";
+    if (!saved && typeof window !== "undefined") {
+      const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+      saved = w.__RELAYBASE_WORKER_URL__?.trim().replace(/\/$/, "") ?? "";
+    }
+    if (!saved) {
+      throw new Error("No Worker URL saved. Connect your Worker in Settings first.");
+    }
+    const res = await fetch(
+      `/api/install/preview-update?workerUrl=${encodeURIComponent(saved)}`,
+      { cache: "no-store" },
+    );
+    const data = (await res.json()) as {
+      matches?: boolean;
+      savedWorkerUrl?: string;
+      accountWorkerUrl?: string;
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error || "Could not verify Worker URL");
+    }
+    return {
+      expectedWorkerUrl: data.savedWorkerUrl ?? saved,
+      oauthAccountId: creds?.cfOauthAccountId ?? creds?.accountId ?? "",
+      oauthWorkerUrl: data.accountWorkerUrl ?? "",
+      connectedAccountId: creds?.accountId ?? "",
+      matches: Boolean(data.matches),
+    };
+  }
   return invoke("preview_worker_update_target_cmd");
 }
 

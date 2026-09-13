@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
-import { Toaster } from "@/components/ui/sonner";
+import { ClientToaster } from "@/components/ClientToaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CloudflarePlanDialogHost } from "@/lib/cloudflare/CloudflarePlanDialog";
 import { ZoomHotkeys } from "@/components/ZoomHotkeys";
@@ -39,7 +39,7 @@ export default function RootLayout({
           <AppProviders>
             <TooltipProvider delay={200}>{children}</TooltipProvider>
           </AppProviders>
-          <Toaster />
+          <ClientToaster />
           <CloudflarePlanDialogHost />
           <ZoomHotkeys />
         </ThemeProvider>

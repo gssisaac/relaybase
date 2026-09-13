@@ -66,7 +66,12 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const response = NextResponse.redirect(new URL("/setup/progress", request.nextUrl.origin));
+  const returnPath =
+    pkce.returnTo?.trim() ||
+    (pkce.purpose === "recover" ? "/setup/recover-admin" : "/setup/progress");
+  const destination = new URL(returnPath, request.nextUrl.origin);
+  destination.searchParams.set("cf_oauth", "complete");
+  const response = NextResponse.redirect(destination);
   response.cookies.delete(COOKIE_NAMES.pkce);
   response.cookies.set(
     COOKIE_NAMES.oauth,

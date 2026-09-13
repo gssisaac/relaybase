@@ -28,12 +28,14 @@ async function postSchemaEndpoint(
   pepper: string | undefined,
   path: string,
   step: string,
+  cfAccessToken?: string,
 ): Promise<InitDbResult> {
   const base = workerUrl.trim().replace(/\/$/, "");
   if (!base) throw new Error("Worker URL is empty");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (pepper?.trim()) headers["X-Auth-Pepper"] = pepper.trim();
-  else throw new Error(`${step} requires AUTH_PEPPER`);
+  else if (cfAccessToken?.trim()) headers["X-Cf-Access-Token"] = cfAccessToken.trim();
+  else throw new Error(`${step} requires AUTH_PEPPER or Cloudflare OAuth`);
   const res = await fetch(`${base}${path}`, { method: "POST", headers, body: "{}" });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -87,9 +89,17 @@ export async function migrateWorkerDb(
   workerUrl: string,
   pepper: string | undefined,
   onLog?: (line: string) => void,
+  cfAccessToken?: string,
 ): Promise<InitDbResult> {
   return withRetry(
-    () => postSchemaEndpoint(workerUrl, pepper, "/console/migrate-db", "migrate-db"),
+    () =>
+      postSchemaEndpoint(
+        workerUrl,
+        pepper,
+        "/console/migrate-db",
+        "migrate-db",
+        cfAccessToken,
+      ),
     "migrate-db",
     onLog,
   );

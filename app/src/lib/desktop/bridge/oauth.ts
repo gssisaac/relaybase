@@ -14,10 +14,19 @@ import { invoke, isDesktopRuntime } from "./invoke";
 
 export async function desktopStartCfOAuth(
   purpose: CfOAuthPurpose = "install",
+  returnTo?: string,
 ): Promise<{
   authorizeUrl: string;
   state: string;
 }> {
+  if (!isDesktopRuntime()) {
+    const params = new URLSearchParams({ purpose });
+    if (returnTo?.trim()) params.set("returnTo", returnTo.trim());
+    return {
+      authorizeUrl: `/api/oauth/start?${params.toString()}`,
+      state: "web",
+    };
+  }
   return invoke("start_cf_oauth", { purpose });
 }
 

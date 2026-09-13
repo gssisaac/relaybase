@@ -504,6 +504,45 @@ export function WorkerInstallPanel({
   const canContinueAfterReveal =
     Boolean(revealedPasstoken) && (tokenSaved || tokenDownloaded);
 
+  if (!isDesktopRuntime() && purpose === "worker-update") {
+    const progressPath = backHref
+      ? "/setup/worker-update/progress"
+      : "/settings/worker/progress";
+    const authorizeHref = `/api/oauth/start?returnTo=${encodeURIComponent(progressPath)}`;
+    return (
+      <SetupScrollPage>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Update Worker</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Authorize the Cloudflare account that owns your saved Worker, then we upload the
+              latest script without touching R2 or D1.
+            </p>
+            {credentials?.workerUrl ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Saved Worker:{" "}
+                <span className="break-all font-mono">{credentials.workerUrl}</span>
+              </p>
+            ) : null}
+          </div>
+          <div className="flex justify-end">
+            <SetupBackLink
+              href={backHref ?? "/settings/worker"}
+              label={backHref ? "Back" : "Back to Worker settings"}
+            />
+          </div>
+          <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
+            <WebAuthorizeCard
+              authorizeHref={authorizeHref}
+              description="Sign in with Cloudflare so Relaybase can verify your Worker URL and deploy the update."
+              buttonLabel="Authorize and update Worker"
+            />
+          </div>
+        </div>
+      </SetupScrollPage>
+    );
+  }
+
   if (!isDesktopRuntime() && purpose === "install") {
     return (
       <SetupScrollPage>

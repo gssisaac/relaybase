@@ -23,8 +23,22 @@ function pkceChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
+function safeReturnTo(raw: string | null, origin: string): string | undefined {
+  if (!raw?.trim()) return undefined;
+  const path = raw.trim();
+  if (!path.startsWith("/") || path.startsWith("//")) return undefined;
+  try {
+    const u = new URL(path, origin);
+    if (u.origin !== origin) return undefined;
+    return `${u.pathname}${u.search}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const purpose = request.nextUrl.searchParams.get("purpose") === "recover" ? "recover" : "install";
+  const returnTo = safeReturnTo(request.nextUrl.searchParams.get("returnTo"), request.nextUrl.origin);
 
   const configRes = await fetch(
     `${consoleBaseUrl()}/api/v1/oauth/config?purpose=${purpose}`,
@@ -66,7 +80,14 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(authorizeUrl.toString(), { status: 302 });
   response.cookies.set(
     COOKIE_NAMES.pkce,
-    sealPkceState({ state, verifier, clientId, redirectUri }),
+    sealPkceState({
+      state,
+      verifier,
+      clientId,
+      redirectUri,
+      returnTo,
+      purpose,
+    }),
     {
       httpOnly: true,
       secure: true,

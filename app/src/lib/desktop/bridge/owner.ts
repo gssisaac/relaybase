@@ -127,6 +127,18 @@ export async function desktopOwnerResetAdmin(input: {
   workerUrl: string;
   cfAccessToken: string;
 }): Promise<OwnerSetupResult> {
+  if (!isDesktopRuntime()) {
+    const res = await fetch("/api/cloudflare/reset-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workerUrl: input.workerUrl }),
+    });
+    const data = (await res.json()) as { passtoken?: string; error?: string };
+    if (!res.ok || !data.passtoken) {
+      throw new Error(data.error || "Reset failed");
+    }
+    return { passtoken: data.passtoken };
+  }
   return invoke("owner_reset_admin_cmd", {
     workerUrl: input.workerUrl,
     cfAccessToken: input.cfAccessToken,

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useContext,
@@ -31,6 +32,12 @@ import {
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 import { registerEnableEmailApiPasteBridge } from "@/console/components/setup/use-enable-email-api-dialog";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import {
+  fetchWebCfOAuthSessionPresent,
+  PENDING_SERVER_TOKEN_PUSH_KEY,
+  useWebCfOAuthComplete,
+} from "@/lib/desktop/bridge/web-oauth-complete";
 
 type HealthBlock = { tone: HealthTone; label: string; detail: string };
 
@@ -90,8 +97,10 @@ export function useSettingsConnection() {
 }
 
 export function SettingsConnectionProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const desktop = useOptionalDesktop();
   const credentials = desktop?.credentials ?? null;
+  const [webCfOauthPresent, setWebCfOauthPresent] = useState(false);
   const refreshCredentials = async (): Promise<void> => {
     await desktop?.refresh?.();
   };
@@ -144,10 +153,16 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   // closes over mount-time state) can read the latest typed value.
   const serverTokenRef = useRef("");
 
-  // OAuth session in memory (access or refresh). Gates server-token push.
+  useEffect(() => {
+    if (isDesktopRuntime()) return;
+    void fetchWebCfOAuthSessionPresent().then(setWebCfOauthPresent);
+  }, [credentials]);
+
+  // OAuth session in memory (desktop) or sealed cookie (web). Gates server-token push.
   const cfInstallTokenAvailable = Boolean(
     credentials?.cfOauthRefreshToken?.trim() ||
-      credentials?.cfOauthAccessToken?.trim(),
+      credentials?.cfOauthAccessToken?.trim() ||
+      webCfOauthPresent,
   );
 
   function resetCfDraft() {
@@ -230,6 +245,16 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   async function authorizeThenPush() {
     pendingPushRef.current = true;
+    if (!isDesktopRuntime() && serverTokenRef.current.trim()) {
+      try {
+        sessionStorage.setItem(
+          PENDING_SERVER_TOKEN_PUSH_KEY,
+          serverTokenRef.current.trim(),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
     setCfError(null);
     setCfMessage("Authorize with Cloudflare to push the server token.");
     await handleStartCfOAuth();
@@ -312,16 +337,44 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     setOauthBusy(true);
     setOauthError(null);
     try {
-      const start = await desktopStartCfOAuth();
+      const returnTo = pathname.startsWith("/settings") ? pathname : undefined;
+      const start = await desktopStartCfOAuth("install", returnTo);
       oauthStartStateRef.current = start.state;
-      // The deep-link listener (registered above) receives the tokens when
-      // the console redirects back to relaybase://oauth/callback.
+      if (!isDesktopRuntime() && start.authorizeUrl.startsWith("/")) {
+        window.location.href = start.authorizeUrl;
+        return;
+      }
       await desktopOpenExternal(start.authorizeUrl);
     } catch (err) {
       setOauthError(explainCfOAuthError(err));
       setOauthBusy(false);
     }
   }
+
+  const runServerTokenPushRef = useRef(runServerTokenPush);
+  runServerTokenPushRef.current = runServerTokenPush;
+
+  useWebCfOAuthComplete(() => {
+    void (async () => {
+      setWebCfOauthPresent(await fetchWebCfOAuthSessionPresent());
+      await refreshCredentials();
+      await refreshConnectionStatus();
+      setOauthBusy(false);
+      setOauthError(null);
+      if (!pendingPushRef.current) return;
+      pendingPushRef.current = false;
+      const pendingToken =
+        sessionStorage.getItem(PENDING_SERVER_TOKEN_PUSH_KEY)?.trim() ||
+        serverTokenRef.current;
+      sessionStorage.removeItem(PENDING_SERVER_TOKEN_PUSH_KEY);
+      if (pendingToken) setServerToken(pendingToken);
+      const fresh = await desktopGetCredentials();
+      await runServerTokenPushRef.current({
+        accountId: fresh?.accountId ?? fresh?.cfOauthAccountId,
+        serverToken: pendingToken,
+      });
+    })();
+  });
 
   async function handleSaveWorker() {
     setWorkerBusy(true);
@@ -419,7 +472,12 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     await refreshConnectionStatus();
   }
 
-  const hasWorker = Boolean(credentials?.workerUrl?.trim());
+  const hasWorker = Boolean(
+    credentials?.workerUrl?.trim() ||
+      (typeof window !== "undefined" &&
+        (window as unknown as { __RELAYBASE_WORKER_URL__?: string })
+          .__RELAYBASE_WORKER_URL__?.trim()),
+  );
   const logsOk = workerStatus?.d1Logs?.configured === true;
   const searchOk = workerStatus?.d1Mail?.configured === true;
   const appOk = workerStatus?.d1App?.configured === true;

@@ -12,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { ownerLogin } from "@/lib/desktop/auth";
+import { saveUserConnection } from "@/lib/desktop/user-data";
+import { useOptionalDesktop } from "@/lib/desktop/shell";
 
 type InstallLogEvent = { step: string; level: "info" | "stderr"; line: string };
 
@@ -24,21 +26,26 @@ type InstallDone = {
 };
 
 /** Cloudflare's authorize page, in a browser tab, needs one screen. */
-export function WebAuthorizeCard() {
+export function WebAuthorizeCard({
+  authorizeHref = "/api/oauth/start",
+  description = "Relaybase runs entirely in your own Cloudflare account. Click below to sign in with Cloudflare and authorize creating a Worker, R2 bucket, and D1 databases.",
+  buttonLabel = "Authorize and install on Cloudflare",
+}: {
+  authorizeHref?: string;
+  description?: string;
+  buttonLabel?: string;
+}) {
   return (
     <div className="flex min-h-100 flex-col items-center justify-center gap-4 py-2 text-center">
-      <p className="text-sm text-muted-foreground max-w-sm">
-        Relaybase runs entirely in your own Cloudflare account. Click below to sign in with
-        Cloudflare and authorize creating a Worker, R2 bucket, and D1 databases.
-      </p>
+      <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
       <Button
         type="button"
         className="w-[300px] max-w-full"
         onClick={() => {
-          window.location.href = "/api/oauth/start";
+          window.location.href = authorizeHref;
         }}
       >
-        Authorize and install on Cloudflare
+        {buttonLabel}
       </Button>
     </div>
   );
@@ -47,6 +54,7 @@ export function WebAuthorizeCard() {
 /** Runs after the Cloudflare OAuth redirect lands the browser on /setup/progress. */
 export function WebInstallProgress() {
   const router = useRouter();
+  const desktop = useOptionalDesktop();
   const [logs, setLogs] = useState<InstallLogEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<InstallDone | null>(null);
@@ -65,8 +73,26 @@ export function WebInstallProgress() {
       setLogs((prev) => [...prev, JSON.parse((e as MessageEvent).data)]);
     });
     source.addEventListener("done", (e) => {
-      setDone(JSON.parse((e as MessageEvent).data));
+      const payload = JSON.parse((e as MessageEvent).data) as InstallDone & {
+        accountId?: string;
+        workerScriptName?: string;
+        workerVersion?: string;
+      };
+      setDone(payload);
       source.close();
+      void (async () => {
+        try {
+          await saveUserConnection({
+            workerUrl: payload.workerUrl,
+            accountId: payload.accountId,
+            workerScriptName: payload.workerScriptName,
+            workerVersion: payload.workerVersion,
+          });
+          await desktop?.refresh?.();
+        } catch {
+          /* best-effort — user can still sign in manually */
+        }
+      })();
     });
     source.addEventListener("error", (e) => {
       const msg = (e as MessageEvent).data;
@@ -201,6 +227,115 @@ export function WebInstallProgress() {
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
         Creating resources and deploying the Worker in your Cloudflare account…
+      </div>
+      {logs.length > 0 ? (
+        <div
+          ref={logEndRef}
+          className="max-h-72 select-text cursor-text overflow-y-auto rounded bg-black/80 p-3 font-mono text-[11px] leading-relaxed text-emerald-300"
+        >
+          {logs.map((entry, i) => (
+            <div key={i} className="whitespace-pre-wrap break-all">
+              <span className="text-muted-foreground">
+                [{entry.step}:{entry.level}]
+              </span>{" "}
+              {entry.line}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type WorkerUpdateDone = {
+  workerUrl: string;
+  workerScriptName: string;
+  workerVersion: string;
+  accountId?: string;
+};
+
+/** Web Worker script update — same SSE pipeline with `mode=update` (keeps AUTH_PEPPER). */
+export function WebWorkerUpdateProgress({ onDone }: { onDone?: () => void }) {
+  const desktop = useOptionalDesktop();
+  const [logs, setLogs] = useState<InstallLogEvent[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<WorkerUpdateDone | null>(null);
+  const startedRef = useRef(false);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    const source = new EventSource("/api/install/stream?mode=update");
+    source.addEventListener("log", (e) => {
+      setLogs((prev) => [...prev, JSON.parse((e as MessageEvent).data)]);
+    });
+    source.addEventListener("done", (e) => {
+      const payload = JSON.parse((e as MessageEvent).data) as WorkerUpdateDone;
+      setDone(payload);
+      source.close();
+      void (async () => {
+        try {
+          await saveUserConnection({
+            workerUrl: payload.workerUrl,
+            accountId: payload.accountId,
+            workerScriptName: payload.workerScriptName,
+            workerVersion: payload.workerVersion,
+          });
+          await desktop?.refresh?.();
+        } catch {
+          /* best-effort */
+        }
+        onDone?.();
+      })();
+    });
+    source.addEventListener("error", (e) => {
+      const msg = (e as MessageEvent).data;
+      setError(
+        msg
+          ? (JSON.parse(msg)?.error ?? "Update failed")
+          : "Connection to the update stream was lost.",
+      );
+      source.close();
+    });
+    return () => source.close();
+  }, [desktop, onDone]);
+
+  useEffect(() => {
+    logEndRef.current?.scrollTo({ top: logEndRef.current.scrollHeight });
+  }, [logs]);
+
+  if (error) {
+    return (
+      <div className="space-y-3 rounded-lg border border-border p-4">
+        <p className="text-sm font-medium text-destructive">Worker update failed</p>
+        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{error}</p>
+        <Button type="button" className="w-full" onClick={() => window.location.reload()}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="space-y-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-4">
+        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+          Worker updated
+          {done.workerVersion ? ` to v${done.workerVersion}` : ""}.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Worker URL: <span className="font-mono">{done.workerUrl}</span>
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Uploading the latest Worker script — R2 and D1 are unchanged…
       </div>
       {logs.length > 0 ? (
         <div

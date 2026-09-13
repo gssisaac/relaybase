@@ -578,17 +578,23 @@ export function EmailAlerts({
                 <Fingerprint className="size-3.5" />
                 {unlockLabel}
               </Button>
-            ) : needsWorkerUpdate && isDesktop ? (
+            ) : needsWorkerUpdate ? (
               <Button
                 size="sm"
                 variant="outline"
                 className="mt-2"
                 nativeButton={false}
-                render={<Link href="/settings/update" />}
+                render={
+                  <Link
+                    href={
+                      isDesktop ? "/settings/update" : "/settings/worker/update"
+                    }
+                  />
+                }
               >
                 Open Worker update
               </Button>
-            ) : isEmailApiNotConfiguredError(shownError) && isDesktop ? (
+            ) : isEmailApiNotConfiguredError(shownError) ? (
               <Button
                 type="button"
                 size="sm"

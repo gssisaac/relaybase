@@ -1,14 +1,14 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
+import { AppShellFrame } from "@/components/layout/app-shell-nav";
 import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
-import { UserSidebar } from "@/components/layout/UserSidebar";
 import { ConsoleAppProviders, WebConsoleAppProviders } from "@/mail-platform/runtime";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
@@ -70,20 +70,9 @@ function DashboardShell({
               <EmailMailboxProvider>
                 <EmailCommandRuntimeProvider>
                   <DisableAppTabFocus />
-                  <div className="flex h-svh overflow-hidden bg-background">
-                    {isEmailSettings ? null : (
-                      <Suspense
-                        fallback={
-                          <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                        }
-                      >
-                        <UserSidebar teamMode />
-                      </Suspense>
-                    )}
-                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                      {children}
-                    </main>
-                  </div>
+                  <AppShellFrame teamMode hideSidebar={isEmailSettings}>
+                    {children}
+                  </AppShellFrame>
                   <AppHotkeys />
                   <GlobalCommandPalette />
                 </EmailCommandRuntimeProvider>
@@ -104,25 +93,14 @@ function DashboardShell({
             <EmailMailboxProvider>
               <EmailCommandRuntimeProvider>
                 <DisableAppTabFocus />
-                <div className="flex h-svh overflow-hidden bg-background">
-                  {isEmailSettings ? null : (
-                    <Suspense
-                      fallback={
-                        <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                      }
-                    >
-                      <UserSidebar />
-                    </Suspense>
-                  )}
-                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                    <ConsoleRouteGate>
-                      <OwnerConsoleDashboard>
-                        {isEmailSettings ? null : <DomainProgressBanner />}
-                        {children}
-                      </OwnerConsoleDashboard>
-                    </ConsoleRouteGate>
-                  </main>
-                </div>
+                <AppShellFrame hideSidebar={isEmailSettings}>
+                  <ConsoleRouteGate>
+                    <OwnerConsoleDashboard>
+                      {isEmailSettings ? null : <DomainProgressBanner />}
+                      {children}
+                    </OwnerConsoleDashboard>
+                  </ConsoleRouteGate>
+                </AppShellFrame>
                 <AppHotkeys />
                 <GlobalCommandPalette />
               </EmailCommandRuntimeProvider>

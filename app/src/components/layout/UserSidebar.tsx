@@ -762,7 +762,13 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
+export function UserSidebar({
+  teamMode = false,
+  presentation = "docked",
+}: {
+  teamMode?: boolean;
+  presentation?: "docked" | "sheet";
+} = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const userId = useProductId();
@@ -797,6 +803,8 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
     noDragClassName,
   } = useDesktopChrome();
   const macDesktopChrome = isDesktop && isMacOS;
+  const isSheet = presentation === "sheet";
+  const sidebarCollapsed = isSheet ? false : collapsed;
 
   useEffect(() => {
     let cancelled = false;
@@ -873,8 +881,13 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-out",
-        collapsed ? "w-14" : "w-52",
+        "flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-out",
+        isSheet
+          ? "w-full border-0"
+          : cn(
+              "border-r border-sidebar-border",
+              sidebarCollapsed ? "w-14" : "w-52",
+            ),
       )}
     >
       <div
@@ -885,10 +898,10 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
         )}
       >
         {/* Keep mounted for ⌘[ / ⌘] even when compact hides the buttons. */}
-        <div className={collapsed ? "hidden" : "contents"}>
-          <SidebarHistoryNav collapsed={collapsed} />
+        <div className={sidebarCollapsed ? "hidden" : "contents"}>
+          <SidebarHistoryNav collapsed={sidebarCollapsed} />
         </div>
-        {collapsed ? (
+        {sidebarCollapsed && !isSheet ? (
           <div
             className={cn(
               "flex flex-col items-center gap-0.5 px-1 pt-8 pb-2",
@@ -944,7 +957,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
           </div>
         ) : (
           <>
-            {macDesktopChrome ? (
+            {macDesktopChrome && !isSheet ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -1007,7 +1020,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                       onClick={switchModeTarget}
                     />
                   )}
-                  {macDesktopChrome ? null : (
+                  {macDesktopChrome || isSheet ? null : (
                     <Button
                       type="button"
                       variant="ghost"
@@ -1037,17 +1050,17 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
       >
         {mode === "email" ? (
           <EmailModeNav
-            collapsed={collapsed}
+            collapsed={sidebarCollapsed}
             onAddAccount={() => setAddOpen(true)}
           />
         ) : (
-          <DashboardModeNav collapsed={collapsed} />
+          <DashboardModeNav collapsed={sidebarCollapsed} />
         )}
       </nav>
 
-      {!collapsed ? <AppUpdateBanner /> : null}
+      {!sidebarCollapsed ? <AppUpdateBanner /> : null}
 
-      {!isTeam && mode === "dashboard" && !collapsed ? (
+      {!isTeam && mode === "dashboard" && !sidebarCollapsed ? (
         <WorkerUpdateBanner />
       ) : null}
 
@@ -1056,7 +1069,7 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         <SendFeedbackButton
-          collapsed={collapsed}
+          collapsed={sidebarCollapsed}
           account={
             searchParams.get("account")?.trim() ||
             searchParams.get("from")?.trim() ||

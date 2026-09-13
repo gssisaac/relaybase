@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useEffect, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { AppShellFrame } from "@/components/layout/app-shell-nav";
 import { EmailAppProviders, useMailRuntime } from "@/mail-platform/runtime";
 import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { DomainProvider } from "@/lib/dashboard/DomainContext";
@@ -15,7 +16,6 @@ import {
 } from "@/email/commands";
 import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
-import { UserSidebar } from "@/components/layout/UserSidebar";
 
 function WebMailShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -69,20 +69,9 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
               <EmailMailboxProvider>
                 <EmailCommandRuntimeProvider>
                   <DisableAppTabFocus />
-                  <div className="flex h-svh overflow-hidden bg-background">
-                    {isEmailSettings ? null : (
-                      <Suspense
-                        fallback={
-                          <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                        }
-                      >
-                        <UserSidebar teamMode />
-                      </Suspense>
-                    )}
-                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                      {children}
-                    </main>
-                  </div>
+                  <AppShellFrame teamMode hideSidebar={isEmailSettings}>
+                    {children}
+                  </AppShellFrame>
                   <AppHotkeys />
                   <GlobalCommandPalette />
                 </EmailCommandRuntimeProvider>

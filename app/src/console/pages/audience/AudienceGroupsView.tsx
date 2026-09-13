@@ -15,7 +15,7 @@ import {
   useDashboardPaths,
   type AudienceDetailTab,
 } from "@/console/lib/paths";
-import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { useEmailPaths } from "@/email/lib/paths";
 import {
   clearEmailCache,
@@ -529,6 +529,7 @@ export function AudienceGroupsView() {
                 />
               </div>
               {filtered.length > 0 ? (
+                <DashboardTableScroll minWidthClassName="min-w-[640px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -592,6 +593,7 @@ export function AudienceGroupsView() {
                     ))}
                   </TableBody>
                 </Table>
+                </DashboardTableScroll>
               ) : !loading ? (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <Users

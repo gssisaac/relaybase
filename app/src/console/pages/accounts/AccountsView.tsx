@@ -11,7 +11,7 @@ import {
   type AccountDetailTab,
   useDashboardPaths,
 } from "@/console/lib/paths";
-import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { fetchEmailCached } from "@/email/components/mailbox/email-cached-fetch";
 import {
   AlertCircle,
@@ -773,7 +773,7 @@ export function AccountsView() {
                         {domainLoading ? (
                           <div className="min-h-[80px] px-6" />
                         ) : domainAddresses.length > 0 ? (
-                          <div className="overflow-hidden rounded-b-xl">
+                          <DashboardTableScroll minWidthClassName="min-w-[520px]">
                             <Table>
                               <TableBody>
                                 {domainAddresses.map((address) => {
@@ -955,7 +955,7 @@ export function AccountsView() {
                                 })}
                               </TableBody>
                             </Table>
-                          </div>
+                          </DashboardTableScroll>
                         ) : (
                           <div className="flex flex-col items-start gap-3 px-6 pb-6">
                             <div>

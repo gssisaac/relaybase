@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { useDashboardPaths } from "@/console/lib/paths";
-import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { KeysStatusPanel } from "@/console/pages/keys/KeysStatusPanel";
 import {
   dashboardCacheNeedsRefresh,
@@ -687,6 +687,7 @@ export function EmailSettingsKeysView() {
                       </Button>
                     </div>
                   ) : (
+                    <DashboardTableScroll minWidthClassName="min-w-[720px]">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -816,6 +817,7 @@ export function EmailSettingsKeysView() {
                         })}
                       </TableBody>
                     </Table>
+                    </DashboardTableScroll>
                   )}
                 </CardContent>
               </Card>

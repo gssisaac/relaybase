@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { useDesktopChrome } from "@/lib/desktop/shell";
+import { MobileNavTrigger } from "@/components/layout/MobileNavTrigger";
 import { cn } from "@/lib/utils";
 
 type DesktopTitleBarProps = {
@@ -35,13 +36,14 @@ export function DesktopTitleBar({
     >
       <div
         {...dragRegionProps}
-        className={cn("min-w-0 flex-1", dragRegionClassName)}
+        className={cn("flex min-w-0 flex-1 items-center gap-2", dragRegionClassName)}
       >
-        {children}
+        <MobileNavTrigger />
+        <div className="min-w-0 flex-1">{children}</div>
       </div>
       {end ? (
         <div
-          className={cn("flex shrink-0 items-center gap-2", noDragClassName)}
+          className={cn("flex shrink-0 flex-wrap items-center justify-end gap-2", noDragClassName)}
           {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
         >
           {end}

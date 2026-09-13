@@ -10,7 +10,7 @@ import {
 import { reaction } from "mobx";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDesktop } from "@/lib/desktop/shell";
+import { useMailRuntime } from "@/mail-platform/runtime";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { useSenderIconStore } from "@/email/components/sender/SenderIconContext";
 import type { EmailAccountFilter } from "@/email/components/accounts/EmailAccountSelect";
@@ -84,7 +84,7 @@ function storeHasUnreadApi(store: EmailMailboxStore) {
 
 export function EmailMailboxProvider({ children }: { children: ReactNode }) {
   const productId = useProductId();
-  const { accountScopeId } = useDesktop();
+  const { accountScopeId } = useMailRuntime();
   const { apiBase } = useEmailPaths();
   const { enabledAddresses, enabledAccounts, availableAddresses, phase: accountsPhase } =
     useMailAccounts();

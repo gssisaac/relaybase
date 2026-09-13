@@ -32,15 +32,49 @@ export type EmailIdentity = {
   accountEmail: string;
 };
 
-export type MailSession = {
+export type SessionRole = "owner" | "team";
+
+/**
+ * Unified auth session port — the single surface UI/stores depend on.
+ *
+ * Concrete adapters (`WebSessionAdapter`, `DesktopSessionAdapter`) implement
+ * this. UI code never branches on `isDesktopRuntime()`; it reads the role
+ * and team flag from here.
+ */
+export type AuthSession = {
+  /** Owner (console) or team (mail-only) session. */
+  readonly role: SessionRole;
+  /** True when running inside the Tauri desktop shell. */
+  readonly isDesktop: boolean;
+  /** True when the authenticated identity is a teammate (not the owner). */
+  readonly isTeamMode: boolean;
+  /** Session is hydrated and ready to read. */
   readonly ready: boolean;
+  /** Active account email, or empty when logged out. */
+  readonly accountEmail: string;
+  /** Connected Worker base URL, or empty when logged out. */
+  readonly workerUrl: string;
+  /** Opaque account-scope id — changes on account switch. */
+  readonly accountScopeId: string;
+  /** Active identity, or null when logged out. */
   readonly identity: EmailIdentity | null;
-  /** Login with account email + per-account mobile password. */
+  /** Mobile password (web team mode only; null otherwise). */
+  readonly mobilePassword: string | null;
+  /** Auth headers to attach to Worker `/mobile/*` calls. */
+  getAuthHeaders(): Record<string, string>;
+  /** Login with account email + per-account mobile password (web team). */
   login(input: EmailIdentity & { mobilePassword: string }): Promise<void>;
+  /** Clear session and route to sign-in / unlock. */
   logout(): Promise<void>;
   /** Subscribe to identity/ready changes; returns an unsubscribe fn. */
   subscribe(listener: () => void): () => void;
 };
+
+/**
+ * Legacy alias — `MailSession` is the read-only identity surface of
+ * `AuthSession`. Kept for backward compatibility with existing stores.
+ */
+export type MailSession = AuthSession;
 
 // --- Storage (item 4) ------------------------------------------------------
 
@@ -95,8 +129,10 @@ export type MailFeatures = {
 // --- Runtime bundle -------------------------------------------------------
 
 export type MailRuntime = {
+  /** Unified auth session — single source of identity/role/team state. */
+  session: AuthSession;
+  /** Mail transport (path mapping + auth headers). */
   transport: MailTransport;
-  session: MailSession;
   storage: MailStorage;
   platform: MailPlatform;
   chrome: MailShellChrome;

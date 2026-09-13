@@ -1,14 +1,17 @@
 /**
- * Email-mode session — web-only mail login.
+ * Web session adapter — web-only mail login (team role).
  *
- * Stores `{ workerUrl, accountEmail, mobilePassword }` in memory and
- * mirrors to `sessionStorage` so a page refresh keeps the session active.
+ * Implements the unified `AuthSession` port for the web build. Stores
+ * `{ workerUrl, accountEmail, mobilePassword }` in memory and mirrors
+ * identity (not password) to `sessionStorage` so a refresh keeps the
+ * session active. Login verifies against `GET /mobile/config` on the
+ * customer Worker; logout clears both memory and `sessionStorage`.
  *
- * Login verifies against `GET /mobile/config` on the customer Worker.
- * Logout clears both memory and `sessionStorage`.
+ * UI/stores read `role`/`isTeamMode`/`accountEmail`/`workerUrl` from here
+ * — no `isDesktopRuntime()` branches needed.
  */
 import { makeAutoObservable, runInAction } from "mobx";
-import type { MailSession, EmailIdentity } from "../types";
+import type { AuthSession, EmailIdentity } from "../types";
 
 const STORAGE_KEY = "relaybase:email-session";
 
@@ -87,7 +90,13 @@ function writeStored(snapshot: SessionSnapshot | null): void {
   }
 }
 
-export class EmailSessionStore implements MailSession {
+/**
+ * Web session store — implements `AuthSession` for the web build.
+ *
+ * `role` is always `"team"` and `isTeamMode` is always `true` here; an
+ * owner using the web build is still a mail-only (team) session.
+ */
+export class WebSessionStore implements AuthSession {
   ready = false;
   identity: EmailIdentity | null = null;
   mobilePassword: string | null = null;
@@ -96,6 +105,37 @@ export class EmailSessionStore implements MailSession {
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
+  }
+
+  get role(): "team" {
+    return "team";
+  }
+
+  get isDesktop(): boolean {
+    return false;
+  }
+
+  get isTeamMode(): boolean {
+    return true;
+  }
+
+  get accountEmail(): string {
+    return this.identity?.accountEmail ?? "";
+  }
+
+  get workerUrl(): string {
+    return this.identity?.workerUrl ?? "";
+  }
+
+  get accountScopeId(): string {
+    return this.identity?.accountEmail ?? "";
+  }
+
+  getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.mobilePassword) headers.Authorization = `Bearer ${this.mobilePassword}`;
+    if (this.identity?.accountEmail) headers["X-Account-Email"] = this.identity.accountEmail;
+    return headers;
   }
 
   /** Restore identity from sessionStorage on boot. */
@@ -177,8 +217,15 @@ export class EmailSessionStore implements MailSession {
   }
 }
 
-export function createEmailSession(): EmailSessionStore {
-  const store = new EmailSessionStore();
+export function createWebSession(): WebSessionStore {
+  const store = new WebSessionStore();
   store.hydrate();
   return store;
 }
+
+/**
+ * Backward-compat alias — older code imports `EmailSessionStore` /
+ * `createEmailSession`. The class is functionally identical.
+ */
+export const EmailSessionStore = WebSessionStore;
+export const createEmailSession = createWebSession;

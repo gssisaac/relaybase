@@ -21,6 +21,8 @@
 export type {
   MailTransport,
   MailSession,
+  AuthSession,
+  SessionRole,
   EmailIdentity,
   MailStorage,
   MailPlatform,
@@ -42,9 +44,14 @@ export {
 
 export {
   EmailSessionStore,
+  WebSessionStore,
   createEmailSession,
+  createWebSession,
+  getWebTeamAuth,
+  setWebTeamAuth,
   useConsoleSession,
   type ConsoleSessionAdapter,
+  type StoredWebSession,
 } from "./session";
 
 export { createWebStorage, createDesktopStorage } from "./storage";
@@ -61,4 +68,5 @@ export {
   useMailRuntime,
   useOptionalMailRuntime,
   EmailAppProviders,
+  ConsoleAppProviders,
 } from "./runtime";

@@ -4,13 +4,13 @@
  *
  * This replaces `AppProviders` (DesktopProvider + AppSessionProvider) for
  * the `(email-app)` route group. No console, no Touch ID, no keyring —
- * just the mail session + transport + storage + platform.
+ * just the web session + transport + storage + platform.
  */
 "use client";
 
 import * as React from "react";
 import { MailRuntimeProvider } from "./MailRuntimeContext";
-import { createEmailSession } from "../session";
+import { createWebSession } from "../session";
 import { createEmailTransport } from "../transport";
 import { createWebStorage } from "../storage";
 import { createWebPlatform, createWebChrome } from "../shell";
@@ -27,8 +27,8 @@ export function EmailAppProviders({
 }: {
   children: React.ReactNode;
 }) {
-  // Lazy-init the session store once; it survives re-renders.
-  const [session] = React.useState(() => createEmailSession());
+  // Lazy-init the web session store once; it survives re-renders.
+  const [session] = React.useState(() => createWebSession());
 
   const runtime = React.useMemo<MailRuntime>(() => {
     const transport = createEmailTransport({
@@ -36,13 +36,13 @@ export function EmailAppProviders({
       getMobilePassword: () => session.mobilePassword,
     });
     return {
-      transport,
       session,
+      transport,
       storage: createWebStorage(),
       platform: createWebPlatform(),
       chrome: createWebChrome(),
       features: EMAIL_FEATURES,
-      accountScopeId: session.identity?.accountEmail ?? "",
+      accountScopeId: session.accountScopeId,
     };
   }, [session]);
 

@@ -4,3 +4,4 @@ export {
   useOptionalMailRuntime,
 } from "./MailRuntimeContext";
 export { EmailAppProviders } from "./EmailAppProviders";
+export { ConsoleAppProviders } from "./ConsoleAppProviders";

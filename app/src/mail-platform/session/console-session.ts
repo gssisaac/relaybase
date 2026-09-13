@@ -1,25 +1,28 @@
 /**
- * Console-mode session — delegates to the existing `DesktopProvider` /
- * `AppSessionStore`.
+ * Desktop session adapter — implements `AuthSession` for the desktop build.
  *
- * Console mode (desktop app) authenticates via the OS keyring + Touch ID.
- * This adapter exposes the `MailSession` port surface so email UI code
- * can stay platform-agnostic. The owner's worker URL comes from
- * `DesktopCredentials`; the "identity" here is the owner, not a teammate.
+ * Console mode (desktop app) authenticates via the OS keyring + Touch ID
+ * through `DesktopProvider` / `AppSessionStore`. This adapter exposes the
+ * unified `AuthSession` port so email UI code stays platform-agnostic.
+ *
+ * The owner's worker URL comes from `DesktopCredentials`; the "identity"
+ * here is the owner (or the invited teammate when `teamLogin` is set).
+ * Login/logout are handled by the existing desktop flows (Touch ID /
+ * team login dialog), so `login()` throws and `logout()` delegates to
+ * `AppSessionStore.signOut()`.
  */
 import { useDesktop } from "@/lib/desktop/shell";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
-import type { MailSession, EmailIdentity } from "../types";
+import type { AuthSession, EmailIdentity, SessionRole } from "../types";
 import { useMemo } from "react";
 
-export type ConsoleSessionAdapter = MailSession & {
+export type ConsoleSessionAdapter = AuthSession & {
   /** The underlying DesktopContext value (for components still reading it). */
   desktopReady: boolean;
-  accountScopeId: string;
 };
 
 /**
- * Build a `MailSession` from the existing `DesktopContext`.
+ * Build an `AuthSession` from the existing `DesktopContext`.
  *
  * In console mode the "identity" is derived from credentials (owner) or
  * teamLogin (invited teammate). Login/logout are handled by the existing
@@ -30,25 +33,45 @@ export function useConsoleSession(): ConsoleSessionAdapter {
   const desktop = useDesktop();
 
   return useMemo<ConsoleSessionAdapter>(() => {
-    const identity: EmailIdentity | null = desktop.teamLogin
+    const teamLogin = desktop.teamLogin;
+    const creds = desktop.credentials;
+    const identity: EmailIdentity | null = teamLogin
       ? {
-          workerUrl: desktop.teamLogin.workerUrl,
-          accountEmail: desktop.teamLogin.accountEmail,
+          workerUrl: teamLogin.workerUrl,
+          accountEmail: teamLogin.accountEmail,
         }
-      : desktop.credentials?.workerUrl
+      : creds?.workerUrl
         ? {
-            workerUrl: desktop.credentials.workerUrl,
-            accountEmail: desktop.credentials.relaybaseEmail || "",
+            workerUrl: creds.workerUrl,
+            accountEmail: creds.relaybaseEmail || "",
           }
         : null;
 
+    const role: SessionRole = teamLogin ? "team" : "owner";
+    const isTeamMode = Boolean(teamLogin);
+
     return {
+      role,
+      isDesktop: true,
+      isTeamMode,
       ready: desktop.ready,
       identity,
+      accountEmail: identity?.accountEmail ?? "",
+      workerUrl: identity?.workerUrl ?? "",
+      accountScopeId: desktop.accountScopeId,
+      mobilePassword: teamLogin?.mobilePassword ?? null,
+      getAuthHeaders() {
+        const headers: Record<string, string> = {};
+        if (teamLogin?.mobilePassword) {
+          headers.Authorization = `Bearer ${teamLogin.mobilePassword}`;
+        }
+        if (teamLogin?.accountEmail) {
+          headers["X-Account-Email"] = teamLogin.accountEmail;
+        }
+        return headers;
+      },
       async login() {
         // Console login is handled by AppSessionStore (Touch ID / team dialog).
-        // This is a no-op stub; components that need login use the existing
-        // UnlockView / AddTeamAccountDialog directly.
         throw new Error("Console login is handled by the desktop session UI.");
       },
       async logout() {
@@ -62,9 +85,6 @@ export function useConsoleSession(): ConsoleSessionAdapter {
       },
       get desktopReady() {
         return desktop.ready;
-      },
-      get accountScopeId() {
-        return desktop.accountScopeId;
       },
     };
   }, [

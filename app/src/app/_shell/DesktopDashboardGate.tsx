@@ -7,6 +7,7 @@ import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { UserSidebar } from "@/components/layout/UserSidebar";
+import { ConsoleAppProviders } from "@/mail-platform/runtime";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
 import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
@@ -164,9 +165,11 @@ export function DesktopDashboardGate({
 }) {
   return (
     <DesktopShell>
-      <EnableEmailApiDialogHost>
-        <GateInner>{children}</GateInner>
-      </EnableEmailApiDialogHost>
+      <ConsoleAppProviders>
+        <EnableEmailApiDialogHost>
+          <GateInner>{children}</GateInner>
+        </EnableEmailApiDialogHost>
+      </ConsoleAppProviders>
     </DesktopShell>
   );
 }

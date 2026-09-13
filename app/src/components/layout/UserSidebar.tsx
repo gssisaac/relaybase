@@ -85,7 +85,7 @@ import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
-import { useDesktop } from "@/lib/desktop/shell";
+import { useMailRuntime } from "@/mail-platform/runtime";
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
   signOutRedirectPath,
@@ -767,10 +767,10 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const searchParams = useSearchParams();
   const userId = useProductId();
   const router = useRouter();
-  const { teamLogin } = useDesktop();
+  const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
   const { settings: settingsHref } = useEmailPaths();
-  const isTeam = teamMode || Boolean(teamLogin);
+  const isTeam = teamMode || mailSession.isTeamMode;
   const { availableAddresses, enabledAccounts } = useMailAccounts();
   const enabledSet = useMemo(
     () => new Set(enabledAccounts.map((e) => e.toLowerCase())),
@@ -838,10 +838,15 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOutRelaybase(isTeam, session);
-      router.replace(signOutRedirectPath(isTeam, session));
+      if (!mailSession.isDesktop) {
+        await mailSession.logout();
+        router.replace("/sign-in");
+      } else {
+        await signOutRelaybase(isTeam, session);
+        router.replace(signOutRedirectPath(isTeam, session));
+      }
     } catch {
-      router.replace(signOutRedirectPath(isTeam, session));
+      router.replace(mailSession.isDesktop ? signOutRedirectPath(isTeam, session) : "/sign-in");
     } finally {
       setSigningOut(false);
       setSignOutOpen(false);
@@ -1041,11 +1046,11 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
         />
       </div>
 
-      {isTeam && teamLogin ? (
+      {isTeam && mailSession.workerUrl ? (
         <AddTeamAccountDialog
           open={addOpen}
           onOpenChange={setAddOpen}
-          workerUrl={teamLogin.workerUrl}
+          workerUrl={mailSession.workerUrl}
         />
       ) : (
         <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} />

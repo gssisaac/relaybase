@@ -1,7 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import { formatSenderDisplay, senderInitials } from "./format-sender.ts";
+import {
+  formatFullAddress,
+  formatSenderDisplay,
+  senderInitials,
+} from "./format-sender.ts";
 
 describe("formatSenderDisplay", () => {
   it("prefers the MIME display name when present", () => {
@@ -59,3 +63,42 @@ describe("senderInitials", () => {
     assert.equal(senderInitials(null, ""), "?");
   });
 });
+
+describe("formatFullAddress", () => {
+  it("formats both name and email as Name <email>", () => {
+    assert.equal(
+      formatFullAddress("Isaac Lee", "gssisaac@gmail.com"),
+      "Isaac Lee <gssisaac@gmail.com>",
+    );
+  });
+
+  it("strips outer quotes from name", () => {
+    assert.equal(
+      formatFullAddress('"Isaac Lee"', "gssisaac@gmail.com"),
+      "Isaac Lee <gssisaac@gmail.com>",
+    );
+  });
+
+  it("extracts name and email from compound email string when name is omitted", () => {
+    assert.equal(
+      formatFullAddress(null, "Isaac Lee <gssisaac@gmail.com>"),
+      "Isaac Lee <gssisaac@gmail.com>",
+    );
+  });
+
+  it("returns only email when name is missing", () => {
+    assert.equal(
+      formatFullAddress(null, "gssisaac@gmail.com"),
+      "gssisaac@gmail.com",
+    );
+  });
+
+  it("returns only name when email is missing", () => {
+    assert.equal(formatFullAddress("Isaac Lee", null), "Isaac Lee");
+  });
+
+  it("returns empty string when both are missing", () => {
+    assert.equal(formatFullAddress(null, null), "");
+  });
+});
+

@@ -138,18 +138,18 @@ export function QuotedReplyBlock({
   );
 
   return (
-    <div className={cn("select-none", className)}>
+    <div className={className}>
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
         aria-expanded={expanded}
         aria-label={expanded ? "Collapse quoted text" : "Expand quoted text"}
-        className="inline-flex h-6 items-center justify-center rounded-md border border-border/50 bg-muted/40 px-2 text-xs tracking-widest text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="inline-flex h-6 select-none items-center justify-center rounded-md border border-border/50 bg-muted/40 px-2 text-xs tracking-widest text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         ···
       </button>
       {expanded ? (
-        <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        <div className="mt-2 select-text text-sm leading-relaxed text-muted-foreground">
           <QuoteSegments segments={segments} />
         </div>
       ) : null}

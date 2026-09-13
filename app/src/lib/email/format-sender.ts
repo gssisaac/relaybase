@@ -98,3 +98,36 @@ export function splitRecipients(
   }
   return out;
 }
+
+/**
+ * Format a sender or recipient into full display format e.g. "Isaac Lee <isaac@example.com>",
+ * falling back to email or name if only one is present.
+ */
+export function formatFullAddress(
+  fromName?: string | null,
+  fromEmail?: string | null,
+): string {
+  let name = (fromName ?? "").trim().replace(/^["']|["']$/g, "");
+  let email = (fromEmail ?? "").trim();
+
+  // If name is missing but email contains "Name <email>", extract them
+  if (!name && email) {
+    const parts = splitRecipients(email);
+    if (parts.length > 0 && parts[0]?.email) {
+      if (parts[0].name) name = parts[0].name.trim().replace(/^["']|["']$/g, "");
+      email = parts[0].email.trim();
+    }
+  }
+
+  if (name && email) {
+    return `${name} <${email}>`;
+  }
+  if (email) {
+    return email;
+  }
+  if (name) {
+    return name;
+  }
+  return "";
+}
+

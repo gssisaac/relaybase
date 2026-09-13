@@ -177,7 +177,7 @@ export function InboundEmailBody({
   }
 
   return (
-    <p className="w-full whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+    <p className="w-full whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground select-text">
       {isTextOnly ? extractPlainTextFromEmailHtml(safeHtml) : bodyText}
     </p>
   );
@@ -284,7 +284,7 @@ export function InboundEmailDetail({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 select-text">
       {safeHtml && !isTextOnly ? (
         <EmailHtmlFrame
           html={safeHtml}
@@ -295,12 +295,12 @@ export function InboundEmailDetail({
           }
         />
       ) : plain ? (
-        <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+        <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground select-text">
           {displayText || "(empty message)"}
         </p>
       ) : (
-        <div className="rounded-md border border-border bg-muted/20 p-4">
-          <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+        <div className="rounded-md border border-border bg-muted/20 p-4 select-text">
+          <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground select-text">
             {displayText || "(empty message)"}
           </p>
         </div>

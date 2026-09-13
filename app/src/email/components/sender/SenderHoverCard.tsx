@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,12 @@ import {
   PreviewCardTrigger,
 } from "@/components/ui/preview-card";
 import { SenderAvatar } from "@/email/components/sender/SenderAvatar";
-import { formatSenderDisplay, senderInitials } from "@/lib/email/format-sender";
+import {
+  formatFullAddress,
+  formatSenderDisplay,
+  senderInitials,
+  splitRecipients,
+} from "@/lib/email/format-sender";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,16 +59,32 @@ export function SenderHoverCard({
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const email = (fromEmail ?? "").trim();
-  const displayName = formatSenderDisplay(fromName, fromEmail);
-  const hasName = Boolean(fromName?.trim());
+
+  const { name, email, fullAddress } = useMemo(() => {
+    let n = (fromName ?? "").trim().replace(/^["']|["']$/g, "");
+    let e = (fromEmail ?? "").trim();
+
+    if (!n && e) {
+      const parts = splitRecipients(e);
+      if (parts.length > 0 && parts[0]?.email) {
+        if (parts[0].name) n = parts[0].name.trim().replace(/^["']|["']$/g, "");
+        e = parts[0].email.trim();
+      }
+    }
+
+    const full = formatFullAddress(n, e);
+    return { name: n, email: e, fullAddress: full };
+  }, [fromName, fromEmail]);
+
+  const displayName = formatSenderDisplay(name, email);
+  const hasName = Boolean(name);
 
   async function onCopy(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!email) return;
+    if (!fullAddress) return;
     try {
-      await navigator.clipboard.writeText(email);
+      await navigator.clipboard.writeText(fullAddress);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -86,46 +107,67 @@ export function SenderHoverCard({
       side={side}
       align={align}
       sideOffset={6}
-      className={cn("w-72 p-3", className)}
+      className={cn("w-72 p-3 select-text", className)}
     >
-      <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-primary">
+      <div className="flex items-start gap-3 select-text">
+        <span className="flex size-10 shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-primary/15 text-primary">
           <span className="text-sm font-semibold leading-none">
-            {senderInitials(fromName, fromEmail)}
+            {senderInitials(name, email)}
           </span>
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">
-            {displayName}
-          </p>
+        <div className="min-w-0 flex-1 space-y-0.5 select-text">
           {hasName && email ? (
-            <p className="truncate text-xs text-muted-foreground">{email}</p>
-          ) : null}
+            <>
+              <p className="truncate text-sm font-semibold text-foreground select-text">
+                {displayName}
+              </p>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <p className="truncate text-xs text-muted-foreground select-text">
+                  {email}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-5 shrink-0 select-none text-muted-foreground hover:text-foreground"
+                  onClick={onCopy}
+                  aria-label={copied ? "Copied" : "Copy address"}
+                  title={copied ? "Copied" : "Copy address"}
+                >
+                  {copied ? (
+                    <Check className="size-3 text-emerald-500" />
+                  ) : (
+                    <Copy className="size-3" />
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground select-text">
+                {displayName}
+              </p>
+              {email || name ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-5 shrink-0 select-none text-muted-foreground hover:text-foreground"
+                  onClick={onCopy}
+                  aria-label={copied ? "Copied" : "Copy address"}
+                  title={copied ? "Copied" : "Copy address"}
+                >
+                  {copied ? (
+                    <Check className="size-3 text-emerald-500" />
+                  ) : (
+                    <Copy className="size-3" />
+                  )}
+                </Button>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
-      {email ? (
-        <div className="mt-3 flex items-center justify-end gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={onCopy}
-            aria-label="Copy email address"
-          >
-            {copied ? (
-              <>
-                <Check />
-                Copied
-              </>
-            ) : (
-              <>
-                <Copy />
-                Copy email
-              </>
-            )}
-          </Button>
-        </div>
-      ) : null}
     </PreviewCardContent>
   );
 
@@ -139,7 +181,7 @@ export function SenderHoverCard({
         className={cn("inline-flex", triggerClassName)}
       >
         {children ?? (
-          <SenderAvatar fromName={fromName} fromEmail={fromEmail} />
+          <SenderAvatar fromName={name || fromName} fromEmail={email || fromEmail} />
         )}
       </PreviewCardTrigger>
       {card}

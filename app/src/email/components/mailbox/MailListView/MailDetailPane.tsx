@@ -305,7 +305,7 @@ export function MailDetailPane({
             kind="sent"
           />
         ) : (
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground select-text">
             {m.bodyPreview}
           </pre>
         )}
@@ -481,7 +481,7 @@ export function MailDetailPane({
             attachments={activityDetail.attachments ?? []}
           />
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground select-text">
             {activityDetail.bodyPreview ||
               "No message body available for this email."}
           </p>

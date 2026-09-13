@@ -379,7 +379,7 @@ export function DetailView({
           </div>
         ) : null}
       </div>
-      <div className="min-w-0 flex-1 overflow-auto p-4">{children}</div>
+      <div className="min-w-0 flex-1 overflow-auto p-4 select-text">{children}</div>
     </div>
   );
 }

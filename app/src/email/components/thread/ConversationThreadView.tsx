@@ -516,7 +516,7 @@ export const ConversationThreadView = observer(function ConversationThreadView({
                 <div className="flex shrink-0 items-start gap-3 px-1">
                   {/* Match avatar column so body aligns with from-address. */}
                   <span className="size-7 shrink-0" aria-hidden />
-                  <div className="min-w-0 flex-1 shrink-0 space-y-4 pr-1">
+                  <div className="min-w-0 flex-1 shrink-0 space-y-4 pr-1 select-text">
                     {msg.kind === "inbound" ? (
                       <>
                         <div className="space-y-1 text-sm">

@@ -21,12 +21,20 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { session } = useMailRuntime();
-  const isSignIn = pathname === "/sign-in";
+  const isSignIn =
+    pathname === "/sign-in" ||
+    pathname === "/sign-in/" ||
+    pathname.startsWith("/sign-in/") ||
+    pathname.startsWith("/sign-in?");
   const isEmailSettings =
     pathname === "/mail-settings" ||
+    pathname === "/mail-settings/" ||
     pathname.startsWith("/mail-settings?") ||
+    pathname.startsWith("/mail-settings/") ||
     pathname === "/email/settings" ||
-    pathname.startsWith("/email/settings?");
+    pathname === "/email/settings/" ||
+    pathname.startsWith("/email/settings?") ||
+    pathname.startsWith("/email/settings/");
 
   useEffect(() => {
     if (session.ready && !session.identity && !isSignIn) {

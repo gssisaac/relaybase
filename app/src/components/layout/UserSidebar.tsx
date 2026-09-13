@@ -502,15 +502,30 @@ function EmailModeNav({
     searchParams.get("from")?.trim() ||
     null;
   const inCompose =
-    pathname === "/email/compose" || pathname.startsWith("/email/compose/");
+    pathname === "/compose" ||
+    pathname.startsWith("/compose/") ||
+    pathname === "/email/compose" ||
+    pathname.startsWith("/email/compose/");
   const inInbox =
-    pathname === "/email/inbox" || pathname.startsWith("/email/inbox/");
+    pathname === "/inbox" ||
+    pathname.startsWith("/inbox/") ||
+    pathname === "/email/inbox" ||
+    pathname.startsWith("/email/inbox/");
   const inDrafts =
-    pathname === "/email/drafts" || pathname.startsWith("/email/drafts/");
+    pathname === "/drafts" ||
+    pathname.startsWith("/drafts/") ||
+    pathname === "/email/drafts" ||
+    pathname.startsWith("/email/drafts/");
   const inSent =
-    pathname === "/email/sent" || pathname.startsWith("/email/sent/");
+    pathname === "/sent" ||
+    pathname.startsWith("/sent/") ||
+    pathname === "/email/sent" ||
+    pathname.startsWith("/email/sent/");
   const inTrash =
-    pathname === "/email/trash" || pathname.startsWith("/email/trash/");
+    pathname === "/trash" ||
+    pathname.startsWith("/trash/") ||
+    pathname === "/email/trash" ||
+    pathname.startsWith("/email/trash/");
 
   function handleRemoveAccount(email: string) {
     // Only drops the address from the mail sidebar enable-list (~/.relaybase ui).
@@ -638,7 +653,10 @@ function SendFeedbackButton({
   const href = composeFeedbackHref(account);
   const to = searchParams.get("to")?.trim().toLowerCase();
   const inCompose =
-    pathname === "/email/compose" || pathname.startsWith("/email/compose/");
+    pathname === "/compose" ||
+    pathname.startsWith("/compose/") ||
+    pathname === "/email/compose" ||
+    pathname.startsWith("/email/compose/");
   const active = inCompose && to === FEEDBACK_TO_EMAIL;
 
   return (

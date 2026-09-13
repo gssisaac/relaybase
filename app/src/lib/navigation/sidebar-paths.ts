@@ -6,7 +6,20 @@ export const DEFAULT_DASHBOARD_PATH = "/dashboard";
 const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
 
 export function modeFromPathname(pathname: string): SidebarMode {
-  return pathname === "/email" || pathname.startsWith("/email/")
+  return pathname === "/email" ||
+    pathname.startsWith("/email/") ||
+    pathname === "/inbox" ||
+    pathname.startsWith("/inbox/") ||
+    pathname === "/compose" ||
+    pathname.startsWith("/compose/") ||
+    pathname === "/drafts" ||
+    pathname.startsWith("/drafts/") ||
+    pathname === "/sent" ||
+    pathname.startsWith("/sent/") ||
+    pathname === "/trash" ||
+    pathname.startsWith("/trash/") ||
+    pathname === "/mail-settings" ||
+    pathname.startsWith("/mail-settings/")
     ? "email"
     : "dashboard";
 }

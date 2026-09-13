@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hq-relaybase-web-app",
+  "compatibility_date": "2026-07-12",
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "relaybase.email", "custom_domain": true },
+    { "pattern": "www.relaybase.email", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "single-page-application"
+  }
+}

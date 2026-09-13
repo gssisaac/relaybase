@@ -7,6 +7,8 @@ import { BootScreen } from "@/console/components/setup/BootScreen";
 import { TeamLoginView } from "@/console/components/setup/TeamLoginView";
 import { UnlockView } from "@/console/components/setup/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 
 /**
  * Shared phase switch for `/` (outside the shell) and the dashboard gate.
@@ -24,6 +26,15 @@ export function SessionPhaseScreen({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!isDesktopRuntime()) {
+      const auth = getWebTeamAuth();
+      if (auth) {
+        router.replace("/inbox");
+      } else {
+        router.replace("/sign-in");
+      }
+      return;
+    }
     const path = window.location.pathname;
     if (phase.kind === "choice" && path !== "/setup") {
       router.replace("/setup");

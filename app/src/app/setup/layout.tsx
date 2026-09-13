@@ -7,7 +7,9 @@ import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { useDesktopChrome } from "@/lib/desktop/shell";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 
 /** Setup routes that must finish even when a keyring session already exists. */
 const SETUP_CONTINUE_PATHS = [
@@ -68,6 +70,24 @@ function SetupShell({ children }: { children: ReactNode }) {
 }
 
 export default function SetupLayout({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const isDesktop = isDesktopRuntime();
+
+  useEffect(() => {
+    if (!isDesktop) {
+      const auth = getWebTeamAuth();
+      if (auth) {
+        router.replace("/inbox");
+      } else {
+        router.replace("/sign-in");
+      }
+    }
+  }, [isDesktop, router]);
+
+  if (!isDesktop) {
+    return null;
+  }
+
   // DesktopProvider + AppSessionProvider live at the root layout now, so
   // setup and the dashboard shell share one session.
   return (

@@ -20,7 +20,7 @@ import {
   writeAvailableAddresses,
 } from "@/email/lib/accounts/available-addresses";
 import type { Address } from "@/email/components/mailbox/types";
-import type { DesktopTeamLogin } from "@/lib/desktop/bridge";
+import type { AuthSession } from "@/mail-platform/types";
 import {
   desktopAwareFetch,
   friendlyDesktopFetchError,
@@ -45,9 +45,7 @@ export class MailAccountsStore {
 
   private userId = "";
   private apiBase = "/api/email";
-  private teamLogin: DesktopTeamLogin | null = null;
-  private workerUrl = "";
-  private desktopReady = false;
+  private session: AuthSession | null = null;
   private hydrated = false;
   private prefsReady = false;
   private started = false;
@@ -81,29 +79,21 @@ export class MailAccountsStore {
   }
 
   get isTeamMode(): boolean {
-    return Boolean(this.teamLogin);
+    return Boolean(this.session?.isTeamMode);
   }
 
   configure(input: {
     userId: string;
     apiBase: string;
-    teamLogin?: DesktopTeamLogin | null;
-    workerUrl?: string;
-    desktopReady?: boolean;
+    session?: AuthSession | null;
   }) {
     const userChanged = this.userId !== input.userId;
     const apiChanged =
       this.apiBase !== (input.apiBase.replace(/\/$/, "") || "/api/email");
-    const teamChanged = this.teamLogin !== (input.teamLogin ?? null);
-    const workerChanged =
-      this.workerUrl !== (input.workerUrl?.trim() ?? "");
-    const readyChanged =
-      this.desktopReady !== Boolean(input.desktopReady);
+    const sessionChanged = this.session !== (input.session ?? null);
     this.userId = input.userId;
     this.apiBase = input.apiBase.replace(/\/$/, "") || "/api/email";
-    this.teamLogin = input.teamLogin ?? null;
-    this.workerUrl = input.workerUrl?.trim() ?? "";
-    this.desktopReady = Boolean(input.desktopReady);
+    this.session = input.session ?? null;
     if (userChanged) {
       this.hydrated = false;
       this.phase = "none";
@@ -112,7 +102,7 @@ export class MailAccountsStore {
     if (
       this.started &&
       this.phase === "done" &&
-      (userChanged || apiChanged || teamChanged || workerChanged || readyChanged)
+      (userChanged || apiChanged || sessionChanged)
     ) {
       void this.refreshAddresses({ background: true });
     }
@@ -132,6 +122,17 @@ export class MailAccountsStore {
       this.phase = "loading";
       this.error = null;
     });
+
+    // Team / web mode: the authenticated account is the only one in scope.
+    // Seed it directly from the session and skip disk hydration + admin API.
+    if (this.session?.isTeamMode && this.session.accountEmail) {
+      this.seedTeamAccount(this.session.accountEmail);
+      runInAction(() => {
+        this.phase = "done";
+      });
+      return;
+    }
+
     const hadCatalog = await this.hydrateCatalog();
     if (this.primaryGeneration !== generation) return;
 
@@ -148,6 +149,21 @@ export class MailAccountsStore {
     runInAction(() => {
       this.phase = "done";
     });
+  }
+
+  /** Seed the single authenticated account for team / web sessions. */
+  private seedTeamAccount(accountEmail: string) {
+    const email = accountEmail.toLowerCase();
+    const seeded: Address = { email, domain: email.split("@")[1] ?? "" };
+    runInAction(() => {
+      this.availableAddresses = [seeded];
+      this.enabledAccounts = [email];
+      this.error = null;
+      this.hydrated = true;
+    });
+    writeEnabledAccounts(this.userId, [email]);
+    writeAvailableAddresses(this.userId, [seeded]);
+    this.ensureColors();
   }
 
   /** Disk catalog + enable-list. Seeds catalog from enable-list on first upgrade. */
@@ -195,34 +211,23 @@ export class MailAccountsStore {
     background?: boolean;
   }): Promise<void> {
     if (!this.apiBase) return;
-    if (!this.desktopReady) return;
 
     const isPrimary = Boolean(opts?.primary) || this.phase === "loading";
 
-    if (!this.teamLogin && !this.workerUrl) {
+    // Team / web mode: re-seed the single authenticated account.
+    if (this.session?.isTeamMode && this.session.accountEmail) {
+      this.seedTeamAccount(this.session.accountEmail);
+      return;
+    }
+
+    // Owner console mode requires a connected worker.
+    if (!this.session?.workerUrl) {
       if (isPrimary) {
         runInAction(() => {
           this.error =
             "Worker is not connected. Finish setup to load live mail.";
         });
       }
-      return;
-    }
-
-    // Team mode: the authenticated account is the only one in scope. Seed it
-    // directly from teamLogin instead of calling the admin /console/addresses
-    // endpoint (team users have no owner session).
-    if (this.teamLogin) {
-      const email = this.teamLogin.accountEmail.toLowerCase();
-      const seeded: Address = { email, domain: email.split("@")[1] ?? "" };
-      runInAction(() => {
-        this.availableAddresses = [seeded];
-        this.enabledAccounts = [email];
-        this.error = null;
-      });
-      writeEnabledAccounts(this.userId, [email]);
-      writeAvailableAddresses(this.userId, [seeded]);
-      this.ensureColors();
       return;
     }
 

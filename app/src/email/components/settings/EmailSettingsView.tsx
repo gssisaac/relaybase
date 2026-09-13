@@ -39,10 +39,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
+import { useMailRuntime } from "@/mail-platform/runtime";
 import { ACCOUNT_COLOR_PALETTE } from "@/email/lib/accounts/account-colors";
 import { useEmailPaths } from "@/email/lib/paths";
 import { clearEmailCache } from "@/email/components/mailbox/email-cached-fetch";
-import { useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
+import { useDesktopChrome } from "@/lib/desktop/shell";
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
   signOutRedirectPath,
@@ -71,11 +72,11 @@ export function EmailSettingsView() {
   const searchParams = useSearchParams();
   const productId = useProductId();
   const { apiBase, inbox } = useEmailPaths();
-  const { teamLogin } = useDesktop();
+  const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
   const { dragRegionProps, dragRegionClassName, noDragClassName } =
     useDesktopChrome();
-  const isTeam = Boolean(teamLogin);
+  const isTeam = mailSession.isTeamMode;
   const {
     availableAddresses,
     enabledAddresses,
@@ -92,16 +93,16 @@ export function EmailSettingsView() {
   const accounts = useMemo(
     () =>
       isTeam
-        ? teamLogin
+        ? mailSession.accountEmail
           ? [
               {
-                email: teamLogin.accountEmail,
-                domain: teamLogin.accountEmail.split("@")[1] ?? "",
+                email: mailSession.accountEmail,
+                domain: mailSession.accountEmail.split("@")[1] ?? "",
               },
             ]
           : []
         : enabledAddresses,
-    [enabledAddresses, isTeam, teamLogin],
+    [enabledAddresses, isTeam, mailSession.accountEmail],
   );
 
   const accountFromUrl =
@@ -145,7 +146,7 @@ export function EmailSettingsView() {
     let cancelled = false;
     async function load() {
       if (!activeEmail) return;
-      if (isTeam && teamLogin) {
+      if (isTeam && mailSession.accountEmail) {
         try {
           const res = await teamWorkerFetch(`/mobile/profile`);
           const data = (await res.json().catch(() => ({}))) as
@@ -184,7 +185,7 @@ export function EmailSettingsView() {
     accountColors,
     getSignature,
     isTeam,
-    teamLogin,
+    mailSession.accountEmail,
   ]);
 
   const identityDirty = displayName !== savedDisplayName;
@@ -197,7 +198,7 @@ export function EmailSettingsView() {
     setSavingIdentity(true);
     setError(null);
     try {
-      if (isTeam && teamLogin) {
+      if (isTeam && mailSession.accountEmail) {
         const res = await teamWorkerFetch(`/mobile/profile`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -262,17 +263,26 @@ export function EmailSettingsView() {
     if (!activeEmail) return;
     removeEnabledAccount(activeEmail);
     setDisableOpen(false);
-    router.push("/email/inbox");
+    router.push(inbox);
   }
 
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOutRelaybase(isTeam, session);
-      router.replace(signOutRedirectPath(isTeam, session));
+      if (!mailSession.isDesktop) {
+        await mailSession.logout();
+        router.replace("/sign-in");
+      } else {
+        await signOutRelaybase(isTeam, session);
+        router.replace(signOutRedirectPath(isTeam, session));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign out failed");
-      router.replace(signOutRedirectPath(isTeam, session));
+      router.replace(
+        mailSession.isDesktop
+          ? signOutRedirectPath(isTeam, session)
+          : "/sign-in",
+      );
     } finally {
       setSigningOut(false);
     }

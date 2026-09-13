@@ -19,6 +19,7 @@ import {
   writeDesktopSessionCache,
 } from "./session-cache";
 import { clearAllDashboardClientCache } from "@/lib/dashboard/shared/dashboard-client-cache";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 
 type DesktopContextValue = {
   isDesktop: boolean;
@@ -96,16 +97,28 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
           /* best-effort one-shot */
         }
       }
+      const webAuth = !desktop ? getWebTeamAuth() : null;
       [creds, team] = desktop
         ? await Promise.all([desktopGetCredentials(), desktopGetTeamLogin()])
-        : [await loadLocalCredentials(), null];
+        : [
+            await loadLocalCredentials(),
+            webAuth
+              ? {
+                  workerUrl: webAuth.workerUrl,
+                  accountEmail: webAuth.accountEmail,
+                  mobilePassword: webAuth.mobilePassword ?? "",
+                }
+              : null,
+          ];
       setCredentials(creds);
       setTeamLogin(team);
-      applyCredentialGlobals(creds);
+      applyCredentialGlobals(creds ?? (webAuth ? ({ workerUrl: webAuth.workerUrl } as DesktopCredentials) : null));
       // Resolve the opaque scope id so downstream stores can detect account
       // switches. Clear the in-memory session cache on scope change so stale
       // MobX state does not bleed across accounts.
-      const scopeId = desktop ? await desktopGetAccountScopeId() : "s-legacy";
+      const scopeId = desktop
+        ? await desktopGetAccountScopeId()
+        : (webAuth?.accountEmail || "s-legacy");
       setAccountScopeId((prev) => {
         if (prev && prev !== scopeId) {
           clearDesktopSessionCache();

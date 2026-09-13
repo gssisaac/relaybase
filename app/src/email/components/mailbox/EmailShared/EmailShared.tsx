@@ -554,6 +554,8 @@ export function EmailAlerts({
     ? `Unlock with ${biometryLabel(0, store.ownerStatus.platform)}`
     : "Unlock dashboard";
 
+  const isDesktop = isDesktopRuntime();
+
   return (
     <>
       {shownError ? (
@@ -564,7 +566,7 @@ export function EmailAlerts({
           </AlertTitle>
           <AlertDescription>
             <FormattedErrorText text={shownError} />
-            {needsConsoleUnlock ? (
+            {needsConsoleUnlock && isDesktop ? (
               <Button
                 type="button"
                 size="sm"
@@ -576,7 +578,7 @@ export function EmailAlerts({
                 <Fingerprint className="size-3.5" />
                 {unlockLabel}
               </Button>
-            ) : needsWorkerUpdate ? (
+            ) : needsWorkerUpdate && isDesktop ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -586,7 +588,7 @@ export function EmailAlerts({
               >
                 Open Worker update
               </Button>
-            ) : isEmailApiNotConfiguredError(shownError) ? (
+            ) : isEmailApiNotConfiguredError(shownError) && isDesktop ? (
               <Button
                 type="button"
                 size="sm"

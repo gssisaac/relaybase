@@ -10,7 +10,7 @@ import {
 import { reaction } from "mobx";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useDesktop } from "@/lib/desktop/shell";
+import { useMailRuntime } from "@/mail-platform/runtime";
 import { useEmailPaths } from "@/email/lib/paths";
 import {
   MailAccountsStore,
@@ -47,18 +47,16 @@ const MailAccountsStoreContext = createContext<MailAccountsStore | null>(null);
 export function MailAccountsProvider({ children }: { children: ReactNode }) {
   const userId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { teamLogin, credentials, ready } = useDesktop();
+  const { session } = useMailRuntime();
   const [store] = useState(() => new MailAccountsStore());
 
   useEffect(() => {
     store.configure({
       userId,
       apiBase,
-      teamLogin,
-      workerUrl: credentials?.workerUrl,
-      desktopReady: ready,
+      session,
     });
-  }, [store, userId, apiBase, teamLogin, credentials?.workerUrl, ready]);
+  }, [store, userId, apiBase, session]);
 
   useEffect(() => {
     store.start();

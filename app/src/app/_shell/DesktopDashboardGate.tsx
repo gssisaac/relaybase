@@ -1,12 +1,13 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Suspense, useEffect, type ReactNode } from "react";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
 import { UserSidebar } from "@/components/layout/UserSidebar";
+import { ConsoleAppProviders } from "@/mail-platform/runtime";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
 import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
@@ -16,6 +17,8 @@ import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
 import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -162,11 +165,48 @@ export function DesktopDashboardGate({
   /** Ignored — kept for call-site compatibility during migration. */
   userId?: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isDesktop = isDesktopRuntime();
+
+  useEffect(() => {
+    if (!isDesktop) {
+      const search =
+        typeof window !== "undefined" ? window.location.search : "";
+      if (pathname === "/email/inbox" || pathname === "/email") {
+        router.replace(`/inbox${search}`);
+      } else if (pathname === "/email/sent") {
+        router.replace(`/sent${search}`);
+      } else if (pathname === "/email/drafts") {
+        router.replace(`/drafts${search}`);
+      } else if (pathname === "/email/trash") {
+        router.replace(`/trash${search}`);
+      } else if (pathname === "/email/compose") {
+        router.replace(`/compose${search}`);
+      } else if (pathname === "/email/settings") {
+        router.replace(`/mail-settings${search}`);
+      } else {
+        const auth = getWebTeamAuth();
+        if (auth) {
+          router.replace(`/inbox${search}`);
+        } else {
+          router.replace("/sign-in");
+        }
+      }
+    }
+  }, [isDesktop, pathname, router]);
+
+  if (!isDesktop) {
+    return null;
+  }
+
   return (
     <DesktopShell>
-      <EnableEmailApiDialogHost>
-        <GateInner>{children}</GateInner>
-      </EnableEmailApiDialogHost>
+      <ConsoleAppProviders>
+        <EnableEmailApiDialogHost>
+          <GateInner>{children}</GateInner>
+        </EnableEmailApiDialogHost>
+      </ConsoleAppProviders>
     </DesktopShell>
   );
 }

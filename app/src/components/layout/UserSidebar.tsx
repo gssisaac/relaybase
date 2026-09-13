@@ -85,7 +85,7 @@ import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
 import { useSendingHealth } from "@/lib/dashboard/SendingHealthContext";
-import { useDesktop } from "@/lib/desktop/shell";
+import { useMailRuntime } from "@/mail-platform/runtime";
 import { useAppSession } from "@/lib/desktop/app-session";
 import {
   signOutRedirectPath,
@@ -502,15 +502,30 @@ function EmailModeNav({
     searchParams.get("from")?.trim() ||
     null;
   const inCompose =
-    pathname === "/email/compose" || pathname.startsWith("/email/compose/");
+    pathname === "/compose" ||
+    pathname.startsWith("/compose/") ||
+    pathname === "/email/compose" ||
+    pathname.startsWith("/email/compose/");
   const inInbox =
-    pathname === "/email/inbox" || pathname.startsWith("/email/inbox/");
+    pathname === "/inbox" ||
+    pathname.startsWith("/inbox/") ||
+    pathname === "/email/inbox" ||
+    pathname.startsWith("/email/inbox/");
   const inDrafts =
-    pathname === "/email/drafts" || pathname.startsWith("/email/drafts/");
+    pathname === "/drafts" ||
+    pathname.startsWith("/drafts/") ||
+    pathname === "/email/drafts" ||
+    pathname.startsWith("/email/drafts/");
   const inSent =
-    pathname === "/email/sent" || pathname.startsWith("/email/sent/");
+    pathname === "/sent" ||
+    pathname.startsWith("/sent/") ||
+    pathname === "/email/sent" ||
+    pathname.startsWith("/email/sent/");
   const inTrash =
-    pathname === "/email/trash" || pathname.startsWith("/email/trash/");
+    pathname === "/trash" ||
+    pathname.startsWith("/trash/") ||
+    pathname === "/email/trash" ||
+    pathname.startsWith("/email/trash/");
 
   function handleRemoveAccount(email: string) {
     // Only drops the address from the mail sidebar enable-list (~/.relaybase ui).
@@ -638,7 +653,10 @@ function SendFeedbackButton({
   const href = composeFeedbackHref(account);
   const to = searchParams.get("to")?.trim().toLowerCase();
   const inCompose =
-    pathname === "/email/compose" || pathname.startsWith("/email/compose/");
+    pathname === "/compose" ||
+    pathname.startsWith("/compose/") ||
+    pathname === "/email/compose" ||
+    pathname.startsWith("/email/compose/");
   const active = inCompose && to === FEEDBACK_TO_EMAIL;
 
   return (
@@ -749,10 +767,10 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const searchParams = useSearchParams();
   const userId = useProductId();
   const router = useRouter();
-  const { teamLogin } = useDesktop();
+  const { session: mailSession } = useMailRuntime();
   const session = useAppSession();
   const { settings: settingsHref } = useEmailPaths();
-  const isTeam = teamMode || Boolean(teamLogin);
+  const isTeam = teamMode || mailSession.isTeamMode;
   const { availableAddresses, enabledAccounts } = useMailAccounts();
   const enabledSet = useMemo(
     () => new Set(enabledAccounts.map((e) => e.toLowerCase())),
@@ -773,10 +791,12 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   const mode: SidebarMode = isTeam ? "email" : detectedMode;
   const {
     isDesktop,
+    isMacOS,
     dragRegionClassName,
     dragRegionProps,
     noDragClassName,
   } = useDesktopChrome();
+  const macDesktopChrome = isDesktop && isMacOS;
 
   useEffect(() => {
     let cancelled = false;
@@ -820,10 +840,15 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await signOutRelaybase(isTeam, session);
-      router.replace(signOutRedirectPath(isTeam, session));
+      if (!mailSession.isDesktop) {
+        await mailSession.logout();
+        router.replace("/sign-in");
+      } else {
+        await signOutRelaybase(isTeam, session);
+        router.replace(signOutRedirectPath(isTeam, session));
+      }
     } catch {
-      router.replace(signOutRedirectPath(isTeam, session));
+      router.replace(mailSession.isDesktop ? signOutRedirectPath(isTeam, session) : "/sign-in");
     } finally {
       setSigningOut(false);
       setSignOutOpen(false);
@@ -919,21 +944,23 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
           </div>
         ) : (
           <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "fixed top-1 left-[84px] z-20 shrink-0",
-                noDragClassName,
-              )}
-              data-tauri-drag-region="false"
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-              onClick={toggleCollapsed}
-            >
-              <PanelLeftClose />
-            </Button>
+            {macDesktopChrome ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "fixed top-1 left-[84px] z-20 shrink-0",
+                  noDragClassName,
+                )}
+                data-tauri-drag-region="false"
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                onClick={toggleCollapsed}
+              >
+                <PanelLeftClose />
+              </Button>
+            ) : null}
             <div
               className={cn("space-y-2 px-3 py-3", noDragClassName)}
               {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
@@ -972,13 +999,28 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                {isTeam ? null : (
-                  <ModeSwitchButton
-                    mode={mode}
-                    collapsed={false}
-                    onClick={switchModeTarget}
-                  />
-                )}
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {isTeam ? null : (
+                    <ModeSwitchButton
+                      mode={mode}
+                      collapsed={false}
+                      onClick={switchModeTarget}
+                    />
+                  )}
+                  {macDesktopChrome ? null : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0"
+                      aria-label="Collapse sidebar"
+                      title="Collapse sidebar"
+                      onClick={toggleCollapsed}
+                    >
+                      <PanelLeftClose />
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </>
@@ -1023,11 +1065,11 @@ export function UserSidebar({ teamMode = false }: { teamMode?: boolean } = {}) {
         />
       </div>
 
-      {isTeam && teamLogin ? (
+      {isTeam && mailSession.workerUrl ? (
         <AddTeamAccountDialog
           open={addOpen}
           onOpenChange={setAddOpen}
-          workerUrl={teamLogin.workerUrl}
+          workerUrl={mailSession.workerUrl}
         />
       ) : (
         <AddEmailAccountDialog open={addOpen} onOpenChange={setAddOpen} />

@@ -92,7 +92,7 @@ try {
     console.log("→ Stashed (shell)/[...path] catch-all for static export");
   }
 
-  run("pnpm", ["exec", "next", "build"], { DESKTOP_BUILD: "1" });
+  run("pnpm", ["exec", "next", "build", "--webpack"], { DESKTOP_BUILD: "1" });
 
   console.log("✓ Desktop static export ready at app/out");
 } finally {

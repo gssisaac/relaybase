@@ -6,6 +6,7 @@ import {
   desktopWorkerRequest,
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 
 export type DesktopWorkerResponse = {
   status: number;
@@ -123,29 +124,43 @@ export async function teamWorkerFetch(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
-  if (!isDesktopRuntime()) {
-    throw new Error("Team session is only available in the desktop app.");
-  }
-  const headers: Record<string, string> = {};
-  if (init?.headers) {
-    new Headers(init.headers).forEach((value, key) => {
-      headers[key] = value;
+  if (isDesktopRuntime()) {
+    const headers: Record<string, string> = {};
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => {
+        headers[key] = value;
+      });
+    }
+    if (init?.body && !headers["Content-Type"] && !headers["content-type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+    let body: string | undefined;
+    if (typeof init?.body === "string") {
+      body = init.body;
+    } else if (init?.body) {
+      body = String(init.body);
+    }
+    const result = await desktopTeamWorkerRequest({
+      method: (init?.method ?? "GET").toUpperCase(),
+      path,
+      headers,
+      body,
     });
+    return responseFromDesktopWorker(result);
   }
-  if (init?.body && !headers["Content-Type"] && !headers["content-type"]) {
-    headers["Content-Type"] = "application/json";
+
+  // Web mode: use the active team session in memory / sessionStorage.
+  const auth = getWebTeamAuth();
+  if (!auth) {
+    throw new Error("Team session is not signed in.");
   }
-  let body: string | undefined;
-  if (typeof init?.body === "string") {
-    body = init.body;
-  } else if (init?.body) {
-    body = String(init.body);
+  const base = auth.workerUrl.replace(/\/$/, "");
+  const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${auth.mobilePassword}`);
+  headers.set("X-Account-Email", auth.accountEmail);
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
-  const result = await desktopTeamWorkerRequest({
-    method: (init?.method ?? "GET").toUpperCase(),
-    path,
-    headers,
-    body,
-  });
-  return responseFromDesktopWorker(result);
+  return fetch(url, { ...init, headers });
 }

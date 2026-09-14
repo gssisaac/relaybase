@@ -265,6 +265,8 @@ export type AudienceGroupContact = {
   groupId: string;
   source: "manual" | "synced";
   addedAt: string;
+  sendStatus: "active" | "unsubscribed";
+  unsubscribedAt: string | null;
 };
 
 export type BroadcastSendPhase = "preparing" | "sending" | "done";

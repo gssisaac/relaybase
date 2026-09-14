@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
-import { useBroadcastDetail } from "@/crm/pages/campaigns/BroadcastDetailContext";
-import { useCampaignDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
+import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import {
   useCampaignEditorPersistence,
   type CampaignPersistBridge,
@@ -20,15 +19,8 @@ function mapSaveStatus(status: SaveStatus | null): "idle" | "saving" | "error" {
 }
 
 export function BroadcastContentView() {
-  const { templates } = useCampaignDetail();
-  const {
-    campaignId,
-    broadcastId,
-    broadcast,
-    syncDraft,
-    persistDraft,
-    getLastSavedDraft,
-  } = useBroadcastDetail();
+  const { broadcastId, broadcast, templates, syncDraft, persistDraft, getLastSavedDraft } =
+    useBroadcastDetail();
 
   const [subject, setSubject] = useState(broadcast?.subject ?? "");
   const [bodyMarkdown, setBodyMarkdown] = useState(broadcast?.bodyMarkdown ?? "");
@@ -53,7 +45,7 @@ export function BroadcastContentView() {
 
   const { editorRef, ingestBody, checkpoint, saveStatus } = useCampaignEditorPersistence({
     campaignId: broadcastId,
-    beaconPath: `${campaignId}/broadcasts/${broadcastId}`,
+    beaconPath: `broadcasts/${broadcastId}`,
     editable: Boolean(editable),
     bridge,
   });
@@ -106,7 +98,6 @@ export function BroadcastContentView() {
         </div>
       ) : null}
       <BroadcastComposeForm
-        campaignId={campaignId}
         broadcastId={broadcastId}
         editorRef={editorRef}
         templates={templates}

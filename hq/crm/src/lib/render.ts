@@ -11,24 +11,24 @@ export function markdownToHtml(markdown: string): string {
   return typeof out === "string" ? out : "";
 }
 
-/** Mirrors app/src/lib/markdown-editor/utils/assets.ts campaignAssetStem (no DOM/browser deps here). */
-function campaignAssetStem(campaignId: string): string {
-  return campaignId.replace(/^campaign_/, "").slice(0, 32) || "campaign";
+/** Mirrors app/src/lib/markdown-editor/utils/assets.ts broadcastAssetStem (no DOM/browser deps here). */
+function broadcastAssetStem(broadcastId: string): string {
+  return broadcastId.replace(/^broadcast_/, "").slice(0, 32) || "broadcast";
 }
 
 /** Resolve a page-relative `./.{stem}/{filename}` href to an absolute CDN asset URL, or null if not one. */
-function resolveRelativeCampaignAssetUrl(
-  campaignId: string,
+function resolveRelativeBroadcastAssetUrl(
+  broadcastId: string,
   crmBaseUrl: string,
   href: string,
 ): string | null {
   if (!href || /^(https?:|data:|blob:)/i.test(href)) return null;
   const relative = href.replace(/^\.\//, "");
-  const folder = `.${campaignAssetStem(campaignId)}`;
+  const folder = `.${broadcastAssetStem(broadcastId)}`;
   if (!relative.startsWith(`${folder}/`)) return null;
   const filename = relative.slice(folder.length + 1);
   if (!filename || filename.includes("..")) return null;
-  return `${crmBaseUrl}/crm/assets/${encodeURIComponent(campaignId)}/${encodeURIComponent(filename)}`;
+  return `${crmBaseUrl}/crm/assets/${encodeURIComponent(broadcastId)}/${encodeURIComponent(filename)}`;
 }
 
 const IMG_TAG_RE = /<img\b[^>]*>/gi;
@@ -43,9 +43,9 @@ const EMAIL_IMG_STYLE = "display:block;max-width:100%;height:auto;";
  * - Strips any Base64 data URI (Gmail/Outlook block or corrupt these outright).
  * - Adds mandatory email-safe `alt`/`style` attributes for Outlook/Gmail rendering.
  */
-export function sanitizeCampaignContentImages(
+export function sanitizeBroadcastContentImages(
   html: string,
-  campaignId: string,
+  broadcastId: string,
   crmBaseUrl: string,
 ): string {
   return html.replace(IMG_TAG_RE, (tag) => {
@@ -53,7 +53,7 @@ export function sanitizeCampaignContentImages(
     if (/^data:image\//i.test(src)) return "";
 
     let nextTag = tag;
-    const resolved = resolveRelativeCampaignAssetUrl(campaignId, crmBaseUrl, src);
+    const resolved = resolveRelativeBroadcastAssetUrl(broadcastId, crmBaseUrl, src);
     if (resolved) {
       nextTag = nextTag.replace(SRC_ATTR_RE, `src="${resolved}"`);
     }
@@ -81,7 +81,6 @@ export type RenderRecipientInput = {
 };
 
 export type RenderBroadcastInput = {
-  campaignId: string;
   broadcastId: string;
   recipientId: string;
   bodyMarkdown: string;
@@ -92,12 +91,12 @@ export type RenderBroadcastInput = {
 };
 
 export function renderBroadcastForRecipient(input: RenderBroadcastInput): string {
-  const contentHtml = sanitizeCampaignContentImages(
+  const contentHtml = sanitizeBroadcastContentImages(
     markdownToHtml(input.bodyMarkdown),
-    input.campaignId,
+    input.broadcastId,
     input.crmBaseUrl,
   );
-  const unsubscribeUrl = `${input.crmBaseUrl}/crm/unsubscribe/${input.campaignId}/${input.unsubscribeToken}`;
+  const unsubscribeUrl = `${input.crmBaseUrl}/crm/unsubscribe/${input.broadcastId}/${input.unsubscribeToken}`;
 
   let html = input.templateHtml
     .replaceAll("{{content}}", contentHtml)

@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
  * Recipients and Send live on the Publish tab.
  */
 export function BroadcastComposeForm({
-  campaignId,
   broadcastId,
   editorRef,
   templates,
@@ -30,8 +29,7 @@ export function BroadcastComposeForm({
   saveState,
   onSave,
 }: {
-  /** Real campaign id — asset upload namespace only. */
-  campaignId: string;
+  /** Broadcast id — asset upload namespace (`/crm/broadcasts/:id/assets`). */
   broadcastId: string;
   editorRef: RefObject<MarkdownEditorHandle | null>;
   templates: CrmTemplate[];
@@ -99,7 +97,7 @@ export function BroadcastComposeForm({
               <MarkdownEditor
                 ref={editorRef}
                 key={broadcastId}
-                campaignId={campaignId}
+                campaignId={broadcastId}
                 documentId={broadcastId}
                 value={bodyMarkdown}
                 onChange={onBodyChange}

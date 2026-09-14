@@ -1,18 +1,52 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { Broadcast, Campaign, Subscriber } from "../db/types";
-import { newId } from "../lib/ids";
+import type { Broadcast, BroadcastMember } from "../db/types";
+import { findAudienceGroup, syncBroadcastAudienceFromGroup } from "../lib/broadcast-audience-sync";
+import { newId, newToken } from "../lib/ids";
 import { renderBroadcastForRecipient } from "../lib/render";
 import { sendMail } from "../lib/mail-sender";
+import { crmBroadcastAudience } from "./broadcast-audience";
 
 export const crmBroadcasts = new Hono();
 
 const CRM_BASE_URL = process.env.CRM_PUBLIC_BASE_URL ?? "http://localhost:32831";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function slugify(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function findBroadcast(id: string): Broadcast | undefined {
+  return store.read().broadcasts.find((b) => b.id === id && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
+}
+
+function audienceActiveCount(broadcastId: string): number {
+  return store.read().broadcastMembers.filter(
+    (m) => m.broadcastId === broadcastId && m.status === "active",
+  ).length;
+}
 
 function serialize(row: Broadcast) {
+  const group = row.audienceGroupId ? findAudienceGroup(row.audienceGroupId) : undefined;
   return {
     id: row.id,
-    campaignId: row.campaignId,
+    name: row.name,
+    slug: row.slug,
+    description: row.description ?? null,
+    audienceGroupId: row.audienceGroupId || null,
+    audienceGroupName: group?.name ?? null,
+    audienceGroupDomain: group?.domain ?? null,
+    audienceContactCount: group?.contacts.length ?? null,
+    fromName: row.fromName ?? null,
+    fromEmail: row.fromEmail ?? null,
+    replyTo: row.replyTo ?? null,
+    defaultTemplateId: row.defaultTemplateId ?? null,
+    listStatus: row.listStatus,
     subject: row.subject,
     previewText: row.previewText ?? null,
     bodyMarkdown: row.bodyMarkdown,
@@ -21,17 +55,10 @@ function serialize(row: Broadcast) {
     scheduledAt: row.scheduledAt ?? null,
     sentAt: row.sentAt ?? null,
     stats: row.stats,
+    audienceActiveCount: audienceActiveCount(row.id),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
-}
-
-function findCampaign(campaignId: string): Campaign | undefined {
-  return store.read().campaigns.find((c) => c.id === campaignId && c.accountLinkId === DEV_ACCOUNT_LINK_ID);
-}
-
-function findBroadcast(campaignId: string, broadcastId: string): Broadcast | undefined {
-  return store.read().broadcasts.find((b) => b.id === broadcastId && b.campaignId === campaignId);
 }
 
 function getTemplateHtml(templateId: string | null | undefined): string | null {
@@ -39,32 +66,29 @@ function getTemplateHtml(templateId: string | null | undefined): string | null {
   return store.read().templates.find((t) => t.id === templateId)?.htmlSource ?? null;
 }
 
-/** Active, deliverable subscribers for a campaign at this exact moment (spec §1.3 late-binding). */
-export function resolveActiveSubscribers(campaignId: string): Subscriber[] {
+/** Active deliverable audience members at send time (late-binding). */
+export function resolveActiveAudienceMembers(broadcastId: string): BroadcastMember[] {
   const data = store.read();
   const suppressed = new Set(data.accountSuppressions.map((s) => s.email));
-  return data.subscribers.filter(
-    (s) => s.campaignId === campaignId && s.status === "subscribed" && !suppressed.has(s.email),
+  return data.broadcastMembers.filter(
+    (m) => m.broadcastId === broadcastId && m.status === "active" && !suppressed.has(m.email),
   );
 }
 
-/** UC-D2: rate-limited sequential dispatch against a resolved subscriber snapshot. */
-export async function dispatchBroadcastToSubscribers(
+export async function dispatchBroadcastToAudience(
   broadcast: Broadcast,
-  subscribers: Subscriber[],
+  members: BroadcastMember[],
 ): Promise<{ sent: number; failed: number; skipped: number }> {
-  const campaign = findCampaign(broadcast.campaignId);
   const now = new Date().toISOString();
 
   store.update((draft) => {
-    for (const s of subscribers) {
+    for (const m of members) {
       draft.recipients.push({
         id: newId("recipient"),
         broadcastId: broadcast.id,
-        subscriberId: s.id,
-        campaignId: broadcast.campaignId,
-        email: s.email,
-        name: s.name ?? null,
+        broadcastMemberId: m.id,
+        email: m.email,
+        name: m.name ?? null,
         status: "queued",
         errorMessage: null,
         sentAt: null,
@@ -78,7 +102,7 @@ export async function dispatchBroadcastToSubscribers(
   });
 
   const templateHtml =
-    getTemplateHtml(broadcast.templateId ?? campaign?.defaultTemplateId) ?? "<div>{{content}}</div>";
+    getTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ?? "<div>{{content}}</div>";
 
   let sent = 0;
   let failed = 0;
@@ -88,8 +112,8 @@ export async function dispatchBroadcastToSubscribers(
     .recipients.filter((r) => r.broadcastId === broadcast.id && r.status === "queued");
 
   for (const recipient of queued) {
-    const subscriber = store.read().subscribers.find((s) => s.id === recipient.subscriberId);
-    if (!subscriber || subscriber.status !== "subscribed") {
+    const member = store.read().broadcastMembers.find((m) => m.id === recipient.broadcastMemberId);
+    if (!member || member.status !== "active") {
       skipped += 1;
       store.update((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
@@ -99,13 +123,12 @@ export async function dispatchBroadcastToSubscribers(
     }
 
     const html = renderBroadcastForRecipient({
-      campaignId: broadcast.campaignId,
       broadcastId: broadcast.id,
       recipientId: recipient.id,
       bodyMarkdown: broadcast.bodyMarkdown,
       templateHtml,
       recipient: { email: recipient.email, name: recipient.name },
-      unsubscribeToken: subscriber.unsubscribeToken,
+      unsubscribeToken: member.unsubscribeToken,
       crmBaseUrl: CRM_BASE_URL,
     });
     const result = await sendMail({ to: recipient.email, subject: broadcast.subject, html });
@@ -139,22 +162,52 @@ export async function dispatchBroadcastToSubscribers(
   return { sent, failed, skipped };
 }
 
-// GET /crm/campaigns/:campaignId/broadcasts
+crmBroadcasts.route("/:broadcastId/audience", crmBroadcastAudience);
+
+// GET /crm/broadcasts
 crmBroadcasts.get("/", (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  if (!findCampaign(campaignId)) return c.json({ error: "not found" }, 404);
   const rows = store
     .read()
-    .broadcasts.filter((b) => b.campaignId === campaignId)
+    .broadcasts.filter((b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return c.json({ broadcasts: rows.map(serialize) });
 });
 
-// POST /crm/campaigns/:campaignId/broadcasts — UC-B1
+// POST /crm/broadcasts { name, audienceGroupId, ... }
 crmBroadcasts.post("/", async (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const campaign = findCampaign(campaignId);
-  if (!campaign) return c.json({ error: "not found" }, 404);
+  let body: {
+    name?: string;
+    audienceGroupId?: string;
+    slug?: string;
+    fromName?: string;
+    fromEmail?: string;
+    replyTo?: string;
+    defaultTemplateId?: string;
+  } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    /* empty */
+  }
+
+  const name = body.name?.trim();
+  if (!name) return c.json({ error: "Broadcast name is required" }, 400);
+  const audienceGroupId = body.audienceGroupId?.trim();
+  if (!audienceGroupId) return c.json({ error: "Select an audience group for this broadcast" }, 400);
+  const audienceGroup = findAudienceGroup(audienceGroupId);
+  if (!audienceGroup) return c.json({ error: "Audience group not found" }, 404);
+  if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
+    return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
+  }
+
+  const data = store.read();
+  const baseSlug = slugify(body.slug?.trim() || name) || newId("broadcast").slice(0, 12);
+  let slug = baseSlug;
+  let suffix = 2;
+  while (data.broadcasts.some((row) => row.accountLinkId === DEV_ACCOUNT_LINK_ID && row.slug === slug)) {
+    slug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
 
   const id = newId("broadcast");
   const now = new Date().toISOString();
@@ -163,11 +216,19 @@ crmBroadcasts.post("/", async (c) => {
     created = {
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
-      campaignId,
+      name,
+      slug,
+      description: null,
+      audienceGroupId,
+      fromName: body.fromName?.trim() || null,
+      fromEmail: body.fromEmail?.trim() || audienceGroup.defaultFrom || null,
+      replyTo: body.replyTo?.trim() || null,
+      defaultTemplateId: body.defaultTemplateId || null,
+      listStatus: "active",
       subject: "",
       previewText: null,
       bodyMarkdown: "",
-      templateId: campaign.defaultTemplateId ?? null,
+      templateId: body.defaultTemplateId || null,
       status: "draft",
       scheduledAt: null,
       sentAt: null,
@@ -179,58 +240,112 @@ crmBroadcasts.post("/", async (c) => {
     draft.broadcasts.push(created);
   });
 
+  syncBroadcastAudienceFromGroup(created!.id, audienceGroupId);
   return c.json(serialize(created!), 201);
 });
 
-// GET /crm/campaigns/:campaignId/broadcasts/:broadcastId
-crmBroadcasts.get("/:broadcastId", (c) => {
-  const row = findBroadcast(c.req.param("campaignId")!, c.req.param("broadcastId")!);
+// GET /crm/broadcasts/:id
+crmBroadcasts.get("/:id", (c) => {
+  const row = findBroadcast(c.req.param("id")!);
   if (!row) return c.json({ error: "not found" }, 404);
   return c.json(serialize(row));
 });
 
-// PATCH /crm/campaigns/:campaignId/broadcasts/:broadcastId — UC-B2 autosave
-crmBroadcasts.patch("/:broadcastId", async (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const broadcastId = c.req.param("broadcastId")!;
-  const existing = findBroadcast(campaignId, broadcastId);
+// PATCH /crm/broadcasts/:id
+crmBroadcasts.patch("/:id", async (c) => {
+  const id = c.req.param("id")!;
+  const existing = findBroadcast(id);
   if (!existing) return c.json({ error: "not found" }, 404);
-  if (existing.status !== "draft") {
-    return c.json({ error: "sent broadcasts are locked — duplicate as a new draft to edit" }, 409);
-  }
 
-  let body: { subject?: string; previewText?: string; bodyMarkdown?: string; templateId?: string };
+  let body: {
+    name?: string;
+    slug?: string;
+    description?: string | null;
+    fromName?: string | null;
+    fromEmail?: string | null;
+    replyTo?: string | null;
+    defaultTemplateId?: string | null;
+    listStatus?: "active" | "archived";
+    subject?: string;
+    previewText?: string;
+    bodyMarkdown?: string;
+    templateId?: string;
+  };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: "invalid JSON body" }, 400);
   }
 
+  if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
+    return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
+  }
+
+  const contentTouched =
+    body.subject !== undefined ||
+    body.previewText !== undefined ||
+    body.bodyMarkdown !== undefined ||
+    body.templateId !== undefined;
+
+  if (contentTouched && existing.status !== "draft") {
+    return c.json({ error: "sent broadcasts are locked — duplicate as a new draft to edit" }, 409);
+  }
+
+  if (body.listStatus === "archived" && existing.listStatus !== "archived") {
+    const sending = store.read().broadcasts.find((b) => b.id === id && b.status === "sending");
+    if (sending) {
+      return c.json(
+        {
+          error: `Cannot archive broadcast while '${sending.subject || sending.name}' is currently sending.`,
+        },
+        409,
+      );
+    }
+  }
+
+  const now = new Date().toISOString();
   let updated: Broadcast | null = null;
   store.update((draft) => {
-    const idx = draft.broadcasts.findIndex((r) => r.id === broadcastId);
+    const idx = draft.broadcasts.findIndex((r) => r.id === id);
     if (idx < 0) return;
     const prev = draft.broadcasts[idx]!;
     draft.broadcasts[idx] = {
       ...prev,
+      name: body.name?.trim() || prev.name,
+      slug: body.slug?.trim() ? slugify(body.slug) : prev.slug,
+      description: body.description !== undefined ? body.description : prev.description,
+      fromName: body.fromName !== undefined ? body.fromName?.trim() || null : prev.fromName,
+      fromEmail: body.fromEmail !== undefined ? body.fromEmail?.trim() || null : prev.fromEmail,
+      replyTo: body.replyTo !== undefined ? body.replyTo?.trim() || null : prev.replyTo,
+      defaultTemplateId:
+        body.defaultTemplateId !== undefined ? body.defaultTemplateId : prev.defaultTemplateId,
+      listStatus: body.listStatus ?? prev.listStatus,
       subject: body.subject ?? prev.subject,
       previewText: body.previewText !== undefined ? body.previewText : prev.previewText,
       bodyMarkdown: body.bodyMarkdown ?? prev.bodyMarkdown,
       templateId: body.templateId !== undefined ? body.templateId : prev.templateId,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     };
     updated = draft.broadcasts[idx]!;
+
+    if (body.listStatus === "archived" && prev.listStatus !== "archived" && prev.status === "scheduled") {
+      draft.scheduledJobs = draft.scheduledJobs.filter(
+        (j) => !(j.kind === "broadcast" && j.refId === id && j.status === "pending"),
+      );
+      draft.broadcasts[idx] = {
+        ...draft.broadcasts[idx]!,
+        status: "draft",
+        scheduledAt: null,
+      };
+    }
   });
 
   return c.json(serialize(updated!));
 });
 
-// POST /crm/campaigns/:campaignId/broadcasts/:broadcastId/test-send { to } — UC-B3
-crmBroadcasts.post("/:broadcastId/test-send", async (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const broadcast = findBroadcast(campaignId, c.req.param("broadcastId")!);
+crmBroadcasts.post("/:id/test-send", async (c) => {
+  const broadcast = findBroadcast(c.req.param("id")!);
   if (!broadcast) return c.json({ error: "not found" }, 404);
-  const campaign = findCampaign(campaignId);
 
   let body: { to?: string };
   try {
@@ -244,9 +359,8 @@ crmBroadcasts.post("/:broadcastId/test-send", async (c) => {
   }
 
   const templateHtml =
-    getTemplateHtml(broadcast.templateId ?? campaign?.defaultTemplateId) ?? "<div>{{content}}</div>";
+    getTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ?? "<div>{{content}}</div>";
   const html = renderBroadcastForRecipient({
-    campaignId,
     broadcastId: broadcast.id,
     recipientId: "test",
     bodyMarkdown: broadcast.bodyMarkdown,
@@ -262,11 +376,9 @@ crmBroadcasts.post("/:broadcastId/test-send", async (c) => {
   return c.json({ ok: true });
 });
 
-// POST /crm/campaigns/:campaignId/broadcasts/:broadcastId/send — UC-B4
-crmBroadcasts.post("/:broadcastId/send", async (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const broadcastId = c.req.param("broadcastId")!;
-  const broadcast = findBroadcast(campaignId, broadcastId);
+crmBroadcasts.post("/:id/send", async (c) => {
+  const id = c.req.param("id")!;
+  const broadcast = findBroadcast(id);
   if (!broadcast) return c.json({ error: "not found" }, 404);
   if (broadcast.status !== "draft") {
     return c.json({ error: `cannot send from status "${broadcast.status}"` }, 409);
@@ -275,35 +387,33 @@ crmBroadcasts.post("/:broadcastId/send", async (c) => {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
   }
 
-  const subscribers = resolveActiveSubscribers(campaignId);
-  if (subscribers.length === 0) {
+  const members = resolveActiveAudienceMembers(id);
+  if (members.length === 0) {
     return c.json(
-      { error: "Cannot send broadcast: This campaign has 0 active subscribers. Add subscribers before sending." },
+      { error: "Cannot send: this broadcast has 0 active audience members. Sync from audience first." },
       400,
     );
   }
 
   const now = new Date().toISOString();
   store.update((draft) => {
-    const idx = draft.broadcasts.findIndex((r) => r.id === broadcastId);
+    const idx = draft.broadcasts.findIndex((r) => r.id === id);
     if (idx >= 0) {
       draft.broadcasts[idx] = { ...draft.broadcasts[idx]!, status: "sending", sentAt: now, updatedAt: now };
     }
   });
 
-  const result = await dispatchBroadcastToSubscribers(
-    store.read().broadcasts.find((b) => b.id === broadcastId)!,
-    subscribers,
+  const result = await dispatchBroadcastToAudience(
+    store.read().broadcasts.find((b) => b.id === id)!,
+    members,
   );
-  const row = store.read().broadcasts.find((r) => r.id === broadcastId)!;
+  const row = store.read().broadcasts.find((r) => r.id === id)!;
   return c.json({ broadcast: serialize(row), ...result });
 });
 
-// POST /crm/campaigns/:campaignId/broadcasts/:broadcastId/schedule { runAt } — UC-B5
-crmBroadcasts.post("/:broadcastId/schedule", async (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const broadcastId = c.req.param("broadcastId")!;
-  const broadcast = findBroadcast(campaignId, broadcastId);
+crmBroadcasts.post("/:id/schedule", async (c) => {
+  const id = c.req.param("id")!;
+  const broadcast = findBroadcast(id);
   if (!broadcast) return c.json({ error: "not found" }, 404);
   if (broadcast.status !== "draft") {
     return c.json({ error: `cannot schedule from status "${broadcast.status}"` }, 409);
@@ -329,12 +439,12 @@ crmBroadcasts.post("/:broadcastId/schedule", async (c) => {
       id: newId("job"),
       accountLinkId: DEV_ACCOUNT_LINK_ID,
       kind: "broadcast",
-      refId: broadcastId,
+      refId: id,
       runAt,
       status: "pending",
       createdAt: now,
     });
-    const idx = draft.broadcasts.findIndex((r) => r.id === broadcastId);
+    const idx = draft.broadcasts.findIndex((r) => r.id === id);
     if (idx >= 0) {
       draft.broadcasts[idx] = {
         ...draft.broadcasts[idx]!,
@@ -345,14 +455,12 @@ crmBroadcasts.post("/:broadcastId/schedule", async (c) => {
     }
   });
 
-  return c.json(serialize(store.read().broadcasts.find((r) => r.id === broadcastId)!));
+  return c.json(serialize(store.read().broadcasts.find((r) => r.id === id)!));
 });
 
-// POST /crm/campaigns/:campaignId/broadcasts/:broadcastId/cancel-schedule — UC-B6
-crmBroadcasts.post("/:broadcastId/cancel-schedule", async (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const broadcastId = c.req.param("broadcastId")!;
-  const broadcast = findBroadcast(campaignId, broadcastId);
+crmBroadcasts.post("/:id/cancel-schedule", async (c) => {
+  const id = c.req.param("id")!;
+  const broadcast = findBroadcast(id);
   if (!broadcast) return c.json({ error: "not found" }, 404);
   if (broadcast.status !== "scheduled") {
     return c.json({ error: "Cannot cancel: Broadcast dispatch has already begun." }, 409);
@@ -361,9 +469,9 @@ crmBroadcasts.post("/:broadcastId/cancel-schedule", async (c) => {
   const now = new Date().toISOString();
   store.update((draft) => {
     draft.scheduledJobs = draft.scheduledJobs.filter(
-      (j) => !(j.kind === "broadcast" && j.refId === broadcastId && j.status === "pending"),
+      (j) => !(j.kind === "broadcast" && j.refId === id && j.status === "pending"),
     );
-    const idx = draft.broadcasts.findIndex((r) => r.id === broadcastId);
+    const idx = draft.broadcasts.findIndex((r) => r.id === id);
     if (idx >= 0) {
       draft.broadcasts[idx] = {
         ...draft.broadcasts[idx]!,
@@ -374,51 +482,62 @@ crmBroadcasts.post("/:broadcastId/cancel-schedule", async (c) => {
     }
   });
 
-  return c.json(serialize(store.read().broadcasts.find((r) => r.id === broadcastId)!));
+  return c.json(serialize(store.read().broadcasts.find((r) => r.id === id)!));
 });
 
-// POST /crm/campaigns/:campaignId/broadcasts/:broadcastId/duplicate — UC-B7
-crmBroadcasts.post("/:broadcastId/duplicate", (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const source = findBroadcast(campaignId, c.req.param("broadcastId")!);
+crmBroadcasts.post("/:id/duplicate", (c) => {
+  const source = findBroadcast(c.req.param("id")!);
   if (!source) return c.json({ error: "not found" }, 404);
 
   const id = newId("broadcast");
   const now = new Date().toISOString();
+  const baseSlug = `${source.slug}-copy`;
+  let slug = baseSlug;
+  let suffix = 2;
+  while (store.read().broadcasts.some((b) => b.slug === slug)) {
+    slug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
   let created: Broadcast | null = null;
   store.update((draft) => {
     created = {
+      ...source,
       id,
-      accountLinkId: DEV_ACCOUNT_LINK_ID,
-      campaignId,
-      subject: source.subject,
-      previewText: source.previewText ?? null,
-      bodyMarkdown: source.bodyMarkdown,
-      templateId: source.templateId ?? null,
+      name: `${source.name} (copy)`,
+      slug,
       status: "draft",
       scheduledAt: null,
       sentAt: null,
-      targetFilter: undefined,
       stats: { sent: 0, opened: 0, clicked: 0, failed: 0 },
       createdAt: now,
       updatedAt: now,
     };
     draft.broadcasts.push(created);
+
+    for (const m of draft.broadcastMembers.filter((x) => x.broadcastId === source.id)) {
+      draft.broadcastMembers.push({
+        ...m,
+        id: newId("member"),
+        broadcastId: id,
+        unsubscribeToken: newToken(),
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
   });
 
   return c.json(serialize(created!), 201);
 });
 
-// GET /crm/campaigns/:campaignId/broadcasts/:broadcastId/stats — UC-D3
-crmBroadcasts.get("/:broadcastId/stats", (c) => {
-  const campaignId = c.req.param("campaignId")!;
-  const broadcastId = c.req.param("broadcastId")!;
-  const broadcast = findBroadcast(campaignId, broadcastId);
+crmBroadcasts.get("/:id/stats", (c) => {
+  const id = c.req.param("id")!;
+  const broadcast = findBroadcast(id);
   if (!broadcast) return c.json({ error: "not found" }, 404);
 
   const recipients = store
     .read()
-    .recipients.filter((r) => r.broadcastId === broadcastId)
+    .recipients.filter((r) => r.broadcastId === id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return c.json({

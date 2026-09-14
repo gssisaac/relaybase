@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -12,97 +13,155 @@ import {
 import {
   crmApi,
   type Broadcast,
-  type Campaign,
+  type BroadcastMember,
   type CrmTemplate,
-  type Subscriber,
 } from "@/lib/crm/api";
 
+type DraftFields = { subject: string; bodyMarkdown: string; templateId: string };
+
 type Ctx = {
-  campaignId: string;
-  campaign: Campaign | null;
+  broadcastId: string;
+  broadcast: Broadcast | null;
   templates: CrmTemplate[];
-  subscribers: Subscriber[];
-  broadcasts: Broadcast[];
+  audienceMembers: BroadcastMember[];
   loading: boolean;
   notFound: boolean;
-  setCampaign: (campaign: Campaign) => void;
+  setBroadcast: (broadcast: Broadcast) => void;
   refresh: () => Promise<void>;
-  refreshSubscribers: () => Promise<void>;
-  refreshBroadcasts: () => Promise<void>;
+  refreshAudience: () => Promise<void>;
+  syncDraft: (fields: DraftFields) => void;
+  persistDraft: () => Promise<boolean>;
+  getLastSavedDraft: () => DraftFields;
 };
 
-const CampaignDetailCtx = createContext<Ctx | null>(null);
+const BroadcastDetailCtx = createContext<Ctx | null>(null);
 
-export function CampaignDetailProvider({
-  campaignId,
+export function BroadcastDetailProvider({
+  broadcastId,
   children,
 }: {
-  campaignId: string;
+  broadcastId: string;
   children: ReactNode;
 }) {
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [broadcast, setBroadcast] = useState<Broadcast | null>(null);
   const [templates, setTemplates] = useState<CrmTemplate[]>([]);
-  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  const [audienceMembers, setAudienceMembers] = useState<BroadcastMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const refreshSubscribers = useCallback(async () => {
-    const { subscribers: rows } = await crmApi.listSubscribers(campaignId);
-    setSubscribers(rows);
-  }, [campaignId]);
+  const draftRef = useRef<DraftFields>({ subject: "", bodyMarkdown: "", templateId: "" });
+  const lastSaved = useRef<DraftFields | null>(null);
+  const persistInFlight = useRef<Promise<boolean> | null>(null);
+  const broadcastRef = useRef<Broadcast | null>(null);
+  broadcastRef.current = broadcast;
 
-  const refreshBroadcasts = useCallback(async () => {
-    const { broadcasts: rows } = await crmApi.listBroadcasts(campaignId);
-    setBroadcasts(rows);
-  }, [campaignId]);
+  const refreshAudience = useCallback(async () => {
+    const { members } = await crmApi.listBroadcastAudience(broadcastId);
+    setAudienceMembers(members);
+  }, [broadcastId]);
 
   const refresh = useCallback(async () => {
     try {
-      const [c, t] = await Promise.all([crmApi.getCampaign(campaignId), crmApi.listTemplates()]);
-      setCampaign(c);
+      const [b, t] = await Promise.all([
+        crmApi.getBroadcast(broadcastId),
+        crmApi.listTemplates(),
+      ]);
+      setBroadcast(b);
       setTemplates(t.templates);
       setNotFound(false);
-      await Promise.all([refreshSubscribers(), refreshBroadcasts()]);
+      const fields = {
+        subject: b.subject,
+        bodyMarkdown: b.bodyMarkdown,
+        templateId: b.templateId ?? "",
+      };
+      draftRef.current = fields;
+      lastSaved.current = fields;
+      await refreshAudience();
     } catch (err) {
       const status = err && typeof err === "object" && "status" in err ? err.status : null;
       if (status === 404) setNotFound(true);
-      setCampaign(null);
+      setBroadcast(null);
     } finally {
       setLoading(false);
     }
-  }, [campaignId, refreshSubscribers, refreshBroadcasts]);
+  }, [broadcastId, refreshAudience]);
 
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
+    lastSaved.current = null;
     void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignId]);
+  }, [refresh]);
+
+  const syncDraft = useCallback((fields: DraftFields) => {
+    draftRef.current = fields;
+  }, []);
+
+  const getLastSavedDraft = useCallback((): DraftFields => {
+    return lastSaved.current ?? draftRef.current;
+  }, []);
+
+  const persistDraft = useCallback((): Promise<boolean> => {
+    const current = broadcastRef.current;
+    if (!current || current.status !== "draft") return Promise.resolve(true);
+    if (persistInFlight.current) return persistInFlight.current;
+
+    const next = draftRef.current;
+    const prev = lastSaved.current;
+    if (
+      prev &&
+      prev.subject === next.subject &&
+      prev.bodyMarkdown === next.bodyMarkdown &&
+      prev.templateId === next.templateId
+    ) {
+      return Promise.resolve(true);
+    }
+
+    const run = crmApi
+      .updateBroadcast(broadcastId, next)
+      .then((updated) => {
+        lastSaved.current = next;
+        setBroadcast(updated);
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => {
+        persistInFlight.current = null;
+      });
+    persistInFlight.current = run;
+    return run;
+  }, [broadcastId]);
 
   return (
-    <CampaignDetailCtx.Provider
+    <BroadcastDetailCtx.Provider
       value={{
-        campaignId,
-        campaign,
+        broadcastId,
+        broadcast,
         templates,
-        subscribers,
-        broadcasts,
+        audienceMembers,
         loading,
         notFound,
-        setCampaign,
+        setBroadcast,
         refresh,
-        refreshSubscribers,
-        refreshBroadcasts,
+        refreshAudience,
+        syncDraft,
+        persistDraft,
+        getLastSavedDraft,
       }}
     >
       {children}
-    </CampaignDetailCtx.Provider>
+    </BroadcastDetailCtx.Provider>
   );
 }
 
-export function useCampaignDetail() {
-  const ctx = useContext(CampaignDetailCtx);
-  if (!ctx) throw new Error("useCampaignDetail must be used inside CampaignDetailProvider");
+export function useBroadcastDetail() {
+  const ctx = useContext(BroadcastDetailCtx);
+  if (!ctx) throw new Error("useBroadcastDetail must be used inside BroadcastDetailProvider");
   return ctx;
 }
+
+/** @deprecated use useBroadcastDetail */
+export const useCampaignDetail = useBroadcastDetail;
+
+/** @deprecated use BroadcastDetailProvider */
+export const CampaignDetailProvider = BroadcastDetailProvider;

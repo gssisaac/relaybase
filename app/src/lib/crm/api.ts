@@ -1,22 +1,9 @@
 /**
- * hq/crm is a separate service from the customer Worker (crm-mode-v0.2.md
- * §1.3) — CRM pages talk to it directly, not through `desktopAwareFetch` /
- * `email-api-map`. No auth wired up yet (single dev account server-side);
- * this client just points at the CRM base URL.
- *
- * Data model: Campaign (consent scope / container) -> Subscriber
- * (campaign-scoped opt-in) -> Broadcast (atomic send) -> Recipient
- * (send-time snapshot). See
- * docs/features/crm-campaign-broadcast-subscriber-model.md.
+ * hq/crm client — Broadcast (audience + send) model.
  */
 import { CRM_API_BASE } from "./api-base";
 
 export { CRM_API_BASE };
-
-export type CampaignRecipient = {
-  email: string;
-  name?: string | null;
-};
 
 export type CrmTemplate = {
   id: string;
@@ -26,22 +13,17 @@ export type CrmTemplate = {
   createdAt: string;
 };
 
-export type CampaignDataSource = {
-  type: "generic_json";
-  endpointUrl: string;
-  credential?: string;
-  credentialHeader?: string;
-  cronEnabled?: boolean;
-  cronIntervalMinutes?: number;
-  lastSyncAt?: string;
-  lastSyncStatus?: "success" | "error";
-  lastSyncError?: string;
-  lastSyncCount?: number;
+export type BroadcastListStatus = "active" | "archived";
+export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+
+export type BroadcastStats = {
+  sent: number;
+  opened: number;
+  clicked: number;
+  failed: number;
 };
 
-export type CampaignStatus = "active" | "archived";
-
-export type Campaign = {
+export type Broadcast = {
   id: string;
   name: string;
   slug: string;
@@ -54,44 +36,7 @@ export type Campaign = {
   fromEmail: string | null;
   replyTo: string | null;
   defaultTemplateId: string | null;
-  status: CampaignStatus;
-  dataSource?: CampaignDataSource;
-  subscriberCount: number;
-  broadcastCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type SubscriberStatus = "subscribed" | "unsubscribed" | "pending" | "bounced";
-export type SubscriberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
-
-export type Subscriber = {
-  id: string;
-  campaignId: string;
-  audienceMemberId: string | null;
-  email: string;
-  name: string | null;
-  status: SubscriberStatus;
-  source: SubscriberSource;
-  unsubscribedAt: string | null;
-  bouncedAt: string | null;
-  bounceReason: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
-
-export type BroadcastStats = {
-  sent: number;
-  opened: number;
-  clicked: number;
-  failed: number;
-};
-
-export type Broadcast = {
-  id: string;
-  campaignId: string;
+  listStatus: BroadcastListStatus;
   subject: string;
   previewText: string | null;
   bodyMarkdown: string;
@@ -100,6 +45,25 @@ export type Broadcast = {
   scheduledAt: string | null;
   sentAt: string | null;
   stats: BroadcastStats;
+  audienceActiveCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BroadcastMemberStatus = "active" | "unsubscribed" | "pending" | "bounced";
+export type BroadcastMemberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
+
+export type BroadcastMember = {
+  id: string;
+  broadcastId: string;
+  audienceMemberId: string | null;
+  email: string;
+  name: string | null;
+  status: BroadcastMemberStatus;
+  source: BroadcastMemberSource;
+  unsubscribedAt: string | null;
+  bouncedAt: string | null;
+  bounceReason: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -151,9 +115,8 @@ export const crmApi = {
       body: JSON.stringify(input),
     }),
 
-  // --- Campaigns (consent scope / container) ---
-  listCampaigns: () => crmFetch<{ campaigns: Campaign[] }>("/crm/campaigns"),
-  createCampaign: (input: {
+  listBroadcasts: () => crmFetch<{ broadcasts: Broadcast[] }>("/crm/broadcasts"),
+  createBroadcast: (input: {
     name: string;
     audienceGroupId: string;
     slug?: string;
@@ -161,9 +124,9 @@ export const crmApi = {
     fromEmail?: string;
     replyTo?: string;
     defaultTemplateId?: string;
-  }) => crmFetch<Campaign>("/crm/campaigns", { method: "POST", body: JSON.stringify(input) }),
-  getCampaign: (id: string) => crmFetch<Campaign>(`/crm/campaigns/${id}`),
-  updateCampaign: (
+  }) => crmFetch<Broadcast>("/crm/broadcasts", { method: "POST", body: JSON.stringify(input) }),
+  getBroadcast: (id: string) => crmFetch<Broadcast>(`/crm/broadcasts/${id}`),
+  updateBroadcast: (
     id: string,
     input: Partial<{
       name: string;
@@ -173,108 +136,85 @@ export const crmApi = {
       fromEmail: string | null;
       replyTo: string | null;
       defaultTemplateId: string | null;
-      status: CampaignStatus;
-      dataSource: Partial<CampaignDataSource> | null;
+      listStatus: BroadcastListStatus;
+      subject: string;
+      previewText: string;
+      bodyMarkdown: string;
+      templateId: string;
     }>,
-  ) => crmFetch<Campaign>(`/crm/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
-  archiveCampaign: (id: string) =>
-    crmFetch<Campaign>(`/crm/campaigns/${id}`, {
+  ) => crmFetch<Broadcast>(`/crm/broadcasts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  archiveBroadcast: (id: string) =>
+    crmFetch<Broadcast>(`/crm/broadcasts/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "archived" }),
+      body: JSON.stringify({ listStatus: "archived" }),
     }),
-  unarchiveCampaign: (id: string) =>
-    crmFetch<Campaign>(`/crm/campaigns/${id}`, {
+  unarchiveBroadcast: (id: string) =>
+    crmFetch<Broadcast>(`/crm/broadcasts/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "active" }),
+      body: JSON.stringify({ listStatus: "active" }),
     }),
 
-  // --- Subscribers (campaign-scoped consent) ---
-  listSubscribers: (campaignId: string, params?: { status?: string; q?: string }) => {
+  listBroadcastAudience: (broadcastId: string, params?: { status?: string; q?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
     if (params?.q) qs.set("q", params.q);
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
-    return crmFetch<{ subscribers: Subscriber[] }>(`/crm/campaigns/${campaignId}/subscribers${suffix}`);
+    return crmFetch<{ members: BroadcastMember[] }>(
+      `/crm/broadcasts/${broadcastId}/audience${suffix}`,
+    );
   },
-  addSubscriber: (campaignId: string, input: { email: string; name?: string; resubscribe?: boolean }) =>
-    crmFetch<Subscriber>(`/crm/campaigns/${campaignId}/subscribers`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  importSubscribers: (campaignId: string, rows: Array<{ email: string; name?: string }>) =>
+  syncBroadcastAudience: (broadcastId: string) =>
     crmFetch<{ added: number; updated: number; skipped: number }>(
-      `/crm/campaigns/${campaignId}/subscribers/import`,
-      { method: "POST", body: JSON.stringify({ rows }) },
-    ),
-  importSubscribersFromAudienceGroup: (campaignId: string, groupId: string) =>
-    crmFetch<{ added: number; updated: number; skipped: number }>(
-      `/crm/campaigns/${campaignId}/subscribers/import-from-audience-group`,
-      { method: "POST", body: JSON.stringify({ groupId }) },
-    ),
-  syncSubscribers: (campaignId: string) =>
-    crmFetch<{ added: number; updated: number; skipped: number }>(
-      `/crm/campaigns/${campaignId}/subscribers/sync`,
+      `/crm/broadcasts/${broadcastId}/audience/sync`,
       { method: "POST" },
     ),
-  removeSubscriber: (campaignId: string, subscriberId: string) =>
-    crmFetch<{ ok: true }>(`/crm/campaigns/${campaignId}/subscribers/${subscriberId}`, {
+  removeBroadcastAudienceMember: (broadcastId: string, memberId: string) =>
+    crmFetch<{ ok: true }>(`/crm/broadcasts/${broadcastId}/audience/${memberId}`, {
       method: "DELETE",
     }),
-  updateSubscriber: (campaignId: string, subscriberId: string, input: { status: "subscribed" | "unsubscribed" }) =>
-    crmFetch<Subscriber>(`/crm/campaigns/${campaignId}/subscribers/${subscriberId}`, {
+  updateBroadcastAudienceMember: (
+    broadcastId: string,
+    memberId: string,
+    input: { status: "active" | "unsubscribed" },
+  ) =>
+    crmFetch<BroadcastMember>(`/crm/broadcasts/${broadcastId}/audience/${memberId}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
 
-  // --- Broadcasts (atomic send events) ---
-  listBroadcasts: (campaignId: string) =>
-    crmFetch<{ broadcasts: Broadcast[] }>(`/crm/campaigns/${campaignId}/broadcasts`),
-  createBroadcast: (campaignId: string) =>
-    crmFetch<Broadcast>(`/crm/campaigns/${campaignId}/broadcasts`, { method: "POST" }),
-  getBroadcast: (campaignId: string, broadcastId: string) =>
-    crmFetch<Broadcast>(`/crm/campaigns/${campaignId}/broadcasts/${broadcastId}`),
-  updateBroadcast: (
-    campaignId: string,
-    broadcastId: string,
-    input: Partial<{ subject: string; previewText: string; bodyMarkdown: string; templateId: string }>,
-  ) =>
-    crmFetch<Broadcast>(`/crm/campaigns/${campaignId}/broadcasts/${broadcastId}`, {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    }),
-  testSendBroadcast: (campaignId: string, broadcastId: string, to: string) =>
-    crmFetch<{ ok: true }>(`/crm/campaigns/${campaignId}/broadcasts/${broadcastId}/test-send`, {
+  testSendBroadcast: (broadcastId: string, to: string) =>
+    crmFetch<{ ok: true }>(`/crm/broadcasts/${broadcastId}/test-send`, {
       method: "POST",
       body: JSON.stringify({ to }),
     }),
-  sendBroadcast: (campaignId: string, broadcastId: string) =>
+  sendBroadcast: (broadcastId: string) =>
     crmFetch<{ broadcast: Broadcast; sent: number; failed: number; skipped: number }>(
-      `/crm/campaigns/${campaignId}/broadcasts/${broadcastId}/send`,
+      `/crm/broadcasts/${broadcastId}/send`,
       { method: "POST" },
     ),
-  scheduleBroadcast: (campaignId: string, broadcastId: string, runAt: string) =>
-    crmFetch<Broadcast>(`/crm/campaigns/${campaignId}/broadcasts/${broadcastId}/schedule`, {
+  scheduleBroadcast: (broadcastId: string, runAt: string) =>
+    crmFetch<Broadcast>(`/crm/broadcasts/${broadcastId}/schedule`, {
       method: "POST",
       body: JSON.stringify({ runAt }),
     }),
-  cancelSchedule: (campaignId: string, broadcastId: string) =>
-    crmFetch<Broadcast>(`/crm/campaigns/${campaignId}/broadcasts/${broadcastId}/cancel-schedule`, {
+  cancelSchedule: (broadcastId: string) =>
+    crmFetch<Broadcast>(`/crm/broadcasts/${broadcastId}/cancel-schedule`, {
       method: "POST",
     }),
-  duplicateBroadcast: (campaignId: string, broadcastId: string) =>
-    crmFetch<Broadcast>(`/crm/campaigns/${campaignId}/broadcasts/${broadcastId}/duplicate`, {
+  duplicateBroadcast: (broadcastId: string) =>
+    crmFetch<Broadcast>(`/crm/broadcasts/${broadcastId}/duplicate`, {
       method: "POST",
     }),
-  getBroadcastStats: (campaignId: string, broadcastId: string) =>
+  getBroadcastStats: (broadcastId: string) =>
     crmFetch<{ broadcast: Broadcast; recipients: BroadcastRecipient[] }>(
-      `/crm/campaigns/${campaignId}/broadcasts/${broadcastId}/stats`,
+      `/crm/broadcasts/${broadcastId}/stats`,
     ),
 
-  uploadCampaignAsset: (
-    campaignId: string,
+  uploadBroadcastAsset: (
+    broadcastId: string,
     input: { filename: string; mimeType: string; contentBase64: string },
   ) =>
-    crmFetch<{ url: string; key: string }>(`/crm/campaigns/${campaignId}/assets`, {
+    crmFetch<{ url: string; key: string }>(`/crm/broadcasts/${broadcastId}/assets`, {
       method: "POST",
       body: JSON.stringify(input),
     }),

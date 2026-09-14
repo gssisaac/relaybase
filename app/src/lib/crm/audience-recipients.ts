@@ -1,10 +1,14 @@
-import type { CampaignRecipient } from "@/lib/crm/api";
 import { crmAudienceApi } from "@/lib/crm/audience-api";
 
+export type AudienceRecipient = {
+  email: string;
+  name?: string | null;
+};
+
 /** Unique recipients across all CRM audience groups. */
-export async function fetchAllAudienceRecipients(): Promise<CampaignRecipient[]> {
+export async function fetchAllAudienceRecipients(): Promise<AudienceRecipient[]> {
   const { groups } = await crmAudienceApi.listGroups();
-  const byEmail = new Map<string, CampaignRecipient>();
+  const byEmail = new Map<string, AudienceRecipient>();
 
   for (const group of groups) {
     const detail = await crmAudienceApi.getGroup(group.id);

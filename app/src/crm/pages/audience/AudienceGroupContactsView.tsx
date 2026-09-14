@@ -23,6 +23,24 @@ import {
 import { audienceContactDisplayName } from "@/lib/audience-display";
 import { CrmApiError, crmAudienceApi } from "@/lib/crm/audience-api";
 
+import { cn } from "@/lib/utils";
+
+const SEND_STATUS_STYLE = {
+  active: "border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  unsubscribed: "border-border bg-muted text-muted-foreground",
+} as const;
+
+function SendStatusBadge({ status }: { status: "active" | "unsubscribed" }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn("text-[10px] capitalize", SEND_STATUS_STYLE[status])}
+    >
+      {status === "active" ? "subscribed" : status}
+    </Badge>
+  );
+}
+
 function friendlyCrmError(e: unknown, fallback: string): string {
   if (e instanceof CrmApiError) return e.message;
   if (e instanceof Error) return e.message;
@@ -61,6 +79,21 @@ export function AudienceGroupContactsView() {
     }
   }
 
+  async function setSendStatus(contactId: string, sendStatus: "active" | "unsubscribed", email: string) {
+    try {
+      await crmAudienceApi.updateContactSendStatus(groupId, contactId, sendStatus);
+      toast.success(
+        sendStatus === "unsubscribed"
+          ? `${email} marked unsubscribed`
+          : `${email} resubscribed`,
+      );
+      clearAudienceGroupDetailCache("", groupId);
+      await refresh(true);
+    } catch (e) {
+      toast.error(friendlyCrmError(e, "Failed to update contact"));
+    }
+  }
+
   async function removeContact(contactId: string, email: string) {
     try {
       await crmAudienceApi.removeContact(groupId, contactId);
@@ -78,8 +111,8 @@ export function AudienceGroupContactsView() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Audience group</CardTitle>
           <CardDescription>
-            Contacts live here. Campaigns link this group and track opt-in status per person as
-            subscribers.
+            Contacts live here. Unsubscribe status is shared with linked broadcasts — remove
+            deletes the contact entirely.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
@@ -182,7 +215,27 @@ export function AudienceGroupContactsView() {
                 <Badge variant="outline" className="text-[10px] capitalize">
                   {c.source}
                 </Badge>
+                <SendStatusBadge status={c.sendStatus ?? "active"} />
                 <div className="flex shrink-0 items-center gap-1">
+                  {(c.sendStatus ?? "active") === "active" ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => void setSendStatus(c.id, "unsubscribed", c.email)}
+                    >
+                      Unsubscribe
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => void setSendStatus(c.id, "active", c.email)}
+                    >
+                      Resubscribe
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"

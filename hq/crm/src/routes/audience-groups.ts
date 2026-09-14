@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { AudienceDataSource, AudienceGroup, AudienceMember } from "../db/types";
-import { syncAllCampaignsForAudienceGroup } from "../lib/audience-subscribers";
+import { syncAllBroadcastsForAudienceGroup } from "../lib/broadcast-audience-sync";
+import { setAudienceContactSendStatus } from "../lib/audience-send-status";
 import { fetchDataSourceContacts } from "../lib/data-source-sync";
 import { newId } from "../lib/ids";
 
@@ -45,6 +46,8 @@ function toContact(group: AudienceGroup, member: AudienceMember) {
     groupId: group.id,
     source: member.source,
     addedAt: member.addedAt,
+    sendStatus: member.sendStatus ?? "active",
+    unsubscribedAt: member.unsubscribedAt ?? null,
   };
 }
 
@@ -102,14 +105,22 @@ export async function syncAudienceGroupAsync(
       const idx = draft.audienceGroups.findIndex((g) => g.id === groupId);
       if (idx < 0) return;
       const g = draft.audienceGroups[idx]!;
+      const priorByEmail = new Map(
+        g.contacts.map((c) => [c.email.trim().toLowerCase(), c] as const),
+      );
       const manual = g.contacts.filter((c) => c.source === "manual");
-      const synced: AudienceMember[] = contacts.map((c) => ({
-        id: newId("member"),
-        email: c.email,
-        name: c.name,
-        source: "synced" as const,
-        addedAt: now,
-      }));
+      const synced: AudienceMember[] = contacts.map((c) => {
+        const prior = priorByEmail.get(c.email.trim().toLowerCase());
+        return {
+          id: prior?.id ?? newId("member"),
+          email: c.email,
+          name: c.name,
+          source: "synced" as const,
+          addedAt: prior?.addedAt ?? now,
+          sendStatus: prior?.sendStatus ?? "active",
+          unsubscribedAt: prior?.unsubscribedAt ?? null,
+        };
+      });
       g.contacts = [...manual, ...synced];
       g.lastSyncAt = now;
       g.lastSyncStatus = "success";
@@ -125,7 +136,7 @@ export async function syncAudienceGroupAsync(
         run.successCount = synced.length;
       }
     });
-    syncAllCampaignsForAudienceGroup(groupId);
+    syncAllBroadcastsForAudienceGroup(groupId);
     return { ok: true, totalCount: contacts.length + skipped, skippedCount: skipped };
   } catch (err) {
     const message = err instanceof Error ? err.message : "sync failed";
@@ -361,6 +372,8 @@ crmAudience.post("/:id/contacts", async (c) => {
     name: body.name?.trim() || null,
     source: "manual",
     addedAt: new Date().toISOString(),
+    sendStatus: "active",
+    unsubscribedAt: null,
   };
 
   store.update((draft) => {
@@ -393,4 +406,30 @@ crmAudience.delete("/:id/contacts", (c) => {
   });
 
   return c.json({ ok: true });
+});
+
+// PATCH /crm/audience-groups/:id/contacts/:contactId { sendStatus: "active" | "unsubscribed" }
+crmAudience.patch("/:id/contacts/:contactId", async (c) => {
+  const group = findGroup(c.req.param("id"));
+  if (!group) return c.json({ error: "not found" }, 404);
+
+  const contactId = c.req.param("contactId")!.trim();
+  const contact = group.contacts.find((m) => m.id === contactId);
+  if (!contact) return c.json({ error: "not found" }, 404);
+
+  let body: { sendStatus?: "active" | "unsubscribed" };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid JSON body" }, 400);
+  }
+  if (body.sendStatus !== "active" && body.sendStatus !== "unsubscribed") {
+    return c.json({ error: "sendStatus must be 'active' or 'unsubscribed'" }, 400);
+  }
+
+  setAudienceContactSendStatus(group.id, contactId, body.sendStatus);
+
+  const updated = findGroup(group.id)!;
+  const member = updated.contacts.find((m) => m.id === contactId)!;
+  return c.json({ contact: toContact(updated, member) });
 });

@@ -18,72 +18,10 @@ export type AccountLink = {
 };
 
 // ============================================================================
-// 1. Campaigns (The Persistent Stream & Consent Scope)
+// 1. Broadcasts (Audience scope + email send)
 // ============================================================================
 
-export type CampaignStatus = "active" | "archived";
-
-export type CampaignDataSource = {
-  type: "generic_json";
-  endpointUrl: string;
-  credential?: string;
-  credentialHeader?: string;
-  cronEnabled?: boolean;
-  cronIntervalMinutes?: number;
-  lastSyncAt?: string | null;
-  lastSyncStatus?: "success" | "error" | null;
-  lastSyncError?: string | null;
-  lastSyncCount?: number | null;
-};
-
-export type Campaign = {
-  id: string;
-  accountLinkId: string;
-  name: string;
-  slug: string;
-  description?: string | null;
-  /** Linked audience group — subscribers are consent overlays on its contacts. */
-  audienceGroupId: string;
-  fromName?: string | null;
-  fromEmail?: string | null;
-  replyTo?: string | null;
-  defaultTemplateId?: string | null;
-  status: CampaignStatus;
-  /** @deprecated Subscribers sync from `audienceGroupId`; kept for legacy store rows. */
-  dataSource?: CampaignDataSource | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-// ============================================================================
-// 2. Subscribers (Campaign-Scoped Consent and Membership)
-// ============================================================================
-
-export type SubscriberStatus = "subscribed" | "unsubscribed" | "pending" | "bounced";
-export type SubscriberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
-
-export type Subscriber = {
-  id: string;
-  accountLinkId: string;
-  campaignId: string;
-  /** Audience contact this consent row tracks (email/name resolved from the group). */
-  audienceMemberId: string | null;
-  email: string;
-  name?: string | null;
-  status: SubscriberStatus;
-  source: SubscriberSource;
-  unsubscribeToken: string;
-  unsubscribedAt?: string | null;
-  bouncedAt?: string | null;
-  bounceReason?: string | null;
-  customFields?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-};
-
-// ============================================================================
-// 3. Broadcasts (Atomic Email Content & Schedule Events)
-// ============================================================================
+export type BroadcastListStatus = "active" | "archived";
 
 export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
 
@@ -97,7 +35,16 @@ export type BroadcastStats = {
 export type Broadcast = {
   id: string;
   accountLinkId: string;
-  campaignId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  /** Linked audience group — broadcast audience rows overlay group contacts. */
+  audienceGroupId: string;
+  fromName?: string | null;
+  fromEmail?: string | null;
+  replyTo?: string | null;
+  defaultTemplateId?: string | null;
+  listStatus: BroadcastListStatus;
   subject: string;
   previewText?: string | null;
   bodyMarkdown: string;
@@ -112,7 +59,32 @@ export type Broadcast = {
 };
 
 // ============================================================================
-// 4. Recipients (Send-Time Immutable Queue & Engagement Ledger)
+// 2. Broadcast audience (per-broadcast consent on audience contacts)
+// ============================================================================
+
+export type BroadcastMemberStatus = "active" | "unsubscribed" | "pending" | "bounced";
+export type BroadcastMemberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
+
+export type BroadcastMember = {
+  id: string;
+  accountLinkId: string;
+  broadcastId: string;
+  audienceMemberId: string | null;
+  email: string;
+  name?: string | null;
+  status: BroadcastMemberStatus;
+  source: BroadcastMemberSource;
+  unsubscribeToken: string;
+  unsubscribedAt?: string | null;
+  bouncedAt?: string | null;
+  bounceReason?: string | null;
+  customFields?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ============================================================================
+// 3. Recipients (Send-Time Immutable Queue & Engagement Ledger)
 // ============================================================================
 
 export type RecipientStatus = "queued" | "sending" | "sent" | "skipped" | "failed";
@@ -120,8 +92,7 @@ export type RecipientStatus = "queued" | "sending" | "sent" | "skipped" | "faile
 export type Recipient = {
   id: string;
   broadcastId: string;
-  subscriberId: string;
-  campaignId: string;
+  broadcastMemberId: string;
   email: string;
   name?: string | null;
   status: RecipientStatus;
@@ -198,10 +169,10 @@ export type TrackingEvent = {
   occurredAt: string;
 };
 
-export type CampaignAsset = {
+export type BroadcastAsset = {
   id: string;
   key: string;
-  campaignId: string;
+  broadcastId: string;
   filename: string;
   mimeType: string;
   contentBase64: string;
@@ -209,8 +180,7 @@ export type CampaignAsset = {
 };
 
 // ============================================================================
-// Audience Groups (Account-wide contact pools — source for campaign
-// subscribers; independent of any one Campaign's consent scope)
+// Audience Groups (Account-wide contact pools)
 // ============================================================================
 
 export type AudienceDataSource = {
@@ -241,6 +211,9 @@ export type AudienceMember = {
   name: string | null;
   source: "manual" | "synced";
   addedAt: string;
+  /** Send eligibility for linked broadcasts — unified with broadcast audience rows. */
+  sendStatus: "active" | "unsubscribed";
+  unsubscribedAt: string | null;
 };
 
 export type AudienceGroup = {
@@ -267,9 +240,8 @@ export type AudienceGroup = {
 
 export type CrmDataStore = {
   account: AccountLink;
-  campaigns: Campaign[];
-  subscribers: Subscriber[];
   broadcasts: Broadcast[];
+  broadcastMembers: BroadcastMember[];
   recipients: Recipient[];
   accountSuppressions: AccountSuppression[];
   pipelineCards: PipelineCard[];
@@ -277,6 +249,6 @@ export type CrmDataStore = {
   templates: Template[];
   scheduledJobs: ScheduledJob[];
   trackingEvents: TrackingEvent[];
-  campaignAssets: CampaignAsset[];
+  broadcastAssets: BroadcastAsset[];
   audienceGroups: AudienceGroup[];
 };

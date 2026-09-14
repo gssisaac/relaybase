@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useBroadcastDetail } from "@/crm/pages/campaigns/BroadcastDetailContext";
+import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { crmApi, type BroadcastRecipient, type RecipientStatus } from "@/lib/crm/api";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,7 @@ function rate(part: number, total: number): string {
 }
 
 export function BroadcastStatsView() {
-  const { campaignId, broadcastId, broadcast } = useBroadcastDetail();
+  const { broadcastId, broadcast } = useBroadcastDetail();
   const [recipients, setRecipients] = useState<BroadcastRecipient[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,7 +30,7 @@ export function BroadcastStatsView() {
     let cancelled = false;
     setLoading(true);
     crmApi
-      .getBroadcastStats(campaignId, broadcastId)
+      .getBroadcastStats(broadcastId)
       .then(({ recipients: rows }) => {
         if (!cancelled) setRecipients(rows);
       })
@@ -40,7 +40,7 @@ export function BroadcastStatsView() {
     return () => {
       cancelled = true;
     };
-  }, [campaignId, broadcastId]);
+  }, [broadcastId]);
 
   if (!broadcast) return null;
 

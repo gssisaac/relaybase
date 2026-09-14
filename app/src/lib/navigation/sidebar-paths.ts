@@ -166,23 +166,49 @@ export function normalizeEntryPath(path: string): string {
     return `/broadcasts?${next.toString()}`;
   }
 
-  const crmCampaignMatch = pathname.match(
-    /^\/crm\/campaigns\/([^/]+)(?:\/(content|publish|progress|overview))?\/?$/,
+  const crmBroadcastMatch = pathname.match(
+    /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|content|publish|stats|settings))?\/?$/,
   );
-  if (crmCampaignMatch) {
-    let campaignId = crmCampaignMatch[1]!;
+  if (crmBroadcastMatch) {
+    let broadcastId = crmBroadcastMatch[1]!;
     try {
-      campaignId = decodeURIComponent(campaignId);
+      broadcastId = decodeURIComponent(broadcastId);
     } catch {
       /* keep raw */
     }
     const next = new URLSearchParams();
-    next.set("id", campaignId);
+    next.set("id", broadcastId);
+    const tabSeg = crmBroadcastMatch[2];
+    if (
+      tabSeg === "audience" ||
+      tabSeg === "content" ||
+      tabSeg === "publish" ||
+      tabSeg === "stats" ||
+      tabSeg === "settings"
+    ) {
+      next.set("tab", tabSeg);
+    }
+    return `/crm/broadcasts?${next.toString()}`;
+  }
+
+  const crmCampaignMatch = pathname.match(
+    /^\/crm\/campaigns(?:\/([^/]+))?(?:\/(content|publish|progress|overview))?\/?$/,
+  );
+  if (crmCampaignMatch) {
+    const next = new URLSearchParams();
+    const legacyId = crmCampaignMatch[1];
+    if (legacyId) {
+      try {
+        next.set("id", decodeURIComponent(legacyId));
+      } catch {
+        next.set("id", legacyId);
+      }
+    }
     const tabSeg = crmCampaignMatch[2];
     if (tabSeg === "content" || tabSeg === "publish" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "publish" : tabSeg);
     }
-    return `/crm/campaigns?${next.toString()}`;
+    return `/crm/broadcasts?${next.toString()}`;
   }
 
   // Settings: /settings/{tab} are real nested routes now. Collapse

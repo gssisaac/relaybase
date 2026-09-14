@@ -1,5 +1,5 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
-import { dispatchBroadcastToSubscribers, resolveActiveSubscribers } from "./routes/broadcasts";
+import { dispatchBroadcastToAudience, resolveActiveAudienceMembers } from "./routes/broadcasts";
 import { syncAudienceGroupAsync } from "./routes/audience-groups";
 
 /**
@@ -45,8 +45,8 @@ async function claimDueBroadcasts(): Promise<void> {
       // Late-binding resolution (§1.3): subscribers are resolved *now*, at
       // the exact dispatch moment — not frozen when the broadcast was scheduled.
       const broadcast = store.read().broadcasts.find((b) => b.id === claimedBroadcastId)!;
-      const subscribers = resolveActiveSubscribers(broadcast.campaignId);
-      await dispatchBroadcastToSubscribers(broadcast, subscribers);
+      const members = resolveActiveAudienceMembers(broadcast.id);
+      await dispatchBroadcastToAudience(broadcast, members);
     } catch (err) {
       console.error(`[crm-scheduler] broadcast ${claimedBroadcastId} send failed`, err);
       store.update((draft) => {

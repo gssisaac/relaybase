@@ -10,12 +10,12 @@ export const crmWebhooks = new Hono();
  * (UC-S4, spec §5.3). Flips the specific campaign subscriber to `bounced`
  * (when `campaignId` is known) and always adds the address to the
  * account-wide suppression list — checked unconditionally on every future
- * dispatch regardless of campaign membership.
+ * dispatch regardless of broadcast membership.
  */
 crmWebhooks.post("/bounce", async (c) => {
   let body: {
     email?: string;
-    campaignId?: string;
+    broadcastId?: string;
     reason?: AccountSuppressionReason;
     detail?: string;
   };
@@ -33,13 +33,13 @@ crmWebhooks.post("/bounce", async (c) => {
 
   const now = new Date().toISOString();
   store.update((draft) => {
-    if (body.campaignId) {
-      const idx = draft.subscribers.findIndex(
-        (s) => s.campaignId === body.campaignId && s.email === email,
+    if (body.broadcastId) {
+      const idx = draft.broadcastMembers.findIndex(
+        (m) => m.broadcastId === body.broadcastId && m.email === email,
       );
       if (idx >= 0) {
-        draft.subscribers[idx] = {
-          ...draft.subscribers[idx]!,
+        draft.broadcastMembers[idx] = {
+          ...draft.broadcastMembers[idx]!,
           status: "bounced",
           bouncedAt: now,
           bounceReason: body.detail ?? reason,

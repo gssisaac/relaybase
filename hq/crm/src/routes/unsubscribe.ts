@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { store } from "../db/store";
+import { syncAudienceSendStatusFromBroadcastMember } from "../lib/audience-send-status";
 
 export const crmUnsubscribe = new Hono();
 
@@ -30,16 +31,16 @@ function page(opts: { heading: string; subtext: string; footer?: string }): stri
 </html>`;
 }
 
-// GET /crm/unsubscribe/:campaignId/:token — UC-S3
-crmUnsubscribe.get("/:campaignId/:token", (c) => {
-  const { campaignId, token } = c.req.param();
+// GET /crm/unsubscribe/:broadcastId/:token
+crmUnsubscribe.get("/:broadcastId/:token", (c) => {
+  const { broadcastId, token } = c.req.param();
   const data = store.read();
-  const subscriber = data.subscribers.find(
-    (s) => s.campaignId === campaignId && s.unsubscribeToken === token,
+  const member = data.broadcastMembers.find(
+    (m) => m.broadcastId === broadcastId && m.unsubscribeToken === token,
   );
-  const campaign = data.campaigns.find((cm) => cm.id === campaignId);
+  const broadcast = data.broadcasts.find((b) => b.id === broadcastId);
 
-  if (!subscriber) {
+  if (!member) {
     c.header("Content-Type", "text/html; charset=utf-8");
     return c.body(
       page({
@@ -53,36 +54,37 @@ crmUnsubscribe.get("/:campaignId/:token", (c) => {
 
   const now = new Date().toISOString();
   store.update((draft) => {
-    const idx = draft.subscribers.findIndex((s) => s.id === subscriber.id);
+    const idx = draft.broadcastMembers.findIndex((m) => m.id === member.id);
     if (idx < 0) return;
-    draft.subscribers[idx] = {
-      ...draft.subscribers[idx]!,
+    draft.broadcastMembers[idx] = {
+      ...draft.broadcastMembers[idx]!,
       status: "unsubscribed",
       unsubscribedAt: now,
       updatedAt: now,
     };
   });
 
+  syncAudienceSendStatusFromBroadcastMember({ ...member, status: "unsubscribed", unsubscribedAt: now });
+
   c.header("Content-Type", "text/html; charset=utf-8");
   return c.body(
     page({
       heading: "You have been unsubscribed",
-      subtext: `${subscriber.email} will no longer receive emails from '${campaign?.name ?? "this campaign"}'.`,
-      footer: `<a class="link" href="/crm/unsubscribe/${campaignId}/${token}/resubscribe">Unsubscribed by mistake? Click here to resubscribe.</a>`,
+      subtext: `${member.email} will no longer receive emails from '${broadcast?.name ?? "this broadcast"}'.`,
+      footer: `<a class="link" href="/crm/unsubscribe/${broadcastId}/${token}/resubscribe">Unsubscribed by mistake? Click here to resubscribe.</a>`,
     }),
   );
 });
 
-// GET /crm/unsubscribe/:campaignId/:token/resubscribe
-crmUnsubscribe.get("/:campaignId/:token/resubscribe", (c) => {
-  const { campaignId, token } = c.req.param();
+crmUnsubscribe.get("/:broadcastId/:token/resubscribe", (c) => {
+  const { broadcastId, token } = c.req.param();
   const data = store.read();
-  const subscriber = data.subscribers.find(
-    (s) => s.campaignId === campaignId && s.unsubscribeToken === token,
+  const member = data.broadcastMembers.find(
+    (m) => m.broadcastId === broadcastId && m.unsubscribeToken === token,
   );
-  const campaign = data.campaigns.find((cm) => cm.id === campaignId);
+  const broadcast = data.broadcasts.find((b) => b.id === broadcastId);
 
-  if (!subscriber) {
+  if (!member) {
     c.header("Content-Type", "text/html; charset=utf-8");
     return c.body(
       page({
@@ -96,21 +98,23 @@ crmUnsubscribe.get("/:campaignId/:token/resubscribe", (c) => {
 
   const now = new Date().toISOString();
   store.update((draft) => {
-    const idx = draft.subscribers.findIndex((s) => s.id === subscriber.id);
+    const idx = draft.broadcastMembers.findIndex((m) => m.id === member.id);
     if (idx < 0) return;
-    draft.subscribers[idx] = {
-      ...draft.subscribers[idx]!,
-      status: "subscribed",
+    draft.broadcastMembers[idx] = {
+      ...draft.broadcastMembers[idx]!,
+      status: "active",
       unsubscribedAt: null,
       updatedAt: now,
     };
   });
 
+  syncAudienceSendStatusFromBroadcastMember({ ...member, status: "active", unsubscribedAt: null });
+
   c.header("Content-Type", "text/html; charset=utf-8");
   return c.body(
     page({
       heading: "You're resubscribed",
-      subtext: `${subscriber.email} will receive emails from '${campaign?.name ?? "this campaign"}' again.`,
+      subtext: `${member.email} will receive emails from '${broadcast?.name ?? "this broadcast"}' again.`,
     }),
   );
 });

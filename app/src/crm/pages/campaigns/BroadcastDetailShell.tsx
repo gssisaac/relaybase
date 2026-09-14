@@ -1,7 +1,14 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, BarChart3, FileText, Send } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  Mail,
+  Send,
+  Settings,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -9,27 +16,18 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import {
-  broadcastDetailHref,
-  campaignDetailHref,
-  type BroadcastDetailTab,
-} from "@/crm/lib/paths";
-import { useBroadcastDetail } from "@/crm/pages/campaigns/BroadcastDetailContext";
+import { broadcastDetailHref, useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
+import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 const NAV: { id: BroadcastDetailTab; label: string; icon: LucideIcon }[] = [
-  { id: "content", label: "Content", icon: FileText },
+  { id: "audience", label: "Audience", icon: Users },
+  { id: "content", label: "Content", icon: Mail },
   { id: "publish", label: "Publish", icon: Send },
   { id: "stats", label: "Stats", icon: BarChart3 },
+  { id: "settings", label: "Settings", icon: Settings },
 ];
-
-function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "sent") return "default";
-  if (status === "failed") return "destructive";
-  if (status === "draft") return "outline";
-  return "secondary";
-}
 
 export function BroadcastDetailShell({
   section,
@@ -40,11 +38,14 @@ export function BroadcastDetailShell({
   fill?: boolean;
   children: ReactNode;
 }) {
+  const { broadcasts } = useCrmPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const { campaignId, broadcastId, broadcast, notFound } = useBroadcastDetail();
+  const { broadcastId, broadcast, notFound } = useBroadcastDetail();
 
   const title =
-    broadcast?.subject?.trim() || (notFound ? "Broadcast not found" : "Untitled draft");
+    broadcast?.name?.trim() ||
+    broadcast?.subject?.trim() ||
+    (notFound ? "Broadcast not found" : "Untitled broadcast");
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -61,7 +62,7 @@ export function BroadcastDetailShell({
             size="sm"
             className="-ml-2 shrink-0"
             nativeButton={false}
-            render={<Link href={campaignDetailHref(campaignId, "broadcasts")} />}
+            render={<Link href={broadcasts} />}
           >
             <ArrowLeft className="size-4" />
             <span className="hidden sm:inline">Broadcasts</span>
@@ -70,7 +71,7 @@ export function BroadcastDetailShell({
             <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>
             <nav className="flex shrink-0 gap-0.5 overflow-x-auto" aria-label="Broadcast">
               {NAV.map((item) => {
-                const href = broadcastDetailHref(campaignId, broadcastId, item.id);
+                const href = broadcastDetailHref(broadcastId, item.id);
                 const Icon = item.icon;
                 const active = item.id === section;
                 return (
@@ -90,8 +91,16 @@ export function BroadcastDetailShell({
                 );
               })}
             </nav>
-            {broadcast?.status ? (
-              <Badge variant={statusVariant(broadcast.status)} className="shrink-0 text-[10px] capitalize">
+            {broadcast?.listStatus ? (
+              <Badge
+                variant={broadcast.listStatus === "archived" ? "secondary" : "outline"}
+                className="shrink-0 text-[10px] capitalize"
+              >
+                {broadcast.listStatus}
+              </Badge>
+            ) : null}
+            {broadcast?.status && broadcast.status !== "draft" ? (
+              <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
                 {broadcast.status}
               </Badge>
             ) : null}
@@ -99,13 +108,20 @@ export function BroadcastDetailShell({
         </div>
       </DesktopTitleBar>
 
-      {fill ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
-      ) : (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-          <div className={dashboardScrollBodyClassName("space-y-4")}>{children}</div>
+      <div
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col",
+          fill ? "overflow-hidden" : "overflow-auto",
+        )}
+      >
+        <div
+          className={cn(
+            fill ? "flex min-h-0 flex-1 flex-col" : dashboardScrollBodyClassName("space-y-4"),
+          )}
+        >
+          {children}
         </div>
-      )}
+      </div>
     </div>
   );
 }

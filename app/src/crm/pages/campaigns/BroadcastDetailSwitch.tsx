@@ -6,14 +6,17 @@ import Link from "next/link";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { campaignDetailHref, type BroadcastDetailTab } from "@/crm/lib/paths";
+import { useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
+import { BroadcastAudienceView } from "@/crm/pages/campaigns/CampaignSubscribersView";
 import { BroadcastContentView } from "@/crm/pages/campaigns/BroadcastContentView";
-import { useBroadcastDetail } from "@/crm/pages/campaigns/BroadcastDetailContext";
 import { BroadcastDetailShell } from "@/crm/pages/campaigns/BroadcastDetailShell";
 import { BroadcastPublishView } from "@/crm/pages/campaigns/BroadcastPublishView";
+import { BroadcastSettingsView } from "@/crm/pages/campaigns/CampaignSettingsView";
 import { BroadcastStatsView } from "@/crm/pages/campaigns/BroadcastStatsView";
+import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 
-function BroadcastNotFound({ campaignId }: { campaignId: string }) {
+function BroadcastNotFound() {
+  const { broadcasts } = useCrmPaths();
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar className="px-4 py-3">
@@ -23,7 +26,7 @@ function BroadcastNotFound({ campaignId }: { campaignId: string }) {
             size="sm"
             className="-ml-2"
             nativeButton={false}
-            render={<Link href={campaignDetailHref(campaignId, "broadcasts")} />}
+            render={<Link href={broadcasts} />}
           >
             <ArrowLeft className="size-4" />
             Broadcasts
@@ -39,7 +42,7 @@ function BroadcastNotFound({ campaignId }: { campaignId: string }) {
 }
 
 export function BroadcastDetailSwitch({ tab }: { tab: BroadcastDetailTab }) {
-  const { campaignId, broadcast, loading, notFound } = useBroadcastDetail();
+  const { broadcast, loading, notFound } = useBroadcastDetail();
 
   if (loading && !broadcast) {
     return (
@@ -48,13 +51,15 @@ export function BroadcastDetailSwitch({ tab }: { tab: BroadcastDetailTab }) {
       </div>
     );
   }
-  if (notFound || !broadcast) return <BroadcastNotFound campaignId={campaignId} />;
+  if (notFound || !broadcast) return <BroadcastNotFound />;
 
   return (
     <BroadcastDetailShell section={tab} fill={tab === "content"}>
+      {tab === "audience" ? <BroadcastAudienceView /> : null}
       {tab === "content" ? <BroadcastContentView /> : null}
       {tab === "publish" ? <BroadcastPublishView /> : null}
       {tab === "stats" ? <BroadcastStatsView /> : null}
+      {tab === "settings" ? <BroadcastSettingsView /> : null}
     </BroadcastDetailShell>
   );
 }

@@ -7,7 +7,7 @@ export async function uploadCampaignAsset(
   mimeType: string,
   contentBase64: string,
 ): Promise<string> {
-  const res = await crmApi.uploadCampaignAsset(campaignId, {
+  const res = await crmApi.uploadBroadcastAsset(campaignId, {
     filename,
     mimeType,
     contentBase64,

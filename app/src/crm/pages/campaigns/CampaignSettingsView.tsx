@@ -33,18 +33,18 @@ import {
 import Link from "next/link";
 
 import { crmAudienceDetailHref } from "@/crm/lib/paths";
-import { useCampaignDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
+import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { crmApi, CrmApiError } from "@/lib/crm/api";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function CampaignSettingsView() {
-  const { campaignId, campaign, templates, setCampaign } = useCampaignDetail();
+export function BroadcastSettingsView() {
+  const { broadcastId, broadcast, templates, setBroadcast } = useBroadcastDetail();
 
-  const [fromName, setFromName] = useState(campaign?.fromName ?? "");
-  const [fromEmail, setFromEmail] = useState(campaign?.fromEmail ?? "");
-  const [replyTo, setReplyTo] = useState(campaign?.replyTo ?? "");
-  const [defaultTemplateId, setDefaultTemplateId] = useState(campaign?.defaultTemplateId ?? "");
+  const [fromName, setFromName] = useState(broadcast?.fromName ?? "");
+  const [fromEmail, setFromEmail] = useState(broadcast?.fromEmail ?? "");
+  const [replyTo, setReplyTo] = useState(broadcast?.replyTo ?? "");
+  const [defaultTemplateId, setDefaultTemplateId] = useState(broadcast?.defaultTemplateId ?? "");
   const [fromEmailError, setFromEmailError] = useState<string | null>(null);
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -53,7 +53,7 @@ export function CampaignSettingsView() {
   const [archiveBlocked, setArchiveBlocked] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
 
-  if (!campaign) return null;
+  if (!broadcast) return null;
 
   async function saveIdentity() {
     if (fromEmail.trim() && !EMAIL_RE.test(fromEmail.trim())) {
@@ -63,14 +63,14 @@ export function CampaignSettingsView() {
     setFromEmailError(null);
     setSavingIdentity(true);
     try {
-      const updated = await crmApi.updateCampaign(campaignId, {
+      const updated = await crmApi.updateBroadcast(broadcastId, {
         fromName: fromName.trim() || null,
         fromEmail: fromEmail.trim() || null,
         replyTo: replyTo.trim() || null,
         defaultTemplateId: defaultTemplateId || null,
       });
-      setCampaign(updated);
-      toast.success("Campaign settings saved successfully");
+      setBroadcast(updated);
+      toast.success("Broadcast settings saved");
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (err) {
@@ -84,16 +84,16 @@ export function CampaignSettingsView() {
   async function handleArchive() {
     setArchiving(true);
     try {
-      const updated = await crmApi.archiveCampaign(campaignId);
-      setCampaign(updated);
+      const updated = await crmApi.archiveBroadcast(broadcastId);
+      setBroadcast(updated);
       setArchiveOpen(false);
-      toast.success("Campaign archived");
+      toast.success("Broadcast archived");
     } catch (err) {
       if (err instanceof CrmApiError) {
         setArchiveOpen(false);
         setArchiveBlocked(err.message);
       } else {
-        toast.error("Could not archive campaign");
+        toast.error("Could not archive broadcast");
       }
     } finally {
       setArchiving(false);
@@ -102,9 +102,9 @@ export function CampaignSettingsView() {
 
   async function handleUnarchive() {
     try {
-      const updated = await crmApi.unarchiveCampaign(campaignId);
-      setCampaign(updated);
-      toast.success("Campaign reactivated");
+      const updated = await crmApi.unarchiveBroadcast(broadcastId);
+      setBroadcast(updated);
+      toast.success("Broadcast reactivated");
     } catch {
       toast.error("Could not reactivate campaign");
     }
@@ -115,7 +115,7 @@ export function CampaignSettingsView() {
       <div>
         <h2 className="text-sm font-semibold">Settings</h2>
         <p className="text-xs text-muted-foreground">
-          Sender identity and defaults. Subscribers sync from the linked audience group.
+          Sender identity and defaults for this broadcast.
         </p>
       </div>
 
@@ -123,23 +123,23 @@ export function CampaignSettingsView() {
         <CardHeader>
           <CardTitle className="text-sm">Audience</CardTitle>
           <CardDescription>
-            Contacts and data sources are managed in Audience. This campaign stores consent only.
+            Contacts and data sources are managed in Audience. Send eligibility is on the Audience tab.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              {campaign.audienceGroupName ?? "No audience linked"}
+              {broadcast.audienceGroupName ?? "No audience linked"}
             </p>
-            {campaign.audienceGroupDomain ? (
-              <p className="truncate text-xs text-muted-foreground">{campaign.audienceGroupDomain}</p>
+            {broadcast.audienceGroupDomain ? (
+              <p className="truncate text-xs text-muted-foreground">{broadcast.audienceGroupDomain}</p>
             ) : null}
           </div>
-          {campaign.audienceGroupId ? (
+          {broadcast.audienceGroupId ? (
             <Button
               size="sm"
               variant="outline"
-              render={<Link href={crmAudienceDetailHref(campaign.audienceGroupId)} />}
+              render={<Link href={crmAudienceDetailHref(broadcast.audienceGroupId)} />}
             >
               Open audience
             </Button>
@@ -150,7 +150,7 @@ export function CampaignSettingsView() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Sender identity</CardTitle>
-          <CardDescription>Future broadcasts inherit these defaults automatically.</CardDescription>
+          <CardDescription>Future edits inherit these sender defaults.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -218,12 +218,11 @@ export function CampaignSettingsView() {
         <CardHeader>
           <CardTitle className="text-sm">Archive</CardTitle>
           <CardDescription>
-            Archiving cancels pending scheduled broadcasts but preserves all subscriber and delivery
-            history.
+            Archiving cancels pending scheduled sends but preserves delivery history.
           </CardDescription>
         </CardHeader>
         <CardFooter className="items-center gap-2">
-          {campaign.status === "archived" ? (
+          {broadcast.listStatus === "archived" ? (
             <>
               <Badge variant="secondary" className="text-[10px]">
                 Archived
@@ -234,7 +233,7 @@ export function CampaignSettingsView() {
             </>
           ) : (
             <Button size="sm" variant="destructive" onClick={() => setArchiveOpen(true)}>
-              Archive campaign
+              Archive broadcast
             </Button>
           )}
         </CardFooter>
@@ -243,10 +242,9 @@ export function CampaignSettingsView() {
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Archive &apos;{campaign.name}&apos;?</DialogTitle>
+            <DialogTitle>Archive &apos;{broadcast.name}&apos;?</DialogTitle>
             <DialogDescription>
-              Pending scheduled broadcasts will be cancelled, but all delivery history and subscriber
-              records are preserved.
+              Pending scheduled sends will be cancelled, but delivery history is preserved.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -263,7 +261,7 @@ export function CampaignSettingsView() {
       <Dialog open={Boolean(archiveBlocked)} onOpenChange={(open) => !open && setArchiveBlocked(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Cannot archive campaign</DialogTitle>
+            <DialogTitle>Cannot archive broadcast</DialogTitle>
             <DialogDescription>{archiveBlocked}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -276,3 +274,6 @@ export function CampaignSettingsView() {
     </div>
   );
 }
+
+/** @deprecated use BroadcastSettingsView */
+export const CampaignSettingsView = BroadcastSettingsView;

@@ -23,8 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { broadcastDetailHref } from "@/crm/lib/paths";
-import { useBroadcastDetail } from "@/crm/pages/campaigns/BroadcastDetailContext";
-import { useCampaignDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
+import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { crmApi, CrmApiError } from "@/lib/crm/api";
 
 function formatWhen(value?: string | null): string {
@@ -39,8 +38,7 @@ function formatWhen(value?: string | null): string {
 
 export function BroadcastPublishView() {
   const router = useRouter();
-  const { campaign } = useCampaignDetail();
-  const { campaignId, broadcastId, broadcast, setBroadcast, persistDraft } = useBroadcastDetail();
+  const { broadcastId, broadcast, setBroadcast, persistDraft } = useBroadcastDetail();
 
   const [sending, setSending] = useState(false);
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
@@ -51,10 +49,10 @@ export function BroadcastPublishView() {
   const [scheduleAt, setScheduleAt] = useState("");
   const [duplicating, setDuplicating] = useState(false);
 
-  if (!broadcast || !campaign) return null;
+  if (!broadcast) return null;
 
   const editable = broadcast.status === "draft";
-  const recipientCount = campaign.subscriberCount;
+  const recipientCount = broadcast.audienceActiveCount;
   const canOpenSend = editable && !sending && Boolean(broadcast.subject.trim());
 
   async function ensureSaved(): Promise<boolean> {
@@ -68,7 +66,7 @@ export function BroadcastPublishView() {
     try {
       const saved = await ensureSaved();
       if (!saved) return;
-      const result = await crmApi.sendBroadcast(campaignId, broadcastId);
+      const result = await crmApi.sendBroadcast(broadcastId);
       setBroadcast(result.broadcast);
       setConfirmSendOpen(false);
       toast.success("Broadcast send started");
@@ -85,7 +83,7 @@ export function BroadcastPublishView() {
     try {
       const saved = await ensureSaved();
       if (!saved) return;
-      await crmApi.testSendBroadcast(campaignId, broadcastId, testEmail);
+      await crmApi.testSendBroadcast(broadcastId, testEmail);
       toast.success(`Test email sent to ${testEmail}`);
       setTestEmailOpen(false);
     } catch (err) {
@@ -98,7 +96,7 @@ export function BroadcastPublishView() {
     try {
       const saved = await ensureSaved();
       if (!saved) return;
-      const updated = await crmApi.scheduleBroadcast(campaignId, broadcastId, new Date(scheduleAt).toISOString());
+      const updated = await crmApi.scheduleBroadcast(broadcastId, new Date(scheduleAt).toISOString());
       setBroadcast(updated);
       setScheduleOpen(false);
       toast.success(`Broadcast scheduled for ${formatWhen(updated.scheduledAt)}`);
@@ -109,7 +107,7 @@ export function BroadcastPublishView() {
 
   async function handleCancelSchedule() {
     try {
-      const updated = await crmApi.cancelSchedule(campaignId, broadcastId);
+      const updated = await crmApi.cancelSchedule(broadcastId);
       setBroadcast(updated);
       toast.success("Schedule cancelled. Broadcast reverted to draft.");
     } catch (err) {
@@ -120,8 +118,8 @@ export function BroadcastPublishView() {
   async function handleDuplicate() {
     setDuplicating(true);
     try {
-      const duplicate = await crmApi.duplicateBroadcast(campaignId, broadcastId);
-      router.push(broadcastDetailHref(campaignId, duplicate.id, "content"));
+      const duplicate = await crmApi.duplicateBroadcast(broadcastId);
+      router.push(broadcastDetailHref(duplicate.id, "content"));
     } catch {
       toast.error("Could not duplicate broadcast");
       setDuplicating(false);
@@ -133,7 +131,7 @@ export function BroadcastPublishView() {
       <div>
         <h2 className="text-sm font-semibold">Publish</h2>
         <p className="text-xs text-muted-foreground">
-          Send this broadcast to the campaign&apos;s subscribers and track delivery.
+          Send to active broadcast audience members (late binding at send time).
         </p>
       </div>
 
@@ -156,12 +154,12 @@ export function BroadcastPublishView() {
         <CardHeader>
           <CardTitle className="text-sm">Recipients</CardTitle>
           <CardDescription>
-            Resolved from &apos;{campaign.name}&apos; subscribers at send time (late binding).
+            Resolved from &apos;{broadcast.name}&apos; audience at send time (unsubscribed excluded).
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-medium tabular-nums">
-            {recipientCount.toLocaleString()} active subscriber{recipientCount === 1 ? "" : "s"}
+            {recipientCount.toLocaleString()} active recipient{recipientCount === 1 ? "" : "s"}
           </p>
           <Badge variant="outline" className="capitalize">
             {broadcast.status}
@@ -241,7 +239,7 @@ export function BroadcastPublishView() {
           <DialogHeader>
             <DialogTitle>Send &apos;{broadcast.subject || "Untitled draft"}&apos; immediately?</DialogTitle>
             <DialogDescription>
-              This will send to {recipientCount.toLocaleString()} subscriber
+              This will send to {recipientCount.toLocaleString()} recipient
               {recipientCount === 1 ? "" : "s"}.
             </DialogDescription>
           </DialogHeader>

@@ -1,5 +1,8 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { AudienceGroup, Subscriber } from "../db/types";
+import type { AudienceGroup, BroadcastMember } from "../db/types";
+import {
+  audienceMemberStatusForBroadcast,
+} from "./audience-send-status";
 import { newId, newToken } from "./ids";
 
 export function findAudienceGroup(groupId: string): AudienceGroup | undefined {
@@ -8,9 +11,9 @@ export function findAudienceGroup(groupId: string): AudienceGroup | undefined {
     .audienceGroups.find((g) => g.id === groupId && g.accountLinkId === DEV_ACCOUNT_LINK_ID);
 }
 
-/** Materialize campaign consent rows from an audience group's contacts. */
-export function syncCampaignSubscribersFromAudienceGroup(
-  campaignId: string,
+/** Materialize broadcast audience rows from a linked audience group's contacts. */
+export function syncBroadcastAudienceFromGroup(
+  broadcastId: string,
   groupId: string,
 ): { added: number; updated: number; skipped: number } {
   const group = findAudienceGroup(groupId);
@@ -24,59 +27,61 @@ export function syncCampaignSubscribersFromAudienceGroup(
   const now = new Date().toISOString();
 
   store.update((draft) => {
-    const seenMemberIds = new Set<string>();
     for (const member of group.contacts) {
       const email = member.email.trim().toLowerCase();
       if (!email.includes("@")) {
         skipped += 1;
         continue;
       }
-      seenMemberIds.add(member.id);
       const name = member.name?.trim() || null;
 
-      let idx = draft.subscribers.findIndex(
-        (s) => s.campaignId === campaignId && s.audienceMemberId === member.id,
+      let idx = draft.broadcastMembers.findIndex(
+        (s) => s.broadcastId === broadcastId && s.audienceMemberId === member.id,
       );
       if (idx < 0) {
-        idx = draft.subscribers.findIndex(
-          (s) => s.campaignId === campaignId && s.email === email,
+        idx = draft.broadcastMembers.findIndex(
+          (s) => s.broadcastId === broadcastId && s.email === email,
         );
       }
 
+      const contactStatus = audienceMemberStatusForBroadcast(member.sendStatus);
+
       if (idx < 0) {
-        const created: Subscriber = {
-          id: newId("subscriber"),
+        const created: BroadcastMember = {
+          id: newId("member"),
           accountLinkId: DEV_ACCOUNT_LINK_ID,
-          campaignId,
+          broadcastId,
           audienceMemberId: member.id,
           email,
           name,
-          status: "subscribed",
+          status: contactStatus,
           source: "audience_group",
           unsubscribeToken: newToken(),
-          unsubscribedAt: null,
+          unsubscribedAt: contactStatus === "unsubscribed" ? now : null,
           bouncedAt: null,
           bounceReason: null,
           createdAt: now,
           updatedAt: now,
         };
-        draft.subscribers.push(created);
+        draft.broadcastMembers.push(created);
         added += 1;
         continue;
       }
 
-      const existing = draft.subscribers[idx]!;
-      if (existing.status === "unsubscribed" || existing.status === "bounced") {
+      const existing = draft.broadcastMembers[idx]!;
+      if (existing.status === "bounced") {
         skipped += 1;
         continue;
       }
 
-      draft.subscribers[idx] = {
+      draft.broadcastMembers[idx] = {
         ...existing,
         audienceMemberId: member.id,
         email,
         name: name ?? existing.name,
         source: "audience_group",
+        status: contactStatus,
+        unsubscribedAt: contactStatus === "unsubscribed" ? existing.unsubscribedAt ?? now : null,
         updatedAt: now,
       };
       updated += 1;
@@ -86,14 +91,14 @@ export function syncCampaignSubscribersFromAudienceGroup(
   return { added, updated, skipped };
 }
 
-export function syncAllCampaignsForAudienceGroup(groupId: string): void {
-  const campaignIds = store
+export function syncAllBroadcastsForAudienceGroup(groupId: string): void {
+  const broadcastIds = store
     .read()
-    .campaigns.filter(
-      (c) => c.accountLinkId === DEV_ACCOUNT_LINK_ID && c.audienceGroupId === groupId,
+    .broadcasts.filter(
+      (b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID && b.audienceGroupId === groupId,
     )
-    .map((c) => c.id);
-  for (const campaignId of campaignIds) {
-    syncCampaignSubscribersFromAudienceGroup(campaignId, groupId);
+    .map((b) => b.id);
+  for (const broadcastId of broadcastIds) {
+    syncBroadcastAudienceFromGroup(broadcastId, groupId);
   }
 }

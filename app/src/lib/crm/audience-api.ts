@@ -86,4 +86,14 @@ export const crmAudienceApi = {
       `/crm/audience-groups/${encodeURIComponent(groupId)}/contacts?contactId=${encodeURIComponent(contactId)}`,
       { method: "DELETE" },
     ),
+
+  updateContactSendStatus: (
+    groupId: string,
+    contactId: string,
+    sendStatus: "active" | "unsubscribed",
+  ) =>
+    crmFetch<{ contact: AudienceGroupContact }>(
+      `/crm/audience-groups/${encodeURIComponent(groupId)}/contacts/${encodeURIComponent(contactId)}`,
+      { method: "PATCH", body: JSON.stringify({ sendStatus }) },
+    ),
 };

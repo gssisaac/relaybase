@@ -22,11 +22,12 @@ import {
   desktopOpenExternal,
   desktopVerifyWorkerConnection,
   explainDesktopError,
-  cfTokenPermissionErrorHelp,
+  cfTokenPermissionProbeWarningHelp,
   isCloudflareAuthExpired,
   mailApiReady,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
+import { setCfApiTokenUserConfirmed } from "@/lib/dashboard/cf-api-token-user-confirmed";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 function CreateCustomTokenGuide() {
@@ -94,6 +95,9 @@ export function EnableEmailApiDialog({
   const [step, setStep] = useState(0);
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verifyError, setVerifyError] = useState<DesktopErrorHelp | null>(null);
+  const [verifyWarning, setVerifyWarning] = useState<DesktopErrorHelp | null>(
+    null,
+  );
   const [pasteToken, setPasteToken] = useState("");
 
   const settingsUrl = cloudflareWorkerSettingsUrl(accountId, workerScriptName);
@@ -105,6 +109,7 @@ export function EnableEmailApiDialog({
     setMode("manual");
     setStep(0);
     setVerifyError(null);
+    setVerifyWarning(null);
     setPasteToken("");
   }, [open]);
 
@@ -120,9 +125,28 @@ export function EnableEmailApiDialog({
     }
   }, [open, pasteMessage, onVerified, onOpenChange]);
 
+  async function handleMarkConfigured() {
+    const url = workerUrl.trim();
+    if (!url) return;
+    setVerifyBusy(true);
+    try {
+      await setCfApiTokenUserConfirmed(url, true);
+      setVerifyWarning(null);
+      toast.success("Cloudflare API setup saved on this device.", {
+        description:
+          "Status here may not match Cloudflare’s dashboard. Fix the token if domain or routing calls fail.",
+      });
+      onVerified();
+      onOpenChange(false);
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
   async function handleVerify() {
     setVerifyBusy(true);
     setVerifyError(null);
+    setVerifyWarning(null);
     try {
       const url = workerUrl.trim();
       if (!url) {
@@ -135,16 +159,17 @@ export function EnableEmailApiDialog({
         );
       }
       if (result.cfApiTokenValid === false) {
-        const help = cfTokenPermissionErrorHelp(result.cfApiTokenPermissions, {
-          workerVersion: result.version,
-        });
-        setVerifyError(help);
-        toast.error(help.title, { description: help.detail });
+        const help = cfTokenPermissionProbeWarningHelp(
+          result.cfApiTokenPermissions,
+          { workerVersion: result.version },
+        );
+        setVerifyWarning(help);
         return;
       }
       if (!mailApiReady(result)) {
         throw new Error("Cloudflare API is not ready on this Worker.");
       }
+      await setCfApiTokenUserConfirmed(url, true);
       toast.success("Cloudflare API token and permissions verified successfully.");
       onVerified();
       onOpenChange(false);
@@ -329,6 +354,7 @@ export function EnableEmailApiDialog({
         <DesktopErrorBanner
           error={isCloudflareAuthExpired(verifyError) ? null : verifyError}
         />
+        <DesktopErrorBanner error={verifyWarning} />
         <DesktopErrorBanner
           error={isCloudflareAuthExpired(pasteError) ? null : pasteError}
         />
@@ -373,6 +399,17 @@ export function EnableEmailApiDialog({
                 {verifyBusy ? "Verifying…" : "I have done this — verify"}
               </Button>
             </div>
+          ) : null}
+          {mode === "manual" && step === 1 && verifyWarning ? (
+            <Button
+              type="button"
+              className="w-full"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void handleMarkConfigured()}
+            >
+              I&apos;ve completed setup — save as configured
+            </Button>
           ) : null}
           {mode === "oauth" && onPasteAndPush ? (
             <Button

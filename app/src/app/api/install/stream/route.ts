@@ -43,7 +43,7 @@ import {
   ownerSetupAdmin,
   waitForWorkerReady,
 } from "@/server/cloudflare/schema";
-import { COOKIE_NAMES } from "@/server/cloudflare/session";
+import { applyRefreshedCookie } from "@/server/cloudflare/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -271,14 +271,7 @@ export async function GET(request: NextRequest) {
       "X-Accel-Buffering": "no",
     },
   });
-  if (refreshedCookie) {
-    response.cookies.set(COOKIE_NAMES.oauth, refreshedCookie, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30,
-    });
-  }
-  return response;
+  // Persist a rotated refresh_token if Cloudflare issued one during the
+  // session refresh above — otherwise the next request 401s.
+  return applyRefreshedCookie(response, refreshedCookie);
 }

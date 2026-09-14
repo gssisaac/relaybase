@@ -28,8 +28,16 @@ pub const CF_OAUTH_KEYRING_USER: &str = "cf-oauth-install";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct KeyringCfOAuth {
+    /// Accept both the default camelCase (`refreshToken`) and the legacy
+    /// snake_case (`refresh_token`) on read. Older builds wrote the raw
+    /// token string or a snake_case JSON blob; without these aliases serde
+    /// would leave the field empty and the app would force a full browser
+    /// re-auth despite the keyring holding a valid token.
+    #[serde(alias = "refresh_token")]
     pub refresh_token: String,
+    #[serde(alias = "account_id")]
     pub account_id: String,
+    #[serde(alias = "client_id")]
     pub client_id: String,
 }
 
@@ -492,6 +500,58 @@ mod tests {
 
             invalidate_refresh_after_failure("new-rotated");
             assert_eq!(load_keyring_oauth_refresh().unwrap(), None);
+        });
+    }
+
+    /// Older builds wrote the keyring blob with snake_case keys
+    /// (`refresh_token`, `account_id`, `client_id`). The struct now uses
+    /// `rename_all = "camelCase"`, so without the `serde(alias = …)` attrs
+    /// those legacy blobs would deserialize to all-empty fields and force a
+    /// full browser re-auth on every app restart.
+    #[test]
+    fn loads_legacy_snake_case_keyring_blob() {
+        with_temp_keyring(|| {
+            let legacy = serde_json::json!({
+                "refresh_token": "snake-refresh",
+                "account_id": "snake-acct",
+                "client_id": "snake-client"
+            });
+            keyring_store::set_password(
+                CF_OAUTH_KEYRING_SERVICE,
+                CF_OAUTH_KEYRING_USER,
+                &legacy.to_string(),
+            )
+            .unwrap();
+            let loaded = load_keyring_oauth_refresh()
+                .unwrap()
+                .expect("legacy snake_case blob must load");
+            assert_eq!(loaded.refresh_token, "snake-refresh");
+            assert_eq!(loaded.account_id, "snake-acct");
+            assert_eq!(loaded.client_id, "snake-client");
+        });
+    }
+
+    /// The default (current) camelCase layout keeps working.
+    #[test]
+    fn loads_camel_case_keyring_blob() {
+        with_temp_keyring(|| {
+            let modern = serde_json::json!({
+                "refreshToken": "camel-refresh",
+                "accountId": "camel-acct",
+                "clientId": "camel-client"
+            });
+            keyring_store::set_password(
+                CF_OAUTH_KEYRING_SERVICE,
+                CF_OAUTH_KEYRING_USER,
+                &modern.to_string(),
+            )
+            .unwrap();
+            let loaded = load_keyring_oauth_refresh()
+                .unwrap()
+                .expect("camelCase blob must load");
+            assert_eq!(loaded.refresh_token, "camel-refresh");
+            assert_eq!(loaded.account_id, "camel-acct");
+            assert_eq!(loaded.client_id, "camel-client");
         });
     }
 }

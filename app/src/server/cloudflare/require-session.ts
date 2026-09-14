@@ -3,7 +3,7 @@ import {
   CfOAuthSession,
   COOKIE_NAMES,
   readOAuthSessionCookie,
-  refreshIfNeeded,
+  refreshIfNeededSingleFlight,
   sealOAuthSession,
 } from "./session";
 
@@ -14,6 +14,12 @@ export class CfAuthRequiredError extends Error {}
  * session plus the sealed cookie value to re-set on the response when a
  * refresh happened (mirrors desktop's `require_cf_oauth`, minus the OS
  * keyring — the sealed cookie *is* the keyring here).
+ *
+ * The refresh is single-flighted by `refresh_token`: concurrent requests
+ * that share the same refresh_token all await the same Cloudflare token
+ * exchange. Cloudflare rotates refresh_tokens on every exchange and
+ * invalidates the old one, so without de-duplication the second parallel
+ * request would arrive with an already-used token and force a re-auth.
  */
 export async function requireCfSession(
   request: NextRequest,
@@ -23,7 +29,7 @@ export async function requireCfSession(
   if (!session) {
     throw new CfAuthRequiredError("CLOUDFLARE_AUTH_EXPIRED: Authorize with Cloudflare again");
   }
-  const fresh = await refreshIfNeeded(session);
+  const fresh = await refreshIfNeededSingleFlight(session);
   const refreshedCookie = fresh.accessToken !== session.accessToken ? sealOAuthSession(fresh) : null;
   return { session: fresh, refreshedCookie };
 }

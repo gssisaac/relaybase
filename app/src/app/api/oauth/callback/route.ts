@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     }),
     {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
       // Session survives for as long as the refresh token would (~30 days on

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CfAuthRequiredError, requireCfSession } from "@/server/cloudflare/require-session";
+import { applyRefreshedCookie } from "@/server/cloudflare/session";
 
 /** Forgot-passtoken recovery on web — uses the sealed OAuth cookie, not a client token. */
 export async function POST(request: NextRequest) {
   let session;
+  let refreshedCookie: string | null;
   try {
-    ({ session } = await requireCfSession(request));
+    ({ session, refreshedCookie } = await requireCfSession(request));
   } catch (err) {
     return NextResponse.json(
       {
@@ -41,5 +43,8 @@ export async function POST(request: NextRequest) {
       { status: res.status >= 400 ? res.status : 502 },
     );
   }
-  return NextResponse.json({ passtoken: data.passtoken });
+  const response = NextResponse.json({ passtoken: data.passtoken });
+  // Persist a rotated refresh_token if Cloudflare issued one during the
+  // session refresh above — otherwise the next request 401s.
+  return applyRefreshedCookie(response, refreshedCookie);
 }

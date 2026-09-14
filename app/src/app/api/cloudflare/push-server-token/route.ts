@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { putWorkerSecret } from "@/server/cloudflare/client";
 import { DEFAULT_SCRIPT } from "@/server/cloudflare/constants";
 import { CfAuthRequiredError, requireCfSession } from "@/server/cloudflare/require-session";
+import { applyRefreshedCookie } from "@/server/cloudflare/session";
 
 export async function POST(request: NextRequest) {
   let session;
@@ -40,17 +41,9 @@ export async function POST(request: NextRequest) {
       message: "Server token pushed to Worker as CF_API_TOKEN.",
       pushedAt,
     });
-    if (refreshedCookie) {
-      const { COOKIE_NAMES } = await import("@/server/cloudflare/session");
-      response.cookies.set(COOKIE_NAMES.oauth, refreshedCookie, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 30,
-      });
-    }
-    return response;
+    // Persist a rotated refresh_token if Cloudflare issued one during the
+    // session refresh above — otherwise the next request 401s.
+    return applyRefreshedCookie(response, refreshedCookie);
   } catch (err) {
     return NextResponse.json(
       { ok: false, message: err instanceof Error ? err.message : "Push failed" },

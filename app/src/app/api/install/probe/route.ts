@@ -13,7 +13,7 @@ import {
 } from "@/server/cloudflare/client";
 import { D1_DATABASES, DEFAULT_SCRIPT, R2_BUCKET } from "@/server/cloudflare/constants";
 import { CfAuthRequiredError, requireCfSession } from "@/server/cloudflare/require-session";
-import { COOKIE_NAMES } from "@/server/cloudflare/session";
+import { applyRefreshedCookie } from "@/server/cloudflare/session";
 
 export type InstallResourceProbe = {
   kind: "worker" | "r2" | "d1";
@@ -81,16 +81,9 @@ export async function GET(request: NextRequest) {
       : null;
 
     const response = NextResponse.json({ accountId: session.accountId, workersDevUrl, resources });
-    if (refreshedCookie) {
-      response.cookies.set(COOKIE_NAMES.oauth, refreshedCookie, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 30,
-      });
-    }
-    return response;
+    // Persist a rotated refresh_token if Cloudflare issued one during the
+    // session refresh above — otherwise the next request 401s.
+    return applyRefreshedCookie(response, refreshedCookie);
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

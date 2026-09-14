@@ -95,6 +95,7 @@ export function HealthStatus({
             "mt-1 size-2.5 shrink-0 rounded-full",
             tone === "ok" && "bg-emerald-500",
             tone === "bad" && "bg-red-500",
+            tone === "warn" && "bg-amber-500",
             tone === "neutral" && "bg-muted-foreground/40",
           )}
           aria-hidden
@@ -106,6 +107,7 @@ export function HealthStatus({
             "text-sm font-medium",
             tone === "ok" && "text-emerald-700 dark:text-emerald-400",
             tone === "bad" && "text-red-700 dark:text-red-400",
+            tone === "warn" && "text-amber-800 dark:text-amber-300",
             (tone === "pending" || tone === "neutral") && "text-foreground",
           )}
         >

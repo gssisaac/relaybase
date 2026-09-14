@@ -7,6 +7,7 @@ import {
   type CfTokenPermissionCheck,
   isCloudflareAuthExpired,
 } from "./cloudflare";
+import { CF_API_TOKEN_PROBE_DISCLAIMER } from "@/lib/dashboard/cf-api-token-user-confirmed";
 import { formatDesktopError } from "./invoke";
 
 export type DesktopErrorLink = {
@@ -26,6 +27,8 @@ export type DesktopErrorHelp = {
   permissions?: readonly string[];
   /** Per-row Cloudflare token permission probe, shown as dashboard-style rows. */
   permissionChecks?: readonly CfTokenPermissionCheck[];
+  /** Default `error` (red). Use `warning` for non-blocking probe mismatches. */
+  variant?: "error" | "warning";
 };
 
 function stripRawApiNoise(raw: string): string {
@@ -105,6 +108,21 @@ export function cfTokenPermissionErrorHelp(
     fix,
     permissionChecks: failing.length > 0 ? failing : undefined,
     links: [{ label: "Open Cloudflare API Tokens", href: CF_API_TOKENS_URL }],
+  };
+}
+
+/** Yellow warning after verify when the automatic probe failed — user may still confirm setup. */
+export function cfTokenPermissionProbeWarningHelp(
+  probe?: CfApiTokenPermissions | null,
+  options?: { workerVersion?: string | null },
+): DesktopErrorHelp {
+  const base = cfTokenPermissionErrorHelp(probe, options);
+  return {
+    ...base,
+    variant: "warning",
+    title: "Automatic check did not pass",
+    detail: `${base.detail} This is only Relaybase’s probe — it may not match what you configured in Cloudflare. ${CF_API_TOKEN_PROBE_DISCLAIMER}`,
+    fix: "If you added CF_API_TOKEN and the permission rows in Cloudflare, click “I've completed setup” to save this workspace as configured. Domain or routing errors later mean the token still needs fixing.",
   };
 }
 

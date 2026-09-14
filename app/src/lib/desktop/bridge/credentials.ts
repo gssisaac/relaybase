@@ -27,6 +27,8 @@ export type DesktopCredentials = {
   cfOauthAccountId: string;
   /** Persisted opaque scope id for the active workspace. */
   scopeId: string;
+  /** User attested CF_API_TOKEN setup on the Worker (probe may disagree). */
+  cfApiTokenUserConfirmed?: boolean;
 };
 
 export type WorkspaceEntry = {
@@ -40,6 +42,7 @@ export type WorkspaceEntry = {
   /** Persisted opaque scope id (`s-{16hex}`). */
   scopeId: string;
   lastUsedAt: string;
+  cfApiTokenUserConfirmed?: boolean;
 };
 
 export type Workspaces = {

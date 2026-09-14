@@ -16,6 +16,7 @@ const EMPTY: DesktopCredentials = {
   cfOauthAccessExpiresAt: "",
   cfOauthAccountId: "",
   scopeId: "",
+  cfApiTokenUserConfirmed: false,
 };
 
 export function loadWebCredentials(): DesktopCredentials | null {

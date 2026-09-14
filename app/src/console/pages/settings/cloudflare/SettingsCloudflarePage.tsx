@@ -14,7 +14,10 @@ import {
   SummaryRow,
   maskAccountId,
 } from "@/console/pages/settings/settings-shared";
-import { displayCfAccountId, cloudflareWorkerSettingsUrl, cfApiTokenHealth, cfApiTokenPermissionsRejected } from "@/lib/desktop/bridge";
+import {
+  displayCfAccountId,
+  cloudflareWorkerSettingsUrl,
+} from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
 
 export function SettingsCloudflarePage() {
@@ -24,8 +27,11 @@ export function SettingsCloudflarePage() {
     cfConnected,
     cfBusy,
     cfError,
+    cfWarning,
+    cfHealth,
     cfMessage,
     handleVerifyCf,
+    handleConfirmCfSetup,
     resetCfDraft,
   } = useSettingsConnection();
   const openEnableEmailApiDialog = useOpenEnableEmailApiDialog();
@@ -41,9 +47,9 @@ export function SettingsCloudflarePage() {
     "relaybase-api";
   const workerUrl =
     workerStatus?.workerUrl?.trim() || credentials?.workerUrl?.trim() || "";
-  const cfHealth = cfApiTokenHealth(workerStatus, { pending: cfBusy });
   const cfTokenOnWorker = Boolean(workerStatus?.cfApiTokenSet);
-  const cfPermissionsRejected = cfApiTokenPermissionsRejected(workerStatus);
+  const probeRejected =
+    cfTokenOnWorker && workerStatus?.cfApiTokenValid === false && !cfConnected;
 
   return (
     <SettingsPageBody>
@@ -87,9 +93,9 @@ export function SettingsCloudflarePage() {
               label="API token"
               value={
                 cfConnected
-                  ? "Set on Worker"
-                  : cfPermissionsRejected
-                    ? "Set on Worker — permissions rejected"
+                  ? "Set on Worker — configured"
+                  : probeRejected
+                    ? "Set on Worker — check not passed"
                     : "Set on Worker"
               }
             />
@@ -107,6 +113,7 @@ export function SettingsCloudflarePage() {
         ) : null}
 
         <DesktopErrorBanner error={cfError} />
+        <DesktopErrorBanner error={cfWarning} />
         {cfMessage ? (
           <p className="text-sm text-emerald-700 dark:text-emerald-400">
             {cfMessage}
@@ -129,7 +136,7 @@ export function SettingsCloudflarePage() {
           >
             {cfConnected
               ? "Set up again"
-              : cfPermissionsRejected
+              : probeRejected
                 ? "Update API token"
                 : "Enable email API"}
           </Button>
@@ -145,6 +152,17 @@ export function SettingsCloudflarePage() {
             ) : null}
             Verify again
           </Button>
+          {cfWarning && !cfConnected ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={cfBusy}
+              onClick={() => void handleConfirmCfSetup()}
+            >
+              I&apos;ve completed setup
+            </Button>
+          ) : null}
         </div>
       </ConnectionCard>
       <CfApiTokenDetailsSheet open={detailsOpen} onOpenChange={setDetailsOpen} />

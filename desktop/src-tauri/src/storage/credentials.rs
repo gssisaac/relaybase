@@ -35,6 +35,8 @@ pub struct WorkspaceEntry {
     pub scope_id: String,
     #[serde(default)]
     pub last_used_at: String,
+    #[serde(default)]
+    pub cf_api_token_user_confirmed: bool,
 }
 
 /// Keymap of all workspaces ever connected on this Mac. The active workspace
@@ -114,6 +116,8 @@ pub struct StoredCredentials {
     pub cf_oauth_account_id: String,
     #[serde(default)]
     pub scope_id: String,
+    #[serde(default)]
+    pub cf_api_token_user_confirmed: bool,
 }
 
 impl StoredCredentials {
@@ -132,6 +136,7 @@ impl StoredCredentials {
             cf_oauth_access_expires_at: String::new(),
             cf_oauth_account_id: String::new(),
             scope_id: entry.scope_id.clone(),
+            cf_api_token_user_confirmed: entry.cf_api_token_user_confirmed,
         }
     }
 
@@ -158,6 +163,7 @@ impl StoredCredentials {
         if !self.relaybase_session.trim().is_empty() {
             next.relaybase_session = self.relaybase_session.trim().to_string();
         }
+        next.cf_api_token_user_confirmed = self.cf_api_token_user_confirmed;
         next
     }
 }
@@ -224,6 +230,7 @@ fn migrate_legacy_workspace_to_keymap() -> Result<(), String> {
         relaybase_session: value.get("relaybaseSession").and_then(|v| v.as_str()).unwrap_or("").trim().to_string(),
         scope_id: String::new(),
         last_used_at: now_iso_utc(),
+        cf_api_token_user_confirmed: false,
     };
     let key = Workspaces::key_for(&entry);
     let mut with_scope = entry;

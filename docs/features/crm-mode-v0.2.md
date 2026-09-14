@@ -1,8 +1,11 @@
 # CRM Mode — v0.2 Product Spec
 
-**Status:** Proposed (design locked, pre-implementation)
+**Status:** Proposed (design locked, pre-implementation) · **Revised v0.2-rev1**
 **Audience:** humans and coding agents building the third product mode (`email` / `console` / `crm`)
 **Date:** 2026-09-14
+**Revision:** 2026-09-14 — Quote legal-grade-ready e-sign (P1-2 / P2-2 / §3 / §8)
+
+> **Disclaimer (product design, not legal advice).** This document records product-architecture recommendations so Quote approval can approach international e-signature reliability criteria (UNCITRAL MLES Art. 6, EU eIDAS AdES-adjacent). It is **not** a legal opinion, does **not** certify enforceability in any jurisdiction, and does **not** claim Qualified Electronic Signature (QES) status. Counsel review is required before marketing “legally binding e-sign.”
 
 This document is the v0.2 product spec for adding a third mode, **CRM**, to Relaybase. It locks the feature list, priorities, per-feature scope, and the most important **architecture decision**: CRM is not the customer’s Cloudflare Worker—it is a centrally operated cloud service run by Relaybase.
 
@@ -35,9 +38,11 @@ In short:
 | Layer | Owner | Stored data |
 |---|---|---|
 | **Customer Worker** (existing, BYO) | Customer’s Cloudflare account | Actual send/receive mail (R2), domains/DKIM, `RELAYBASE_DB` catalog |
-| **CRM central server** (new) | Relaybase operations | Contacts, pipeline, campaign/sequence definitions, quotes, scheduled queue, open/click stats |
+| **CRM central server** (new) | Relaybase operations | Contacts, pipeline, campaign/sequence definitions, quotes, **quote snapshots / hashes / signatures / append-only audit**, scheduled queue, open/click stats |
 
 The CRM central server does not send mail directly—sending domain reputation, SPF/DKIM, and the actual SMTP path remain the customer Worker’s responsibility. The central server only decides and assembles *what to send, when, and to whom*; actual delivery always **requests** the customer Worker. Signals such as whether someone replied are **queried** from the customer Worker.
+
+> **Revised (v0.2-rev1).** The sent quote *email* still lives in the customer Worker’s R2 (unchanged). The **canonical quote snapshot, content hash, cryptographic signature, and audit trail** live only in `strum-relaybase-crm`. An auditor must be able to verify *what was approved* from the central D1 alone, even if the customer later mutates their R2 mailbox. Customer R2 is a delivery artifact, not the system of record for Quote integrity.
 
 > After this document is approved, we recommend adding a one-line cross-reference in `storage-architecture.md` / `hq-ops-d1.md` that “CRM is an intentional exception” (out of scope for this document).
 
@@ -53,7 +58,7 @@ The existing Worker already exposes `/v1/*` that third parties can call with “
 
 Additionally, the **one-time Audience migration** on first CRM enable does not require new Worker APIs: the client (desktop/web app) reads `GET /console/audience-groups` etc. with the owner session it already has and passes that payload to the CRM enable API (client relay—see §7).
 
-**Conclusion: for v0.2, required changes in the `worker/` repo are zero lines (by new routes).** Open/click tracking pixel and redirect endpoints also live on the CRM central domain (`crm.relaybase.xyz`), so they are unrelated to the Worker.
+**Conclusion: for v0.2, required changes in the `worker/` repo are zero lines (by new routes).** Open/click tracking pixel and redirect endpoints also live on the CRM central domain (`crm.relaybase.xyz`), so they are unrelated to the Worker. Quote public pages, respond/sign, and verification endpoints likewise live on `crm.relaybase.xyz` (P1-2)—still **zero new Worker routes**.
 
 ### 1.3 New deployment unit — `main/hq/crm`
 
@@ -66,9 +71,9 @@ Add a new app using the same pattern as existing `hq/console`, `hq/admin`, `hq/w
 | DB (new) | D1 `strum-relaybase-crm` — binding `DB`. CRM-only tables (§3) |
 | DB (reference) | D1 `strum-relaybase-ops` — binding `OPS_DB`, **read-mostly**. `accounts` / `account_workers` for login account ↔ Worker URL mapping |
 | Auth | Reuse session cookies from `console.relaybase.xyz` — cookie domain `.relaybase.xyz` (parent domain), validated with the same `CONSOLE_SESSION_SECRET`. **Do not build a separate signup/login screen.** |
-| Secret storage | Domain-scoped API keys for the customer Worker (plaintext required—Bearer on every request to Worker) stored **encrypted** in `strum-relaybase-crm` (differs from HQ ops “hash only” principle—see §8 risks) |
+| Secret storage | Domain-scoped API keys for the customer Worker (plaintext required—Bearer on every request to Worker) stored **encrypted** in `strum-relaybase-crm` (differs from HQ ops “hash only” principle—see §8 risks). **Quote signing keys** (`QUOTE_SIGNING_SECRET` / Ed25519 private key) are a second decryptable secret—same KMS pattern, separate key id, access-logged. |
 | Queue (new) | Cloudflare Queue `crm-tracking-events` — buffer open/click tracking events for batched D1 insert (P0-2) |
-| R2 (new) | Bucket `crm-assets` — images pasted in the campaign editor (P0-6). Separate from the customer Worker’s `relaybase-mailbox` R2 |
+| R2 (new) | Bucket `crm-assets` — images pasted in the campaign editor (P0-6). Separate from the customer Worker’s `relaybase-mailbox` R2. **Do not** store quote snapshots or signatures only in customer R2. |
 
 ### 1.4 Three core flows
 
@@ -92,15 +97,41 @@ Add a new app using the same pattern as existing `hq/console`, `hq/admin`, `hq/w
 4. Client calls hq/crm `POST /crm/enable` with `{ workerUrl, domain, apiKey, importedContacts }`
 5. hq/crm stores account↔Worker↔API key record + one-time import into Contacts table
 
+**D. Quote send & legal-grade-ready approval** *(added v0.2-rev1; still uses flow A for delivery)*
+1. Author finalizes line items → hq/crm **freezes** a canonical snapshot (`quotes.canonicalSnapshotJson`) and stores `contentHash = SHA-256(canonical)` in `strum-relaybase-crm`. After this point the quote body is immutable (edit = duplicate as new).
+2. hq/crm emails the public link via flow A (`POST {workerUrl}/v1/send`). The email is a pointer; the signed object is the central snapshot, not the R2 MIME copy.
+3. Customer opens `crm.relaybase.xyz/q/:publicToken`, reads the frozen quote, expresses **intent** (consent checkbox + typed name), then Approve/Reject.
+4. hq/crm binds `{ contentHash, action, signerEmail, occurredAt, nonce }` with HMAC-SHA256 or Ed25519 (`QUOTE_SIGNING_SECRET`, `signatureKeyId`), writes `quote_signatures` + an **append-only** `quote_audit_events` row (hash-chained). IP/UA are supporting evidence, not the signature.
+5. Pipeline Quoted → Won on approve (P0-4). Author (or later auditor) verifies from D1 alone: recompute hash of snapshot, recompute MAC/signature, walk the audit chain. Customer R2 mutation cannot rewrite this record.
+
 ```mermaid
 flowchart LR
   UI["main/app UI\n(crm mode)"] -->|"session cookie (.relaybase.xyz)"| CRM["hq/crm\ncrm.relaybase.xyz"]
   CRM -->|"read"| OPS["D1 strum-relaybase-ops\naccounts, account_workers"]
-  CRM -->|"read/write"| CRMDB["D1 strum-relaybase-crm\ncontacts, pipeline, campaigns,\nsequences, quotes, tracking"]
+  CRM -->|"read/write"| CRMDB["D1 strum-relaybase-crm\ncontacts, pipeline, campaigns,\nsequences, quotes, signatures,\naudit, tracking"]
   CRM -->|"POST /v1/send (API key)"| W["Customer Worker\n*.workers.dev"]
   CRM -->|"GET /v1/events (API key)"| W
   W -->|"actual send/receive"| R2["Customer R2 / D1\n(RELAYBASE_DB, mail source)"]
 ```
+
+### 1.5 Quote integrity model (v0.2-rev1)
+
+Informal “Approve click + timestamp/IP” is **not** treated as an electronic signature. v0.2 Quote approval targets **SES+ / AdES-adjacent** reliability (below), not QES.
+
+**Design recommendation (not legal advice) — map to UNCITRAL Model Law on Electronic Signatures (2001) Art. 6 and eIDAS AdES:**
+
+| Criterion | International reference | v0.2 minimum (feasible on hq/crm) | Deferred (P2-2 / v0.3+) |
+|---|---|---|---|
+| **Intent** | eIDAS: signature used to sign; clear act of approval | Explicit consent copy + required checkbox + typed display name before Approve/Reject | Qualified certificate “I sign” ceremony |
+| **Attribution** | UNCITRAL 6(a)(b): creation data linked to, and under control of, the signatory | Unique unguessable token delivered only to `contacts.email`; recorded `signerEmail` / typed name; token is single-use | Signer-held private key, WebAuthn, national eID, OTP step-up |
+| **Integrity** | UNCITRAL 6(c)(d); eIDAS AdES: subsequent change detectable | SHA-256 of frozen canonical snapshot; sent quotes immutable; signature covers the hash | PDF/A + PAdES, content timestamping authority (TSA) |
+| **Independent audit trail** | eIDAS evidence / record | Append-only, hash-chained `quote_audit_events` in **central** D1 `strum-relaybase-crm` | External qualified trust service / timestamp |
+| **Record retention** | Commercial practice; eIDAS evidence retention | Retain snapshot + signature + audit ≥ **7 years** (product default; account cannot hard-delete a signed quote in v0.2) | Jurisdiction-specific legal hold, customer-exportable evidence pack as a first-class product |
+| **Sole control of signing key** | UNCITRAL 6(b); eIDAS AdES “sole control” | **Partial only**: inbox control of the mailed token ≈ SES+; the HMAC/Ed25519 key is Relaybase-held | QES: qualified certificate + QSCD; SignWell / DocuSign / EU QTSP |
+
+**Why this is enough for v0.2 (and why it is not QES).** Email + frozen-hash + explicit intent + independent central audit is the usual commercial-quote pattern (clickwrap / SES+). Most B2B quote/approve flows rely on that combination. It does **not** satisfy AdES “sole control of signature-creation data” or eIDAS QES (qualified certificate + qualified device). Do not label the v0.2 button “legally binding e-signature” or “QES.” UI copy: **“Approve this quote”** plus a short evidence receipt (hash prefix, time, signer).
+
+**Central vs customer R2.** If the only copy of “what was approved” is the email in the customer’s R2, Relaybase cannot independently prove integrity or support non-repudiation after R2 overwrite. v0.2 therefore **requires** the snapshot/hash/signature/audit in `strum-relaybase-crm`, independent of Worker R2.
 
 ---
 
@@ -130,7 +161,7 @@ Proposed routes:
 | `/crm/campaigns/:id` | Campaign compose/send/stats |
 | `/crm/sequences` | Drip sequence list & edit |
 | `/crm/quotes` | Quote list & compose |
-| `/crm/quotes/:id` | Quote detail/tracking |
+| `/crm/quotes/:id` | Quote detail/tracking **+ signature evidence** |
 
 ### 2.3 New client layer
 
@@ -165,7 +196,34 @@ sequence_steps  { id, sequenceId, order, waitDays, subject, body }
 sequence_runs   { id, sequenceId, contactId, currentStep, status(active|done|stopped), startedAt, nextStepDueAt }
 
 quotes          { id, accountLinkId, contactId, itemsJson, total, status(draft|sent|approved|rejected),
-                  publicToken, sentAt?, respondedAt?, respondedIp?, respondedUa?, stripePaymentLinkUrl? }
+                  publicToken, sentAt?, respondedAt?, respondedIp?, respondedUa?, stripePaymentLinkUrl?,
+                  -- legal-grade-ready (v0.2-rev1)
+                  canonicalSnapshotJson?,     -- frozen at send; source of contentHash
+                  contentHash?,               -- SHA-256 hex of canonical snapshot
+                  contentHashAlg,             -- 'sha-256'
+                  sentFromEmail?,             -- mailbox that delivered the token (attribution context)
+                  retentionUntil? }           -- default sentAt + 7y; signed rows: no hard delete
+
+quote_signatures { id, quoteId, action(approve|reject),
+                   signerEmail, signerDisplayName?,
+                   intentText,                -- exact consent copy shown
+                   intentAcceptedAt,
+                   contentHash,               -- MUST equal quotes.contentHash
+                   signatureAlg,              -- 'hmac-sha256' | 'ed25519'
+                   signatureKeyId,
+                   signatureValue,            -- MAC/sig over (contentHash || action || signerEmail || occurredAt || nonce)
+                   nonce,
+                   tokenHash,                 -- hash of publicToken used (do not store raw token after respond)
+                   occurredAt, clientIp, clientUa }
+
+quote_audit_events { id, quoteId, seq,        -- append-only, hash-chained; no UPDATE/DELETE
+                     type(created|sent|viewed|intent_shown|signed|rejected|verify_checked),
+                     contentHash?,
+                     payloadJson,
+                     prevEventHash,           -- eventHash of prior row for this quote (or zeros)
+                     eventHash,               -- SHA-256(seq || type || payload || contentHash || prevEventHash || occurredAt)
+                     actorType(author|signer|system),
+                     occurredAt }
 
 scheduled_jobs  { id, accountLinkId, kind(campaign|sequence_step), refId, runAt, status(pending|done|failed) }
 
@@ -175,6 +233,8 @@ webhooks_inbound{ id, accountLinkId, token, createdAt }  -- inbound webhook for 
 ```
 
 The UNIQUE constraint on `pipeline_cards.contactId` enforces at schema level the P0-4 decision “no multiple deals per Contact in v0.2”. `tracking_events` is high-write volume, so batch insert goes through Cloudflare Queue `crm-tracking-events` (§1.3, P0-2). Separating `campaigns.bodyMarkdown` (content) from `campaigns.templateId → templates.htmlSource` (design) is intentional—see P0-6.
+
+> **Revised (v0.2-rev1) — Quote integrity.** `respondedAt` / `respondedIp` / `respondedUa` remain as **supporting evidence**. They are not the signature. The signature of record is `quote_signatures.signatureValue` bound to `quotes.contentHash`. `quote_audit_events` is insert-only (application + least-privilege D1 role); a later `verify_checked` row records that an author/auditor re-validated hash + MAC. Application code must refuse `UPDATE`/`DELETE` on signed `quotes` content fields and on all `quote_audit_events` rows.
 
 Existing Worker-side `audience_groups` / `audience_contacts` / `broadcasts` (`RELAYBASE_DB`) are **not deleted**—kept legacy read-only (§8).
 
@@ -471,47 +531,70 @@ Automatically send a few emails in order when a new lead arrives—automate manu
 | UC-7 | Error | Try to add 6th step | Client block | “+ Add step” disabled + tooltip “Max 5 steps” |
 | UC-8 | Error | Contact deleted at step send time | `status=stopped` skip | No user alert (log on sequence detail only) |
 
-#### P1-2. Quote — web link
+#### P1-2. Quote — web link + legal-grade-ready approval
 
 **Purpose**
-Instead of pricing in email body, one-click approve on the web.
+Instead of pricing in email body, one-click approve on the web—with a **legal-grade-ready** evidence pack so the click is more than informal acknowledgement.
 
-- **In v0.2**: Line-item table template → unique public URL (`publicToken`) → send via flow A → customer approves/rejects on web (timestamp + IP) → status transition + pipeline auto-move
-- **Out of v0.2**: PDF, legally binding e-sign, multi-currency, tax, item catalog
+> **Revised (v0.2-rev1).** Previous scope (“approve/reject + timestamp/IP”) is **informal approval only** and does not meet UNCITRAL MLES Art. 6 reliability or eIDAS AdES. v0.2 now includes the **minimum SES+ / AdES-adjacent** layer in §1.5 (intent, attribution, integrity, independent central audit, retention). It still does **not** include QES or a qualified TSP. This is a product-design recommendation, not legal advice.
+
+- **In v0.2**:
+  - Line-item table → unique public URL (`publicToken`) → send via flow A
+  - **Freeze** canonical snapshot + SHA-256 `contentHash` at send; sent quotes are immutable (edit = duplicate)
+  - Public approve/reject **only after** explicit intent (consent statement + required checkbox + typed name). Use shadcn `FieldCheck` / inputs—no native checkbox.
+  - Cryptographic binding: HMAC-SHA256 or Ed25519 over `(contentHash ‖ action ‖ signerEmail ‖ occurredAt ‖ nonce)` with `QUOTE_SIGNING_SECRET` + `signatureKeyId`
+  - Independent **append-only, hash-chained** audit in `strum-relaybase-crm` (`quote_signatures`, `quote_audit_events`)—not customer R2
+  - Supporting evidence: server timestamp, IP, UA (kept; no longer sufficient alone)
+  - Author verification view: recompute hash + MAC, show valid/invalid + hash prefix
+  - Status transition + pipeline auto-move (Quoted → Won on approve)
+  - Product retention: signed snapshot + signature + audit ≥ 7 years; no hard-delete of signed quotes in v0.2
+- **Out of v0.2**: PDF/PAdES, QES / qualified certificates / QSCD, SignWell·DocuSign·QTSP, TSA timestamps, WebAuthn / signer-held keys, email OTP step-up, multi-currency, tax, item catalog, marketing copy that claims “legally binding e-signature”
 
 **Data · cache**
-- `quotes` (§3): `itemsJson: [{ name, qty, unitPrice }]`, `total` recalculated server-side (don’t trust client)
-- `publicToken`: 32-byte unguessable random—public URL `crm.relaybase.xyz/q/:publicToken` is token-gated (no login)
-- Public quote page: Cache API 30s; approve/reject POST bypasses cache
+- `quotes`, `quote_signatures`, `quote_audit_events` (§3). `itemsJson: [{ name, qty, unitPrice }]`, `total` recalculated server-side (don’t trust client). Canonical snapshot is the **server-normalized** JSON (stable key order, integer minor-units for money) hashed with SHA-256.
+- `publicToken`: 32-byte unguessable random—public URL `crm.relaybase.xyz/q/:publicToken` is token-gated (no login). After respond, store `tokenHash` only; treat the token as single-use.
+- Public quote page: Cache API 30s for **GET** of frozen snapshot; approve/reject POST bypasses cache and is serialized (idempotent).
+- Signing secret: hq/crm Worker secret, rotatable via `signatureKeyId`. Old key ids remain for verify. Access-logged like API-key decrypt.
+
+**Canonical snapshot (minimum fields, hashed):**
+`{ quoteId, accountLinkId, contactId, contactEmail, items[], total, currency:"USD"(fixed v0.2), sentFromEmail, sentAt }` — no client-supplied extra keys.
 
 **UI**
 - `/crm/quotes` list (customer/amount/status/sent date)
-- `/crm/quotes/:id` compose — pick Contact, line items (add/remove/auto total), “Send”
-- Public `crm.relaybase.xyz/q/:token` — read-only table + total + Approve/Reject; if already responded, show result only (no re-click)
-- Quote detail: “Customer approved 2026-09-15 14:20”
+- `/crm/quotes/:id` compose — pick Contact, line items (add/remove/auto total), “Send”. “Add quote” is Dialog from the list toolbar (`dashboard-add-dialog`); detail page is compose/edit of an existing draft, not a persistent inline create Card.
+- `/crm/quotes/:id` after send — read-only items + **Evidence** panel: content hash (full), signature alg/key id, signer, time, IP, verify status
+- Public `crm.relaybase.xyz/q/:token` — read-only table + total; intent block (fixed legal-style copy, `FieldCheck`, typed name matching Contact name **or** email local-part—server decides); then Approve/Reject. If already responded, result + hash prefix only (no re-click)
+- Quote detail: “Customer approved 2026-09-15 14:20 · hash 9f3a… · signature valid”
+
+**Public-page intent copy (v0.2, English product default):**
+“I am [typed name], I have read this quote, and I [approve / reject] it. I understand this records my decision with the quote contents shown above.”
 
 **Happy path**
 1. `/crm/quotes` → “New quote” → Contact → line items → “Send”
-2. hq/crm issues `publicToken` + flow A email with quote link
-3. Customer opens link → public page → Approve
-4. `POST /q/:token/respond { action: "approve" }` → `status=approved`, record `respondedAt`/IP/UA
+2. hq/crm freezes snapshot + `contentHash`, issues `publicToken`, writes `quote_audit_events` type=`sent`, then flow A email with quote link
+3. Customer opens link → `viewed` audit → reads table → checks intent + types name → Approve
+4. `POST /q/:token/respond { action, signerDisplayName, intentAccepted: true }` → verify token, freeze still matches hash, write `quote_signatures` + `signed` audit, `status=approved`, record IP/UA
 5. Pipeline card Quoted → Won; activity “Quote approved”
-6. Author sees status badge on next `/crm/quotes` visit (no real-time notification in v0.2)
+6. Author sees status + Evidence panel on next `/crm/quotes/:id` visit (no real-time notification in v0.2)
 
 **Use cases**
 
 | UC | Type | Trigger/condition | System behavior | User-visible |
 |---|---|---|---|---|
-| UC-1 | Success | Customer approves | `status=approved`, pipeline move | (Customer) thank-you screen / (Author) green “Approved” badge |
-| UC-2 | Success | Customer rejects | `status=rejected` | (Customer) acknowledgment / (Author) red “Rejected”; no auto Lost (manual) |
-| UC-3 | Error | Revisit after response | Idempotent block | (Customer) read-only “Already [approved/rejected]”, no buttons |
+| UC-1 | Success | Customer approves with intent + name | Signature + audit + `status=approved`, pipeline move | (Customer) thank-you + hash prefix / (Author) green “Approved” + Evidence |
+| UC-2 | Success | Customer rejects with intent + name | Signature over `action=reject` + audit | (Customer) acknowledgment / (Author) red “Rejected”; no auto Lost (manual) |
+| UC-3 | Error | Revisit after response | Idempotent block | (Customer) read-only “Already [approved/rejected]” + hash prefix, no buttons |
 | UC-4 | Error | Invalid token | 404 | (Customer) “Quote not found. Check your link.” |
 | UC-5 | Error | Send with zero line items | Client validation | “Add at least one line item” |
 | UC-6 | Error | Negative/non-numeric qty/price | Client numeric fields | Red cell border “Numbers only” |
-| UC-7 | Error | Invalid recipient email on send | `/v1/send` fails | (Author) toast “Send failed: check recipient address”; stay draft |
-| UC-8 | Success | Save draft, finish later | `status=draft` | Gray “Draft” badge |
-| UC-9 | Error | Edit sent quote (`status=sent`) | Server blocks (audit) | “Sent quotes cannot be edited. Duplicate as new.” + duplicate button |
+| UC-7 | Error | Invalid recipient email on send | `/v1/send` fails | (Author) toast “Send failed: check recipient address”; stay draft; **do not** leave a sent-frozen row without a successful send (or mark `sent` only after `/v1/send` 2xx—implementation choice, pick one and document) |
+| UC-8 | Success | Save draft, finish later | `status=draft` (no hash freeze yet) | Gray “Draft” badge |
+| UC-9 | Error | Edit sent quote (`status=sent` / signed) | Server blocks (integrity) | “Sent quotes cannot be edited. Duplicate as new.” + duplicate button |
 | UC-10 | Error | Double-click approve | Idempotent | No extra UI change |
+| UC-11 | Error | Approve without checkbox or typed name | Client + server 400 | “Confirm the statement and type your name to continue” |
+| UC-12 | Error | Snapshot hash mismatch at respond (should be impossible if immutable) | 409, `verify` fail audit | (Customer) “This quote could not be verified. Contact the sender.” |
+| UC-13 | Success | Author opens Evidence / Verify | Recompute hash + MAC; write `verify_checked` audit | “Signature valid · hash matches snapshot” |
+| UC-14 | Error | Signing secret missing / unknown `signatureKeyId` | 500, no status change | (Customer) generic retry; internal alert. Do not approve without a signature row |
 
 #### P1-3. Form/webhook → auto-create Contact
 
@@ -615,8 +698,12 @@ Approved quotes can lead to payment (not full automation—attach link only).
 | UC-3 | Error | Empty optional field | Save OK | No “Pay now” (not an error) |
 | UC-4 | Error | Non-Stripe URL | No server domain check (v0.2, user responsibility) | Help text “Use only trusted payment links” |
 
-#### P2-2. E-signatures
-- **Fully out of v0.2.** P1-2 approve click + timestamp/IP is informal approval, not legal e-sign. SignWell etc. v0.3+ backlog only.
+#### P2-2. QES / qualified e-signatures (SignWell etc.)
+
+> **Revised (v0.2-rev1).** No longer “e-sign is fully out of v0.2.” **Legal-grade-ready SES+ / AdES-adjacent approval moved into P1-2.** This item is only the **QES / qualified TSP** layer.
+
+- **Out of v0.2 (unchanged as a product integration):** Qualified Electronic Signature, qualified certificates, QSCD / hardware devices, EU trust-list / eIDAS QES ceremony, SignWell / DocuSign / other QTSP or commercial e-sign vendors, TSA (qualified timestamp), PAdES/XAdES/CAdES baseline profiles, signer-held keys / WebAuthn as the signature-creation data.
+- **v0.3+ backlog:** Optional “Sign with SignWell” (or equivalent) on a quote when the customer needs QES or a vendor-attested certificate. P1-2 evidence remains the default path; QES is an upgrade, not a rewrite of Quote.
 
 #### P2-3. Chrome extension contact capture (Folk-style)
 - **Fully out of v0.2.** Separate Chrome Web Store pipeline; ROI vs effort. v0.3+ backlog.
@@ -637,11 +724,11 @@ Approved quotes can lead to payment (not full automation—attach link only).
 | P0-5 | Scheduled send | P0 | M1 | In (reduced) |
 | P0-6 | Content editor & design templates | P0 | M1 | In (reduced, Railmark reuse) |
 | P1-1 | Drip sequences | P1 | M2 | In (reduced) |
-| P1-2 | Web-link quotes | P1 | M2 | In (reduced) |
+| P1-2 | Web-link quotes + legal-grade-ready approval | P1 | M2 | In (reduced, SES+ / AdES-adjacent) |
 | P1-3 | Webhook lead capture | P1 | M2 | In (reduced) |
 | P1-4 | CSV import/export | P1 | M2 | In (reduced) |
 | P2-1 | Stripe payment link | P2 | M3 | In (minimal slice) |
-| P2-2 | E-signatures | P2 | — | Out of v0.2 |
+| P2-2 | QES / qualified e-sign (SignWell etc.) | P2 | — | Out of v0.2 (v0.3+); SES+ moved to P1-2 |
 | P2-3 | Chrome extension | P2 | — | Out of v0.2 |
 | P2-4 | AI draft generation | P2 | — | Out of v0.2 |
 
@@ -650,10 +737,12 @@ Approved quotes can lead to payment (not full automation—attach link only).
 ## 6. Milestones
 
 - **M1 (P0)**: `hq/crm` skeleton + D1 + auth (shared cookies) + Contacts + tracking pixel/redirect + pipeline kanban + scheduled send + follow-up reminder + Railmark content editor & templates (P0-6). CRM mode is usable for the first time.
-- **M2 (P1)**: Drip sequences, Quotes, webhook lead capture, CSV import/export.
-- **M3 (P2 minimal slice)**: Stripe Payment Link field on quotes. E-sign / Chrome / AI remain backlog only.
+- **M2 (P1)**: Drip sequences, Quotes **including legal-grade-ready approval** (canonical snapshot, content hash, intent UI, HMAC/Ed25519 bind, central append-only audit, author Verify), webhook lead capture, CSV import/export.
+- **M3 (P2 minimal slice)**: Stripe Payment Link field on quotes. **QES / SignWell / Chrome / AI remain backlog only.**
 
 Each milestone must be independently deployable—if M2 slips, M1 alone must make CRM mode work.
+
+> **Scope guard.** M2 Quote work is the SES+ evidence pack—not a SignWell integration and not a PDF signer. If M2 is at risk, ship freeze+hash+intent+audit **before** Evidence-panel polish; do not ship approve-click-only without a hash and audit row.
 
 ---
 
@@ -677,6 +766,22 @@ Each milestone must be independently deployable—if M2 slips, M1 alone must mak
 - **Abuse/rate limits**: First case of central server bulk-sending on behalf of accounts—per-account/per-campaign caps needed from v0.2 beta (similar to Broadcast `BROADCAST_BETA_MAX_RECIPIENTS` 50).
 - **Sync failures only**: Treat synchronous `/v1/send` failures as bounces; async bounce event parsing out of v0.2—may affect open/click accuracy awareness.
 
+### E-signature / Quote evidence (added v0.2-rev1)
+
+> Product-design risks, not a legal memo.
+
+- **Informal click is not an e-sign.** Shipping P1-2 as timestamp/IP-only would over-claim and under-serve UNCITRAL Art. 6 / eIDAS AdES. v0.2-rev1 moves the minimum evidence pack into P1-2; marketing must still not say “QES” or “legally binding in the EU/US/KR.”
+- **AdES “sole control” is only partial.** The HMAC/Ed25519 key is Relaybase-held. Attribution rests on *control of the inbox that received `publicToken`*. Token leak (forwarded email, shared mailbox, malware) = an attacker can produce a valid-looking signature. Residual SES+ risk; mitigate with 32-byte tokens, single-use, HTTPS-only public pages, and optional v0.3 OTP/WebAuthn. Do not pretend this is signer-held key material.
+- **Independent audit vs customer R2.** Mail in customer R2 can be deleted or rewritten. If snapshot/hash/signature lived only there, integrity and non-repudiation collapse. Central D1 is mandatory. Conversely, **Relaybase operators** with D1 write access could theoretically insert a fake audit row unless we add operational controls (least-privilege role, no UPDATE on audit table, key access logs, optional periodic export of audit hashes). v0.2 is tamper-**evident** to the customer (hash chain + signing key), not operator-unforgeable in the QES sense.
+- **Signing-key compromise.** If `QUOTE_SIGNING_SECRET` leaks, an attacker can forge `signatureValue` for any known `contentHash`. Rotation via `signatureKeyId` is required; a leak is an incident (revoke + re-sign is **not** possible without the signer—flag affected quotes `signatureValid=unknown`). Same KMS/access-log discipline as Worker API keys (§1.3).
+- **Clock and timestamp quality.** `occurredAt` is hq/crm server time, not a qualified TSA. Fine for commercial quotes; insufficient where a jurisdiction demands a qualified timestamp. Document as “Relaybase server time (UTC).”
+- **Retention vs erasure.** 7-year retain of signed quotes conflicts with GDPR/CCPA deletion requests. Open issue: signed evidence may need a statutory-retention exception in ToS/DPA; unsigned drafts can be deleted. v0.2: no hard-delete of signed rows; legal/product to resolve before GA.
+- **Jurisdiction variance.** UNCITRAL is a model law; ESIGN/UETA (US), eIDAS (EU), and Korean Digital Signature / Framework Act on Electronic Documents differ. A SES+ quote approval may be persuasive commercially and still fail a specific statutory form (real estate, consumer credit, wet-ink mandates). **Out of product scope to enumerate.** Flag in ToS: “not a substitute for qualified e-sign where required.”
+- **Hash algorithm agility.** SHA-256 is the v0.2 `contentHashAlg`. Store the alg name so a future migration is possible; do not silently re-hash old snapshots.
+- **Currency/canonicalization bugs = false integrity.** If snapshot serialization is unstable (key order, float money), hashes will not verify. Require integer minor-units and explicit canonical JSON rules in the implementation plan.
+- **Contact delete vs signed quotes.** P0-1 UC-8 hard-deletes contacts. A signed quote must **not** lose `signerEmail` / snapshot. Open issue: block contact delete when a signed quote exists, or tombstone the contact and keep quote evidence. Decide in M2 implementation plan (recommend: block or tombstone).
+- **QES gap.** Customers who need qualified signatures (public sector, some EU B2G) will not be served by P1-2. P2-2 / SignWell remains the honest upgrade path.
+
 ---
 
 ## 9. Out of scope for this document
@@ -685,5 +790,29 @@ Each milestone must be independently deployable—if M2 slips, M1 alone must mak
 - Exact Drizzle types/migration SQL for `hq/crm`
 - Pixel-perfect Contacts/Pipeline/Campaigns UI design
 - Email template editor implementation (rich-text library choice, etc.)
+- Legal opinion on enforceability of Quote approval in any jurisdiction; ToS/DPA retention-vs-erasure wording
+- QES / QTSP / SignWell integration design (P2-2 backlog only)
 
-After this document is approved, a separate implementation plan (file-level task list) for M1 will be written.
+After this document is approved, a separate implementation plan (file-level task list) for M1 will be written. M2 Quote implementation plan must include canonical JSON rules, `QUOTE_SIGNING_SECRET` rotation, and D1 privilege split for `quote_audit_events`.
+
+---
+
+## 10. Revision notes (v0.2-rev1)
+
+Kept: overall section structure, P0/P1/P2 numbering, central CRM server, Worker **zero new routes**, flows A–C, and M1–M3 independence.
+
+| Section | What changed | Why |
+|---|---|---|
+| Header | Status + disclaimer (not legal advice) | Avoid over-claiming e-sign |
+| §1.1 / §1.3 | Quotes snapshot/hash/signature/audit are central D1 SoR; signing secret; R2 is not quote SoR | Integrity + independent verification if customer R2 is mutated |
+| §1.2 | Public quote/sign/verify stay on `crm.relaybase.xyz` | Still zero Worker routes |
+| §1.4 flow D | New quote freeze → send → intent → MAC → audit | Makes the verification path implementable |
+| §1.5 | UNCITRAL Art. 6 / eIDAS AdES mapping table | Required international criteria, v0.2-feasible only |
+| §3 | `quotes` hash/snapshot/retention; `quote_signatures`; `quote_audit_events` | Data model for legal-grade-ready |
+| P1-2 | In: SES+ evidence pack. Out: QES/PDF/TSP. New UCs 11–14 | Rebalance vs old “timestamp/IP = done” |
+| P2-2 | Renamed to QES; SES+ moved to P1-2 | Stop saying “e-sign fully out” while still not building SignWell |
+| §5 / §6 | Status + M2 wording + scope guard | Milestones stay; M2 Quote is evidence pack not vendor e-sign |
+| §8 | E-sign legal/technical risks | Token leak, key leak, operator forge, retention, jurisdiction |
+| §9 | Legal opinion + QES design out of this doc | Boundary of the spec |
+
+**Intentionally not in v0.2:** QES, SignWell, PDF/PAdES, TSA, WebAuthn/OTP step-up, new Worker routes, expanding CRM off the central server.

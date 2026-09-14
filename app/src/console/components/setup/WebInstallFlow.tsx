@@ -21,6 +21,7 @@ import {
   openWebCfOAuthPopup,
   webOAuthStartHrefForPath,
 } from "@/lib/desktop/bridge/web-oauth-authorize";
+import { fetchWebCfOAuthSessionPresent } from "@/lib/desktop/bridge/web-oauth-complete";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { ownerLogin } from "@/lib/desktop/auth";
 import { saveUserConnection } from "@/lib/desktop/user-data";
@@ -48,6 +49,34 @@ export function WebAuthorizeCard({
   const router = useRouter();
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
+  // Whether a valid CF OAuth session cookie is already present.
+  // "checking" → still probing /api/oauth/session on mount.
+  // "present"  → cookie exists; show "Continue" instead of forcing re-auth.
+  // "absent"  → no cookie; show the normal authorize card.
+  // Desktop runtime skips the probe entirely (OAuth lives in the OS
+  // keyring, not a cookie) so we initialise straight to "absent".
+  const [sessionCheck, setSessionCheck] = useState<
+    "checking" | "present" | "absent"
+  >(() => (isDesktopRuntime() ? "absent" : "checking"));
+
+  // On mount, check whether an OAuth session cookie is already present.
+  // Without this, the card always shows the "Authorize" button — so a
+  // user who just authorized, navigated to /setup/progress, then hit Back
+  // to /setup/install and re-entered would be asked to authorize again
+  // even though their sealed cookie is still valid. That was the
+  // "back → re-enter → asked to auth again" loop.
+  useEffect(() => {
+    if (sessionCheck !== "checking") return;
+    let active = true;
+    void (async () => {
+      const present = await fetchWebCfOAuthSessionPresent();
+      if (!active) return;
+      setSessionCheck(present ? "present" : "absent");
+    })();
+    return () => {
+      active = false;
+    };
+  }, [sessionCheck]);
 
   function startAuthorize() {
     if (isDesktopRuntime()) return;
@@ -69,6 +98,60 @@ export function WebAuthorizeCard({
   function handleCancelWait() {
     setOauthBusy(false);
     setOauthError(oauthAuthorizationIncompleteHelp("cancelled"));
+  }
+
+  // While probing for an existing session, show a neutral loading state
+  // so the user doesn't see a flash of the authorize button that would
+  // immediately disappear.
+  if (sessionCheck === "checking") {
+    return (
+      <SetupCloudflareAuthorizeCard
+        oauthBusy={true}
+        oauthError={null}
+        onAuthorize={() => {}}
+        onCancelWait={() => {}}
+        authorizeLabel={buttonLabel}
+        diagramWaiting={true}
+        waitingSubtitle="Checking your Cloudflare authorization…"
+        showCancelWait={false}
+      />
+    );
+  }
+
+  // Already authorized — don't force the user through the authorize
+  // popup again. Offer a direct "Continue" plus a secondary "Authorize
+  // again" path for the rare case they need to switch Cloudflare accounts.
+  if (sessionCheck === "present" && !oauthBusy) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center py-2">
+        <div className="flex w-[300px] max-w-full flex-col items-center gap-3">
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+            Cloudflare authorization is active
+          </p>
+          <p className="text-center text-xs text-muted-foreground">
+            You already authorized Relaybase. Continue to the install, or authorize again to
+            switch Cloudflare accounts.
+          </p>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={() => router.push(afterAuthPath)}
+          >
+            Continue to install
+          </Button>
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:underline"
+            onClick={() => {
+              setSessionCheck("absent");
+              void startAuthorize();
+            }}
+          >
+            Authorize again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

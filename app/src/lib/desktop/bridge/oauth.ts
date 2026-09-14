@@ -162,3 +162,19 @@ export async function listenCfOAuthResult(handler: {
 export async function desktopRefreshInstallToken(): Promise<DesktopCredentials> {
   return invoke("refresh_install_token");
 }
+
+/**
+ * Whether a usable CF OAuth session exists (in-memory or keyring) without
+ * throwing when the user has not authorized. Used by the install screen to
+ * decide between "Authorize" and "Continue to install" — without it, a
+ * user who just authorized and navigated Back would be asked to authorize
+ * again even though the keyring holds a valid refresh token.
+ */
+export async function desktopCfOauthPresent(): Promise<boolean> {
+  if (!isDesktopRuntime()) return false;
+  try {
+    return await invoke<boolean>("cf_oauth_present");
+  } catch {
+    return false;
+  }
+}

@@ -63,6 +63,7 @@ export function CampaignContentView() {
   if (!campaign) return null;
 
   return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
     <CampaignComposeForm
       campaignId={campaignId}
       templates={templates}
@@ -82,5 +83,6 @@ export function CampaignContentView() {
       saveState={saveState}
       onSave={() => void handleSave()}
     />
+    </div>
   );
 }

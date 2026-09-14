@@ -54,7 +54,7 @@ export default function MarkdownEditor({
           html: editor.blocksToHTMLLossy(),
         })
       }
-      className="min-h-0 flex-1 [&_.bn-container]:h-full [&_.bn-container]:border-0 [&_.bn-container]:bg-transparent [&_.bn-editor]:px-1"
+      className="h-full min-h-0 w-full bg-background [&_.bn-container]:h-full [&_.bn-container]:min-h-0 [&_.bn-container]:border-0 [&_.bn-container]:bg-background [&_.bn-editor]:min-h-full [&_.bn-editor]:bg-background [&_.bn-editor]:px-3 [&_.bn-editor]:pb-3"
     />
   );
 }

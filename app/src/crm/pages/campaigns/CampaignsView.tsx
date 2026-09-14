@@ -20,9 +20,11 @@ function CampaignsRoute() {
   const detail = campaignDetailFromSearch(searchParams);
   if (detail) {
     return (
-      <CampaignDetailProvider key={detail.campaignId} campaignId={detail.campaignId}>
-        <CampaignDetailSwitch tab={detail.tab} />
-      </CampaignDetailProvider>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CampaignDetailProvider key={detail.campaignId} campaignId={detail.campaignId}>
+          <CampaignDetailSwitch tab={detail.tab} />
+        </CampaignDetailProvider>
+      </div>
     );
   }
   return <CampaignsListView />;

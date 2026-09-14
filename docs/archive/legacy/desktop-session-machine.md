@@ -206,6 +206,6 @@ and enters the owner unlock / passtoken flow without wiping the owner keyring.
 2. Add a transition in `reconcileFromStatuses` or a store action — never mutate
    `phase` from a view; call an action (e.g. `requestPrompt()`).
 3. Add a `case` to the gate `switch` and a view that only renders.
-4. If it ships in the Worker, rebuild the bundle (see `AGENTS.md` → *Worker
+4. If it ships in the Worker, rebuild the bundle (see `AGENT.md` → *Worker
    bundle*).
 5. Add a transition test in `app/src/lib/desktop/app-session/store.test.ts` (inject `AppSessionDeps`).

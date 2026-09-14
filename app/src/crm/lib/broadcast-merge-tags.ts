@@ -1,3 +1,4 @@
+import { PLAIN_TEXT_TEMPLATE_ID } from "@/crm/lib/broadcast-templates";
 import type { BroadcastMember } from "@/lib/crm/api";
 
 export type BroadcastMergeTagCategory = "contact" | "system";
@@ -118,7 +119,8 @@ export function previewPersonaOptions(members: BroadcastMember[]): {
 
 export function templateThumbnailVariant(
   templateId: string,
-): "minimal" | "header" | "card" {
+): "minimal" | "header" | "card" | "plain" {
+  if (templateId === PLAIN_TEXT_TEMPLATE_ID) return "plain";
   if (templateId.includes("header")) return "header";
   if (templateId.includes("card")) return "card";
   return "minimal";

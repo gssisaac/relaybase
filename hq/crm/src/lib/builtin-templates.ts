@@ -2,6 +2,12 @@
  * P0-6 "design" layer — pure visual wrappers around `{{content}}`. Content
  * (campaigns.bodyMarkdown) is authored separately; these never carry copy.
  */
+export const PLAIN_TEXT_TEMPLATE_ID = "tpl-plain-text";
+
+export function isPlainTextTemplate(templateId: string | null | undefined): boolean {
+  return templateId === PLAIN_TEXT_TEMPLATE_ID;
+}
+
 export type BuiltinTemplate = {
   id: string;
   name: string;
@@ -16,6 +22,14 @@ const FOOTER = `
     </tr>`;
 
 export const BUILTIN_TEMPLATES: BuiltinTemplate[] = [
+  {
+    id: PLAIN_TEXT_TEMPLATE_ID,
+    name: "Plain text",
+    htmlSource: `{{content}}
+
+---
+Unsubscribe: {{unsubscribe_url}}`,
+  },
   {
     id: "tpl-minimal",
     name: "Minimal",

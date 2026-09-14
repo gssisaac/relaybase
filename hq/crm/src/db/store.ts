@@ -247,6 +247,20 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
     }
   }
 
+  const templateIds = new Set(store.templates.map((t) => t.id));
+  const now = new Date().toISOString();
+  for (const tpl of BUILTIN_TEMPLATES) {
+    if (templateIds.has(tpl.id)) continue;
+    store.templates.push({
+      id: tpl.id,
+      accountLinkId: null,
+      name: tpl.name,
+      htmlSource: tpl.htmlSource,
+      isBuiltin: true,
+      createdAt: now,
+    });
+  }
+
   for (const row of store.recipients) {
     const legacy = row as Recipient & { broadcastMemberId?: string };
     if (!row.audienceMemberId && legacy.broadcastMemberId) {

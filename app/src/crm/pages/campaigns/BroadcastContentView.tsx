@@ -9,6 +9,7 @@ import {
   resolvePreviewRecipient,
   type PreviewPersonaId,
 } from "@/crm/lib/broadcast-merge-tags";
+import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
 import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import {
@@ -94,14 +95,36 @@ export function BroadcastContentView() {
   }, [subject, templateId, broadcast, editable, persistDraft]);
 
   const template = templates.find((t) => t.id === templateId);
+  const plainTextTemplate = isPlainTextTemplate(templateId);
+  const previewMergeOptions = useMemo(() => ({ unsubscribeUrl: "#" as const }), []);
+
+  const previewSubject = useMemo(
+    () => applyBroadcastMergeTags(subject, previewRecipient, previewMergeOptions),
+    [subject, previewRecipient, previewMergeOptions],
+  );
+
   const renderedPreview = useMemo(() => {
+    if (plainTextTemplate) {
+      const body = bodyMarkdown.trim() || "Nothing to preview yet";
+      const wrapped =
+        template?.htmlSource.replaceAll("{{content}}", body) ??
+        `${body}\n\n---\nUnsubscribe: {{unsubscribe_url}}`;
+      return applyBroadcastMergeTags(wrapped, previewRecipient, previewMergeOptions);
+    }
     const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
     if (!template) {
-      return applyBroadcastMergeTags(content, previewRecipient, { unsubscribeUrl: "#" });
+      return applyBroadcastMergeTags(content, previewRecipient, previewMergeOptions);
     }
     const wrapped = template.htmlSource.replaceAll("{{content}}", content);
-    return applyBroadcastMergeTags(wrapped, previewRecipient, { unsubscribeUrl: "#" });
-  }, [template, previewHtml, previewRecipient]);
+    return applyBroadcastMergeTags(wrapped, previewRecipient, previewMergeOptions);
+  }, [
+    template,
+    plainTextTemplate,
+    bodyMarkdown,
+    previewHtml,
+    previewRecipient,
+    previewMergeOptions,
+  ]);
 
   async function handleSave() {
     await checkpoint("manual-save");
@@ -141,6 +164,11 @@ export function BroadcastContentView() {
           });
         }}
         renderedPreview={renderedPreview}
+        previewSubject={previewSubject}
+        previewFromName={broadcast.fromName}
+        previewFromEmail={broadcast.fromEmail ?? "you@example.com"}
+        previewToEmail={previewRecipient.email}
+        previewIsPlainText={plainTextTemplate}
         device={device}
         setDevice={setDevice}
         editable={Boolean(editable)}

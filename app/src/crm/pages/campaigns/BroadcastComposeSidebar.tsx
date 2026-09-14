@@ -21,10 +21,22 @@ import {
   type PreviewPersonaId,
   type PreviewRecipient,
 } from "@/crm/lib/broadcast-merge-tags";
+import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
 import type { CrmTemplate } from "@/lib/crm/api";
 import { cn } from "@/lib/utils";
 
-function TemplateWireframe({ variant }: { variant: "minimal" | "header" | "card" }) {
+function TemplateWireframe({ variant }: { variant: "minimal" | "header" | "card" | "plain" }) {
+  if (variant === "plain") {
+    return (
+      <div className="pointer-events-none mb-2 px-0.5" aria-hidden>
+        <div className="space-y-1.5">
+          <div className="h-1 w-full rounded bg-muted-foreground/25" />
+          <div className="h-1 w-[92%] rounded bg-muted-foreground/20" />
+          <div className="h-1 w-[75%] rounded bg-muted-foreground/15" />
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className={cn(
@@ -181,7 +193,9 @@ export function BroadcastComposeSidebar({
                       <span className="block text-sm font-medium leading-snug">{t.name}</span>
                       {t.isBuiltin ? (
                         <span className="mt-1 block text-[10px] text-muted-foreground">
-                          Built-in · 600px max width
+                          {isPlainTextTemplate(t.id)
+                            ? "Built-in · plain text"
+                            : "Built-in · 600px max width"}
                         </span>
                       ) : null}
                     </button>

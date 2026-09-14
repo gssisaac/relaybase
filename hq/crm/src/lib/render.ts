@@ -1,5 +1,7 @@
 import { marked } from "marked";
 
+import { isPlainTextTemplate } from "./builtin-templates";
+
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's
  * `{{content}}`, merge merge tags, then tracking pixel/redirects (P0-2),
@@ -84,31 +86,61 @@ export type RenderBroadcastInput = {
   broadcastId: string;
   recipientId: string;
   bodyMarkdown: string;
+  templateId?: string | null;
   templateHtml: string;
   recipient: RenderRecipientInput;
   unsubscribeToken: string;
   crmBaseUrl: string;
 };
 
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function applyRecipientMergeTags(
+  text: string,
+  recipient: RenderRecipientInput,
+  unsubscribeUrl: string,
+): string {
+  const displayName =
+    recipient.name?.trim() ||
+    recipient.email.split("@")[0] ||
+    recipient.email;
+  return text
+    .replaceAll("{{contact.name}}", displayName)
+    .replaceAll("{{contact.email}}", recipient.email)
+    .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
+}
+
 export function renderBroadcastForRecipient(input: RenderBroadcastInput): string {
+  const unsubscribeUrl = `${input.crmBaseUrl}/crm/unsubscribe/${input.broadcastId}/${input.unsubscribeToken}`;
+
+  if (isPlainTextTemplate(input.templateId)) {
+    const merged = applyRecipientMergeTags(
+      input.templateHtml.replaceAll("{{content}}", input.bodyMarkdown ?? ""),
+      input.recipient,
+      unsubscribeUrl,
+    );
+    const html = `<div style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">${escapeHtml(merged)}</div>`;
+    const pixelUrl = `${input.crmBaseUrl}/crm/t/o/${input.broadcastId}/${input.recipientId}`;
+    return `${html}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;" />`;
+  }
+
   const contentHtml = sanitizeBroadcastContentImages(
     markdownToHtml(input.bodyMarkdown),
     input.broadcastId,
     input.crmBaseUrl,
   );
-  const unsubscribeUrl = `${input.crmBaseUrl}/crm/unsubscribe/${input.broadcastId}/${input.unsubscribeToken}`;
 
   let html = input.templateHtml
     .replaceAll("{{content}}", contentHtml)
     .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
 
-  const displayName =
-    input.recipient.name?.trim() ||
-    input.recipient.email.split("@")[0] ||
-    input.recipient.email;
-  html = html
-    .replaceAll("{{contact.name}}", displayName)
-    .replaceAll("{{contact.email}}", input.recipient.email);
+  html = applyRecipientMergeTags(html, input.recipient, unsubscribeUrl);
 
   html = html.replace(/href="([^"]*)"/g, (match, url: string) => {
     if (!url || url.startsWith("mailto:") || url.startsWith("#") || url.includes("/crm/t/")) {

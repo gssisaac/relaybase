@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { BroadcastEmailPreview } from "@/crm/components/BroadcastEmailPreview";
 import { BroadcastComposeSidebar } from "@/crm/pages/campaigns/BroadcastComposeSidebar";
 import {
   BROADCAST_MERGE_TAGS,
@@ -18,8 +19,6 @@ import {
 import type { CrmTemplate } from "@/lib/crm/api";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
-import { cn } from "@/lib/utils";
-
 /**
  * Content editor for a broadcast — template, subject, body, preview, Save.
  * Recipients and Send live on the Publish tab.
@@ -35,6 +34,11 @@ export function BroadcastComposeForm({
   bodyMarkdown,
   onBodyChange,
   renderedPreview,
+  previewSubject,
+  previewFromName,
+  previewFromEmail,
+  previewToEmail,
+  previewIsPlainText,
   device,
   setDevice,
   editable,
@@ -56,6 +60,11 @@ export function BroadcastComposeForm({
   bodyMarkdown: string;
   onBodyChange: (content: { markdown: string; html: string }) => void;
   renderedPreview: string;
+  previewSubject: string;
+  previewFromName: string | null;
+  previewFromEmail: string;
+  previewToEmail: string;
+  previewIsPlainText: boolean;
   device: "desktop" | "mobile";
   setDevice: (device: "desktop" | "mobile") => void;
   editable: boolean;
@@ -109,7 +118,8 @@ export function BroadcastComposeForm({
     >
       <div className="flex min-h-0 flex-1 flex-col divide-y divide-border overflow-hidden lg:flex-row lg:divide-x lg:divide-y-0">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-          <div className="flex shrink-0 items-center gap-2 bg-background px-3 py-2">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background px-3 py-2">
+            <span className="shrink-0 text-sm text-muted-foreground">Subject:</span>
             <input
               ref={subjectInputRef}
               type="text"
@@ -226,14 +236,19 @@ export function BroadcastComposeForm({
               <Smartphone className="size-4" />
             </Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto overflow-x-hidden bg-muted/15">
-            <div
-              className={cn(
-                "min-h-full w-full [&_p]:my-[0.75em] [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
-                device === "mobile" &&
-                  "mx-auto box-border max-w-[375px] [&_table]:box-border [&_table]:max-w-full [&_table[width='600']]:!w-full",
-              )}
-              dangerouslySetInnerHTML={{ __html: renderedPreview }}
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-auto overflow-x-hidden bg-[#f6f8fc]"
+            style={{ colorScheme: "light" }}
+          >
+            <BroadcastEmailPreview
+              subject={previewSubject}
+              fromName={previewFromName}
+              fromEmail={previewFromEmail}
+              toEmail={previewToEmail}
+              bodyHtml={renderedPreview}
+              bodyPlainText={renderedPreview}
+              previewIsPlainText={previewIsPlainText}
+              device={device}
             />
           </div>
         </div>

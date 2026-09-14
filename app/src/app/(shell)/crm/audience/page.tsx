@@ -1,10 +1,10 @@
-import { AudienceGroupsView } from "@/crm/pages/audience/AudienceGroupsView";
 import { AudienceRouteProvider } from "@/crm/pages/audience/AudienceRouteContext";
+import { AudienceView } from "@/crm/pages/audience/AudienceView";
 
 export default function Page() {
   return (
     <AudienceRouteProvider audienceRoot="/crm/audience">
-      <AudienceGroupsView />
+      <AudienceView />
     </AudienceRouteProvider>
   );
 }

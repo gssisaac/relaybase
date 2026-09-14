@@ -1,26 +1,12 @@
 "use client";
 
-import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
-
-import {
-  clearAudienceGroupDetailCache,
-  useAudienceGroupDetail,
-} from "@/crm/pages/audience/AudienceGroupDetailContext";
-import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
-import { CrmApiError, crmAudienceApi } from "@/lib/crm/audience-api";
-import {
-  DetailView,
-  EmailListContainer,
-  EmailTableHeader,
-  EmailTableRow,
-  EmptyListState,
-  ListToolbar,
-} from "@/email/components/mailbox/EmailListShell";
-import { audienceContactDisplayName } from "@/lib/audience-display";
+import { Plus, Users } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +16,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  clearAudienceGroupDetailCache,
+  useAudienceGroupDetail,
+} from "@/crm/pages/audience/AudienceGroupDetailContext";
+import { audienceContactDisplayName } from "@/lib/audience-display";
+import { CrmApiError, crmAudienceApi } from "@/lib/crm/audience-api";
 
 function friendlyCrmError(e: unknown, fallback: string): string {
   if (e instanceof CrmApiError) return e.message;
@@ -38,41 +30,19 @@ function friendlyCrmError(e: unknown, fallback: string): string {
 }
 
 export function AudienceGroupContactsView() {
-  const { groupId, detail, loading, refresh } = useAudienceGroupDetail();
-
-  const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { groupId, detail, refresh } = useAudienceGroupDetail();
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [contactEmail, setContactEmail] = useState("");
   const [contactName, setContactName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
-  const contacts = detail?.contacts ?? [];
+  if (!detail) return null;
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return contacts
-      .filter(
-        (c) =>
-          !q ||
-          c.email.toLowerCase().includes(q) ||
-          (c.name?.toLowerCase().includes(q) ?? false),
-      )
-      .map((c) => ({
-        key: c.id,
-        primary: audienceContactDisplayName(c.email, c.name),
-        subject: c.email,
-        contact: c,
-      }));
-  }, [contacts, search]);
-
-  const selected = contacts.find((c) => c.id === selectedId);
+  const contacts = detail.contacts;
+  const group = detail.group;
 
   async function addContact() {
     setSaving(true);
-    setError(null);
     try {
       const data = await crmAudienceApi.addContact(groupId, {
         email: contactEmail,
@@ -81,160 +51,152 @@ export function AudienceGroupContactsView() {
       setContactEmail("");
       setContactName("");
       setAddOpen(false);
-      setMessage(`Added ${data.contact.email}`);
+      toast.success(`Added ${data.contact.email}`);
       clearAudienceGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
-      setError(friendlyCrmError(e, "Failed to add contact"));
+      toast.error(friendlyCrmError(e, "Failed to add contact"));
     } finally {
       setSaving(false);
     }
   }
 
-  async function removeContact(contactId: string) {
-    setError(null);
+  async function removeContact(contactId: string, email: string) {
     try {
       await crmAudienceApi.removeContact(groupId, contactId);
-      setSelectedId(null);
+      toast.success(`Removed ${email}`);
       clearAudienceGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
-      setError(friendlyCrmError(e, "Failed to remove contact"));
+      toast.error(friendlyCrmError(e, "Failed to remove contact"));
     }
-  }
-
-  if (selected) {
-    return (
-      <EmailListContainer>
-        <DetailView
-          title={audienceContactDisplayName(selected.email, selected.name)}
-          onBack={() => setSelectedId(null)}
-          actions={
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => removeContact(selected.id)}
-            >
-              Remove
-            </Button>
-          }
-        >
-          <dl className="grid gap-4 text-sm">
-            <div>
-              <dt className="text-xs text-muted-foreground">Email</dt>
-              <dd className="font-mono">{selected.email}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Name</dt>
-              <dd>
-                {audienceContactDisplayName(selected.email, selected.name)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Source</dt>
-              <dd>
-                <Badge variant="outline" className="text-[10px] capitalize">
-                  {selected.source}
-                </Badge>
-              </dd>
-            </div>
-          </dl>
-        </DetailView>
-      </EmailListContainer>
-    );
   }
 
   return (
     <div className="space-y-4">
-      <EmailAlerts
-        error={error}
-        message={message}
-        onDismissError={() => setError(null)}
-        onDismissMessage={() => setMessage(null)}
-      />
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Audience group</CardTitle>
+          <CardDescription>
+            Contacts live here. Campaigns link this group and track opt-in status per person as
+            subscribers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{group.domain}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {contacts.length.toLocaleString()} contact{contacts.length === 1 ? "" : "s"}
+              {group.dataSource
+                ? group.cronEnabled
+                  ? " · Synced · scheduled"
+                  : " · Synced"
+                : " · Manual"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
-      <EmailListContainer>
-        <ListToolbar
-          search={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search contacts…"
-          trailing={
-            <Dialog open={addOpen} onOpenChange={setAddOpen}>
-              <DialogTrigger render={<Button size="sm" />}>
-                <Plus className="size-4" />
-                Add contact
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add contact</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Email</Label>
-                    <Input
-                      value={contactEmail}
-                      onChange={(e) => setContactEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Name (optional)</Label>
-                    <Input
-                      value={contactName}
-                      onChange={(e) => setContactName(e.target.value)}
-                    />
-                  </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">Contacts</h2>
+          <p className="text-xs text-muted-foreground">
+            {contacts.length.toLocaleString()} contact{contacts.length === 1 ? "" : "s"}.
+          </p>
+        </div>
+        <Dialog
+          open={addOpen}
+          onOpenChange={(open) => {
+            setAddOpen(open);
+            if (!open) {
+              setContactEmail("");
+              setContactName("");
+            }
+          }}
+        >
+          <DialogTrigger render={<Button size="sm" />}>
+            <Plus className="size-4" />
+            Add contact
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add contact</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Email</Label>
+                <Input
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Name (optional)</Label>
+                <Input
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                />
+              </div>
+              <Button
+                className="w-full"
+                size="sm"
+                disabled={saving || !contactEmail.trim()}
+                onClick={() => void addContact()}
+              >
+                {saving ? "Adding…" : "Add"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {contacts.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+            <Users className="size-8 text-muted-foreground" />
+            <p className="text-sm font-medium">No contacts yet</p>
+            <p className="text-xs text-muted-foreground">
+              Add contacts manually, or sync a data source from Settings.
+            </p>
+            <Button size="sm" className="mt-2" onClick={() => setAddOpen(true)}>
+              Add contact
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="divide-y divide-border p-0">
+            {contacts.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {audienceContactDisplayName(c.email, c.name)}
+                  </p>
+                  {c.name ? (
+                    <p className="truncate text-xs text-muted-foreground">{c.email}</p>
+                  ) : null}
+                </div>
+                <Badge variant="outline" className="text-[10px] capitalize">
+                  {c.source}
+                </Badge>
+                <div className="flex shrink-0 items-center gap-1">
                   <Button
-                    className="w-full"
                     size="sm"
-                    disabled={saving || !contactEmail.trim()}
-                    onClick={addContact}
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => void removeContact(c.id, c.email)}
                   >
-                    {saving ? "Adding…" : "Add"}
+                    Remove
                   </Button>
                 </div>
-              </DialogContent>
-            </Dialog>
-          }
-        />
-        {rows.length > 0 ? (
-          <>
-            <EmailTableHeader>
-              <span>Name</span>
-              <span className="hidden sm:block">Email</span>
-              <span />
-              <span className="text-right">Source</span>
-            </EmailTableHeader>
-            <div>
-              {rows.map((row) => (
-                <EmailTableRow
-                  key={row.key}
-                  onClick={() => setSelectedId(row.key)}
-                  primary={row.primary}
-                  subject={row.subject}
-                  date=""
-                  status={
-                    <Badge variant="outline" className="text-[10px] capitalize">
-                      {row.contact.source}
-                    </Badge>
-                  }
-                />
-              ))}
-            </div>
-          </>
-        ) : !loading ? (
-          <EmptyListState
-            title="No contacts yet"
-            description="Add contacts manually, or sync a data source from Settings."
-            action={
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                Add contact
-              </Button>
-            }
-          />
-        ) : (
-          <div className="min-h-[200px]" />
-        )}
-      </EmailListContainer>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

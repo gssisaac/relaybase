@@ -1,15 +1,11 @@
 "use client";
 
-import { useAudienceGroupDetail } from "@/crm/pages/audience/AudienceGroupDetailContext";
-import {
-  EmailListContainer,
-  EmailTableHeader,
-  EmailTableRow,
-  EmptyListState,
-} from "@/email/components/mailbox/EmailListShell";
-import type { AudienceSyncRun } from "@/email/components/mailbox/types";
+import { History } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { useAudienceGroupDetail } from "@/crm/pages/audience/AudienceGroupDetailContext";
+import type { AudienceSyncRun } from "@/email/components/mailbox/types";
 
 function syncStatusVariant(
   status: AudienceSyncRun["status"],
@@ -33,58 +29,64 @@ function syncSummary(run: AudienceSyncRun): string | undefined {
 }
 
 export function AudienceGroupHistoryView() {
-  const { detail, loading } = useAudienceGroupDetail();
+  const { detail } = useAudienceGroupDetail();
   const history = detail?.group.syncHistory ?? [];
 
   return (
     <div className="space-y-4">
-      <EmailListContainer>
-        {history.length > 0 ? (
-          <>
-            <EmailTableHeader>
-              <span>Sync</span>
-              <span className="hidden sm:block">Trigger</span>
-              <span />
-              <span className="text-right">Status</span>
-            </EmailTableHeader>
-            <div>
-              {history.map((run) => (
-                <EmailTableRow
+      <div>
+        <h2 className="text-sm font-semibold">Sync history</h2>
+        <p className="text-xs text-muted-foreground">
+          Manual or scheduled data-source syncs for this group.
+        </p>
+      </div>
+
+      {history.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+            <History className="size-8 text-muted-foreground" />
+            <p className="text-sm font-medium">No sync history yet</p>
+            <p className="text-xs text-muted-foreground">
+              Manual or scheduled data-source syncs for this group will appear here.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="divide-y divide-border p-0">
+            {history.map((run) => {
+              const summary = syncSummary(run);
+              return (
+                <div
                   key={run.id}
-                  primary={new Date(run.startedAt).toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                  subject={run.trigger === "cron" ? "Scheduled" : "Manual"}
-                  preview={syncSummary(run)}
-                  date={
-                    run.finishedAt
-                      ? new Date(run.finishedAt).toLocaleDateString()
-                      : "—"
-                  }
-                  status={
-                    <Badge
-                      variant={syncStatusVariant(run.status)}
-                      className="text-[10px] capitalize"
-                    >
-                      {run.status}
-                    </Badge>
-                  }
-                />
-              ))}
-            </div>
-          </>
-        ) : !loading ? (
-          <EmptyListState
-            title="No sync history yet"
-            description="Manual or scheduled data-source syncs for this group will appear here."
-          />
-        ) : (
-          <div className="min-h-[200px]" />
-        )}
-      </EmailListContainer>
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">
+                      {new Date(run.startedAt).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {run.trigger === "cron" ? "Scheduled" : "Manual"}
+                      {summary ? ` · ${summary}` : ""}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={syncStatusVariant(run.status)}
+                    className="shrink-0 text-[10px] capitalize"
+                  >
+                    {run.status}
+                  </Badge>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

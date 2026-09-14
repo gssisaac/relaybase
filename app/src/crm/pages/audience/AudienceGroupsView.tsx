@@ -1,14 +1,12 @@
 "use client";
 
 import { Plus, RefreshCw, Users } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { AudienceDataSourceGuide } from "@/crm/pages/audience/AudienceDataSourceGuide";
-import { AudienceGroupDetailSheet } from "@/crm/pages/audience/AudienceGroupDetailSheet";
 import { useDomain } from "@/lib/dashboard/DomainContext";
-import { type AudienceDetailTab } from "@/crm/lib/paths";
 import { useAudienceRoutes } from "@/crm/pages/audience/AudienceRouteContext";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
@@ -83,9 +81,7 @@ function friendlyCrmError(e: unknown, fallback: string): string {
 
 export function AudienceGroupsView() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { audienceRoot, audienceDetailHref, audienceDetailFromSearch } = useAudienceRoutes();
-  const audienceDetail = audienceDetailFromSearch(searchParams);
+  const { audienceDetailHref } = useAudienceRoutes();
   const { domains } = useDomain();
   const readyDomains = useMemo(
     () =>
@@ -213,15 +209,6 @@ export function AudienceGroupsView() {
     name.trim().length > 0 &&
     Boolean(domain) &&
     (!useDataSource || testState.status === "success");
-
-  function closeAudienceDetail() {
-    router.replace(audienceRoot);
-  }
-
-  function setAudienceDetailTab(tab: AudienceDetailTab) {
-    if (!audienceDetail) return;
-    router.replace(audienceDetailHref(audienceDetail.groupId, tab));
-  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -494,7 +481,7 @@ export function AudienceGroupsView() {
                         key={group.id}
                         className="cursor-pointer"
                         onClick={() =>
-                          router.replace(audienceDetailHref(group.id))
+                          router.push(audienceDetailHref(group.id))
                         }
                       >
                         <TableCell className="font-medium">
@@ -555,16 +542,6 @@ export function AudienceGroupsView() {
           </Card>
         </div>
       </div>
-
-      <AudienceGroupDetailSheet
-        groupId={audienceDetail?.groupId ?? ""}
-        tab={audienceDetail?.tab ?? "contacts"}
-        open={Boolean(audienceDetail)}
-        onOpenChange={(next) => {
-          if (!next) closeAudienceDetail();
-        }}
-        onTabChange={setAudienceDetailTab}
-      />
     </div>
   );
 }

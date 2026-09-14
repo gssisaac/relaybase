@@ -22,21 +22,41 @@ import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passt
 import { useDesktop } from "@/lib/desktop/shell";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
+import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import { webOwnerLogin } from "@/lib/desktop/bridge/web-owner-bridge";
+import {
+  loadWebCredentials,
+  saveWebCredentials,
+} from "@/lib/desktop/bridge/web-credentials";
 import { useWebCfOAuthComplete } from "@/lib/desktop/bridge/use-web-cf-oauth-complete";
 import { openWebCfOAuthPopup } from "@/lib/desktop/bridge/web-oauth-authorize";
+import { RECOVER_ADMIN_PATH } from "@/lib/navigation/recover-admin";
+import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
+import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
 
 /**
  * Forgot-passtoken recovery. Authorizes the Secrets Store Write OAuth
  * client, then calls `/console/reset-admin` with the in-memory access
  * token. The Worker re-issues the owner passtoken once.
  */
+function workerUrlFromLocation(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return new URLSearchParams(window.location.search).get("workerUrl") ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function RecoverAdminPanel() {
   const router = useRouter();
+  const isDesktop = isDesktopRuntime();
   const { refresh, credentials } = useDesktop();
   const store = useAppSession();
+  const [workerUrlDraft, setWorkerUrlDraft] = useState(workerUrlFromLocation);
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
   const [issueError, setIssueError] = useState<DesktopErrorHelp | null>(null);
@@ -71,13 +91,73 @@ export function RecoverAdminPanel() {
     }, CF_OAUTH_AUTHORIZE_WAIT_MS);
   }, [clearOauthWaitTimer]);
 
-  const resolvedWorkerUrl = resolveWorkerUrl({
-    role: "owner",
-    ownerStatus: store.ownerStatus,
-    teamStatus: store.teamStatus,
-    credentials,
-    teamLogin: null,
-  });
+  const resolvedWorkerUrl =
+    normalizeWorkerUrl(workerUrlDraft) ||
+    resolveWorkerUrl({
+      role: "owner",
+      ownerStatus: store.ownerStatus,
+      teamStatus: store.teamStatus,
+      credentials,
+      teamLogin: null,
+    });
+
+  useEffect(() => {
+    store.enterRecover();
+  }, [store]);
+
+  useEffect(() => {
+    const fromQuery = normalizeWorkerUrl(workerUrlFromLocation());
+    if (!fromQuery || isDesktop) return;
+    setWorkerUrlDraft(fromQuery);
+    const existing = loadWebCredentials();
+    saveWebCredentials({
+      ...(existing ?? {
+        accountId: "",
+        installToken: "",
+        workerUrl: "",
+        workerScriptName: "",
+        workerVersion: "",
+        relaybaseAccountId: "",
+        relaybaseEmail: "",
+        relaybaseSession: "",
+        cfOauthAccessToken: "",
+        cfOauthRefreshToken: "",
+        cfOauthAccessExpiresAt: "",
+        cfOauthAccountId: "",
+        scopeId: "",
+        cfApiTokenUserConfirmed: false,
+      }),
+      workerUrl: fromQuery,
+    });
+    void refresh();
+  }, [isDesktop, refresh]);
+
+  useEffect(() => {
+    if (isDesktop) return;
+    const url = normalizeWorkerUrl(workerUrlDraft);
+    if (!url) return;
+    const existing = loadWebCredentials();
+    if (existing?.workerUrl === url) return;
+    saveWebCredentials({
+      ...(existing ?? {
+        accountId: "",
+        installToken: "",
+        workerUrl: "",
+        workerScriptName: "",
+        workerVersion: "",
+        relaybaseAccountId: "",
+        relaybaseEmail: "",
+        relaybaseSession: "",
+        cfOauthAccessToken: "",
+        cfOauthRefreshToken: "",
+        cfOauthAccessExpiresAt: "",
+        cfOauthAccountId: "",
+        scopeId: "",
+        cfApiTokenUserConfirmed: false,
+      }),
+      workerUrl: url,
+    });
+  }, [isDesktop, workerUrlDraft]);
 
   const runReset = useCallback(async () => {
     setIssueError(null);
@@ -145,12 +225,24 @@ export function RecoverAdminPanel() {
   }, [finishOauthWait, refresh, runReset]);
 
   async function handleAuthorize() {
+    if (!resolvedWorkerUrl) {
+      setIssueError({
+        title: "Worker URL required",
+        detail: "Choose the Worker URL for the Relaybase you are recovering.",
+        fix: "Select your Worker URL above, then authorize with Cloudflare.",
+      });
+      return;
+    }
     setOauthBusy(true);
     setOauthError(null);
     setIssueError(null);
     startOauthWaitTimer();
     try {
-      const start = await desktopStartCfOAuth("recover", "/setup/recover-admin");
+      const returnTo =
+        typeof window !== "undefined"
+          ? `${RECOVER_ADMIN_PATH}${window.location.search}`
+          : RECOVER_ADMIN_PATH;
+      const start = await desktopStartCfOAuth("recover", returnTo);
       if (!isDesktopRuntime() && start.authorizeUrl.startsWith("/")) {
         openWebCfOAuthPopup(start.authorizeUrl, {
           onComplete: () => {
@@ -193,12 +285,22 @@ export function RecoverAdminPanel() {
   const revealed = store.revealedPasstoken;
   const workerUrl = resolvedWorkerUrl;
 
+  function handleBack() {
+    if (isDesktop) {
+      store.leaveRecover();
+      router.replace("/");
+      return;
+    }
+    store.clearError();
+    router.replace("/login");
+  }
+
   return (
     <SetupCenteredPage
-      backHref="/"
+      backHref={isDesktop ? "/" : "/login"}
       backLabel="Back"
       backReplace
-      onBack={() => store.leaveRecover()}
+      onBack={handleBack}
     >
       <div className="space-y-6 rounded-xl border border-border bg-card p-6">
         <div className="space-y-1">
@@ -215,8 +317,9 @@ export function RecoverAdminPanel() {
         {revealed ? (
           <div className="space-y-3">
             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-              New passtoken issued. Copy or download a backup — this Mac
-              stores it in the keyring, and Touch ID reads it later.
+              {isDesktop
+                ? "New passtoken issued. Copy or download a backup — this Mac stores it in the keyring, and Touch ID reads it later."
+                : "New passtoken issued. Copy or download a backup, then continue to sign in."}
             </p>
             <p className="text-xs text-muted-foreground">
               Worker URL: <span className="font-mono">{workerUrl}</span>
@@ -259,16 +362,25 @@ export function RecoverAdminPanel() {
               disabled={!copiedToken && !tokenDownloaded}
               onClick={() => {
                 void (async () => {
+                  const token = revealed.passtoken;
+                  const url = workerUrl;
+                  if (!token || !url) return;
                   try {
-                    await store.consumeRevealedPasstoken();
-                    router.replace("/");
+                    if (isDesktop) {
+                      await store.consumeRevealedPasstoken();
+                      router.replace("/");
+                      return;
+                    }
+                    await webOwnerLogin({ workerUrl: url, passtoken: token });
+                    rememberWorkerUrl(url);
+                    router.replace("/dashboard");
                   } catch {
-                    /* store.error */
+                    /* store.error / webOwnerLogin throws */
                   }
                 })();
               }}
             >
-              Go to Mailbox
+              {isDesktop ? "Go to Mailbox" : "Continue to dashboard"}
             </Button>
           </div>
         ) : store.busy ? (
@@ -278,6 +390,19 @@ export function RecoverAdminPanel() {
           </div>
         ) : (
           <div className="space-y-3">
+            {!isDesktop && !resolvedWorkerUrl ? (
+              <WorkerUrlPicker
+                value={workerUrlDraft}
+                onChange={setWorkerUrlDraft}
+                disabled={oauthBusy || store.busy}
+              />
+            ) : null}
+            {resolvedWorkerUrl ? (
+              <p className="text-xs text-muted-foreground">
+                Worker URL:{" "}
+                <span className="font-mono">{resolvedWorkerUrl}</span>
+              </p>
+            ) : null}
             <SetupCloudflareAuthorizeCard
               oauthBusy={oauthBusy}
               oauthError={oauthError}

@@ -1,7 +1,17 @@
-"use client";
+import { Suspense } from "react";
 
-import { RecoverAdminPanel } from "@/console/components/setup/RecoverAdminPanel";
+import { SetupRecoverAdminRedirect } from "./redirect-client";
 
 export default function SetupRecoverAdminPage() {
-  return <RecoverAdminPanel />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+          Opening…
+        </div>
+      }
+    >
+      <SetupRecoverAdminRedirect />
+    </Suspense>
+  );
 }

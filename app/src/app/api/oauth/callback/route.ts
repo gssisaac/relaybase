@@ -5,6 +5,7 @@
 // in-memory CfOAuthSession + OS keyring refresh token).
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAccountId } from "@/server/cloudflare/client";
+import { RECOVER_ADMIN_PATH } from "@/lib/navigation/recover-admin";
 import { COOKIE_NAMES, readPkceCookie, sealOAuthSession } from "@/server/cloudflare/session";
 
 function oauthErrorDestination(
@@ -14,7 +15,7 @@ function oauthErrorDestination(
 ): URL {
   const fallback =
     pkce?.returnTo?.trim() ||
-    (pkce?.purpose === "recover" ? "/setup/recover-admin" : "/setup/install");
+    (pkce?.purpose === "recover" ? RECOVER_ADMIN_PATH : "/setup/install");
   const destination = new URL(fallback, request.nextUrl.origin);
   destination.searchParams.set("cf_oauth_error", message);
   return destination;
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
 
   const returnPath =
     pkce.returnTo?.trim() ||
-    (pkce.purpose === "recover" ? "/setup/recover-admin" : "/setup/progress");
+    (pkce.purpose === "recover" ? RECOVER_ADMIN_PATH : "/setup/progress");
   const destination = new URL(returnPath, request.nextUrl.origin);
   destination.searchParams.set("cf_oauth", "complete");
   const response = NextResponse.redirect(destination);

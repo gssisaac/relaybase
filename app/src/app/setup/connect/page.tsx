@@ -7,6 +7,7 @@ import { UnlockView } from "@/console/components/setup/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { RECOVER_ADMIN_PATH } from "@/lib/navigation/recover-admin";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 /**
@@ -32,7 +33,7 @@ export default function SetupConnectPage() {
       return;
     }
     if (store.phase.kind === "ownerRecover") {
-      router.replace("/setup/recover-admin");
+      router.replace(RECOVER_ADMIN_PATH);
       return;
     }
     store.openAlreadyInstalled();

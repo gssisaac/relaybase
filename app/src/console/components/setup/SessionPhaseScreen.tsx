@@ -10,6 +10,7 @@ import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
+import { RECOVER_ADMIN_PATH } from "@/lib/navigation/recover-admin";
 
 /**
  * Shared phase switch for `/` (outside the shell) and the dashboard gate.
@@ -60,10 +61,11 @@ export function SessionPhaseScreen({
     }
     if (
       phase.kind === "ownerRecover" &&
+      path !== RECOVER_ADMIN_PATH &&
       path !== "/setup/recover-admin" &&
       !path.startsWith("/setup/worker-update")
     ) {
-      router.replace("/setup/recover-admin");
+      router.replace(RECOVER_ADMIN_PATH);
       return;
     }
     if (phase.kind === "install" && !path.startsWith("/setup")) {

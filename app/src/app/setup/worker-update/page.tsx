@@ -7,7 +7,7 @@ export default function SetupWorkerUpdatePage() {
   return (
     <WorkerInstallPanel
       purpose="worker-update"
-      backHref="/setup/recover-admin"
+      backHref="/recover-admin"
     />
   );
 }

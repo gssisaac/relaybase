@@ -19,6 +19,7 @@ import { biometryLabel } from "@/lib/desktop/biometry/label";
 import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { normalizePasstokenInput } from "@/lib/desktop/worker-url/normalize-passtoken";
 import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
+import { recoverAdminHref } from "@/lib/navigation/recover-admin";
 import { DesktopErrorBanner, useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
 import { readLastPath, writeSidebarMode } from "@/lib/navigation/sidebar-mode";
 import { cn } from "@/lib/utils";
@@ -186,7 +187,7 @@ export function ConsoleGateView() {
                   store.clearError();
                   store.closeConsoleGate();
                   store.enterRecover();
-                  router.push("/setup/recover-admin");
+                  router.push(recoverAdminHref(selectedUrl));
                 }}
               >
                 I forgot my passtoken

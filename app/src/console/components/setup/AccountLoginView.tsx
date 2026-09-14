@@ -15,6 +15,8 @@ import { webOwnerLogin } from "@/lib/desktop/bridge/web-owner-bridge";
 import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
 import { useMailRuntime } from "@/mail-platform/runtime";
+import { useAppSession } from "@/lib/desktop/app-session";
+import { recoverAdminHref } from "@/lib/navigation/recover-admin";
 
 type Role = "owner" | "team";
 
@@ -48,6 +50,7 @@ export function AccountLoginView({
   defaultRole?: Role;
 }) {
   const router = useRouter();
+  const store = useAppSession();
   const { session } = useMailRuntime();
   const [role, setRole] = useState<Role>(defaultRole);
   const [workerUrl, setWorkerUrl] = useState(workerUrlFromQuery);
@@ -162,10 +165,24 @@ export function AccountLoginView({
               disabled={busy}
             />
             {role === "owner" ? (
-              <p className="text-[11px] text-muted-foreground">
-                Paste the token starting with{" "}
-                <span className="font-mono">rb_pass_</span>.
-              </p>
+              <>
+                <p className="text-[11px] text-muted-foreground">
+                  Paste the token starting with{" "}
+                  <span className="font-mono">rb_pass_</span>.
+                </p>
+                <button
+                  type="button"
+                  className="text-left text-xs text-muted-foreground hover:underline"
+                  disabled={busy}
+                  onClick={() => {
+                    store.clearError();
+                    store.enterRecover();
+                    router.push(recoverAdminHref(trimmedUrl));
+                  }}
+                >
+                  I forgot my passtoken
+                </button>
+              </>
             ) : (
               <p className="text-[11px] text-muted-foreground">
                 Ask your team admin for the Worker URL and your account

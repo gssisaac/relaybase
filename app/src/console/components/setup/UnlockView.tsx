@@ -20,6 +20,7 @@ import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { normalizePasstokenInput } from "@/lib/desktop/worker-url/normalize-passtoken";
 import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
 import { DesktopErrorBanner, useDesktop, useDesktopChrome } from "@/lib/desktop/shell";
+import { recoverAdminHref } from "@/lib/navigation/recover-admin";
 import { cn } from "@/lib/utils";
 
 /**
@@ -246,7 +247,9 @@ export function UnlockView({
                   onClick={() => {
                     store.clearError();
                     store.enterRecover();
-                    router.push("/setup/recover-admin");
+                    router.push(
+                      recoverAdminHref(normalizeWorkerUrl(workerUrl)),
+                    );
                   }}
                 >
                   I forgot my passtoken

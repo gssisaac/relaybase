@@ -17,6 +17,7 @@ const SETUP_CONTINUE_PATHS = [
   "/setup/progress",
   "/setup/connect",
   "/setup/recover-admin",
+  "/recover-admin",
   "/setup/worker-update",
 ] as const;
 

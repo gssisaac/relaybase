@@ -216,7 +216,7 @@ Never for owner tokens: localStorage, cookies, or a BFF session cookie.
 
 | Event | Behavior |
 |-------|----------|
-| Unauthenticated landing | `/login` (Owner tab default + Teammate). Install is `/setup`. Legacy `/sign-in` redirects to `/login` |
+| Unauthenticated landing | `/login` (Owner tab default + Teammate). Install is `/setup`. Forgot passtoken: `/recover-admin` (same OAuth + reset flow as desktop). Legacy `/sign-in` redirects to `/login` |
 | Login | `AccountLoginView` → `webOwnerLogin()` → `/console/login`; refresh pair written to `relaybase:owner-session` |
 | Refresh rotation | Every successful `/console/refresh` overwrites the stored token for that scope (the Worker rotates refresh tokens) |
 | Same-tab hard reload | `/` immediately replaces to `/login` (or `/dashboard`/`/inbox` if memory already has a session). `/login` and `DesktopDashboardGate` call `restoreWebOwnerSession()` → refresh both scopes. Both must succeed; otherwise the survivor is revoked, storage cleared, user lands on `/login` |

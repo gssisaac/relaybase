@@ -119,7 +119,7 @@ export function SetupProgressPanel({
     ? "/setup/worker-update"
     : "/settings/worker/update";
   const workerUpdateHomeHref = fromRecover
-    ? "/setup/recover-admin"
+    ? "/recover-admin"
     : "/settings/worker";
   const [probing, setProbing] = useState(false);
   const [existing, setExisting] = useState<InstallResourceProbe[]>([]);
@@ -995,7 +995,7 @@ export function SetupProgressPanel({
                   </Link>{" "}
                   or use{" "}
                   <Link
-                    href="/setup/recover-admin"
+                    href="/recover-admin"
                     className="underline underline-offset-2"
                   >
                     I forgot my passtoken

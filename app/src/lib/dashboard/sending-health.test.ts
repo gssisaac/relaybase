@@ -30,7 +30,7 @@ const snapshot: SendingHealthSnapshot = {
       cloudflareSendingUrl: null,
     },
     {
-      domain: "kloyapp.com",
+      domain: "example.org",
       status: "ready",
       sendingEnabled: true,
       sendingOnboarded: true,
@@ -46,7 +46,7 @@ describe("sending-health helpers", () => {
   it("maps email to domain status and only warns on restricted/no_zone", () => {
     assert.equal(domainFromEmail("beta@relaybase.xyz"), "relaybase.xyz");
     assert.equal(statusForEmail(snapshot, "beta@relaybase.xyz")?.status, "restricted");
-    assert.equal(statusForEmail(snapshot, "isaac@kloyapp.com")?.status, "ready");
+    assert.equal(statusForEmail(snapshot, "ada@example.org")?.status, "ready");
     assert.equal(isSendingWarningStatus("restricted"), true);
     assert.equal(isSendingWarningStatus("no_zone"), true);
     assert.equal(isSendingWarningStatus("unknown"), false);

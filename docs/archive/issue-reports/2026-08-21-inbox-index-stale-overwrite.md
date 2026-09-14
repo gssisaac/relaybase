@@ -1,4 +1,4 @@
-# Inbox list stuck at Aug 9 after `_list.json` overwrite (wedesk.so)
+# Inbox list stuck at Aug 9 after `_list.json` overwrite
 
 **Date:** 2026-08-21  
 **Status:** Fixed (Worker incremental reconcile + live `_list.json` / D1 repair)  
@@ -7,19 +7,19 @@
 
 ## Summary
 
-`isaac@wedesk.so` Inbox showed **2,642** messages with newest **Aug 9**, while R2 still held **2,696** `meta.json` objects (newest **Aug 17 22:25 UTC**). Mail bodies were never deleted. The compact list index `inbound/wedesk.so/_list.json` was overwritten from a stale in-memory snapshot, and D1 `RELAYBASE_INBOX_INDEX` had never caught up for that domain. The first auto-heal attempt then failed on every refresh (`exceededMemory` / `exceededResources`) because it scanned every `meta.json` on the request isolate.
+A dogfood Inbox showed **2,642** messages with newest **Aug 9**, while R2 still held **2,696** `meta.json` objects (newest **Aug 17 22:25 UTC**). Mail bodies were never deleted. The compact list index `inbound/{domain}/_list.json` was overwritten from a stale in-memory snapshot, and D1 `RELAYBASE_INBOX_INDEX` had never caught up for that domain. The first auto-heal attempt then failed on every refresh (`exceededMemory` / `exceededResources`) because it scanned every `meta.json` on the request isolate.
 
 ## Symptoms
 
 1. Inbox header **2,642**; list newest **Aug 9, 8:00 AM**. Today was **2026-08-21**.
 2. Pull-to-refresh / reopen did not change the list. First heal deploy hung the spinner (full scan on `GET /mail/inbox`).
 3. After moving the scan to `waitUntil`, the spinner stopped but the list stayed 2,642 / Aug 9.
-4. Other domains (`letssayso.com`, `kloyapp.com`, `isaaclee.xyz`) still had later mail.
+4. Other domains on the same Worker still had later mail.
 5. Local cache `~/.relaybase/s-legacy/mail/desktop/inbox.json` (Aug 20 18:07) still held 47 of the 54 missing rows (newest Aug 17 20:49 UTC).
 
 ## Live evidence (dogfood `relaybase-api`)
 
-| Source | wedesk.so |
+| Source | affected domain |
 |--------|-----------|
 | Live `_list.json` (before repair) | **2,642** · newest `2026-08-09T01:00:24.000Z` |
 | R2 `meta.json` folders | **2,696** |
@@ -39,7 +39,7 @@ The Gmail Takeout importer (dogfood only) loads `_list.json` once and writes it 
 
 ### 2. D1-on-ingest was not live yet
 
-D1 upsert on ingest landed in commit `79bee1f` (Aug 18) and first deployed **Aug 19 18:02 UTC**. Before that, ingest never wrote FTS. After deploy it worked (`letssayso.com` D1 row Aug 20 07:04). Wedesk had no new objects after Aug 18 10:06, so the gap stayed in both `_list.json` and D1.
+D1 upsert on ingest landed in commit `79bee1f` (Aug 18) and first deployed **Aug 19 18:02 UTC**. Before that, ingest never wrote FTS. After deploy it worked (another domain's D1 row Aug 20 07:04). The affected mailbox had no new objects after Aug 18 10:06, so the gap stayed in both `_list.json` and D1.
 
 ### 3. First auto-heal scanned every body and died
 
@@ -60,9 +60,9 @@ The first reconcile compared folder count to list length and, on mismatch, `GET`
 
 ## Repair applied (2026-08-21)
 
-- Worker redeploy with incremental merge: version `d472fd88-8ad6-46fe-bc8f-fd8aeca78329` (`https://relaybase-api.gssisaac.workers.dev`).
+- Worker redeploy with incremental merge: version `d472fd88-8ad6-46fe-bc8f-fd8aeca78329` (dogfood Worker URL redacted).
 - Live `_list.json` merged: **2,696** entries, newest `2026-08-17T22:25:54.169Z` (`Data migration service: Request for authorization`).
-- D1 backfill `node scripts/backfill-inbound-search.mjs --domain wedesk.so`: **2,696** rows, same newest.
+- D1 backfill `node scripts/backfill-inbound-search.mjs --domain example.com`: **2,696** rows, same newest.
 
 A later folder vs list check showed **2,692** on `_list.json` (four folders without a loadable `meta.json`). Inbox newest remained Aug 17.
 
@@ -70,12 +70,12 @@ A later folder vs list check showed **2,692** on `_list.json` (four folders with
 
 - [x] Workers Analytics showed `exceededMemory` / `exceededResources` on the full-scan heal
 - [x] After incremental deploy + merge: `_list.json` count ≥ 2,692, newest `2026-08-17T22:25:54.169Z`
-- [x] D1 `SELECT COUNT(*), MAX(received_at) FROM inbound_search_fts WHERE domain='wedesk.so'` → `2696` / `2026-08-17T22:25:54.169Z`
+- [x] D1 `SELECT COUNT(*), MAX(received_at) FROM inbound_search_fts WHERE domain='example.com'` → `2696` / `2026-08-17T22:25:54.169Z`
 - [ ] Desktop: Inbox pull-to-refresh shows count ~2,692 and mail after Aug 9 (local cache must be replaced)
 
 ## Out of scope
 
-- Why wedesk.so received no new R2 objects after Aug 18 10:06 UTC (possible Email Routing / ingest gap, separate from this index bug)
+- Why the mailbox received no new R2 objects after Aug 18 10:06 UTC (possible Email Routing / ingest gap, separate from this index bug)
 - Production Gmail Takeout import (script stays dogfood-only)
 - BIMI / VMC inbox brand marks
 

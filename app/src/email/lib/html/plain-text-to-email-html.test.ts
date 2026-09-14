@@ -33,7 +33,7 @@ describe("plainTextToEmailHtml", () => {
     const text = [
       "Not at all.",
       "",
-      "On Aug 9, 2026, 2:44 AM, gssisaac@gmail.com wrote:",
+      "On Aug 9, 2026, 2:44 AM, alice@example.com wrote:",
       "",
       "> I have a Question",
       "> > Nested prior",
@@ -44,7 +44,7 @@ describe("plainTextToEmailHtml", () => {
     assert.match(html, /<div class="gmail_quote">/);
     assert.match(
       html,
-      /On Aug 9, 2026, 2:44 AM, gssisaac@gmail\.com wrote:<br>/,
+      /On Aug 9, 2026, 2:44 AM, alice@example\.com wrote:<br>/,
     );
     assert.match(
       html,

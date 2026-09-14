@@ -115,7 +115,7 @@ export function WorkerUrlInputDialog({
                   setAccountName(e.target.value);
                   setError(null);
                 }}
-                placeholder="gssisaac"
+                placeholder="acmecorp"
                 autoComplete="off"
                 autoFocus={tab === "auto"}
               />

@@ -32,7 +32,7 @@ flowchart TB
     UI["Next HMR or static Tauri export"]
     Fetch["desktopAwareFetch → email-api-map"]
   end
-  subgraph worker [customer *.workers.dev / isaac dogfood relaybase-api.gssisaac.worker.dev]
+  subgraph worker [customer *.workers.dev e.g. relaybase-api.acmecorp.workers.dev]
     R2["R2 relaybase-mailbox\ninbound|sent {domain}/{id}/\nmeta.json + raw.eml"]
     D1App["D1 RELAYBASE_DB\ndomains, addresses, audience,\nbroadcasts, keys, auth-tokens,\nmobile, webhooks, owner, events,\naccount_state, draft_attachments"]
     D1["D1 RELAYBASE_LOGS\nops events"]

@@ -6,11 +6,11 @@ void main() {
   group('ConnectDeepLink', () {
     test('parses a valid connect deep link', () {
       const uri =
-          'relaybase://connect?workerUrl=https://worker.example.com&email=isaac@kloyapp.com&password=secret123';
+          'relaybase://connect?workerUrl=https://worker.example.com&email=ada@example.org&password=secret123';
       final params = ConnectDeepLink.parse(uri);
       expect(params, isNotNull);
       expect(params!.workerUrl, 'https://worker.example.com');
-      expect(params.email, 'isaac@kloyapp.com');
+      expect(params.email, 'ada@example.org');
       expect(params.password, 'secret123');
     });
 

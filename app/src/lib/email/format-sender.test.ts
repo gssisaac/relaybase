@@ -9,7 +9,7 @@ import {
 
 describe("formatSenderDisplay", () => {
   it("prefers the MIME display name when present", () => {
-    assert.equal(formatSenderDisplay("Isaac Lee", "isaac@gmail.com"), "Isaac Lee");
+    assert.equal(formatSenderDisplay("Ada Lovelace", "ada@example.com"), "Ada Lovelace");
   });
 
   it("falls back to the address when no display name", () => {
@@ -20,11 +20,11 @@ describe("formatSenderDisplay", () => {
 
   it("collapses VERP bounce envelope addresses to a friendly label", () => {
     assert.equal(
-      formatSenderDisplay(null, "bounce+ef499c.63af5d-isaac=wedesk.so@example.com"),
+      formatSenderDisplay(null, "bounce+ef499c.63af5d-ada=example.com@example.net"),
       "Mail Delivery System",
     );
     assert.equal(
-      formatSenderDisplay(null, "bounces+41265761-ad21-isaac=wedesk.so@example.com"),
+      formatSenderDisplay(null, "bounces+41265761-ad21-ada=example.com@example.net"),
       "Mail Delivery System",
     );
     assert.equal(
@@ -52,7 +52,7 @@ describe("formatSenderDisplay", () => {
 
 describe("senderInitials", () => {
   it("derives initials from a display name", () => {
-    assert.equal(senderInitials("Isaac Lee", "isaac@gmail.com"), "IL");
+    assert.equal(senderInitials("Ada Lovelace", "ada@example.com"), "AL");
   });
 
   it("derives initials from the local part when no name", () => {
@@ -67,34 +67,34 @@ describe("senderInitials", () => {
 describe("formatFullAddress", () => {
   it("formats both name and email as Name <email>", () => {
     assert.equal(
-      formatFullAddress("Isaac Lee", "gssisaac@gmail.com"),
-      "Isaac Lee <gssisaac@gmail.com>",
+      formatFullAddress("Ada Lovelace", "ada@example.com"),
+      "Ada Lovelace <ada@example.com>",
     );
   });
 
   it("strips outer quotes from name", () => {
     assert.equal(
-      formatFullAddress('"Isaac Lee"', "gssisaac@gmail.com"),
-      "Isaac Lee <gssisaac@gmail.com>",
+      formatFullAddress('"Ada Lovelace"', "ada@example.com"),
+      "Ada Lovelace <ada@example.com>",
     );
   });
 
   it("extracts name and email from compound email string when name is omitted", () => {
     assert.equal(
-      formatFullAddress(null, "Isaac Lee <gssisaac@gmail.com>"),
-      "Isaac Lee <gssisaac@gmail.com>",
+      formatFullAddress(null, "Ada Lovelace <ada@example.com>"),
+      "Ada Lovelace <ada@example.com>",
     );
   });
 
   it("returns only email when name is missing", () => {
     assert.equal(
-      formatFullAddress(null, "gssisaac@gmail.com"),
-      "gssisaac@gmail.com",
+      formatFullAddress(null, "ada@example.com"),
+      "ada@example.com",
     );
   });
 
   it("returns only name when email is missing", () => {
-    assert.equal(formatFullAddress("Isaac Lee", null), "Isaac Lee");
+    assert.equal(formatFullAddress("Ada Lovelace", null), "Ada Lovelace");
   });
 
   it("returns empty string when both are missing", () => {

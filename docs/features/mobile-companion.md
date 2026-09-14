@@ -41,7 +41,7 @@ These override older plan drafts (global mobile password, Worker URL login, “a
 |--------|------|
 | **Auth credential** | Per-account mobile password (12-char alphanumeric). **Not** the owner passtoken. **Not** a single global mobile password. |
 | **Login fields** | Account email + password only. Users never enter a Worker URL. |
-| **Worker URL** | Baked into the Flutter build as `AppConfig.defaultWorkerUrl` (`https://relaybase-api.gssisaac.worker.dev` for the dogfood build; customer builds bake in the customer's own Worker URL). Change the constant + rebuild to retarget. |
+| **Worker URL** | Baked into the Flutter build as `AppConfig.defaultWorkerUrl` (customer builds bake in the customer's own Worker URL). Change the constant + rebuild to retarget. |
 | **Account scope** | Every `/mobile/*` request is scoped to the authenticated email only. No full mailbox catalog, no “All inboxes”, no account switcher across other addresses. |
 | **Desktop provisioning** | Owner enables the address + generates the password in Accounts → account detail → **Other device**. |
 | **Secrets** | Plain password shown once on desktop after generate/regenerate; stored on Worker in D1 `mobile_passwords`. Mobile stores email + password in `flutter_secure_storage`. The **desktop** app, when a teammate signs in there, stores the same password in the OS keyring (`team-session:{email}`), not in `team-login.json` — see **[home-storage.md](../desktop/home-storage.md)** → *OS keyring (team mobile password)* and **[desktop-session-machine.md](../auth/desktop-session-machine.md)**. |

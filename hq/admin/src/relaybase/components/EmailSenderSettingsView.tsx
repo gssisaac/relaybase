@@ -80,7 +80,7 @@ const FIELD_DEFS = [
     key: "workerUrl" as const,
     id: "relaybase-worker-url",
     label: "Worker URL",
-    placeholder: "https://relaybase-api.gssisaac.worker.dev",
+    placeholder: "https://relaybase-api.acmecorp.workers.dev",
     description:
       "Public /health only. HQ does not store an owner passtoken or call /console/*.",
   },

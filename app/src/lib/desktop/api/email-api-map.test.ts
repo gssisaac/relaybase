@@ -109,4 +109,21 @@ describe("mapEmailApiToWorker", () => {
       "/console/addresses/mobile-password?email=a@b.com",
     );
   });
+
+  it("maps account-state and broadcast-drafts", () => {
+    assert.equal(
+      mapEmailApiToWorker("/api/email/account-state/ui/sidebar.json"),
+      "/mail/account-state/ui/sidebar.json",
+    );
+    assert.equal(
+      mapEmailApiToWorker(
+        "/api/email/account-state/drafts/d1/attachments/a1",
+      ),
+      "/mail/account-state/drafts/d1/attachments/a1",
+    );
+    assert.equal(
+      mapEmailApiToWorker("/api/email/broadcast-drafts"),
+      "/console/broadcast-drafts",
+    );
+  });
 });

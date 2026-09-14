@@ -3,7 +3,14 @@ import {
   desktopSaveEmailPrefs,
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
+import {
+  fetchAccountStateJson,
+  saveAccountStateJson,
+} from "@/mail-platform/account-state";
 import type { AccountColorMap } from "@/email/lib/accounts/account-colors";
+
+const NAMESPACE = "prefs";
+const KEY = "email.json";
 
 export type EmailPrefs = {
   version: 1;
@@ -76,6 +83,13 @@ export async function loadEmailPrefs(): Promise<EmailPrefs> {
     // Disk miss: allow one-time migrate from legacy localhost localStorage.
     return readLocalPrefs();
   }
+  // Web: the Worker is the source of truth.
+  const remote = await fetchAccountStateJson<unknown>(NAMESPACE, KEY);
+  if (remote != null) {
+    const normalized = normalizePrefs(remote);
+    writeLocalPrefs(normalized);
+    return normalized;
+  }
   return readLocalPrefs();
 }
 
@@ -85,7 +99,9 @@ export async function saveEmailPrefs(prefs: EmailPrefs): Promise<void> {
     // Disk first — do not treat localhost localStorage as durable.
     await desktopSaveEmailPrefs(normalized);
     writeLocalPrefs(normalized);
+    saveAccountStateJson(NAMESPACE, KEY, normalized).catch(() => {});
     return;
   }
   writeLocalPrefs(normalized);
+  await saveAccountStateJson(NAMESPACE, KEY, normalized);
 }

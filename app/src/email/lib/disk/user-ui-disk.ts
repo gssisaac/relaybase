@@ -5,13 +5,23 @@ import {
   desktopSaveMailJson,
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
+import {
+  fetchAccountStateJson,
+  saveAccountStateJson,
+} from "@/mail-platform/account-state";
 
 /**
  * Durable UI state under ~/.relaybase/mail/{userId}/ui/*.json
  *
- * Desktop: disk is required. localStorage is a warm mirror only — never the
- * source of truth (see docs/desktop/home-storage.md).
+ * Desktop: disk is the source of truth, mirrored to the Worker's
+ * `account_state` table (best-effort) on write so web builds see the same
+ * state. Web: the Worker is the source of truth; localStorage is a warm
+ * local mirror only (see docs/desktop/home-storage.md and the storage/cache
+ * migration plan for why — a browser-only mirror doesn't survive a cleared
+ * cache or follow the user to a second device).
  */
+
+const NAMESPACE = "ui";
 
 function safeUserId(userId: string): string {
   const cleaned = userId.trim().replace(/[^a-zA-Z0-9._%-]/g, "_");
@@ -65,6 +75,12 @@ export async function readUiJson<T>(
     // Disk miss: allow one-time migrate from legacy localhost localStorage.
     return readLocalJson<T>(relativePath);
   }
+  // Web: the Worker is the source of truth.
+  const remote = await fetchAccountStateJson<T>(NAMESPACE, file);
+  if (remote != null) {
+    writeLocalJson(relativePath, remote);
+    return remote;
+  }
   return readLocalJson<T>(relativePath);
 }
 
@@ -78,9 +94,15 @@ export async function writeUiJson(
     // Disk first — do not treat localhost localStorage as durable.
     await desktopSaveMailJson(relativePath, value);
     writeLocalJson(relativePath, value);
+    // Best-effort mirror so a web session for the same account sees this too.
+    saveAccountStateJson(NAMESPACE, file, value).catch(() => {});
     return;
   }
+  // Web: write the local mirror first (instant, survives a flaky network),
+  // then the Worker (source of truth) — let failures propagate, callers
+  // already `.catch()` their writes.
   writeLocalJson(relativePath, value);
+  await saveAccountStateJson(NAMESPACE, file, value);
 }
 
 export const UI_FILES = {

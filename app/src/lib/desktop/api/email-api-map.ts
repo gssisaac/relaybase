@@ -101,6 +101,12 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
   if (rest === "/settings" || rest.startsWith("/settings/")) {
     return `/console/settings${search}`;
   }
+  if (rest === "/account-state" || rest.startsWith("/account-state/")) {
+    return `/mail/account-state${rest.slice("/account-state".length)}${search}`;
+  }
+  if (rest === "/broadcast-drafts" || rest.startsWith("/broadcast-drafts/")) {
+    return `/console/broadcast-drafts${rest.slice("/broadcast-drafts".length)}${search}`;
+  }
 
   return null;
 }

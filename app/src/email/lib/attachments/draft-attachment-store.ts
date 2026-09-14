@@ -7,6 +7,12 @@ import {
   desktopSaveMailBinary,
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
+import {
+  deleteDraftAttachmentBytes as deleteRemoteDraftAttachmentBytes,
+  deleteDraftAttachmentsDir as deleteRemoteDraftAttachmentsDir,
+  fetchDraftAttachmentBytes,
+  saveDraftAttachmentBytes as saveRemoteDraftAttachmentBytes,
+} from "@/mail-platform/account-state";
 
 const IDB_NAME = "relaybase-draft-attachments";
 const IDB_STORE = "blobs";
@@ -110,19 +116,40 @@ async function idbDeletePrefix(prefix: string): Promise<void> {
   });
 }
 
+/**
+ * Attachment bytes for unsent compose drafts.
+ *
+ * Desktop: disk is the source of truth (unchanged), mirrored to the
+ * Worker (R2-backed) best-effort so the same draft is visible from web.
+ * Web: IndexedDB is the immediate local buffer (unchanged — a draft must
+ * keep working through a flaky network mid-compose), with a best-effort
+ * Worker upload/fetch on top so the attachment survives a cleared cache or
+ * follows the user to a second device once the network cooperates.
+ */
 export async function saveDraftAttachmentBytes(
   productId: string,
   draftId: string,
   attachmentId: string,
   bytes: ArrayBuffer,
+  meta?: { filename: string; contentType?: string },
 ): Promise<void> {
   const path = draftAttachmentRelativePath(productId, draftId, attachmentId);
   if (isDesktopRuntime()) {
     const base64 = arrayBufferToBase64(bytes);
     await desktopSaveMailBinary(path, base64);
+    if (meta) {
+      saveRemoteDraftAttachmentBytes(draftId, attachmentId, bytes, meta).catch(
+        () => {},
+      );
+    }
     return;
   }
   await idbPut(idbKey(path), bytes);
+  if (meta) {
+    saveRemoteDraftAttachmentBytes(draftId, attachmentId, bytes, meta).catch(
+      () => {},
+    );
+  }
 }
 
 export async function loadDraftAttachmentBytes(
@@ -136,7 +163,11 @@ export async function loadDraftAttachmentBytes(
     if (!base64) return null;
     return base64ToArrayBuffer(base64);
   }
-  return idbGet(idbKey(path));
+  const local = await idbGet(idbKey(path));
+  if (local) return local;
+  const remote = await fetchDraftAttachmentBytes(draftId, attachmentId);
+  if (remote) await idbPut(idbKey(path), remote);
+  return remote;
 }
 
 export async function deleteDraftAttachmentBytes(
@@ -147,9 +178,11 @@ export async function deleteDraftAttachmentBytes(
   const path = draftAttachmentRelativePath(productId, draftId, attachmentId);
   if (isDesktopRuntime()) {
     await desktopDeleteMailBinary(path);
+    deleteRemoteDraftAttachmentBytes(draftId, attachmentId).catch(() => {});
     return;
   }
   await idbDelete(idbKey(path));
+  deleteRemoteDraftAttachmentBytes(draftId, attachmentId).catch(() => {});
 }
 
 export async function deleteDraftAttachmentsDir(
@@ -159,9 +192,11 @@ export async function deleteDraftAttachmentsDir(
   const dir = draftAttachmentsDirRelativePath(productId, draftId);
   if (isDesktopRuntime()) {
     await desktopDeleteMailBinaryDir(dir);
+    deleteRemoteDraftAttachmentsDir(draftId).catch(() => {});
     return;
   }
   await idbDeletePrefix(`${dir}/`);
+  deleteRemoteDraftAttachmentsDir(draftId).catch(() => {});
 }
 
 function arrayBufferToBase64(bytes: ArrayBuffer): string {

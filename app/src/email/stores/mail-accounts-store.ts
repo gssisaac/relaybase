@@ -27,6 +27,7 @@ import {
   isPackagedApiUnavailableError,
   readResponseJson,
 } from "@/lib/desktop/api";
+import { runAccountStateBackfillOnce } from "@/lib/desktop/account-state-migration";
 
 export type LoadPhase = "none" | "loading" | "done";
 
@@ -130,6 +131,7 @@ export class MailAccountsStore {
       runInAction(() => {
         this.phase = "done";
       });
+      runAccountStateBackfillOnce();
       return;
     }
 
@@ -256,6 +258,10 @@ export class MailAccountsStore {
       writeAvailableAddresses(this.userId, next);
       this.pruneEnabledToAvailable();
       this.ensureColors();
+      // A successful authenticated fetch proves desktopAwareFetch + the
+      // owner session is genuinely working — the safe point to attempt the
+      // one-time account-state backfill (no-ops on web, retries on failure).
+      runAccountStateBackfillOnce();
     } catch (e) {
       // Keep the disk/memory catalog. Offline and 401 must not wipe accounts.
       if (isPrimary) {

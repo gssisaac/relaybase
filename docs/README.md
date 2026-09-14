@@ -12,6 +12,7 @@ Technical documentation index for AI agents and engineers. Read the relevant doc
 | **D1 migrations / init-db / migrate-db** | [`architecture/d1-migrations-and-init-db.md`](./architecture/d1-migrations-and-init-db.md) | [`architecture/storage-architecture.md`](./architecture/storage-architecture.md) |
 | **R2 mailbox layout / raw email storage** | [`architecture/mailbox-r2.md`](./architecture/mailbox-r2.md) | [`architecture/mailbox-d1.md`](./architecture/mailbox-d1.md) |
 | **Mail search / FTS5 / list counts / Sent** | [`architecture/mailbox-d1.md`](./architecture/mailbox-d1.md) | [`architecture/mailbox-r2.md`](./architecture/mailbox-r2.md) |
+| **Sidebar/read/trash/drafts state on the web build (not just desktop)** | [`architecture/account-state-d1.md`](./architecture/account-state-d1.md) | [`desktop/home-storage.md`](./desktop/home-storage.md) |
 | **Send/bounce logging / Dashboard Log page** | [`architecture/ops-log-d1.md`](./architecture/ops-log-d1.md) | [`architecture/d1-migrations-and-init-db.md`](./architecture/d1-migrations-and-init-db.md) |
 | **Central HQ store (`strum-relaybase-ops`)** | [`architecture/hq-ops-d1.md`](./architecture/hq-ops-d1.md) | [`decisions/pivot-byo-cloudflare.md`](./decisions/pivot-byo-cloudflare.md) |
 | **Worker install / login / passtoken recovery lifecycle** | [`auth/install-auth-recovery-spec.md`](./auth/install-auth-recovery-spec.md) | [`auth/authentication.md`](./auth/authentication.md) |
@@ -44,6 +45,7 @@ Remote infrastructure, databases, storage bindings, and migration rules.
 - **[`mailbox-d1.md`](./architecture/mailbox-d1.md)** — `relaybase-mail` D1: `mailbox_messages` + `mailbox_fts` (FTS5) unified mail index.
 - **[`ops-log-d1.md`](./architecture/ops-log-d1.md)** — `relaybase-logs` D1 `ops_log` table and Dashboard Log stream.
 - **[`hq-ops-d1.md`](./architecture/hq-ops-d1.md)** — Central `strum-relaybase-ops` D1 schema (licenses, console accounts, recovery tokens, etc.).
+- **[`account-state-d1.md`](./architecture/account-state-d1.md)** — `account_state` + `draft_attachments`: sidebar/read/trash/drafts/account-colors state, now Worker-backed so the web build has real persistence, not just desktop disk.
 
 ### Authentication & Lifecycle (`docs/auth/`)
 Owner/teammate auth, session state machine, OS keychain integration, Worker install and recovery lifecycle.

@@ -31,7 +31,11 @@ import {
   type IngestedPageFile,
 } from "@/lib/markdown-editor/utils/file-ingest";
 import { linkifyParsedBlocks } from "@/lib/markdown-editor/utils/linkify";
-import { promotePageMediaBlocks, serializePageMediaMarkdown } from "@/lib/markdown-editor/utils/media-markdown";
+import {
+  enhancePreviewHtml,
+  serializeEditorMarkdown,
+} from "@/lib/markdown-editor/utils/editor-markdown";
+import { promotePageMediaBlocks } from "@/lib/markdown-editor/utils/media-markdown";
 import { markdownSelectAllExtension } from "@/lib/markdown-editor/utils/select-all";
 import { resolveCampaignAssetPath } from "@/lib/markdown-editor/utils/assets";
 import {
@@ -255,7 +259,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     (body: string, editorInstance: BlockNoteEditor) => {
       pendingEditorMarkdownRef.current = body;
       const markdown = body;
-      const html = normalizeCampaignAssetUrlsInHtml(editorInstance.blocksToHTMLLossy());
+      const html = enhancePreviewHtml(
+        normalizeCampaignAssetUrlsInHtml(editorInstance.blocksToHTMLLossy()),
+      );
       onChangeRef.current({ markdown, html });
       return markdown;
     },
@@ -278,7 +284,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
         false,
       );
       if (strategy === "serialize") {
-        return serializePageMediaMarkdown(inst.blocksToMarkdownLossy());
+        return serializeEditorMarkdown(inst);
       }
       return readPersistedBody();
     },
@@ -295,7 +301,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     if (!applied || hydrateGenRef.current !== gen) return;
     hydratedRef.current = true;
     hydratedFingerprintRef.current = fingerprintEditorDocument(editorInstance.document);
-  }, []);
+    // Seed parent preview HTML — notifyEditorChange skips unchanged fingerprints.
+    emitChange(serializeEditorMarkdown(editorInstance), editorInstance);
+  }, [emitChange]);
 
   const notifyEditorChange = useCallback(
     (editorInstance: BlockNoteEditor) => {
@@ -306,7 +314,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       ) {
         return;
       }
-      emitChange(serializePageMediaMarkdown(editorInstance.blocksToMarkdownLossy()), editorInstance);
+      emitChange(serializeEditorMarkdown(editorInstance), editorInstance);
     },
     [emitChange],
   );
@@ -329,7 +337,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   useEffect(() => {
     if (!editor || !editorMountedRef.current) return;
     const pending = pendingEditorMarkdownRef.current;
-    const currentMarkdown = serializePageMediaMarkdown(editor.blocksToMarkdownLossy());
+    const currentMarkdown = serializeEditorMarkdown(editor);
     if (pending !== null && (value === pending || currentMarkdown === value)) {
       pendingEditorMarkdownRef.current = null;
       return;

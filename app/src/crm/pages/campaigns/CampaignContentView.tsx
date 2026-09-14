@@ -60,6 +60,10 @@ export function CampaignContentView() {
   const saveState = mapSaveStatus(saveStatus);
 
   useEffect(() => {
+    setPreviewHtml("");
+  }, [campaignId]);
+
+  useEffect(() => {
     syncDraft({ subject, bodyMarkdown, templateId });
   }, [subject, bodyMarkdown, templateId, syncDraft]);
 
@@ -103,9 +107,11 @@ export function CampaignContentView() {
         setSubject={setSubject}
         bodyMarkdown={bodyMarkdown}
         onBodyChange={({ markdown, html }) => {
-          setBodyMarkdown(markdown);
           setPreviewHtml(html);
-          ingestBody(markdown, campaignId);
+          setBodyMarkdown((prev) => {
+            if (prev !== markdown) ingestBody(markdown, campaignId);
+            return markdown;
+          });
         }}
         renderedPreview={renderedPreview}
         device={device}

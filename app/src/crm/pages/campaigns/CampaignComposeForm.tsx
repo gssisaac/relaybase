@@ -131,7 +131,7 @@ export function CampaignComposeForm({
           <div className="min-h-0 flex-1 overflow-auto overflow-x-hidden bg-muted/15">
             <div
               className={cn(
-                "min-h-full w-full",
+                "min-h-full w-full [&_p]:my-[0.75em] [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
                 device === "mobile" &&
                   "mx-auto box-border max-w-[375px] [&_table]:box-border [&_table]:max-w-full [&_table[width='600']]:!w-full",
               )}

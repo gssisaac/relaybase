@@ -1,27 +1,26 @@
 import { Hono } from "hono";
-import { eq, isNull, or } from "drizzle-orm";
-import { db, DEV_ACCOUNT_LINK_ID } from "../db/client";
-import { templates } from "../db/schema";
+import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import { newId } from "../lib/ids";
+import type { Template } from "../db/types";
 
 export const crmTemplates = new Hono();
 
-function serialize(row: typeof templates.$inferSelect) {
+function serialize(row: Template) {
   return {
     id: row.id,
     name: row.name,
     htmlSource: row.htmlSource,
-    isBuiltin: Boolean(row.isBuiltin),
+    isBuiltin: row.isBuiltin,
     createdAt: row.createdAt,
   };
 }
 
 // GET /crm/templates — built-in (shared) + this account's custom imports
 crmTemplates.get("/", async (c) => {
-  const rows = await db
-    .select()
-    .from(templates)
-    .where(or(isNull(templates.accountLinkId), eq(templates.accountLinkId, DEV_ACCOUNT_LINK_ID)));
+  const data = store.read();
+  const rows = data.templates.filter(
+    (t) => t.isBuiltin || t.accountLinkId === DEV_ACCOUNT_LINK_ID || t.accountLinkId === null,
+  );
   return c.json({ templates: rows.map(serialize) });
 });
 
@@ -52,15 +51,19 @@ crmTemplates.post("/", async (c) => {
   }
 
   const id = newId("template");
-  await db.insert(templates).values({
-    id,
-    accountLinkId: DEV_ACCOUNT_LINK_ID,
-    name,
-    htmlSource,
-    isBuiltin: 0,
-    createdAt: new Date().toISOString(),
+  const now = new Date().toISOString();
+  let created: Template | null = null;
+  store.update((draft) => {
+    created = {
+      id,
+      accountLinkId: DEV_ACCOUNT_LINK_ID,
+      name,
+      htmlSource,
+      isBuiltin: false,
+      createdAt: now,
+    };
+    draft.templates.push(created);
   });
 
-  const row = await db.select().from(templates).where(eq(templates.id, id)).get();
-  return c.json({ template: serialize(row!), warnings }, 201);
+  return c.json({ template: serialize(created!), warnings }, 201);
 });

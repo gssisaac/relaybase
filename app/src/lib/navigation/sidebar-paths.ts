@@ -2,7 +2,7 @@ export type SidebarMode = "email" | "dashboard" | "crm";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
-export const DEFAULT_CRM_PATH = "/crm/contacts";
+export const DEFAULT_CRM_PATH = "/crm/audience";
 
 const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
 
@@ -97,6 +97,25 @@ export function normalizeEntryPath(path: string): string {
     }
   }
 
+  const crmAudienceMatch = pathname.match(
+    /^\/crm\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  );
+  if (crmAudienceMatch) {
+    let groupId = crmAudienceMatch[1]!;
+    try {
+      groupId = decodeURIComponent(groupId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", groupId);
+    const tabSeg = crmAudienceMatch[2];
+    if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
+      next.set("tab", tabSeg);
+    }
+    return `/crm/audience?${next.toString()}`;
+  }
+
   const audienceMatch = pathname.match(
     /^\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
   );
@@ -113,7 +132,12 @@ export function normalizeEntryPath(path: string): string {
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/audience?${next.toString()}`;
+    return `/crm/audience?${next.toString()}`;
+  }
+
+  if (pathname === "/audience" || pathname.startsWith("/audience/")) {
+    const qs = params.toString();
+    return qs ? `/crm/audience?${qs}` : "/crm/audience";
   }
 
   if (pathname === "/broadcasts/new") {

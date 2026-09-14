@@ -42,10 +42,10 @@ export function CampaignPublishView() {
   const {
     campaign,
     campaignId,
-    contactCount,
-    contactCountHasMore,
+    audienceRecipientCount,
     setCampaign,
     persistDraft,
+    resolveRecipients,
   } = useCampaignDetail();
 
   const [sending, setSending] = useState(false);
@@ -59,9 +59,9 @@ export function CampaignPublishView() {
   const editable = campaign.status === "draft" || campaign.status === "failed";
   const canSend = editable && !sending && Boolean(campaign.subject.trim());
   const recipients =
-    contactCount == null
-      ? "All contacts"
-      : `All contacts · ${contactCount}${contactCountHasMore ? "+" : ""}`;
+    audienceRecipientCount == null
+      ? "All audience members"
+      : `All audience members · ${audienceRecipientCount.toLocaleString()}`;
 
   async function handleSend() {
     setSending(true);
@@ -71,9 +71,14 @@ export function CampaignPublishView() {
         toast.error("Could not save campaign");
         return;
       }
-      const result = await crmApi.sendCampaign(campaignId);
+      const recipientsList = await resolveRecipients();
+      if (recipientsList.length === 0) {
+        toast.error("No audience members — add groups in Audience first");
+        return;
+      }
+      const result = await crmApi.sendCampaign(campaignId, recipientsList);
       setCampaign(result.campaign);
-      toast.success(`Sent to ${result.sent} contact${result.sent === 1 ? "" : "s"}`);
+      toast.success(`Sent to ${result.sent} recipient${result.sent === 1 ? "" : "s"}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Send failed");
     } finally {
@@ -105,9 +110,15 @@ export function CampaignPublishView() {
         toast.error("Could not save campaign");
         return;
       }
+      const recipientsList = await resolveRecipients();
+      if (recipientsList.length === 0) {
+        toast.error("No audience members — add groups in Audience first");
+        return;
+      }
       const updated = await crmApi.scheduleCampaign(
         campaignId,
         new Date(scheduleAt).toISOString(),
+        recipientsList,
       );
       setCampaign(updated);
       setScheduleOpen(false);
@@ -132,14 +143,14 @@ export function CampaignPublishView() {
       <div>
         <h2 className="text-sm font-semibold">Publish</h2>
         <p className="text-xs text-muted-foreground">
-          Send this campaign to your contacts and track delivery.
+          Send this campaign to your Worker audience and track delivery.
         </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Recipients</CardTitle>
-          <CardDescription>v0.2 sends to every CRM contact.</CardDescription>
+          <CardDescription>v0.2 sends to every member across all audience groups.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-medium">{recipients}</p>

@@ -21,7 +21,6 @@ server/pnpm-lock.yaml
 # Claude Code local git worktrees — full checkout copies, never commit
 .claude/worktrees/
 
-# Local CRM SQLite (dev) — never commit data files
-hq/crm/*.sqlite3
-hq/crm/*.sqlite3-shm
-hq/crm/*.sqlite3-wal
+# Local CRM JSON store (dev) — never commit data files
+hq/crm/data/*
+!hq/crm/data/.gitkeep

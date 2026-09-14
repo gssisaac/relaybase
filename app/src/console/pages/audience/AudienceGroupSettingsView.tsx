@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useEmailPaths } from "@/email/lib/paths";
-import { useDashboardPaths } from "@/console/lib/paths";
+import { useAudienceRoutes } from "@/console/pages/audience/AudienceRouteContext";
+import { CrmApiError, crmAudienceApi } from "@/lib/crm/audience-api";
 import { AudienceDataSourceGuide } from "@/console/pages/audience/AudienceDataSourceGuide";
 import {
   clearAudienceGroupDetailCache,
@@ -73,7 +74,7 @@ const CRON_INTERVALS = [
 export function AudienceGroupSettingsView() {
   const productId = useProductId();
   const { apiBase } = useEmailPaths();
-  const { audience } = useDashboardPaths();
+  const { audienceRoot } = useAudienceRoutes();
   const router = useRouter();
   const { groupId, detail, refresh } = useAudienceGroupDetail();
 
@@ -140,23 +141,13 @@ export function AudienceGroupSettingsView() {
   async function testConnection() {
     setTestState({ status: "testing" });
     try {
-      const res = await desktopAwareFetch(`${apiBase}/audience-groups/test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          endpointUrl,
-          groupId,
-          ...(credential.trim() ? { credential: credential.trim() } : {}),
-          credentialHeader,
-        }),
+      const data = await crmAudienceApi.testConnection({
+        endpointUrl,
+        groupId,
+        ...(credential.trim() ? { credential: credential.trim() } : {}),
+        credentialHeader,
       });
-      const data = await readResponseJson<{
-        ok?: boolean;
-        error?: string;
-        totalCount?: number;
-        skippedCount?: number;
-      }>(res);
-      if (!res.ok || !data.ok) {
+      if (!data.ok) {
         setTestState({ status: "error", message: data.error ?? "Test failed" });
         return;
       }
@@ -168,7 +159,12 @@ export function AudienceGroupSettingsView() {
     } catch (e) {
       setTestState({
         status: "error",
-        message: friendlyDesktopFetchError(e, "Test failed"),
+        message:
+          e instanceof CrmApiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Test failed",
       });
     }
   }
@@ -188,29 +184,26 @@ export function AudienceGroupSettingsView() {
           }
         : null;
 
-      const res = await desktopAwareFetch(
-        `${apiBase}/audience-groups/${encodeURIComponent(groupId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name,
-            defaultFrom: defaultFrom || null,
-            cronEnabled,
-            cronIntervalMinutes: Number(cronIntervalMinutes),
-            ...(dataSourceEdited ? { dataSource: dataSourcePayload } : {}),
-          }),
-        },
-      );
-      const data = await readResponseJson<{ error?: string }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
+      await crmAudienceApi.updateGroup(groupId, {
+        name,
+        defaultFrom: defaultFrom || null,
+        cronEnabled,
+        cronIntervalMinutes: Number(cronIntervalMinutes),
+        ...(dataSourceEdited ? { dataSource: dataSourcePayload } : {}),
+      });
       setMessage("Settings saved");
       setDataSourceEdited(false);
       if (credential.trim()) setHasStoredCredential(true);
       clearAudienceGroupDetailCache(productId, groupId);
       await refresh(true);
     } catch (e) {
-      setError(friendlyDesktopFetchError(e, "Failed to save settings"));
+      setError(
+        e instanceof CrmApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to save settings",
+      );
     } finally {
       setSaving(false);
     }
@@ -220,16 +213,17 @@ export function AudienceGroupSettingsView() {
     setDeleting(true);
     setError(null);
     try {
-      const res = await desktopAwareFetch(
-        `${apiBase}/audience-groups/${encodeURIComponent(groupId)}`,
-        { method: "DELETE" },
-      );
-      const data = await readResponseJson<{ error?: string }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Failed to delete group");
+      await crmAudienceApi.deleteGroup(groupId);
       clearAudienceGroupDetailCache(productId, groupId);
-      router.push(audience);
+      router.push(audienceRoot);
     } catch (e) {
-      setError(friendlyDesktopFetchError(e, "Failed to delete group"));
+      setError(
+        e instanceof CrmApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Failed to delete group",
+      );
       setDeleting(false);
     }
   }

@@ -3,18 +3,12 @@
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useEmailPaths } from "@/email/lib/paths";
 import {
   clearAudienceGroupDetailCache,
   useAudienceGroupDetail,
 } from "@/console/pages/audience/AudienceGroupDetailContext";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
-import {
-  desktopAwareFetch,
-  friendlyDesktopFetchError,
-  readResponseJson,
-} from "@/lib/desktop/api";
+import { CrmApiError, crmAudienceApi } from "@/lib/crm/audience-api";
 import {
   DetailView,
   EmailListContainer,
@@ -37,9 +31,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+function friendlyCrmError(e: unknown, fallback: string): string {
+  if (e instanceof CrmApiError) return e.message;
+  if (e instanceof Error) return e.message;
+  return fallback;
+}
+
 export function AudienceGroupContactsView() {
-  const productId = useProductId();
-  const { apiBase } = useEmailPaths();
   const { groupId, detail, loading, refresh } = useAudienceGroupDetail();
 
   const [search, setSearch] = useState("");
@@ -76,30 +74,18 @@ export function AudienceGroupContactsView() {
     setSaving(true);
     setError(null);
     try {
-      const res = await desktopAwareFetch(
-        `${apiBase}/audience-groups/${encodeURIComponent(groupId)}/contacts`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: contactEmail,
-            name: contactName || undefined,
-          }),
-        },
-      );
-      const data = await readResponseJson<{
-        contact: { email: string };
-        error?: string;
-      }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Failed to add contact");
+      const data = await crmAudienceApi.addContact(groupId, {
+        email: contactEmail,
+        name: contactName || undefined,
+      });
       setContactEmail("");
       setContactName("");
       setAddOpen(false);
       setMessage(`Added ${data.contact.email}`);
-      clearAudienceGroupDetailCache(productId, groupId);
+      clearAudienceGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
-      setError(friendlyDesktopFetchError(e, "Failed to add contact"));
+      setError(friendlyCrmError(e, "Failed to add contact"));
     } finally {
       setSaving(false);
     }
@@ -108,17 +94,12 @@ export function AudienceGroupContactsView() {
   async function removeContact(contactId: string) {
     setError(null);
     try {
-      const res = await desktopAwareFetch(
-        `${apiBase}/audience-groups/${encodeURIComponent(groupId)}/contacts?contactId=${encodeURIComponent(contactId)}`,
-        { method: "DELETE" },
-      );
-      const data = await readResponseJson<{ error?: string }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Failed to remove contact");
+      await crmAudienceApi.removeContact(groupId, contactId);
       setSelectedId(null);
-      clearAudienceGroupDetailCache(productId, groupId);
+      clearAudienceGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
-      setError(friendlyDesktopFetchError(e, "Failed to remove contact"));
+      setError(friendlyCrmError(e, "Failed to remove contact"));
     }
   }
 

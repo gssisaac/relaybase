@@ -1,16 +1,17 @@
 import { Hono } from "hono";
-import { desc, eq } from "drizzle-orm";
-import { db, DEV_ACCOUNT_LINK_ID } from "../db/client";
-import { campaigns, contacts, scheduledJobs, templates } from "../db/schema";
+import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
+import type { Campaign } from "../db/types";
 import { newId } from "../lib/ids";
-import { renderCampaignForContact } from "../lib/render";
+import { renderCampaignForRecipient } from "../lib/render";
 import { sendMail } from "../lib/mail-sender";
 
 export const crmCampaigns = new Hono();
 
 const CRM_BASE_URL = process.env.CRM_PUBLIC_BASE_URL ?? "http://localhost:32831";
 
-function serialize(row: typeof campaigns.$inferSelect) {
+export type CampaignRecipient = { email: string; name?: string | null };
+
+function serialize(row: Campaign) {
   return {
     id: row.id,
     subject: row.subject,
@@ -25,106 +26,128 @@ function serialize(row: typeof campaigns.$inferSelect) {
   };
 }
 
-async function getTemplateHtml(templateId: string | null): Promise<string | null> {
+function getTemplateHtml(templateId: string | null): string | null {
   if (!templateId) return null;
-  const row = await db.select().from(templates).where(eq(templates.id, templateId)).get();
+  const data = store.read();
+  const row = data.templates.find((t) => t.id === templateId);
   return row?.htmlSource ?? null;
 }
 
-/** Renders + sends to every Contact on the account (v0.2 has no segment builder — see P0-6 note). */
-async function dispatchCampaign(campaignId: string): Promise<{ sent: number; failed: number }> {
-  const campaign = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).get();
+function normalizeRecipients(raw: unknown): CampaignRecipient[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CampaignRecipient[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const email = String((item as { email?: string }).email ?? "")
+      .trim()
+      .toLowerCase();
+    if (!email.includes("@") || seen.has(email)) continue;
+    seen.add(email);
+    const name = (item as { name?: string }).name;
+    out.push({ email, name: name?.trim() || null });
+  }
+  return out;
+}
+
+/** Audience lives on the customer Worker — client supplies resolved recipients at send time. */
+export async function dispatchCampaign(
+  campaignId: string,
+  recipients: CampaignRecipient[],
+): Promise<{ sent: number; failed: number }> {
+  const data = store.read();
+  const campaign = data.campaigns.find((c) => c.id === campaignId);
   if (!campaign) return { sent: 0, failed: 0 };
 
-  const templateHtml =
-    (await getTemplateHtml(campaign.templateId)) ?? "<div>{{content}}</div>";
-  const recipients = await db
-    .select()
-    .from(contacts)
-    .where(eq(contacts.accountLinkId, DEV_ACCOUNT_LINK_ID));
+  const templateHtml = getTemplateHtml(campaign.templateId) ?? "<div>{{content}}</div>";
 
   let sent = 0;
   let failed = 0;
   const now = new Date().toISOString();
 
-  for (const contact of recipients) {
-    const html = renderCampaignForContact({
+  for (const recipient of recipients) {
+    const html = renderCampaignForRecipient({
       campaignId: campaign.id,
       bodyMarkdown: campaign.bodyMarkdown,
       templateHtml,
-      contact: { id: contact.id, email: contact.email, name: contact.name },
+      recipient,
       crmBaseUrl: CRM_BASE_URL,
     });
-    const result = await sendMail({ to: contact.email, subject: campaign.subject, html });
-    if (result.ok) {
-      sent += 1;
-      await db.update(contacts).set({ lastActivityAt: now }).where(eq(contacts.id, contact.id));
-    } else {
-      failed += 1;
-    }
+    const result = await sendMail({ to: recipient.email, subject: campaign.subject, html });
+    if (result.ok) sent += 1;
+    else failed += 1;
   }
 
   const stats = { sent, opened: 0, clicked: 0 };
-  await db
-    .update(campaigns)
-    .set({
+  store.update((draft) => {
+    const idx = draft.campaigns.findIndex((c) => c.id === campaignId);
+    if (idx < 0) return;
+    draft.campaigns[idx] = {
+      ...draft.campaigns[idx]!,
       status: sent > 0 || recipients.length === 0 ? "sent" : "failed",
       sentAt: now,
       statsJson: JSON.stringify(stats),
       updatedAt: now,
-    })
-    .where(eq(campaigns.id, campaignId));
+    };
+  });
 
   return { sent, failed };
 }
 
 // GET /crm/campaigns
 crmCampaigns.get("/", async (c) => {
-  const rows = await db
-    .select()
-    .from(campaigns)
-    .where(eq(campaigns.accountLinkId, DEV_ACCOUNT_LINK_ID))
-    .orderBy(desc(campaigns.createdAt));
+  const data = store.read();
+  const rows = data.campaigns
+    .filter((row) => row.accountLinkId === DEV_ACCOUNT_LINK_ID)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return c.json({ campaigns: rows.map(serialize) });
 });
 
-// POST /crm/campaigns { subject?, templateId? } — always creates a draft
+// POST /crm/campaigns { subject?, templateId? }
 crmCampaigns.post("/", async (c) => {
   let body: { subject?: string; templateId?: string } = {};
   try {
     body = await c.req.json();
   } catch {
-    // empty body is fine — bare "New campaign" draft
+    /* empty body */
   }
 
   const id = newId("campaign");
   const now = new Date().toISOString();
-  await db.insert(campaigns).values({
-    id,
-    accountLinkId: DEV_ACCOUNT_LINK_ID,
-    subject: body.subject ?? "",
-    bodyMarkdown: "",
-    templateId: body.templateId ?? null,
-    status: "draft",
-    createdAt: now,
-    updatedAt: now,
+  let created: Campaign | null = null;
+  store.update((draft) => {
+    created = {
+      id,
+      accountLinkId: DEV_ACCOUNT_LINK_ID,
+      subject: body.subject ?? "",
+      bodyMarkdown: "",
+      templateId: body.templateId ?? null,
+      segmentJson: "{}",
+      status: "draft",
+      scheduledAt: null,
+      sentAt: null,
+      statsJson: '{"sent":0,"opened":0,"clicked":0}',
+      createdAt: now,
+      updatedAt: now,
+    };
+    draft.campaigns.push(created);
   });
 
-  const row = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
-  return c.json(serialize(row!), 201);
+  return c.json(serialize(created!), 201);
 });
 
 // GET /crm/campaigns/:id
 crmCampaigns.get("/:id", async (c) => {
-  const row = await db.select().from(campaigns).where(eq(campaigns.id, c.req.param("id"))).get();
+  const row = store.read().campaigns.find((r) => r.id === c.req.param("id"));
   if (!row) return c.json({ error: "not found" }, 404);
   return c.json(serialize(row));
 });
 
-// PATCH /crm/campaigns/:id { subject?, bodyMarkdown?, templateId? } — autosave (P0-6)
+// PATCH /crm/campaigns/:id
 crmCampaigns.patch("/:id", async (c) => {
   const id = c.req.param("id");
-  const existing = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
+  const data = store.read();
+  const existing = data.campaigns.find((r) => r.id === id);
   if (!existing) return c.json({ error: "not found" }, 404);
   if (existing.status !== "draft" && existing.status !== "failed") {
     return c.json({ error: "sent campaigns cannot be edited" }, 409);
@@ -137,43 +160,68 @@ crmCampaigns.patch("/:id", async (c) => {
     return c.json({ error: "invalid JSON body" }, 400);
   }
 
-  await db
-    .update(campaigns)
-    .set({
-      subject: body.subject,
-      bodyMarkdown: body.bodyMarkdown,
-      templateId: body.templateId,
+  let updated: Campaign | null = null;
+  store.update((draft) => {
+    const idx = draft.campaigns.findIndex((r) => r.id === id);
+    if (idx < 0) return;
+    draft.campaigns[idx] = {
+      ...draft.campaigns[idx]!,
+      subject: body.subject ?? draft.campaigns[idx]!.subject,
+      bodyMarkdown: body.bodyMarkdown ?? draft.campaigns[idx]!.bodyMarkdown,
+      templateId: body.templateId !== undefined ? body.templateId : draft.campaigns[idx]!.templateId,
       updatedAt: new Date().toISOString(),
-    })
-    .where(eq(campaigns.id, id));
+    };
+    updated = draft.campaigns[idx]!;
+  });
 
-  const row = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
-  return c.json(serialize(row!));
+  return c.json(serialize(updated!));
 });
 
-// POST /crm/campaigns/:id/send — immediate send (flow A)
+// POST /crm/campaigns/:id/send { recipients?: { email, name? }[] }
 crmCampaigns.post("/:id/send", async (c) => {
   const id = c.req.param("id");
-  const existing = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
+  const existing = store.read().campaigns.find((r) => r.id === id);
   if (!existing) return c.json({ error: "not found" }, 404);
   if (existing.status !== "draft" && existing.status !== "failed") {
     return c.json({ error: `cannot send from status "${existing.status}"` }, 409);
   }
 
-  await db
-    .update(campaigns)
-    .set({ status: "sending", updatedAt: new Date().toISOString() })
-    .where(eq(campaigns.id, id));
+  let body: { recipients?: unknown } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    /* no body */
+  }
+  const recipients = normalizeRecipients(body.recipients);
+  if (recipients.length === 0) {
+    return c.json(
+      {
+        error:
+          "recipients required — resolve audience members from your Worker and pass them in the request body",
+      },
+      400,
+    );
+  }
 
-  const result = await dispatchCampaign(id);
-  const row = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
-  return c.json({ campaign: serialize(row!), ...result });
+  store.update((draft) => {
+    const idx = draft.campaigns.findIndex((r) => r.id === id);
+    if (idx >= 0) {
+      draft.campaigns[idx] = {
+        ...draft.campaigns[idx]!,
+        status: "sending",
+        updatedAt: new Date().toISOString(),
+      };
+    }
+  });
+
+  const result = await dispatchCampaign(id, recipients);
+  const row = store.read().campaigns.find((r) => r.id === id)!;
+  return c.json({ campaign: serialize(row), ...result });
 });
 
 // POST /crm/campaigns/:id/test-send { to }
 crmCampaigns.post("/:id/test-send", async (c) => {
-  const id = c.req.param("id");
-  const campaign = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
+  const campaign = store.read().campaigns.find((r) => r.id === c.req.param("id"));
   if (!campaign) return c.json({ error: "not found" }, 404);
 
   let body: { to?: string };
@@ -187,12 +235,12 @@ crmCampaigns.post("/:id/test-send", async (c) => {
     return c.json({ error: "a valid recipient email is required" }, 400);
   }
 
-  const templateHtml = (await getTemplateHtml(campaign.templateId)) ?? "<div>{{content}}</div>";
-  const html = renderCampaignForContact({
+  const templateHtml = getTemplateHtml(campaign.templateId) ?? "<div>{{content}}</div>";
+  const html = renderCampaignForRecipient({
     campaignId: campaign.id,
     bodyMarkdown: campaign.bodyMarkdown,
     templateHtml,
-    contact: { id: "test", email: to, name: null },
+    recipient: { email: to, name: null },
     crmBaseUrl: CRM_BASE_URL,
   });
   const result = await sendMail({ to, subject: `[Test] ${campaign.subject}`, html });
@@ -200,16 +248,16 @@ crmCampaigns.post("/:id/test-send", async (c) => {
   return c.json({ ok: true });
 });
 
-// POST /crm/campaigns/:id/schedule { runAt } — P0-5
+// POST /crm/campaigns/:id/schedule { runAt, recipients }
 crmCampaigns.post("/:id/schedule", async (c) => {
   const id = c.req.param("id");
-  const campaign = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
+  const campaign = store.read().campaigns.find((r) => r.id === id);
   if (!campaign) return c.json({ error: "not found" }, 404);
   if (campaign.status !== "draft") {
     return c.json({ error: `cannot schedule from status "${campaign.status}"` }, 409);
   }
 
-  let body: { runAt?: string };
+  let body: { runAt?: string; recipients?: unknown };
   try {
     body = await c.req.json();
   } catch {
@@ -219,52 +267,69 @@ crmCampaigns.post("/:id/schedule", async (c) => {
   if (!runAt || new Date(runAt).getTime() <= Date.now()) {
     return c.json({ error: "runAt must be a future time" }, 400);
   }
+  const recipients = normalizeRecipients(body.recipients);
+  if (recipients.length === 0) {
+    return c.json({ error: "recipients required for scheduled send" }, 400);
+  }
 
-  await db.insert(scheduledJobs).values({
-    id: newId("job"),
-    accountLinkId: DEV_ACCOUNT_LINK_ID,
-    kind: "campaign",
-    refId: id,
-    runAt,
-    status: "pending",
-    createdAt: new Date().toISOString(),
+  const now = new Date().toISOString();
+  store.update((draft) => {
+    draft.scheduledJobs.push({
+      id: newId("job"),
+      accountLinkId: DEV_ACCOUNT_LINK_ID,
+      kind: "campaign",
+      refId: id,
+      runAt,
+      status: "pending",
+      createdAt: now,
+    });
+    const idx = draft.campaigns.findIndex((r) => r.id === id);
+    if (idx >= 0) {
+      draft.campaigns[idx] = {
+        ...draft.campaigns[idx]!,
+        segmentJson: JSON.stringify({ recipients }),
+        status: "scheduled",
+        scheduledAt: runAt,
+        updatedAt: now,
+      };
+    }
   });
-  await db
-    .update(campaigns)
-    .set({ status: "scheduled", scheduledAt: runAt, updatedAt: new Date().toISOString() })
-    .where(eq(campaigns.id, id));
 
-  const row = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
-  return c.json(serialize(row!));
+  const row = store.read().campaigns.find((r) => r.id === id)!;
+  return c.json(serialize(row));
 });
 
 // POST /crm/campaigns/:id/cancel-schedule
 crmCampaigns.post("/:id/cancel-schedule", async (c) => {
   const id = c.req.param("id");
-  const campaign = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
+  const data = store.read();
+  const campaign = data.campaigns.find((r) => r.id === id);
   if (!campaign) return c.json({ error: "not found" }, 404);
   if (campaign.status !== "scheduled") {
     return c.json({ error: "already sent — cannot cancel" }, 409);
   }
 
-  const job = await db
-    .select()
-    .from(scheduledJobs)
-    .where(eq(scheduledJobs.refId, id))
-    .get();
+  const job = data.scheduledJobs.find((j) => j.refId === id);
   if (job && job.status === "pending") {
-    await db.delete(scheduledJobs).where(eq(scheduledJobs.id, job.id));
+    store.update((draft) => {
+      draft.scheduledJobs = draft.scheduledJobs.filter((j) => j.id !== job.id);
+    });
   } else if (job) {
     return c.json({ error: "send already started; cannot cancel" }, 409);
   }
 
-  await db
-    .update(campaigns)
-    .set({ status: "draft", scheduledAt: null, updatedAt: new Date().toISOString() })
-    .where(eq(campaigns.id, id));
+  store.update((draft) => {
+    const idx = draft.campaigns.findIndex((r) => r.id === id);
+    if (idx >= 0) {
+      draft.campaigns[idx] = {
+        ...draft.campaigns[idx]!,
+        status: "draft",
+        scheduledAt: null,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+  });
 
-  const row = await db.select().from(campaigns).where(eq(campaigns.id, id)).get();
-  return c.json(serialize(row!));
+  const row = store.read().campaigns.find((r) => r.id === id)!;
+  return c.json(serialize(row));
 });
-
-export { dispatchCampaign };

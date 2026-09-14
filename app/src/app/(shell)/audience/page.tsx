@@ -1,5 +1,6 @@
-import { AudienceGroupsView } from "@/console/pages/audience/AudienceGroupsView";
+import { redirect } from "next/navigation";
 
+/** Audience management lives in CRM mode — keep legacy /audience links working. */
 export default function Page() {
-  return <AudienceGroupsView />;
+  redirect("/crm/audience");
 }

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { db } from "../db/client";
-import { trackingEvents } from "../db/schema";
+import { store } from "../db/store";
+import { emailFromMemberKey } from "../lib/member-key";
 import { newId } from "../lib/ids";
 
 export const crmTracking = new Hono();
@@ -11,43 +11,47 @@ const PIXEL_GIF = Buffer.from(
   "base64",
 );
 
-// GET /crm/t/o/:campaignId/:contactId — open pixel, always 200 (P0-2 UC-1)
-crmTracking.get("/o/:campaignId/:contactId", async (c) => {
-  const { campaignId, contactId } = c.req.param();
-  // Fire-and-forget: never delay the pixel response on the write.
-  void db
-    .insert(trackingEvents)
-    .values({
-      id: newId("track"),
-      campaignId,
-      contactId,
-      type: "open",
-      occurredAt: new Date().toISOString(),
-    })
-    .catch((err) => console.error("[crm-tracking] failed to record open", err));
+function recordEvent(input: {
+  campaignId: string;
+  memberKey: string;
+  type: "open" | "click";
+  url?: string;
+}) {
+  const email = emailFromMemberKey(input.memberKey);
+  if (!email) return;
+  try {
+    store.update((draft) => {
+      draft.trackingEvents.push({
+        id: newId("track"),
+        campaignId: input.campaignId,
+        memberEmail: email,
+        type: input.type,
+        url: input.url ?? null,
+        occurredAt: new Date().toISOString(),
+      });
+    });
+  } catch (err) {
+    console.error("[crm-tracking] failed to record event", err);
+  }
+}
+
+// GET /crm/t/o/:campaignId/:memberKey — open pixel
+crmTracking.get("/o/:campaignId/:memberKey", async (c) => {
+  const { campaignId, memberKey } = c.req.param();
+  recordEvent({ campaignId, memberKey, type: "open" });
 
   c.header("Content-Type", "image/gif");
   c.header("Cache-Control", "no-store");
   return c.body(PIXEL_GIF);
 });
 
-// GET /crm/t/c/:campaignId/:contactId?u=<original> — click redirect (P0-2 UC-2)
-crmTracking.get("/c/:campaignId/:contactId", async (c) => {
-  const { campaignId, contactId } = c.req.param();
+// GET /crm/t/c/:campaignId/:memberKey?u=<original> — click redirect
+crmTracking.get("/c/:campaignId/:memberKey", async (c) => {
+  const { campaignId, memberKey } = c.req.param();
   const target = c.req.query("u");
   if (!target) return c.json({ error: "missing u" }, 400);
 
-  void db
-    .insert(trackingEvents)
-    .values({
-      id: newId("track"),
-      campaignId,
-      contactId,
-      type: "click",
-      url: target,
-      occurredAt: new Date().toISOString(),
-    })
-    .catch((err) => console.error("[crm-tracking] failed to record click", err));
+  recordEvent({ campaignId, memberKey, type: "click", url: target });
 
   return c.redirect(target, 302);
 });

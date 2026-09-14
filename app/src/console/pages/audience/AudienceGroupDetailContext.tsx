@@ -10,13 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useEmailPaths } from "@/email/lib/paths";
-import {
-  clearEmailCache,
-  fetchEmailCachedOptional,
-} from "@/email/components/mailbox/email-cached-fetch";
-import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
+import { crmAudienceApi } from "@/lib/crm/audience-api";
 import type {
   AudienceGroupContact,
   AudienceGroupSummary,
@@ -26,18 +20,6 @@ export type AudienceGroupDetail = {
   group: AudienceGroupSummary;
   contacts: AudienceGroupContact[];
 };
-
-function detailResource(groupId: string): string {
-  return `audience-group:${groupId}`;
-}
-
-export function clearAudienceGroupDetailCache(
-  productId: string,
-  groupId: string,
-): void {
-  clearEmailCache(productId, detailResource(groupId));
-  clearEmailCache(productId, "audience-groups");
-}
 
 type Ctx = {
   groupId: string;
@@ -51,6 +33,10 @@ type Ctx = {
 
 const AudienceGroupDetailCtx = createContext<Ctx | null>(null);
 
+export function clearAudienceGroupDetailCache(_productId: string, _groupId: string): void {
+  /* CRM audience is server-backed — no email cache to clear. */
+}
+
 export function AudienceGroupDetailProvider({
   groupId,
   children,
@@ -58,14 +44,8 @@ export function AudienceGroupDetailProvider({
   groupId: string;
   children: ReactNode;
 }) {
-  const productId = useProductId();
-  const { apiBase } = useEmailPaths();
-  const resource = detailResource(groupId);
-
   const [detail, setDetail] = useState<AudienceGroupDetail | null>(null);
-  const [loading, setLoading] = useState(
-    () => readEmailStale<AudienceGroupDetail>(productId, resource) === null,
-  );
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,40 +53,27 @@ export function AudienceGroupDetailProvider({
   const detailRef = useRef(detail);
   detailRef.current = detail;
 
-  useEffect(() => {
-    const stale = readEmailStale<AudienceGroupDetail>(productId, resource);
-    if (stale) {
-      setDetail(stale);
-      setLoading(false);
-    }
-  }, [productId, resource]);
-
-  const refresh = useCallback(
-    async (force?: boolean) => {
-      if (!detailRef.current) setLoading(true);
-      setRefreshing(true);
-      setError(null);
-      try {
-        const result = await fetchEmailCachedOptional<AudienceGroupDetail>(
-          productId,
-          resource,
-          `${apiBase}/audience-groups/${encodeURIComponent(groupId)}`,
-          { refresh: force, onUpdate: (data) => data && setDetail(data) },
-        );
-        if (result.ok) {
-          if (result.data) setDetail(result.data);
-        } else {
-          setNotFound(true);
-        }
-      } catch (e) {
+  const refresh = useCallback(async (_force?: boolean) => {
+    if (!detailRef.current) setLoading(true);
+    setRefreshing(true);
+    setError(null);
+    try {
+      const data = await crmAudienceApi.getGroup(groupId);
+      setDetail(data);
+      setNotFound(false);
+    } catch (e) {
+      const status = e && typeof e === "object" && "status" in e ? e.status : null;
+      if (status === 404) {
+        setNotFound(true);
+        setDetail(null);
+      } else {
         setError(e instanceof Error ? e.message : "Refresh failed");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
       }
-    },
-    [apiBase, groupId, productId, resource],
-  );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [groupId]);
 
   useEffect(() => {
     void refresh();

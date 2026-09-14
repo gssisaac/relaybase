@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { crmApi, type Campaign, type CrmTemplate } from "@/lib/crm/api";
+import { fetchAudienceRecipientCount } from "@/lib/crm/audience-recipients";
 
 type DraftFields = { subject: string; bodyMarkdown: string; templateId: string };
 
@@ -18,14 +19,15 @@ type Ctx = {
   campaignId: string;
   campaign: Campaign | null;
   templates: CrmTemplate[];
-  contactCount: number | null;
-  contactCountHasMore: boolean;
+  audienceRecipientCount: number | null;
   loading: boolean;
   notFound: boolean;
   setCampaign: (campaign: Campaign) => void;
   refresh: () => Promise<void>;
   syncDraft: (fields: DraftFields) => void;
   persistDraft: () => Promise<boolean>;
+  getLastSavedDraft: () => DraftFields;
+  resolveRecipients: () => Promise<{ email: string; name?: string | null }[]>;
 };
 
 const CampaignDetailCtx = createContext<Ctx | null>(null);
@@ -39,8 +41,7 @@ export function CampaignDetailProvider({
 }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [templates, setTemplates] = useState<CrmTemplate[]>([]);
-  const [contactCount, setContactCount] = useState<number | null>(null);
-  const [contactCountHasMore, setContactCountHasMore] = useState(false);
+  const [audienceRecipientCount, setAudienceRecipientCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -84,20 +85,22 @@ export function CampaignDetailProvider({
   }, [refresh]);
 
   useEffect(() => {
-    void crmApi.listContacts().then(
-      (data) => {
-        setContactCount(data.contacts.length);
-        setContactCountHasMore(Boolean(data.nextCursor));
-      },
-      () => {
-        setContactCount(null);
-        setContactCountHasMore(false);
-      },
-    );
+    void fetchAudienceRecipientCount()
+      .then(setAudienceRecipientCount)
+      .catch(() => setAudienceRecipientCount(null));
+  }, []);
+
+  const resolveRecipients = useCallback(async () => {
+    const { fetchAllAudienceRecipients } = await import("@/lib/crm/audience-recipients");
+    return fetchAllAudienceRecipients();
   }, []);
 
   const syncDraft = useCallback((fields: DraftFields) => {
     draftRef.current = fields;
+  }, []);
+
+  const getLastSavedDraft = useCallback((): DraftFields => {
+    return lastSaved.current ?? draftRef.current;
   }, []);
 
   const persistDraft = useCallback((): Promise<boolean> => {
@@ -138,14 +141,15 @@ export function CampaignDetailProvider({
         campaignId,
         campaign,
         templates,
-        contactCount,
-        contactCountHasMore,
+        audienceRecipientCount,
         loading,
         notFound,
         setCampaign,
         refresh,
         syncDraft,
         persistDraft,
+        getLastSavedDraft,
+        resolveRecipients,
       }}
     >
       {children}

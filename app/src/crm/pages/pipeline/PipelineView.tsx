@@ -40,11 +40,11 @@ export function PipelineView() {
     return columns.find((c) => c.stage === stage) ?? { stage, count: 0, cards: [] };
   }
 
-  async function moveCard(contactId: string, toStage: string) {
+  async function moveCard(memberEmail: string, toStage: string) {
     let fromStage: PipelineColumn["stage"] | null = null;
     let movedCard: PipelineColumn["cards"][number] | null = null;
     for (const col of columns) {
-      const found = col.cards.find((c) => c.contactId === contactId);
+      const found = col.cards.find((c) => c.memberEmail === memberEmail);
       if (found) {
         fromStage = col.stage;
         movedCard = found;
@@ -59,7 +59,7 @@ export function PipelineView() {
           return {
             ...col,
             count: col.count - 1,
-            cards: col.cards.filter((c) => c.contactId !== contactId),
+            cards: col.cards.filter((c) => c.memberEmail !== memberEmail),
           };
         }
         if (col.stage === toStage) {
@@ -70,7 +70,7 @@ export function PipelineView() {
     );
 
     try {
-      await crmApi.moveCard(contactId, { stage: toStage });
+      await crmApi.moveCard(memberEmail, { stage: toStage });
     } catch {
       toast.error("Move failed. Try again.");
       void load();
@@ -97,9 +97,9 @@ export function PipelineView() {
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                const contactId = e.dataTransfer.getData("text/plain");
+                const memberEmail = e.dataTransfer.getData("text/plain");
                 setDragging(null);
-                if (contactId) void moveCard(contactId, stage);
+                if (memberEmail) void moveCard(memberEmail, stage);
               }}
             >
               <div className="flex items-center justify-between px-1 text-sm font-medium">
@@ -109,11 +109,11 @@ export function PipelineView() {
               <div className="flex flex-1 flex-col gap-1.5">
                 {column.cards.map((card) => (
                   <div
-                    key={card.contactId}
+                    key={card.memberEmail}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData("text/plain", card.contactId);
-                      setDragging(card.contactId);
+                      e.dataTransfer.setData("text/plain", card.memberEmail);
+                      setDragging(card.memberEmail);
                     }}
                     onDragEnd={() => setDragging(null)}
                     className="cursor-grab rounded-md border border-border/60 bg-background p-2 text-xs shadow-sm active:cursor-grabbing"
@@ -129,7 +129,7 @@ export function PipelineView() {
                 ))}
                 {column.count > 50 ? (
                   <a
-                    href={`/crm/contacts?status=${stage}`}
+                    href="/crm/audience"
                     className="px-1 text-xs text-muted-foreground underline"
                   >
                     Show more ({column.count - 50})

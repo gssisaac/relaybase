@@ -25,7 +25,7 @@ function formatWhen(value?: string | null): string {
 }
 
 export function CampaignOverviewView() {
-  const { campaign, campaignId, templates, contactCount, contactCountHasMore, loading } =
+  const { campaign, campaignId, templates, audienceRecipientCount, loading } =
     useCampaignDetail();
 
   if (loading && !campaign) {
@@ -35,9 +35,9 @@ export function CampaignOverviewView() {
 
   const template = templates.find((t) => t.id === campaign.templateId);
   const recipients =
-    contactCount == null
-      ? "All contacts"
-      : `All contacts · ${contactCount}${contactCountHasMore ? "+" : ""}`;
+    audienceRecipientCount == null
+      ? "All audience members"
+      : `All audience members · ${audienceRecipientCount.toLocaleString()}`;
 
   return (
     <div className="space-y-4">

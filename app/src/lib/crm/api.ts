@@ -3,35 +3,23 @@
  * §1.3) — CRM pages talk to it directly, not through `desktopAwareFetch` /
  * `email-api-map`. No auth wired up yet (single dev account server-side);
  * this client just points at the CRM base URL.
+ *
+ * Audience groups live in the CRM JSON store (`/crm/audience-groups`).
  */
-const CRM_API_BASE =
-  process.env.NEXT_PUBLIC_CRM_API_BASE?.replace(/\/$/, "") ?? "http://localhost:32831";
+import { CRM_API_BASE } from "./api-base";
 
-export type Contact = {
-  id: string;
+export { CRM_API_BASE };
+
+export type CampaignRecipient = {
   email: string;
-  name: string | null;
-  status: string;
-  source: string;
-  tags: string[];
-  createdAt: string;
-  lastActivityAt: string | null;
-  lastReplyAt: string | null;
-  followupSnoozed: boolean;
-};
-
-export type Activity = {
-  id: string;
-  type: string;
-  payload: unknown;
-  occurredAt: string;
+  name?: string | null;
 };
 
 export type PipelineColumn = {
   stage: "lead" | "contacted" | "quoted" | "won" | "lost";
   count: number;
   cards: {
-    contactId: string;
+    memberEmail: string;
     name: string | null;
     email: string;
     note: string | null;
@@ -70,7 +58,7 @@ class CrmApiError extends Error {
   }
 }
 
-async function crmFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function crmFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${CRM_API_BASE}${path}`, {
     ...init,
     headers: { "content-type": "application/json", ...init?.headers },
@@ -85,32 +73,12 @@ async function crmFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export { CrmApiError };
 
 export const crmApi = {
-  listContacts: (params?: { search?: string; status?: string; tag?: string }) => {
-    const q = new URLSearchParams();
-    if (params?.search) q.set("search", params.search);
-    if (params?.status) q.set("status", params.status);
-    if (params?.tag) q.set("tag", params.tag);
-    const qs = q.toString();
-    return crmFetch<{ contacts: Contact[]; nextCursor: string | null }>(
-      `/crm/contacts${qs ? `?${qs}` : ""}`,
-    );
-  },
-  listFollowup: () =>
-    crmFetch<{ contacts: Contact[]; thresholdDays: number }>("/crm/contacts/followup"),
-  createContact: (input: { email: string; name?: string; tags?: string[]; status?: string }) =>
-    crmFetch<Contact>("/crm/contacts", { method: "POST", body: JSON.stringify(input) }),
-  getContact: (id: string) =>
-    crmFetch<{ contact: Contact; activities: Activity[] }>(`/crm/contacts/${id}`),
-  updateContact: (
-    id: string,
-    input: Partial<{ name: string; tags: string[]; status: string; followupSnoozed: boolean }>,
-  ) => crmFetch<Contact>(`/crm/contacts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
-  deleteContact: (id: string) =>
-    crmFetch<{ ok: true }>(`/crm/contacts/${id}`, { method: "DELETE" }),
-
   getPipeline: () => crmFetch<{ columns: PipelineColumn[] }>("/crm/pipeline"),
-  moveCard: (contactId: string, input: { stage?: string; note?: string }) =>
-    crmFetch(`/crm/pipeline/${contactId}`, { method: "PATCH", body: JSON.stringify(input) }),
+  moveCard: (memberEmail: string, input: { stage?: string; note?: string; name?: string }) =>
+    crmFetch(
+      `/crm/pipeline/${encodeURIComponent(memberEmail)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    ),
 
   listTemplates: () => crmFetch<{ templates: CrmTemplate[] }>("/crm/templates"),
   importTemplate: (input: { name: string; htmlSource: string }) =>
@@ -127,21 +95,30 @@ export const crmApi = {
     id: string,
     input: Partial<{ subject: string; bodyMarkdown: string; templateId: string }>,
   ) => crmFetch<Campaign>(`/crm/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
-  sendCampaign: (id: string) =>
+  sendCampaign: (id: string, recipients: CampaignRecipient[]) =>
     crmFetch<{ campaign: Campaign; sent: number; failed: number }>(
       `/crm/campaigns/${id}/send`,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify({ recipients }) },
     ),
   testSendCampaign: (id: string, to: string) =>
     crmFetch<{ ok: true }>(`/crm/campaigns/${id}/test-send`, {
       method: "POST",
       body: JSON.stringify({ to }),
     }),
-  scheduleCampaign: (id: string, runAt: string) =>
+  scheduleCampaign: (id: string, runAt: string, recipients: CampaignRecipient[]) =>
     crmFetch<Campaign>(`/crm/campaigns/${id}/schedule`, {
       method: "POST",
-      body: JSON.stringify({ runAt }),
+      body: JSON.stringify({ runAt, recipients }),
     }),
   cancelSchedule: (id: string) =>
     crmFetch<Campaign>(`/crm/campaigns/${id}/cancel-schedule`, { method: "POST" }),
+
+  uploadCampaignAsset: (
+    campaignId: string,
+    input: { filename: string; mimeType: string; contentBase64: string },
+  ) =>
+    crmFetch<{ url: string; key: string }>(`/crm/campaigns/${campaignId}/assets`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };

@@ -163,7 +163,7 @@ export function CampaignsListView() {
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold tracking-tight">Campaigns</h1>
             <p className="text-sm text-muted-foreground">
-              Draft and send campaigns to your CRM contacts
+              Draft and send campaigns to your audience
             </p>
           </div>
         </DesktopTitleBar>

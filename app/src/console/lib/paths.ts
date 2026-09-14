@@ -9,7 +9,6 @@ import {
   Megaphone,
   ScrollText,
   Settings,
-  Users,
 } from "lucide-react";
 
 import {
@@ -34,7 +33,6 @@ export function useDashboardPaths() {
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
     { href: domains, label: "Domains", icon: Globe },
     { href: accounts, label: "Accounts", icon: AtSign },
-    { href: audience, label: "Audience", icon: Users },
     { href: broadcasts, label: "Broadcasts", icon: Megaphone },
     { href: keys, label: "API Keys", icon: KeyRound },
     { href: logs, label: "Log", icon: ScrollText },
@@ -143,7 +141,7 @@ export function accountDetailFromSearch(searchParams: {
   return { email, tab };
 }
 
-/** Audience group detail — `/audience?id=&tab=`. */
+/** Audience group detail — `/crm/audience?id=&tab=` (Audience lives in CRM mode). */
 export function audienceDetailHref(
   groupId: string,
   tab: AudienceDetailTab = "contacts",
@@ -151,7 +149,7 @@ export function audienceDetailHref(
   const params = new URLSearchParams();
   params.set("id", groupId.trim());
   if (tab !== "contacts") params.set("tab", tab);
-  return `/audience?${params.toString()}`;
+  return `/crm/audience?${params.toString()}`;
 }
 
 export function audienceDetailFromSearch(searchParams: {

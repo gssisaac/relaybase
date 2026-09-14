@@ -7,29 +7,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { AudienceDataSourceGuide } from "@/console/pages/audience/AudienceDataSourceGuide";
 import { AudienceGroupDetailSheet } from "@/console/pages/audience/AudienceGroupDetailSheet";
-import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { useDomain } from "@/lib/dashboard/DomainContext";
-import {
-  audienceDetailFromSearch,
-  audienceDetailHref,
-  useDashboardPaths,
-  type AudienceDetailTab,
-} from "@/console/lib/paths";
+import { type AudienceDetailTab } from "@/console/lib/paths";
+import { useAudienceRoutes } from "@/console/pages/audience/AudienceRouteContext";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
-import { useEmailPaths } from "@/email/lib/paths";
-import {
-  clearEmailCache,
-  fetchEmailCached,
-} from "@/email/components/mailbox/email-cached-fetch";
-import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
-import {
-  desktopAwareFetch,
-  friendlyDesktopFetchError,
-  isPackagedApiUnavailableError,
-  readResponseJson,
-} from "@/lib/desktop/api";
+import { CrmApiError, crmAudienceApi } from "@/lib/crm/audience-api";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,8 +52,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const RESOURCE = "audience-groups";
-
 type TestState =
   | { status: "idle" }
   | { status: "testing" }
@@ -93,12 +75,16 @@ function lastSyncLabel(group: AudienceGroupSummary): string {
   return group.lastSyncStatus === "error" ? `Failed · ${when}` : when;
 }
 
+function friendlyCrmError(e: unknown, fallback: string): string {
+  if (e instanceof CrmApiError) return e.message;
+  if (e instanceof Error) return e.message;
+  return fallback;
+}
+
 export function AudienceGroupsView() {
-  const productId = useProductId();
-  const { apiBase } = useEmailPaths();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { audience: audienceHref } = useDashboardPaths();
+  const { audienceRoot, audienceDetailHref, audienceDetailFromSearch } = useAudienceRoutes();
   const audienceDetail = audienceDetailFromSearch(searchParams);
   const { domains } = useDomain();
   const readyDomains = useMemo(
@@ -109,13 +95,7 @@ export function AudienceGroupsView() {
 
   const [groups, setGroups] = useState<AudienceGroupSummary[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(
-    () =>
-      readEmailStale<{ groups?: AudienceGroupSummary[] }>(
-        productId,
-        RESOURCE,
-      ) === null,
-  );
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -133,46 +113,21 @@ export function AudienceGroupsView() {
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
 
-  useEffect(() => {
-    const stale = readEmailStale<{ groups?: AudienceGroupSummary[] }>(
-      productId,
-      RESOURCE,
-    );
-    if (stale) {
-      setGroups(stale.groups ?? []);
+  const refresh = useCallback(async (_force?: boolean) => {
+    const hasData = groupsRef.current.length > 0;
+    if (!hasData) setLoading(true);
+    setRefreshing(true);
+    setError(null);
+    try {
+      const result = await crmAudienceApi.listGroups();
+      setGroups(result.groups ?? []);
+    } catch (e) {
+      setError(friendlyCrmError(e, "Refresh failed"));
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [productId]);
-
-  const refresh = useCallback(
-    async (force?: boolean) => {
-      const hasData = groupsRef.current.length > 0;
-      if (!hasData) setLoading(true);
-      setRefreshing(true);
-      setError(null);
-      try {
-        const result = await fetchEmailCached<{
-          groups?: AudienceGroupSummary[];
-        }>(productId, RESOURCE, `${apiBase}/audience-groups`, {
-          refresh: force,
-          onUpdate: (data) => setGroups(data.groups ?? []),
-        });
-        setGroups(result.data.groups ?? []);
-      } catch (e) {
-        setError(
-          isPackagedApiUnavailableError(e)
-            ? null
-            : e instanceof Error
-              ? e.message
-              : "Refresh failed",
-        );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [apiBase, productId],
-  );
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -201,19 +156,12 @@ export function AudienceGroupsView() {
   async function testConnection() {
     setTestState({ status: "testing" });
     try {
-      const res = await desktopAwareFetch(`${apiBase}/audience-groups/test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpointUrl, credential, credentialHeader }),
+      const data = await crmAudienceApi.testConnection({
+        endpointUrl,
+        credential,
+        credentialHeader,
       });
-      const data = await readResponseJson<{
-        ok?: boolean;
-        error?: string;
-        totalCount?: number;
-        skippedCount?: number;
-        sampleContacts?: Array<{ email: string; name?: string }>;
-      }>(res);
-      if (!res.ok || !data.ok) {
+      if (!data.ok) {
         setTestState({
           status: "error",
           message: data.error ?? "Test failed",
@@ -229,7 +177,7 @@ export function AudienceGroupsView() {
     } catch (e) {
       setTestState({
         status: "error",
-        message: friendlyDesktopFetchError(e, "Test failed"),
+        message: friendlyCrmError(e, "Test failed"),
       });
     }
   }
@@ -239,33 +187,23 @@ export function AudienceGroupsView() {
     setRegistering(true);
     setError(null);
     try {
-      const res = await desktopAwareFetch(`${apiBase}/audience-groups`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          domain,
-          dataSource: useDataSource
-            ? {
-                type: "generic_json",
-                endpointUrl,
-                credential: credential || undefined,
-                credentialHeader: credentialHeader || undefined,
-              }
-            : undefined,
-        }),
+      const data = await crmAudienceApi.createGroup({
+        name,
+        domain,
+        dataSource: useDataSource
+          ? {
+              type: "generic_json",
+              endpointUrl,
+              credential: credential || undefined,
+              credentialHeader: credentialHeader || undefined,
+            }
+          : undefined,
       });
-      const data = await readResponseJson<{
-        group: { name: string };
-        error?: string;
-      }>(res);
-      if (!res.ok) throw new Error(data.error ?? "Failed to create group");
       setAddOpen(false);
       setMessage(`Created "${data.group.name}"`);
-      clearEmailCache(productId, RESOURCE);
       await refresh(true);
     } catch (e) {
-      setError(friendlyDesktopFetchError(e, "Failed to create group"));
+      setError(friendlyCrmError(e, "Failed to create group"));
     } finally {
       setRegistering(false);
     }
@@ -277,7 +215,7 @@ export function AudienceGroupsView() {
     (!useDataSource || testState.status === "success");
 
   function closeAudienceDetail() {
-    router.replace(audienceHref);
+    router.replace(audienceRoot);
   }
 
   function setAudienceDetailTab(tab: AudienceDetailTab) {

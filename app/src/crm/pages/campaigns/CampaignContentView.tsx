@@ -5,11 +5,28 @@ import { toast } from "sonner";
 
 import { CampaignComposeForm } from "@/crm/pages/campaigns/CampaignComposeForm";
 import { useCampaignDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
+import {
+  useCampaignEditorPersistence,
+  type CampaignPersistBridge,
+} from "@/lib/markdown-editor";
+import { SAVE_STATUS } from "@/lib/markdown-editor/persistence/constants";
+import type { SaveStatus } from "@/lib/markdown-editor/persistence/types";
 
-const AUTOSAVE_DELAY_MS = 3000;
+function mapSaveStatus(status: SaveStatus | null): "idle" | "saving" | "error" {
+  if (status === SAVE_STATUS.SAVING) return "saving";
+  if (status === SAVE_STATUS.ERROR) return "error";
+  return "idle";
+}
 
 export function CampaignContentView() {
-  const { campaignId, campaign, templates, syncDraft, persistDraft } = useCampaignDetail();
+  const {
+    campaignId,
+    campaign,
+    templates,
+    syncDraft,
+    persistDraft,
+    getLastSavedDraft,
+  } = useCampaignDetail();
 
   const [subject, setSubject] = useState(campaign?.subject ?? "");
   const [bodyMarkdown, setBodyMarkdown] = useState(campaign?.bodyMarkdown ?? "");
@@ -17,29 +34,42 @@ export function CampaignContentView() {
   const [templateId, setTemplateId] = useState(
     campaign?.templateId ?? templates[0]?.id ?? "",
   );
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
 
   const editable = campaign?.status === "draft" || campaign?.status === "failed";
+
+  const bridge = useMemo<CampaignPersistBridge>(
+    () => ({
+      getDraft: () => ({ subject, bodyMarkdown, templateId }),
+      setBodyMarkdown: (body) => setBodyMarkdown(body),
+      getLastPersistedBody: () => getLastSavedDraft().bodyMarkdown,
+      persist: async () => {
+        const ok = await persistDraft();
+        if (!ok) throw new Error("persist failed");
+      },
+    }),
+    [subject, bodyMarkdown, templateId, getLastSavedDraft, persistDraft],
+  );
+
+  const { editorRef, ingestBody, checkpoint, saveStatus } = useCampaignEditorPersistence({
+    campaignId,
+    editable: Boolean(editable),
+    bridge,
+  });
+
+  const saveState = mapSaveStatus(saveStatus);
 
   useEffect(() => {
     syncDraft({ subject, bodyMarkdown, templateId });
   }, [subject, bodyMarkdown, templateId, syncDraft]);
 
   useEffect(() => {
-    return () => {
-      void persistDraft();
-    };
-  }, [persistDraft]);
-
-  useEffect(() => {
     if (!campaign || !editable) return;
     const timer = setTimeout(() => {
-      setSaveState("saving");
-      void persistDraft().then((ok) => setSaveState(ok ? "idle" : "error"));
-    }, AUTOSAVE_DELAY_MS);
+      void persistDraft();
+    }, 3000);
     return () => clearTimeout(timer);
-  }, [subject, bodyMarkdown, templateId, campaign, editable, persistDraft]);
+  }, [subject, templateId, campaign, editable, persistDraft]);
 
   const template = templates.find((t) => t.id === templateId);
   const renderedPreview = useMemo(() => {
@@ -53,9 +83,8 @@ export function CampaignContentView() {
   }, [template, previewHtml]);
 
   async function handleSave() {
-    setSaveState("saving");
+    await checkpoint("manual-save");
     const saved = await persistDraft();
-    setSaveState(saved ? "idle" : "error");
     if (saved) toast.success("Campaign saved");
     else toast.error("Could not save campaign");
   }
@@ -64,25 +93,27 @@ export function CampaignContentView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-    <CampaignComposeForm
-      campaignId={campaignId}
-      templates={templates}
-      templateId={templateId}
-      setTemplateId={setTemplateId}
-      subject={subject}
-      setSubject={setSubject}
-      bodyMarkdown={bodyMarkdown}
-      onBodyChange={({ markdown, html }) => {
-        setBodyMarkdown(markdown);
-        setPreviewHtml(html);
-      }}
-      renderedPreview={renderedPreview}
-      device={device}
-      setDevice={setDevice}
-      editable={Boolean(editable)}
-      saveState={saveState}
-      onSave={() => void handleSave()}
-    />
+      <CampaignComposeForm
+        campaignId={campaignId}
+        editorRef={editorRef}
+        templates={templates}
+        templateId={templateId}
+        setTemplateId={setTemplateId}
+        subject={subject}
+        setSubject={setSubject}
+        bodyMarkdown={bodyMarkdown}
+        onBodyChange={({ markdown, html }) => {
+          setBodyMarkdown(markdown);
+          setPreviewHtml(html);
+          ingestBody(markdown, campaignId);
+        }}
+        renderedPreview={renderedPreview}
+        device={device}
+        setDevice={setDevice}
+        editable={Boolean(editable)}
+        saveState={saveState}
+        onSave={() => void handleSave()}
+      />
     </div>
   );
 }

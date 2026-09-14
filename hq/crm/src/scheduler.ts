@@ -1,71 +1,100 @@
-import { and, eq, inArray, lte } from "drizzle-orm";
-import { db } from "./db/client";
-import { campaigns, scheduledJobs, trackingEvents } from "./db/schema";
-import { dispatchCampaign } from "./routes/campaigns";
+import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
+import { syncAudienceGroupAsync } from "./routes/audience";
+import { dispatchCampaign, type CampaignRecipient } from "./routes/campaigns";
 
 /**
- * Stand-ins for Cloudflare Cron Trigger + Queue (docs/features/crm-mode-v0.2.md
- * §1.3/§4 P0-5/P0-2) — hq/crm is a plain Node server, so these are in-process
- * intervals instead. Same "not real-time, atomic claim" semantics as spec'd.
+ * Stand-ins for Cloudflare Cron Trigger + Queue — in-process intervals for local dev.
  */
 
 const SCHEDULE_POLL_MS = 10_000;
 const STATS_ROLLUP_MS = 5_000;
+const AUDIENCE_CRON_MS = 60_000;
+
+function recipientsFromCampaignSegment(segmentJson: string): CampaignRecipient[] {
+  try {
+    const parsed = JSON.parse(segmentJson) as { recipients?: CampaignRecipient[] };
+    if (!Array.isArray(parsed.recipients)) return [];
+    return parsed.recipients
+      .map((r) => ({
+        email: String(r.email ?? "")
+          .trim()
+          .toLowerCase(),
+        name: r.name?.trim() || null,
+      }))
+      .filter((r) => r.email.includes("@"));
+  } catch {
+    return [];
+  }
+}
 
 async function claimDueJobs(): Promise<void> {
   const now = new Date().toISOString();
-  const due = await db
-    .select()
-    .from(scheduledJobs)
-    .where(and(eq(scheduledJobs.status, "pending"), lte(scheduledJobs.runAt, now)));
+  const data = store.read();
+  const due = data.scheduledJobs.filter((j) => j.status === "pending" && j.runAt <= now);
 
   for (const job of due) {
-    // Atomic claim: only proceed if this row is still "pending" (P0-5 concurrency note).
-    const claimed = await db
-      .update(scheduledJobs)
-      .set({ status: "done" })
-      .where(and(eq(scheduledJobs.id, job.id), eq(scheduledJobs.status, "pending")))
-      .run();
-    if (claimed.changes === 0) continue;
+    let claimed = false;
+    store.update((draft) => {
+      const idx = draft.scheduledJobs.findIndex((j) => j.id === job.id && j.status === "pending");
+      if (idx < 0) return;
+      draft.scheduledJobs[idx] = { ...draft.scheduledJobs[idx]!, status: "done" };
+      claimed = true;
+    });
+    if (!claimed) continue;
 
     if (job.kind === "campaign") {
       try {
-        await dispatchCampaign(job.refId);
+        const campaign = store.read().campaigns.find((c) => c.id === job.refId);
+        const recipients = campaign ? recipientsFromCampaignSegment(campaign.segmentJson) : [];
+        await dispatchCampaign(job.refId, recipients);
       } catch (err) {
         console.error(`[crm-scheduler] campaign ${job.refId} send failed`, err);
-        await db
-          .update(scheduledJobs)
-          .set({ status: "failed" })
-          .where(eq(scheduledJobs.id, job.id));
+        store.update((draft) => {
+          const idx = draft.scheduledJobs.findIndex((j) => j.id === job.id);
+          if (idx >= 0) draft.scheduledJobs[idx] = { ...draft.scheduledJobs[idx]!, status: "failed" };
+        });
       }
     }
   }
 }
 
 async function rollupStats(): Promise<void> {
-  const sending = await db
-    .select({ id: campaigns.id, statsJson: campaigns.statsJson })
-    .from(campaigns)
-    .where(inArray(campaigns.status, ["sent", "sending"]));
+  const data = store.read();
+  const sending = data.campaigns.filter((c) => c.status === "sent" || c.status === "sending");
 
   for (const campaign of sending) {
-    const opens = await db
-      .select({ contactId: trackingEvents.contactId })
-      .from(trackingEvents)
-      .where(and(eq(trackingEvents.campaignId, campaign.id), eq(trackingEvents.type, "open")));
-    const clicks = await db
-      .select({ contactId: trackingEvents.contactId })
-      .from(trackingEvents)
-      .where(and(eq(trackingEvents.campaignId, campaign.id), eq(trackingEvents.type, "click")));
-
-    const opened = new Set(opens.map((r) => r.contactId)).size;
-    const clicked = new Set(clicks.map((r) => r.contactId)).size;
+    const events = data.trackingEvents.filter((e) => e.campaignId === campaign.id);
+    const opened = new Set(events.filter((e) => e.type === "open").map((e) => e.memberEmail)).size;
+    const clicked = new Set(events.filter((e) => e.type === "click").map((e) => e.memberEmail)).size;
     const prev = JSON.parse(campaign.statsJson) as { sent: number };
 
-    await db
-      .update(campaigns)
-      .set({ statsJson: JSON.stringify({ sent: prev.sent, opened, clicked }) })
-      .where(eq(campaigns.id, campaign.id));
+    store.update((draft) => {
+      const idx = draft.campaigns.findIndex((c) => c.id === campaign.id);
+      if (idx < 0) return;
+      draft.campaigns[idx] = {
+        ...draft.campaigns[idx]!,
+        statsJson: JSON.stringify({ sent: prev.sent, opened, clicked }),
+      };
+    });
+  }
+}
+
+async function pollAudienceCron(): Promise<void> {
+  const now = Date.now();
+  const groups = store
+    .read()
+    .audienceGroups.filter(
+      (g) =>
+        g.accountLinkId === DEV_ACCOUNT_LINK_ID &&
+        g.cronEnabled &&
+        g.dataSource?.endpointUrl,
+    );
+
+  for (const group of groups) {
+    const intervalMs = Math.max(15, group.cronIntervalMinutes) * 60_000;
+    const last = group.lastSyncAt ? new Date(group.lastSyncAt).getTime() : 0;
+    if (last && now - last < intervalMs) continue;
+    await syncAudienceGroupAsync(group.id, "cron");
   }
 }
 
@@ -78,7 +107,11 @@ export function startScheduler(): void {
     void rollupStats().catch((err) => console.error("[crm-scheduler] stats rollup failed", err));
   }, STATS_ROLLUP_MS);
 
+  setInterval(() => {
+    void pollAudienceCron().catch((err) => console.error("[crm-scheduler] audience cron failed", err));
+  }, AUDIENCE_CRON_MS);
+
   console.log(
-    `[crm-scheduler] polling scheduled sends every ${SCHEDULE_POLL_MS / 1000}s, stats every ${STATS_ROLLUP_MS / 1000}s`,
+    `[crm-scheduler] polling scheduled sends every ${SCHEDULE_POLL_MS / 1000}s, stats every ${STATS_ROLLUP_MS / 1000}s, audience cron every ${AUDIENCE_CRON_MS / 1000}s`,
   );
 }

@@ -1,20 +1,12 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { Monitor, Smartphone } from "lucide-react";
+import type { RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { CrmTemplate } from "@/lib/crm/api";
+import MarkdownEditor, { type MarkdownEditorHandle } from "@/lib/markdown-editor/components/MarkdownEditor";
 import { cn } from "@/lib/utils";
-
-const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
-      Loading editor…
-    </div>
-  ),
-});
 
 /**
  * Content editor for a campaign — template, subject, body, preview, Save.
@@ -22,6 +14,7 @@ const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), {
  */
 export function CampaignComposeForm({
   campaignId,
+  editorRef,
   templates,
   templateId,
   setTemplateId,
@@ -37,6 +30,7 @@ export function CampaignComposeForm({
   onSave,
 }: {
   campaignId: string;
+  editorRef: RefObject<MarkdownEditorHandle | null>;
   templates: CrmTemplate[];
   templateId: string;
   setTemplateId: (id: string) => void;
@@ -100,7 +94,9 @@ export function CampaignComposeForm({
           <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
             <div className="absolute inset-0 bg-background">
               <MarkdownEditor
+                ref={editorRef}
                 key={campaignId}
+                campaignId={campaignId}
                 value={bodyMarkdown}
                 onChange={onBodyChange}
                 editable={editable}

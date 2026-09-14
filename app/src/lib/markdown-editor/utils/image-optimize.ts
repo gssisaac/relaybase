@@ -71,14 +71,62 @@ export async function rasterImageDimensions(
   }
 }
 
-export async function optimizeImageToWebp(
+/**
+ * Sample the decoded bitmap for a non-opaque pixel. Email clients (Gmail,
+ * Outlook) mangle transparency in JPEG/WebP, so any alpha use forces PNG
+ * output (docs/features/crm-email-image-asset-cdn-spec.md §1.2/§6.3).
+ */
+async function hasTransparency(blob: Blob): Promise<boolean> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      bitmap.close();
+      return false;
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 3; i < data.length; i += 4) {
+      if ((data[i] ?? 255) < 255) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export type EmailImageExt = "jpg" | "png" | "gif";
+
+export type OptimizeForEmailResult = {
+  file: File | Blob;
+  mimeType: string;
+  ext: EmailImageExt;
+};
+
+/**
+ * Normalize any input image to the email-safe format policy: JPEG for
+ * photos/banners, PNG when transparency is present, GIF passthrough for
+ * animations. WebP/SVG/AVIF inputs are always converted — they are silently
+ * mangled or stripped by Gmail and classic Outlook.
+ * (docs/features/crm-email-image-asset-cdn-spec.md §1.2, §2, UC-4)
+ */
+export async function optimizeForEmail(
   file: File,
   settings: ImageOptimizationSettings = DEFAULT_IMAGE_OPTIMIZATION_SETTINGS,
-): Promise<{ file: File | Blob; mimeType: string }> {
-  const mimeType = file.type || "application/octet-stream";
-  if (mimeType === "image/gif") {
-    return { file, mimeType };
+): Promise<OptimizeForEmailResult> {
+  const inputMime = file.type || "";
+  if (inputMime === "image/gif") {
+    return { file, mimeType: "image/gif", ext: "gif" };
   }
+
+  const canHaveAlpha = inputMime === "image/png" || inputMime === "image/webp" || inputMime === "image/svg+xml";
+  const preserveTransparency = canHaveAlpha && (await hasTransparency(file));
+  const targetMime = preserveTransparency ? "image/png" : "image/jpeg";
+  const targetExt: EmailImageExt = preserveTransparency ? "png" : "jpg";
 
   const dims = await rasterImageDimensions(file);
   const maxWidth = maxWidthForSizeLevel(settings.sizeLevel, settings.maxWidth);
@@ -87,17 +135,17 @@ export async function optimizeImageToWebp(
     maxWidth !== undefined &&
     longestSide !== undefined &&
     longestSide > maxWidth + IMAGE_OPTIMIZE_DIMENSION_TOLERANCE_PX;
-  const shouldConvertWebp = mimeType !== "image/webp";
+  const shouldConvertFormat = inputMime !== targetMime;
 
-  if (!shouldResize && !shouldConvertWebp) {
-    return { file, mimeType };
+  if (!shouldResize && !shouldConvertFormat) {
+    return { file, mimeType: inputMime, ext: targetExt };
   }
 
   const compressionOptions: Parameters<typeof imageCompression>[1] = {
     initialQuality: settings.quality,
     maxSizeMB: 2,
     useWebWorker: true,
-    fileType: "image/webp",
+    fileType: targetMime,
   };
   if (shouldResize && maxWidth !== undefined) {
     compressionOptions.maxWidthOrHeight = maxWidth;
@@ -106,7 +154,8 @@ export async function optimizeImageToWebp(
   const output = await imageCompression(file, compressionOptions);
   return {
     file: output,
-    mimeType: output.type || "image/webp",
+    mimeType: output.type || targetMime,
+    ext: targetExt,
   };
 }
 

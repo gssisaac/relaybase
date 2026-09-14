@@ -359,8 +359,8 @@ export const DEFAULT_EMAIL_IMAGE_SETTINGS: EmailImageOptimizeOptions = {
 
 | Phase | Milestone | Deliverable | Status |
 |---|---|---|---|
-| **Phase 1: Format Standardization** | Switch client optimizer from WebP default to **JPEG default** (`.jpg`) and **PNG for transparency** (`.png`). | `app/src/lib/markdown-editor/utils/file-ingest.ts`<br/>`app/src/lib/markdown-editor/utils/image-optimize.ts` | Ready |
-| **Phase 2: Sanitization Pipeline** | Add strict HTML image validation in `hq/crm/src/lib/render.ts` to ensure no relative paths, Base64 strings, or unhosted media reach outbound mail. | `hq/crm/src/lib/render.ts` | Ready |
+| **Phase 1: Format Standardization** | Switch client optimizer from WebP default to **JPEG default** (`.jpg`) and **PNG for transparency** (`.png`). | `app/src/lib/markdown-editor/utils/file-ingest.ts`<br/>`app/src/lib/markdown-editor/utils/image-optimize.ts` | Done |
+| **Phase 2: Sanitization Pipeline** | Add strict HTML image validation in `hq/crm/src/lib/render.ts` to ensure no relative paths, Base64 strings, or unhosted media reach outbound mail. | `hq/crm/src/lib/render.ts` | Done |
 | **Phase 3: Storage Bridge Parity** | Maintain local JSON store structure in `hq/crm/data/store.json` with exact key parity to Cloudflare R2 bucket (`crm-assets`). | `hq/crm/src/routes/assets.ts` | Active (Dev) |
 | **Phase 4: Cloudflare R2 Production Binding** | Attach Cloudflare R2 bucket `crm-assets` and custom edge domain (`assets.relaybase.xyz`) to production Worker deployment. | `hq/crm/wrangler.jsonc` | Target (Prod) |
 

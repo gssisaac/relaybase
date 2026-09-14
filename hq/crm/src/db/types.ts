@@ -1,4 +1,14 @@
-/** Dev JSON persistence — production target is D1 (crm-mode-v0.2.md §3). */
+/**
+ * CRM Development JSON File Store Types (`data/store.json`).
+ *
+ * During active development, all state is stored in a structured JSON file.
+ * Production D1 database schemas will be synthesized after the TypeScript
+ * models and workflows stabilize (docs/features/crm-campaign-broadcast-subscriber-model.md §2).
+ */
+
+// ============================================================================
+// Core Tenant & Settings
+// ============================================================================
 
 export type AccountLink = {
   id: string;
@@ -6,6 +16,136 @@ export type AccountLink = {
   domain: string | null;
   createdAt: string;
 };
+
+// ============================================================================
+// 1. Campaigns (The Persistent Stream & Consent Scope)
+// ============================================================================
+
+export type CampaignStatus = "active" | "archived";
+
+export type CampaignDataSource = {
+  type: "generic_json";
+  endpointUrl: string;
+  credential?: string;
+  credentialHeader?: string;
+  cronEnabled?: boolean;
+  cronIntervalMinutes?: number;
+  lastSyncAt?: string | null;
+  lastSyncStatus?: "success" | "error" | null;
+  lastSyncError?: string | null;
+  lastSyncCount?: number | null;
+};
+
+export type Campaign = {
+  id: string;
+  accountLinkId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  fromName?: string | null;
+  fromEmail?: string | null;
+  replyTo?: string | null;
+  defaultTemplateId?: string | null;
+  status: CampaignStatus;
+  dataSource?: CampaignDataSource | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ============================================================================
+// 2. Subscribers (Campaign-Scoped Consent and Membership)
+// ============================================================================
+
+export type SubscriberStatus = "subscribed" | "unsubscribed" | "pending" | "bounced";
+export type SubscriberSource = "manual" | "sync" | "csv" | "webhook";
+
+export type Subscriber = {
+  id: string;
+  accountLinkId: string;
+  campaignId: string;
+  email: string;
+  name?: string | null;
+  status: SubscriberStatus;
+  source: SubscriberSource;
+  unsubscribeToken: string;
+  unsubscribedAt?: string | null;
+  bouncedAt?: string | null;
+  bounceReason?: string | null;
+  customFields?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ============================================================================
+// 3. Broadcasts (Atomic Email Content & Schedule Events)
+// ============================================================================
+
+export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+
+export type BroadcastStats = {
+  sent: number;
+  opened: number;
+  clicked: number;
+  failed: number;
+};
+
+export type Broadcast = {
+  id: string;
+  accountLinkId: string;
+  campaignId: string;
+  subject: string;
+  previewText?: string | null;
+  bodyMarkdown: string;
+  templateId?: string | null;
+  status: BroadcastStatus;
+  scheduledAt?: string | null;
+  sentAt?: string | null;
+  targetFilter?: Record<string, unknown>;
+  stats: BroadcastStats;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ============================================================================
+// 4. Recipients (Send-Time Immutable Queue & Engagement Ledger)
+// ============================================================================
+
+export type RecipientStatus = "queued" | "sending" | "sent" | "skipped" | "failed";
+
+export type Recipient = {
+  id: string;
+  broadcastId: string;
+  subscriberId: string;
+  campaignId: string;
+  email: string;
+  name?: string | null;
+  status: RecipientStatus;
+  errorMessage?: string | null;
+  sentAt?: string | null;
+  openedAt?: string | null;
+  clickedAt?: string | null;
+  openCount: number;
+  clickCount: number;
+  createdAt: string;
+};
+
+// ============================================================================
+// 5. Account Suppression (Global Opt-Outs & Hard Bounces)
+// ============================================================================
+
+export type AccountSuppressionReason = "complaint" | "hard_bounce" | "manual_suppression";
+
+export type AccountSuppression = {
+  id: string;
+  accountLinkId: string;
+  email: string;
+  reason: AccountSuppressionReason;
+  createdAt: string;
+};
+
+// ============================================================================
+// 6. Shared CRM & System Support Types
+// ============================================================================
 
 export type PipelineCard = {
   id: string;
@@ -33,39 +173,39 @@ export type Template = {
   createdAt: string;
 };
 
-export type Campaign = {
-  id: string;
-  accountLinkId: string;
-  subject: string;
-  bodyMarkdown: string;
-  templateId: string | null;
-  segmentJson: string;
-  status: string;
-  scheduledAt: string | null;
-  sentAt: string | null;
-  statsJson: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type ScheduledJob = {
   id: string;
   accountLinkId: string;
-  kind: string;
+  kind: "broadcast" | "sync" | string;
   refId: string;
   runAt: string;
-  status: string;
+  status: "pending" | "done" | "failed" | string;
   createdAt: string;
 };
 
 export type TrackingEvent = {
   id: string;
-  campaignId: string;
+  broadcastId: string;
+  recipientId: string;
   memberEmail: string;
-  type: string;
-  url: string | null;
+  type: "open" | "click";
+  url?: string | null;
   occurredAt: string;
 };
+
+export type CampaignAsset = {
+  id: string;
+  key: string;
+  campaignId: string;
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+  createdAt: string;
+};
+
+// ============================================================================
+// Legacy Audience Types (Retained during migration phase)
+// ============================================================================
 
 export type AudienceDataSource = {
   type: "generic_json";
@@ -115,24 +255,23 @@ export type AudienceGroup = {
   contacts: AudienceMember[];
 };
 
-export type CampaignAsset = {
-  id: string;
-  key: string;
-  campaignId: string;
-  filename: string;
-  mimeType: string;
-  contentBase64: string;
-  createdAt: string;
-};
+// ============================================================================
+// Root Dev JSON Data Store (`data/store.json`)
+// ============================================================================
 
 export type CrmDataStore = {
   account: AccountLink;
-  audienceGroups: AudienceGroup[];
+  campaigns: Campaign[];
+  subscribers: Subscriber[];
+  broadcasts: Broadcast[];
+  recipients: Recipient[];
+  accountSuppressions: AccountSuppression[];
   pipelineCards: PipelineCard[];
   activities: Activity[];
   templates: Template[];
-  campaigns: Campaign[];
   scheduledJobs: ScheduledJob[];
   trackingEvents: TrackingEvent[];
   campaignAssets: CampaignAsset[];
+  /** Legacy store support during transition */
+  audienceGroups?: AudienceGroup[];
 };

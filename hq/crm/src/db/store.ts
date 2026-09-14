@@ -20,7 +20,11 @@ function defaultStore(): CrmDataStore {
       domain: null,
       createdAt: now,
     },
-    audienceGroups: [],
+    campaigns: [],
+    subscribers: [],
+    broadcasts: [],
+    recipients: [],
+    accountSuppressions: [],
     pipelineCards: [],
     activities: [],
     templates: BUILTIN_TEMPLATES.map((tpl) => ({
@@ -31,10 +35,10 @@ function defaultStore(): CrmDataStore {
       isBuiltin: true,
       createdAt: now,
     })),
-    campaigns: [],
     scheduledJobs: [],
     trackingEvents: [],
     campaignAssets: [],
+    audienceGroups: [],
   };
 }
 
@@ -52,6 +56,16 @@ function readStore(): CrmDataStore {
   const raw = fs.readFileSync(STORE_FILE, "utf8");
   try {
     const parsed = JSON.parse(raw) as CrmDataStore;
+    if (!parsed.campaigns) parsed.campaigns = [];
+    if (!parsed.subscribers) parsed.subscribers = [];
+    if (!parsed.broadcasts) parsed.broadcasts = [];
+    if (!parsed.recipients) parsed.recipients = [];
+    if (!parsed.accountSuppressions) parsed.accountSuppressions = [];
+    if (!parsed.pipelineCards) parsed.pipelineCards = [];
+    if (!parsed.activities) parsed.activities = [];
+    if (!parsed.templates) parsed.templates = [];
+    if (!parsed.scheduledJobs) parsed.scheduledJobs = [];
+    if (!parsed.trackingEvents) parsed.trackingEvents = [];
     if (!parsed.campaignAssets) parsed.campaignAssets = [];
     if (!parsed.audienceGroups) parsed.audienceGroups = [];
     return parsed;
@@ -67,7 +81,7 @@ function writeStore(store: CrmDataStore) {
   fs.writeFileSync(STORE_FILE, `${JSON.stringify(store, null, 2)}\n`, "utf8");
 }
 
-/** Synchronous JSON file store — fine for local dev; replace with D1 in production. */
+/** Synchronous JSON file store — dev environment; production D1 database to follow. */
 export const store = {
   read(): CrmDataStore {
     return readStore();

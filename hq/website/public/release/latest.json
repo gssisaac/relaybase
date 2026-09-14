@@ -1,11 +1,11 @@
 {
-  "version": "0.1.8",
-  "notes": "# Relaybase 0.1.8\n\nPairs with Worker install bundle **0.1.5**.\n\n## Highlights\n- Plain-text emails now render as text instead of being wrapped in an iframe\n- Cloudflare Email Routing drift detection with dashboard deep links\n- Passkey-gated login for hq/admin\n\n## Changes\n- Detect structurally plain-text HTML email bodies and render them as text, not an iframe\n- Surface Cloudflare Email Routing drift and add dashboard deep links\n- Add passkey gate to hq/admin (login, session middleware, app shell)\n- Consolidate OS keyring secrets into a single vault item",
-  "pub_date": "2026-09-11T04:36:47.646Z",
+  "version": "0.1.9",
+  "notes": "# Relaybase 0.1.9\n\nPairs with Worker install bundle **0.1.6**.\n\n## Highlights\n- Web owner console: full dashboard, Cloudflare OAuth auto-install, and Worker updates in the browser\n- Cross-device sidebar, UI, and draft persistence via the Worker\n- Mailbox-mode desktop updates stay at or below the connected Worker’s desktop ceiling\n\n## Changes\n- Add web Cloudflare OAuth auto-install (popup flow, configurable redirect, reuse after Back)\n- Give web owners full console and dashboard access, matching desktop\n- Show Worker update in the web console; hide Desktop update on web\n- Wire team web mail to the shared UI and Worker `/mobile/*` APIs\n- Persist sidebar/UI/draft state to Worker `account_state` for web parity\n- Preserve Worker secrets on redeploy and allow same-version reinstall\n- Gate mailbox-mode desktop updates against Worker `DESKTOP_VERSION`\n- Show global Worker install status in the sidebar\n- Allow text selection in mail detail and copy full sender addresses\n- Trust user confirmation for CF API token setup when the probe disagrees\n- Add mobile shell navigation, responsive console tables, and full-width web layout",
+  "pub_date": "2026-09-14T05:54:47.407Z",
   "platforms": {
     "darwin-aarch64": {
-      "url": "https://download.relaybase.xyz/Relaybase.0.1.8.aarch64.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WldaVVZvMVo3bEgxMTI3aStDa3Q2SmlCVm55bnRqeXJ0aVVvU2YrVTZORkFQL3ErNGZJSVcyQnJNdkRuRm5MV24wK0xPU0pOcUJJYlJpekU1STNYQWc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5MTAwMDc3CWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKeTNnVU83WmEwNWJaNTBITEg4SWU2eE45QkJFbW9EaHpSMXlZdGpKZ3BOMThWV3ppZ0hzNG1hcWlXN2tuM2hLWEFPdGVWTzFnN0V4NjlZZ3BUbVpXRGc9PQo="
+      "url": "https://download.relaybase.xyz/Relaybase.0.1.9.aarch64.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTWWRIbDdLWkJ2WlN2ZkRJTmw2SFJaR21qMC8weFpVYkh6ck90QTZReE1uQjJ0Z1JZc0NQOWtKKzkyQmw2eStibjB3MjZIYm5qbFloSWJpK2o1RU13SE1SNDQ2dXFtcGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5MzY1MjUyCWZpbGU6UmVsYXliYXNlLmFwcC50YXIuZ3oKYTRvLzhnMTVKSXhpSGFGRGppYlJuaTdNZEFXb3phajAyVWhHM29BcGY5c2g1blVnek5yNDFTY2dmcWtjdmRSNDJEUWx3eU9UM09KVnk2RnNhOXQrQnc9PQo="
     }
   }
 }

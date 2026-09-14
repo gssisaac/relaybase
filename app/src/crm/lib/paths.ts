@@ -1,20 +1,44 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Kanban, Mail } from "lucide-react";
+import { Mail, Users } from "lucide-react";
+
+export type AudienceDetailTab = "contacts" | "history" | "settings";
 
 /** CRM mode routes — mirrors `console/lib/paths.ts`'s `useDashboardPaths()`. */
 export function useCrmPaths() {
   const base = "/crm";
-  const pipeline = "/crm/pipeline";
+  const audience = "/crm/audience";
   const campaigns = "/crm/campaigns";
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
+    { href: audience, label: "Audience", icon: Users },
     { href: campaigns, label: "Campaigns", icon: Mail },
-    { href: pipeline, label: "Pipeline", icon: Kanban },
   ];
 
-  return { base, pipeline, campaigns, tabs };
+  return { base, audience, campaigns, tabs };
+}
+
+/** Audience group detail — `/crm/audience?id=&tab=`. */
+export function crmAudienceDetailHref(
+  groupId: string,
+  tab: AudienceDetailTab = "contacts",
+): string {
+  const params = new URLSearchParams();
+  params.set("id", groupId.trim());
+  if (tab !== "contacts") params.set("tab", tab);
+  return `/crm/audience?${params.toString()}`;
+}
+
+export function audienceDetailFromSearch(searchParams: {
+  get: (name: string) => string | null;
+}): { groupId: string; tab: AudienceDetailTab } | null {
+  const groupId = searchParams.get("id")?.trim() ?? "";
+  if (!groupId) return null;
+  const raw = searchParams.get("tab")?.trim().toLowerCase();
+  const tab: AudienceDetailTab =
+    raw === "history" || raw === "settings" ? raw : "contacts";
+  return { groupId, tab };
 }
 
 /** Campaign detail tabs — subscribers (consent), broadcasts (sends), settings. */

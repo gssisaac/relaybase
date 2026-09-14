@@ -38,6 +38,7 @@ function defaultStore(): CrmDataStore {
     scheduledJobs: [],
     trackingEvents: [],
     campaignAssets: [],
+    audienceGroups: [],
   };
 }
 
@@ -66,6 +67,13 @@ function readStore(): CrmDataStore {
     if (!parsed.scheduledJobs) parsed.scheduledJobs = [];
     if (!parsed.trackingEvents) parsed.trackingEvents = [];
     if (!parsed.campaignAssets) parsed.campaignAssets = [];
+    if (!parsed.audienceGroups) parsed.audienceGroups = [];
+    for (const row of parsed.campaigns) {
+      if (!row.audienceGroupId) row.audienceGroupId = "";
+    }
+    for (const row of parsed.subscribers) {
+      if (row.audienceMemberId === undefined) row.audienceMemberId = null;
+    }
     return parsed;
   } catch {
     const initial = defaultStore();

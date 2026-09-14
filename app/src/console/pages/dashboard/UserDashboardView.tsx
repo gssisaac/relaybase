@@ -81,14 +81,14 @@ const KPI_CARDS = [
   },
   {
     key: "broadcasts" as const,
-    label: "Broadcasts",
-    description: "Campaigns across domains",
+    label: "Campaigns",
+    description: "CRM campaigns and sends",
     path: "broadcasts" as const,
   },
   {
     key: "audience" as const,
     label: "Audience",
-    description: "Contacts for broadcasts",
+    description: "Contact groups for CRM",
     path: "audience" as const,
   },
 ];
@@ -232,7 +232,12 @@ export function UserDashboardView() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {KPI_CARDS.map((card) => {
               const value = stats?.totals?.[card.key] ?? 0;
-              const href = paths[card.path];
+              const href =
+                card.path === "broadcasts"
+                  ? "/crm/campaigns"
+                  : card.path === "audience"
+                    ? "/crm/audience"
+                    : paths[card.path];
               return (
                 <Card
                   key={card.key}

@@ -42,11 +42,14 @@ export type Campaign = {
   name: string;
   slug: string;
   description?: string | null;
+  /** Linked audience group — subscribers are consent overlays on its contacts. */
+  audienceGroupId: string;
   fromName?: string | null;
   fromEmail?: string | null;
   replyTo?: string | null;
   defaultTemplateId?: string | null;
   status: CampaignStatus;
+  /** @deprecated Subscribers sync from `audienceGroupId`; kept for legacy store rows. */
   dataSource?: CampaignDataSource | null;
   createdAt: string;
   updatedAt: string;
@@ -57,12 +60,14 @@ export type Campaign = {
 // ============================================================================
 
 export type SubscriberStatus = "subscribed" | "unsubscribed" | "pending" | "bounced";
-export type SubscriberSource = "manual" | "sync" | "csv" | "webhook";
+export type SubscriberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
 
 export type Subscriber = {
   id: string;
   accountLinkId: string;
   campaignId: string;
+  /** Audience contact this consent row tracks (email/name resolved from the group). */
+  audienceMemberId: string | null;
   email: string;
   name?: string | null;
   status: SubscriberStatus;
@@ -204,6 +209,59 @@ export type CampaignAsset = {
 };
 
 // ============================================================================
+// Audience Groups (Account-wide contact pools — source for campaign
+// subscribers; independent of any one Campaign's consent scope)
+// ============================================================================
+
+export type AudienceDataSource = {
+  type: "generic_json";
+  endpointUrl: string;
+  credential?: string;
+  credentialHeader?: string;
+};
+
+export type AudienceSyncRun = {
+  id: string;
+  trigger: "manual" | "cron";
+  status: "running" | "success" | "error";
+  phase: "idle" | "fetching" | "parsing" | "writing" | "done";
+  startedAt: string;
+  finishedAt?: string;
+  totalCount?: number;
+  processedCount?: number;
+  skippedCount?: number;
+  successCount?: number;
+  failedCount?: number;
+  error?: string;
+};
+
+export type AudienceMember = {
+  id: string;
+  email: string;
+  name: string | null;
+  source: "manual" | "synced";
+  addedAt: string;
+};
+
+export type AudienceGroup = {
+  id: string;
+  accountLinkId: string;
+  name: string;
+  domain: string;
+  createdAt: string;
+  defaultFrom: string | null;
+  dataSource: AudienceDataSource | null;
+  cronEnabled: boolean;
+  cronIntervalMinutes: number;
+  lastSyncAt: string | null;
+  lastSyncStatus: "success" | "error" | null;
+  lastSyncError: string | null;
+  lastSyncCount: number | null;
+  syncHistory: AudienceSyncRun[];
+  contacts: AudienceMember[];
+};
+
+// ============================================================================
 // Root Dev JSON Data Store (`data/store.json`)
 // ============================================================================
 
@@ -220,4 +278,5 @@ export type CrmDataStore = {
   scheduledJobs: ScheduledJob[];
   trackingEvents: TrackingEvent[];
   campaignAssets: CampaignAsset[];
+  audienceGroups: AudienceGroup[];
 };

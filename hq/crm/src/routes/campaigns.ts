@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { Campaign, CampaignDataSource } from "../db/types";
+import {
+  findAudienceGroup,
+  syncCampaignSubscribersFromAudienceGroup,
+} from "../lib/audience-subscribers";
 import { newId } from "../lib/ids";
 
 export const crmCampaigns = new Hono();
@@ -33,11 +37,16 @@ function maskDataSource(ds: CampaignDataSource | null | undefined) {
 }
 
 function serialize(row: Campaign, counts: { subscribers: number; broadcasts: number }) {
+  const group = row.audienceGroupId ? findAudienceGroup(row.audienceGroupId) : undefined;
   return {
     id: row.id,
     name: row.name,
     slug: row.slug,
     description: row.description ?? null,
+    audienceGroupId: row.audienceGroupId || null,
+    audienceGroupName: group?.name ?? null,
+    audienceGroupDomain: group?.domain ?? null,
+    audienceContactCount: group?.contacts.length ?? null,
     fromName: row.fromName ?? null,
     fromEmail: row.fromEmail ?? null,
     replyTo: row.replyTo ?? null,
@@ -95,10 +104,11 @@ crmCampaigns.get("/", async (c) => {
   return c.json({ campaigns: rows.map((row) => serialize(row, countsFor(row.id))) });
 });
 
-// POST /crm/campaigns { name, slug?, fromName?, fromEmail?, replyTo?, defaultTemplateId? }
+// POST /crm/campaigns { name, audienceGroupId, slug?, fromName?, fromEmail?, replyTo?, defaultTemplateId? }
 crmCampaigns.post("/", async (c) => {
   let body: {
     name?: string;
+    audienceGroupId?: string;
     slug?: string;
     fromName?: string;
     fromEmail?: string;
@@ -114,6 +124,14 @@ crmCampaigns.post("/", async (c) => {
   const name = body.name?.trim();
   if (!name) {
     return c.json({ error: "Campaign name is required" }, 400);
+  }
+  const audienceGroupId = body.audienceGroupId?.trim();
+  if (!audienceGroupId) {
+    return c.json({ error: "Select an audience group for this campaign" }, 400);
+  }
+  const audienceGroup = findAudienceGroup(audienceGroupId);
+  if (!audienceGroup) {
+    return c.json({ error: "Audience group not found" }, 404);
   }
   if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
     return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
@@ -154,8 +172,9 @@ crmCampaigns.post("/", async (c) => {
       name,
       slug,
       description: null,
+      audienceGroupId,
       fromName: body.fromName?.trim() || null,
-      fromEmail: body.fromEmail?.trim() || null,
+      fromEmail: body.fromEmail?.trim() || audienceGroup.defaultFrom || null,
       replyTo: body.replyTo?.trim() || null,
       defaultTemplateId: body.defaultTemplateId || null,
       status: "active",
@@ -166,7 +185,9 @@ crmCampaigns.post("/", async (c) => {
     draft.campaigns.push(created);
   });
 
-  return c.json(serialize(created!, { subscribers: 0, broadcasts: 0 }), 201);
+  syncCampaignSubscribersFromAudienceGroup(created!.id, audienceGroupId);
+
+  return c.json(serialize(created!, countsFor(created!.id)), 201);
 });
 
 // GET /crm/campaigns/:id

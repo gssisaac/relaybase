@@ -19,7 +19,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { crmAudienceApi } from "@/lib/crm/audience-api";
+import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
   EmailListContainer,
   EmailTableHeader,
@@ -45,7 +54,9 @@ export function CampaignsListView() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newFromEmail, setNewFromEmail] = useState("");
+  const [newAudienceGroupId, setNewAudienceGroupId] = useState<string>("");
+  const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
+  const [audienceLoading, setAudienceLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const load = useCallback(async (force?: boolean) => {
@@ -66,6 +77,16 @@ export function CampaignsListView() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!createOpen) return;
+    setAudienceLoading(true);
+    crmAudienceApi
+      .listGroups()
+      .then(({ groups }) => setAudienceGroups(groups))
+      .catch(() => toast.error("Could not load audience groups"))
+      .finally(() => setAudienceLoading(false));
+  }, [createOpen]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return campaigns.filter(
@@ -73,17 +94,31 @@ export function CampaignsListView() {
     );
   }, [campaigns, search]);
 
+  const audienceSelectItems = useMemo(
+    () =>
+      audienceGroups.map((g) => ({
+        value: g.id,
+        label: `${g.name} (${g.domain}) · ${g.contactCount} contacts`,
+      })),
+    [audienceGroups],
+  );
+
   function resetCreate() {
     setNewName("");
-    setNewFromEmail("");
+    setNewAudienceGroupId("");
     setCreateError(null);
     setCreating(false);
   }
 
   async function handleCreate() {
     const name = newName.trim();
+    const audienceGroupId = newAudienceGroupId.trim();
     if (!name) {
       setCreateError("Campaign name is required");
+      return;
+    }
+    if (!audienceGroupId) {
+      setCreateError("Select an audience group");
       return;
     }
     setCreating(true);
@@ -91,7 +126,7 @@ export function CampaignsListView() {
     try {
       const campaign = await crmApi.createCampaign({
         name,
-        fromEmail: newFromEmail.trim() || undefined,
+        audienceGroupId,
       });
       toast.success(`Campaign '${campaign.name}' created`);
       setCreateOpen(false);
@@ -148,8 +183,8 @@ export function CampaignsListView() {
           <DialogHeader>
             <DialogTitle>New campaign</DialogTitle>
             <DialogDescription>
-              A campaign is the consent scope for its subscribers. You can add broadcasts (individual
-              sends) once it&apos;s created.
+              Pick an audience group — subscribers are consent records for its contacts. Add broadcasts
+              (individual sends) after the campaign is created.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -163,18 +198,37 @@ export function CampaignsListView() {
                 autoComplete="off"
                 autoFocus
               />
-              {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="campaign-from-email">From email (optional)</Label>
-              <Input
-                id="campaign-from-email"
-                type="email"
-                value={newFromEmail}
-                onChange={(e) => setNewFromEmail(e.target.value)}
-                placeholder="newsletter@yourdomain.com"
-                autoComplete="off"
-              />
+              <Label htmlFor="campaign-audience">Audience</Label>
+              {audienceLoading ? (
+                <p className="text-sm text-muted-foreground">Loading audience groups…</p>
+              ) : audienceGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Create an audience group first, then return here to start a campaign.
+                </p>
+              ) : (
+                <Select
+                  items={audienceSelectItems}
+                  value={newAudienceGroupId || null}
+                  onValueChange={(value) => setNewAudienceGroupId(value ?? "")}
+                >
+                  <SelectTrigger id="campaign-audience" className="w-full">
+                    <SelectValue placeholder="Select audience group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {audienceGroups.map((g) => {
+                      const label = `${g.name} (${g.domain}) · ${g.contactCount} contacts`;
+                      return (
+                        <SelectItem key={g.id} value={g.id} label={label}>
+                          {label}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+              {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
             </div>
           </div>
           <DialogFooter>
@@ -190,7 +244,7 @@ export function CampaignsListView() {
             <Button
               type="button"
               size="sm"
-              disabled={creating || !newName.trim()}
+              disabled={creating || !newName.trim() || !newAudienceGroupId.trim()}
               onClick={() => void handleCreate()}
             >
               {creating ? "Creating…" : "Create campaign"}
@@ -222,7 +276,7 @@ export function CampaignsListView() {
                       href={campaignDetailHref(c.id)}
                       primary={c.name}
                       subject={statsLine(c)}
-                      preview={c.fromEmail ?? undefined}
+                      preview={c.audienceGroupName ?? c.fromEmail ?? undefined}
                       date={new Date(c.updatedAt).toLocaleDateString(undefined, {
                         month: "short",
                         day: "numeric",

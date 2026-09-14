@@ -1,5 +1,6 @@
-import { PipelineView } from "@/crm/pages/pipeline/PipelineView";
+import { redirect } from "next/navigation";
 
+/** Pipeline UI removed — keep legacy /crm/pipeline links working. */
 export default function Page() {
-  return <PipelineView />;
+  redirect("/crm/campaigns");
 }

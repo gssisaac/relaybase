@@ -1,5 +1,6 @@
-import { BroadcastsView } from "@/console/pages/broadcasts/BroadcastsView";
+import { redirect } from "next/navigation";
 
+/** Broadcasts live under CRM campaigns — keep legacy /broadcasts links working. */
 export default function Page() {
-  return <BroadcastsView />;
+  redirect("/crm/campaigns");
 }

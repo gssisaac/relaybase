@@ -13,16 +13,9 @@ import { CRM_API_BASE } from "./api-base";
 
 export { CRM_API_BASE };
 
-export type PipelineColumn = {
-  stage: "lead" | "contacted" | "quoted" | "won" | "lost";
-  count: number;
-  cards: {
-    memberEmail: string;
-    name: string | null;
-    email: string;
-    note: string | null;
-    updatedAt: string;
-  }[];
+export type CampaignRecipient = {
+  email: string;
+  name?: string | null;
 };
 
 export type CrmTemplate = {
@@ -53,6 +46,10 @@ export type Campaign = {
   name: string;
   slug: string;
   description: string | null;
+  audienceGroupId: string | null;
+  audienceGroupName: string | null;
+  audienceGroupDomain: string | null;
+  audienceContactCount: number | null;
   fromName: string | null;
   fromEmail: string | null;
   replyTo: string | null;
@@ -66,11 +63,12 @@ export type Campaign = {
 };
 
 export type SubscriberStatus = "subscribed" | "unsubscribed" | "pending" | "bounced";
-export type SubscriberSource = "manual" | "sync" | "csv" | "webhook";
+export type SubscriberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
 
 export type Subscriber = {
   id: string;
   campaignId: string;
+  audienceMemberId: string | null;
   email: string;
   name: string | null;
   status: SubscriberStatus;
@@ -146,13 +144,6 @@ export async function crmFetch<T>(path: string, init?: RequestInit): Promise<T> 
 export { CrmApiError };
 
 export const crmApi = {
-  getPipeline: () => crmFetch<{ columns: PipelineColumn[] }>("/crm/pipeline"),
-  moveCard: (memberEmail: string, input: { stage?: string; note?: string; name?: string }) =>
-    crmFetch(
-      `/crm/pipeline/${encodeURIComponent(memberEmail)}`,
-      { method: "PATCH", body: JSON.stringify(input) },
-    ),
-
   listTemplates: () => crmFetch<{ templates: CrmTemplate[] }>("/crm/templates"),
   importTemplate: (input: { name: string; htmlSource: string }) =>
     crmFetch<{ template: CrmTemplate; warnings: string[] }>("/crm/templates", {
@@ -164,6 +155,7 @@ export const crmApi = {
   listCampaigns: () => crmFetch<{ campaigns: Campaign[] }>("/crm/campaigns"),
   createCampaign: (input: {
     name: string;
+    audienceGroupId: string;
     slug?: string;
     fromName?: string;
     fromEmail?: string;
@@ -213,6 +205,11 @@ export const crmApi = {
     crmFetch<{ added: number; updated: number; skipped: number }>(
       `/crm/campaigns/${campaignId}/subscribers/import`,
       { method: "POST", body: JSON.stringify({ rows }) },
+    ),
+  importSubscribersFromAudienceGroup: (campaignId: string, groupId: string) =>
+    crmFetch<{ added: number; updated: number; skipped: number }>(
+      `/crm/campaigns/${campaignId}/subscribers/import-from-audience-group`,
+      { method: "POST", body: JSON.stringify({ groupId }) },
     ),
   syncSubscribers: (campaignId: string) =>
     crmFetch<{ added: number; updated: number; skipped: number }>(

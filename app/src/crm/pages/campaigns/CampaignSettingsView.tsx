@@ -30,7 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import Link from "next/link";
+
+import { crmAudienceDetailHref } from "@/crm/lib/paths";
 import { useCampaignDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { crmApi, CrmApiError } from "@/lib/crm/api";
 
@@ -46,15 +48,6 @@ export function CampaignSettingsView() {
   const [fromEmailError, setFromEmailError] = useState<string | null>(null);
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
-
-  const [endpointUrl, setEndpointUrl] = useState(campaign?.dataSource?.endpointUrl ?? "");
-  const [credential, setCredential] = useState("");
-  const [credentialHeader, setCredentialHeader] = useState(campaign?.dataSource?.credentialHeader ?? "");
-  const [cronEnabled, setCronEnabled] = useState(campaign?.dataSource?.cronEnabled ?? false);
-  const [cronIntervalMinutes, setCronIntervalMinutes] = useState(
-    campaign?.dataSource?.cronIntervalMinutes ?? 60,
-  );
-  const [savingDataSource, setSavingDataSource] = useState(false);
 
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveBlocked, setArchiveBlocked] = useState<string | null>(null);
@@ -85,30 +78,6 @@ export function CampaignSettingsView() {
       else toast.error("Could not save settings");
     } finally {
       setSavingIdentity(false);
-    }
-  }
-
-  async function saveDataSource() {
-    setSavingDataSource(true);
-    try {
-      const updated = await crmApi.updateCampaign(campaignId, {
-        dataSource: endpointUrl.trim()
-          ? {
-              endpointUrl: endpointUrl.trim(),
-              credential: credential.trim() || undefined,
-              credentialHeader: credentialHeader.trim() || undefined,
-              cronEnabled,
-              cronIntervalMinutes: Math.max(15, cronIntervalMinutes),
-            }
-          : null,
-      });
-      setCampaign(updated);
-      setCredential("");
-      toast.success("Data source saved");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save data source");
-    } finally {
-      setSavingDataSource(false);
     }
   }
 
@@ -146,9 +115,37 @@ export function CampaignSettingsView() {
       <div>
         <h2 className="text-sm font-semibold">Settings</h2>
         <p className="text-xs text-muted-foreground">
-          Sender identity, defaults, and data source for this campaign.
+          Sender identity and defaults. Subscribers sync from the linked audience group.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Audience</CardTitle>
+          <CardDescription>
+            Contacts and data sources are managed in Audience. This campaign stores consent only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">
+              {campaign.audienceGroupName ?? "No audience linked"}
+            </p>
+            {campaign.audienceGroupDomain ? (
+              <p className="truncate text-xs text-muted-foreground">{campaign.audienceGroupDomain}</p>
+            ) : null}
+          </div>
+          {campaign.audienceGroupId ? (
+            <Button
+              size="sm"
+              variant="outline"
+              render={<Link href={crmAudienceDetailHref(campaign.audienceGroupId)} />}
+            >
+              Open audience
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -214,81 +211,6 @@ export function CampaignSettingsView() {
             {savingIdentity ? "Saving…" : "Save"}
           </Button>
           {savedFlash ? <span className="text-xs text-emerald-600">✓ Saved</span> : null}
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Data source</CardTitle>
-          <CardDescription>
-            Sync subscribers from a JSON endpoint (webhook, CSV pipeline, etc). Manage from the
-            Subscribers tab with &quot;Sync now&quot;.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="ds-url">Endpoint URL</Label>
-            <Input
-              id="ds-url"
-              value={endpointUrl}
-              onChange={(e) => setEndpointUrl(e.target.value)}
-              placeholder="https://example.com/subscribers.json"
-              autoComplete="off"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ds-credential">Credential (optional)</Label>
-            <Input
-              id="ds-credential"
-              type="password"
-              value={credential}
-              onChange={(e) => setCredential(e.target.value)}
-              placeholder={campaign.dataSource?.credential ? "••••••" : "token or API key"}
-              autoComplete="off"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ds-header">Credential header (optional)</Label>
-            <Input
-              id="ds-header"
-              value={credentialHeader}
-              onChange={(e) => setCredentialHeader(e.target.value)}
-              placeholder="Authorization"
-              autoComplete="off"
-            />
-          </div>
-          <div className="flex items-center justify-between gap-2 sm:col-span-2">
-            <div>
-              <Label htmlFor="ds-cron">Auto-sync</Label>
-              <p className="text-xs text-muted-foreground">Poll this endpoint on an interval.</p>
-            </div>
-            <Switch id="ds-cron" checked={cronEnabled} onCheckedChange={setCronEnabled} />
-          </div>
-          {cronEnabled ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="ds-interval">Interval (minutes)</Label>
-              <Input
-                id="ds-interval"
-                type="number"
-                min={15}
-                value={cronIntervalMinutes}
-                onChange={(e) => setCronIntervalMinutes(Number(e.target.value) || 60)}
-              />
-            </div>
-          ) : null}
-          {campaign.dataSource?.lastSyncAt ? (
-            <p className="text-xs text-muted-foreground sm:col-span-2">
-              Last sync {new Date(campaign.dataSource.lastSyncAt).toLocaleString()} ·{" "}
-              {campaign.dataSource.lastSyncStatus === "error"
-                ? `error: ${campaign.dataSource.lastSyncError}`
-                : `${campaign.dataSource.lastSyncCount ?? 0} synced`}
-            </p>
-          ) : null}
-        </CardContent>
-        <CardFooter>
-          <Button size="sm" variant="outline" onClick={() => void saveDataSource()} disabled={savingDataSource}>
-            {savingDataSource ? "Saving…" : "Save data source"}
-          </Button>
         </CardFooter>
       </Card>
 

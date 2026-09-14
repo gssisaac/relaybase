@@ -18,16 +18,8 @@ export function EmailShell({
   const pathname = usePathname();
   useNotificationOpenMail();
   const { email } = useEmailPaths();
-  const {
-    dashboard,
-    domains,
-    accounts,
-    keys,
-    logs,
-    broadcasts,
-    audience,
-    settingsBase,
-  } = useDashboardPaths();
+  const { dashboard, domains, accounts, keys, logs, settingsBase } =
+    useDashboardPaths();
   // Top-level dashboard pages own DesktopTitleBar + max-w content padding.
   // Do not wrap them in EmailShell's outer p-4 / max-w (double padding).
   const dashboardScoped = [
@@ -36,8 +28,6 @@ export function EmailShell({
     accounts,
     keys,
     logs,
-    broadcasts,
-    audience,
     settingsBase,
   ].some(
     (href) =>

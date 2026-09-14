@@ -1,7 +1,6 @@
-import { store } from "./db/store";
+import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
 import { dispatchBroadcastToSubscribers, resolveActiveSubscribers } from "./routes/broadcasts";
-import { fetchDataSourceContacts } from "./lib/data-source-sync";
-import { newId, newToken } from "./lib/ids";
+import { syncAudienceGroupAsync } from "./routes/audience-groups";
 
 /**
  * Stand-ins for Cloudflare Cron Trigger + Queue — in-process intervals for
@@ -10,7 +9,7 @@ import { newId, newToken } from "./lib/ids";
 
 const SCHEDULE_POLL_MS = 10_000;
 const STATS_ROLLUP_MS = 5_000;
-const DATA_SOURCE_CRON_MS = 60_000;
+const AUDIENCE_CRON_MS = 60_000;
 
 /** §5.1 — synchronous atomic claim on the document store guards against duplicate sends. */
 async function claimDueBroadcasts(): Promise<void> {
@@ -87,94 +86,22 @@ async function rollupStats(): Promise<void> {
   }
 }
 
-async function pollDataSourceCron(): Promise<void> {
+async function pollAudienceCron(): Promise<void> {
   const now = Date.now();
-  const campaigns = store
+  const groups = store
     .read()
-    .campaigns.filter((c) => c.dataSource?.endpointUrl && c.dataSource.cronEnabled);
+    .audienceGroups.filter(
+      (g) =>
+        g.accountLinkId === DEV_ACCOUNT_LINK_ID &&
+        g.cronEnabled &&
+        g.dataSource?.endpointUrl,
+    );
 
-  for (const campaign of campaigns) {
-    const dataSource = campaign.dataSource!;
-    const intervalMs = Math.max(15, dataSource.cronIntervalMinutes ?? 60) * 60_000;
-    const last = dataSource.lastSyncAt ? new Date(dataSource.lastSyncAt).getTime() : 0;
+  for (const group of groups) {
+    const intervalMs = Math.max(15, group.cronIntervalMinutes) * 60_000;
+    const last = group.lastSyncAt ? new Date(group.lastSyncAt).getTime() : 0;
     if (last && now - last < intervalMs) continue;
-
-    try {
-      const { contacts, skipped } = await fetchDataSourceContacts(dataSource);
-      const syncedAt = new Date().toISOString();
-      let added = 0;
-      let updated = 0;
-      store.update((draft) => {
-        const seen = new Set<string>();
-        for (const contact of contacts) {
-          const email = contact.email.trim().toLowerCase();
-          if (!email.includes("@") || seen.has(email)) continue;
-          seen.add(email);
-          const idx = draft.subscribers.findIndex(
-            (s) => s.campaignId === campaign.id && s.email === email,
-          );
-          if (idx < 0) {
-            draft.subscribers.push({
-              id: newId("subscriber"),
-              accountLinkId: campaign.accountLinkId,
-              campaignId: campaign.id,
-              email,
-              name: contact.name,
-              status: "subscribed",
-              source: "sync",
-              unsubscribeToken: newToken(),
-              unsubscribedAt: null,
-              bouncedAt: null,
-              bounceReason: null,
-              createdAt: syncedAt,
-              updatedAt: syncedAt,
-            });
-            added += 1;
-          } else if (
-            draft.subscribers[idx]!.status !== "unsubscribed" &&
-            draft.subscribers[idx]!.status !== "bounced"
-          ) {
-            draft.subscribers[idx] = {
-              ...draft.subscribers[idx]!,
-              name: contact.name ?? draft.subscribers[idx]!.name,
-              updatedAt: syncedAt,
-            };
-            updated += 1;
-          }
-        }
-        const cIdx = draft.campaigns.findIndex((c) => c.id === campaign.id);
-        if (cIdx >= 0 && draft.campaigns[cIdx]!.dataSource) {
-          draft.campaigns[cIdx] = {
-            ...draft.campaigns[cIdx]!,
-            dataSource: {
-              ...draft.campaigns[cIdx]!.dataSource!,
-              lastSyncAt: syncedAt,
-              lastSyncStatus: "success",
-              lastSyncError: null,
-              lastSyncCount: added + updated,
-            },
-          };
-        }
-      });
-      void skipped;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "sync failed";
-      const syncedAt = new Date().toISOString();
-      store.update((draft) => {
-        const cIdx = draft.campaigns.findIndex((c) => c.id === campaign.id);
-        if (cIdx >= 0 && draft.campaigns[cIdx]!.dataSource) {
-          draft.campaigns[cIdx] = {
-            ...draft.campaigns[cIdx]!,
-            dataSource: {
-              ...draft.campaigns[cIdx]!.dataSource!,
-              lastSyncAt: syncedAt,
-              lastSyncStatus: "error",
-              lastSyncError: message,
-            },
-          };
-        }
-      });
-    }
+    await syncAudienceGroupAsync(group.id, "cron");
   }
 }
 
@@ -188,10 +115,10 @@ export function startScheduler(): void {
   }, STATS_ROLLUP_MS);
 
   setInterval(() => {
-    void pollDataSourceCron().catch((err) => console.error("[crm-scheduler] data source cron failed", err));
-  }, DATA_SOURCE_CRON_MS);
+    void pollAudienceCron().catch((err) => console.error("[crm-scheduler] audience cron failed", err));
+  }, AUDIENCE_CRON_MS);
 
   console.log(
-    `[crm-scheduler] polling scheduled sends every ${SCHEDULE_POLL_MS / 1000}s, stats every ${STATS_ROLLUP_MS / 1000}s, data source cron every ${DATA_SOURCE_CRON_MS / 1000}s`,
+    `[crm-scheduler] polling scheduled sends every ${SCHEDULE_POLL_MS / 1000}s, stats every ${STATS_ROLLUP_MS / 1000}s, audience cron every ${AUDIENCE_CRON_MS / 1000}s`,
   );
 }

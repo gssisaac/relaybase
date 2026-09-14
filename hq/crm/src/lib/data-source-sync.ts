@@ -1,6 +1,11 @@
-import type { CampaignDataSource } from "../db/types";
-
 export type ParsedContact = { email: string; name: string | null };
+
+/** Shape shared by `AudienceDataSource` and `CampaignDataSource` — both feed this same fetcher. */
+export type JsonDataSource = {
+  endpointUrl: string;
+  credential?: string;
+  credentialHeader?: string;
+};
 
 const WRAPPER_KEYS = ["contacts", "data", "items", "results"] as const;
 
@@ -56,7 +61,7 @@ export function parseContactsPayload(body: unknown): {
 }
 
 export async function fetchDataSourceContacts(
-  dataSource: CampaignDataSource,
+  dataSource: JsonDataSource,
 ): Promise<{ contacts: ParsedContact[]; skipped: number }> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (dataSource.credential?.trim()) {

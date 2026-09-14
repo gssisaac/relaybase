@@ -2,7 +2,7 @@ export type SidebarMode = "email" | "dashboard" | "crm";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
-export const DEFAULT_CRM_PATH = "/crm";
+export const DEFAULT_CRM_PATH = "/crm/contacts";
 
 const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
 

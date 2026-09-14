@@ -1,5 +1,5 @@
-import { CrmPlaceholderView } from "@/crm/pages/CrmPlaceholderView";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <CrmPlaceholderView />;
+  redirect("/crm/contacts");
 }

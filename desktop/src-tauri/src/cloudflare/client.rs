@@ -131,7 +131,30 @@ pub async fn verify_token(
         account_id: account_id.to_string(),
         api_token: api_token.to_string(),
     };
-    let value = cf_request(&client, reqwest::Method::GET, "/user/tokens/verify", None).await?;
+    // Gracefully handle 401/403 (invalid/expired token) and 429 (rate limit)
+    // instead of letting cf_request propagate a raw error string containing
+    // "code":1000 — which the frontend could misclassify as a Worker edge crash.
+    let verify_result = cf_request(&client, reqwest::Method::GET, "/user/tokens/verify", None).await;
+    let value = match verify_result {
+        Ok(v) => v,
+        Err(e) => {
+            let err_lower = e.to_lowercase();
+            // 429 Too Many Requests — rate limited, not an auth failure
+            if err_lower.contains("429") || err_lower.contains("too many requests") {
+                return Ok(TokenVerifyResult {
+                    ok: false,
+                    account_id: account_id.to_string(),
+                    message: "Cloudflare rate-limited the token verification. Wait a few seconds and try again.".into(),
+                });
+            }
+            // 401/403 — invalid, expired, or deleted token
+            return Ok(TokenVerifyResult {
+                ok: false,
+                account_id: account_id.to_string(),
+                message: "Cloudflare rejected this API token. It may be invalid, expired, or deleted.".into(),
+            });
+        }
+    };
     let status = value
         .pointer("/result/status")
         .and_then(|v| v.as_str())
@@ -144,7 +167,17 @@ pub async fn verify_token(
         });
     }
     // Confirm account access by listing zones (limit 1)
-    let zones = list_zones(&client).await?;
+    let zones = match list_zones(&client).await {
+        Ok(z) => z,
+        Err(_) => {
+            // Token is active but cannot list zones — Zone Read is missing.
+            return Ok(TokenVerifyResult {
+                ok: false,
+                account_id: account_id.to_string(),
+                message: "Token is active but lacks Zone → Zone → Read permission. Add that permission row in Cloudflare.".into(),
+            });
+        }
+    };
 
     if scope == "server" {
         let mut checked: Vec<&str> = Vec::new();

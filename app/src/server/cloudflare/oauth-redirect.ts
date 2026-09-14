@@ -1,6 +1,10 @@
 import type { NextRequest } from "next/server";
 
-/** Redirect URI sent to Cloudflare — must be pre-registered on the OAuth client. */
+/**
+ * Fallback redirect URI only when console OAuth config omits `redirectUri`.
+ * Production authorize must use the registered console callback — see
+ * `encodeWebOAuthState` in oauth-web-state.ts.
+ */
 export function webOAuthRedirectUri(request: NextRequest): string {
   const explicit = process.env.RELAYBASE_OAUTH_REDIRECT_URI?.trim();
   if (explicit) return explicit;

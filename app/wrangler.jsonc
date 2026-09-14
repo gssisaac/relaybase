@@ -1,5 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // Static Tauri export (`./out`) for `pnpm run build:desktop`.
+  // Production relaybase.email is the OpenNext Worker in wrangler.web.jsonc
+  // (`pnpm run deploy:web`). Do not `wrangler deploy` this file — it would
+  // replace that Worker with a static SPA that cannot serve /api/*.
   "name": "hq-relaybase-web-app",
   "compatibility_date": "2026-07-12",
   "account_id": "3adf03d991843094a7343eebc0a98007",

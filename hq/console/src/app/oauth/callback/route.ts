@@ -1,4 +1,9 @@
 import { getEnv } from "@/lib/env";
+import {
+  parseWebOAuthState,
+  WEB_OAUTH_STATE_PREFIX,
+  webOAuthCallbackUrl,
+} from "@/lib/oauth-web-state";
 
 /**
  * Cloudflare OAuth authorization-code callback (browser landing). Public.
@@ -10,9 +15,9 @@ import { getEnv } from "@/lib/env";
  * the code — it simply relays `code` + `state` to the `relaybase://` deep
  * link, which the Tauri app catches and completes the exchange.
  *
- * No CF user credentials are stored on the console (there is no secret to
- * hold and no token exchange here). The tokens are minted on the desktop and
- * saved to ~/.relaybase.
+ * Desktop: relays `code` + `state` to `relaybase://` / loopback (no token
+ * exchange here). Web install: `state` prefixed `rbweb.` is 302'd back to
+ * `{origin}/api/oauth/callback` so the web app can complete PKCE.
  */
 export async function GET(req: Request) {
   await getEnv();
@@ -20,6 +25,18 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code") ?? "";
   const state = url.searchParams.get("state") ?? "";
   const error = url.searchParams.get("error") ?? "";
+
+  // Web install encodes the originating origin in `state` so we can bounce
+  // Cloudflare's redirect back to `{origin}/api/oauth/callback` (PKCE cookie).
+  // Never fall through to desktop loopback for these states — that would
+  // hand the authorization code to a local Relaybase.app.
+  if (state.startsWith(WEB_OAUTH_STATE_PREFIX)) {
+    const web = parseWebOAuthState(state);
+    if (!web) {
+      return renderDone("Invalid web OAuth return origin.", true);
+    }
+    return Response.redirect(webOAuthCallbackUrl(web.origin, url).toString(), 302);
+  }
 
   if (error) {
     return renderDone(`Authorization failed: ${error}`, true);

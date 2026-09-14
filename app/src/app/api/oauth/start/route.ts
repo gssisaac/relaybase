@@ -1,11 +1,11 @@
 // Starts the Cloudflare OAuth PKCE flow for the web install pipeline —
-// mirrors desktop/src-tauri/src/cloudflare/loopback.rs (`start_cf_oauth_inner`),
-// but the redirect target is this app's own /api/oauth/callback instead of a
-// loopback port / custom URL scheme, and the verifier travels in a sealed
-// cookie instead of an in-process Mutex.
+// mirrors desktop/src-tauri/src/cloudflare/loopback.rs (`start_cf_oauth_inner`).
+// Authorize uses the console-registered redirect URI; the verifier travels
+// in a sealed cookie. Console /oauth/callback bounces `code` back here.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { webOAuthRedirectUri } from "@/server/cloudflare/oauth-redirect";
+import { encodeWebOAuthState, isAllowedWebOAuthReturnOrigin } from "@/server/cloudflare/oauth-web-state";
 import { COOKIE_NAMES, sealPkceState } from "@/server/cloudflare/session";
 
 function consoleBaseUrl(): string {
@@ -56,14 +56,32 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Console did not return a clientId" }, { status: 502 });
   }
   const scopes: string =
-    config.scopes ??
-    (purpose === "recover" ? "secrets-store.write" : "d1.write workers-r2.write workers-scripts.write");
+    typeof config.scopes === "string" && config.scopes.trim()
+      ? config.scopes
+      : purpose === "recover"
+        ? "secrets-store.write"
+        : "d1.write workers-r2.write workers-scripts.write";
 
-  // Must match a redirect URL on the Cloudflare OAuth client (see
-  // RELAYBASE_OAUTH_REDIRECT_URI / NEXT_PUBLIC_APP_URL / docs/auth/cf-oauth-install-token.md).
-  const redirectUri = webOAuthRedirectUri(request);
+  // Cloudflare only accepts redirect URIs registered on the OAuth client.
+  // Production is `https://console.relaybase.xyz/oauth/callback` — sending
+  // `{origin}/api/oauth/callback` makes dash.cloudflare.com return
+  // `invalid_request`. The console bounces `code` back using `state`.
+  const registeredRedirect =
+    typeof config.redirectUri === "string" ? config.redirectUri.trim() : "";
+  const redirectUri = registeredRedirect || webOAuthRedirectUri(request);
 
-  const state = randomUUID();
+  const origin = request.nextUrl.origin;
+  if (registeredRedirect && !isAllowedWebOAuthReturnOrigin(origin)) {
+    return NextResponse.json(
+      { error: `This origin (${origin}) is not allowed for Cloudflare OAuth.` },
+      { status: 400 },
+    );
+  }
+
+  const nonce = randomUUID();
+  const state = registeredRedirect
+    ? encodeWebOAuthState({ origin, nonce })
+    : nonce;
   const verifier = newPkceVerifier();
   const challenge = pkceChallenge(verifier);
 

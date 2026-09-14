@@ -124,9 +124,11 @@ Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `
 
 ## Web app (browser) callback
 
-The dynamic web deploy (`app/` Route Handlers) runs PKCE itself. Cloudflare must redirect to **`{APP_URL}/api/oauth/callback`**, not `console.relaybase.xyz`. Add every origin you use (production hostname, `http://localhost:32830`, `http://127.0.0.1:32830`) to the **same** install OAuth client redirect list.
+The dynamic web deploy (`app/` Route Handlers) runs PKCE itself. Cloudflare still redirects to the **registered** URI `https://console.relaybase.xyz/oauth/callback` (same client as desktop). Sending `{APP_URL}/api/oauth/callback` as `redirect_uri` makes dash.cloudflare.com return `invalid_request` — that URL is not on the OAuth client.
 
-Configure the app with `RELAYBASE_OAUTH_REDIRECT_URI` or `NEXT_PUBLIC_APP_URL` (see `app/.env.example`) so the authorize request uses the same URL you registered. Authorize opens in a **popup**; the opener stays on Worker update / Settings.
+The web authorize request encodes the originating origin in `state` (`rbweb.…`). Console `/oauth/callback` 302s to `{origin}/api/oauth/callback` with `code` + `state`; token exchange on the web app still uses the console redirect URI (must match the authorize request). Allowed bounce origins: `https://relaybase.email`, `https://www.relaybase.email`, `http://localhost:32830`, `http://127.0.0.1:32830`.
+
+Authorize opens in a **popup**; the opener stays on Worker update / Settings.
 
 ---
 
@@ -180,6 +182,7 @@ Errors use `explainCfOAuthError()`.
 | Symptom | Likely cause |
 |---------|----------------|
 | `invalid_scope` or Cloudflare “authorization failed” | Scope strings in `/config` don’t match that purpose’s OAuth client (install must not request `secrets-store.write`; recover must request only `secrets-store.write`). Do not request `offline_access` or KV. |
+| `invalid_request` on `dash.cloudflare.com/oauth/error` | Web authorize sent a `redirect_uri` that is not on the OAuth client (usually `{origin}/api/oauth/callback`). Web must use the console-registered URI; console bounces `code` back. |
 | `Worker is missing CF_ACCOUNT_ID` after Authorize | Latest Worker does not require the secret. Ensure `accountId` is in `~/.relaybase/workspace.json`, or pass `cfAccountId` in the reset body. |
 | Browser “Finishing connection…” but app stays **Not connected** | `tauri dev` without loopback listener — restart desktop after pulling; ensure port **32831** is free. |
 | `Token endpoint did not return a refresh_token` | Missing `refresh_token` grant or `offline_access` on authorize — fixed in code (connection succeeds with access token only); enable **Refresh Token** grant on the client for auto-refresh. |

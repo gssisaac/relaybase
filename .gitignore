@@ -17,3 +17,6 @@ data/users/*.json
 
 # server/ is outside the pnpm workspace; keep its local lockfile untracked
 server/pnpm-lock.yaml
+
+# Claude Code local git worktrees — full checkout copies, never commit
+.claude/worktrees/

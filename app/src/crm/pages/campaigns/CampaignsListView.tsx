@@ -45,16 +45,34 @@ import {
 } from "@/lib/crm/api";
 import { cn } from "@/lib/utils";
 
-export type BroadcastFilter = "all" | "active" | "sent";
+export type BroadcastFilter = "draft" | "sent" | "in_progress" | "all";
 
 const FILTER_OPTIONS: { value: BroadcastFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
+  { value: "draft", label: "Draft" },
   { value: "sent", label: "Sent" },
+  { value: "in_progress", label: "In progress" },
+  { value: "all", label: "All" },
 ];
 
-function isActiveBroadcastStatus(status: BroadcastStatus): boolean {
-  return status === "draft" || status === "scheduled" || status === "sending";
+function filterLabel(filter: BroadcastFilter): string {
+  return FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+function matchesBroadcastFilter(
+  status: BroadcastStatus,
+  filter: BroadcastFilter,
+): boolean {
+  switch (filter) {
+    case "draft":
+      return status === "draft";
+    case "sent":
+      return status === "sent";
+    case "in_progress":
+      return status === "scheduled" || status === "sending";
+    case "all":
+    default:
+      return true;
+  }
 }
 
 function formatWhen(value?: string | null): string {
@@ -108,7 +126,7 @@ export function BroadcastsListView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<BroadcastFilter>("all");
+  const [filter, setFilter] = useState<BroadcastFilter>("draft");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -161,9 +179,12 @@ export function BroadcastsListView() {
   const counts = useMemo(() => {
     const visible = broadcasts.filter((b) => b.listStatus !== "archived");
     return {
-      all: visible.length,
-      active: visible.filter((b) => isActiveBroadcastStatus(b.status)).length,
+      draft: visible.filter((b) => b.status === "draft").length,
       sent: visible.filter((b) => b.status === "sent").length,
+      in_progress: visible.filter(
+        (b) => b.status === "scheduled" || b.status === "sending",
+      ).length,
+      all: visible.length,
     };
   }, [broadcasts]);
 
@@ -171,8 +192,7 @@ export function BroadcastsListView() {
     const q = search.trim().toLowerCase();
     return broadcasts.filter((b) => {
       if (b.listStatus === "archived") return false;
-      if (filter === "active" && !isActiveBroadcastStatus(b.status)) return false;
-      if (filter === "sent" && b.status !== "sent") return false;
+      if (!matchesBroadcastFilter(b.status, filter)) return false;
 
       if (!q) return true;
       return (
@@ -431,8 +451,8 @@ export function BroadcastsListView() {
                   title="No matching broadcasts"
                   description={
                     search
-                      ? `No broadcasts match "${search}" with filter "${filter}".`
-                      : `There are no broadcasts with status "${filter}".`
+                      ? `No broadcasts match "${search}" with filter "${filterLabel(filter)}".`
+                      : `There are no broadcasts with status "${filterLabel(filter)}".`
                   }
                   action={
                     <Button
@@ -440,7 +460,7 @@ export function BroadcastsListView() {
                       size="sm"
                       onClick={() => {
                         setSearch("");
-                        setFilter("all");
+                        setFilter("draft");
                       }}
                     >
                       Reset filters

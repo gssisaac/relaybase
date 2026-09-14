@@ -73,10 +73,14 @@ export function mapEmailApiToMobile(path: string): EmailModeMapResult {
   if (rest === "/addresses") {
     return `/mobile/mailbox${search}`;
   }
+  if (rest === "/account-state" || rest.startsWith("/account-state/")) {
+    return `/mobile/account-state${rest.slice("/account-state".length)}${search}`;
+  }
 
   // Console-only routes — not wired in email mode.
   // (/config, /zones, /keys, /audience-groups, /broadcasts, /stats,
-  //  /logs, /settings, /mobile-password, /domains*)
+  //  /logs, /settings, /mobile-password, /domains*, /broadcast-drafts —
+  //  broadcast composing is owner/console-only, see console/broadcast-drafts)
   return null;
 }
 

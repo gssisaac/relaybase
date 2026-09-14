@@ -30,7 +30,7 @@ export function useProductUpdateStatus(): ProductUpdateStatus {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!isDesktopRuntime() || teamLogin) return;
+    if (teamLogin) return;
     if (!credentials?.workerUrl?.trim()) return;
 
     let active = true;
@@ -52,25 +52,30 @@ export function useProductUpdateStatus(): ProductUpdateStatus {
   }, [credentials?.workerUrl, credentials?.workerVersion, teamLogin]);
 
   return useMemo(() => {
-    const desktopVersion = updater?.currentVersion?.trim() || null;
+    const desktop = isDesktopRuntime();
+    const desktopVersion = desktop ? updater?.currentVersion?.trim() || null : null;
     const latestVersion = workerCheck?.latestVersion?.trim() || null;
     const workerCurrent =
       workerCheck?.currentVersion?.trim() ||
       credentials?.workerVersion?.trim() ||
       null;
 
-    const desktopUpdateAvailable = Boolean(
-      updater &&
-        updater.version &&
-        (updater.phase === "available" ||
-          updater.phase === "downloading" ||
-          updater.phase === "ready"),
-    );
+    const desktopUpdateAvailable =
+      desktop &&
+      Boolean(
+        updater &&
+          updater.version &&
+          (updater.phase === "available" ||
+            updater.phase === "downloading" ||
+            updater.phase === "ready"),
+      );
 
-    const desktopBlocksWorker = Boolean(
-      desktopUpdateAvailable ||
-        desktopBehindRelease(desktopVersion, latestVersion),
-    );
+    const desktopBlocksWorker =
+      desktop &&
+      Boolean(
+        desktopUpdateAvailable ||
+          desktopBehindRelease(desktopVersion, latestVersion),
+      );
 
     const workerUpdateAvailable =
       !teamLogin &&

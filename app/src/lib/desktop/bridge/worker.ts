@@ -56,15 +56,51 @@ export async function desktopVerifyCfToken(
   apiToken: string,
   scope: "install" | "server",
 ): Promise<{ ok: boolean; accountId: string; message: string }> {
+  if (!isDesktopRuntime()) {
+    const res = await fetch("/api/cloudflare/verify-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, apiToken, scope }),
+    });
+    return (await res.json()) as { ok: boolean; accountId: string; message: string };
+  }
   return invoke("verify_cf_token", { accountId, apiToken, scope });
 }
 
 /** Push a one-shot server token to the Worker as `CF_API_TOKEN`. Not persisted. */
-export async function desktopPushServerToken(serverToken: string): Promise<{
+export async function desktopPushServerToken(
+  serverToken: string,
+  opts?: { workerScriptName?: string; accountId?: string },
+): Promise<{
   ok: boolean;
   message: string;
   pushedAt: string;
 }> {
+  if (!isDesktopRuntime()) {
+    const creds = await loadLocalCredentialsFile();
+    const res = await fetch("/api/cloudflare/push-server-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serverToken: serverToken.trim(),
+        workerScriptName: opts?.workerScriptName ?? creds?.workerScriptName,
+        accountId: opts?.accountId ?? creds?.accountId ?? creds?.cfOauthAccountId,
+      }),
+    });
+    const data = (await res.json()) as {
+      ok?: boolean;
+      message?: string;
+      pushedAt?: string;
+    };
+    if (!res.ok || !data.ok) {
+      throw new Error(data.message ?? "Could not push server token");
+    }
+    return {
+      ok: true,
+      message: data.message ?? "Pushed",
+      pushedAt: data.pushedAt ?? new Date().toISOString(),
+    };
+  }
   return invoke("push_server_token", { serverToken: serverToken.trim() });
 }
 

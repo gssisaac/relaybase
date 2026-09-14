@@ -7,6 +7,7 @@ import {
   type CfTokenPermissionCheck,
   isCloudflareAuthExpired,
 } from "./cloudflare";
+import { CF_API_TOKEN_PROBE_DISCLAIMER } from "@/lib/dashboard/cf-api-token-user-confirmed";
 import { formatDesktopError } from "./invoke";
 
 export type DesktopErrorLink = {
@@ -26,6 +27,8 @@ export type DesktopErrorHelp = {
   permissions?: readonly string[];
   /** Per-row Cloudflare token permission probe, shown as dashboard-style rows. */
   permissionChecks?: readonly CfTokenPermissionCheck[];
+  /** Default `error` (red). Use `warning` for non-blocking probe mismatches. */
+  variant?: "error" | "warning";
 };
 
 function stripRawApiNoise(raw: string): string {
@@ -37,11 +40,19 @@ function stripRawApiNoise(raw: string): string {
     .trim();
 }
 
+const VALID_WORKER_EDGE_CODES = new Set([
+  "1015",
+  "1027",
+  "1042",
+  "1101",
+  "1102",
+  "1103",
+  "1104",
+]);
+
 function extractCfWorkerCode(raw: string): string | null {
-  const plain = raw.match(/error code:\s*(\d{3,5})/i);
-  if (plain?.[1]) return plain[1];
-  const json = raw.match(/"code"\s*:\s*(\d{3,5})/i);
-  if (json?.[1]) return json[1];
+  const plain = raw.match(/error code:\s*(\d{4})/i);
+  if (plain?.[1] && VALID_WORKER_EDGE_CODES.has(plain[1])) return plain[1];
   return null;
 }
 
@@ -97,6 +108,21 @@ export function cfTokenPermissionErrorHelp(
     fix,
     permissionChecks: failing.length > 0 ? failing : undefined,
     links: [{ label: "Open Cloudflare API Tokens", href: CF_API_TOKENS_URL }],
+  };
+}
+
+/** Yellow warning after verify when the automatic probe failed — user may still confirm setup. */
+export function cfTokenPermissionProbeWarningHelp(
+  probe?: CfApiTokenPermissions | null,
+  options?: { workerVersion?: string | null },
+): DesktopErrorHelp {
+  const base = cfTokenPermissionErrorHelp(probe, options);
+  return {
+    ...base,
+    variant: "warning",
+    title: "Automatic check did not pass",
+    detail: `${base.detail} This is only Relaybase’s probe — it may not match what you configured in Cloudflare. ${CF_API_TOKEN_PROBE_DISCLAIMER}`,
+    fix: "If you added CF_API_TOKEN and the permission rows in Cloudflare, click “I've completed setup” to save this workspace as configured. Domain or routing errors later mean the token still needs fixing.",
   };
 }
 
@@ -224,6 +250,28 @@ export function explainDesktopError(
     );
   }
   if (
+    lower.includes("invalid api token") ||
+    lower.includes("invalid access token") ||
+    lower.includes("unable to authenticate request") ||
+    lower.includes("code: 1000,") ||
+    lower.includes('"code": 1000,') ||
+    lower.includes('"code":1000,') ||
+    lower.includes('"code": 1000}') ||
+    lower.includes('"code":1000}') ||
+    lower.includes("code: 9109") ||
+    lower.includes('"code": 9109') ||
+    lower.includes('"code":9109')
+  ) {
+    return {
+      title: "Invalid Cloudflare API token",
+      detail:
+        "Cloudflare rejected the API token (invalid, deleted, or expired token).",
+      fix: "Open Cloudflare → API Tokens, verify the token is active, or generate a new token and update CF_API_TOKEN on your Worker.",
+      links: [{ label: "Open Cloudflare API Tokens", href: CF_API_TOKENS_URL }],
+    };
+  }
+
+  if (
     lower.includes("does not support zone listing") ||
     lower.includes("does not have this api yet") ||
     lower.includes("worker versions may not match") ||
@@ -237,6 +285,20 @@ export function explainDesktopError(
       links: [
         { label: "Open Update", href: "/settings/update" },
       ],
+    };
+  }
+
+  if (
+    lower.includes("429") ||
+    lower.includes("too many requests") ||
+    lower.includes("rate-limited") ||
+    lower.includes("rate limited")
+  ) {
+    return {
+      title: "Cloudflare rate-limited the request",
+      detail:
+        "Cloudflare returned 429 Too Many Requests. This is a temporary rate limit, not a token or Worker error.",
+      fix: "Wait a few seconds, then click Verify again. If it keeps happening, avoid repeated clicks.",
     };
   }
 

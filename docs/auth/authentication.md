@@ -343,7 +343,7 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 | `console/components/setup/ConsoleRouteGate.tsx` | Dashboard route blocker |
 | `console/components/setup/UnlockView.tsx` | First-login / bio-declined typed form |
 
-After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`** (see **AGENTS.md**).
+After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`** (see **AGENT.md**).
 
 ---
 

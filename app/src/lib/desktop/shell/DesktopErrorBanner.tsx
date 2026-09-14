@@ -58,8 +58,22 @@ export function DesktopErrorBanner({
       : error;
 
   return (
-    <div className="space-y-2.5 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
-      <p className="font-medium text-destructive">{help.title}</p>
+    <div
+      className={
+        help.variant === "warning"
+          ? "space-y-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm"
+          : "space-y-2.5 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
+      }
+    >
+      <p
+        className={
+          help.variant === "warning"
+            ? "font-medium text-amber-800 dark:text-amber-300"
+            : "font-medium text-destructive"
+        }
+      >
+        {help.title}
+      </p>
       {help.detail ? (
         <p className="text-sm leading-relaxed text-foreground/90">
           {help.detail}

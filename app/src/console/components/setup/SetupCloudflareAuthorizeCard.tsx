@@ -10,27 +10,21 @@ import {
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { cn } from "@/lib/utils";
 
 const ACTION_WIDTH = "w-[300px] max-w-full";
 
+export const CLOUDFLARE_MARK_SRC = "/setup/cloudflare-mark.png";
+
 function CloudflareMark({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 65 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      <path
-        fill="#F38020"
-        d="M56.4 23.7c.2-1.3-.1-2.6-.8-3.7-1.3-2-3.7-3.1-6.2-2.8-.5-3.5-3.4-6.3-6.9-6.8-4.2-.6-8 2-8.9 5.9-2.7.2-5.1 1.7-6.3 4.1-1.3 2.5-1 5.5.7 7.7h26.4c2.4 0 4.4-1.8 4.6-4.2l-.6-.2z"
-      />
-      <path
-        fill="#FAAD3F"
-        d="M57.2 24.8c-.3 1.2-1.3 2-2.5 2H18.8c-2.8 0-4.8-2.7-4-5.4.6-1.7 2.2-2.8 4-2.9 1.1-4.1 5.2-6.5 9.4-5.4 1.7.5 3.1 1.7 3.9 3.2 2.6-.4 5.1 1.4 5.8 3.9.1.5.2 1 .2 1.5 0 .5-.1 1-.3 1.5.4.3.9.5 1.4.6z"
-      />
-    </svg>
+    <img
+      src={CLOUDFLARE_MARK_SRC}
+      alt=""
+      width={40}
+      height={40}
+      className={cn("size-10 object-contain", className)}
+    />
   );
 }
 
@@ -57,7 +51,7 @@ function OAuthConnectDiagram({
           <span className="h-px flex-1 border-t border-dashed border-muted-foreground/70" />
         </div>
         <div className="flex size-18 shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-sm">
-          <CloudflareMark className="h-8 w-11" />
+          <CloudflareMark />
         </div>
       </div>
       {waiting && subtitle ? (

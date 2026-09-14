@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ownerAuthStatusForWorkerUrl } from "@/lib/desktop/auth";
 import {
   CF_OAUTH_AUTHORIZE_WAIT_MS,
+  desktopCfOauthPresent,
   desktopOpenExternal,
   desktopOwnerLogin,
   desktopOwnerSetupAdmin,
@@ -45,6 +46,8 @@ import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCl
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 import { WhatWeInstall } from "@/console/components/setup/SetupWizardParts";
 import { WorkerUpdateTargetDialog } from "@/console/components/setup/WorkerUpdateTargetDialog";
+import { WebAuthorizeCard } from "@/console/components/setup/WebInstallFlow";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 
 const DRAFT_KEY = "relaybase.setup.install.draft";
@@ -124,8 +127,23 @@ export function WorkerInstallPanel({
   );
   const [targetConfirmOpen, setTargetConfirmOpen] = useState(false);
   const [targetChecking, setTargetChecking] = useState(false);
-  const [autoChecking, setAutoChecking] = useState(false);
+  // `autoChecking` is only used by the worker-update silent preview. Start
+  // true on desktop+worker-update so the effect body doesn't have to call
+  // setState synchronously (which the react-hooks/set-state-in-effect rule
+  // forbids).
+  const [autoChecking, setAutoChecking] = useState(
+    () => isDesktopRuntime() && purpose === "worker-update",
+  );
   const [authorizedReady, setAuthorizedReady] = useState(false);
+  /** Install-only: a usable CF OAuth session already exists (keyring or
+   *  in-memory). When true the install card shows "Continue to install"
+   *  instead of forcing the user through the authorize popup again —
+   *  fixes the desktop "Back → re-enter → asked to auth again" loop. */
+  const [installAuthorized, setInstallAuthorized] = useState(false);
+  // Start true on desktop+install for the same reason as `autoChecking`.
+  const [installAuthChecking, setInstallAuthChecking] = useState(
+    () => isDesktopRuntime() && purpose === "install",
+  );
   const finishingRef = useRef(false);
   const modeRef = useRef(mode);
   const silentPreviewIdRef = useRef(0);
@@ -164,6 +182,7 @@ export function WorkerInstallPanel({
 
   useEffect(() => {
     const draft = loadDraft();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWorkerUrl(draft.workerUrl || credentials?.workerUrl || "");
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -180,14 +199,47 @@ export function WorkerInstallPanel({
     };
   }, [clearOauthWaitTimer]);
 
+  // Install-only: on mount, check whether a usable CF OAuth session already
+  // exists (keyring or in-memory). If it does, the install card shows
+  // "Continue to install" instead of forcing the user through the authorize
+  // popup again. Without this, a user who just authorized, navigated to
+  // /setup/progress, then hit Back to /setup/install would be asked to
+  // authorize again even though the keyring holds a valid refresh token.
+  // `installAuthChecking` is initialised true for desktop+install so the
+  // effect body only needs to flip it to false inside the async callback.
   useEffect(() => {
+    if (!isDesktopRuntime()) return;
+    if (purpose !== "install") return;
+    let active = true;
+    void (async () => {
+      try {
+        const present = await desktopCfOauthPresent();
+        if (!active) return;
+        setInstallAuthorized(present);
+      } catch {
+        if (!active) return;
+        setInstallAuthorized(false);
+      } finally {
+        if (active) setInstallAuthChecking(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [purpose]);
+
+  useEffect(() => {
+    if (!isDesktopRuntime()) return;
     if (purpose !== "worker-update") return;
 
     const requestId = ++silentPreviewIdRef.current;
-    setAutoChecking(true);
-    setOauthError(null);
+    // `autoChecking` is initialised true for desktop+worker-update, so we
+    // don't need to set it synchronously here. Clearing any prior error is
+    // done inside the async callback to satisfy the
+    // react-hooks/set-state-in-effect rule.
 
     void (async () => {
+      setOauthError(null);
       try {
         const target = await desktopPreviewWorkerUpdateTarget();
         if (requestId !== silentPreviewIdRef.current) return;
@@ -364,6 +416,15 @@ export function WorkerInstallPanel({
         setTargetChecking(false);
       }
     }
+    // Install purpose: if a usable CF OAuth session already exists (keyring
+    // or in-memory), skip the authorize popup and go straight to the
+    // install progress page — `require_cf_oauth()` there will refresh the
+    // token transparently. This fixes the "Back → re-enter → asked to
+    // authorize again" loop on desktop.
+    if (purpose === "install" && installAuthorized) {
+      router.push("/setup/progress");
+      return;
+    }
     await handleStartCfOAuth();
   }
 
@@ -502,6 +563,68 @@ export function WorkerInstallPanel({
   const canContinueAfterReveal =
     Boolean(revealedPasstoken) && (tokenSaved || tokenDownloaded);
 
+  if (!isDesktopRuntime() && purpose === "worker-update") {
+    const progressPath = backHref
+      ? "/setup/worker-update/progress"
+      : "/settings/worker/progress";
+    return (
+      <SetupScrollPage>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Update Worker</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Authorize the Cloudflare account that owns your saved Worker, then we upload the
+              latest script without touching R2 or D1.
+            </p>
+            {credentials?.workerUrl ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Saved Worker:{" "}
+                <span className="break-all font-mono">{credentials.workerUrl}</span>
+              </p>
+            ) : null}
+          </div>
+          <div className="flex justify-end">
+            <SetupBackLink
+              href={backHref ?? "/settings/worker"}
+              label={backHref ? "Back" : "Back to Worker settings"}
+            />
+          </div>
+          <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
+            <WebAuthorizeCard
+              afterAuthPath={progressPath}
+              buttonLabel="Authorize and update Worker"
+            />
+          </div>
+        </div>
+      </SetupScrollPage>
+    );
+  }
+
+  if (!isDesktopRuntime() && purpose === "install") {
+    return (
+      <SetupScrollPage>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Get ready</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Relaybase runs entirely in your Cloudflare account. Your email, API keys, and
+              routing data never touch Relaybase servers. Install and receive mail on the free
+              plan; sending email requires a Cloudflare Workers Paid plan (~$5/mo, billed by
+              Cloudflare).
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <SetupBackLink href="/setup" label="Back to start" />
+          </div>
+          <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
+            <WebAuthorizeCard />
+          </div>
+          <WhatWeInstall />
+        </div>
+      </SetupScrollPage>
+    );
+  }
+
   return (
     <SetupScrollPage>
       <div className="space-y-6">
@@ -563,7 +686,11 @@ export function WorkerInstallPanel({
                   : authorizedReady
                     ? "Your Cloudflare authorization is active. Click Update Worker to verify and deploy the update."
                     : "Authorize the Cloudflare account that owns your saved Worker. We show both URLs before any upload."
-                : "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
+                : installAuthChecking
+                  ? "Checking your Cloudflare authorization…"
+                  : installAuthorized
+                    ? "Your Cloudflare authorization is active. Click Continue to install to deploy and create Workers, R2, and D1."
+                    : "Authorize Relaybase to deploy and create Workers, R2, and D1 in your Cloudflare account."
               : purpose === "worker-update"
                 ? "Copy the update command, deploy the Worker, then come back. Schema uses your owner session."
                 : "If you do not have Wrangler, start with step 1. Worker overwrite is fine. Be careful with existing D1 and R2. Verify is optional."}
@@ -572,10 +699,12 @@ export function WorkerInstallPanel({
           <div className="mt-2 flex min-h-0 flex-1 flex-col">
             {mode === "auto" ? (
               <SetupCloudflareAuthorizeCard
-                oauthBusy={oauthBusy || targetChecking || autoChecking}
-                diagramWaiting={oauthBusy || targetChecking || autoChecking}
+                oauthBusy={oauthBusy || targetChecking || autoChecking || installAuthChecking}
+                diagramWaiting={oauthBusy || targetChecking || autoChecking || installAuthChecking}
                 waitingSubtitle={
-                  oauthBusy
+                  installAuthChecking
+                    ? "Checking your Cloudflare authorization…"
+                    : oauthBusy
                     ? "Complete authorization in your browser, then return here."
                     : autoChecking
                       ? "Verifying Cloudflare authorization…"
@@ -598,7 +727,9 @@ export function WorkerInstallPanel({
                     ? authorizedReady
                       ? "Update Worker"
                       : "Authorize with Cloudflare"
-                    : "Authorize and install on Cloudflare"
+                    : installAuthorized
+                      ? "Continue to install"
+                      : "Authorize and install on Cloudflare"
                 }
                 waitingLabel={
                   autoChecking

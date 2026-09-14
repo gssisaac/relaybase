@@ -20,6 +20,7 @@ import {
 } from "./session-cache";
 import { clearAllDashboardClientCache } from "@/lib/dashboard/shared/dashboard-client-cache";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasOwnerSession } from "@/lib/desktop/auth";
 
 type DesktopContextValue = {
   isDesktop: boolean;
@@ -43,27 +44,47 @@ function applyCredentialGlobals(creds: DesktopCredentials | null) {
   const w = window as unknown as {
     __RELAYBASE_WORKER_URL__?: string;
   };
-  if (creds?.workerUrl) w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
-  else delete w.__RELAYBASE_WORKER_URL__;
+  if (creds?.workerUrl) {
+    w.__RELAYBASE_WORKER_URL__ = creds.workerUrl;
+  } else if (!hasOwnerSession()) {
+    // Don't clobber the worker URL a web owner session (AccountLoginView /
+    // WebInstallFlow) just set — this module has no concept of that session.
+    delete w.__RELAYBASE_WORKER_URL__;
+  }
 }
 
 async function loadLocalCredentials(): Promise<DesktopCredentials | null> {
-  try {
-    const res = await fetch("/api/local-credentials", { cache: "no-store" });
-    if (!res.ok) return null;
-    const data = (await res.json()) as DesktopCredentials | null;
-    if (!data?.workerUrl) return null;
-    return data;
-  } catch {
-    return null;
+  const { loadLocalCredentialsFile } = await import("@/lib/desktop/bridge/credentials-local");
+  const data = await loadLocalCredentialsFile();
+  if (data?.workerUrl?.trim()) return data;
+  if (typeof window !== "undefined") {
+    const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+    const fromGlobal = w.__RELAYBASE_WORKER_URL__?.trim();
+    if (fromGlobal) {
+      return {
+        accountId: data?.accountId ?? "",
+        installToken: data?.installToken ?? "",
+        workerUrl: fromGlobal,
+        workerScriptName: data?.workerScriptName || "relaybase-api",
+        workerVersion: data?.workerVersion ?? "",
+        relaybaseAccountId: data?.relaybaseAccountId ?? "",
+        relaybaseEmail: data?.relaybaseEmail ?? "",
+        relaybaseSession: data?.relaybaseSession ?? "",
+        cfOauthAccessToken: "",
+        cfOauthRefreshToken: "",
+        cfOauthAccessExpiresAt: "",
+        cfOauthAccountId: data?.cfOauthAccountId ?? "",
+        scopeId: data?.scopeId ?? "",
+      };
+    }
   }
+  return null;
 }
 
 export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const cached = readDesktopSessionCache();
-  const [isDesktop, setIsDesktop] = React.useState(
-    () => cached?.isDesktop ?? isDesktopRuntime(),
-  );
+  // Match SSR and the first client paint — Tauri invoke is not available on the server.
+  const [isDesktop, setIsDesktop] = React.useState(false);
   const [ready, setReady] = React.useState(() => cached?.ready ?? false);
   const [credentials, setCredentials] = React.useState<DesktopCredentials | null>(
     () => cached?.credentials ?? null,

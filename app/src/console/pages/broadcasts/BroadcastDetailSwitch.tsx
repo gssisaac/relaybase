@@ -14,6 +14,7 @@ import { BroadcastOverviewView } from "@/console/pages/broadcasts/BroadcastOverv
 import { BroadcastProgressView } from "@/console/pages/broadcasts/BroadcastProgressView";
 import type { BroadcastDetailTab } from "@/console/lib/paths";
 import { useDashboardPaths } from "@/console/lib/paths";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 
 function BroadcastNotFound() {
   const { broadcasts } = useDashboardPaths();
@@ -34,7 +35,7 @@ function BroadcastNotFound() {
           <h1 className="truncate text-sm font-semibold">Broadcast not found</h1>
         </div>
       </DesktopTitleBar>
-      <div className="mx-auto w-full max-w-[1200px] p-4 text-sm text-muted-foreground">
+      <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
         This broadcast does not exist or was removed.
       </div>
     </div>

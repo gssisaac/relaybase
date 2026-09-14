@@ -1,31 +1,35 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+
 import {
   useProductApiBase,
   useProductHref,
 } from "@/lib/dashboard/shared/ProductContext";
-import { isDesktopRuntime } from "@/lib/desktop/bridge";
+import {
+  emailComposeBasePath,
+  emailFolderBasePath,
+  isShellEmailPath,
+  usesShellEmailRoutes,
+  type EmailFolder,
+} from "./email-route-bases";
 
-export type EmailFolder =
-  | "compose"
-  | "inbox"
-  | "drafts"
-  | "sent"
-  | "trash"
-  | "settings";
+export type { EmailFolder };
+export { isShellEmailPath };
 
-/** Mail client routes under `/email/*` (desktop) or `/*` (web). */
+/** Mail client routes under `/email/*` (desktop + web owner shell) or `/*` (web team). */
 export function useEmailPaths() {
-  const isDesktop = isDesktopRuntime();
+  const pathname = usePathname();
+  const shellEmail = usesShellEmailRoutes(pathname);
   const apiBase = useProductApiBase("email");
   const base = useProductHref();
-  const email = isDesktop ? useProductHref("email") : "/inbox";
-  const inbox = isDesktop ? useProductHref("email", "inbox") : "/inbox";
-  const drafts = isDesktop ? useProductHref("email", "drafts") : "/drafts";
-  const sent = isDesktop ? useProductHref("email", "sent") : "/sent";
-  const compose = isDesktop ? useProductHref("email", "compose") : "/compose";
-  const trash = isDesktop ? useProductHref("email", "trash") : "/trash";
-  const settings = isDesktop
+  const email = shellEmail ? useProductHref("email") : "/inbox";
+  const inbox = shellEmail ? useProductHref("email", "inbox") : "/inbox";
+  const drafts = shellEmail ? useProductHref("email", "drafts") : "/drafts";
+  const sent = shellEmail ? useProductHref("email", "sent") : "/sent";
+  const compose = shellEmail ? useProductHref("email", "compose") : "/compose";
+  const trash = shellEmail ? useProductHref("email", "trash") : "/trash";
+  const settings = shellEmail
     ? useProductHref("email", "settings")
     : "/mail-settings";
 
@@ -47,16 +51,9 @@ export function emailAccountHref(
   folder: Exclude<EmailFolder, "compose" | "settings">,
   account?: string | null,
 ) {
-  const isDesktop = isDesktopRuntime();
-  const base = isDesktop
-    ? folder === "inbox"
-      ? "/email/inbox"
-      : folder === "drafts"
-        ? "/email/drafts"
-        : folder === "sent"
-          ? "/email/sent"
-          : "/email/trash"
-    : `/${folder}`;
+  const pathname =
+    typeof window !== "undefined" ? window.location.pathname : "";
+  const base = emailFolderBasePath(folder, pathname);
   if (!account || account === "all") return base;
   return `${base}?account=${encodeURIComponent(account)}`;
 }
@@ -72,7 +69,9 @@ export function emailComposeHref(
     subject?: string | null;
   },
 ) {
-  const defaultBase = isDesktopRuntime() ? "/email/compose" : "/compose";
+  const pathname =
+    typeof window !== "undefined" ? window.location.pathname : "";
+  const defaultBase = emailComposeBasePath(pathname);
   const rawBase = options?.base ?? defaultBase;
   const qIndex = rawBase.indexOf("?");
   const path = qIndex >= 0 ? rawBase.slice(0, qIndex) : rawBase;

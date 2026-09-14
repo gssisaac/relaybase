@@ -178,7 +178,7 @@ The last-route restore (`app/src/app/page.tsx`) waits for `store.canShowApp`
 2. Add a transition in `reconcileFromStatuses`, `bootFromKeyring`, or a store
    action — never mutate `phase` from a view.
 3. Add a `case` to the gate `switch` and a view that only renders.
-4. If it ships in the Worker, rebuild the bundle (see `AGENTS.md` → *Worker
+4. If it ships in the Worker, rebuild the bundle (see `AGENT.md` → *Worker
    bundle*).
 5. Add a transition test in `app/src/lib/desktop/app-session/tests/`.
 6. After first enrollment, do not add a path that asks for a typed passtoken

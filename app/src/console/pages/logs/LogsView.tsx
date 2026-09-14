@@ -22,6 +22,7 @@ import {
   friendlyDesktopFetchError,
   readResponseJson,
 } from "@/lib/desktop/api";
+import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "failed" | "success";
@@ -200,7 +201,7 @@ export function LogsView() {
               placeholder="Filter by domain…"
               defaultValue={domainFilter}
               onChange={(e) => domainDebounce(e.target.value)}
-              className="h-8 w-40 text-xs"
+              className="h-8 w-full min-w-0 text-xs sm:w-40"
             />
             <Button
               variant="outline"
@@ -227,7 +228,7 @@ export function LogsView() {
       </DesktopTitleBar>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+        <div className={dashboardScrollBodyClassName("space-y-4")}>
           <EmailAlerts error={error} message={null} />
 
           {summary ? (
@@ -266,6 +267,7 @@ export function LogsView() {
             </div>
           ) : null}
 
+          <DashboardTableScroll minWidthClassName="min-w-[720px]">
           <Table>
             <TableHeader>
               <TableRow className="border-b hover:bg-transparent">
@@ -344,6 +346,7 @@ export function LogsView() {
               ) : null}
             </TableBody>
           </Table>
+          </DashboardTableScroll>
 
           {selected ? (
             <div className="space-y-2 rounded-lg border border-border p-4 text-sm">

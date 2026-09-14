@@ -7,9 +7,7 @@ import { DesktopShell } from "@/components/layout/DesktopShell";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
 import { useAppSession } from "@/lib/desktop/app-session";
-import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { useDesktopChrome } from "@/lib/desktop/shell";
-import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 
 /** Setup routes that must finish even when a keyring session already exists. */
 const SETUP_CONTINUE_PATHS = [
@@ -37,13 +35,16 @@ function SetupShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Leave setup only when the mailbox can actually load (session + Worker).
     // First-time signup/install must not bounce to an empty inbox mid-flow.
+    // Desktop only — web has no keyring phase machine to check here; a web
+    // owner mid-install is routed by WebInstallFlow itself once it's done.
+    if (!isDesktop) return;
     if (isSetupContinuePath(pathname)) {
       return;
     }
     if (store.canShowApp) {
       router.replace("/");
     }
-  }, [store, store.canShowApp, router, pathname]);
+  }, [isDesktop, store, store.canShowApp, router, pathname]);
 
   if (pathname === "/setup/connect") {
     return children;
@@ -69,25 +70,13 @@ function SetupShell({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Setup / install flow. Both desktop and web render this: desktop drives
+ * the keyring-backed AppSessionStore install wizard; web renders the OAuth
+ * install flow (WebAuthorizeCard / WebInstallProgress, see WebInstallFlow)
+ * spliced into the same WorkerInstallPanel / SetupProgressPanel screens.
+ */
 export default function SetupLayout({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const isDesktop = isDesktopRuntime();
-
-  useEffect(() => {
-    if (!isDesktop) {
-      const auth = getWebTeamAuth();
-      if (auth) {
-        router.replace("/inbox");
-      } else {
-        router.replace("/sign-in");
-      }
-    }
-  }, [isDesktop, router]);
-
-  if (!isDesktop) {
-    return null;
-  }
-
   // DesktopProvider + AppSessionProvider live at the root layout now, so
   // setup and the dashboard shell share one session.
   return (

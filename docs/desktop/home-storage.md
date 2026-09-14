@@ -7,6 +7,8 @@ Implemented in `desktop/src-tauri/src/secrets.rs`, `desktop/src-tauri/src/notify
 
 For the full two-layer model (Worker D1 + R2 + this directory), see **[storage-architecture.md](../architecture/storage-architecture.md)**.
 
+**Web build:** most of the "durable" tree below is desktop-specific storage that **also** mirrors to D1 `account_state` (`email.json`, `mail/desktop/ui/*.json`, `mail/desktop/drafts.json` + `draft-attachments/**`, and `broadcast-drafts.json`) so the web build — which has no filesystem — gets the same persistence via the Worker instead of a browser-only `localStorage` fallback. Desktop disk stays the thing a write must succeed against; the D1 write is an additive best-effort mirror. See **[account-state-d1.md](../architecture/account-state-d1.md)** for the D1 schema, identity scoping, and exactly which files this applies to (`workspaces.json`, `team-login.json`, and `api-keys.json` are explicitly excluded — see that doc's *Explicitly out of scope*).
+
 ---
 
 ## Rule (non-negotiable)
@@ -254,7 +256,7 @@ Path: `~/.relaybase/{scopeId}/email.json`
 | `version` | `1` |
 | `accountColors` | `{ [email]: "#RRGGBB" }` |
 
-TS: `app/src/email/lib/prefs/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`.
+TS: `app/src/email/lib/prefs/email-prefs.ts` → `get_email_prefs` / `save_email_prefs`. Also mirrored to D1 `account_state` (namespace `prefs`) so the web build persists this too — see **[account-state-d1.md](../architecture/account-state-d1.md)**.
 
 ### `mail/desktop/ui/enabled-accounts.json`
 
@@ -266,7 +268,7 @@ Which addresses the user turned on in the mail sidebar (not the full Worker cata
 |-------|---------|
 | `emails` | Enabled address strings |
 
-TS: `app/src/email/lib/accounts/enabled-accounts.ts` → `readUiJson` / `writeUiJson`.
+TS: `app/src/email/lib/accounts/enabled-accounts.ts` → `readUiJson` / `writeUiJson`. `readUiJson`/`writeUiJson` (all `ui/*.json` files below) also mirror to D1 `account_state` (namespace `ui`) — desktop stays disk-first, web reads/writes the Worker directly. See **[account-state-d1.md](../architecture/account-state-d1.md)**.
 
 ### `mail/desktop/ui/available-addresses.json`
 
@@ -311,6 +313,8 @@ Worker KV stores only key hashes. Plaintext is captured once at create/rotate an
 
 Path: `~/.relaybase/{scopeId}/mail/desktop/*.json`. Opaque JSON via `get_mail_json` / `save_mail_json`.
 
+`inbox.json` / `sent.json` / `details/*.json` are cache-tier only (rebuildable from the Worker) — not mirrored to D1. `drafts.json` (unsent compose drafts) **is** mirrored to D1 `account_state` (namespace `mail`, key `drafts.json`), because unsent drafts have no other server copy until sent — see **[account-state-d1.md](../architecture/account-state-d1.md)**. Draft attachment bytes (`draft-attachments/{draftId}/{attachmentId}`) mirror to R2 (`drafts/{identityKey}/{draftId}/{attachmentId}`) the same way; on web these bytes live primarily in IndexedDB with the Worker upload as a best-effort durability layer, not a hard dependency (see that doc for why). Broadcast drafts-in-progress (`lib/dashboard/broadcast-drafts-disk.ts`, `mail/{userId}/broadcast-drafts.json`) mirror to D1 `account_state` (namespace `broadcast`, owner-only) via `/console/broadcast-drafts` rather than `/mail/account-state`.
+
 ### `cache/**`
 
 Path: `~/.relaybase/{scopeId}/cache/**`. Opaque JSON via `get_cache_json` / `save_cache_json`. Includes dashboard envelopes (`dashboard-cache-disk.ts`), TTL write-through (`dashboard-client-cache.ts` → `dashboard/ttl-*.json`), and sender favicon **status** (`favicon-status.json` — image bytes stay memory-only; see **[sender-favicon-cache.md](./sender-favicon-cache.md)**).
@@ -347,6 +351,7 @@ Related: [last-route-restore.md](./last-route-restore.md) (sidebar paths live in
 
 When adding durable desktop state:
 
+0. **Decide if this needs to work on the web build too.** If it's UI state / drafts / prefs (not mail-index or cache-tier data, not a plaintext secret), it almost certainly should be mirrored to D1 `account_state` rather than desktop-disk-only — see **[account-state-d1.md](../architecture/account-state-d1.md)** and add the `(namespace, key)` there too.
 1. Put it under `~/.relaybase/{scopeId}/` (usually `mail/desktop/ui/…`, `cache/…`, or extend `email.json` / `api-keys.json` with a Rust schema change). **Never** write tenant data at the `~/.relaybase/` root — only session files (`workspace.json`, `team-login.json`, `app-icon.png`, `storage-layout-v2.json`) live there.
 2. **Never** use raw `relaybaseAccountId`, CF `accountId`, or `workerUrl` as a folder name. The `scopeId` is an opaque SHA-256 prefix resolved by Rust (`resolve_account_scope_id`).
 3. Go through existing Tauri commands — do **not** open ad-hoc files from the Next.js layer (except `/api/local-credentials` for browser next).

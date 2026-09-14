@@ -1,5 +1,6 @@
 import type { DesktopCredentials } from "./credentials";
 import type { CfOAuthPurpose } from "./cloudflare";
+import { webOAuthReturnTo } from "./web-oauth-paths";
 import { invoke, isDesktopRuntime } from "./invoke";
 
 // --- Cloudflare OAuth (install token) ---
@@ -14,10 +15,25 @@ import { invoke, isDesktopRuntime } from "./invoke";
 
 export async function desktopStartCfOAuth(
   purpose: CfOAuthPurpose = "install",
+  returnTo?: string,
 ): Promise<{
   authorizeUrl: string;
   state: string;
 }> {
+  if (!isDesktopRuntime()) {
+    const params = new URLSearchParams({ purpose });
+    if (returnTo?.trim()) {
+      const path = returnTo.trim();
+      const wrapped = path.startsWith("/oauth/web-complete")
+        ? path
+        : webOAuthReturnTo(path);
+      params.set("returnTo", wrapped);
+    }
+    return {
+      authorizeUrl: `/api/oauth/start?${params.toString()}`,
+      state: "web",
+    };
+  }
   return invoke("start_cf_oauth", { purpose });
 }
 
@@ -145,4 +161,20 @@ export async function listenCfOAuthResult(handler: {
  * already go through the Rust gateway. */
 export async function desktopRefreshInstallToken(): Promise<DesktopCredentials> {
   return invoke("refresh_install_token");
+}
+
+/**
+ * Whether a usable CF OAuth session exists (in-memory or keyring) without
+ * throwing when the user has not authorized. Used by the install screen to
+ * decide between "Authorize" and "Continue to install" — without it, a
+ * user who just authorized and navigated Back would be asked to authorize
+ * again even though the keyring holds a valid refresh token.
+ */
+export async function desktopCfOauthPresent(): Promise<boolean> {
+  if (!isDesktopRuntime()) return false;
+  try {
+    return await invoke<boolean>("cf_oauth_present");
+  } catch {
+    return false;
+  }
 }

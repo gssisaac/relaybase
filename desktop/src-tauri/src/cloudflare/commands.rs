@@ -5,7 +5,7 @@ use super::client::{verify_token, TokenVerifyResult};
 use super::loopback::{
     complete_cf_oauth_inner, start_cf_oauth_inner, OAuthStartResult,
 };
-use super::oauth::require_cf_oauth;
+use super::oauth::{cf_oauth_if_present, require_cf_oauth};
 use super::worker::{
     adopt_worker, install_worker, probe_install, update_worker,
     InstallResult, ProbeResult,
@@ -92,6 +92,16 @@ pub async fn complete_cf_oauth(
 pub async fn refresh_install_token() -> Result<StoredCredentials, String> {
     require_cf_oauth().await?;
     load_credentials_merged()
+}
+
+/// Whether a usable CF OAuth session exists (in-memory or keyring) **without**
+/// throwing when the user has not authorized. Used by the install screen to
+/// decide between "Authorize" and "Continue to install" — without it, a
+/// user who just authorized and navigated Back would be asked to authorize
+/// again even though the keyring holds a valid refresh token.
+#[tauri::command]
+pub async fn cf_oauth_present() -> Result<bool, String> {
+    Ok(cf_oauth_if_present().await?.is_some())
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

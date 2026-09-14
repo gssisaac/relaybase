@@ -1,4 +1,12 @@
 import { invoke, isDesktopRuntime } from "./invoke";
+import {
+  webOwnerBootMail,
+  webOwnerLogin,
+  webOwnerLogout,
+  webOwnerSessionStatus,
+  webOwnerSetupAdmin,
+  webOwnerUnlockConsole,
+} from "./web-owner-bridge";
 
 export type OwnerSessionStatus = {
   hasMailRefresh: boolean;
@@ -41,7 +49,7 @@ export async function desktopOwnerSessionStatus(
   workerUrl?: string,
 ): Promise<OwnerSessionStatus> {
   if (!isDesktopRuntime()) {
-    return { ...EMPTY_OWNER };
+    return webOwnerSessionStatus(workerUrl);
   }
   return invoke("owner_session_status_cmd", {
     workerUrl: workerUrl?.trim() || null,
@@ -52,6 +60,9 @@ export async function desktopOwnerLogin(input: {
   workerUrl: string;
   passtoken: string;
 }): Promise<OwnerSessionStatus> {
+  if (!isDesktopRuntime()) {
+    return webOwnerLogin(input);
+  }
   return invoke("owner_login_cmd", {
     workerUrl: input.workerUrl,
     passtoken: input.passtoken,
@@ -59,10 +70,16 @@ export async function desktopOwnerLogin(input: {
 }
 
 export async function desktopOwnerBootMail(): Promise<OwnerSessionStatus> {
+  if (!isDesktopRuntime()) {
+    return webOwnerBootMail();
+  }
   return invoke("owner_boot_mail_cmd");
 }
 
 export async function desktopOwnerUnlockConsole(): Promise<OwnerSessionStatus> {
+  if (!isDesktopRuntime()) {
+    return webOwnerUnlockConsole();
+  }
   return invoke("owner_unlock_console_cmd");
 }
 
@@ -95,6 +112,9 @@ export async function desktopOwnerAuthStatus(workerUrl: string): Promise<{
 
 /** Touch ID / Windows Hello — console gate only. */
 export async function desktopOwnerTouchId(reason: string): Promise<void> {
+  if (!isDesktopRuntime()) {
+    throw new Error("Biometric unlock is only available in the Relaybase desktop app.");
+  }
   await invoke("owner_touch_id_cmd", { reason });
 }
 
@@ -103,6 +123,9 @@ export async function desktopOwnerLoginFromKeyring(
   reason: string,
   workerUrl?: string,
 ): Promise<OwnerSessionStatus> {
+  if (!isDesktopRuntime()) {
+    throw new Error("Biometric unlock is only available in the Relaybase desktop app.");
+  }
   return invoke("owner_login_from_keyring_cmd", {
     reason,
     workerUrl: workerUrl?.trim() || null,
@@ -110,6 +133,10 @@ export async function desktopOwnerLoginFromKeyring(
 }
 
 export async function desktopOwnerLogout(): Promise<void> {
+  if (!isDesktopRuntime()) {
+    await webOwnerLogout();
+    return;
+  }
   await invoke("owner_logout_cmd");
 }
 
@@ -117,6 +144,9 @@ export async function desktopOwnerSetupAdmin(input: {
   workerUrl: string;
   pepper: string;
 }): Promise<OwnerSetupResult> {
+  if (!isDesktopRuntime()) {
+    return webOwnerSetupAdmin(input);
+  }
   return invoke("owner_setup_admin_cmd", {
     workerUrl: input.workerUrl,
     pepper: input.pepper,
@@ -127,6 +157,18 @@ export async function desktopOwnerResetAdmin(input: {
   workerUrl: string;
   cfAccessToken: string;
 }): Promise<OwnerSetupResult> {
+  if (!isDesktopRuntime()) {
+    const res = await fetch("/api/cloudflare/reset-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workerUrl: input.workerUrl }),
+    });
+    const data = (await res.json()) as { passtoken?: string; error?: string };
+    if (!res.ok || !data.passtoken) {
+      throw new Error(data.error || "Reset failed");
+    }
+    return { passtoken: data.passtoken };
+  }
   return invoke("owner_reset_admin_cmd", {
     workerUrl: input.workerUrl,
     cfAccessToken: input.cfAccessToken,

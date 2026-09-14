@@ -30,6 +30,7 @@ import {
   sendingBadgeLabel,
 } from "@/lib/dashboard/sending-health";
 import { AddDomainDialog } from "@/console/pages/domains/AddDomainDialog";
+import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { FixSendingDialog } from "@/console/pages/domains/FixSendingDialog";
 import { ImportCloudflareZonesDialog } from "@/console/pages/domains/ImportCloudflareZonesDialog";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
@@ -380,7 +381,7 @@ export function DomainsView() {
       </DesktopTitleBar>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+      <div className={dashboardScrollBodyClassName("space-y-4")}>
       <EmailAlerts
         error={error ?? localError ?? sendingHealth.error}
         message={message}
@@ -401,6 +402,7 @@ export function DomainsView() {
         </CardHeader>
         <CardContent>
           {domains.length ? (
+            <DashboardTableScroll minWidthClassName="min-w-[960px]">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -695,6 +697,7 @@ export function DomainsView() {
                 })}
               </TableBody>
             </Table>
+            </DashboardTableScroll>
           ) : !loading ? (
             <div className="space-y-3 py-2">
               <p className="text-sm text-muted-foreground">

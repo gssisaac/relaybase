@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
-import { Toaster } from "@/components/ui/sonner";
+import { ClientToaster } from "@/components/ClientToaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CloudflarePlanDialogHost } from "@/lib/cloudflare/CloudflarePlanDialog";
 import { ZoomHotkeys } from "@/components/ZoomHotkeys";
@@ -24,6 +24,12 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -39,7 +45,7 @@ export default function RootLayout({
           <AppProviders>
             <TooltipProvider delay={200}>{children}</TooltipProvider>
           </AppProviders>
-          <Toaster />
+          <ClientToaster />
           <CloudflarePlanDialogHost />
           <ZoomHotkeys />
         </ThemeProvider>

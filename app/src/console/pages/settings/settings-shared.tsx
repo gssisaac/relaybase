@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { HealthTone } from "@/lib/dashboard/connection-status";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { cn } from "@/lib/utils";
 
 export function formatBytes(bytes: number): string {
@@ -94,6 +95,7 @@ export function HealthStatus({
             "mt-1 size-2.5 shrink-0 rounded-full",
             tone === "ok" && "bg-emerald-500",
             tone === "bad" && "bg-red-500",
+            tone === "warn" && "bg-amber-500",
             tone === "neutral" && "bg-muted-foreground/40",
           )}
           aria-hidden
@@ -105,6 +107,7 @@ export function HealthStatus({
             "text-sm font-medium",
             tone === "ok" && "text-emerald-700 dark:text-emerald-400",
             tone === "bad" && "text-red-700 dark:text-red-400",
+            tone === "warn" && "text-amber-800 dark:text-amber-300",
             (tone === "pending" || tone === "neutral") && "text-foreground",
           )}
         >
@@ -181,7 +184,7 @@ export function SummaryRow({ label, value }: { label: string; value: string }) {
 
 export function SettingsPageBody({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">{children}</div>
+    <div className={dashboardScrollBodyClassName("space-y-4")}>{children}</div>
   );
 }
 

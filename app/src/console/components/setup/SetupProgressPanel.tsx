@@ -49,6 +49,8 @@ import {
 } from "@/console/components/setup/install-success-gate";
 import { useOpenEnableEmailApiDialog } from "@/console/components/setup/use-enable-email-api-dialog";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
+import { WebInstallProgress } from "@/console/components/setup/WebInstallFlow";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import type { InstallFlowPurpose } from "@/console/lib/install-flow";
 import { loadPublicWorkerVersionCompare } from "@/lib/dashboard/list-cf-zones";
 import { ownerAuthStatusForWorkerUrl } from "@/lib/desktop/auth/owner-session";
@@ -850,6 +852,22 @@ export function SetupProgressPanel({
         : `Connected to ${dbAlreadyInit.workerUrl}`,
     );
     setDbAlreadyInit(null);
+  }
+
+  if (!isDesktopRuntime() && purpose === "install") {
+    return (
+      <SetupScrollPage>
+        <div className="mt-3 space-y-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Installing</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Creating resources and deploying the Worker in your Cloudflare account.
+            </p>
+          </div>
+          <WebInstallProgress />
+        </div>
+      </SetupScrollPage>
+    );
   }
 
   return (

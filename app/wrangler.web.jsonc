@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Dynamic (OpenNext) deploy target — hosts app/src/app/api/** (OAuth +
+  // Cloudflare auto-install routes). Kept separate from wrangler.jsonc,
+  // which still deploys the static Tauri-style export to relaybase.email —
+  // that pipeline has no server and cannot serve Route Handlers.
+  //
+  // Build + deploy: `pnpm run deploy:web` (see package.json). Assign a
+  // `routes`/`custom_domain` entry here once this is ready to go live;
+  // until then it deploys to the account's *.workers.dev subdomain.
+  "name": "relaybase-web-app-dynamic",
+  "compatibility_date": "2026-07-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "3adf03d991843094a7343eebc0a98007",
+  "workers_dev": true,
+  "main": ".open-next/worker.js",
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  }
+}

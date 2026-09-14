@@ -38,7 +38,10 @@ async function fileToDraftAttachment(
   const filename = slugFilename(optimized?.filename ?? file.name);
   const id = crypto.randomUUID().slice(0, 8);
   const bytes = await blob.arrayBuffer();
-  await saveDraftAttachmentBytes(productId, draftId, id, bytes);
+  await saveDraftAttachmentBytes(productId, draftId, id, bytes, {
+    filename,
+    contentType,
+  });
   return {
     id,
     filename,

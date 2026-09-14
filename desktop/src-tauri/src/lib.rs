@@ -116,6 +116,7 @@ pub fn run() {
             cloudflare::start_cf_oauth,
             cloudflare::complete_cf_oauth,
             cloudflare::refresh_install_token,
+            cloudflare::cf_oauth_present,
             cloudflare::verify_worker_connection,
             cloudflare::save_worker_connection,
             // auto_install commands

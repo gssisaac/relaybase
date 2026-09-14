@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import { useDashboardPaths } from "@/console/lib/paths";
+import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { KeysStatusPanel } from "@/console/pages/keys/KeysStatusPanel";
 import {
   dashboardCacheNeedsRefresh,
@@ -622,7 +623,7 @@ export function EmailSettingsKeysView() {
       </Dialog>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+        <div className={dashboardScrollBodyClassName("space-y-4")}>
           <EmailAlerts error={keysError} message={keysMessage} />
 
           {showWorkerUnavailable ? (
@@ -686,6 +687,7 @@ export function EmailSettingsKeysView() {
                       </Button>
                     </div>
                   ) : (
+                    <DashboardTableScroll minWidthClassName="min-w-[720px]">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -815,6 +817,7 @@ export function EmailSettingsKeysView() {
                         })}
                       </TableBody>
                     </Table>
+                    </DashboardTableScroll>
                   )}
                 </CardContent>
               </Card>

@@ -12,6 +12,7 @@ Technical documentation index for AI agents and engineers. Read the relevant doc
 | **D1 migrations / init-db / migrate-db** | [`architecture/d1-migrations-and-init-db.md`](./architecture/d1-migrations-and-init-db.md) | [`architecture/storage-architecture.md`](./architecture/storage-architecture.md) |
 | **R2 mailbox layout / raw email storage** | [`architecture/mailbox-r2.md`](./architecture/mailbox-r2.md) | [`architecture/mailbox-d1.md`](./architecture/mailbox-d1.md) |
 | **Mail search / FTS5 / list counts / Sent** | [`architecture/mailbox-d1.md`](./architecture/mailbox-d1.md) | [`architecture/mailbox-r2.md`](./architecture/mailbox-r2.md) |
+| **Sidebar/read/trash/drafts state on the web build (not just desktop)** | [`architecture/account-state-d1.md`](./architecture/account-state-d1.md) | [`desktop/home-storage.md`](./desktop/home-storage.md) |
 | **Send/bounce logging / Dashboard Log page** | [`architecture/ops-log-d1.md`](./architecture/ops-log-d1.md) | [`architecture/d1-migrations-and-init-db.md`](./architecture/d1-migrations-and-init-db.md) |
 | **Central HQ store (`strum-relaybase-ops`)** | [`architecture/hq-ops-d1.md`](./architecture/hq-ops-d1.md) | [`decisions/pivot-byo-cloudflare.md`](./decisions/pivot-byo-cloudflare.md) |
 | **Worker install / login / passtoken recovery lifecycle** | [`auth/install-auth-recovery-spec.md`](./auth/install-auth-recovery-spec.md) | [`auth/authentication.md`](./auth/authentication.md) |
@@ -28,6 +29,7 @@ Technical documentation index for AI agents and engineers. Read the relevant doc
 | **Inbox threading / multi-account mail** | [`features/inbox-threading.md`](./features/inbox-threading.md) | [`architecture/mailbox-d1.md`](./architecture/mailbox-d1.md) |
 | **Flutter mobile companion / teammate mail scoping** | [`features/mobile-companion.md`](./features/mobile-companion.md) | [`auth/authentication.md`](./auth/authentication.md) |
 | **Desktop / Worker release and version sync** | [`release/version-sync.md`](./release/version-sync.md) | `desktop/docs/release.md` |
+| **Web console Worker update (Desktop Update hidden, no desktop-version gate)** | [`release/version-sync.md`](./release/version-sync.md#web-console-update-rules-browser) | [`architecture/mail-platform-auth.md`](./architecture/mail-platform-auth.md) |
 | **BYO Cloudflare architecture pivot** | [`decisions/pivot-byo-cloudflare.md`](./decisions/pivot-byo-cloudflare.md) | [`architecture/storage-architecture.md`](./architecture/storage-architecture.md) |
 | **BIMI / VMC inbox logo — do not build** | [`decisions/bimi-vmc-do-not-build.md`](./decisions/bimi-vmc-do-not-build.md) | [`desktop/sender-favicon-cache.md`](./desktop/sender-favicon-cache.md) |
 
@@ -43,6 +45,7 @@ Remote infrastructure, databases, storage bindings, and migration rules.
 - **[`mailbox-d1.md`](./architecture/mailbox-d1.md)** — `relaybase-mail` D1: `mailbox_messages` + `mailbox_fts` (FTS5) unified mail index.
 - **[`ops-log-d1.md`](./architecture/ops-log-d1.md)** — `relaybase-logs` D1 `ops_log` table and Dashboard Log stream.
 - **[`hq-ops-d1.md`](./architecture/hq-ops-d1.md)** — Central `strum-relaybase-ops` D1 schema (licenses, console accounts, recovery tokens, etc.).
+- **[`account-state-d1.md`](./architecture/account-state-d1.md)** — `account_state` + `draft_attachments`: sidebar/read/trash/drafts/account-colors state, now Worker-backed so the web build has real persistence, not just desktop disk.
 
 ### Authentication & Lifecycle (`docs/auth/`)
 Owner/teammate auth, session state machine, OS keychain integration, Worker install and recovery lifecycle.
@@ -73,7 +76,7 @@ Product direction changes and architecture decision records (ADRs).
 
 ### Release (`docs/release/`)
 Release guides and version sync policy.
-- **[`version-sync.md`](./release/version-sync.md)** — Desktop (`.app`) and Worker (`worker.js`) semver must match.
+- **[`version-sync.md`](./release/version-sync.md)** — Desktop (`.app`) and Worker (`worker.js`) semver must match. Includes web-console-specific update rules (Desktop Update hidden, Worker Update ungated by desktop version).
 
 ### Marketing (`docs/marketing/`)
 Marketing copy and feature descriptions.

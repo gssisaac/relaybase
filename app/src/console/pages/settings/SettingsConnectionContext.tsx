@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useContext,
@@ -11,6 +12,10 @@ import {
 } from "react";
 
 import { type HealthTone } from "@/lib/dashboard/connection-status";
+import {
+  cfDomainApiReady,
+  setCfApiTokenUserConfirmed,
+} from "@/lib/dashboard/cf-api-token-user-confirmed";
 import { useConnectionStatus } from "@/lib/dashboard/use-connection-status";
 import {
   desktopGetCredentials,
@@ -21,16 +26,23 @@ import {
   desktopVerifyCfToken,
   desktopVerifyWorkerConnection,
   desktopOpenExternal,
-  cfTokenPermissionErrorHelp,
+  cfTokenPermissionProbeWarningHelp,
   explainDesktopError,
   explainCfOAuthError,
   isCloudflareAuthExpired,
-  mailApiReady,
+  cfApiTokenHealth,
   type DesktopErrorHelp,
 } from "@/lib/desktop/bridge";
 import type { DesktopCredentials } from "@/lib/desktop/bridge";
 import { registerEnableEmailApiPasteBridge } from "@/console/components/setup/use-enable-email-api-dialog";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import {
+  fetchWebCfOAuthSessionPresent,
+  PENDING_SERVER_TOKEN_PUSH_KEY,
+} from "@/lib/desktop/bridge/web-oauth-complete";
+import { useWebCfOAuthComplete } from "@/lib/desktop/bridge/use-web-cf-oauth-complete";
+import { openWebCfOAuthPopup } from "@/lib/desktop/bridge/web-oauth-authorize";
 
 type HealthBlock = { tone: HealthTone; label: string; detail: string };
 
@@ -61,6 +73,8 @@ type SettingsConnectionContextValue = {
   serverPushBusy: boolean;
   workerBusy: boolean;
   cfError: DesktopErrorHelp | null;
+  cfWarning: DesktopErrorHelp | null;
+  cfHealth: HealthBlock;
   workerError: DesktopErrorHelp | null;
   cfMessage: string | null;
   workerMessage: string | null;
@@ -75,6 +89,7 @@ type SettingsConnectionContextValue = {
   handlePasteServerToken: (token: string) => Promise<boolean>;
   handleSaveWorker: () => Promise<void>;
   handleVerifyCf: () => Promise<boolean>;
+  handleConfirmCfSetup: () => Promise<void>;
   handleRefreshStatus: () => Promise<void>;
 };
 
@@ -90,8 +105,10 @@ export function useSettingsConnection() {
 }
 
 export function SettingsConnectionProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const desktop = useOptionalDesktop();
   const credentials = desktop?.credentials ?? null;
+  const [webCfOauthPresent, setWebCfOauthPresent] = useState(false);
   const refreshCredentials = async (): Promise<void> => {
     await desktop?.refresh?.();
   };
@@ -109,7 +126,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   // When the probe has run, use it; fall back to the local signal only when
   // the probe can't run (no worker status yet).
   const cfConnected = workerStatus
-    ? mailApiReady(workerStatus)
+    ? cfDomainApiReady(workerStatus, credentials)
     : Boolean(snapshot?.cfConnected);
   const statusBusy = statusLoading || statusRefreshing;
 
@@ -125,6 +142,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   const [workerBusy, setWorkerBusy] = useState(false);
 
   const [cfError, setCfError] = useState<DesktopErrorHelp | null>(null);
+  const [cfWarning, setCfWarning] = useState<DesktopErrorHelp | null>(null);
   const [workerError, setWorkerError] = useState<DesktopErrorHelp | null>(null);
   const [cfMessage, setCfMessage] = useState<string | null>(null);
   const [workerMessage, setWorkerMessage] = useState<string | null>(null);
@@ -144,16 +162,23 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
   // closes over mount-time state) can read the latest typed value.
   const serverTokenRef = useRef("");
 
-  // OAuth session in memory (access or refresh). Gates server-token push.
+  useEffect(() => {
+    if (isDesktopRuntime()) return;
+    void fetchWebCfOAuthSessionPresent().then(setWebCfOauthPresent);
+  }, [credentials]);
+
+  // OAuth session in memory (desktop) or sealed cookie (web). Gates server-token push.
   const cfInstallTokenAvailable = Boolean(
     credentials?.cfOauthRefreshToken?.trim() ||
-      credentials?.cfOauthAccessToken?.trim(),
+      credentials?.cfOauthAccessToken?.trim() ||
+      webCfOauthPresent,
   );
 
   function resetCfDraft() {
     setAccountId(credentials?.accountId ?? "");
     setServerToken("");
     setCfError(null);
+    setCfWarning(null);
     setCfMessage(null);
   }
 
@@ -230,6 +255,16 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
 
   async function authorizeThenPush() {
     pendingPushRef.current = true;
+    if (!isDesktopRuntime() && serverTokenRef.current.trim()) {
+      try {
+        sessionStorage.setItem(
+          PENDING_SERVER_TOKEN_PUSH_KEY,
+          serverTokenRef.current.trim(),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
     setCfError(null);
     setCfMessage("Authorize with Cloudflare to push the server token.");
     await handleStartCfOAuth();
@@ -308,14 +343,52 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const runServerTokenPushRef = useRef(runServerTokenPush);
+  runServerTokenPushRef.current = runServerTokenPush;
+
+  const completeWebCfOAuth = async () => {
+    setWebCfOauthPresent(await fetchWebCfOAuthSessionPresent());
+    await refreshCredentials();
+    await refreshConnectionStatus();
+    setOauthBusy(false);
+    setOauthError(null);
+    if (!pendingPushRef.current) return;
+    pendingPushRef.current = false;
+    const pendingToken =
+      sessionStorage.getItem(PENDING_SERVER_TOKEN_PUSH_KEY)?.trim() ||
+      serverTokenRef.current;
+    sessionStorage.removeItem(PENDING_SERVER_TOKEN_PUSH_KEY);
+    if (pendingToken) setServerToken(pendingToken);
+    const fresh = await desktopGetCredentials();
+    await runServerTokenPushRef.current({
+      accountId: fresh?.accountId ?? fresh?.cfOauthAccountId,
+      serverToken: pendingToken,
+    });
+  };
+
+  useWebCfOAuthComplete(() => {
+    void completeWebCfOAuth();
+  });
+
   async function handleStartCfOAuth() {
     setOauthBusy(true);
     setOauthError(null);
     try {
-      const start = await desktopStartCfOAuth();
+      const returnTo = pathname.startsWith("/settings") ? pathname : undefined;
+      const start = await desktopStartCfOAuth("install", returnTo);
       oauthStartStateRef.current = start.state;
-      // The deep-link listener (registered above) receives the tokens when
-      // the console redirects back to relaybase://oauth/callback.
+      if (!isDesktopRuntime() && start.authorizeUrl.startsWith("/")) {
+        openWebCfOAuthPopup(start.authorizeUrl, {
+          onComplete: () => {
+            void completeWebCfOAuth();
+          },
+          onError: (message) => {
+            setOauthError(explainCfOAuthError(message));
+            setOauthBusy(false);
+          },
+        });
+        return;
+      }
       await desktopOpenExternal(start.authorizeUrl);
     } catch (err) {
       setOauthError(explainCfOAuthError(err));
@@ -358,6 +431,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     }
     setCfBusy(true);
     setCfError(null);
+    setCfWarning(null);
     setCfMessage(null);
     try {
       const result = await desktopVerifyWorkerConnection(url);
@@ -371,23 +445,23 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
         return false;
       }
       if (result.cfApiTokenValid === false) {
-        setCfError(
-          cfTokenPermissionErrorHelp(result.cfApiTokenPermissions, {
+        setCfWarning(
+          cfTokenPermissionProbeWarningHelp(result.cfApiTokenPermissions, {
             workerVersion: result.version,
           }),
         );
         await refreshConnectionStatus();
         return false;
       }
-      if (!mailApiReady(result)) {
-        setCfError({
-          title: "Cloudflare API not ready",
-          detail: "The Worker reported that Cloudflare API is not ready.",
-          fix: "Verify your Cloudflare API token and permissions.",
-        });
+      if (result.cfApiTokenValid !== true && result.cfApiTokenSet) {
+        setCfMessage(
+          "Cloudflare API token is set on the Worker. Automatic permission check was inconclusive.",
+        );
+        await refreshCredentials();
         await refreshConnectionStatus();
-        return false;
+        return true;
       }
+      await setCfApiTokenUserConfirmed(url, true);
       setCfMessage("Cloudflare API token and permissions verified successfully.");
       await refreshCredentials();
       await refreshConnectionStatus();
@@ -398,6 +472,24 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       );
       await refreshConnectionStatus().catch(() => {});
       return false;
+    } finally {
+      setCfBusy(false);
+    }
+  }
+
+  async function handleConfirmCfSetup(): Promise<void> {
+    const url = credentials?.workerUrl?.trim() || workerUrl.trim();
+    if (!url) return;
+    setCfBusy(true);
+    setCfError(null);
+    try {
+      await setCfApiTokenUserConfirmed(url, true);
+      setCfWarning(null);
+      setCfMessage(
+        "Saved as configured. Relaybase will treat Cloudflare API setup as complete on this Mac; API errors at runtime still mean the token needs fixing.",
+      );
+      await refreshCredentials();
+      await refreshConnectionStatus();
     } finally {
       setCfBusy(false);
     }
@@ -415,11 +507,58 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     }
     setWorkerError(null);
     setCfError(null);
+    setCfWarning(null);
     setCfMessage(null);
     await refreshConnectionStatus();
   }
 
-  const hasWorker = Boolean(credentials?.workerUrl?.trim());
+  const cfHealth: HealthBlock = cfConnected
+    ? workerStatus?.cfApiTokenValid === false
+      ? {
+          tone: "warn",
+          label: "Configured (you confirmed)",
+          detail:
+            "You marked setup complete. Relaybase’s automatic check did not pass — fix the token if domain or routing calls fail.",
+        }
+      : {
+          tone: "ok",
+          label: "Configured",
+          detail:
+            "The API token is set on the Worker and Cloudflare accepted it.",
+        }
+    : statusBusy && !workerStatus
+      ? {
+          tone: "pending",
+          label: "Verifying API token…",
+          detail: "Probing Cloudflare API token permissions on the Worker.",
+        }
+      : workerStatus?.cfApiTokenSet && workerStatus.cfApiTokenValid === false
+        ? {
+            tone: "warn",
+            label: "Automatic check did not pass",
+            detail:
+              "CF_API_TOKEN is on the Worker, but Relaybase’s probe disagrees. Review the warning below and mark setup complete if you finished in Cloudflare.",
+          }
+        : (() => {
+            const health = cfApiTokenHealth(workerStatus, { pending: cfBusy });
+            return {
+              tone:
+                health.tone === "bad"
+                  ? ("bad" as HealthTone)
+                  : health.tone === "pending"
+                    ? ("pending" as HealthTone)
+                    : ("bad" as HealthTone),
+              label: health.label,
+              detail: health.detail,
+            };
+          })();
+
+  const hasWorker = Boolean(
+    credentials?.workerUrl?.trim() ||
+      (typeof window !== "undefined" &&
+        (window as unknown as { __RELAYBASE_WORKER_URL__?: string })
+          .__RELAYBASE_WORKER_URL__?.trim()),
+  );
   const logsOk = workerStatus?.d1Logs?.configured === true;
   const searchOk = workerStatus?.d1Mail?.configured === true;
   const appOk = workerStatus?.d1App?.configured === true;
@@ -555,6 +694,8 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       serverPushBusy,
       workerBusy,
       cfError,
+      cfWarning,
+      cfHealth,
       workerError,
       cfMessage,
       workerMessage,
@@ -568,6 +709,7 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       handlePasteServerToken,
       handleSaveWorker,
       handleVerifyCf,
+      handleConfirmCfSetup,
       handleRefreshStatus,
     }),
     [
@@ -591,6 +733,8 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       serverPushBusy,
       workerBusy,
       cfError,
+      cfWarning,
+      cfHealth,
       workerError,
       cfMessage,
       workerMessage,

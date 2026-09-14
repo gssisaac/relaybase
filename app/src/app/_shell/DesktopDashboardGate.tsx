@@ -1,13 +1,15 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 
 import { AppHotkeys } from "@/components/layout/AppHotkeys";
 import { DesktopShell } from "@/components/layout/DesktopShell";
+import { AppShellFrame } from "@/components/layout/app-shell-nav";
 import { DisableAppTabFocus } from "@/components/layout/DisableAppTabFocus";
-import { UserSidebar } from "@/components/layout/UserSidebar";
-import { ConsoleAppProviders } from "@/mail-platform/runtime";
+import { ConsoleAppProviders, WebConsoleAppProviders } from "@/mail-platform/runtime";
 import { AccountsProvider } from "@/lib/dashboard/AccountsContext";
 import { AccountsSyncBridge } from "@/lib/dashboard/AccountsSyncBridge";
 import { BroadcastProvider } from "@/lib/dashboard/BroadcastContext";
@@ -19,6 +21,7 @@ import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 import { DomainProgressBanner } from "@/console/components/DomainProgressBanner";
 import {
   EmailCommandRuntimeProvider,
@@ -30,6 +33,7 @@ import { SenderIconProvider } from "@/email/components/sender/SenderIconContext"
 import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
 
 const LOCAL_OPERATOR_USER_ID = "desktop";
+const WEB_OWNER_USER_ID = "web-owner";
 
 /** Console-scoped dashboard stores — mount only after the route gate passes. */
 function OwnerConsoleDashboard({ children }: { children: ReactNode }) {
@@ -66,20 +70,9 @@ function DashboardShell({
               <EmailMailboxProvider>
                 <EmailCommandRuntimeProvider>
                   <DisableAppTabFocus />
-                  <div className="flex h-svh overflow-hidden bg-background">
-                    {isEmailSettings ? null : (
-                      <Suspense
-                        fallback={
-                          <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                        }
-                      >
-                        <UserSidebar teamMode />
-                      </Suspense>
-                    )}
-                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                      {children}
-                    </main>
-                  </div>
+                  <AppShellFrame teamMode hideSidebar={isEmailSettings}>
+                    {children}
+                  </AppShellFrame>
                   <AppHotkeys />
                   <GlobalCommandPalette />
                 </EmailCommandRuntimeProvider>
@@ -100,25 +93,14 @@ function DashboardShell({
             <EmailMailboxProvider>
               <EmailCommandRuntimeProvider>
                 <DisableAppTabFocus />
-                <div className="flex h-svh overflow-hidden bg-background">
-                  {isEmailSettings ? null : (
-                    <Suspense
-                      fallback={
-                        <aside className="h-full w-56 shrink-0 border-r border-sidebar-border bg-sidebar" />
-                      }
-                    >
-                      <UserSidebar />
-                    </Suspense>
-                  )}
-                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                    <ConsoleRouteGate>
-                      <OwnerConsoleDashboard>
-                        {isEmailSettings ? null : <DomainProgressBanner />}
-                        {children}
-                      </OwnerConsoleDashboard>
-                    </ConsoleRouteGate>
-                  </main>
-                </div>
+                <AppShellFrame hideSidebar={isEmailSettings}>
+                  <ConsoleRouteGate>
+                    <OwnerConsoleDashboard>
+                      {isEmailSettings ? null : <DomainProgressBanner />}
+                      {children}
+                    </OwnerConsoleDashboard>
+                  </ConsoleRouteGate>
+                </AppShellFrame>
                 <AppHotkeys />
                 <GlobalCommandPalette />
               </EmailCommandRuntimeProvider>
@@ -154,10 +136,27 @@ function GateInner({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Web owner: no keyring / Touch ID phase machine — `hasWebOwnerSession()`
+ * (in-memory access token from `ownerLogin()`, see AccountLoginView /
+ * WebInstallFlow) is the whole gate. Reuses the same DashboardShell as
+ * desktop's owner path, just under WebConsoleAppProviders instead of
+ * DesktopShell + ConsoleAppProviders.
+ */
+function WebOwnerGate({ children }: { children: ReactNode }) {
+  return (
+    <WebConsoleAppProviders>
+      <DashboardShell userId={WEB_OWNER_USER_ID}>{children}</DashboardShell>
+    </WebConsoleAppProviders>
+  );
+}
+
+/**
  * Single dashboard chrome for every run mode. The phase switch is the only
  * gate — no scattered `hasOwnerSession()` / `ownerAccess` checks. Credentials
  * come from the root `DesktopProvider` (see `AppProviders`).
  */
+type DashboardGateMode = "loading" | "desktop" | "web-owner" | "web-redirect";
+
 export function DesktopDashboardGate({
   children,
 }: {
@@ -167,37 +166,53 @@ export function DesktopDashboardGate({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const isDesktop = isDesktopRuntime();
+  const [gateMode, setGateMode] = useState<DashboardGateMode>("loading");
 
   useEffect(() => {
-    if (!isDesktop) {
-      const search =
-        typeof window !== "undefined" ? window.location.search : "";
-      if (pathname === "/email/inbox" || pathname === "/email") {
+    const desktop = isDesktopRuntime();
+    if (desktop) {
+      setGateMode("desktop");
+      return;
+    }
+    if (hasWebOwnerSession()) {
+      setGateMode("web-owner");
+      return;
+    }
+    setGateMode("web-redirect");
+  }, []);
+
+  useEffect(() => {
+    if (gateMode !== "web-redirect") return;
+    const search =
+      typeof window !== "undefined" ? window.location.search : "";
+    if (pathname === "/email/inbox" || pathname === "/email") {
+      router.replace(`/inbox${search}`);
+    } else if (pathname === "/email/sent") {
+      router.replace(`/sent${search}`);
+    } else if (pathname === "/email/drafts") {
+      router.replace(`/drafts${search}`);
+    } else if (pathname === "/email/trash") {
+      router.replace(`/trash${search}`);
+    } else if (pathname === "/email/compose") {
+      router.replace(`/compose${search}`);
+    } else if (pathname === "/email/settings") {
+      router.replace(`/mail-settings${search}`);
+    } else {
+      const auth = getWebTeamAuth();
+      if (auth) {
         router.replace(`/inbox${search}`);
-      } else if (pathname === "/email/sent") {
-        router.replace(`/sent${search}`);
-      } else if (pathname === "/email/drafts") {
-        router.replace(`/drafts${search}`);
-      } else if (pathname === "/email/trash") {
-        router.replace(`/trash${search}`);
-      } else if (pathname === "/email/compose") {
-        router.replace(`/compose${search}`);
-      } else if (pathname === "/email/settings") {
-        router.replace(`/mail-settings${search}`);
       } else {
-        const auth = getWebTeamAuth();
-        if (auth) {
-          router.replace(`/inbox${search}`);
-        } else {
-          router.replace("/sign-in");
-        }
+        router.replace("/setup");
       }
     }
-  }, [isDesktop, pathname, router]);
+  }, [gateMode, pathname, router]);
 
-  if (!isDesktop) {
-    return null;
+  if (gateMode === "loading" || gateMode === "web-redirect") {
+    return <AppLoadingScreen />;
+  }
+
+  if (gateMode === "web-owner") {
+    return <WebOwnerGate>{children}</WebOwnerGate>;
   }
 
   return (

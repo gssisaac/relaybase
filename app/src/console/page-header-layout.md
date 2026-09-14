@@ -30,7 +30,7 @@ Reference implementations: `UserDashboardView.tsx` (root) and `AccountsView.tsx`
   </DesktopTitleBar>
 
   <div className="min-h-0 flex-1 overflow-y-auto">
-    <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4">
+    <div className={dashboardScrollBodyClassName("space-y-4")}>
       {/* page body */}
     </div>
   </div>
@@ -46,7 +46,7 @@ Reference implementations: `UserDashboardView.tsx` (root) and `AccountsView.tsx`
 | Subtitle: `text-sm text-muted-foreground` | `text-xs` subtitles in the title bar |
 | Put filters / Add / Refresh in `DesktopTitleBar` `end` | Leave Refresh or filters only inside the scroll body |
 | Icon-only Refresh (`size-4`) with `aria-label` | Labeled “Refresh …” text on the toolbar refresh button |
-| Body: scroll wrapper → `mx-auto w-full max-w-[1200px] space-y-4 p-4` | Full-bleed `px-4 py-4` without the max-width column (or a different max like `1100px`) |
+| Body: scroll wrapper → `dashboardScrollBodyClassName("space-y-4")` from `@/console/lib/page-layout` (full width in browser; `max-w-[1200px]` on desktop) | Full-bleed `px-4 py-4` without the helper (or a different max like `1100px`) |
 
 ## Notes
 

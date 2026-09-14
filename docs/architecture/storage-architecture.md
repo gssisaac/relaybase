@@ -6,16 +6,17 @@
 
 | Layer | Where | Role |
 |-------|--------|------|
-| **Remote** | D1 `RELAYBASE_DB` (binding in `../relaybase-worker/wrangler.toml`; Drizzle in `../relaybase-worker/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (passtoken hash), `owner_sessions`, `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`). See **[audience-and-broadcasts.md](../features/audience-and-broadcasts.md)**. |
+| **Remote** | D1 `RELAYBASE_DB` (binding in `../relaybase-worker/wrangler.toml`; Drizzle in `../relaybase-worker/db/app/`) | All durable product state: `domains`, `addresses`, `audience_groups`, `audience_contacts`, `broadcasts`, `domain_branding`, `api_keys`, `mobile_passwords`, `webhooks` / `webhook_secrets` / `webhook_fails`, `owner_config` (passtoken hash), `owner_sessions`, `app_settings` (product options such as inbound retain-per-domain), `inbound_events` (TTL replaced by `expires_at`), `account_state` + `draft_attachments` (sidebar/read/trash/drafts/account-colors — the web-parity replacement for `~/.relaybase/{scopeId}/*`, see **[account-state-d1.md](./account-state-d1.md)**). See **[audience-and-broadcasts.md](../features/audience-and-broadcasts.md)**. |
 | **Remote** | Product Worker R2 `relaybase-mailbox` (binding `INBOUND`) | Mail atoms: `inbound/{domain}/{id}/` and `sent/{domain}/{id}/` (thin `meta.json` + `raw.eml` + attachments) and send logs (`sent/_sendlog/{id}.json`, no `_index.json`). R2 is the source of truth. See **[mailbox-r2.md](./mailbox-r2.md)**. |
 | **Remote** | D1 `RELAYBASE_LOGS` (hosted only) | Product ops-event log: compose, API, broadcast sends and inbound bounces. R2 `sent/_sendlog/*` remains authoritative for send history. Drizzle schema/helper: `../relaybase-worker/db/log/`. |
 | **Remote** | D1 `RELAYBASE_MAIL` | Unified mail index: `mailbox_messages` (list/count/cursor, inbound **and** sent) + `mailbox_fts` (FTS5 search). Derived from R2 thin `meta.json` + `raw.eml`; fully rebuildable via `POST /console/rebuild-mail`. Drizzle schema/helper: `../relaybase-worker/db/mail/`. See **[mailbox-d1.md](./mailbox-d1.md)**. **Replaces** the old `RELAYBASE_INBOX_INDEX` / `inbound_search_fts`. |
 | **Remote** | D1 `strum-relaybase-ops` (binding `DB` on `strum-relaybase-admin` + `strum-relaybase-console` + `strum-relaybase-website`) | Shared HQ store: `product_settings` (optional operator `workerUrl` only), `licenses`, `accounts`, `account_workers`, `account_recovery`, `waitlist`, `beta_invites`. See **[hq-ops-d1.md](./hq-ops-d1.md)**. |
-| **Local** | `~/.relaybase` | Workspace config (`workspace.json`), API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login |
+| **Local** | `~/.relaybase` | Workspace config (`workspace.json`), API key plaintext vault (`api-keys.json`), mail/UI cache, dashboard cache, team login. Desktop keeps this as an offline-fast-path mirror for the state that now also lives in `account_state` (see below) — disk is still what a desktop write must succeed against; the D1 mirror is additive. |
 
 Account, license, billing, and recovery live on the central `console.relaybase.xyz` Next.js app (OpenNext on Cloudflare Workers), **not** on the product Worker. The product Worker no longer serves `/v1/license/*` or `/v1/waitlist` — those moved to the console.
 
 Local Mac layout and Tauri commands: **[home-storage.md](../desktop/home-storage.md)**.  
+Sidebar/read/trash/drafts/account-colors on the web build — D1 `account_state`: **[account-state-d1.md](./account-state-d1.md)**.  
 Audience/broadcast product rules: **[audience-and-broadcasts.md](../features/audience-and-broadcasts.md)**.
 
 ---
@@ -33,7 +34,7 @@ flowchart TB
   end
   subgraph worker [customer *.workers.dev / isaac dogfood relaybase-api.gssisaac.worker.dev]
     R2["R2 relaybase-mailbox\ninbound|sent {domain}/{id}/\nmeta.json + raw.eml"]
-    D1App["D1 RELAYBASE_DB\ndomains, addresses, audience,\nbroadcasts, keys, auth-tokens,\nmobile, webhooks, owner, events"]
+    D1App["D1 RELAYBASE_DB\ndomains, addresses, audience,\nbroadcasts, keys, auth-tokens,\nmobile, webhooks, owner, events,\naccount_state, draft_attachments"]
     D1["D1 RELAYBASE_LOGS\nops events"]
     D1Mail["D1 RELAYBASE_MAIL\nmailbox_messages + mailbox_fts"]
   end
@@ -61,7 +62,7 @@ Local operator id is always `"desktop"` → `~/.relaybase/mail/desktop/`.
 
 Binding: `../relaybase-worker/wrangler.toml` → `RELAYBASE_DB` (database `relaybase-db`).  
 Env type: `../relaybase-worker/src/env.ts`.  
-Drizzle schema + helpers: `../relaybase-worker/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `settings.ts`, `inbound-events.ts`).  
+Drizzle schema + helpers: `../relaybase-worker/db/app/` (`schema.ts`, `index.ts`, and one helper per table: `mailbox.ts`, `audience.ts`, `broadcasts.ts`, `keys.ts`, `auth-tokens.ts`, `branding.ts`, `mobile.ts`, `webhooks.ts`, `owner.ts`, `settings.ts`, `inbound-events.ts`, `account-state.ts`).  
 Migrations: `../relaybase-worker/db/app/migrations/` — applied by the Worker via **`POST /console/init-db`** (empty D1 only) or **`POST /console/migrate-db`** (existing D1 / Worker update). The desktop never runs SQL. Ledger + baseline catch-up policy: **[d1-migrations-and-init-db.md](./d1-migrations-and-init-db.md)**.
 
 This is the **sole source of truth** for product catalog state. No KV binding on the product Worker.
@@ -112,6 +113,7 @@ The product Worker manages domains / inbox routing / DNS with wrangler secret `C
 | `/console/mailbox-health` | Per-domain last inbound/sent freshness + stale flag (D1 `RELAYBASE_MAIL`) |
 | `/console/settings` (GET / PUT) | Product options in D1 `app_settings` (inbound retain-per-domain; `null` = unlimited) |
 | `/console/branding` (GET status / PUT merge / POST apply DNS) | Per-domain DMARC config in D1 `domain_branding` + DMARC TXT via the Worker's Cloudflare client |
+| `/console/broadcast-drafts` (GET / PUT) | Owner-only broadcast-draft-in-progress singleton in D1 `account_state` — see **[account-state-d1.md](./account-state-d1.md)** |
 | `/console/connect` | Desktop self-install probe (owner access token) |
 | `/console/register-owner` | Record the console account that owns this Worker (owner session) |
 | `/console/setup-admin` | Owner setup / reinstall: issue passtoken once (AUTH_PEPPER bootstrap) |
@@ -122,7 +124,8 @@ The product Worker manages domains / inbox routing / DNS with wrangler secret `C
 | `/console/stats`, `/console/stats/account-*` | Dashboard stats / per-account |
 | `/console/addresses/mobile-password` | Per-account mobile password (owner session) |
 | `/mail/inbox`, `/mail/send`, `/mail/favicon`, … | Mail I/O (desktop / owner access token). Favicon proxy: **[sender-favicon-cache.md](../desktop/sender-favicon-cache.md)** |
-| `/mobile/*` | Flutter companion + desktop team-user login (mobile-password auth; single-account scope) — **[mobile-companion.md](../features/mobile-companion.md)** |
+| `/mail/account-state/*` | Sidebar/read/trash/drafts/account-colors state + draft attachments in D1 `account_state` (owner access token) — **[account-state-d1.md](./account-state-d1.md)** |
+| `/mobile/*` | Flutter companion + desktop team-user login (mobile-password auth; single-account scope) — **[mobile-companion.md](../features/mobile-companion.md)**. Includes `/mobile/account-state/*`, the same `account_state` surface for teammates and web "email" mode. |
 
 Account / license / billing are on `console.relaybase.xyz` (`/api/v1/account`, `/api/v1/license`, `/api/v1/billing`), not on the product Worker. The console no longer holds or verifies an admin token.
 
@@ -220,7 +223,7 @@ When adding a dashboard/email feature that needs durable remote data:
 4. Call through `desktopAwareFetch` / `readResponseJson` — never raw `fetch` to Next `/api/email` in the UI.
 5. Cache on disk under `~/.relaybase/cache/…` if the UI needs offline/stale-while-revalidate.
 
-When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `~/.relaybase` Tauri facades — see home-storage doc.
+When adding local-only UX state that must also work on the **web** build (sidebar, enabled accounts, read/trash state, drafts, account colors): add the `(namespace, key)` to D1 `account_state` instead of a desktop-only Tauri facade — see **[account-state-d1.md](./account-state-d1.md)**. Use a bare `~/.relaybase` Tauri facade only for genuinely desktop-only concerns (workspace bootstrap, plaintext API key vault).
 
 ---
 
@@ -230,8 +233,10 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 |---------|-----------------|-------------|
 | Worker connection | OS keyring (`owner-session` / `team-session` `workerUrl`) → optional `~/.relaybase/workspace.json` / `team-login.json` | window globals |
 | Domains / addresses | D1 `RELAYBASE_DB` (`domains`, `addresses`) | `cache/dashboard/addresses-*` |
-| Enabled mail accounts | `mail/desktop/ui/enabled-accounts.json` | localStorage mirror |
-| Accounts domain card expand | `mail/desktop/ui/accounts.json` | localStorage mirror |
+| Enabled mail accounts, sidebar mode/last-path, accounts domain card expand, read/trash state, compose-contacts autocomplete | D1 `RELAYBASE_DB` `account_state` (namespace `ui`) — desktop mirrors to disk (`mail/desktop/ui/*.json`) as an offline-fast-path, web has no local fallback beyond a localStorage cache. See **[account-state-d1.md](./account-state-d1.md)** | `mail/desktop/ui/*.json` (desktop) / localStorage mirror (web) |
+| Account colors / per-account signatures | D1 `RELAYBASE_DB` `account_state` (namespace `prefs`, key `email.json`) | `email.json` (desktop) / localStorage mirror (web) |
+| Unsent compose drafts + attachments | D1 `RELAYBASE_DB` `account_state` (namespace `mail`, key `drafts.json`) + `draft_attachments` (R2 `drafts/{identityKey}/{draftId}/{attachmentId}` for bytes) | `mail/desktop/drafts.json` + `draft-attachments/**` (desktop) / IndexedDB (web, primary buffer — see account-state-d1.md for why) |
+| Broadcast drafts-in-progress | D1 `RELAYBASE_DB` `account_state` (namespace `broadcast`, owner-only) via `/console/broadcast-drafts` | `mail/{userId}/broadcast-drafts.json` (desktop) / localStorage mirror (web) |
 | Inbox / unread | R2 thin `meta.json` (`readAt`) + D1 `mailbox_messages` | `mail/desktop/inbox.json`, `ui/read.json` |
 | Audience / broadcasts | D1 `RELAYBASE_DB` (`audience_groups`, `audience_contacts`, `broadcasts`) | — |
 | Sent history | R2 `sent/{domain}/{id}/` + `sent/_sendlog/{id}.json`, indexed by D1 `mailbox_messages` `kind=sent` | mail sent JSON optional |
@@ -256,6 +261,6 @@ When adding local-only UX state (sidebar, enabled accounts, drafts cache): use `
 
 1. Do **not** add `DevUser*` / `userdata:` / repo `data/users` for product state.
 2. Do **not** add a Cloudflare KV binding on the product Worker for app data.
-3. New durable product fields go in D1 `RELAYBASE_DB` (`../relaybase-worker/db/app/` Drizzle schema + helper).
+3. New durable product fields go in D1 `RELAYBASE_DB` (`../relaybase-worker/db/app/` Drizzle schema + helper). Per-account UI/prefs/drafts state (not a catalog table, not a secret) → `account_state`, not a new table — see **[account-state-d1.md](./account-state-d1.md)**.
 4. Packaged and `next`/Tauri must share one fetch path — no `isPackagedDesktopShell`-only product API.
 5. Plaintext secrets that the Worker cannot store → `~/.relaybase` only (`api-keys.json`). Workspace config is `workspace.json` (no secrets).

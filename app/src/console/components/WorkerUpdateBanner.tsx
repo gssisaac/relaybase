@@ -1,15 +1,27 @@
 "use client";
 
-import { Loader2, X } from "lucide-react";
+import { Loader2, RotateCw, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SETTINGS_UPDATE_PATH, SETTINGS_WORKER_PROGRESS_PATH } from "@/console/lib/paths";
 import { workerNeedsUpgrade } from "@/lib/dashboard/worker-version";
 import { useOptionalAppUpdater } from "@/lib/desktop/updater/AppUpdaterContext";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import { useDesktop } from "@/lib/desktop/shell";
 import { useWorkerUpdateCheck } from "@/lib/desktop/worker-update/WorkerUpdateCheckContext";
 import { useWorkerUpdateRunner } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
@@ -24,6 +36,10 @@ async function goUpdateWorker(
   router: ReturnType<typeof useRouter>,
   start: ReturnType<typeof useWorkerUpdateRunner>["start"],
 ) {
+  if (!isDesktopRuntime()) {
+    router.push("/settings/worker/update");
+    return;
+  }
   const res = await start();
   if (res.ok) {
     router.push("/settings/worker/progress");
@@ -137,19 +153,29 @@ export function WorkerVersionSettingsCard() {
   const { check, checking, error, checkNow } = useWorkerUpdateCheck();
   const [starting, setStarting] = useState(false);
 
-  const current = credentials?.workerVersion?.trim() || "unknown";
+  const isDesktop = isDesktopRuntime();
+  const current =
+    credentials?.workerVersion?.trim() ||
+    check?.currentVersion?.trim() ||
+    "unknown";
   const desktopVersion = updater?.currentVersion?.trim() || null;
   const checkedWorker = check?.currentVersion?.trim() || current;
   const latestVersion = check?.latestVersion?.trim() || null;
   const showUpdateWorker = Boolean(
     check &&
       latestVersion &&
-      desktopVersion &&
-      workerNeedsUpgrade(
-        checkedWorker === "unknown" ? null : checkedWorker,
-        latestVersion,
-        desktopVersion,
-      ),
+      (isDesktop
+        ? desktopVersion &&
+          workerNeedsUpgrade(
+            checkedWorker === "unknown" ? null : checkedWorker,
+            latestVersion,
+            desktopVersion,
+          )
+        : workerNeedsUpgrade(
+            checkedWorker === "unknown" ? null : checkedWorker,
+            latestVersion,
+            null,
+          )),
   );
   const message =
     check && latestVersion && !showUpdateWorker
@@ -170,8 +196,9 @@ export function WorkerVersionSettingsCard() {
       <div>
         <p className="text-sm font-medium">Worker version</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Pre-built bundle deployed to your Cloudflare account. Matches the
-          desktop app version after both are updated.
+          {isDesktop
+            ? "Pre-built bundle deployed to your Cloudflare account. Matches the desktop app version after both are updated."
+            : "Pre-built bundle deployed to your Cloudflare account. Keep your routing Worker updated to the latest release."}
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
@@ -217,6 +244,49 @@ export function WorkerVersionSettingsCard() {
             {starting ? <Loader2 className="size-3.5 animate-spin" /> : null}
             Update Worker to v{latestVersion}
           </Button>
+        ) : null}
+        {/* Same-version reinstall. The PUT upload overwrites code/bindings
+            while inheriting existing runtime secrets (e.g. CF_API_TOKEN). */}
+        {message && latestVersion ? (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={starting}
+                />
+              }
+            >
+              {starting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RotateCw className="size-3.5" />
+              )}
+              Reinstall Worker v{latestVersion}
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Reinstall Worker v{latestVersion}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  The installed Worker is already v{latestVersion}. Reinstalling
+                  redeploys the same version to your Cloudflare account.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={starting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={starting}
+                  onClick={() => void handleUpdateClick()}
+                >
+                  {starting ? "Reinstalling…" : "Reinstall"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         ) : null}
       </div>
     </div>

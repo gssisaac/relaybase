@@ -7,6 +7,7 @@ import { memo, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MobileNavTrigger } from "@/components/layout/MobileNavTrigger";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { onDraggableFieldMouseDown } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
@@ -86,9 +87,17 @@ export function ListToolbar({
       )}
     >
       <div
+        className={cn(
+          "flex min-w-0 items-center gap-2 sm:flex-1",
+          dragRegionClassName,
+        )}
         {...dragRegionProps}
-        className={cn("relative min-w-0 flex-1", dragRegionClassName)}
       >
+        <MobileNavTrigger />
+        <div
+          {...dragRegionProps}
+          className={cn("relative min-w-0 flex-1", dragRegionClassName)}
+        >
         <Search
           className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden
@@ -100,6 +109,7 @@ export function ListToolbar({
           placeholder={searchPlaceholder}
           className="h-8 border-0 bg-secondary/60 pl-8 shadow-none focus-visible:bg-secondary/90 focus-visible:ring-0 focus-visible:border-0"
         />
+        </div>
       </div>
       {trailing ? (
         <div

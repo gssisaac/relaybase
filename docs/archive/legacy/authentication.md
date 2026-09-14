@@ -688,4 +688,4 @@ Access tokens are **not** stored in D1 — HMAC self-contained JWT-like tokens s
 3. New `/console/*` or `/mail/*` routes → **`requireOwnerSession`**.
 4. New `/mobile/*` routes → register under **`mobile.ts`** middleware (inherits `requireMobilePassword`).
 5. New desktop entry paths → trampoline through **`AppSessionStore`** actions, not standalone routes that bypass the phase machine.
-6. After Worker auth route changes → **`cd server && pnpm run build:bundle`** (see **AGENTS.md**).
+6. After Worker auth route changes → **`cd server && pnpm run build:bundle`** (see **AGENT.md**).

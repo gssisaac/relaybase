@@ -6,20 +6,40 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { stripAnsi } from "@/lib/desktop/bridge";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import { DesktopErrorBanner } from "@/lib/desktop/shell";
+import { WebWorkerUpdateProgress } from "@/console/components/setup/WebInstallFlow";
 import { useWorkerUpdateRunner } from "@/lib/desktop/worker-update/WorkerUpdateRunnerContext";
 import { SetupBackLink, SetupScrollPage } from "@/console/components/setup/setup-page-chrome";
 
 const SETTINGS_WORKER_HOME = "/settings/worker";
 const SETTINGS_WORKER_UPDATE = "/settings/worker/update";
 
-/**
- * Lightweight viewer for `useWorkerUpdateRunner()`. The runner lives above
- * the router outlet, so the update keeps running (and its toast still fires)
- * even if the user navigates away from this page — this view only reflects
- * whatever state is already in flight.
- */
-export function WorkerUpdateProgressView() {
+function WebWorkerUpdateProgressPage() {
+  const router = useRouter();
+  return (
+    <SetupScrollPage maxWidth="max-w-[600px]">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Updating Worker</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            R2 and D1 stay as they are while the Worker script is replaced.
+          </p>
+        </div>
+        <div className="flex justify-end">
+          <SetupBackLink href={SETTINGS_WORKER_HOME} label="Back to Worker settings" />
+        </div>
+        <WebWorkerUpdateProgress
+          onDone={() => {
+            window.setTimeout(() => router.replace(SETTINGS_WORKER_HOME), 600);
+          }}
+        />
+      </div>
+    </SetupScrollPage>
+  );
+}
+
+function DesktopWorkerUpdateProgressView() {
   const router = useRouter();
   const runner = useWorkerUpdateRunner();
   const [logsExpanded, setLogsExpanded] = useState(false);
@@ -32,9 +52,6 @@ export function WorkerUpdateProgressView() {
     void (async () => {
       const res = await runner.start();
       if (res.ok) return;
-      // Landed here directly (e.g. back/forward) without a live run and
-      // without a fresh silent check — send back to the Approve screen,
-      // which re-authorizes or shows the account-mismatch explanation.
       router.replace(SETTINGS_WORKER_UPDATE);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,12 +75,10 @@ export function WorkerUpdateProgressView() {
     <SetupScrollPage maxWidth="max-w-[600px]">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Updating Worker
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Updating Worker</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            R2 and D1 stay as they are. You can leave this page — the update
-            keeps running and you&apos;ll get a notification when it&apos;s done.
+            R2 and D1 stay as they are. You can leave this page — the update keeps running and
+            you&apos;ll get a notification when it&apos;s done.
           </p>
         </div>
 
@@ -156,4 +171,15 @@ export function WorkerUpdateProgressView() {
       </div>
     </SetupScrollPage>
   );
+}
+
+/**
+ * Lightweight viewer for `useWorkerUpdateRunner()` on desktop. On web, runs the
+ * SSE update pipeline instead.
+ */
+export function WorkerUpdateProgressView() {
+  if (!isDesktopRuntime()) {
+    return <WebWorkerUpdateProgressPage />;
+  }
+  return <DesktopWorkerUpdateProgressView />;
 }

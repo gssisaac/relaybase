@@ -5,13 +5,26 @@ import {
   desktopSaveMailJson,
   isDesktopRuntime,
 } from "@/lib/desktop/bridge";
+import {
+  fetchAccountStateJson,
+  saveAccountStateJson,
+} from "@/mail-platform/account-state";
 import type {
   DraftEmail,
   RoutingActivityEvent,
   SentEmail,
 } from "@/email/components/mailbox/types";
 
-/** Desktop mail lists/details → ~/.relaybase/mail (see docs/desktop/home-storage.md). */
+/**
+ * Desktop mail lists/details → ~/.relaybase/mail (see docs/desktop/home-storage.md).
+ *
+ * `inbox.json` / `sent.json` / `details/*.json` are cache tier — fully
+ * rebuildable from the Worker, so they stay disk/localStorage-only (no
+ * account-state sync). `drafts.json` is the one exception: unsent compose
+ * drafts have no server copy until sent, so `loadPersistedDrafts` /
+ * `savePersistedDrafts` route through account-state below instead of the
+ * shared `readJson`/`writeJson` cache helpers.
+ */
 
 function safeProductId(productId: string): string {
   const cleaned = productId.trim().replace(/[^a-zA-Z0-9._%-]/g, "_");
@@ -159,9 +172,24 @@ export async function savePersistedSent(
   });
 }
 
+const DRAFTS_NAMESPACE = "mail";
+const DRAFTS_KEY = "drafts.json";
+
 export async function loadPersistedDrafts(
   productId: string,
 ): Promise<DraftEmail[] | null> {
+  if (isDesktopRuntime()) {
+    const data = await readJson<{ drafts?: DraftEmail[] }>(draftsPath(productId));
+    return data?.drafts ?? null;
+  }
+  const remote = await fetchAccountStateJson<{ drafts?: DraftEmail[] }>(
+    DRAFTS_NAMESPACE,
+    DRAFTS_KEY,
+  );
+  if (remote?.drafts) {
+    writeLocalJson(draftsPath(productId), remote);
+    return remote.drafts;
+  }
   const data = await readJson<{ drafts?: DraftEmail[] }>(draftsPath(productId));
   return data?.drafts ?? null;
 }
@@ -170,7 +198,13 @@ export async function savePersistedDrafts(
   productId: string,
   drafts: DraftEmail[],
 ): Promise<void> {
-  await writeJson(draftsPath(productId), { drafts });
+  if (isDesktopRuntime()) {
+    await writeJson(draftsPath(productId), { drafts });
+    saveAccountStateJson(DRAFTS_NAMESPACE, DRAFTS_KEY, { drafts }).catch(() => {});
+    return;
+  }
+  writeLocalJson(draftsPath(productId), { drafts });
+  await saveAccountStateJson(DRAFTS_NAMESPACE, DRAFTS_KEY, { drafts });
 }
 
 export async function loadPersistedDetail(

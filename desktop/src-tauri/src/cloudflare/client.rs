@@ -131,7 +131,30 @@ pub async fn verify_token(
         account_id: account_id.to_string(),
         api_token: api_token.to_string(),
     };
-    let value = cf_request(&client, reqwest::Method::GET, "/user/tokens/verify", None).await?;
+    // Gracefully handle 401/403 (invalid/expired token) and 429 (rate limit)
+    // instead of letting cf_request propagate a raw error string containing
+    // "code":1000 — which the frontend could misclassify as a Worker edge crash.
+    let verify_result = cf_request(&client, reqwest::Method::GET, "/user/tokens/verify", None).await;
+    let value = match verify_result {
+        Ok(v) => v,
+        Err(e) => {
+            let err_lower = e.to_lowercase();
+            // 429 Too Many Requests — rate limited, not an auth failure
+            if err_lower.contains("429") || err_lower.contains("too many requests") {
+                return Ok(TokenVerifyResult {
+                    ok: false,
+                    account_id: account_id.to_string(),
+                    message: "Cloudflare rate-limited the token verification. Wait a few seconds and try again.".into(),
+                });
+            }
+            // 401/403 — invalid, expired, or deleted token
+            return Ok(TokenVerifyResult {
+                ok: false,
+                account_id: account_id.to_string(),
+                message: "Cloudflare rejected this API token. It may be invalid, expired, or deleted.".into(),
+            });
+        }
+    };
     let status = value
         .pointer("/result/status")
         .and_then(|v| v.as_str())
@@ -144,7 +167,17 @@ pub async fn verify_token(
         });
     }
     // Confirm account access by listing zones (limit 1)
-    let zones = list_zones(&client).await?;
+    let zones = match list_zones(&client).await {
+        Ok(z) => z,
+        Err(_) => {
+            // Token is active but cannot list zones — Zone Read is missing.
+            return Ok(TokenVerifyResult {
+                ok: false,
+                account_id: account_id.to_string(),
+                message: "Token is active but lacks Zone → Zone → Read permission. Add that permission row in Cloudflare.".into(),
+            });
+        }
+    };
 
     if scope == "server" {
         let mut checked: Vec<&str> = Vec::new();
@@ -478,6 +511,14 @@ pub async fn worker_health_ok(worker_url: &str) -> bool {
 
 /// Upload a Worker module with R2, optional D1, send_email, and plain-text vars.
 /// `d1_bindings` is `(binding_name, database_uuid)`.
+///
+/// Existing Worker secrets are preserved across the upload by emitting an
+/// `inherit` binding for every currently-set secret name (e.g. `CF_API_TOKEN`,
+/// which the app never stores) and by listing `secret_text` / `secret_key` in
+/// `keep_bindings` as a type-level fallback. Secrets the caller intends to
+/// rotate are re-PUT after this returns; inherit simply keeps the previous
+/// value until then. The script is never DELETEd — a PUT overwrite replaces
+/// code and non-secret bindings while carrying secrets forward.
 pub async fn upload_worker_script(
     client: &CfClient,
     script_name: &str,
@@ -491,6 +532,13 @@ pub async fn upload_worker_script(
         "{CF_API}/accounts/{}/workers/scripts/{script_name}",
         client.account_id
     );
+
+    // Snapshot existing secret names before upload so we can inherit them
+    // and verify none were dropped. 404 (first install) → empty list.
+    let existing_secrets = list_worker_secrets(client, script_name)
+        .await
+        .unwrap_or_default();
+
     let mut bindings = vec![
         json!({ "type": "r2_bucket", "name": "INBOUND", "bucket_name": r2_bucket }),
         json!({ "type": "plain_text", "name": "WORKER_SCRIPT_NAME", "text": script_name }),
@@ -528,10 +576,17 @@ pub async fn upload_worker_script(
             "database_id": id
         }));
     }
+    // Inherit every existing secret by name so the new version keeps it
+    // (e.g. CF_API_TOKEN). Secrets we rotate are re-PUT after upload.
+    for name in &existing_secrets {
+        bindings.push(json!({ "type": "inherit", "name": name }));
+    }
     let metadata = json!({
         "main_module": "worker.js",
         "bindings": bindings,
-        "keep_bindings": ["secret_text"],
+        // secret_text + secret_key mirrors wrangler; plain_text/json omitted
+        // on purpose so stale system vars (WORKER_VERSION, …) are replaced.
+        "keep_bindings": ["secret_text", "secret_key"],
         "compatibility_date": "2025-06-01",
         "triggers": { "crons": [DEFAULT_WORKER_CRON] }
     });
@@ -559,6 +614,25 @@ pub async fn upload_worker_script(
     if !status.is_success() || value.get("success") == Some(&Value::Bool(false)) {
         return Err(format!("Worker upload failed ({status}): {value}"));
     }
+
+    // Verify no previously-set secret was silently dropped by the upload.
+    if !existing_secrets.is_empty() {
+        let after_secrets = list_worker_secrets(client, script_name)
+            .await
+            .unwrap_or_default();
+        let lost: Vec<&String> = existing_secrets
+            .iter()
+            .filter(|n| !after_secrets.contains(n))
+            .collect();
+        if !lost.is_empty() {
+            return Err(format!(
+                "Worker upload dropped existing secrets: {}. \
+                 Reinstall the Worker and re-add the missing secret, or contact support.",
+                lost.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            ));
+        }
+    }
+
     Ok(())
 }
 

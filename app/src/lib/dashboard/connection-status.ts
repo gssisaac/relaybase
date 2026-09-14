@@ -3,11 +3,12 @@ import {
   desktopOwnerSessionStatus,
   desktopVerifyWorkerConnection,
   isDesktopRuntime,
-  mailApiReady,
   cfApiTokenHealth,
   type CfApiTokenPermissions,
 } from "@/lib/desktop/bridge";
-import { ensureAccessToken } from "@/lib/desktop/auth";
+import { cfDomainApiReady } from "@/lib/dashboard/cf-api-token-user-confirmed";
+import { ensureAccessToken, hasOwnerSession } from "@/lib/desktop/auth";
+import { fetchWebCfOAuthSessionPresent } from "@/lib/desktop/bridge/web-oauth-complete";
 import {
   D1_APP_DEFAULT,
   D1_MAIL_DEFAULT,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/dashboard/d1-binding-status";
 import { probeD1WhenConnectOmits } from "@/lib/dashboard/d1-fallback-probe";
 
-export type HealthTone = "ok" | "bad" | "pending" | "neutral";
+export type HealthTone = "ok" | "bad" | "pending" | "neutral" | "warn";
 
 export type HealthStatus = {
   tone: HealthTone;
@@ -92,12 +93,25 @@ export function workerStatusFromConnect(
   };
 }
 
+function resolveWorkerUrlForProbe(
+  credentials: DesktopCredentials | null | undefined,
+): string {
+  let url = credentials?.workerUrl?.trim() ?? "";
+  if (!url && typeof window !== "undefined") {
+    const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+    url = w.__RELAYBASE_WORKER_URL__?.trim() ?? "";
+  }
+  return url;
+}
+
 export async function probeConnectionStatus(
   credentials: DesktopCredentials | null | undefined,
   options?: { hasConsoleAccess?: boolean },
 ): Promise<ConnectionStatusSnapshot> {
-  const cfInstallTokenPresentVal = cfInstallTokenPresent(credentials);
-  let url = credentials?.workerUrl?.trim() ?? "";
+  const webOauth = await fetchWebCfOAuthSessionPresent();
+  const cfInstallTokenPresentVal =
+    cfInstallTokenPresent(credentials) || webOauth;
+  let url = resolveWorkerUrlForProbe(credentials);
 
   if (isDesktopRuntime()) {
     const owner = await desktopOwnerSessionStatus();
@@ -122,7 +136,8 @@ export async function probeConnectionStatus(
       const worker = workerStatusFromConnect(result);
       // D1 fallback probes need a Bearer token; Rust verify_worker_connection
       // already probes D1 when /console/connect omits bindings.
-      const cfConnected = worker.ok ? mailApiReady(worker) : false;
+      const cfConnected =
+        worker.ok && cfDomainApiReady(worker, credentials);
       return {
         cfConnected,
         cfInstallTokenPresent: cfInstallTokenPresentVal,
@@ -156,18 +171,21 @@ export async function probeConnectionStatus(
   }
 
   const access = await ensureAccessToken();
+  const hasConsole =
+    options?.hasConsoleAccess ?? hasOwnerSession();
 
   if (!url) {
     return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
   }
 
   try {
-    if (!access) {
+    if (!access && !hasConsole) {
       return { cfConnected: false, cfInstallTokenPresent: cfInstallTokenPresentVal, worker: null };
     }
     const result = await desktopVerifyWorkerConnection(url);
     const worker = workerStatusFromConnect(result);
     if (
+      access &&
       worker.ok &&
       !worker.d1Logs.configured &&
       !worker.d1Mail.configured
@@ -179,7 +197,8 @@ export async function probeConnectionStatus(
         worker.d1InboxIndex = fallback.d1Mail;
       }
     }
-    const cfConnected = worker.ok ? mailApiReady(worker) : false;
+    const cfConnected =
+      worker.ok && cfDomainApiReady(worker, credentials);
     return {
       cfConnected,
       cfInstallTokenPresent: cfInstallTokenPresentVal,
@@ -227,20 +246,27 @@ export function connectionHealthFromSnapshot(
     Boolean(options?.hasWorkerCredentials);
 
   const cf: HealthStatus = snapshot?.cfConnected
-    ? {
-        tone: "ok",
-        label: "Configured",
-        detail:
-          "CF_API_TOKEN is set on the Worker and Cloudflare accepted it. Domain, address, and DNS API calls can run. Sending uses the EMAIL binding.",
-      }
+    ? snapshot.worker?.cfApiTokenValid === false
+      ? {
+          tone: "ok",
+          label: "Configured",
+          detail:
+            "CF_API_TOKEN is on the Worker. You marked setup complete on this device.",
+        }
+      : {
+          tone: "ok",
+          label: "Configured",
+          detail:
+            "CF_API_TOKEN is set on the Worker and Cloudflare accepted it. Domain, address, and DNS API calls can run. Sending uses the EMAIL binding.",
+        }
     : (() => {
         const health = cfApiTokenHealth(snapshot?.worker ?? null);
         if (health.label === "Permissions need fixing") {
           return {
-            tone: "bad",
-            label: health.label,
+            tone: "warn",
+            label: "Automatic check did not pass",
             detail:
-              "CF_API_TOKEN is on the Worker, but Cloudflare rejected one or more permissions. Open Settings → Cloudflare and verify again.",
+              "CF_API_TOKEN is on the Worker, but Relaybase’s probe disagrees. Open Settings → Cloudflare, review the warning, and mark setup complete if you finished in Cloudflare.",
           };
         }
         return {

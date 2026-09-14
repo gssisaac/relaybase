@@ -9,7 +9,7 @@
     "build:cf": "node scripts/build-desktop.mjs",
     "deploy:cf": "pnpm run build:cf && wrangler deploy",
     "build:desktop": "node scripts/build-desktop.mjs",
-    "build:web": "next build --webpack",
+    "build:web": "NEXT_PRIVATE_STANDALONE=true next build --webpack",
     "build:web:opennext": "node scripts/opennext-standalone-layout.mjs && opennextjs-cloudflare build -c wrangler.web.jsonc --skipNextBuild",
     "deploy:web": "pnpm run build:web && pnpm run build:web:opennext && opennextjs-cloudflare deploy -c wrangler.web.jsonc",
     "start": "next start -p 32830",

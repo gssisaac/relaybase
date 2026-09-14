@@ -7,11 +7,11 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { useCrmPaths, type CampaignDetailTab } from "@/crm/lib/paths";
-import { CampaignContentView } from "@/crm/pages/campaigns/CampaignContentView";
+import { CampaignBroadcastsView } from "@/crm/pages/campaigns/CampaignBroadcastsView";
 import { useCampaignDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { CampaignDetailShell } from "@/crm/pages/campaigns/CampaignDetailShell";
-import { CampaignOverviewView } from "@/crm/pages/campaigns/CampaignOverviewView";
-import { CampaignPublishView } from "@/crm/pages/campaigns/CampaignPublishView";
+import { CampaignSettingsView } from "@/crm/pages/campaigns/CampaignSettingsView";
+import { CampaignSubscribersView } from "@/crm/pages/campaigns/CampaignSubscribersView";
 
 function CampaignNotFound() {
   const { campaigns } = useCrmPaths();
@@ -52,10 +52,10 @@ export function CampaignDetailSwitch({ tab }: { tab: CampaignDetailTab }) {
   if (notFound || !campaign) return <CampaignNotFound />;
 
   return (
-    <CampaignDetailShell section={tab} fill={tab === "content"}>
-      {tab === "overview" ? <CampaignOverviewView /> : null}
-      {tab === "content" ? <CampaignContentView /> : null}
-      {tab === "publish" ? <CampaignPublishView /> : null}
+    <CampaignDetailShell section={tab}>
+      {tab === "subscribers" ? <CampaignSubscribersView /> : null}
+      {tab === "broadcasts" ? <CampaignBroadcastsView /> : null}
+      {tab === "settings" ? <CampaignSettingsView /> : null}
     </CampaignDetailShell>
   );
 }

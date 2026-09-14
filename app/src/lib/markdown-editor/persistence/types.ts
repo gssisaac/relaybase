@@ -9,8 +9,14 @@ export type Mode = "read" | "edit";
 
 export type EditContext = {
   root: CrmPersistRoot | null;
-  /** Campaign id */
+  /** Local snapshot/draft storage key — the document identity (e.g. broadcast id). */
   path: string | null;
+  /**
+   * `/crm/campaigns/…` suffix used by the tab-close beacon PATCH — may
+   * differ from `path` when the document lives under a parent resource
+   * (e.g. `<campaignId>/broadcasts/<broadcastId>`). Falls back to `path`.
+   */
+  beaconPath?: string | null;
   mode: Mode;
 };
 

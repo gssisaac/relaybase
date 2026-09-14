@@ -245,7 +245,8 @@ export function createEditorPersistenceCoordinator(
     // replay).
     if (reason === "beforeunload" || reason === "pagehide" || reason === "unload") {
       if (!isEmptyClobber(ctx, content)) {
-        if (ctx.path) tryCampaignBeaconSave(ctx.path, content);
+        const beaconPath = ctx.beaconPath ?? ctx.path;
+        if (beaconPath) tryCampaignBeaconSave(beaconPath, content);
       }
     }
   }

@@ -13,7 +13,14 @@ import { useEditorSnapshotRef } from "./editor-capture";
 import { CRM_PERSIST_ROOT, type EditorSnapshotProvider, type Mode, type SaveStatus } from "./types";
 
 export type UseCampaignEditorPersistenceOptions = {
+  /** Document identity / local persistence key (e.g. broadcast id). */
   campaignId: string;
+  /**
+   * `/crm/campaigns/…` suffix for the tab-close beacon PATCH, when it
+   * differs from `campaignId` (e.g. `<campaignId>/broadcasts/<broadcastId>`).
+   * Defaults to `campaignId`.
+   */
+  beaconPath?: string;
   editable: boolean;
   bridge: CampaignPersistBridge;
 };
@@ -28,18 +35,21 @@ export type UseCampaignEditorPersistenceResult = {
 export function useCampaignEditorPersistence(
   options: UseCampaignEditorPersistenceOptions,
 ): UseCampaignEditorPersistenceResult {
-  const { campaignId, editable, bridge } = options;
+  const { campaignId, beaconPath, editable, bridge } = options;
   const { editorRef, getSnapshot } = useEditorSnapshotRef();
   const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
   const campaignIdRef = useRef(campaignId);
+  const beaconPathRef = useRef(beaconPath);
   const editableRef = useRef(editable);
   campaignIdRef.current = campaignId;
+  beaconPathRef.current = beaconPath;
   editableRef.current = editable;
 
   const getEditContext = useCallback(
     () => ({
       root: CRM_PERSIST_ROOT,
       path: campaignIdRef.current,
+      beaconPath: beaconPathRef.current ?? campaignIdRef.current,
       mode: (editableRef.current ? "edit" : "read") as Mode,
     }),
     [],

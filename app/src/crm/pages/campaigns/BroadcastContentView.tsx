@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { CampaignComposeForm } from "@/crm/pages/campaigns/CampaignComposeForm";
+import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
+import { useBroadcastDetail } from "@/crm/pages/campaigns/BroadcastDetailContext";
 import { useCampaignDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import {
   useCampaignEditorPersistence,
@@ -18,25 +19,24 @@ function mapSaveStatus(status: SaveStatus | null): "idle" | "saving" | "error" {
   return "idle";
 }
 
-export function CampaignContentView() {
+export function BroadcastContentView() {
+  const { templates } = useCampaignDetail();
   const {
     campaignId,
-    campaign,
-    templates,
+    broadcastId,
+    broadcast,
     syncDraft,
     persistDraft,
     getLastSavedDraft,
-  } = useCampaignDetail();
+  } = useBroadcastDetail();
 
-  const [subject, setSubject] = useState(campaign?.subject ?? "");
-  const [bodyMarkdown, setBodyMarkdown] = useState(campaign?.bodyMarkdown ?? "");
+  const [subject, setSubject] = useState(broadcast?.subject ?? "");
+  const [bodyMarkdown, setBodyMarkdown] = useState(broadcast?.bodyMarkdown ?? "");
   const [previewHtml, setPreviewHtml] = useState("");
-  const [templateId, setTemplateId] = useState(
-    campaign?.templateId ?? templates[0]?.id ?? "",
-  );
+  const [templateId, setTemplateId] = useState(broadcast?.templateId ?? templates[0]?.id ?? "");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
 
-  const editable = campaign?.status === "draft" || campaign?.status === "failed";
+  const editable = broadcast?.status === "draft";
 
   const bridge = useMemo<CampaignPersistBridge>(
     () => ({
@@ -52,7 +52,8 @@ export function CampaignContentView() {
   );
 
   const { editorRef, ingestBody, checkpoint, saveStatus } = useCampaignEditorPersistence({
-    campaignId,
+    campaignId: broadcastId,
+    beaconPath: `${campaignId}/broadcasts/${broadcastId}`,
     editable: Boolean(editable),
     bridge,
   });
@@ -61,19 +62,19 @@ export function CampaignContentView() {
 
   useEffect(() => {
     setPreviewHtml("");
-  }, [campaignId]);
+  }, [broadcastId]);
 
   useEffect(() => {
     syncDraft({ subject, bodyMarkdown, templateId });
   }, [subject, bodyMarkdown, templateId, syncDraft]);
 
   useEffect(() => {
-    if (!campaign || !editable) return;
+    if (!broadcast || !editable) return;
     const timer = setTimeout(() => {
       void persistDraft();
     }, 3000);
     return () => clearTimeout(timer);
-  }, [subject, templateId, campaign, editable, persistDraft]);
+  }, [subject, templateId, broadcast, editable, persistDraft]);
 
   const template = templates.find((t) => t.id === templateId);
   const renderedPreview = useMemo(() => {
@@ -89,16 +90,24 @@ export function CampaignContentView() {
   async function handleSave() {
     await checkpoint("manual-save");
     const saved = await persistDraft();
-    if (saved) toast.success("Campaign saved");
-    else toast.error("Could not save campaign");
+    if (saved) toast.success("Broadcast saved");
+    else toast.error("Could not save broadcast");
   }
 
-  if (!campaign) return null;
+  if (!broadcast) return null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <CampaignComposeForm
+      {!editable ? (
+        <div className="shrink-0 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+          This broadcast was sent on{" "}
+          {broadcast.sentAt ? new Date(broadcast.sentAt).toLocaleDateString() : "an earlier date"} and is
+          locked. Duplicate it as a new draft to reuse this content.
+        </div>
+      ) : null}
+      <BroadcastComposeForm
         campaignId={campaignId}
+        broadcastId={broadcastId}
         editorRef={editorRef}
         templates={templates}
         templateId={templateId}
@@ -109,7 +118,7 @@ export function CampaignContentView() {
         onBodyChange={({ markdown, html }) => {
           setPreviewHtml(html);
           setBodyMarkdown((prev) => {
-            if (prev !== markdown) ingestBody(markdown, campaignId);
+            if (prev !== markdown) ingestBody(markdown, broadcastId);
             return markdown;
           });
         }}

@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, FileText, LayoutDashboard, Send } from "lucide-react";
+import { ArrowLeft, Mail, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -19,35 +19,23 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 const NAV: { id: CampaignDetailTab; label: string; icon: LucideIcon }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "content", label: "Content", icon: FileText },
-  { id: "publish", label: "Publish", icon: Send },
+  { id: "subscribers", label: "Subscribers", icon: Users },
+  { id: "broadcasts", label: "Broadcasts", icon: Mail },
+  { id: "settings", label: "Settings", icon: Settings },
 ];
-
-function statusVariant(
-  status: string,
-): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "sent") return "default";
-  if (status === "failed") return "destructive";
-  if (status === "draft") return "outline";
-  return "secondary";
-}
 
 export function CampaignDetailShell({
   section,
-  fill,
   children,
 }: {
   section: CampaignDetailTab;
-  fill?: boolean;
   children: ReactNode;
 }) {
   const { campaigns } = useCrmPaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const { campaignId, campaign, notFound } = useCampaignDetail();
 
-  const title =
-    campaign?.subject?.trim() || (notFound ? "Campaign not found" : "Untitled draft");
+  const title = campaign?.name?.trim() || (notFound ? "Campaign not found" : "Untitled campaign");
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -98,7 +86,7 @@ export function CampaignDetailShell({
             </nav>
             {campaign?.status ? (
               <Badge
-                variant={statusVariant(campaign.status)}
+                variant={campaign.status === "archived" ? "secondary" : "outline"}
                 className="shrink-0 text-[10px] capitalize"
               >
                 {campaign.status}
@@ -108,15 +96,9 @@ export function CampaignDetailShell({
         </div>
       </DesktopTitleBar>
 
-      {fill ? (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {children}
-        </div>
-      ) : (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-          <div className={dashboardScrollBodyClassName("space-y-4")}>{children}</div>
-        </div>
-      )}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+        <div className={dashboardScrollBodyClassName("space-y-4")}>{children}</div>
+      </div>
     </div>
   );
 }

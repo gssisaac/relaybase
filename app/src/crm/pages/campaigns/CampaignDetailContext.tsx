@@ -5,29 +5,30 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { crmApi, type Campaign, type CrmTemplate } from "@/lib/crm/api";
-import { fetchAudienceRecipientCount } from "@/lib/crm/audience-recipients";
-
-type DraftFields = { subject: string; bodyMarkdown: string; templateId: string };
+import {
+  crmApi,
+  type Broadcast,
+  type Campaign,
+  type CrmTemplate,
+  type Subscriber,
+} from "@/lib/crm/api";
 
 type Ctx = {
   campaignId: string;
   campaign: Campaign | null;
   templates: CrmTemplate[];
-  audienceRecipientCount: number | null;
+  subscribers: Subscriber[];
+  broadcasts: Broadcast[];
   loading: boolean;
   notFound: boolean;
   setCampaign: (campaign: Campaign) => void;
   refresh: () => Promise<void>;
-  syncDraft: (fields: DraftFields) => void;
-  persistDraft: () => Promise<boolean>;
-  getLastSavedDraft: () => DraftFields;
-  resolveRecipients: () => Promise<{ email: string; name?: string | null }[]>;
+  refreshSubscribers: () => Promise<void>;
+  refreshBroadcasts: () => Promise<void>;
 };
 
 const CampaignDetailCtx = createContext<Ctx | null>(null);
@@ -41,33 +42,28 @@ export function CampaignDetailProvider({
 }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [templates, setTemplates] = useState<CrmTemplate[]>([]);
-  const [audienceRecipientCount, setAudienceRecipientCount] = useState<number | null>(null);
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const draftRef = useRef<DraftFields>({ subject: "", bodyMarkdown: "", templateId: "" });
-  const lastSaved = useRef<DraftFields | null>(null);
-  const persistInFlight = useRef<Promise<boolean> | null>(null);
-  const campaignRef = useRef<Campaign | null>(null);
-  campaignRef.current = campaign;
+  const refreshSubscribers = useCallback(async () => {
+    const { subscribers: rows } = await crmApi.listSubscribers(campaignId);
+    setSubscribers(rows);
+  }, [campaignId]);
+
+  const refreshBroadcasts = useCallback(async () => {
+    const { broadcasts: rows } = await crmApi.listBroadcasts(campaignId);
+    setBroadcasts(rows);
+  }, [campaignId]);
 
   const refresh = useCallback(async () => {
     try {
-      const [c, t] = await Promise.all([
-        crmApi.getCampaign(campaignId),
-        crmApi.listTemplates(),
-      ]);
-      const nextTemplateId = c.templateId ?? t.templates[0]?.id ?? "";
+      const [c, t] = await Promise.all([crmApi.getCampaign(campaignId), crmApi.listTemplates()]);
       setCampaign(c);
       setTemplates(t.templates);
       setNotFound(false);
-      const fields = {
-        subject: c.subject,
-        bodyMarkdown: c.bodyMarkdown,
-        templateId: nextTemplateId,
-      };
-      draftRef.current = fields;
-      lastSaved.current = fields;
+      await Promise.all([refreshSubscribers(), refreshBroadcasts()]);
     } catch (err) {
       const status = err && typeof err === "object" && "status" in err ? err.status : null;
       if (status === 404) setNotFound(true);
@@ -75,64 +71,13 @@ export function CampaignDetailProvider({
     } finally {
       setLoading(false);
     }
-  }, [campaignId]);
+  }, [campaignId, refreshSubscribers, refreshBroadcasts]);
 
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
-    lastSaved.current = null;
     void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    void fetchAudienceRecipientCount()
-      .then(setAudienceRecipientCount)
-      .catch(() => setAudienceRecipientCount(null));
-  }, []);
-
-  const resolveRecipients = useCallback(async () => {
-    const { fetchAllAudienceRecipients } = await import("@/lib/crm/audience-recipients");
-    return fetchAllAudienceRecipients();
-  }, []);
-
-  const syncDraft = useCallback((fields: DraftFields) => {
-    draftRef.current = fields;
-  }, []);
-
-  const getLastSavedDraft = useCallback((): DraftFields => {
-    return lastSaved.current ?? draftRef.current;
-  }, []);
-
-  const persistDraft = useCallback((): Promise<boolean> => {
-    const current = campaignRef.current;
-    const editable = current?.status === "draft" || current?.status === "failed";
-    if (!editable) return Promise.resolve(true);
-    if (persistInFlight.current) return persistInFlight.current;
-
-    const next = draftRef.current;
-    const prev = lastSaved.current;
-    if (
-      prev &&
-      prev.subject === next.subject &&
-      prev.bodyMarkdown === next.bodyMarkdown &&
-      prev.templateId === next.templateId
-    ) {
-      return Promise.resolve(true);
-    }
-
-    const run = crmApi
-      .updateCampaign(campaignId, next)
-      .then((updated) => {
-        lastSaved.current = next;
-        setCampaign(updated);
-        return true;
-      })
-      .catch(() => false)
-      .finally(() => {
-        persistInFlight.current = null;
-      });
-    persistInFlight.current = run;
-    return run;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
   return (
@@ -141,15 +86,14 @@ export function CampaignDetailProvider({
         campaignId,
         campaign,
         templates,
-        audienceRecipientCount,
+        subscribers,
+        broadcasts,
         loading,
         notFound,
         setCampaign,
         refresh,
-        syncDraft,
-        persistDraft,
-        getLastSavedDraft,
-        resolveRecipients,
+        refreshSubscribers,
+        refreshBroadcasts,
       }}
     >
       {children}

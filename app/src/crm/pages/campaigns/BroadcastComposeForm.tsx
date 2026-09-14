@@ -9,11 +9,12 @@ import MarkdownEditor, { type MarkdownEditorHandle } from "@/lib/markdown-editor
 import { cn } from "@/lib/utils";
 
 /**
- * Content editor for a campaign — template, subject, body, preview, Save.
+ * Content editor for a broadcast — template, subject, body, preview, Save.
  * Recipients and Send live on the Publish tab.
  */
-export function CampaignComposeForm({
+export function BroadcastComposeForm({
   campaignId,
+  broadcastId,
   editorRef,
   templates,
   templateId,
@@ -29,7 +30,9 @@ export function CampaignComposeForm({
   saveState,
   onSave,
 }: {
+  /** Real campaign id — asset upload namespace only. */
   campaignId: string;
+  broadcastId: string;
   editorRef: RefObject<MarkdownEditorHandle | null>;
   templates: CrmTemplate[];
   templateId: string;
@@ -95,8 +98,9 @@ export function CampaignComposeForm({
             <div className="absolute inset-0 bg-background">
               <MarkdownEditor
                 ref={editorRef}
-                key={campaignId}
+                key={broadcastId}
                 campaignId={campaignId}
+                documentId={broadcastId}
                 value={bodyMarkdown}
                 onChange={onBodyChange}
                 editable={editable}

@@ -52,7 +52,16 @@ import "@/lib/markdown-editor/css/markdown-shared.css";
 export type MarkdownEditorHandle = EditorSnapshotProvider;
 
 type MarkdownEditorProps = {
+  /** Real campaign id — asset upload/resolution namespace (`/crm/campaigns/:campaignId/assets`). */
   campaignId: string;
+  /**
+   * Document identity for the persistence snapshot's `filePath` binding —
+   * must equal the `path` the caller's persistence hook uses, so a stale
+   * snapshot from a previously-open document isn't applied to this one.
+   * Defaults to `campaignId` when the document and asset namespace are the
+   * same entity (e.g. no broadcast-scoped content).
+   */
+  documentId?: string;
   value: string;
   editable?: boolean;
   onChange: (payload: { markdown: string; html: string }) => void;
@@ -171,7 +180,7 @@ function openExternalLink(event: React.MouseEvent) {
 }
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(
-  { campaignId, value, editable = true, onChange, className },
+  { campaignId, documentId = campaignId, value, editable = true, onChange, className },
   ref,
 ) {
   const { resolvedTheme } = useTheme();
@@ -374,12 +383,12 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   useImperativeHandle(
     ref,
     () => ({
-      filePath: campaignId,
+      filePath: documentId,
       flushSnapshot(): string | null {
         return pullSnapshot();
       },
     }),
-    [campaignId, pullSnapshot],
+    [documentId, pullSnapshot],
   );
 
   useEffect(() => {

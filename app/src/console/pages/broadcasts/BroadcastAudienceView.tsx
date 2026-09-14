@@ -1,9 +1,6 @@
 "use client";
 
-import Link from "next/link";
-
 import { useBroadcastDetail } from "@/console/pages/broadcasts/BroadcastDetailContext";
-import { audienceDetailHref } from "@/console/lib/paths";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -43,12 +40,7 @@ export function BroadcastAudienceView() {
                 className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm first:pt-0 last:pb-0"
               >
                 <div className="min-w-0">
-                  <Link
-                    href={audienceDetailHref(group.id)}
-                    className="font-medium hover:underline"
-                  >
-                    {group.name}
-                  </Link>
+                  <p className="truncate font-medium">{group.name}</p>
                   <p className="truncate font-mono text-xs text-muted-foreground">
                     {group.domain}
                   </p>

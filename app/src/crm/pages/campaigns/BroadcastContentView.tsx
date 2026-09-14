@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  applyBroadcastMergeTags,
+  previewPersonaOptions,
+  resolvePreviewRecipient,
+  type PreviewPersonaId,
+} from "@/crm/lib/broadcast-merge-tags";
 import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import {
@@ -19,14 +25,22 @@ function mapSaveStatus(status: SaveStatus | null): "idle" | "saving" | "error" {
 }
 
 export function BroadcastContentView() {
-  const { broadcastId, broadcast, templates, syncDraft, persistDraft, getLastSavedDraft } =
-    useBroadcastDetail();
+  const {
+    broadcastId,
+    broadcast,
+    templates,
+    audienceMembers,
+    syncDraft,
+    persistDraft,
+    getLastSavedDraft,
+  } = useBroadcastDetail();
 
   const [subject, setSubject] = useState(broadcast?.subject ?? "");
   const [bodyMarkdown, setBodyMarkdown] = useState(broadcast?.bodyMarkdown ?? "");
   const [previewHtml, setPreviewHtml] = useState("");
   const [templateId, setTemplateId] = useState(broadcast?.templateId ?? templates[0]?.id ?? "");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [previewPersonaId, setPreviewPersonaId] = useState<PreviewPersonaId>("sample-named");
 
   const editable = broadcast?.status === "draft";
 
@@ -54,7 +68,18 @@ export function BroadcastContentView() {
 
   useEffect(() => {
     setPreviewHtml("");
+    setPreviewPersonaId("sample-named");
   }, [broadcastId]);
+
+  const personaOptions = useMemo(
+    () => previewPersonaOptions(audienceMembers),
+    [audienceMembers],
+  );
+
+  const previewRecipient = useMemo(
+    () => resolvePreviewRecipient(previewPersonaId, audienceMembers),
+    [previewPersonaId, audienceMembers],
+  );
 
   useEffect(() => {
     syncDraft({ subject, bodyMarkdown, templateId });
@@ -71,13 +96,12 @@ export function BroadcastContentView() {
   const template = templates.find((t) => t.id === templateId);
   const renderedPreview = useMemo(() => {
     const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
-    if (!template) return content;
-    return template.htmlSource
-      .replaceAll("{{content}}", content)
-      .replaceAll("{{unsubscribe_url}}", "#")
-      .replaceAll("{{contact.name}}", "there")
-      .replaceAll("{{contact.email}}", "you@example.com");
-  }, [template, previewHtml]);
+    if (!template) {
+      return applyBroadcastMergeTags(content, previewRecipient, { unsubscribeUrl: "#" });
+    }
+    const wrapped = template.htmlSource.replaceAll("{{content}}", content);
+    return applyBroadcastMergeTags(wrapped, previewRecipient, { unsubscribeUrl: "#" });
+  }, [template, previewHtml, previewRecipient]);
 
   async function handleSave() {
     await checkpoint("manual-save");
@@ -92,9 +116,12 @@ export function BroadcastContentView() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {!editable ? (
         <div className="shrink-0 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
-          This broadcast was sent on{" "}
-          {broadcast.sentAt ? new Date(broadcast.sentAt).toLocaleDateString() : "an earlier date"} and is
-          locked. Duplicate it as a new draft to reuse this content.
+          {broadcast.status === "scheduled" && broadcast.scheduledAt
+            ? `This broadcast is scheduled for ${new Date(broadcast.scheduledAt).toLocaleString()} and is locked.`
+            : broadcast.status === "sending"
+              ? "This broadcast is currently sending and is locked."
+              : `This broadcast was sent on ${broadcast.sentAt ? new Date(broadcast.sentAt).toLocaleDateString() : "an earlier date"} and is locked.`}{" "}
+          Duplicate it as a new draft to reuse this content.
         </div>
       ) : null}
       <BroadcastComposeForm
@@ -119,6 +146,10 @@ export function BroadcastContentView() {
         editable={Boolean(editable)}
         saveState={saveState}
         onSave={() => void handleSave()}
+        previewPersonaId={previewPersonaId}
+        setPreviewPersonaId={setPreviewPersonaId}
+        previewRecipient={previewRecipient}
+        personaOptions={personaOptions}
       />
     </div>
   );

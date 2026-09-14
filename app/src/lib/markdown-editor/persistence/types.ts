@@ -47,6 +47,8 @@ export type CheckpointResult = {
 export type EditorSnapshotProvider = {
   flushSnapshot(): string | null;
   filePath: string;
+  /** Insert plain text at the editor caret (broadcast merge tags, etc.). */
+  insertText?: (text: string) => void;
 };
 
 export type PersistAdapter = {

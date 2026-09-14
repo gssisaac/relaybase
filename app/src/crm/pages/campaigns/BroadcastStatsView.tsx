@@ -1,12 +1,13 @@
 "use client";
 
-import { Download, ExternalLink } from "lucide-react";
+import { Download, ExternalLink, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { broadcastDetailHref } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import {
@@ -91,19 +92,31 @@ export function BroadcastStatsView() {
 
   useEffect(() => {
     let cancelled = false;
-    crmApi
-      .getBroadcastStats(broadcastId)
-      .then(({ broadcast: row, recipients: rows, trackingEvents: events, linkClicks: links }) => {
-        if (cancelled) return;
-        setBroadcast(row);
-        setRecipients(rows);
-        setTrackingEvents(events);
-        setLinkClicks(links);
-      });
+    const loadStats = () => {
+      crmApi
+        .getBroadcastStats(broadcastId)
+        .then(({ broadcast: row, recipients: rows, trackingEvents: events, linkClicks: links }) => {
+          if (cancelled) return;
+          setBroadcast(row);
+          setRecipients(rows);
+          setTrackingEvents(events);
+          setLinkClicks(links);
+        })
+        .catch(() => {});
+    };
+
+    loadStats();
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (broadcast?.status === "sending") {
+      interval = setInterval(loadStats, 3000);
+    }
+
     return () => {
       cancelled = true;
+      if (interval) clearInterval(interval);
     };
-  }, [broadcastId, setBroadcast]);
+  }, [broadcastId, broadcast?.status, setBroadcast]);
 
   const stats = broadcast?.stats;
   const hasSendData = Boolean(stats && (stats.sent > 0 || recipients.length > 0));
@@ -121,6 +134,38 @@ export function BroadcastStatsView() {
 
   if (!broadcast) return null;
 
+  if (!hasSendData && broadcast.status === "scheduled") {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm">Scheduled Broadcast</CardTitle>
+              <CardDescription>
+                This broadcast is scheduled for {formatWhen(broadcast.scheduledAt)}.
+                Delivery and engagement metrics will update in real time once dispatch begins.
+              </CardDescription>
+            </div>
+            <BroadcastStatusBadge
+              status={broadcast.status}
+              listStatus={broadcast.listStatus}
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={broadcastDetailHref(broadcastId, "publish")} />}
+          >
+            Manage schedule
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!hasSendData && broadcast.status === "draft") {
     return (
       <Card>
@@ -132,7 +177,7 @@ export function BroadcastStatsView() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button size="sm" nativeButton={false} render={<Link href={broadcastDetailHref(broadcastId, "publish")} />}>
+          <Button size="sm" nativeButton={false} render={<Link href={broadcastDetailHref(broadcastId, "publish")} />} >
             Go to Publish
           </Button>
         </CardContent>
@@ -154,15 +199,51 @@ export function BroadcastStatsView() {
     unsubscribed,
   } = stats;
 
+  const processedCount = delivered + bounced + failed;
+  const totalRecipients = recipients.length || broadcast.audienceActiveCount || sent;
+
   return (
     <div className="space-y-4">
+      {broadcast.status === "sending" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin text-sky-600 dark:text-sky-400" />
+              <p className="text-sm font-semibold text-sky-950 dark:text-sky-100">
+                Sending in progress…
+              </p>
+            </div>
+            <p className="text-xs text-sky-800/90 dark:text-sky-300">
+              Processed {processedCount} of {totalRecipients} recipients (
+              {rate(processedCount, totalRecipients)} complete)
+            </p>
+          </div>
+          <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-sky-200 dark:bg-sky-950">
+            <div
+              className="h-full bg-sky-600 transition-all duration-300 dark:bg-sky-400"
+              style={{
+                width: `${totalRecipients ? Math.min(100, Math.round((processedCount / totalRecipients) * 100)) : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Stats</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">Stats</h2>
+            <BroadcastStatusBadge
+              status={broadcast.status}
+              listStatus={broadcast.listStatus}
+            />
+          </div>
           <p className="text-xs text-muted-foreground">
-            {broadcast.sentAt
-              ? `Sent ${formatWhen(broadcast.sentAt)} · ${sent} attempts`
-              : "Delivery and engagement for this broadcast."}
+            {broadcast.status === "sending"
+              ? `Sending in progress since ${formatWhen(broadcast.sentAt)} · ${processedCount} of ${totalRecipients} processed`
+              : broadcast.sentAt
+                ? `Sent ${formatWhen(broadcast.sentAt)} · ${sent} attempts`
+                : "Delivery and engagement for this broadcast."}
           </p>
         </div>
         {recipients.length > 0 ? (

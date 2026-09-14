@@ -380,6 +380,21 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
     return body;
   }, [emitChange, flushBody]);
 
+  const insertTextAtCursor = useCallback(
+    (text: string) => {
+      const editorInstance = editorRef.current;
+      if (!editorInstance || !editorMountedRef.current || !editable || !text) return;
+      try {
+        editorInstance.focus();
+        editorInstance.insertInlineContent([{ type: "text", text, styles: {} }]);
+        notifyEditorChange(editorInstance);
+      } catch (err) {
+        console.error("Failed to insert text in editor", err);
+      }
+    },
+    [editable, notifyEditorChange],
+  );
+
   useImperativeHandle(
     ref,
     () => ({
@@ -387,8 +402,11 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       flushSnapshot(): string | null {
         return pullSnapshot();
       },
+      insertText(text: string) {
+        insertTextAtCursor(text);
+      },
     }),
-    [documentId, pullSnapshot],
+    [documentId, insertTextAtCursor, pullSnapshot],
   );
 
   useEffect(() => {

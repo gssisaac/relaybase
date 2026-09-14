@@ -1,11 +1,11 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { broadcastDetailHref } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { crmApi, CrmApiError } from "@/lib/crm/api";
@@ -39,7 +40,8 @@ function formatWhen(value?: string | null): string {
 
 export function BroadcastPublishView() {
   const router = useRouter();
-  const { broadcastId, broadcast, setBroadcast, persistDraft } = useBroadcastDetail();
+  const { broadcastId, broadcast, setBroadcast, persistDraft, refresh } =
+    useBroadcastDetail();
 
   const [sending, setSending] = useState(false);
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
@@ -49,6 +51,14 @@ export function BroadcastPublishView() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
   const [duplicating, setDuplicating] = useState(false);
+
+  useEffect(() => {
+    if (broadcast?.status !== "sending") return;
+    const timer = setInterval(() => {
+      void refresh();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [broadcast?.status, refresh]);
 
   if (!broadcast) return null;
 
@@ -152,6 +162,26 @@ export function BroadcastPublishView() {
         </div>
       ) : null}
 
+      {broadcast.status === "sending" ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-800 dark:text-sky-300">
+          <div className="flex items-center gap-2">
+            <Loader2 className="size-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" />
+            <span>
+              This broadcast is currently sending to {recipientCount.toLocaleString()} recipient
+              {recipientCount === 1 ? "" : "s"}. Delivery stats update automatically.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<Link href={broadcastDetailHref(broadcastId, "stats")} />}
+          >
+            Live stats
+          </Button>
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Recipients</CardTitle>
@@ -163,9 +193,10 @@ export function BroadcastPublishView() {
           <p className="text-sm font-medium tabular-nums">
             {recipientCount.toLocaleString()} active recipient{recipientCount === 1 ? "" : "s"}
           </p>
-          <Badge variant="outline" className="capitalize">
-            {broadcast.status}
-          </Badge>
+          <BroadcastStatusBadge
+            status={broadcast.status}
+            listStatus={broadcast.listStatus}
+          />
         </CardContent>
       </Card>
 
@@ -175,9 +206,11 @@ export function BroadcastPublishView() {
           <CardDescription>
             {broadcast.status === "scheduled" && broadcast.scheduledAt
               ? `Scheduled for ${formatWhen(broadcast.scheduledAt)}`
-              : broadcast.status === "sent"
-                ? `Sent ${formatWhen(broadcast.sentAt)}`
-                : "Save content first, then send or schedule from here."}
+              : broadcast.status === "sending"
+                ? `Sending in progress since ${formatWhen(broadcast.sentAt)}`
+                : broadcast.status === "sent"
+                  ? `Sent ${formatWhen(broadcast.sentAt)}`
+                  : "Save content first, then send or schedule from here."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
@@ -190,6 +223,20 @@ export function BroadcastPublishView() {
             <Button size="sm" variant="outline" onClick={() => void handleCancelSchedule()}>
               Cancel schedule
             </Button>
+          ) : broadcast.status === "sending" ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-sky-600 dark:text-sky-400">
+                Dispatch in progress…
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                nativeButton={false}
+                render={<Link href={broadcastDetailHref(broadcastId, "stats")} />}
+              >
+                View delivery progress
+              </Button>
+            </div>
           ) : editable ? (
             <>
               <Button size="sm" variant="outline" onClick={() => setScheduleOpen(true)}>

@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { crmAudienceApi } from "@/lib/crm/audience-api";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
@@ -38,11 +38,68 @@ import {
 } from "@/email/components/mailbox/EmailListShell";
 import { broadcastDetailHref } from "@/crm/lib/paths";
 import { crmApi, CrmApiError, type Broadcast } from "@/lib/crm/api";
+import { cn } from "@/lib/utils";
+
+export type BroadcastFilter =
+  | "all"
+  | "draft"
+  | "scheduled"
+  | "sending"
+  | "sent"
+  | "archived";
+
+const FILTER_OPTIONS: { value: BroadcastFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "draft", label: "Draft" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "sending", label: "Sending" },
+  { value: "sent", label: "Sent" },
+  { value: "archived", label: "Archived" },
+];
+
+function formatWhen(value?: string | null): string {
+  if (!value) return "Upcoming";
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 function statsLine(b: Broadcast): string {
-  const audience = `${b.audienceActiveCount.toLocaleString()} active`;
-  const send = b.status === "sent" ? "sent" : b.status;
-  return `${audience} · ${send}`;
+  if (b.status === "sending") {
+    const total = b.audienceActiveCount || (b.stats.sent + b.stats.failed);
+    const inFlight = b.stats.sent;
+    return `Sending… · ${inFlight} of ${total} sent`;
+  }
+  if (b.status === "scheduled") {
+    return `Scheduled for ${formatWhen(b.scheduledAt)} · ${b.audienceActiveCount.toLocaleString()} recipient${b.audienceActiveCount === 1 ? "" : "s"}`;
+  }
+  if (b.status === "sent") {
+    const totalSent = b.stats.sent;
+    const delivered = b.stats.delivered;
+    const opens = b.stats.opened;
+    const clicks = b.stats.clicked;
+    const parts: string[] = [`${totalSent.toLocaleString()} sent`];
+    if (delivered > 0 && opens > 0) {
+      const openRate = ((opens / delivered) * 100).toFixed(0);
+      parts.push(`${opens} opened (${openRate}%)`);
+    } else if (delivered > 0) {
+      parts.push(`${delivered} delivered`);
+    }
+    if (delivered > 0 && clicks > 0) {
+      const clickRate = ((clicks / delivered) * 100).toFixed(0);
+      parts.push(`${clicks} clicked (${clickRate}%)`);
+    }
+    return parts.join(" · ");
+  }
+  if (b.status === "failed") {
+    return `Send failed · ${b.stats.failed} failed of ${b.audienceActiveCount.toLocaleString()} recipients`;
+  }
+  // draft
+  const count = b.audienceActiveCount;
+  return `${count.toLocaleString()} recipient${count === 1 ? "" : "s"}`;
 }
 
 export function BroadcastsListView() {
@@ -51,6 +108,7 @@ export function BroadcastsListView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<BroadcastFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -77,6 +135,19 @@ export function BroadcastsListView() {
     void load();
   }, [load]);
 
+  const hasSending = useMemo(
+    () => broadcasts.some((b) => b.status === "sending"),
+    [broadcasts],
+  );
+
+  useEffect(() => {
+    if (!hasSending) return;
+    const interval = setInterval(() => {
+      void load(false);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [hasSending, load]);
+
   useEffect(() => {
     if (!createOpen) return;
     setAudienceLoading(true);
@@ -87,12 +158,46 @@ export function BroadcastsListView() {
       .finally(() => setAudienceLoading(false));
   }, [createOpen]);
 
+  const counts = useMemo(() => {
+    return {
+      all: broadcasts.filter((b) => b.listStatus !== "archived").length,
+      draft: broadcasts.filter(
+        (b) => b.status === "draft" && b.listStatus !== "archived",
+      ).length,
+      scheduled: broadcasts.filter(
+        (b) => b.status === "scheduled" && b.listStatus !== "archived",
+      ).length,
+      sending: broadcasts.filter(
+        (b) => b.status === "sending" && b.listStatus !== "archived",
+      ).length,
+      sent: broadcasts.filter(
+        (b) => b.status === "sent" && b.listStatus !== "archived",
+      ).length,
+      archived: broadcasts.filter((b) => b.listStatus === "archived").length,
+    };
+  }, [broadcasts]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return broadcasts.filter(
-      (b) => !q || b.name.toLowerCase().includes(q) || b.slug.toLowerCase().includes(q),
-    );
-  }, [broadcasts, search]);
+    return broadcasts.filter((b) => {
+      if (filter === "all") {
+        if (b.listStatus === "archived") return false;
+      } else if (filter === "archived") {
+        if (b.listStatus !== "archived") return false;
+      } else {
+        if (b.listStatus === "archived") return false;
+        if (b.status !== filter) return false;
+      }
+
+      if (!q) return true;
+      return (
+        b.name.toLowerCase().includes(q) ||
+        b.slug.toLowerCase().includes(q) ||
+        b.subject.toLowerCase().includes(q) ||
+        (b.audienceGroupName && b.audienceGroupName.toLowerCase().includes(q))
+      );
+    });
+  }, [broadcasts, filter, search]);
 
   const audienceSelectItems = useMemo(
     () =>
@@ -259,6 +364,39 @@ export function BroadcastsListView() {
               search={search}
               onSearchChange={setSearch}
               searchPlaceholder="Search broadcasts…"
+              trailing={
+                <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
+                  {FILTER_OPTIONS.map((opt) => {
+                    const count = counts[opt.value];
+                    const isSelected = filter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFilter(opt.value)}
+                        className={cn(
+                          "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors",
+                          isSelected
+                            ? "bg-background font-medium text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <span>{opt.label}</span>
+                        <span
+                          className={cn(
+                            "text-[10px] tabular-nums",
+                            isSelected
+                              ? "font-medium text-foreground/80"
+                              : "text-muted-foreground/70",
+                          )}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              }
             />
             {filtered.length > 0 ? (
               <>
@@ -281,28 +419,50 @@ export function BroadcastsListView() {
                         day: "numeric",
                       })}
                       status={
-                        <Badge
-                          variant={b.listStatus === "archived" ? "secondary" : "outline"}
-                          className="text-[10px] capitalize"
-                        >
-                          {b.listStatus}
-                        </Badge>
+                        <BroadcastStatusBadge
+                          status={b.status}
+                          listStatus={b.listStatus}
+                        />
                       }
                     />
                   ))}
                 </div>
               </>
             ) : !loading ? (
-              <EmptyListState
-                icon={Mail}
-                title="No broadcasts yet"
-                description="Create a broadcast to sync an audience and send email."
-                action={
-                  <Button size="sm" onClick={() => setCreateOpen(true)}>
-                    New broadcast
-                  </Button>
-                }
-              />
+              broadcasts.length === 0 ? (
+                <EmptyListState
+                  icon={Mail}
+                  title="No broadcasts yet"
+                  description="Create a broadcast to sync an audience and send email."
+                  action={
+                    <Button size="sm" onClick={() => setCreateOpen(true)}>
+                      New broadcast
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyListState
+                  icon={Mail}
+                  title="No matching broadcasts"
+                  description={
+                    search
+                      ? `No broadcasts match "${search}" with filter "${filter}".`
+                      : `There are no broadcasts with status "${filter}".`
+                  }
+                  action={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSearch("");
+                        setFilter("all");
+                      }}
+                    >
+                      Reset filters
+                    </Button>
+                  }
+                />
+              )
             ) : (
               <div className="min-h-[200px]" />
             )}

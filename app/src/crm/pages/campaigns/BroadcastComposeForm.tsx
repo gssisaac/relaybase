@@ -1,11 +1,23 @@
 "use client";
 
-import { Monitor, Smartphone } from "lucide-react";
-import type { RefObject } from "react";
+import { Braces, Monitor, Smartphone } from "lucide-react";
+import { useCallback, useRef, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { BroadcastComposeSidebar } from "@/crm/pages/campaigns/BroadcastComposeSidebar";
+import {
+  BROADCAST_MERGE_TAGS,
+  type PreviewPersonaId,
+  type PreviewRecipient,
+} from "@/crm/lib/broadcast-merge-tags";
 import type { CrmTemplate } from "@/lib/crm/api";
-import MarkdownEditor, { type MarkdownEditorHandle } from "@/lib/markdown-editor/components/MarkdownEditor";
+import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
+import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,10 +40,14 @@ export function BroadcastComposeForm({
   editable,
   saveState,
   onSave,
+  previewPersonaId,
+  setPreviewPersonaId,
+  previewRecipient,
+  personaOptions,
 }: {
   /** Broadcast id — asset upload namespace (`/crm/broadcasts/:id/assets`). */
   broadcastId: string;
-  editorRef: RefObject<MarkdownEditorHandle | null>;
+  editorRef: RefObject<EditorSnapshotProvider | null>;
   templates: CrmTemplate[];
   templateId: string;
   setTemplateId: (id: string) => void;
@@ -45,7 +61,38 @@ export function BroadcastComposeForm({
   editable: boolean;
   saveState: "idle" | "saving" | "error";
   onSave: () => void;
+  previewPersonaId: PreviewPersonaId;
+  setPreviewPersonaId: (id: PreviewPersonaId) => void;
+  previewRecipient: PreviewRecipient;
+  personaOptions: { value: PreviewPersonaId; label: string }[];
 }) {
+  const subjectInputRef = useRef<HTMLInputElement>(null);
+  const insertTargetRef = useRef<"subject" | "body">("body");
+
+  const insertMergeTag = useCallback(
+    (token: string) => {
+      if (insertTargetRef.current === "subject" && subjectInputRef.current) {
+        const el = subjectInputRef.current;
+        const start = el.selectionStart ?? el.value.length;
+        const end = el.selectionEnd ?? start;
+        const next = `${el.value.slice(0, start)}${token}${el.value.slice(end)}`;
+        setSubject(next);
+        requestAnimationFrame(() => {
+          el.focus();
+          const pos = start + token.length;
+          el.setSelectionRange(pos, pos);
+        });
+        return;
+      }
+      editorRef.current?.insertText?.(token);
+    },
+    [editorRef, setSubject],
+  );
+
+  const previewBodySnippet =
+    bodyMarkdown.trim().slice(0, 280) ||
+    renderedPreview.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 280);
+
   const draftStatus =
     !editable
       ? null
@@ -64,8 +111,12 @@ export function BroadcastComposeForm({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
           <div className="flex shrink-0 items-center gap-2 bg-background px-3 py-2">
             <input
+              ref={subjectInputRef}
               type="text"
               value={subject}
+              onFocus={() => {
+                insertTargetRef.current = "subject";
+              }}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Subject…"
               autoFocus={editable}
@@ -76,6 +127,46 @@ export function BroadcastComposeForm({
               spellCheck={false}
               className="min-w-0 flex-1 border-0 bg-background py-1 text-sm font-medium text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
             />
+            {editable ? (
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      className="shrink-0"
+                      aria-label="Insert personalization tag in subject"
+                    />
+                  }
+                >
+                  <Braces className="size-4" />
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-56 p-2">
+                  <p className="mb-2 px-1 text-[11px] text-muted-foreground">
+                    Insert into subject
+                  </p>
+                  <ul className="flex flex-col gap-1">
+                    {BROADCAST_MERGE_TAGS.map((tag) => (
+                      <li key={tag.id}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto w-full justify-start px-2 py-1.5 font-normal"
+                          onClick={() => {
+                            insertTargetRef.current = "subject";
+                            insertMergeTag(tag.token);
+                          }}
+                        >
+                          <code className="text-xs">{tag.token}</code>
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </PopoverContent>
+              </Popover>
+            ) : null}
             {draftStatus ? (
               <span className="hidden shrink-0 select-none text-xs text-muted-foreground/60 sm:inline">
                 {draftStatus}
@@ -92,7 +183,12 @@ export function BroadcastComposeForm({
               </Button>
             ) : null}
           </div>
-          <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
+          <div
+            className="relative min-h-0 flex-1 overflow-hidden bg-background"
+            onFocusCapture={() => {
+              insertTargetRef.current = "body";
+            }}
+          >
             <div className="absolute inset-0 bg-background">
               <MarkdownEditor
                 ref={editorRef}
@@ -142,47 +238,19 @@ export function BroadcastComposeForm({
           </div>
         </div>
 
-        <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-border lg:w-[240px] lg:border-l">
-          <div className="shrink-0 border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
-            Template
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
-            {templates.length === 0 ? (
-              <p className="px-1 py-2 text-xs text-muted-foreground">No templates yet</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {templates.map((t) => {
-                  const selected = t.id === templateId;
-                  return (
-                    <li key={t.id}>
-                      <button
-                        type="button"
-                        disabled={!editable}
-                        onClick={() => setTemplateId(t.id)}
-                        className={cn(
-                          "w-full rounded-md border bg-card p-2.5 text-left transition-colors",
-                          "hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60",
-                          selected
-                            ? "border-primary ring-1 ring-primary/30"
-                            : "border-border",
-                        )}
-                      >
-                        <span className="block text-sm font-medium leading-snug">
-                          {t.name}
-                        </span>
-                        {t.isBuiltin ? (
-                          <span className="mt-1 block text-[10px] text-muted-foreground">
-                            Built-in
-                          </span>
-                        ) : null}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </aside>
+        <BroadcastComposeSidebar
+          templates={templates}
+          templateId={templateId}
+          setTemplateId={setTemplateId}
+          editable={editable}
+          previewPersonaId={previewPersonaId}
+          setPreviewPersonaId={setPreviewPersonaId}
+          previewRecipient={previewRecipient}
+          previewSubject={subject}
+          previewBodySnippet={previewBodySnippet}
+          personaOptions={personaOptions}
+          onInsertMergeTag={insertMergeTag}
+        />
       </div>
     </div>
   );

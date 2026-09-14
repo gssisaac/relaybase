@@ -13,9 +13,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { broadcastDetailHref, useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
@@ -91,18 +91,12 @@ export function BroadcastDetailShell({
                 );
               })}
             </nav>
-            {broadcast?.listStatus ? (
-              <Badge
-                variant={broadcast.listStatus === "archived" ? "secondary" : "outline"}
-                className="shrink-0 text-[10px] capitalize"
-              >
-                {broadcast.listStatus}
-              </Badge>
-            ) : null}
-            {broadcast?.status && broadcast.status !== "draft" ? (
-              <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
-                {broadcast.status}
-              </Badge>
+            {broadcast ? (
+              <BroadcastStatusBadge
+                status={broadcast.status}
+                listStatus={broadcast.listStatus}
+                className="shrink-0"
+              />
             ) : null}
           </div>
         </div>

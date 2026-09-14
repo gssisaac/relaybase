@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FilePen, Inbox, Loader2, Send, Trash2 } from "lucide-react";
+import { FilePen, Inbox, Loader2, Paperclip, Pencil, Send, Trash2 } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import Link from "next/link";
 import {
@@ -12,19 +12,23 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/components/layout/use-is-mobile";
 import {
   EmailCommandContextMenu,
   type EmailCommandRuntime,
 } from "@/email/commands";
 import {
   EmailListContainer,
+  EmailMobileRow,
   EmailTableHeader,
   EmailTableRow,
   EmptyListState,
   ListToolbar,
+  MobileListSearchBar,
 } from "@/email/components/mailbox/EmailListShell";
 import {
   formatDate,
+  formatListDateCompact,
   itemKey,
   messageHref,
   previewText,
@@ -50,6 +54,10 @@ type MailListFolder = "inbox" | "drafts" | "sent" | "trash";
 
 /** EmailTableRow: size-7 avatar (28) + py-2 (16) + bottom border (1). */
 const MAIL_ROW_HEIGHT = 45;
+/** EmailMobileRow: three text lines (24 + 20 + 20) + vertical breathing room. */
+const MOBILE_ROW_HEIGHT = 84;
+/** Scroll distance (px) before the mobile compose FAB collapses / expands. */
+const FAB_SCROLL_DELTA = 8;
 /** Start fetching the next page this many rows before the end. */
 const LOAD_MORE_THRESHOLD = 10;
 /**
@@ -155,6 +163,10 @@ type MailRowProps = {
   loadingMore: boolean;
   hasMore: boolean;
   listItemStateStore?: ListItemStateStore;
+  /** Gmail-style three-line rows (no hover cards, compact dates). */
+  mobile: boolean;
+  /** Blank trailing row so the compose FAB never covers the last mail. */
+  spacerIndex: number | null;
 };
 
 /**
@@ -163,7 +175,32 @@ type MailRowProps = {
  * primary line + subject/preview line + date) so the loading region reads
  * as "more rows coming" rather than a blank gap.
  */
-function MailRowSkeleton({ style }: { style: React.CSSProperties }) {
+function MailRowSkeleton({
+  style,
+  mobile = false,
+}: {
+  style: React.CSSProperties;
+  mobile?: boolean;
+}) {
+  if (mobile) {
+    return (
+      <div
+        style={style}
+        className="flex w-full animate-pulse gap-3 px-4 pt-3.5"
+        aria-hidden
+      >
+        <span className="size-10 shrink-0 rounded-full bg-muted" />
+        <div className="min-w-0 flex-1 space-y-2 pt-1">
+          <div className="flex gap-3">
+            <span className="block h-3.5 flex-1 rounded bg-muted" />
+            <span className="block h-3 w-10 rounded bg-muted" />
+          </div>
+          <span className="block h-3 w-3/4 rounded bg-muted" />
+          <span className="block h-3 w-full rounded bg-muted/70" />
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       style={style}
@@ -188,13 +225,17 @@ function MailRowSkeleton({ style }: { style: React.CSSProperties }) {
 
 const INITIAL_LOAD_SKELETON_ROWS = 6;
 
-function MailListLoadingSkeleton() {
+function MailListLoadingSkeleton({ mobile }: { mobile: boolean }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" aria-busy="true">
       {Array.from({ length: INITIAL_LOAD_SKELETON_ROWS }).map((_, index) => (
         <MailRowSkeleton
           key={index}
-          style={{ height: MAIL_ROW_HEIGHT, width: "100%" }}
+          mobile={mobile}
+          style={{
+            height: mobile ? MOBILE_ROW_HEIGHT : MAIL_ROW_HEIGHT,
+            width: "100%",
+          }}
         />
       ))}
     </div>
@@ -225,13 +266,18 @@ const MailRow = memo(
     loadingMore,
     hasMore,
     listItemStateStore,
+    mobile,
+    spacerIndex,
   }: RowComponentProps<MailRowProps>): React.ReactElement | null {
     const item = items[index];
     if (!item) {
+      if (index === spacerIndex) {
+        return <div style={style} aria-hidden />;
+      }
       // Past the last loaded item: skeleton while fetching, sentinel hint
       // when more pages exist but we haven't started loading the next one.
       if (loadingMore) {
-        return <MailRowSkeleton style={style} />;
+        return <MailRowSkeleton style={style} mobile={mobile} />;
       }
       if (!hasMore) {
         return null;
@@ -258,11 +304,49 @@ const MailRow = memo(
         firstRecipient?.email ?? extractFirstEmail(item.message.to);
       const primary = item.message.to || "(no recipient)";
       const subject = item.message.subject || "(no subject)";
-      const date = formatDate(item.message.updatedAt);
       const preview = previewText(item);
       const isSelected = item.message.id === messageId;
       const href = messageHref(folderBase, item, accountFilter);
       const runtime = commandRuntimeFor(item);
+      const status = item.message.replyKey
+        ? "Reply"
+        : item.message.forwardKey
+          ? "Forward"
+          : "Draft";
+
+      if (mobile) {
+        const recipient = recipientName?.trim() || recipientEmail;
+        return (
+          <div style={style} className="overflow-hidden">
+            <EmailCommandContextMenu runtime={runtime}>
+              <EmailMobileRow
+                href={href}
+                selected={isSelected}
+                avatar={
+                  <SenderAvatar
+                    fromName={recipientName}
+                    fromEmail={recipientEmail}
+                    size="lg"
+                  />
+                }
+                primary={
+                  <>
+                    <span className="text-destructive">{status}</span>
+                    {recipient ? (
+                      <span className="text-muted-foreground"> · {recipient}</span>
+                    ) : null}
+                  </>
+                }
+                subject={subject}
+                preview={preview}
+                date={formatListDateCompact(item.message.updatedAt)}
+              />
+            </EmailCommandContextMenu>
+          </div>
+        );
+      }
+
+      const date = formatDate(item.message.updatedAt);
       const avatar = (
         <SenderHoverCard
           fromEmail={recipientEmail}
@@ -279,11 +363,6 @@ const MailRow = memo(
           {primary}
         </SenderHoverLabel>
       );
-      const status = item.message.replyKey
-        ? "Reply"
-        : item.message.forwardKey
-          ? "Forward"
-          : "Draft";
       return (
         <div style={style} className="overflow-hidden" onMouseEnter={onMouseEnter}>
           <EmailCommandContextMenu runtime={runtime}>
@@ -326,10 +405,9 @@ const MailRow = memo(
     const attachmentCount = isInbox
       ? item.message.attachmentCount ?? item.message.attachments?.length ?? 0
       : item.message.attachmentCount ?? item.message.attachments?.length ?? 0;
-    const date = formatDate(
+    const sortAt =
       thread?.latestAt ??
-        (isInbox ? item.message.receivedAt : item.message.sentAt),
-    );
+      (isInbox ? item.message.receivedAt : item.message.sentAt);
     const previewRaw = thread?.preview || previewText(item);
     const preview = trimQuotedHistoryForThread({
       bodyText: previewRaw,
@@ -348,6 +426,70 @@ const MailRow = memo(
       thread && thread.messageCount > 1 ? thread.messageCount : undefined;
     const href = messageHref(folderBase, item, accountFilter);
     const runtime = commandRuntimeFor(item);
+    const sendStatus = isInbox ? undefined : item.message.status;
+    const statusBadge =
+      sendStatus === "sending" ? (
+        <Badge variant="secondary" className="text-[10px]">
+          Sending…
+        </Badge>
+      ) : sendStatus === "failed" ? (
+        <Badge variant="destructive" className="text-[10px]">
+          Failed
+        </Badge>
+      ) : undefined;
+
+    if (mobile) {
+      // Touch: no hover cards (tapping the avatar would open a card instead
+      // of the message); long-press still opens the command context menu.
+      const counterpart = isInbox
+        ? primary
+        : recipientName?.trim() || recipientEmail || item.message.to || "(no recipient)";
+      const label =
+        folder === "trash"
+          ? `${isInbox ? "In" : "Sent"} · ${counterpart}`
+          : isInbox
+            ? counterpart
+            : `To: ${counterpart}`;
+      return (
+        <div style={style} className="overflow-hidden">
+          <EmailCommandContextMenu runtime={runtime}>
+            <EmailMobileRow
+              href={href}
+              selected={isSelected}
+              unread={unread}
+              avatar={
+                <SenderAvatar
+                  fromName={isInbox ? senderName : recipientName}
+                  fromEmail={senderEmail}
+                  unread={unread}
+                  size="lg"
+                />
+              }
+              primary={label}
+              stackCount={stackCount}
+              subject={subject || "(no subject)"}
+              preview={preview}
+              date={formatListDateCompact(sortAt)}
+              trailing={
+                attachmentCount > 0 || statusBadge ? (
+                  <>
+                    {attachmentCount > 0 ? (
+                      <Paperclip
+                        className="size-3.5 text-muted-foreground"
+                        aria-label={`${attachmentCount} attachment${attachmentCount === 1 ? "" : "s"}`}
+                      />
+                    ) : null}
+                    {statusBadge}
+                  </>
+                ) : undefined
+              }
+            />
+          </EmailCommandContextMenu>
+        </div>
+      );
+    }
+
+    const date = formatDate(sortAt);
     const avatar = isInbox ? (
       <SenderHoverCard
         fromName={item.message.fromName}
@@ -387,7 +529,6 @@ const MailRow = memo(
           {primary}
         </SenderHoverLabel>
       );
-    const sendStatus = isInbox ? undefined : item.message.status;
     return (
       <div style={style} className="overflow-hidden" onMouseEnter={onMouseEnter}>
         <EmailCommandContextMenu runtime={runtime}>
@@ -404,17 +545,7 @@ const MailRow = memo(
             }
             preview={preview}
             date={date}
-            status={
-              sendStatus === "sending" ? (
-                <Badge variant="secondary" className="text-[10px]">
-                  Sending…
-                </Badge>
-              ) : sendStatus === "failed" ? (
-                <Badge variant="destructive" className="text-[10px]">
-                  Failed
-                </Badge>
-              ) : undefined
-            }
+            status={statusBadge}
           />
         </EmailCommandContextMenu>
       </div>
@@ -451,6 +582,8 @@ export function MailListPane({
 }: MailListPaneProps) {
   const contentReady = accountsReady && mailReady;
   const listRef = useListRef(null);
+  const isMobile = useIsMobile();
+  const rowHeight = isMobile ? MOBILE_ROW_HEIGHT : MAIL_ROW_HEIGHT;
   const { dragRegionClassName, dragRegionProps } = useDesktopChrome();
   const { pull, onScroll, onWheel } = usePullToRefresh({
     enabled: Boolean(onRefresh),
@@ -471,6 +604,23 @@ export function MailListPane({
     ? 28
     : Math.round((pull / PULL_REFRESH_THRESHOLD) * 28);
 
+  // Mobile compose FAB: extended ("✎ Compose") near the top or when
+  // scrolling up, icon-only while scrolling down — like Gmail.
+  const [fabExtended, setFabExtended] = useState(true);
+  const lastScrollTopRef = useRef(0);
+  const handleScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      onScroll(event);
+      if (!isMobile) return;
+      const top = event.currentTarget.scrollTop;
+      const delta = top - lastScrollTopRef.current;
+      if (Math.abs(delta) < FAB_SCROLL_DELTA) return;
+      lastScrollTopRef.current = top;
+      setFabExtended(delta < 0 || top < MOBILE_ROW_HEIGHT);
+    },
+    [isMobile, onScroll],
+  );
+
   // Track the list container height so overscan can be sized as a multiple
   // of the viewport (see OVERSCAN_VIEWPORTS). Falls back to a sensible
   // minimum until the first onResize fires.
@@ -479,9 +629,9 @@ export function MailListPane({
     if (containerHeight <= 0) return MIN_OVERSCAN_ROWS;
     return Math.max(
       MIN_OVERSCAN_ROWS,
-      Math.ceil((containerHeight * OVERSCAN_VIEWPORTS) / MAIL_ROW_HEIGHT),
+      Math.ceil((containerHeight * OVERSCAN_VIEWPORTS) / rowHeight),
     );
-  }, [containerHeight]);
+  }, [containerHeight, rowHeight]);
   const onResize = useCallback(
     (size: { height: number; width: number }) => {
       setContainerHeight(size.height);
@@ -539,7 +689,7 @@ export function MailListPane({
   // screen if more items exist on the server; we only suppress the visual.
   const listFitsViewport =
     containerHeight > 0
-      ? items.length * MAIL_ROW_HEIGHT <= containerHeight
+      ? items.length * rowHeight <= containerHeight
       : items.length <= MIN_OVERSCAN_ROWS;
   const sentinelCount = listFitsViewport
     ? 0
@@ -548,7 +698,8 @@ export function MailListPane({
       : showSentinel
         ? 1
         : 0;
-  const rowCount = items.length + sentinelCount;
+  const spacerIndex = isMobile ? items.length + sentinelCount : null;
+  const rowCount = items.length + sentinelCount + (spacerIndex != null ? 1 : 0);
 
   const lastFocusKeyRef = useRef<string | null>(null);
   const lastLoadMoreIndexRef = useRef<number>(-1);
@@ -607,6 +758,8 @@ export function MailListPane({
       loadingMore,
       hasMore: showSentinel,
       listItemStateStore,
+      mobile: isMobile,
+      spacerIndex,
     }),
     [
       items,
@@ -620,6 +773,8 @@ export function MailListPane({
       loadingMore,
       showSentinel,
       listItemStateStore,
+      isMobile,
+      spacerIndex,
     ],
   );
 
@@ -632,57 +787,96 @@ export function MailListPane({
     : typeof totalCount === "number"
       ? totalCount.toLocaleString()
       : null;
+  const countText =
+    countLabel != null ? (
+      <>
+        {isSearchHeader ? countLabel : `· ${countLabel}`}
+        {!isSearchHeader &&
+        typeof unreadCount === "number" &&
+        unreadCount > 0
+          ? ` (${unreadCount.toLocaleString()} unread)`
+          : null}
+      </>
+    ) : null;
+  const emptyTrashButton =
+    folder === "trash" && items.length > 0 ? (
+      <Button
+        size="sm"
+        variant={isMobile ? "ghost" : "outline"}
+        className={cn(isMobile && "-mr-2 h-7")}
+        onClick={() => emptyTrash()}
+      >
+        Empty trash
+      </Button>
+    ) : undefined;
+  const tableHeader = isMobile ? null : (
+    <EmailTableHeader>
+      <span className="flex items-center gap-2">
+        <span className="size-7 shrink-0" aria-hidden />
+        <span>
+          {folder === "sent" || folder === "drafts"
+            ? "To"
+            : folder === "trash"
+              ? "From / To"
+              : "From"}
+        </span>
+      </span>
+      <span>Subject</span>
+      <span>Date</span>
+    </EmailTableHeader>
+  );
 
   return (
     <EmailListContainer plain>
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div
-          {...dragRegionProps}
-          className={cn(
-            "flex shrink-0 select-none items-baseline gap-2 px-4 pb-0 pt-2",
-            dragRegionClassName,
-          )}
-        >
-          <h2 className="text-sm font-semibold">{title}</h2>
-          {countLabel != null ? (
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {isSearchHeader ? countLabel : `· ${countLabel}`}
-              {!isSearchHeader &&
-              typeof unreadCount === "number" &&
-              unreadCount > 0
-                ? ` (${unreadCount.toLocaleString()} unread)`
-                : null}
-            </span>
-          ) : null}
-        </div>
-        <ListToolbar
-          search={search}
-          onSearchChange={onSearchChange}
-          searchPlaceholder="Search mail…"
-          trailing={
-            folder === "trash" && items.length > 0 ? (
-              <Button size="sm" variant="outline" onClick={() => emptyTrash()}>
-                Empty trash
-              </Button>
-            ) : undefined
-          }
-        />
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        {isMobile ? (
+          <>
+            <MobileListSearchBar
+              search={search}
+              onSearchChange={onSearchChange}
+              placeholder="Search in mail"
+            />
+            <div className="flex min-h-9 shrink-0 select-none items-center gap-2 px-4 pt-1">
+              <h2 className="text-[13px] font-medium tracking-wide text-muted-foreground">
+                {title}
+              </h2>
+              {countText != null ? (
+                <span className="text-xs tabular-nums text-muted-foreground/80">
+                  {countText}
+                </span>
+              ) : null}
+              {emptyTrashButton ? (
+                <div className="ml-auto">{emptyTrashButton}</div>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <div
+              {...dragRegionProps}
+              className={cn(
+                "flex shrink-0 select-none items-baseline gap-2 px-4 pb-0 pt-2",
+                dragRegionClassName,
+              )}
+            >
+              <h2 className="text-sm font-semibold">{title}</h2>
+              {countText != null ? (
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {countText}
+                </span>
+              ) : null}
+            </div>
+            <ListToolbar
+              search={search}
+              onSearchChange={onSearchChange}
+              searchPlaceholder="Search mail…"
+              trailing={emptyTrashButton}
+            />
+          </>
+        )}
         {contentReady && items.length > 0 ? (
           <>
-            <EmailTableHeader>
-              <span className="flex items-center gap-2">
-                <span className="size-7 shrink-0" aria-hidden />
-                <span>
-                  {folder === "sent" || folder === "drafts"
-                    ? "To"
-                    : folder === "trash"
-                      ? "From / To"
-                      : "From"}
-                </span>
-              </span>
-              <span>Subject</span>
-              <span>Date</span>
-            </EmailTableHeader>
+            {tableHeader}
             {showPullIndicator ? (
               <PullRefreshIndicator height={pullHeight} refreshing={refreshing} />
             ) : null}
@@ -693,33 +887,20 @@ export function MailListPane({
                 MailRow as unknown as (props: RowComponentProps<MailRowProps>) => React.ReactElement | null
               }
               rowCount={rowCount}
-              rowHeight={MAIL_ROW_HEIGHT}
+              rowHeight={rowHeight}
               rowKey={rowKey}
               overscanCount={overscanCount}
               onResize={onResize}
               onRowsRendered={onRowsRendered}
-              onScroll={onScroll}
+              onScroll={handleScroll}
               onWheel={onWheel}
               rowProps={rowPropsMemo}
             />
           </>
         ) : !contentReady ? (
           <>
-            <EmailTableHeader>
-              <span className="flex items-center gap-2">
-                <span className="size-7 shrink-0" aria-hidden />
-                <span>
-                  {folder === "sent" || folder === "drafts"
-                    ? "To"
-                    : folder === "trash"
-                      ? "From / To"
-                      : "From"}
-                </span>
-              </span>
-              <span>Subject</span>
-              <span>Date</span>
-            </EmailTableHeader>
-            <MailListLoadingSkeleton />
+            {tableHeader}
+            <MailListLoadingSkeleton mobile={isMobile} />
           </>
         ) : searchLoading ? (
           <EmptyListState
@@ -773,7 +954,7 @@ export function MailListPane({
                     : "Inbound mail routed to your domain will appear here."
             }
             action={
-              folder === "sent" || folder === "drafts" ? (
+              (folder === "sent" || folder === "drafts") && !isMobile ? (
                 <Button
                   size="sm"
                   disabled={!relaybaseOk}
@@ -786,6 +967,24 @@ export function MailListPane({
           />
           </div>
         )}
+        {isMobile ? (
+          <Link
+            href={composeNewHref}
+            aria-label="Compose"
+            aria-disabled={!relaybaseOk}
+            tabIndex={relaybaseOk ? undefined : -1}
+            className={cn(
+              "absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-10 flex h-14 items-center justify-center gap-3 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-black/25 transition-[width,padding,transform] duration-200 active:scale-95",
+              fabExtended ? "px-5" : "w-14 px-0",
+              !relaybaseOk && "pointer-events-none opacity-50",
+            )}
+          >
+            <Pencil className="size-5 shrink-0" aria-hidden />
+            {fabExtended ? (
+              <span className="text-[15px] font-medium">Compose</span>
+            ) : null}
+          </Link>
+        ) : null}
       </div>
     </EmailListContainer>
   );

@@ -24,11 +24,14 @@ export const SenderAvatar = memo(
     fromEmail,
     unread,
     className,
+    size = "sm",
   }: {
     fromName?: string | null;
     fromEmail?: string;
     unread?: boolean;
     className?: string;
+    /** `sm` = 28px (desktop table rows), `lg` = 40px (mobile list rows). */
+    size?: "sm" | "lg";
   }) {
     const store = useSenderIconStore();
     const domain = senderIconDomain(fromEmail);
@@ -40,23 +43,37 @@ export const SenderAvatar = memo(
     const entry = domain ? store.getIcon(domain) : undefined;
     const dataUrl = entry?.status === "ready" ? entry.dataUrl : null;
     const initials = senderInitials(fromName, fromEmail);
+    const large = size === "lg";
 
     return (
       <span
-        className={cn("relative flex size-7 shrink-0", className)}
+        className={cn(
+          "relative flex shrink-0",
+          large ? "size-10" : "size-7",
+          className,
+        )}
         aria-hidden
       >
         <span
           className={cn(
-            "flex size-7 items-center justify-center overflow-hidden rounded-full",
+            "flex size-full items-center justify-center overflow-hidden rounded-full",
             dataUrl ? "bg-muted" : "bg-primary/15 text-primary",
           )}
         >
           {dataUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={dataUrl} alt="" className="size-4 object-contain" />
+            <img
+              src={dataUrl}
+              alt=""
+              className={cn("object-contain", large ? "size-5" : "size-4")}
+            />
           ) : (
-            <span className="text-[11px] font-semibold leading-none">
+            <span
+              className={cn(
+                "font-semibold leading-none",
+                large ? "text-sm" : "text-[11px]",
+              )}
+            >
               {initials}
             </span>
           )}

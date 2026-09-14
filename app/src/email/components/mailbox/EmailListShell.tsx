@@ -1,12 +1,13 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, Inbox, Search } from "lucide-react";
+import { ArrowLeft, Inbox, Menu, Search, X } from "lucide-react";
 import Link from "next/link";
 import { memo, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useOptionalAppShellNav } from "@/components/layout/app-shell-nav";
 import { MobileNavTrigger } from "@/components/layout/MobileNavTrigger";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { onDraggableFieldMouseDown } from "@/lib/desktop/shell";
@@ -125,6 +126,149 @@ export function ListToolbar({
     </div>
   );
 }
+
+/**
+ * Mobile (Gmail-style) pill search bar: menu button opens the nav sheet,
+ * 16px input text so iOS Safari does not zoom on focus.
+ */
+export function MobileListSearchBar({
+  search,
+  onSearchChange,
+  placeholder = "Search in mail",
+}: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const nav = useOptionalAppShellNav();
+
+  return (
+    <div className="shrink-0 px-3 pb-1 pt-2">
+      <div className="flex h-12 items-center gap-1 rounded-full bg-secondary/70 pl-1 pr-2 transition-colors focus-within:bg-secondary">
+        {nav?.isMobile ? (
+          <button
+            type="button"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full text-foreground/80 active:bg-foreground/10"
+            aria-label="Open menu"
+            onClick={nav.openNav}
+          >
+            <Menu className="size-5" aria-hidden />
+          </button>
+        ) : (
+          <Search
+            className="mx-3 size-4 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+        )}
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={placeholder}
+          enterKeyHint="search"
+          autoComplete="off"
+          aria-label={placeholder}
+          className="h-full min-w-0 flex-1 bg-transparent px-1 text-base text-foreground outline-none placeholder:text-muted-foreground"
+        />
+        {search ? (
+          <button
+            type="button"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-foreground/10"
+            aria-label="Clear search"
+            onClick={() => onSearchChange("")}
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Mobile (Gmail-style) three-line mail row: sender + date, subject, preview.
+ * Fills its virtualized row slot (`h-full`), so the list controls height.
+ */
+export const EmailMobileRow = memo(function EmailMobileRow({
+  href,
+  primary,
+  subject,
+  stackCount,
+  preview,
+  date,
+  trailing,
+  selected,
+  unread,
+  avatar,
+}: {
+  href: string;
+  primary: ReactNode;
+  subject: string;
+  stackCount?: number;
+  preview?: string;
+  date: string;
+  /** Icons / badges at the end of the preview line. */
+  trailing?: ReactNode;
+  selected?: boolean;
+  unread?: boolean;
+  avatar: ReactNode;
+}) {
+  const strong = unread ? "font-semibold text-foreground" : "font-normal";
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex h-full w-full items-center gap-3 px-4 text-left outline-none transition-colors active:bg-secondary/60",
+        selected && "bg-primary/10",
+      )}
+    >
+      <div className="self-start pt-3.5">{avatar}</div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <p
+            className={cn(
+              "min-w-0 flex-1 truncate text-[15px] leading-6",
+              strong,
+              !unread && "text-foreground/90",
+            )}
+          >
+            {primary}
+            {stackCount != null && stackCount > 1 ? (
+              <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
+                {stackCount}
+              </span>
+            ) : null}
+          </p>
+          <span
+            className={cn(
+              "shrink-0 text-xs tabular-nums",
+              unread ? "font-semibold text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {date}
+          </span>
+        </div>
+        <p
+          className={cn(
+            "truncate text-sm leading-5",
+            strong,
+            !unread && "text-foreground/90",
+          )}
+        >
+          {subject || "(no subject)"}
+        </p>
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-sm leading-5 text-muted-foreground">
+            {preview || " "}
+          </p>
+          {trailing ? (
+            <span className="flex shrink-0 items-center gap-1.5">{trailing}</span>
+          ) : null}
+        </div>
+      </div>
+    </Link>
+  );
+});
 
 export function EmailTableHeader({ children }: { children: ReactNode }) {
   return (

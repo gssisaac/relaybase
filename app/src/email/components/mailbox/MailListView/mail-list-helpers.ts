@@ -35,6 +35,30 @@ export function formatDate(iso: string) {
   return `${months[date.getMonth()]} ${date.getDate()}, ${hour12}:${minutes} ${ampm}`;
 }
 
+/**
+ * Gmail-style compact list date: time for today ("2:56 PM"), month/day this
+ * year ("Sep 14"), numeric otherwise ("9/14/25"). Reads the clock, so only
+ * use it in client-only branches (the mobile list renders after mount).
+ */
+export function formatListDateCompact(iso: string, now: Date = new Date()) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  if (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  ) {
+    const hours = date.getHours();
+    const hour12 = hours % 12 || 12;
+    const ampm = hours < 12 ? "AM" : "PM";
+    return `${hour12}:${pad2(date.getMinutes())} ${ampm}`;
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return formatDate(iso).split(",")[0] ?? "";
+  }
+  return `${date.getMonth() + 1}/${date.getDate()}/${pad2(date.getFullYear() % 100)}`;
+}
+
 export function formatDetailDate(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";

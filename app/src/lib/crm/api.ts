@@ -216,7 +216,14 @@ export const crmApi = {
       body: JSON.stringify({ to }),
     }),
   sendBroadcast: (broadcastId: string) =>
-    crmFetch<{ broadcast: Broadcast; sent: number; failed: number; skipped: number }>(
+    crmFetch<{
+      broadcast: Broadcast;
+      sent: number;
+      failed: number;
+      skipped: number;
+      async?: boolean;
+      queued?: number;
+    }>(
       `/crm/broadcasts/${broadcastId}/send`,
       { method: "POST" },
     ),

@@ -1,6 +1,10 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
 import { resolveActiveAudienceContacts } from "./lib/audience-resolver";
-import { dispatchBroadcastToAudience } from "./routes/broadcasts";
+import {
+  DISPATCH_BATCH_SIZE,
+  dispatchBroadcastToAudience,
+  processBroadcastDispatchBatch,
+} from "./routes/broadcasts";
 import { syncAudienceGroupAsync } from "./routes/audience-groups";
 
 /**
@@ -54,6 +58,32 @@ async function claimDueBroadcasts(): Promise<void> {
         const idx = draft.broadcasts.findIndex((b) => b.id === claimedBroadcastId);
         if (idx >= 0) draft.broadcasts[idx] = { ...draft.broadcasts[idx]!, status: "failed" };
       });
+    }
+  }
+}
+
+/** Drain queued recipients for broadcasts still in `sending` (large scheduled sends). */
+async function processSendingBroadcastQueues(): Promise<void> {
+  const sending = store
+    .read()
+    .broadcasts.filter(
+      (b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID && b.status === "sending",
+    );
+
+  for (const broadcast of sending) {
+    const pending = store
+      .read()
+      .recipients.filter(
+        (r) =>
+          r.broadcastId === broadcast.id &&
+          (r.status === "queued" || r.status === "sending"),
+      );
+    if (pending.length === 0) continue;
+
+    try {
+      await processBroadcastDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
+    } catch (err) {
+      console.error(`[crm-scheduler] batch send failed for ${broadcast.id}`, err);
     }
   }
 }
@@ -134,6 +164,9 @@ export function startScheduler(): void {
   }, SCHEDULE_POLL_MS);
 
   setInterval(() => {
+    void processSendingBroadcastQueues().catch((err) =>
+      console.error("[crm-scheduler] sending queue failed", err),
+    );
     void rollupStats().catch((err) => console.error("[crm-scheduler] stats rollup failed", err));
   }, STATS_ROLLUP_MS);
 

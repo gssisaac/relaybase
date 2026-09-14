@@ -80,8 +80,13 @@ export function BroadcastPublishView() {
       const result = await crmApi.sendBroadcast(broadcastId);
       setBroadcast(result.broadcast);
       setConfirmSendOpen(false);
-      toast.success("Broadcast sent — view stats for delivery details");
-      router.push(broadcastDetailHref(broadcastId, "stats"));
+      if (result.async || result.broadcast.status === "sending") {
+        toast.success("Broadcast is sending — stats update as delivery progresses");
+        router.push(broadcastDetailHref(broadcastId, "stats"));
+      } else {
+        toast.success("Broadcast sent — view stats for delivery details");
+        router.push(broadcastDetailHref(broadcastId, "stats"));
+      }
     } catch (err) {
       setConfirmSendOpen(false);
       setBlockedError(err instanceof CrmApiError ? err.message : "Send failed");

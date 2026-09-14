@@ -37,25 +37,25 @@ import {
   ListToolbar,
 } from "@/email/components/mailbox/EmailListShell";
 import { broadcastDetailHref } from "@/crm/lib/paths";
-import { crmApi, CrmApiError, type Broadcast } from "@/lib/crm/api";
+import {
+  crmApi,
+  CrmApiError,
+  type Broadcast,
+  type BroadcastStatus,
+} from "@/lib/crm/api";
 import { cn } from "@/lib/utils";
 
-export type BroadcastFilter =
-  | "all"
-  | "draft"
-  | "scheduled"
-  | "sending"
-  | "sent"
-  | "archived";
+export type BroadcastFilter = "all" | "active" | "sent";
 
 const FILTER_OPTIONS: { value: BroadcastFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "draft", label: "Draft" },
-  { value: "scheduled", label: "Scheduled" },
-  { value: "sending", label: "Sending" },
+  { value: "active", label: "Active" },
   { value: "sent", label: "Sent" },
-  { value: "archived", label: "Archived" },
 ];
+
+function isActiveBroadcastStatus(status: BroadcastStatus): boolean {
+  return status === "draft" || status === "scheduled" || status === "sending";
+}
 
 function formatWhen(value?: string | null): string {
   if (!value) return "Upcoming";
@@ -159,35 +159,20 @@ export function BroadcastsListView() {
   }, [createOpen]);
 
   const counts = useMemo(() => {
+    const visible = broadcasts.filter((b) => b.listStatus !== "archived");
     return {
-      all: broadcasts.filter((b) => b.listStatus !== "archived").length,
-      draft: broadcasts.filter(
-        (b) => b.status === "draft" && b.listStatus !== "archived",
-      ).length,
-      scheduled: broadcasts.filter(
-        (b) => b.status === "scheduled" && b.listStatus !== "archived",
-      ).length,
-      sending: broadcasts.filter(
-        (b) => b.status === "sending" && b.listStatus !== "archived",
-      ).length,
-      sent: broadcasts.filter(
-        (b) => b.status === "sent" && b.listStatus !== "archived",
-      ).length,
-      archived: broadcasts.filter((b) => b.listStatus === "archived").length,
+      all: visible.length,
+      active: visible.filter((b) => isActiveBroadcastStatus(b.status)).length,
+      sent: visible.filter((b) => b.status === "sent").length,
     };
   }, [broadcasts]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return broadcasts.filter((b) => {
-      if (filter === "all") {
-        if (b.listStatus === "archived") return false;
-      } else if (filter === "archived") {
-        if (b.listStatus !== "archived") return false;
-      } else {
-        if (b.listStatus === "archived") return false;
-        if (b.status !== filter) return false;
-      }
+      if (b.listStatus === "archived") return false;
+      if (filter === "active" && !isActiveBroadcastStatus(b.status)) return false;
+      if (filter === "sent" && b.status !== "sent") return false;
 
       if (!q) return true;
       return (

@@ -65,14 +65,23 @@ function getTemplateHtml(templateId: string | null | undefined): string | null {
   return store.read().templates.find((t) => t.id === templateId)?.htmlSource ?? null;
 }
 
-export async function dispatchBroadcastToAudience(
+/** Small lists send inline; larger audiences queue and drain via scheduler batches. */
+const INLINE_RECIPIENT_MAX = 50;
+export const DISPATCH_BATCH_SIZE = 20;
+
+function enqueueBroadcastRecipients(
   broadcast: Broadcast,
   members: AudienceMember[],
-): Promise<{ sent: number; failed: number; skipped: number }> {
-  const now = new Date().toISOString();
-
+  now: string,
+): void {
   store.update((draft) => {
+    const existing = new Set(
+      draft.recipients
+        .filter((r) => r.broadcastId === broadcast.id)
+        .map((r) => r.audienceMemberId),
+    );
     for (const m of members) {
+      if (existing.has(m.id)) continue;
       draft.recipients.push({
         id: newId("recipient"),
         broadcastId: broadcast.id,
@@ -91,18 +100,87 @@ export async function dispatchBroadcastToAudience(
         clickCount: 0,
         createdAt: now,
       });
+      existing.add(m.id);
     }
   });
+}
+
+function rollupBroadcastStatsFromRecipients(broadcastId: string) {
+  const recipients = store.read().recipients.filter((r) => r.broadcastId === broadcastId);
+  const sent = recipients.filter((r) => r.status === "delivered" || r.status === "bounced").length;
+  const delivered = recipients.filter((r) => r.status === "delivered").length;
+  const bounced = recipients.filter((r) => r.status === "bounced").length;
+  const failed = recipients.filter((r) => r.status === "failed").length;
+  const opened = recipients.filter((r) => r.openedAt).length;
+  const clicked = recipients.filter((r) => r.clickedAt).length;
+  const totalOpens = recipients.reduce((n, r) => n + r.openCount, 0);
+  const totalClicks = recipients.reduce((n, r) => n + r.clickCount, 0);
+  const unsubscribed = recipients.filter((r) => r.unsubscribedAt).length;
+  return {
+    sent,
+    delivered,
+    bounced,
+    failed,
+    opened,
+    totalOpens,
+    clicked,
+    totalClicks,
+    unsubscribed,
+  };
+}
+
+function finalizeBroadcastDispatchIfIdle(broadcastId: string): boolean {
+  const data = store.read();
+  const idx = data.broadcasts.findIndex((b) => b.id === broadcastId);
+  if (idx < 0) return true;
+  const broadcast = data.broadcasts[idx]!;
+  if (broadcast.status !== "sending") return true;
+
+  const pending = data.recipients.filter(
+    (r) =>
+      r.broadcastId === broadcastId &&
+      (r.status === "queued" || r.status === "sending"),
+  );
+  if (pending.length > 0) return false;
+
+  const now = new Date().toISOString();
+  const stats = rollupBroadcastStatsFromRecipients(broadcastId);
+  store.update((draft) => {
+    const rowIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+    if (rowIdx < 0) return;
+    draft.broadcasts[rowIdx] = {
+      ...draft.broadcasts[rowIdx]!,
+      status: "sent",
+      sentAt: draft.broadcasts[rowIdx]!.sentAt ?? now,
+      stats,
+      updatedAt: now,
+    };
+  });
+  return true;
+}
+
+/** Process up to `limit` queued recipients for a broadcast in `sending` status. */
+export async function processBroadcastDispatchBatch(
+  broadcastId: string,
+  limit: number,
+): Promise<{ sent: number; failed: number; skipped: number; completed: boolean }> {
+  const broadcast = store.read().broadcasts.find((b) => b.id === broadcastId);
+  if (!broadcast || broadcast.status !== "sending") {
+    return { sent: 0, failed: 0, skipped: 0, completed: true };
+  }
 
   const templateHtml =
-    getTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ?? "<div>{{content}}</div>";
+    getTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ??
+    "<div>{{content}}</div>";
 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+
   const queued = store
     .read()
-    .recipients.filter((r) => r.broadcastId === broadcast.id && r.status === "queued");
+    .recipients.filter((r) => r.broadcastId === broadcastId && r.status === "queued")
+    .slice(0, limit);
 
   for (const recipient of queued) {
     const member = store
@@ -117,6 +195,11 @@ export async function dispatchBroadcastToAudience(
       });
       continue;
     }
+
+    store.update((draft) => {
+      const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
+      if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "sending" };
+    });
 
     const html = renderBroadcastForRecipient({
       broadcastId: broadcast.id,
@@ -145,24 +228,34 @@ export async function dispatchBroadcastToAudience(
   }
 
   store.update((draft) => {
-    const idx = draft.broadcasts.findIndex((b) => b.id === broadcast.id);
+    const idx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
     if (idx < 0) return;
-    const prev = draft.broadcasts[idx]!.stats;
     draft.broadcasts[idx] = {
       ...draft.broadcasts[idx]!,
-      status: "sent",
-      sentAt: draft.broadcasts[idx]!.sentAt ?? now,
-      stats: {
-        ...prev,
-        sent,
-        delivered: sent,
-        failed,
-      },
+      stats: rollupBroadcastStatsFromRecipients(broadcastId),
       updatedAt: new Date().toISOString(),
     };
   });
 
-  return { sent, failed, skipped };
+  const completed = finalizeBroadcastDispatchIfIdle(broadcastId);
+  return { sent, failed, skipped, completed };
+}
+
+export async function dispatchBroadcastToAudience(
+  broadcast: Broadcast,
+  members: AudienceMember[],
+): Promise<{ sent: number; failed: number; skipped: number; async?: boolean; queued?: number }> {
+  const now = new Date().toISOString();
+  enqueueBroadcastRecipients(broadcast, members, now);
+
+  const asyncDispatch = members.length > INLINE_RECIPIENT_MAX;
+  if (asyncDispatch) {
+    await processBroadcastDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
+    return { sent: 0, failed: 0, skipped: 0, async: true, queued: members.length };
+  }
+
+  const result = await processBroadcastDispatchBatch(broadcast.id, members.length + 1000);
+  return { sent: result.sent, failed: result.failed, skipped: result.skipped, async: false };
 }
 
 crmBroadcasts.route("/:broadcastId/audience", crmBroadcastAudience);

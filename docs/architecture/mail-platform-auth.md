@@ -101,7 +101,7 @@ Defined in `app/src/mail-platform/types.ts`. This is the contract both adapters 
 | `accountScopeId` | Cache key scope (web: account email; desktop: opaque scope id) |
 | `mobilePassword` | Web team Bearer secret (memory + `sessionStorage`); desktop team only when applicable |
 | `getAuthHeaders()` | `Authorization` + `X-Account-Email` for `/mobile/*` |
-| `login()` / `logout()` | Web: `/sign-in` form + clear storage; desktop: existing unlock/team flows |
+| `login()` / `logout()` | Web: `/login` form + clear storage; desktop: existing unlock/team flows |
 | `subscribe()` | MobX-friendly change notifications (web store) |
 
 `MailSession` is a legacy alias for `AuthSession`.
@@ -115,11 +115,11 @@ Defined in `app/src/mail-platform/types.ts`. This is the contract both adapters 
 - Always `role: "team"`, `isTeamMode: true`, `isDesktop: false`.
 - Login: `POST` verification via `GET {workerUrl}/mobile/config` with Bearer + `X-Account-Email`.
 - Persistence: identity + password in `sessionStorage` key `relaybase:email-session`; mirrored globals `__RELAYBASE_TEAM_AUTH__` / `__RELAYBASE_WORKER_URL__` for legacy `desktopAwareFetch` paths still on the web build.
-- Logout: clears memory, storage, and globals; UI redirects to `/sign-in`.
+- Logout: clears memory, storage, and globals; UI redirects to `/login` (legacy `/sign-in` bookmarks redirect there too).
 
 **Provider:** `EmailAppProviders` creates one `WebSessionStore` and passes it as `runtime.session`. Used only under `app/(email-app)/layout.tsx` (no `AppSessionProvider` gate for mail-only routes).
 
-**Deployed hosts:** static export + Workers assets (`hq-relaybase-web-app`, `relaybase.email`). Routes use top-level folders (`/inbox`, `/sign-in`, …) with `trailingSlash: true`.
+**Deployed hosts:** static export + Workers assets (`hq-relaybase-web-app`, `relaybase.email`). Routes use top-level folders (`/inbox`, `/login`, …) with `trailingSlash: true`.
 
 ---
 
@@ -248,7 +248,7 @@ RootLayout → AppProviders (DesktopProvider, AppSessionProvider, …)
 
 ## Verification checklist
 
-1. Web: `/sign-in` → login with Worker URL, account email, mobile password.
+1. Web: `/login` → Teammate tab → login with Worker URL, account email, mobile password.
 2. Web: `/inbox/` shows sidebar folders and loads mail (no “No mail accounts” / “Worker is not connected”).
 3. Web: `/sent`, `/drafts`, `/trash`, `/compose`, `/mail-settings` navigate with trailing slashes.
 4. Desktop: owner mail under `/email/*` and invited team session unchanged.

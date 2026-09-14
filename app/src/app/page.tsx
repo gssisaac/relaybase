@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { RestoreLastRoute } from "@/components/RestoreLastRoute";
 import { SessionPhaseScreen } from "@/console/components/setup/SessionPhaseScreen";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
@@ -10,13 +11,14 @@ import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 /**
  * App entry.
- * Desktop and web share SessionPhaseScreen for setup / unlock routing.
- * Web shortcuts: owner session → /dashboard; team session → /inbox.
+ * Desktop: SessionPhaseScreen owns setup / unlock routing (welcome `/setup`).
+ * Web: never render a form here — bounce to `/dashboard`, `/inbox`, or `/login`
+ * immediately so the address bar is `/login`, not `/`. Session restore runs
+ * on the `/login` page.
  */
 export default function HomePage() {
   const router = useRouter();
   const isDesktop = isDesktopRuntime();
-  const [webShowsSetup, setWebShowsSetup] = useState(isDesktop);
 
   useEffect(() => {
     if (isDesktop) return;
@@ -28,18 +30,16 @@ export default function HomePage() {
       router.replace("/inbox");
       return;
     }
-    setWebShowsSetup(true);
+    router.replace("/login");
   }, [isDesktop, router]);
 
-  if (!isDesktop && !webShowsSetup) {
-    return null;
+  if (!isDesktop) {
+    return <AppLoadingScreen />;
   }
 
   return (
     <SessionPhaseScreen>
-      {() => (
-        <RestoreLastRoute userId={isDesktop ? "desktop" : "web"} />
-      )}
+      {() => <RestoreLastRoute userId="desktop" />}
     </SessionPhaseScreen>
   );
 }

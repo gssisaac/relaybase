@@ -1,18 +1,28 @@
 "use client";
 
 import { resolveEmailApiBase } from "@/lib/desktop/api";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+
+import {
+  readWebOwnerSession,
+  writeWebOwnerSession,
+} from "./web-owner-persist";
 
 /**
- * Owner session held in **JS process memory only**.
+ * Owner session for the browser build.
  *
- * The passtoken, access tokens, and refresh tokens are NEVER written to
- * disk, cookies, localStorage, or sessionStorage. The user keeps the
- * one-time passtoken download; the app holds the session in memory for the
- * lifetime of the process. On desktop, mail refresh lives in the OS keyring
- * and boot unlock is silent (`owner_boot_mail`). Console dashboard access
- * uses Touch ID via `owner_unlock_console` / `ConsoleGateView`. This module
- * is the browser `pnpm next` in-memory session; the Tauri webview uses Rust
- * `worker_request` so JS never sees tokens.
+ * Access tokens live in JS memory only. The passtoken is never stored — the
+ * user keeps the one-time download. Cookies and localStorage are never used.
+ *
+ * **Web only:** the mail + console *refresh* tokens (and Worker URL) are
+ * mirrored to tab `sessionStorage` (`relaybase:owner-session`, see
+ * `web-owner-persist.ts`) so a same-tab hard reload can re-mint access via
+ * `restoreWebOwnerSession()`. Closing the tab ends the session (N-01).
+ *
+ * **Desktop:** nothing here is persisted from JS. Mail refresh lives in the
+ * OS keyring and boot unlock is silent (`owner_boot_mail`); console access
+ * uses Touch ID via `owner_unlock_console` / `ConsoleGateView`. The Tauri
+ * webview uses Rust `worker_request` so JS never sees tokens.
  *
  * The Worker's owner tokens are scoped (`OwnerScope = "mail" | "console"`,
  * see `worker/src/lib/owner-auth.ts`) — a mail-scoped access token 401s on
@@ -51,10 +61,27 @@ function normalizeSession(next: OwnerSession): OwnerSession {
   };
 }
 
+function readWorkerUrlGlobal(): string {
+  if (typeof window === "undefined") return "";
+  const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+  return w.__RELAYBASE_WORKER_URL__?.trim().replace(/\/$/, "") ?? "";
+}
+
+/** Web only: mirror current refresh tokens to tab sessionStorage (never access / passtoken). */
+function persistWebRefreshTokens(): void {
+  if (isDesktopRuntime()) return;
+  writeWebOwnerSession({
+    workerUrl: readWorkerUrlGlobal(),
+    mailRefreshToken: mailSession?.refreshToken ?? "",
+    consoleRefreshToken: consoleSession?.refreshToken ?? "",
+  });
+}
+
 function setSessionFor(scope: OwnerScope, next: OwnerSession | null): void {
   if (scope === "mail") mailSession = next;
   else consoleSession = next;
   delete refreshPromises[scope];
+  persistWebRefreshTokens();
 }
 
 /** Console session by default — that's what dashboard/API routes need. */
@@ -76,6 +103,7 @@ export function clearOwnerSession(): void {
   consoleSession = null;
   delete refreshPromises.mail;
   delete refreshPromises.console;
+  if (!isDesktopRuntime()) writeWebOwnerSession(null);
 }
 
 /** Current access token for a scope, or null when not logged in. */
@@ -210,6 +238,48 @@ export async function ownerRefresh(
   })();
   refreshPromises[scope] = promise;
   return promise;
+}
+
+let webRestorePromise: Promise<boolean> | null = null;
+
+/**
+ * Web only: after a same-tab hard reload, re-mint mail + console access from
+ * the refresh pair in tab `sessionStorage`. Sets the Worker URL global first so
+ * `/console/refresh` has a base. Both scopes must come back; otherwise the
+ * surviving refresh is revoked and storage is cleared (user signs in again).
+ * Single-flighted. Desktop: always `false`, never touches storage.
+ */
+export function restoreWebOwnerSession(): Promise<boolean> {
+  if (isDesktopRuntime()) return Promise.resolve(false);
+  if (hasOwnerSession() && readWorkerUrlGlobal()) return Promise.resolve(true);
+  if (webRestorePromise) return webRestorePromise;
+  const stored = readWebOwnerSession();
+  if (!stored) return Promise.resolve(false);
+
+  webRestorePromise = (async () => {
+    try {
+      if (typeof window !== "undefined") {
+        const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
+        w.__RELAYBASE_WORKER_URL__ = stored.workerUrl;
+      }
+      const seed = (refreshToken: string): OwnerSession | null =>
+        refreshToken
+          ? { accessToken: "", refreshToken, expiresIn: 0, accessExpiresAt: 0 }
+          : null;
+      setSessionFor("mail", seed(stored.mailRefreshToken));
+      setSessionFor("console", seed(stored.consoleRefreshToken));
+      const [mail, consoleNext] = await Promise.all([
+        ownerRefresh("mail"),
+        ownerRefresh("console"),
+      ]);
+      if (mail?.accessToken && consoleNext?.accessToken) return true;
+      await ownerLogout();
+      return false;
+    } finally {
+      webRestorePromise = null;
+    }
+  })();
+  return webRestorePromise;
 }
 
 /** POST /console/logout — revoke this device's refresh tokens (both scopes, best-effort). */

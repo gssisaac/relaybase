@@ -220,7 +220,7 @@ export function InboundEmailDetail({
   domain?: string;
   bodyText: string;
   bodyHtml?: string | null;
-  /** No border/background card around the body (conversation stack). */
+  /** Skip the iframe chrome around HTML bodies (conversation stack). */
   plain?: boolean;
   attachments?: InboundAttachment[];
   /** Trailing quoted history to hide behind a `···` expander. */
@@ -294,16 +294,10 @@ export function InboundEmailDetail({
               : "email-html-frame w-full overflow-hidden rounded-md border border-border"
           }
         />
-      ) : plain ? (
+      ) : (
         <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground select-text">
           {displayText || "(empty message)"}
         </p>
-      ) : (
-        <div className="rounded-md border border-border bg-muted/20 p-4 select-text">
-          <p className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground select-text">
-            {displayText || "(empty message)"}
-          </p>
-        </div>
       )}
 
       {normalizedQuote ? <QuotedReplyBlock quote={normalizedQuote} /> : null}

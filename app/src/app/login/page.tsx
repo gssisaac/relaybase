@@ -1,44 +1,64 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { AppLoadingScreen } from "@/components/AppLoadingScreen";
 import { AccountLoginView } from "@/console/components/setup/AccountLoginView";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { EmailAppProviders } from "@/mail-platform/runtime";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 /**
- * "I was invited" entry from the welcome choice. Desktop enters TeamLoginView
- * on `/` via the shared phase screen; web renders Account Login (team tab).
+ * Desktop: "I was invited" trampoline — enters TeamLoginView on `/` via the
+ * shared phase screen.
+ * Web: the unauthenticated entry (`https://www.relaybase.email/login`) —
+ * Account Login with the Owner tab selected. Already signed in (or a
+ * restorable owner session in this tab) bounces to the dashboard / inbox.
  */
-export default function TeamLoginPage() {
+export default function LoginPage() {
   const router = useRouter();
   const store = useAppSession();
   const isDesktop = isDesktopRuntime();
+  const [webShowsForm, setWebShowsForm] = useState(false);
 
   useEffect(() => {
     if (!isDesktop) {
       if (hasWebOwnerSession()) {
         router.replace("/dashboard");
-      } else if (getWebTeamAuth()) {
-        router.replace("/inbox");
+        return;
       }
-      return;
+      if (getWebTeamAuth()) {
+        router.replace("/inbox");
+        return;
+      }
+      let active = true;
+      void restoreWebOwnerSession().then((restored) => {
+        if (!active) return;
+        if (restored && hasWebOwnerSession()) {
+          router.replace("/dashboard");
+        } else {
+          setWebShowsForm(true);
+        }
+      });
+      return () => {
+        active = false;
+      };
     }
     store.openInvitedLogin();
     router.replace("/");
   }, [isDesktop, router, store]);
 
   if (!isDesktop) {
-    if (hasWebOwnerSession() || getWebTeamAuth()) {
-      return null;
+    if (!webShowsForm) {
+      return <AppLoadingScreen />;
     }
     return (
       <EmailAppProviders>
-        <AccountLoginView defaultRole="team" />
+        <AccountLoginView defaultRole="owner" />
       </EmailAppProviders>
     );
   }

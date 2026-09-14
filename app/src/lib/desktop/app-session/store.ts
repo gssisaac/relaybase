@@ -855,6 +855,9 @@ export class AppSessionStore {
   }
 
   openAlreadyInstalled(): void {
+    if (this.phase.kind === "ownerRecover" || this.phase.kind === "install") {
+      return;
+    }
     this.error = null;
     const teamUrl = this.identity.teamIdentity?.workerUrl?.trim() ?? "";
     if (this.teamStatus?.hasSecret || this.teamStatus?.hasAccess || teamUrl) {

@@ -3,20 +3,10 @@ use tauri::AppHandle;
 use super::errors::format_worker_http_error;
 use super::log::emit_log;
 
-#[derive(serde::Deserialize, Default)]
-struct RoutingRule {
-    #[serde(default)]
-    enabled: bool,
-    #[serde(default)]
-    action: String,
-}
-
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RoutingStatusEntry {
     domain: String,
-    #[serde(default)]
-    rules: Option<Vec<RoutingRule>>,
     #[serde(default)]
     error: Option<String>,
 }
@@ -27,11 +17,18 @@ struct RoutingStatusResponse {
     domains: Vec<RoutingStatusEntry>,
 }
 
-/// Best-effort: re-apply Cloudflare Email Routing rules for every domain
-/// whose literal-To rule Cloudflare left `enabled: false` after this Worker
-/// script upload (the `550 5.1.1 Address not found` bounce case). Never
-/// fails the install — only a console session exists once an owner has
-/// completed setup, so this is a no-op on first install.
+/// Best-effort: re-apply Cloudflare Email Routing rules for **every**
+/// domain after a Worker script upload.
+///
+/// Cloudflare can leave a rule `enabled: true` but with a stale Worker
+/// dispatch target after a script upload — the rule looks fine in the API
+/// and dashboard, yet Email Routing fails to deliver to the Worker
+/// ("Delivery failed" in the CF Activity Log with no Worker invocation,
+/// no `ops_log` row, and no R2/D1 write). The only reliable fix is to
+/// re-PUT every rule, which this does unconditionally for all domains.
+///
+/// Never fails the install — only a console session exists once an owner
+/// has completed setup, so this is a no-op on first install.
 pub(crate) async fn repair_email_routing_for_all_domains(
     app: &AppHandle,
     worker_url: &str,
@@ -96,15 +93,11 @@ pub(crate) async fn repair_email_routing_for_all_domains(
         if entry.error.is_some() {
             continue;
         }
-        let has_disabled_rule = entry
-            .rules
-            .unwrap_or_default()
-            .iter()
-            .any(|r| r.action == "worker" && !r.enabled);
-        if !has_disabled_rule {
-            continue;
-        }
-
+        // Unconditionally re-PUT every domain's routing rules after a Worker
+        // upload. We must not skip domains whose rules appear `enabled: true`
+        // — Cloudflare can leave a rule enabled but with a stale Worker
+        // dispatch target, which silently drops inbound mail ("Delivery
+        // failed" in the CF Activity Log) without ever invoking the Worker.
         let repair_url = format!("{base}/console/domains/routing/repair");
         match client
             .post(&repair_url)

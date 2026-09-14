@@ -1,13 +1,16 @@
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import type { AppSessionStore } from "@/lib/desktop/app-session";
 
+import { ownerLogout } from "./owner-session";
+import { clearWebOwnerSessionStorage } from "./web-owner-persist";
+
 /** Where to land after sign-out: unlock when a keyring session remains, else setup/login. */
 export function signOutRedirectPath(
   isTeam: boolean,
   store: AppSessionStore,
 ): string {
   if (!isDesktopRuntime()) {
-    return "/setup";
+    return "/login";
   }
   if (isTeam) {
     return store.teamStatus?.hasSecret ? "/" : "/login";
@@ -21,6 +24,10 @@ export async function signOutRelaybase(
   store: AppSessionStore,
 ): Promise<void> {
   if (!isDesktopRuntime()) {
+    // Web: revoke owner refresh (needs the Worker URL global, so before the
+    // team clear below deletes it), then drop owner + team tab storage.
+    await ownerLogout();
+    clearWebOwnerSessionStorage();
     const { setWebTeamAuth } = await import("@/mail-platform/session/email-session");
     setWebTeamAuth(null);
     if (typeof window !== "undefined") {

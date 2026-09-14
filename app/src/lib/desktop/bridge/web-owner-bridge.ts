@@ -5,6 +5,7 @@ import {
   ownerLogin,
   ownerLogout,
   ownerSetupAdmin,
+  restoreWebOwnerSession,
 } from "@/lib/desktop/auth";
 import { loadLocalCredentialsFile, persistLocalCredentialsFile } from "./credentials-local";
 import type { DesktopCredentials } from "./credentials";
@@ -89,11 +90,14 @@ export async function webOwnerLogin(input: {
 }
 
 export async function webOwnerBootMail(): Promise<OwnerSessionStatus> {
+  // After a hard reload memory is empty; re-mint from tab sessionStorage.
+  if (!hasOwnerSession()) await restoreWebOwnerSession();
   await ensureAccessToken("mail");
   return webOwnerSessionStatus();
 }
 
 export async function webOwnerUnlockConsole(): Promise<OwnerSessionStatus> {
+  if (!hasOwnerSession()) await restoreWebOwnerSession();
   await ensureAccessToken("console");
   if (!getOwnerSession("console")?.accessToken) {
     throw new Error("Console unlock failed.");

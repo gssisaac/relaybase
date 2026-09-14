@@ -19,6 +19,7 @@ import { SessionProvider } from "@/lib/dashboard/shared/ProductContext";
 import { EnableEmailApiDialogHost } from "@/console/components/setup/use-enable-email-api-dialog";
 import { ConsoleRouteGate } from "@/console/components/setup/ConsoleRouteGate";
 import { useAppSession } from "@/lib/desktop/app-session";
+import { restoreWebOwnerSession } from "@/lib/desktop/auth";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
@@ -137,8 +138,9 @@ function GateInner({ children }: { children: ReactNode }) {
 
 /**
  * Web owner: no keyring / Touch ID phase machine — `hasWebOwnerSession()`
- * (in-memory access token from `ownerLogin()`, see AccountLoginView /
- * WebInstallFlow) is the whole gate. Reuses the same DashboardShell as
+ * (in-memory access token from `webOwnerLogin()`, or re-minted from tab
+ * sessionStorage by `restoreWebOwnerSession()` after a reload) is the whole
+ * gate. Unauthenticated web visitors go to `/login`. Reuses the same DashboardShell as
  * desktop's owner path, just under WebConsoleAppProviders instead of
  * DesktopShell + ConsoleAppProviders.
  */
@@ -178,7 +180,18 @@ export function DesktopDashboardGate({
       setGateMode("web-owner");
       return;
     }
-    setGateMode("web-redirect");
+    // Web hard reload: memory is empty but the tab may still hold a refresh
+    // pair (`relaybase:owner-session`). Re-mint before deciding to redirect.
+    let active = true;
+    void restoreWebOwnerSession().then((restored) => {
+      if (!active) return;
+      setGateMode(
+        restored && hasWebOwnerSession() ? "web-owner" : "web-redirect",
+      );
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -202,7 +215,7 @@ export function DesktopDashboardGate({
       if (auth) {
         router.replace(`/inbox${search}`);
       } else {
-        router.replace("/setup");
+        router.replace("/login");
       }
     }
   }, [gateMode, pathname, router]);

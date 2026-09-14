@@ -2,10 +2,10 @@
  * Web owner session adapter — web-only console (owner dashboard) login.
  *
  * Implements the unified `AuthSession` port with `role: "owner"`. Backed by
- * the in-memory-only access/refresh token pair in
- * `lib/desktop/auth/owner-session` (never persisted to disk, cookies,
- * localStorage, or sessionStorage by design — see that module's header
- * comment), so a hard reload requires signing in again with the passtoken.
+ * `lib/desktop/auth/owner-session`: access tokens in JS memory, refresh
+ * tokens mirrored to tab `sessionStorage` (`relaybase:owner-session`) so a
+ * same-tab hard reload restores via `restoreWebOwnerSession()`. The passtoken
+ * is never stored; closing the tab requires signing in again (N-01).
  *
  * `login()` is intentionally not implemented here: owner sign-in happens in
  * `AccountLoginView` (passtoken form) or the post-install handoff in

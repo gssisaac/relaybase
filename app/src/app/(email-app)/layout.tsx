@@ -21,11 +21,6 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { session } = useMailRuntime();
-  const isSignIn =
-    pathname === "/sign-in" ||
-    pathname === "/sign-in/" ||
-    pathname.startsWith("/sign-in/") ||
-    pathname.startsWith("/sign-in?");
   const isEmailSettings =
     pathname === "/mail-settings" ||
     pathname === "/mail-settings/" ||
@@ -37,14 +32,10 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
     pathname.startsWith("/email/settings/");
 
   useEffect(() => {
-    if (session.ready && !session.identity && !isSignIn) {
-      router.replace("/setup");
+    if (session.ready && !session.identity) {
+      router.replace("/login");
     }
-  }, [session.ready, session.identity, isSignIn, router]);
-
-  if (isSignIn) {
-    return <>{children}</>;
-  }
+  }, [session.ready, session.identity, router]);
 
   if (!session.ready) {
     return (
@@ -88,8 +79,7 @@ function WebMailShellInner({ children }: { children: ReactNode }) {
  * Email app layout — web-only mail client.
  *
  * No console gate, no desktop shell, no Touch ID. Just the mail runtime
- * + the mail pages. Unauthenticated visitors go to `/setup`; `/sign-in` is
- * kept as a backup entry within this group.
+ * + the mail pages. Unauthenticated visitors go to `/login`.
  */
 export default function EmailAppLayout({
   children,

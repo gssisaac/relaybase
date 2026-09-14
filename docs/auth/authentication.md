@@ -25,6 +25,9 @@ Four auth surfaces on the product Worker, plus **Cloudflare OAuth** for install
 | **API integrator** | Product API key (`rb-…`) | `/v1/*` | N/A |
 
 Desktop entry is unified in **`AppSessionStore`** + **`DesktopDashboardGate`**.
+Web (browser build, in development) owners sign in at **`/login`** — see
+**[Web owner session](#web-owner-session)**. Everything else in this doc about
+the keyring, Touch ID, and Rust is **desktop** policy.
 
 ---
 
@@ -70,8 +73,9 @@ Service for both: `com.relaybase.desktop`. Account names are **per Worker URL** 
 biometry ACL on `owner-passtoken:{url}` so the platform itself refuses the read
 without bio.
 
-Still never: `~/.relaybase`, cookies, localStorage, sessionStorage. The Worker
-stores only `sha256(AUTH_PEPPER || salt || passtoken)`.
+On desktop, still never: `~/.relaybase`, cookies, localStorage, sessionStorage.
+The Worker stores only `sha256(AUTH_PEPPER || salt || passtoken)`. (Web has no
+keyring; its policy is in [Web owner session](#web-owner-session).)
 
 ### Write vs read
 
@@ -189,6 +193,39 @@ and is not kept in JS after submit.
 | URL + email identity | `~/.relaybase/team-login.json` (no password) |
 
 Full layout: **[home-storage.md](../desktop/home-storage.md)**.
+
+---
+
+## Web owner session
+
+Browser build only (`!isDesktopRuntime()`; in development, not live). No OS
+keyring, no Touch ID, no Rust — JS calls the Worker with `fetch` + Bearer
+(M-05). Follows N-01 in
+[rust-migration-strategy.md](../architecture/rust-migration-strategy.md).
+Desktop behavior above is unchanged by anything in this section.
+
+| Secret | Web storage |
+|--------|-------------|
+| Passtoken plaintext | **Never stored.** Typed on `/login` (or handed off once right after web install). Re-typed after the tab closes |
+| Owner `mailRefreshToken` + `consoleRefreshToken` + Worker URL | Tab `sessionStorage` `relaybase:owner-session` (`lib/desktop/auth/web-owner-persist.ts`) |
+| Mail / console access JWT | JS memory (`lib/desktop/auth/owner-session.ts`), re-minted via `POST /console/refresh` |
+| Teammate mobile password | Tab `sessionStorage` `relaybase:email-session` |
+| Recent Worker URLs | `localStorage` `relaybase.recentWorkerUrls` (URLs only, no secrets) |
+
+Never for owner tokens: localStorage, cookies, or a BFF session cookie.
+
+| Event | Behavior |
+|-------|----------|
+| Unauthenticated landing | `/login` (Owner tab default + Teammate). Install is `/setup`. Legacy `/sign-in` redirects to `/login` |
+| Login | `AccountLoginView` → `webOwnerLogin()` → `/console/login`; refresh pair written to `relaybase:owner-session` |
+| Refresh rotation | Every successful `/console/refresh` overwrites the stored token for that scope (the Worker rotates refresh tokens) |
+| Same-tab hard reload | `/` immediately replaces to `/login` (or `/dashboard`/`/inbox` if memory already has a session). `/login` and `DesktopDashboardGate` call `restoreWebOwnerSession()` → refresh both scopes. Both must succeed; otherwise the survivor is revoked, storage cleared, user lands on `/login` |
+| Sign out | `ownerLogout()` + clear owner and team `sessionStorage` → `/login` |
+| Tab closed | `sessionStorage` is gone → `/login`, type passtoken again |
+| Duplicated tab | Copies `sessionStorage`; the first tab to refresh rotates the token, so the other tab's next refresh 401s and it must sign in again (the Worker does not revoke the family for this) |
+
+Gate every web persist / restore / redirect with `!isDesktopRuntime()`; desktop
+never reads or writes `relaybase:owner-session`.
 
 ---
 
@@ -342,6 +379,9 @@ Detailed phase transitions: **[desktop-session-machine.md](./desktop-session-mac
 | `console/components/setup/ConsoleGateView.tsx` | Touch ID (read keyring passtoken) + typed fallback |
 | `console/components/setup/ConsoleRouteGate.tsx` | Dashboard route blocker |
 | `console/components/setup/UnlockView.tsx` | First-login / bio-declined typed form |
+| `lib/desktop/auth/owner-session.ts` | Web owner session: memory access, `restoreWebOwnerSession()` |
+| `lib/desktop/auth/web-owner-persist.ts` | Web-only `relaybase:owner-session` refresh storage |
+| `console/components/setup/AccountLoginView.tsx` | Web `/login` form (owner passtoken / teammate password, `WorkerUrlPicker`) |
 
 After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`** (see **AGENT.md**).
 
@@ -350,9 +390,10 @@ After Worker auth changes: **`cd ../relaybase-worker && pnpm run build:bundle`**
 ## Agent checklist
 
 1. Read this doc + **desktop-session-machine.md** before changing unlock flow.
-2. Persist owner passtoken plaintext **only** in OS keyring `owner-passtoken:{workerUrl}`. Never `~/.relaybase`, cookies, localStorage, or sessionStorage. JS never reads it from the keyring.
+2. Desktop: persist owner passtoken plaintext **only** in OS keyring `owner-passtoken:{workerUrl}`. Never `~/.relaybase`, cookies, localStorage, or sessionStorage. JS never reads it from the keyring. Web: never persist the passtoken anywhere; only owner refresh tokens go to tab `sessionStorage` ([Web owner session](#web-owner-session)).
 3. `/console/*` → console scope; `/mail/*` → mail scope.
 4. Touch ID **only** authorizes a read of `owner-passtoken`. Not on silent mail boot, not on teammate flows, not as a generic console privilege check.
 5. After first enrollment, do not show the typed passtoken form unless bio failed / was declined or the keyring item is missing.
 6. New desktop entry paths → `AppSessionStore` actions, not bypass routes.
 7. Rebuild Worker bundle after `../relaybase-worker/` auth changes.
+8. Web owner changes stay behind `!isDesktopRuntime()` — a desktop user must see the same screens, boot, and sign-out destination.

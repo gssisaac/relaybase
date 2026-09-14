@@ -3,16 +3,15 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { AccountLoginView } from "@/console/components/setup/AccountLoginView";
 import { UnlockView } from "@/console/components/setup/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
-import { EmailAppProviders } from "@/mail-platform/runtime";
+import { getWebTeamAuth } from "@/mail-platform/session/email-session";
 import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 /**
- * Already-installed / post-setup sign-in. Shows the passtoken form here.
- * After unlock, leave setup for the mailbox.
+ * Desktop: already-installed passtoken unlock (`UnlockView`).
+ * Web: do not render login here — the Owner/Teammate form lives at `/login`.
  */
 export default function SetupConnectPage() {
   const router = useRouter();
@@ -23,11 +22,21 @@ export default function SetupConnectPage() {
     if (!isDesktop) {
       if (hasWebOwnerSession()) {
         router.replace("/dashboard");
+        return;
       }
+      if (getWebTeamAuth()) {
+        router.replace("/inbox");
+        return;
+      }
+      router.replace(`/login${window.location.search}`);
+      return;
+    }
+    if (store.phase.kind === "ownerRecover") {
+      router.replace("/setup/recover-admin");
       return;
     }
     store.openAlreadyInstalled();
-  }, [isDesktop, store, router]);
+  }, [isDesktop, store, store.phase.kind, router]);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -37,17 +46,10 @@ export default function SetupConnectPage() {
   }, [isDesktop, store.canShowApp, router]);
 
   if (!isDesktop) {
-    if (hasWebOwnerSession()) {
-      return (
-        <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
-          Opening dashboard…
-        </div>
-      );
-    }
     return (
-      <EmailAppProviders>
-        <AccountLoginView />
-      </EmailAppProviders>
+      <div className="flex h-svh items-center justify-center text-sm text-muted-foreground">
+        Opening…
+      </div>
     );
   }
 

@@ -22,8 +22,9 @@ import {
   webOAuthStartHrefForPath,
 } from "@/lib/desktop/bridge/web-oauth-authorize";
 import { fetchWebCfOAuthSessionPresent } from "@/lib/desktop/bridge/web-oauth-complete";
+import { webOwnerLogin } from "@/lib/desktop/bridge/web-owner-bridge";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
-import { ownerLogin } from "@/lib/desktop/auth";
+import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
 import { saveUserConnection } from "@/lib/desktop/user-data";
 import { useOptionalDesktop } from "@/lib/desktop/shell";
 
@@ -242,22 +243,17 @@ export function WebInstallProgress() {
       const workerUrl = done.workerUrl.replace(/\/$/, "");
       if (done.passtoken) {
         // Bootstrap an owner session directly against the deployed Worker —
-        // same ownerLogin() the Account Login screen's owner tab uses, so
+        // same webOwnerLogin() the Account Login screen's owner tab uses, so
         // the rest of the app (workerFetch's Bearer path, WebOwnerSession)
-        // picks it up. router.push (not a hard navigation) keeps this
-        // in-memory-only session alive across the move to /dashboard.
-        if (typeof window !== "undefined") {
-          const w = window as unknown as { __RELAYBASE_WORKER_URL__?: string };
-          w.__RELAYBASE_WORKER_URL__ = workerUrl;
-        }
-        await ownerLogin({ passtoken: done.passtoken, label: "web" });
+        // picks it up. Access stays in memory; refresh is mirrored to tab
+        // sessionStorage so a reload on /dashboard restores the session.
+        await webOwnerLogin({ workerUrl, passtoken: done.passtoken });
+        rememberWorkerUrl(workerUrl);
         router.push("/dashboard");
       } else {
         // An owner was already configured on this Worker — nothing to log
         // in with here. Send them to sign in with their existing passtoken.
-        router.push(
-          `/setup/connect?workerUrl=${encodeURIComponent(workerUrl)}`,
-        );
+        router.push(`/login?workerUrl=${encodeURIComponent(workerUrl)}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed");

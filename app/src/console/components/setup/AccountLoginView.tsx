@@ -8,8 +8,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { WorkerUrlPicker } from "@/console/components/setup/WorkerUrlPicker";
 import { cn } from "@/lib/utils";
-import { ownerLogin } from "@/lib/desktop/auth";
+import { hasOwnerSession } from "@/lib/desktop/auth";
+import { webOwnerLogin } from "@/lib/desktop/bridge/web-owner-bridge";
+import { rememberWorkerUrl } from "@/lib/desktop/worker-url/recent-worker-urls";
+import { normalizeWorkerUrl } from "@/lib/desktop/worker-url/worker-url";
 import { useMailRuntime } from "@/mail-platform/runtime";
 
 type Role = "owner" | "team";
@@ -34,9 +38,9 @@ function setWorkerUrlGlobal(workerUrl: string): void {
 }
 
 /**
- * Unified web account login (owner passtoken or teammate password). Used on
- * `/setup/connect`, `/login`, and backup `/sign-in` — the welcome choice at
- * `/setup` is the primary entry, matching desktop.
+ * Unified web account login (owner passtoken or teammate password). The web
+ * entry is `/login` (Owner tab default); also used on `/setup/connect`.
+ * First-time install lives at `/setup`.
  */
 export function AccountLoginView({
   defaultRole = "owner",
@@ -47,12 +51,13 @@ export function AccountLoginView({
   const { session } = useMailRuntime();
   const [role, setRole] = useState<Role>(defaultRole);
   const [workerUrl, setWorkerUrl] = useState(workerUrlFromQuery);
+  const [workerUrlSeeds] = useState(() => [workerUrlFromQuery()]);
   const [accountEmail, setAccountEmail] = useState("");
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const trimmedUrl = workerUrl.trim().replace(/\/$/, "");
+  const trimmedUrl = normalizeWorkerUrl(workerUrl);
   const canSubmit =
     Boolean(trimmedUrl) &&
     Boolean(secret) &&
@@ -65,13 +70,13 @@ export function AccountLoginView({
     setError(null);
     try {
       if (role === "owner") {
-        setWorkerUrlGlobal(trimmedUrl);
         try {
-          await ownerLogin({ passtoken: secret, label: "web" });
+          await webOwnerLogin({ workerUrl: trimmedUrl, passtoken: secret });
         } catch (err) {
-          setWorkerUrlGlobal("");
+          if (!hasOwnerSession()) setWorkerUrlGlobal("");
           throw err;
         }
+        rememberWorkerUrl(trimmedUrl);
         router.push("/dashboard");
       } else {
         await session.login({
@@ -79,6 +84,7 @@ export function AccountLoginView({
           accountEmail: accountEmail.trim(),
           mobilePassword: secret,
         });
+        rememberWorkerUrl(trimmedUrl);
         router.push("/inbox");
       }
     } catch (err) {
@@ -120,18 +126,12 @@ export function AccountLoginView({
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="space-y-1.5">
-            <Label htmlFor="worker-url">Worker URL</Label>
-            <Input
-              id="worker-url"
-              type="url"
-              required
-              value={workerUrl}
-              onChange={(e) => setWorkerUrl(e.target.value)}
-              placeholder="https://your-worker.example.workers.dev"
-              disabled={busy}
-            />
-          </div>
+          <WorkerUrlPicker
+            value={workerUrl}
+            onChange={setWorkerUrl}
+            seedUrls={workerUrlSeeds}
+            disabled={busy}
+          />
           {role === "team" ? (
             <div className="space-y-1.5">
               <Label htmlFor="account-email">Account email</Label>

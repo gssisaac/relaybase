@@ -41,6 +41,9 @@ export function SessionPhaseScreen({
         router.replace("/dashboard");
         return;
       }
+      // Web never uses the desktop welcome / unlock phases; unauthenticated
+      // web entry is `/login` (app/page.tsx, DesktopDashboardGate).
+      return;
     }
     const path = window.location.pathname;
     if (phase.kind === "choice" && path !== "/setup") {

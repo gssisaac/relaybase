@@ -240,7 +240,14 @@ export function UnlockView({
                 <button
                   type="button"
                   className="text-left text-xs text-muted-foreground hover:underline"
-                  onClick={() => store.enterRecover()}
+                  disabled={busy}
+                  data-tauri-drag-region="false"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    store.clearError();
+                    store.enterRecover();
+                    router.push("/setup/recover-admin");
+                  }}
                 >
                   I forgot my passtoken
                 </button>

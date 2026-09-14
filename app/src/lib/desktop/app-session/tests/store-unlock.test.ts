@@ -466,4 +466,14 @@ describe("AppSessionStore unlock", () => {
     assert.equal(store.workerUnreachable, false);
     assert.equal(store.bioDismissed, true);
   });
+
+  it("enterRecover holds ownerRecover even if already-installed is opened", () => {
+    const store = createStore({});
+    connectOwner(store);
+    store.setStatuses(ownerStatus({ workerUrl: WORKER_URL }), teamStatus({}));
+    store.enterRecover();
+    assert.equal(store.phase.kind, "ownerRecover");
+    store.openAlreadyInstalled();
+    assert.equal(store.phase.kind, "ownerRecover");
+  });
 });

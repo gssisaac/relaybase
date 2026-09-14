@@ -3,8 +3,10 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { CampaignsListView } from "./CampaignsListView";
-import { CampaignComposeView } from "./CampaignComposeView";
+import { campaignDetailFromSearch } from "@/crm/lib/paths";
+import { CampaignDetailProvider } from "@/crm/pages/campaigns/CampaignDetailContext";
+import { CampaignDetailSwitch } from "@/crm/pages/campaigns/CampaignDetailSwitch";
+import { CampaignsListView } from "@/crm/pages/campaigns/CampaignsListView";
 
 /**
  * `?id=` switch, not a `[id]` dynamic segment — the packaged desktop build is
@@ -15,8 +17,14 @@ import { CampaignComposeView } from "./CampaignComposeView";
  */
 function CampaignsRoute() {
   const searchParams = useSearchParams();
-  const id = searchParams.get("id");
-  if (id) return <CampaignComposeView campaignId={id} />;
+  const detail = campaignDetailFromSearch(searchParams);
+  if (detail) {
+    return (
+      <CampaignDetailProvider key={detail.campaignId} campaignId={detail.campaignId}>
+        <CampaignDetailSwitch tab={detail.tab} />
+      </CampaignDetailProvider>
+    );
+  }
   return <CampaignsListView />;
 }
 

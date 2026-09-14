@@ -1,6 +1,5 @@
 "use client";
 
-import * as React from "react";
 import dynamic from "next/dynamic";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Campaign, CrmTemplate } from "@/lib/crm/api";
+import type { CrmTemplate } from "@/lib/crm/api";
 
 const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), {
   ssr: false,
@@ -23,17 +22,14 @@ const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), {
 });
 
 /**
- * Compose-shaped editor for campaign drafts — same chrome as BroadcastComposeForm
- * (header rows / body / footer). Body is BlockNote + template preview instead
- * of a plain textarea.
+ * Content editor for a campaign — template, subject, body, preview, Save.
+ * Recipients and Send live on the Publish tab.
  */
 export function CampaignComposeForm({
   campaignId,
   templates,
   templateId,
   setTemplateId,
-  contactCount,
-  contactCountHasMore,
   subject,
   setSubject,
   bodyMarkdown,
@@ -42,20 +38,13 @@ export function CampaignComposeForm({
   device,
   setDevice,
   editable,
-  sending,
   saveState,
-  campaignStatus,
-  onSend,
-  onTest,
-  onSchedule,
-  onCancelSchedule,
+  onSave,
 }: {
   campaignId: string;
   templates: CrmTemplate[];
   templateId: string;
   setTemplateId: (id: string) => void;
-  contactCount: number | null;
-  contactCountHasMore: boolean;
   subject: string;
   setSubject: (v: string) => void;
   bodyMarkdown: string;
@@ -64,28 +53,9 @@ export function CampaignComposeForm({
   device: "desktop" | "mobile";
   setDevice: (device: "desktop" | "mobile") => void;
   editable: boolean;
-  sending: boolean;
   saveState: "idle" | "saving" | "error";
-  campaignStatus: Campaign["status"];
-  onSend: () => void;
-  onTest: () => void;
-  onSchedule: () => void;
-  onCancelSchedule: () => void;
+  onSave: () => void;
 }) {
-  const canSend = editable && !sending && Boolean(subject.trim());
-
-  const handleSendHotkey = (e: React.KeyboardEvent) => {
-    if (!(e.metaKey || e.ctrlKey) || e.key !== "Enter") return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (canSend) onSend();
-  };
-
-  const toLabel =
-    contactCount == null
-      ? "All contacts"
-      : `All contacts · ${contactCount}${contactCountHasMore ? "+" : ""}`;
-
   const draftStatus =
     !editable
       ? null
@@ -98,7 +68,6 @@ export function CampaignComposeForm({
   return (
     <div
       data-allow-tab-focus
-      onKeyDown={handleSendHotkey}
       className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/40 bg-card shadow-sm"
     >
       <div className="flex shrink-0 flex-col divide-y divide-border/20 px-4">
@@ -128,15 +97,6 @@ export function CampaignComposeForm({
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 py-1">
-          <span className="w-16 shrink-0 select-none text-xs font-medium text-muted-foreground">
-            To:
-          </span>
-          <span className="min-w-0 flex-1 truncate py-1.5 text-sm text-foreground">
-            {toLabel}
-          </span>
         </div>
 
         <div className="flex shrink-0 items-center py-1">
@@ -198,27 +158,18 @@ export function CampaignComposeForm({
 
       <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/20 bg-muted/10 px-4 py-3">
         <span className="select-none text-xs text-muted-foreground/60">
-          {draftStatus ?? (editable ? "⌘Enter to send" : "")}
+          {draftStatus ?? ""}
         </span>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={onTest}>
-            Send test
+        {editable ? (
+          <Button
+            size="sm"
+            onClick={onSave}
+            disabled={saveState === "saving"}
+            className="px-4"
+          >
+            {saveState === "saving" ? "Saving…" : "Save"}
           </Button>
-          {campaignStatus === "scheduled" ? (
-            <Button size="sm" variant="outline" onClick={onCancelSchedule}>
-              Cancel schedule
-            </Button>
-          ) : editable ? (
-            <>
-              <Button size="sm" variant="outline" onClick={onSchedule}>
-                Schedule
-              </Button>
-              <Button size="sm" onClick={onSend} disabled={!canSend} className="px-4">
-                {sending ? "Sending…" : "Send"}
-              </Button>
-            </>
-          ) : null}
-        </div>
+        ) : null}
       </div>
     </div>
   );

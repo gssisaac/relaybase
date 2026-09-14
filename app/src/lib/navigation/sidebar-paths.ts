@@ -142,6 +142,25 @@ export function normalizeEntryPath(path: string): string {
     return `/broadcasts?${next.toString()}`;
   }
 
+  const crmCampaignMatch = pathname.match(
+    /^\/crm\/campaigns\/([^/]+)(?:\/(content|publish|progress|overview))?\/?$/,
+  );
+  if (crmCampaignMatch) {
+    let campaignId = crmCampaignMatch[1]!;
+    try {
+      campaignId = decodeURIComponent(campaignId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", campaignId);
+    const tabSeg = crmCampaignMatch[2];
+    if (tabSeg === "content" || tabSeg === "publish" || tabSeg === "progress") {
+      next.set("tab", tabSeg === "progress" ? "publish" : tabSeg);
+    }
+    return `/crm/campaigns?${next.toString()}`;
+  }
+
   // Settings: /settings/{tab} are real nested routes now. Collapse
   // cloudflare → /settings and rewrite legacy /settings?tab={tab} into
   // the nested path form so stored last-routes still restore.

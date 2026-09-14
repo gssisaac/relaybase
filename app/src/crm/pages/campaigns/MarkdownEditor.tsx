@@ -29,7 +29,7 @@ export default function MarkdownEditor({
   // Hydrate once on mount only — re-running on every `value` change would
   // fight the user's own typing, since onChange below feeds edits back into
   // that same prop (the echo loop Railmark's docs call out). A campaign
-  // switch remounts this component (see CampaignComposeView's `key`), which
+  // switch remounts this component (see CampaignContentView's `key`), which
   // is the only time content should reload from outside.
   useEffect(() => {
     if (hydrated.current) return;

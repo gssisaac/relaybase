@@ -204,58 +204,6 @@ export type CampaignAsset = {
 };
 
 // ============================================================================
-// Legacy Audience Types (Retained during migration phase)
-// ============================================================================
-
-export type AudienceDataSource = {
-  type: "generic_json";
-  endpointUrl: string;
-  credential?: string;
-  credentialHeader?: string;
-};
-
-export type AudienceSyncRun = {
-  id: string;
-  trigger: "manual" | "cron";
-  status: "running" | "success" | "error";
-  phase: "idle" | "fetching" | "parsing" | "writing" | "done";
-  startedAt: string;
-  finishedAt?: string;
-  totalCount?: number;
-  processedCount?: number;
-  skippedCount?: number;
-  successCount?: number;
-  failedCount?: number;
-  error?: string;
-};
-
-export type AudienceMember = {
-  id: string;
-  email: string;
-  name: string | null;
-  source: "manual" | "synced";
-  addedAt: string;
-};
-
-export type AudienceGroup = {
-  id: string;
-  accountLinkId: string;
-  name: string;
-  domain: string;
-  createdAt: string;
-  defaultFrom: string | null;
-  dataSource: AudienceDataSource | null;
-  cronEnabled: boolean;
-  cronIntervalMinutes: number;
-  lastSyncAt: string | null;
-  lastSyncStatus: "success" | "error" | null;
-  lastSyncError: string | null;
-  lastSyncCount: number | null;
-  syncHistory: AudienceSyncRun[];
-  contacts: AudienceMember[];
-};
-
-// ============================================================================
 // Root Dev JSON Data Store (`data/store.json`)
 // ============================================================================
 
@@ -272,6 +220,4 @@ export type CrmDataStore = {
   scheduledJobs: ScheduledJob[];
   trackingEvents: TrackingEvent[];
   campaignAssets: CampaignAsset[];
-  /** Legacy store support during transition */
-  audienceGroups?: AudienceGroup[];
 };

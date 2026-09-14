@@ -38,7 +38,6 @@ function defaultStore(): CrmDataStore {
     scheduledJobs: [],
     trackingEvents: [],
     campaignAssets: [],
-    audienceGroups: [],
   };
 }
 
@@ -67,7 +66,6 @@ function readStore(): CrmDataStore {
     if (!parsed.scheduledJobs) parsed.scheduledJobs = [];
     if (!parsed.trackingEvents) parsed.trackingEvents = [];
     if (!parsed.campaignAssets) parsed.campaignAssets = [];
-    if (!parsed.audienceGroups) parsed.audienceGroups = [];
     return parsed;
   } catch {
     const initial = defaultStore();

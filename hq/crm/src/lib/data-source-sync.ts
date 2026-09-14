@@ -1,4 +1,4 @@
-import type { AudienceDataSource } from "../db/types";
+import type { CampaignDataSource } from "../db/types";
 
 export type ParsedContact = { email: string; name: string | null };
 
@@ -56,7 +56,7 @@ export function parseContactsPayload(body: unknown): {
 }
 
 export async function fetchDataSourceContacts(
-  dataSource: AudienceDataSource,
+  dataSource: CampaignDataSource,
 ): Promise<{ contacts: ParsedContact[]; skipped: number }> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (dataSource.credential?.trim()) {

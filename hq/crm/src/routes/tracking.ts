@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { store } from "../db/store";
-import { emailFromMemberKey } from "../lib/member-key";
 import { newId } from "../lib/ids";
 
 export const crmTracking = new Hono();
@@ -11,47 +10,99 @@ const PIXEL_GIF = Buffer.from(
   "base64",
 );
 
-function recordEvent(input: {
-  campaignId: string;
-  memberKey: string;
-  type: "open" | "click";
-  url?: string;
-}) {
-  const email = emailFromMemberKey(input.memberKey);
-  if (!email) return;
+function recordOpen(broadcastId: string, recipientId: string) {
   try {
+    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.broadcastId === broadcastId);
+    if (!recipient) return;
+    const now = new Date().toISOString();
+    const firstOpen = !recipient.openedAt;
     store.update((draft) => {
+      const idx = draft.recipients.findIndex((r) => r.id === recipientId);
+      if (idx < 0) return;
+      draft.recipients[idx] = {
+        ...draft.recipients[idx]!,
+        openedAt: draft.recipients[idx]!.openedAt ?? now,
+        openCount: draft.recipients[idx]!.openCount + 1,
+      };
       draft.trackingEvents.push({
         id: newId("track"),
-        campaignId: input.campaignId,
-        memberEmail: email,
-        type: input.type,
-        url: input.url ?? null,
-        occurredAt: new Date().toISOString(),
+        broadcastId,
+        recipientId,
+        memberEmail: recipient.email,
+        type: "open",
+        url: null,
+        occurredAt: now,
       });
+      if (firstOpen) {
+        const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+        if (bIdx >= 0) {
+          draft.broadcasts[bIdx] = {
+            ...draft.broadcasts[bIdx]!,
+            stats: { ...draft.broadcasts[bIdx]!.stats, opened: draft.broadcasts[bIdx]!.stats.opened + 1 },
+          };
+        }
+      }
     });
   } catch (err) {
-    console.error("[crm-tracking] failed to record event", err);
+    console.error("[crm-tracking] failed to record open", err);
   }
 }
 
-// GET /crm/t/o/:campaignId/:memberKey — open pixel
-crmTracking.get("/o/:campaignId/:memberKey", async (c) => {
-  const { campaignId, memberKey } = c.req.param();
-  recordEvent({ campaignId, memberKey, type: "open" });
+function recordClick(broadcastId: string, recipientId: string, url: string) {
+  try {
+    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.broadcastId === broadcastId);
+    if (!recipient) return;
+    const now = new Date().toISOString();
+    const firstClick = !recipient.clickedAt;
+    store.update((draft) => {
+      const idx = draft.recipients.findIndex((r) => r.id === recipientId);
+      if (idx < 0) return;
+      draft.recipients[idx] = {
+        ...draft.recipients[idx]!,
+        clickedAt: draft.recipients[idx]!.clickedAt ?? now,
+        clickCount: draft.recipients[idx]!.clickCount + 1,
+      };
+      draft.trackingEvents.push({
+        id: newId("track"),
+        broadcastId,
+        recipientId,
+        memberEmail: recipient.email,
+        type: "click",
+        url,
+        occurredAt: now,
+      });
+      if (firstClick) {
+        const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+        if (bIdx >= 0) {
+          draft.broadcasts[bIdx] = {
+            ...draft.broadcasts[bIdx]!,
+            stats: { ...draft.broadcasts[bIdx]!.stats, clicked: draft.broadcasts[bIdx]!.stats.clicked + 1 },
+          };
+        }
+      }
+    });
+  } catch (err) {
+    console.error("[crm-tracking] failed to record click", err);
+  }
+}
+
+// GET /crm/t/o/:broadcastId/:recipientId — open pixel
+crmTracking.get("/o/:broadcastId/:recipientId", async (c) => {
+  const { broadcastId, recipientId } = c.req.param();
+  recordOpen(broadcastId, recipientId);
 
   c.header("Content-Type", "image/gif");
   c.header("Cache-Control", "no-store");
   return c.body(PIXEL_GIF);
 });
 
-// GET /crm/t/c/:campaignId/:memberKey?u=<original> — click redirect
-crmTracking.get("/c/:campaignId/:memberKey", async (c) => {
-  const { campaignId, memberKey } = c.req.param();
+// GET /crm/t/c/:broadcastId/:recipientId?u=<original> — click redirect
+crmTracking.get("/c/:broadcastId/:recipientId", async (c) => {
+  const { broadcastId, recipientId } = c.req.param();
   const target = c.req.query("u");
   if (!target) return c.json({ error: "missing u" }, 400);
 
-  recordEvent({ campaignId, memberKey, type: "click", url: target });
+  recordClick(broadcastId, recipientId, target);
 
   return c.redirect(target, 302);
 });

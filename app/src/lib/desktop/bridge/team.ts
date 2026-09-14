@@ -1,4 +1,10 @@
 import { invoke, isDesktopRuntime } from "./invoke";
+import {
+  webTeamLogin,
+  webTeamLogout,
+  webTeamSessionStatus,
+  webTeamUnlock,
+} from "./web-team-bridge";
 
 export type DesktopTeamLogin = {
   workerUrl: string;
@@ -48,13 +54,7 @@ export type TeamSessionStatus = {
 
 export async function desktopTeamSessionStatus(): Promise<TeamSessionStatus> {
   if (!isDesktopRuntime()) {
-    return {
-      hasSecret: false,
-      hasAccess: false,
-      accountEmail: "",
-      workerUrl: "",
-      platform: "other",
-    };
+    return webTeamSessionStatus();
   }
   return invoke("team_session_status_cmd");
 }
@@ -64,6 +64,9 @@ export async function desktopTeamLogin(input: {
   accountEmail: string;
   mobilePassword: string;
 }): Promise<TeamSessionStatus> {
+  if (!isDesktopRuntime()) {
+    return webTeamLogin(input);
+  }
   return invoke("team_login_cmd", {
     workerUrl: input.workerUrl,
     accountEmail: input.accountEmail,
@@ -72,10 +75,17 @@ export async function desktopTeamLogin(input: {
 }
 
 export async function desktopTeamUnlock(): Promise<TeamSessionStatus> {
+  if (!isDesktopRuntime()) {
+    return webTeamUnlock();
+  }
   return invoke("team_unlock_cmd");
 }
 
 export async function desktopTeamLogout(): Promise<void> {
+  if (!isDesktopRuntime()) {
+    webTeamLogout();
+    return;
+  }
   await invoke("team_logout_cmd");
 }
 

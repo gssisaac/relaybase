@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useDashboardPaths } from "@/console/lib/paths";
 import { useEmailPaths } from "@/email/lib/paths";
 import { useNotificationOpenMail } from "@/lib/desktop/notify";
+import { modeFromPathname } from "@/lib/navigation/sidebar-paths";
 import { cn } from "@/lib/utils";
 
 export function EmailShell({
@@ -51,12 +52,17 @@ export function EmailShell({
     pathname.startsWith("/emails/") ||
     pathname === "/emails";
 
+  // CRM owns DesktopTitleBar + compose/list chrome (same as mailbox / dashboard).
+  // Without this, `/crm/*` falls through to the padded max-w form page.
+  const isCrmRoute = modeFromPathname(pathname) === "crm";
+
   const isMailbox =
     forceFullBleed ||
     isEmailAppRoute ||
     pathname === email ||
     pathname.startsWith(`${email}/`) ||
-    dashboardScoped;
+    dashboardScoped ||
+    isCrmRoute;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

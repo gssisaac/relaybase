@@ -18,3 +18,7 @@ export function useCrmPaths() {
 
   return { base, contacts, pipeline, campaigns, tabs };
 }
+
+export function campaignDetailHref(id: string): string {
+  return `/crm/campaigns?id=${encodeURIComponent(id)}`;
+}

@@ -1,19 +1,13 @@
 "use client";
 
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
+import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -21,16 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { useCrmPaths } from "@/crm/lib/paths";
 import { crmApi, type Campaign, type CrmTemplate } from "@/lib/crm/api";
 
-const MarkdownEditor = dynamic(() => import("./MarkdownEditor"), {
-  ssr: false,
-  loading: () => (
-    <div className="min-h-[300px] rounded-md border border-border/60 p-4 text-sm text-muted-foreground">
-      Loading editor…
-    </div>
-  ),
-});
+import { CampaignComposeForm } from "./CampaignComposeForm";
 
 const AUTOSAVE_DELAY_MS = 3000;
 
@@ -41,13 +30,23 @@ function statusBadgeVariant(status: Campaign["status"]) {
   return "secondary" as const;
 }
 
+function composeTitle(campaign: Campaign, subject: string) {
+  if (campaign.status === "draft" || campaign.status === "failed") {
+    return "Draft campaign";
+  }
+  return subject.trim() || "Campaign";
+}
+
+type DraftFields = { subject: string; bodyMarkdown: string; templateId: string };
+
 export function CampaignComposeView({ campaignId }: { campaignId: string }) {
+  const { campaigns } = useCrmPaths();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [templates, setTemplates] = useState<CrmTemplate[]>([]);
   const [subject, setSubject] = useState("");
   const [bodyMarkdown, setBodyMarkdown] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
-  const [templateId, setTemplateId] = useState<string>("");
+  const [templateId, setTemplateId] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [testEmailOpen, setTestEmailOpen] = useState(false);
@@ -55,57 +54,96 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
   const [sending, setSending] = useState(false);
+  const [contactCount, setContactCount] = useState<number | null>(null);
+  const [contactCountHasMore, setContactCountHasMore] = useState(false);
 
-  const lastSaved = useRef<{ subject: string; bodyMarkdown: string; templateId: string } | null>(
-    null,
-  );
+  const lastSaved = useRef<DraftFields | null>(null);
+  const draftRef = useRef<DraftFields>({ subject: "", bodyMarkdown: "", templateId: "" });
+  const persistInFlight = useRef<Promise<boolean> | null>(null);
+  const editable = campaign?.status === "draft" || campaign?.status === "failed";
+
+  draftRef.current = { subject, bodyMarkdown, templateId };
 
   useEffect(() => {
     void Promise.all([crmApi.getCampaign(campaignId), crmApi.listTemplates()]).then(
       ([c, t]) => {
+        const nextTemplateId = c.templateId ?? t.templates[0]?.id ?? "";
         setCampaign(c);
         setSubject(c.subject);
         setBodyMarkdown(c.bodyMarkdown);
-        setTemplateId(c.templateId ?? t.templates[0]?.id ?? "");
+        setTemplateId(nextTemplateId);
         setTemplates(t.templates);
         lastSaved.current = {
           subject: c.subject,
           bodyMarkdown: c.bodyMarkdown,
-          templateId: c.templateId ?? t.templates[0]?.id ?? "",
+          templateId: nextTemplateId,
         };
       },
       () => toast.error("Could not load campaign"),
     );
   }, [campaignId]);
 
-  const editable = campaign?.status === "draft" || campaign?.status === "failed";
+  useEffect(() => {
+    void crmApi.listContacts().then(
+      (data) => {
+        setContactCount(data.contacts.length);
+        setContactCountHasMore(Boolean(data.nextCursor));
+      },
+      () => {
+        setContactCount(null);
+        setContactCountHasMore(false);
+      },
+    );
+  }, []);
 
-  // 3s debounce autosave (P0-6) — skips the write when nothing actually changed.
+  function persistNow(): Promise<boolean> {
+    if (!editable) return Promise.resolve(true);
+    if (persistInFlight.current) return persistInFlight.current;
+
+    const next = draftRef.current;
+    const prev = lastSaved.current;
+    if (
+      prev &&
+      prev.subject === next.subject &&
+      prev.bodyMarkdown === next.bodyMarkdown &&
+      prev.templateId === next.templateId
+    ) {
+      return Promise.resolve(true);
+    }
+
+    setSaveState("saving");
+    const run = crmApi
+      .updateCampaign(campaignId, next)
+      .then(() => {
+        lastSaved.current = next;
+        setSaveState("idle");
+        return true;
+      })
+      .catch(() => {
+        setSaveState("error");
+        return false;
+      })
+      .finally(() => {
+        persistInFlight.current = null;
+      });
+    persistInFlight.current = run;
+    return run;
+  }
+
   useEffect(() => {
     if (!campaign || !editable) return;
     const timer = setTimeout(() => {
-      const next = { subject, bodyMarkdown, templateId };
-      const prev = lastSaved.current;
-      if (prev && prev.subject === next.subject && prev.bodyMarkdown === next.bodyMarkdown && prev.templateId === next.templateId) {
-        return;
-      }
-      setSaveState("saving");
-      crmApi
-        .updateCampaign(campaignId, next)
-        .then(() => {
-          lastSaved.current = next;
-          setSaveState("idle");
-        })
-        .catch(() => setSaveState("error"));
+      void persistNow();
     }, AUTOSAVE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [subject, bodyMarkdown, templateId, campaign, editable, campaignId]);
 
   const template = templates.find((t) => t.id === templateId);
   const renderedPreview = useMemo(() => {
-    if (!template) return previewHtml;
+    const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    if (!template) return content;
     return template.htmlSource
-      .replaceAll("{{content}}", previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>")
+      .replaceAll("{{content}}", content)
       .replaceAll("{{unsubscribe_url}}", "#")
       .replaceAll("{{contact.name}}", "there")
       .replaceAll("{{contact.email}}", "you@example.com");
@@ -114,6 +152,11 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
   async function handleSend() {
     setSending(true);
     try {
+      const saved = await persistNow();
+      if (!saved) {
+        toast.error("Could not save campaign");
+        return;
+      }
       const result = await crmApi.sendCampaign(campaignId);
       setCampaign(result.campaign);
       toast.success(`Sent to ${result.sent} contact${result.sent === 1 ? "" : "s"}`);
@@ -127,6 +170,11 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
   async function handleTestSend() {
     if (!testEmail.includes("@")) return;
     try {
+      const saved = await persistNow();
+      if (!saved) {
+        toast.error("Could not save campaign");
+        return;
+      }
       await crmApi.testSendCampaign(campaignId, testEmail);
       toast.success("Test email sent");
       setTestEmailOpen(false);
@@ -138,7 +186,15 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
   async function handleSchedule() {
     if (!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()) return;
     try {
-      const updated = await crmApi.scheduleCampaign(campaignId, new Date(scheduleAt).toISOString());
+      const saved = await persistNow();
+      if (!saved) {
+        toast.error("Could not save campaign");
+        return;
+      }
+      const updated = await crmApi.scheduleCampaign(
+        campaignId,
+        new Date(scheduleAt).toISOString(),
+      );
       setCampaign(updated);
       setScheduleOpen(false);
       toast.success(`Scheduled · ${new Date(updated.scheduledAt!).toLocaleString()}`);
@@ -158,139 +214,85 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
   }
 
   if (!campaign) {
-    return <div className="p-8 text-center text-sm text-muted-foreground">Loading…</div>;
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <Input
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            disabled={!editable}
-            placeholder="Subject"
-            className="max-w-md text-base font-medium"
-          />
-          <Badge variant={statusBadgeVariant(campaign.status)}>{campaign.status}</Badge>
-          {editable ? (
-            <span className="text-xs text-muted-foreground">
-              {saveState === "saving"
-                ? "Saving…"
-                : saveState === "error"
-                  ? "Unsaved · retrying"
-                  : "Saved"}
-            </span>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setTestEmailOpen(true)}>
-            Send test email
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <DesktopTitleBar className="px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2"
+            nativeButton={false}
+            render={<Link href={campaigns} />}
+          >
+            <ArrowLeft className="size-4" />
+            Campaigns
           </Button>
-          {campaign.status === "scheduled" ? (
-            <Button variant="outline" size="sm" onClick={() => void handleCancelSchedule()}>
-              Cancel schedule
-            </Button>
-          ) : editable ? (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)}>
-                Schedule
-              </Button>
-              <Button size="sm" onClick={() => void handleSend()} disabled={sending}>
-                {sending ? "Sending…" : "Send"}
-              </Button>
-            </>
-          ) : null}
+          <h1 className="truncate text-sm font-semibold">
+            {composeTitle(campaign, subject)}
+          </h1>
+          <Badge variant={statusBadgeVariant(campaign.status)}>{campaign.status}</Badge>
         </div>
-      </div>
+      </DesktopTitleBar>
 
       {campaign.status === "sent" ? (
-        <div className="flex gap-4 rounded-md border border-border/60 p-3 text-sm">
+        <div className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 px-4 pb-2 text-xs text-muted-foreground">
           <span>Sent: {campaign.stats.sent}</span>
           <span>
             Opened: {campaign.stats.opened} (
-            {campaign.stats.sent ? Math.round((campaign.stats.opened / campaign.stats.sent) * 100) : 0}
+            {campaign.stats.sent
+              ? Math.round((campaign.stats.opened / campaign.stats.sent) * 100)
+              : 0}
             %)
           </span>
           <span>
             Clicked: {campaign.stats.clicked} (
-            {campaign.stats.sent ? Math.round((campaign.stats.clicked / campaign.stats.sent) * 100) : 0}
+            {campaign.stats.sent
+              ? Math.round((campaign.stats.clicked / campaign.stats.sent) * 100)
+              : 0}
             %)
           </span>
-          <span className="text-muted-foreground">Last updated just now</span>
         </div>
       ) : null}
 
-      <div className="grid flex-1 grid-cols-1 gap-4 overflow-hidden lg:grid-cols-2">
-        <div className="flex flex-col gap-3 overflow-y-auto">
-          <div className="flex items-center gap-2">
-            <Label>Template</Label>
-            <Select
-              value={templateId}
-              onValueChange={(next) => setTemplateId(next ?? "")}
-              items={templates.map((t) => ({ value: t.id, label: t.name }))}
-              disabled={!editable}
-            >
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Choose a template" />
-              </SelectTrigger>
-              <SelectContent>
-                {templates.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {editable ? (
-            <MarkdownEditor
-              key={campaignId}
-              value={bodyMarkdown}
-              onChange={({ markdown, html }) => {
-                setBodyMarkdown(markdown);
-                setPreviewHtml(html);
-              }}
-            />
-          ) : (
-            <div
-              className="prose prose-sm max-w-none rounded-md border border-border/60 p-4 dark:prose-invert"
-              dangerouslySetInnerHTML={{ __html: previewHtml || "" }}
-            />
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2 overflow-y-auto">
-          <div className="flex items-center gap-2">
-            <Label>Preview</Label>
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant={device === "desktop" ? "secondary" : "ghost"}
-                onClick={() => setDevice("desktop")}
-              >
-                Desktop
-              </Button>
-              <Button
-                size="sm"
-                variant={device === "mobile" ? "secondary" : "ghost"}
-                onClick={() => setDevice("mobile")}
-              >
-                Mobile
-              </Button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-auto rounded-md border border-border/60 bg-muted/20 p-4">
-            <div
-              className={device === "mobile" ? "mx-auto max-w-[375px]" : "mx-auto max-w-[640px]"}
-              dangerouslySetInnerHTML={{ __html: renderedPreview }}
-            />
-          </div>
-        </div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-6">
+        <CampaignComposeForm
+          campaignId={campaignId}
+          templates={templates}
+          templateId={templateId}
+          setTemplateId={setTemplateId}
+          contactCount={contactCount}
+          contactCountHasMore={contactCountHasMore}
+          subject={subject}
+          setSubject={setSubject}
+          bodyMarkdown={bodyMarkdown}
+          onBodyChange={({ markdown, html }) => {
+            setBodyMarkdown(markdown);
+            setPreviewHtml(html);
+          }}
+          renderedPreview={renderedPreview}
+          device={device}
+          setDevice={setDevice}
+          editable={Boolean(editable)}
+          sending={sending}
+          saveState={saveState}
+          campaignStatus={campaign.status}
+          onSend={() => void handleSend()}
+          onTest={() => setTestEmailOpen(true)}
+          onSchedule={() => setScheduleOpen(true)}
+          onCancelSchedule={() => void handleCancelSchedule()}
+        />
       </div>
 
       <Dialog open={testEmailOpen} onOpenChange={setTestEmailOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send test email</DialogTitle>
           </DialogHeader>
@@ -301,10 +303,14 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
             onChange={(e) => setTestEmail(e.target.value)}
           />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setTestEmailOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setTestEmailOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void handleTestSend()} disabled={!testEmail.includes("@")}>
+            <Button
+              size="sm"
+              onClick={() => void handleTestSend()}
+              disabled={!testEmail.includes("@")}
+            >
               Send
             </Button>
           </DialogFooter>
@@ -312,7 +318,7 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
       </Dialog>
 
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Schedule send</DialogTitle>
           </DialogHeader>
@@ -325,10 +331,11 @@ export function CampaignComposeView({ campaignId }: { campaignId: string }) {
             <p className="text-xs text-destructive">Choose a time after now</p>
           ) : null}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setScheduleOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setScheduleOpen(false)}>
               Cancel
             </Button>
             <Button
+              size="sm"
               onClick={() => void handleSchedule()}
               disabled={!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()}
             >

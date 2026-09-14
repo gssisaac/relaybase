@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Download,
   FilePen,
+  Handshake,
   Inbox,
   Loader2,
   LogOut,
@@ -19,7 +20,6 @@ import {
   Plus,
   Send,
   Trash2,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -123,18 +123,26 @@ function OfflineSidebarBadge({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function TitleIcon({ mode }: { mode: SidebarMode }) {
+function ModeIcon({
+  mode,
+  className,
+}: {
+  mode: SidebarMode;
+  className?: string;
+}) {
   if (mode === "email") {
     return (
       <Mails
-        className="size-4 shrink-0"
+        className={cn("size-4 shrink-0", className)}
         style={{ color: MAILBOX_TITLE_ICON_COLOR }}
         aria-hidden
       />
     );
   }
   if (mode === "crm") {
-    return <Users className="size-4 shrink-0" aria-hidden />;
+    return (
+      <Handshake className={cn("size-4 shrink-0", className)} aria-hidden />
+    );
   }
   return (
     <img
@@ -142,9 +150,13 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
       alt=""
       width={16}
       height={16}
-      className="size-4 shrink-0"
+      className={cn("size-4 shrink-0", className)}
     />
   );
+}
+
+function TitleIcon({ mode }: { mode: SidebarMode }) {
+  return <ModeIcon mode={mode} />;
 }
 
 function sidebarTitleForMode(mode: SidebarMode) {
@@ -155,20 +167,23 @@ function sidebarTitleForMode(mode: SidebarMode) {
 
 function ModeMenuItem({
   label,
+  mode,
   active,
   onClick,
 }: {
   label: string;
+  mode: SidebarMode;
   active: boolean;
   onClick: () => void;
 }) {
   return (
     <DropdownMenuItem onClick={onClick}>
+      <ModeIcon mode={mode} className="size-3.5" />
+      <span className="flex-1">{label}</span>
       <Check
-        className={cn("size-3.5", active ? "opacity-100" : "opacity-0")}
+        className={cn("ml-auto size-3.5", active ? "opacity-100" : "opacity-0")}
         aria-hidden
       />
-      {label}
     </DropdownMenuItem>
   );
 }
@@ -193,18 +208,21 @@ function TitleMenuItems({
   return (
     <>
       <ModeMenuItem
-        label="Email"
+        label="Mailbox"
+        mode="email"
         active={mode === "email"}
         onClick={() => onSwitchTo("email")}
       />
       <ModeMenuItem
         label="CRM"
+        mode="crm"
         active={mode === "crm"}
         onClick={() => onSwitchTo("crm")}
       />
       {teamMode ? null : (
         <ModeMenuItem
           label="Console"
+          mode="dashboard"
           active={mode === "dashboard"}
           onClick={() => onSwitchTo("dashboard")}
         />

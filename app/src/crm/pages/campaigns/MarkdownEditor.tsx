@@ -15,12 +15,16 @@ import "@blocknote/react/style.css";
 export default function MarkdownEditor({
   value,
   onChange,
+  editable = true,
 }: {
   value: string;
   onChange: (content: { markdown: string; html: string }) => void;
+  editable?: boolean;
 }) {
   const editor = useCreateBlockNote();
   const hydrated = useRef(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Hydrate once on mount only — re-running on every `value` change would
   // fight the user's own typing, since onChange below feeds edits back into
@@ -30,18 +34,27 @@ export default function MarkdownEditor({
   useEffect(() => {
     if (hydrated.current) return;
     hydrated.current = true;
-    if (!value) return;
-    const blocks = editor.tryParseMarkdownToBlocks(value);
-    editor.replaceBlocks(editor.document, blocks);
+    if (value) {
+      const blocks = editor.tryParseMarkdownToBlocks(value);
+      editor.replaceBlocks(editor.document, blocks);
+    }
+    onChangeRef.current({
+      markdown: editor.blocksToMarkdownLossy(),
+      html: editor.blocksToHTMLLossy(),
+    });
   }, [editor, value]);
 
   return (
     <BlockNoteView
       editor={editor}
+      editable={editable}
       onChange={() =>
-        onChange({ markdown: editor.blocksToMarkdownLossy(), html: editor.blocksToHTMLLossy() })
+        onChange({
+          markdown: editor.blocksToMarkdownLossy(),
+          html: editor.blocksToHTMLLossy(),
+        })
       }
-      className="min-h-[300px]"
+      className="min-h-0 flex-1 [&_.bn-container]:h-full [&_.bn-container]:border-0 [&_.bn-container]:bg-transparent [&_.bn-editor]:px-1"
     />
   );
 }

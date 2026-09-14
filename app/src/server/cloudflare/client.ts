@@ -168,7 +168,17 @@ export async function workerHealthOk(workerUrl: string): Promise<boolean> {
 
 export const DEFAULT_WORKER_CRON = "*/15 * * * *";
 
-/** Upload a Worker module with R2, D1, send_email, and plain-text vars. */
+/**
+ * Upload a Worker module with R2, D1, send_email, and plain-text vars.
+ *
+ * Existing Worker secrets are preserved across the upload by emitting an
+ * `inherit` binding for every currently-set secret name (e.g. `CF_API_TOKEN`,
+ * which the app never stores) and by listing `secret_text` / `secret_key` in
+ * `keep_bindings` as a type-level fallback. Secrets the caller intends to
+ * rotate are re-PUT after this returns; inherit simply keeps the previous
+ * value until then. The script is never DELETEd — a PUT overwrite replaces
+ * code and non-secret bindings while carrying secrets forward.
+ */
 export async function uploadWorkerScript(
   client: CfClient,
   scriptName: string,
@@ -178,6 +188,12 @@ export async function uploadWorkerScript(
   workerVersion: string,
   desktopVersion: string,
 ): Promise<void> {
+  // Snapshot existing secret names before upload so we can inherit them and
+  // verify none were dropped. 404 (first install) → empty list.
+  const existingSecrets = await listWorkerSecrets(client, scriptName).catch(
+    (): string[] => [],
+  );
+
   const bindings: Json[] = [
     { type: "r2_bucket", name: "INBOUND", bucket_name: r2Bucket },
     { type: "plain_text", name: "WORKER_SCRIPT_NAME", text: scriptName },
@@ -190,10 +206,17 @@ export async function uploadWorkerScript(
     if (!binding || !id) continue;
     bindings.push({ type: "d1", name: binding, id, database_id: id });
   }
+  // Inherit every existing secret by name so the new version keeps it
+  // (e.g. CF_API_TOKEN). Secrets we rotate are re-PUT after upload.
+  for (const name of existingSecrets) {
+    bindings.push({ type: "inherit", name });
+  }
   const metadata = {
     main_module: "worker.js",
     bindings,
-    keep_bindings: ["secret_text"],
+    // secret_text + secret_key mirrors wrangler; plain_text/json omitted on
+    // purpose so stale system vars (WORKER_VERSION, …) are replaced.
+    keep_bindings: ["secret_text", "secret_key"],
     compatibility_date: "2025-06-01",
     triggers: { crons: [DEFAULT_WORKER_CRON] },
   };
@@ -217,6 +240,20 @@ export async function uploadWorkerScript(
   const value = await res.json().catch(() => ({}));
   if (!res.ok || value?.success === false) {
     throw new Error(`Worker upload failed (${res.status}): ${JSON.stringify(value)}`);
+  }
+
+  // Verify no previously-set secret was silently dropped by the upload.
+  if (existingSecrets.length > 0) {
+    const afterSecrets = await listWorkerSecrets(client, scriptName).catch(
+      (): string[] => [],
+    );
+    const lost = existingSecrets.filter((n) => !afterSecrets.includes(n));
+    if (lost.length > 0) {
+      throw new Error(
+        `Worker upload dropped existing secrets: ${lost.join(", ")}. ` +
+          "Reinstall the Worker and re-add the missing secret, or contact support.",
+      );
+    }
   }
 }
 

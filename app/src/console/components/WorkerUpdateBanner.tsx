@@ -1,10 +1,21 @@
 "use client";
 
-import { Loader2, X } from "lucide-react";
+import { Loader2, RotateCw, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SETTINGS_UPDATE_PATH, SETTINGS_WORKER_PROGRESS_PATH } from "@/console/lib/paths";
@@ -233,6 +244,49 @@ export function WorkerVersionSettingsCard() {
             {starting ? <Loader2 className="size-3.5 animate-spin" /> : null}
             Update Worker to v{latestVersion}
           </Button>
+        ) : null}
+        {/* Same-version reinstall. The PUT upload overwrites code/bindings
+            while inheriting existing runtime secrets (e.g. CF_API_TOKEN). */}
+        {message && latestVersion ? (
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={starting}
+                />
+              }
+            >
+              {starting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RotateCw className="size-3.5" />
+              )}
+              Reinstall Worker v{latestVersion}
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Reinstall Worker v{latestVersion}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  The installed Worker is already v{latestVersion}. Reinstalling
+                  redeploys the same version to your Cloudflare account.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={starting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={starting}
+                  onClick={() => void handleUpdateClick()}
+                >
+                  {starting ? "Reinstalling…" : "Reinstall"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         ) : null}
       </div>
     </div>

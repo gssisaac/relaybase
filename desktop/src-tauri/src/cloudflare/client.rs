@@ -511,6 +511,14 @@ pub async fn worker_health_ok(worker_url: &str) -> bool {
 
 /// Upload a Worker module with R2, optional D1, send_email, and plain-text vars.
 /// `d1_bindings` is `(binding_name, database_uuid)`.
+///
+/// Existing Worker secrets are preserved across the upload by emitting an
+/// `inherit` binding for every currently-set secret name (e.g. `CF_API_TOKEN`,
+/// which the app never stores) and by listing `secret_text` / `secret_key` in
+/// `keep_bindings` as a type-level fallback. Secrets the caller intends to
+/// rotate are re-PUT after this returns; inherit simply keeps the previous
+/// value until then. The script is never DELETEd — a PUT overwrite replaces
+/// code and non-secret bindings while carrying secrets forward.
 pub async fn upload_worker_script(
     client: &CfClient,
     script_name: &str,
@@ -524,6 +532,13 @@ pub async fn upload_worker_script(
         "{CF_API}/accounts/{}/workers/scripts/{script_name}",
         client.account_id
     );
+
+    // Snapshot existing secret names before upload so we can inherit them
+    // and verify none were dropped. 404 (first install) → empty list.
+    let existing_secrets = list_worker_secrets(client, script_name)
+        .await
+        .unwrap_or_default();
+
     let mut bindings = vec![
         json!({ "type": "r2_bucket", "name": "INBOUND", "bucket_name": r2_bucket }),
         json!({ "type": "plain_text", "name": "WORKER_SCRIPT_NAME", "text": script_name }),
@@ -561,10 +576,17 @@ pub async fn upload_worker_script(
             "database_id": id
         }));
     }
+    // Inherit every existing secret by name so the new version keeps it
+    // (e.g. CF_API_TOKEN). Secrets we rotate are re-PUT after upload.
+    for name in &existing_secrets {
+        bindings.push(json!({ "type": "inherit", "name": name }));
+    }
     let metadata = json!({
         "main_module": "worker.js",
         "bindings": bindings,
-        "keep_bindings": ["secret_text"],
+        // secret_text + secret_key mirrors wrangler; plain_text/json omitted
+        // on purpose so stale system vars (WORKER_VERSION, …) are replaced.
+        "keep_bindings": ["secret_text", "secret_key"],
         "compatibility_date": "2025-06-01",
         "triggers": { "crons": [DEFAULT_WORKER_CRON] }
     });
@@ -592,6 +614,25 @@ pub async fn upload_worker_script(
     if !status.is_success() || value.get("success") == Some(&Value::Bool(false)) {
         return Err(format!("Worker upload failed ({status}): {value}"));
     }
+
+    // Verify no previously-set secret was silently dropped by the upload.
+    if !existing_secrets.is_empty() {
+        let after_secrets = list_worker_secrets(client, script_name)
+            .await
+            .unwrap_or_default();
+        let lost: Vec<&String> = existing_secrets
+            .iter()
+            .filter(|n| !after_secrets.contains(n))
+            .collect();
+        if !lost.is_empty() {
+            return Err(format!(
+                "Worker upload dropped existing secrets: {}. \
+                 Reinstall the Worker and re-add the missing secret, or contact support.",
+                lost.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            ));
+        }
+    }
+
     Ok(())
 }
 

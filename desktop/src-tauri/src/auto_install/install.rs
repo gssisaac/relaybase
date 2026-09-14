@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::cloudflare::{
     assert_r2_subscription, count_d1_user_rows, count_r2_objects, create_d1_database,
-    delete_d1_database, delete_r2_bucket, delete_worker_script, empty_r2_bucket,
+    delete_d1_database, delete_r2_bucket, empty_r2_bucket,
     enable_workers_dev, ensure_r2_bucket, find_d1_id, find_r2_bucket, list_d1_databases,
     list_worker_bindings, list_worker_d1_bindings, list_worker_secrets, put_worker_schedules,
     put_worker_secret, upload_worker_script, CfClient, DEFAULT_WORKER_CRON,
@@ -302,13 +302,16 @@ async fn prepare_r2(
     assert_r2_subscription(client).await?;
 
     if plan.reinstall_worker {
+        // Never DELETE the Worker script on reinstall — that wipes every
+        // runtime secret (including CF_API_TOKEN, which the app never stores).
+        // The PUT upload below overwrites code + non-secret bindings and
+        // inherits existing secrets via upload_worker_script.
         emit_log(
             app,
             "prepare",
             "info",
-            format!("Reinstall — deleting Worker `{DEFAULT_SCRIPT}`…"),
+            format!("Reinstall — overwriting Worker `{DEFAULT_SCRIPT}` (secrets kept)…"),
         );
-        delete_worker_script(client, DEFAULT_SCRIPT).await?;
     }
 
     if plan.reinstall_r2 {

@@ -7,10 +7,8 @@ export const crmWebhooks = new Hono();
 
 /**
  * Customer Worker webhook reporting a permanent SMTP bounce or spam complaint
- * (UC-S4, spec §5.3). Flips the specific campaign subscriber to `bounced`
- * (when `campaignId` is known) and always adds the address to the
- * account-wide suppression list — checked unconditionally on every future
- * dispatch regardless of broadcast membership.
+ * (UC-S4, spec §5.3). Marks the audience contact bounced when the broadcast's
+ * group is known, and always adds the address to account-wide suppression.
  */
 crmWebhooks.post("/bounce", async (c) => {
   let body: {
@@ -34,16 +32,38 @@ crmWebhooks.post("/bounce", async (c) => {
   const now = new Date().toISOString();
   store.update((draft) => {
     if (body.broadcastId) {
-      const idx = draft.broadcastMembers.findIndex(
-        (m) => m.broadcastId === body.broadcastId && m.email === email,
-      );
-      if (idx >= 0) {
-        draft.broadcastMembers[idx] = {
-          ...draft.broadcastMembers[idx]!,
+      const broadcast = draft.broadcasts.find((b) => b.id === body.broadcastId);
+      if (broadcast?.audienceGroupId) {
+        const gIdx = draft.audienceGroups.findIndex((g) => g.id === broadcast.audienceGroupId);
+        if (gIdx >= 0) {
+          const cIdx = draft.audienceGroups[gIdx]!.contacts.findIndex((c) => c.email === email);
+          if (cIdx >= 0) {
+            draft.audienceGroups[gIdx]!.contacts[cIdx] = {
+              ...draft.audienceGroups[gIdx]!.contacts[cIdx]!,
+              sendStatus: "bounced",
+              bouncedAt: now,
+              bounceReason: body.detail ?? reason,
+            };
+          }
+        }
+      }
+
+      for (let i = 0; i < draft.recipients.length; i += 1) {
+        const r = draft.recipients[i]!;
+        if (r.broadcastId !== body.broadcastId || r.email !== email) continue;
+        draft.recipients[i] = {
+          ...r,
           status: "bounced",
-          bouncedAt: now,
           bounceReason: body.detail ?? reason,
-          updatedAt: now,
+        };
+      }
+
+      const bIdx = draft.broadcasts.findIndex((b) => b.id === body.broadcastId);
+      if (bIdx >= 0) {
+        const stats = draft.broadcasts[bIdx]!.stats;
+        draft.broadcasts[bIdx] = {
+          ...draft.broadcasts[bIdx]!,
+          stats: { ...stats, bounced: stats.bounced + 1 },
         };
       }
     }

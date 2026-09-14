@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, Trash2, Users } from "lucide-react";
+import { RefreshCw, Users } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -10,13 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { crmAudienceDetailHref, useCrmPaths } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
-import { crmApi, type BroadcastMember, type BroadcastMemberStatus } from "@/lib/crm/api";
+import { crmApi, type BroadcastMemberStatus } from "@/lib/crm/api";
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLE: Record<BroadcastMemberStatus, string> = {
   active: "border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   unsubscribed: "border-border bg-muted text-muted-foreground",
-  pending: "border-amber-600/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   bounced: "border-destructive/30 bg-destructive/10 text-destructive",
 };
 
@@ -28,7 +27,7 @@ function StatusBadge({ status }: { status: BroadcastMemberStatus }) {
   );
 }
 
-export function BroadcastAudienceView() {
+export function BroadcastRecipientsView() {
   const { broadcastId, broadcast, audienceMembers, refreshAudience, refresh } = useBroadcastDetail();
   const { audience: audienceHref } = useCrmPaths();
   const [syncing, setSyncing] = useState(false);
@@ -40,33 +39,13 @@ export function BroadcastAudienceView() {
     try {
       const result = await crmApi.syncBroadcastAudience(broadcastId);
       toast.success(
-        `Synced from audience: ${result.added} added, ${result.updated} updated, ${result.skipped} skipped`,
+        `Recipients refreshed: ${result.contactCount ?? 0} contacts (${result.activeCount ?? 0} active)`,
       );
       await Promise.all([refreshAudience(), refresh()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
     } finally {
       setSyncing(false);
-    }
-  }
-
-  async function handleAdminUnsubscribe(member: BroadcastMember) {
-    try {
-      await crmApi.updateBroadcastAudienceMember(broadcastId, member.id, { status: "unsubscribed" });
-      toast.success(`${member.email} marked unsubscribed`);
-      await refreshAudience();
-    } catch {
-      toast.error("Could not update audience member");
-    }
-  }
-
-  async function handleRemove(member: BroadcastMember) {
-    try {
-      await crmApi.removeBroadcastAudienceMember(broadcastId, member.id);
-      toast.success(`${member.email} removed from this broadcast`);
-      await refreshAudience();
-    } catch {
-      toast.error("Could not remove audience member");
     }
   }
 
@@ -80,8 +59,8 @@ export function BroadcastAudienceView() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Linked audience</CardTitle>
           <CardDescription>
-            Contacts live in Audience groups. This broadcast tracks send eligibility per contact —
-            user unsubscribes stay on the list as unsubscribed; admin remove deletes the row.
+            Recipients are resolved from the linked audience group at send time. To unsubscribe a
+            contact, use Audience — not this read-only list.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
@@ -110,7 +89,7 @@ export function BroadcastAudienceView() {
             </Button>
             <Button size="sm" onClick={() => void handleSync()} disabled={syncing || !groupId}>
               <RefreshCw className={cn("size-4", syncing && "animate-spin")} />
-              Sync from audience
+              Refresh recipients
             </Button>
           </div>
         </CardContent>
@@ -118,10 +97,10 @@ export function BroadcastAudienceView() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold">Broadcast audience</h2>
+          <h2 className="text-sm font-semibold">Recipients</h2>
           <p className="text-xs text-muted-foreground">
-            {activeCount.toLocaleString()} active send target{activeCount === 1 ? "" : "s"} (unsubscribed
-            contacts are excluded at send time).
+            {activeCount.toLocaleString()} active recipient{activeCount === 1 ? "" : "s"} at send time
+            (unsubscribed and bounced are excluded).
           </p>
         </div>
       </div>
@@ -130,12 +109,12 @@ export function BroadcastAudienceView() {
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Users className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">No audience members yet</p>
+            <p className="text-sm font-medium">No recipients in linked group</p>
             <p className="text-xs text-muted-foreground">
-              Sync from the linked audience group to attach contacts to this broadcast.
+              Add contacts in Audience, then refresh recipients.
             </p>
             <Button size="sm" className="mt-2" onClick={() => void handleSync()} disabled={!groupId || syncing}>
-              Sync from audience
+              Refresh recipients
             </Button>
           </CardContent>
         </Card>
@@ -154,27 +133,6 @@ export function BroadcastAudienceView() {
                   ) : null}
                 </div>
                 <StatusBadge status={m.status} />
-                <div className="flex shrink-0 items-center gap-1">
-                  {m.status === "active" ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => void handleAdminUnsubscribe(m)}
-                    >
-                      Unsubscribe
-                    </Button>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs text-destructive"
-                    onClick={() => void handleRemove(m)}
-                  >
-                    <Trash2 className="size-3.5" />
-                    Remove
-                  </Button>
-                </div>
               </div>
             ))}
           </CardContent>
@@ -184,5 +142,8 @@ export function BroadcastAudienceView() {
   );
 }
 
-/** @deprecated use BroadcastAudienceView */
-export const CampaignSubscribersView = BroadcastAudienceView;
+/** @deprecated use BroadcastRecipientsView */
+export const BroadcastAudienceView = BroadcastRecipientsView;
+
+/** @deprecated use BroadcastRecipientsView */
+export const CampaignSubscribersView = BroadcastRecipientsView;

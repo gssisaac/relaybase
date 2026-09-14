@@ -1,8 +1,13 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { Broadcast, BroadcastMember } from "../db/types";
-import { findAudienceGroup, syncBroadcastAudienceFromGroup } from "../lib/broadcast-audience-sync";
-import { newId, newToken } from "../lib/ids";
+import type { AudienceMember, Broadcast } from "../db/types";
+import {
+  audienceActiveCountForBroadcast,
+  resolveActiveAudienceContacts,
+} from "../lib/audience-resolver";
+import { findAudienceGroup } from "../lib/broadcast-audience-sync";
+import { emptyBroadcastStats } from "../lib/broadcast-stats";
+import { newId } from "../lib/ids";
 import { renderBroadcastForRecipient } from "../lib/render";
 import { sendMail } from "../lib/mail-sender";
 import { crmBroadcastAudience } from "./broadcast-audience";
@@ -23,12 +28,6 @@ function slugify(input: string): string {
 
 function findBroadcast(id: string): Broadcast | undefined {
   return store.read().broadcasts.find((b) => b.id === id && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
-}
-
-function audienceActiveCount(broadcastId: string): number {
-  return store.read().broadcastMembers.filter(
-    (m) => m.broadcastId === broadcastId && m.status === "active",
-  ).length;
 }
 
 function serialize(row: Broadcast) {
@@ -55,7 +54,7 @@ function serialize(row: Broadcast) {
     scheduledAt: row.scheduledAt ?? null,
     sentAt: row.sentAt ?? null,
     stats: row.stats,
-    audienceActiveCount: audienceActiveCount(row.id),
+    audienceActiveCount: audienceActiveCountForBroadcast(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -66,18 +65,9 @@ function getTemplateHtml(templateId: string | null | undefined): string | null {
   return store.read().templates.find((t) => t.id === templateId)?.htmlSource ?? null;
 }
 
-/** Active deliverable audience members at send time (late-binding). */
-export function resolveActiveAudienceMembers(broadcastId: string): BroadcastMember[] {
-  const data = store.read();
-  const suppressed = new Set(data.accountSuppressions.map((s) => s.email));
-  return data.broadcastMembers.filter(
-    (m) => m.broadcastId === broadcastId && m.status === "active" && !suppressed.has(m.email),
-  );
-}
-
 export async function dispatchBroadcastToAudience(
   broadcast: Broadcast,
-  members: BroadcastMember[],
+  members: AudienceMember[],
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = new Date().toISOString();
 
@@ -86,14 +76,17 @@ export async function dispatchBroadcastToAudience(
       draft.recipients.push({
         id: newId("recipient"),
         broadcastId: broadcast.id,
-        broadcastMemberId: m.id,
+        audienceMemberId: m.id,
         email: m.email,
         name: m.name ?? null,
         status: "queued",
         errorMessage: null,
+        bounceReason: null,
         sentAt: null,
+        deliveredAt: null,
         openedAt: null,
         clickedAt: null,
+        unsubscribedAt: null,
         openCount: 0,
         clickCount: 0,
         createdAt: now,
@@ -112,8 +105,11 @@ export async function dispatchBroadcastToAudience(
     .recipients.filter((r) => r.broadcastId === broadcast.id && r.status === "queued");
 
   for (const recipient of queued) {
-    const member = store.read().broadcastMembers.find((m) => m.id === recipient.broadcastMemberId);
-    if (!member || member.status !== "active") {
+    const member = store
+      .read()
+      .audienceGroups.flatMap((g) => g.contacts)
+      .find((m) => m.id === recipient.audienceMemberId);
+    if (!member || member.sendStatus !== "active") {
       skipped += 1;
       store.update((draft) => {
         const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
@@ -138,8 +134,9 @@ export async function dispatchBroadcastToAudience(
       if (idx < 0) return;
       draft.recipients[idx] = {
         ...draft.recipients[idx]!,
-        status: result.ok ? "sent" : "failed",
+        status: result.ok ? "delivered" : "failed",
         sentAt: result.ok ? sentAt : draft.recipients[idx]!.sentAt,
+        deliveredAt: result.ok ? sentAt : null,
         errorMessage: result.ok ? null : result.error,
       };
     });
@@ -150,11 +147,17 @@ export async function dispatchBroadcastToAudience(
   store.update((draft) => {
     const idx = draft.broadcasts.findIndex((b) => b.id === broadcast.id);
     if (idx < 0) return;
+    const prev = draft.broadcasts[idx]!.stats;
     draft.broadcasts[idx] = {
       ...draft.broadcasts[idx]!,
       status: "sent",
       sentAt: draft.broadcasts[idx]!.sentAt ?? now,
-      stats: { ...draft.broadcasts[idx]!.stats, sent, failed },
+      stats: {
+        ...prev,
+        sent,
+        delivered: sent,
+        failed,
+      },
       updatedAt: new Date().toISOString(),
     };
   });
@@ -233,14 +236,13 @@ crmBroadcasts.post("/", async (c) => {
       scheduledAt: null,
       sentAt: null,
       targetFilter: undefined,
-      stats: { sent: 0, opened: 0, clicked: 0, failed: 0 },
+      stats: emptyBroadcastStats(),
       createdAt: now,
       updatedAt: now,
     };
     draft.broadcasts.push(created);
   });
 
-  syncBroadcastAudienceFromGroup(created!.id, audienceGroupId);
   return c.json(serialize(created!), 201);
 });
 
@@ -387,10 +389,10 @@ crmBroadcasts.post("/:id/send", async (c) => {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
   }
 
-  const members = resolveActiveAudienceMembers(id);
+  const members = resolveActiveAudienceContacts(broadcast);
   if (members.length === 0) {
     return c.json(
-      { error: "Cannot send: this broadcast has 0 active audience members. Sync from audience first." },
+      { error: "Cannot send: this broadcast has 0 active audience contacts in the linked group." },
       400,
     );
   }
@@ -509,48 +511,79 @@ crmBroadcasts.post("/:id/duplicate", (c) => {
       status: "draft",
       scheduledAt: null,
       sentAt: null,
-      stats: { sent: 0, opened: 0, clicked: 0, failed: 0 },
+      stats: emptyBroadcastStats(),
       createdAt: now,
       updatedAt: now,
     };
     draft.broadcasts.push(created);
-
-    for (const m of draft.broadcastMembers.filter((x) => x.broadcastId === source.id)) {
-      draft.broadcastMembers.push({
-        ...m,
-        id: newId("member"),
-        broadcastId: id,
-        unsubscribeToken: newToken(),
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
   });
 
   return c.json(serialize(created!), 201);
 });
+
+function aggregateLinkClicks(broadcastId: string) {
+  const events = store
+    .read()
+    .trackingEvents.filter((e) => e.broadcastId === broadcastId && e.type === "click" && e.url);
+  const byUrl = new Map<string, { url: string; clicks: number; uniqueRecipients: Set<string> }>();
+  for (const event of events) {
+    const url = event.url!;
+    let row = byUrl.get(url);
+    if (!row) {
+      row = { url, clicks: 0, uniqueRecipients: new Set() };
+      byUrl.set(url, row);
+    }
+    row.clicks += 1;
+    row.uniqueRecipients.add(event.recipientId);
+  }
+  return [...byUrl.values()]
+    .map((row) => ({
+      url: row.url,
+      clicks: row.clicks,
+      uniqueClicks: row.uniqueRecipients.size,
+    }))
+    .sort((a, b) => b.clicks - a.clicks || a.url.localeCompare(b.url));
+}
 
 crmBroadcasts.get("/:id/stats", (c) => {
   const id = c.req.param("id")!;
   const broadcast = findBroadcast(id);
   if (!broadcast) return c.json({ error: "not found" }, 404);
 
-  const recipients = store
-    .read()
-    .recipients.filter((r) => r.broadcastId === id)
+  const data = store.read();
+  const recipients = data.recipients
+    .filter((r) => r.broadcastId === id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const trackingEvents = data.trackingEvents
+    .filter((e) => e.broadcastId === id)
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
   return c.json({
     broadcast: serialize(broadcast),
+    trackingEvents: trackingEvents.map((e) => ({
+      id: e.id,
+      recipientId: e.recipientId,
+      memberEmail: e.memberEmail,
+      type: e.type,
+      url: e.url ?? null,
+      reason: e.reason ?? null,
+      occurredAt: e.occurredAt,
+    })),
+    linkClicks: aggregateLinkClicks(id),
     recipients: recipients.map((r) => ({
       id: r.id,
+      audienceMemberId: r.audienceMemberId,
       email: r.email,
       name: r.name ?? null,
       status: r.status,
       errorMessage: r.errorMessage ?? null,
+      bounceReason: r.bounceReason ?? null,
       sentAt: r.sentAt ?? null,
+      deliveredAt: r.deliveredAt ?? null,
       openedAt: r.openedAt ?? null,
       clickedAt: r.clickedAt ?? null,
+      unsubscribedAt: r.unsubscribedAt ?? null,
       openCount: r.openCount,
       clickCount: r.clickCount,
     })),

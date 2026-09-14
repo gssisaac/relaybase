@@ -22,9 +22,9 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 const NAV: { id: BroadcastDetailTab; label: string; icon: LucideIcon }[] = [
-  { id: "audience", label: "Audience", icon: Users },
   { id: "content", label: "Content", icon: Mail },
   { id: "publish", label: "Publish", icon: Send },
+  { id: "recipients", label: "Recipients", icon: Users },
   { id: "stats", label: "Stats", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
 ];

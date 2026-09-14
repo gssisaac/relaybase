@@ -4,7 +4,7 @@ import type { AudienceDataSource, AudienceGroup, AudienceMember } from "../db/ty
 import { syncAllBroadcastsForAudienceGroup } from "../lib/broadcast-audience-sync";
 import { setAudienceContactSendStatus } from "../lib/audience-send-status";
 import { fetchDataSourceContacts } from "../lib/data-source-sync";
-import { newId } from "../lib/ids";
+import { newId, newToken } from "../lib/ids";
 
 export const crmAudience = new Hono();
 
@@ -119,6 +119,9 @@ export async function syncAudienceGroupAsync(
           addedAt: prior?.addedAt ?? now,
           sendStatus: prior?.sendStatus ?? "active",
           unsubscribedAt: prior?.unsubscribedAt ?? null,
+          bouncedAt: prior?.bouncedAt ?? null,
+          bounceReason: prior?.bounceReason ?? null,
+          unsubscribeToken: prior?.unsubscribeToken ?? newToken(),
         };
       });
       g.contacts = [...manual, ...synced];
@@ -374,6 +377,7 @@ crmAudience.post("/:id/contacts", async (c) => {
     addedAt: new Date().toISOString(),
     sendStatus: "active",
     unsubscribedAt: null,
+    unsubscribeToken: newToken(),
   };
 
   store.update((draft) => {

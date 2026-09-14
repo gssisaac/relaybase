@@ -7,7 +7,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
-import { BroadcastAudienceView } from "@/crm/pages/campaigns/CampaignSubscribersView";
+import { BroadcastRecipientsView } from "@/crm/pages/campaigns/CampaignSubscribersView";
 import { BroadcastContentView } from "@/crm/pages/campaigns/BroadcastContentView";
 import { BroadcastDetailShell } from "@/crm/pages/campaigns/BroadcastDetailShell";
 import { BroadcastPublishView } from "@/crm/pages/campaigns/BroadcastPublishView";
@@ -55,9 +55,9 @@ export function BroadcastDetailSwitch({ tab }: { tab: BroadcastDetailTab }) {
 
   return (
     <BroadcastDetailShell section={tab} fill={tab === "content"}>
-      {tab === "audience" ? <BroadcastAudienceView /> : null}
       {tab === "content" ? <BroadcastContentView /> : null}
       {tab === "publish" ? <BroadcastPublishView /> : null}
+      {tab === "recipients" ? <BroadcastRecipientsView /> : null}
       {tab === "stats" ? <BroadcastStatsView /> : null}
       {tab === "settings" ? <BroadcastSettingsView /> : null}
     </BroadcastDetailShell>

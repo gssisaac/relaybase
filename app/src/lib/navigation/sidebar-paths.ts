@@ -144,7 +144,7 @@ export function normalizeEntryPath(path: string): string {
     return "/broadcasts?new=1";
   }
   const broadcastMatch = pathname.match(
-    /^\/broadcasts\/([^/]+)(?:\/(audience|content|progress|overview))?\/?$/,
+    /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,
   );
   if (broadcastMatch) {
     let broadcastId = broadcastMatch[1]!;
@@ -156,18 +156,16 @@ export function normalizeEntryPath(path: string): string {
     const next = new URLSearchParams();
     next.set("id", broadcastId);
     const tabSeg = broadcastMatch[2];
-    if (
-      tabSeg === "audience" ||
-      tabSeg === "content" ||
-      tabSeg === "progress"
-    ) {
-      next.set("tab", tabSeg);
+    if (tabSeg === "audience" || tabSeg === "recipients") {
+      next.set("tab", "recipients");
+    } else if (tabSeg === "content" || tabSeg === "progress") {
+      next.set("tab", tabSeg === "progress" ? "stats" : tabSeg);
     }
     return `/broadcasts?${next.toString()}`;
   }
 
   const crmBroadcastMatch = pathname.match(
-    /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|content|publish|stats|settings))?\/?$/,
+    /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
   if (crmBroadcastMatch) {
     let broadcastId = crmBroadcastMatch[1]!;
@@ -179,8 +177,9 @@ export function normalizeEntryPath(path: string): string {
     const next = new URLSearchParams();
     next.set("id", broadcastId);
     const tabSeg = crmBroadcastMatch[2];
-    if (
-      tabSeg === "audience" ||
+    if (tabSeg === "audience" || tabSeg === "recipients") {
+      next.set("tab", "recipients");
+    } else if (
       tabSeg === "content" ||
       tabSeg === "publish" ||
       tabSeg === "stats" ||

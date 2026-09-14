@@ -26,10 +26,18 @@ export type BroadcastListStatus = "active" | "archived";
 export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
 
 export type BroadcastStats = {
+  /** Messages handed off to the mail pipeline (success + hard failures at SMTP). */
   sent: number;
-  opened: number;
-  clicked: number;
+  delivered: number;
+  bounced: number;
   failed: number;
+  /** Unique recipients who opened at least once. */
+  opened: number;
+  totalOpens: number;
+  /** Unique recipients who clicked at least once. */
+  clicked: number;
+  totalClicks: number;
+  unsubscribed: number;
 };
 
 export type Broadcast = {
@@ -38,7 +46,7 @@ export type Broadcast = {
   name: string;
   slug: string;
   description?: string | null;
-  /** Linked audience group — broadcast audience rows overlay group contacts. */
+  /** Linked audience group — send targets are resolved from group contacts at dispatch. */
   audienceGroupId: string;
   fromName?: string | null;
   fromEmail?: string | null;
@@ -59,47 +67,31 @@ export type Broadcast = {
 };
 
 // ============================================================================
-// 2. Broadcast audience (per-broadcast consent on audience contacts)
+// 2. Recipients (Send-Time Immutable Queue & Engagement Ledger)
 // ============================================================================
 
-export type BroadcastMemberStatus = "active" | "unsubscribed" | "pending" | "bounced";
-export type BroadcastMemberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
-
-export type BroadcastMember = {
-  id: string;
-  accountLinkId: string;
-  broadcastId: string;
-  audienceMemberId: string | null;
-  email: string;
-  name?: string | null;
-  status: BroadcastMemberStatus;
-  source: BroadcastMemberSource;
-  unsubscribeToken: string;
-  unsubscribedAt?: string | null;
-  bouncedAt?: string | null;
-  bounceReason?: string | null;
-  customFields?: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-};
-
-// ============================================================================
-// 3. Recipients (Send-Time Immutable Queue & Engagement Ledger)
-// ============================================================================
-
-export type RecipientStatus = "queued" | "sending" | "sent" | "skipped" | "failed";
+export type RecipientStatus =
+  | "queued"
+  | "sending"
+  | "delivered"
+  | "bounced"
+  | "skipped"
+  | "failed";
 
 export type Recipient = {
   id: string;
   broadcastId: string;
-  broadcastMemberId: string;
+  audienceMemberId: string;
   email: string;
   name?: string | null;
   status: RecipientStatus;
   errorMessage?: string | null;
+  bounceReason?: string | null;
   sentAt?: string | null;
+  deliveredAt?: string | null;
   openedAt?: string | null;
   clickedAt?: string | null;
+  unsubscribedAt?: string | null;
   openCount: number;
   clickCount: number;
   createdAt: string;
@@ -159,13 +151,22 @@ export type ScheduledJob = {
   createdAt: string;
 };
 
+export type TrackingEventType =
+  | "delivered"
+  | "open"
+  | "click"
+  | "bounce"
+  | "unsubscribe"
+  | "complaint";
+
 export type TrackingEvent = {
   id: string;
   broadcastId: string;
   recipientId: string;
   memberEmail: string;
-  type: "open" | "click";
+  type: TrackingEventType;
   url?: string | null;
+  reason?: string | null;
   occurredAt: string;
 };
 
@@ -205,15 +206,20 @@ export type AudienceSyncRun = {
   error?: string;
 };
 
+export type AudienceSendStatus = "active" | "unsubscribed" | "bounced";
+
 export type AudienceMember = {
   id: string;
   email: string;
   name: string | null;
   source: "manual" | "synced";
   addedAt: string;
-  /** Send eligibility for linked broadcasts — unified with broadcast audience rows. */
-  sendStatus: "active" | "unsubscribed";
+  sendStatus: AudienceSendStatus;
   unsubscribedAt: string | null;
+  bouncedAt?: string | null;
+  bounceReason?: string | null;
+  /** Per-contact token for list-scoped unsubscribe links. */
+  unsubscribeToken: string;
 };
 
 export type AudienceGroup = {
@@ -241,7 +247,6 @@ export type AudienceGroup = {
 export type CrmDataStore = {
   account: AccountLink;
   broadcasts: Broadcast[];
-  broadcastMembers: BroadcastMember[];
   recipients: Recipient[];
   accountSuppressions: AccountSuppression[];
   pipelineCards: PipelineCard[];

@@ -2,14 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { BUILTIN_TEMPLATES } from "../lib/builtin-templates";
+import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcast-stats";
 import { newId, newToken } from "../lib/ids";
-import type {
-  Broadcast,
-  BroadcastAsset,
-  BroadcastMember,
-  BroadcastMemberStatus,
-  CrmDataStore,
-} from "./types";
+import type { Broadcast, BroadcastAsset, CrmDataStore, Recipient } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
@@ -37,7 +32,6 @@ function defaultStore(): CrmDataStore {
       createdAt: now,
     },
     broadcasts: [],
-    broadcastMembers: [],
     recipients: [],
     accountSuppressions: [],
     pipelineCards: [],
@@ -57,13 +51,17 @@ function defaultStore(): CrmDataStore {
   };
 }
 
-function mapLegacySubscriberStatus(status: string): BroadcastMemberStatus {
-  if (status === "subscribed") return "active";
-  if (status === "unsubscribed" || status === "bounced" || status === "pending") {
-    return status as BroadcastMemberStatus;
-  }
-  return "active";
-}
+type LegacyBroadcastMember = {
+  id?: string;
+  audienceMemberId?: string | null;
+  email?: string;
+  unsubscribeToken?: string;
+  status?: string;
+  unsubscribedAt?: string | null;
+  bouncedAt?: string | null;
+  bounceReason?: string | null;
+  broadcastId?: string;
+};
 
 /** One-time migration from campaign + nested broadcast + subscriber model. */
 function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
@@ -72,9 +70,9 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
     subscribers?: Array<Record<string, unknown>>;
     campaignAssets?: Array<Record<string, unknown>>;
     broadcasts?: Array<Record<string, unknown>>;
+    broadcastMembers?: LegacyBroadcastMember[];
   };
 
-  if (!parsed.broadcastMembers) parsed.broadcastMembers = [];
   if (!parsed.broadcastAssets) parsed.broadcastAssets = [];
   if (!parsed.broadcasts) parsed.broadcasts = [];
 
@@ -84,12 +82,10 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
 
   if (legacyCampaigns.length > 0 || legacySubs.length > 0) {
     const nextBroadcasts: Broadcast[] = [];
-    const nextMembers: BroadcastMember[] = [];
 
     for (const campaign of legacyCampaigns) {
       const campaignId = String(campaign.id ?? "");
       const sends = legacyBroadcasts.filter((b) => b.campaignId === campaignId);
-      const subs = legacySubs.filter((s) => s.campaignId === campaignId);
 
       const targets =
         sends.length > 0
@@ -105,7 +101,7 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
                 status: "draft",
                 scheduledAt: null,
                 sentAt: null,
-                stats: { sent: 0, opened: 0, clicked: 0, failed: 0 },
+                stats: emptyBroadcastStats(),
                 createdAt: campaign.createdAt,
                 updatedAt: campaign.updatedAt,
               },
@@ -139,34 +135,14 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
           scheduledAt: (send.scheduledAt as string | null | undefined) ?? null,
           sentAt: (send.sentAt as string | null | undefined) ?? null,
           targetFilter: send.targetFilter as Record<string, unknown> | undefined,
-          stats: (send.stats as Broadcast["stats"]) ?? { sent: 0, opened: 0, clicked: 0, failed: 0 },
+          stats: normalizeBroadcastStats(send.stats as Broadcast["stats"]),
           createdAt: String(send.createdAt ?? campaign.createdAt ?? new Date().toISOString()),
           updatedAt: String(send.updatedAt ?? campaign.updatedAt ?? new Date().toISOString()),
         });
-
-        for (const sub of subs) {
-          nextMembers.push({
-            id: sends.length > 1 ? newId("member") : String(sub.id ?? newId("member")),
-            accountLinkId: String(sub.accountLinkId ?? DEV_ACCOUNT_LINK_ID),
-            broadcastId,
-            audienceMemberId: (sub.audienceMemberId as string | null | undefined) ?? null,
-            email: String(sub.email ?? ""),
-            name: (sub.name as string | null | undefined) ?? null,
-            status: mapLegacySubscriberStatus(String(sub.status ?? "subscribed")),
-            source: (sub.source as BroadcastMember["source"]) ?? "audience_group",
-            unsubscribeToken: String(sub.unsubscribeToken ?? newToken()),
-            unsubscribedAt: (sub.unsubscribedAt as string | null | undefined) ?? null,
-            bouncedAt: (sub.bouncedAt as string | null | undefined) ?? null,
-            bounceReason: (sub.bounceReason as string | null | undefined) ?? null,
-            createdAt: String(sub.createdAt ?? new Date().toISOString()),
-            updatedAt: String(sub.updatedAt ?? new Date().toISOString()),
-          });
-        }
       }
     }
 
     parsed.broadcasts = nextBroadcasts;
-    parsed.broadcastMembers = nextMembers;
     delete parsed.campaigns;
     delete parsed.subscribers;
   }
@@ -178,20 +154,20 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
     if (!row.name) row.name = String(row.subject ?? "Untitled broadcast");
     if (!row.slug) row.slug = slugify(String(row.name)) || String(row.id).slice(0, 12);
     if (!row.listStatus) row.listStatus = "active";
+    row.stats = normalizeBroadcastStats(row.stats as Broadcast["stats"]);
     delete row.campaignId;
   }
 
-  for (const row of parsed.broadcastMembers ?? []) {
-    if (row.audienceMemberId === undefined) row.audienceMemberId = null;
-    const status = row.status as string | undefined;
-    if (status === "subscribed") row.status = "active";
-  }
-
   for (const row of (parsed.recipients ?? []) as Array<Record<string, unknown>>) {
-    if (row.subscriberId && !row.broadcastMemberId) {
-      row.broadcastMemberId = row.subscriberId;
+    if (!row.audienceMemberId && row.broadcastMemberId) {
+      /* filled from broadcastMembers migration below */
     }
+    if (row.subscriberId && !row.audienceMemberId) {
+      row.audienceMemberId = row.subscriberId;
+    }
+    if (row.status === "sent") row.status = "delivered";
     delete row.subscriberId;
+    delete row.broadcastMemberId;
     delete row.campaignId;
   }
 
@@ -208,7 +184,83 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
     delete parsed.campaignAssets;
   }
 
+  const legacyMembers = parsed.broadcastMembers ?? [];
+  if (legacyMembers.length > 0 && parsed.audienceGroups) {
+    const tokenByContactId = new Map<string, string>();
+    for (const bm of legacyMembers) {
+      const contactId = bm.audienceMemberId;
+      if (contactId && bm.unsubscribeToken) {
+        tokenByContactId.set(contactId, bm.unsubscribeToken);
+      }
+    }
+
+    for (const group of parsed.audienceGroups) {
+      for (const contact of group.contacts) {
+        const fromMember = legacyMembers.find((bm) => bm.audienceMemberId === contact.id);
+        if (fromMember?.unsubscribeToken) {
+          contact.unsubscribeToken = fromMember.unsubscribeToken;
+        } else if (!contact.unsubscribeToken) {
+          contact.unsubscribeToken = newToken();
+        }
+        if (fromMember?.status === "unsubscribed" || fromMember?.status === "subscribed") {
+          const st = fromMember.status === "unsubscribed" ? "unsubscribed" : "active";
+          contact.sendStatus = st;
+          contact.unsubscribedAt = fromMember.unsubscribedAt ?? contact.unsubscribedAt ?? null;
+        }
+        if (fromMember?.status === "bounced") {
+          contact.sendStatus = "bounced";
+          contact.bouncedAt = fromMember.bouncedAt ?? null;
+          contact.bounceReason = fromMember.bounceReason ?? null;
+        }
+        if (!tokenByContactId.has(contact.id) && contact.unsubscribeToken) {
+          tokenByContactId.set(contact.id, contact.unsubscribeToken);
+        }
+      }
+    }
+
+    for (const row of (parsed.recipients ?? []) as Array<Record<string, unknown>>) {
+      if (!row.audienceMemberId && row.broadcastMemberId) {
+        const bm = legacyMembers.find((m) => m.id === row.broadcastMemberId);
+        if (bm?.audienceMemberId) row.audienceMemberId = bm.audienceMemberId;
+      }
+    }
+  }
+
+  delete parsed.broadcastMembers;
+
   return parsed as CrmDataStore;
+}
+
+function normalizeStore(store: CrmDataStore): CrmDataStore {
+  for (const row of store.broadcasts) {
+    if (!row.audienceGroupId) row.audienceGroupId = "";
+    row.stats = normalizeBroadcastStats(row.stats);
+  }
+
+  for (const row of store.audienceGroups) {
+    for (const contact of row.contacts) {
+      if (!contact.sendStatus) contact.sendStatus = "active";
+      if (contact.unsubscribedAt === undefined) contact.unsubscribedAt = null;
+      if (!contact.unsubscribeToken) contact.unsubscribeToken = newToken();
+      if (contact.bouncedAt === undefined) contact.bouncedAt = null;
+      if (contact.bounceReason === undefined) contact.bounceReason = null;
+    }
+  }
+
+  for (const row of store.recipients) {
+    const legacy = row as Recipient & { broadcastMemberId?: string };
+    if (!row.audienceMemberId && legacy.broadcastMemberId) {
+      row.audienceMemberId = legacy.broadcastMemberId;
+    }
+    if ((row.status as string) === "sent") row.status = "delivered";
+    if (row.bounceReason === undefined) row.bounceReason = null;
+    if (row.deliveredAt === undefined) {
+      row.deliveredAt = row.status === "delivered" ? (row.sentAt ?? null) : null;
+    }
+    if (row.unsubscribedAt === undefined) row.unsubscribedAt = null;
+  }
+
+  return store;
 }
 
 function ensureDataDir() {
@@ -225,28 +277,7 @@ function readStore(): CrmDataStore {
   const raw = fs.readFileSync(STORE_FILE, "utf8");
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const store = migrateLegacyStore(parsed);
-    for (const row of store.broadcasts) {
-      if (!row.audienceGroupId) row.audienceGroupId = "";
-    }
-    for (const row of store.audienceGroups) {
-      for (const contact of row.contacts) {
-        if (!contact.sendStatus) contact.sendStatus = "active";
-        if (contact.unsubscribedAt === undefined) contact.unsubscribedAt = null;
-      }
-    }
-    for (const bm of store.broadcastMembers) {
-      if (bm.status !== "unsubscribed" || !bm.audienceMemberId) continue;
-      const broadcast = store.broadcasts.find((b) => b.id === bm.broadcastId);
-      if (!broadcast?.audienceGroupId) continue;
-      const group = store.audienceGroups.find((g) => g.id === broadcast.audienceGroupId);
-      const contact = group?.contacts.find((c) => c.id === bm.audienceMemberId);
-      if (contact && contact.sendStatus !== "unsubscribed") {
-        contact.sendStatus = "unsubscribed";
-        contact.unsubscribedAt = bm.unsubscribedAt ?? null;
-      }
-    }
-    return store;
+    return normalizeStore(migrateLegacyStore(parsed));
   } catch {
     const initial = defaultStore();
     fs.writeFileSync(STORE_FILE, `${JSON.stringify(initial, null, 2)}\n`, "utf8");

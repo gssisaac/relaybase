@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { store } from "../db/store";
-import { syncAudienceSendStatusFromBroadcastMember } from "../lib/audience-send-status";
+import { findAudienceContactByUnsubscribeToken } from "../lib/audience-resolver";
+import { setAudienceContactSendStatus } from "../lib/audience-send-status";
 
 export const crmUnsubscribe = new Hono();
 
@@ -31,16 +32,41 @@ function page(opts: { heading: string; subtext: string; footer?: string }): stri
 </html>`;
 }
 
+function findContactForBroadcast(broadcastId: string, token: string) {
+  const data = store.read();
+  const broadcast = data.broadcasts.find((b) => b.id === broadcastId);
+  if (!broadcast?.audienceGroupId) return { broadcast, contact: undefined };
+  const contact = findAudienceContactByUnsubscribeToken(broadcast.audienceGroupId, token);
+  return { broadcast, contact };
+}
+
+function recordUnsubscribeOnRecipients(broadcastId: string, email: string, now: string) {
+  store.update((draft) => {
+    let newlyMarked = false;
+    for (let i = 0; i < draft.recipients.length; i += 1) {
+      const r = draft.recipients[i]!;
+      if (r.broadcastId !== broadcastId || r.email !== email || r.unsubscribedAt) continue;
+      draft.recipients[i] = { ...r, unsubscribedAt: now };
+      newlyMarked = true;
+    }
+    if (!newlyMarked) return;
+    const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+    if (bIdx >= 0) {
+      const stats = draft.broadcasts[bIdx]!.stats;
+      draft.broadcasts[bIdx] = {
+        ...draft.broadcasts[bIdx]!,
+        stats: { ...stats, unsubscribed: stats.unsubscribed + 1 },
+      };
+    }
+  });
+}
+
 // GET /crm/unsubscribe/:broadcastId/:token
 crmUnsubscribe.get("/:broadcastId/:token", (c) => {
   const { broadcastId, token } = c.req.param();
-  const data = store.read();
-  const member = data.broadcastMembers.find(
-    (m) => m.broadcastId === broadcastId && m.unsubscribeToken === token,
-  );
-  const broadcast = data.broadcasts.find((b) => b.id === broadcastId);
+  const { broadcast, contact } = findContactForBroadcast(broadcastId, token);
 
-  if (!member) {
+  if (!contact) {
     c.header("Content-Type", "text/html; charset=utf-8");
     return c.body(
       page({
@@ -53,24 +79,14 @@ crmUnsubscribe.get("/:broadcastId/:token", (c) => {
   }
 
   const now = new Date().toISOString();
-  store.update((draft) => {
-    const idx = draft.broadcastMembers.findIndex((m) => m.id === member.id);
-    if (idx < 0) return;
-    draft.broadcastMembers[idx] = {
-      ...draft.broadcastMembers[idx]!,
-      status: "unsubscribed",
-      unsubscribedAt: now,
-      updatedAt: now,
-    };
-  });
-
-  syncAudienceSendStatusFromBroadcastMember({ ...member, status: "unsubscribed", unsubscribedAt: now });
+  setAudienceContactSendStatus(broadcast!.audienceGroupId, contact.id, "unsubscribed");
+  recordUnsubscribeOnRecipients(broadcastId, contact.email, now);
 
   c.header("Content-Type", "text/html; charset=utf-8");
   return c.body(
     page({
       heading: "You have been unsubscribed",
-      subtext: `${member.email} will no longer receive emails from '${broadcast?.name ?? "this broadcast"}'.`,
+      subtext: `${contact.email} will no longer receive emails from '${broadcast?.name ?? "this list"}'.`,
       footer: `<a class="link" href="/crm/unsubscribe/${broadcastId}/${token}/resubscribe">Unsubscribed by mistake? Click here to resubscribe.</a>`,
     }),
   );
@@ -78,13 +94,9 @@ crmUnsubscribe.get("/:broadcastId/:token", (c) => {
 
 crmUnsubscribe.get("/:broadcastId/:token/resubscribe", (c) => {
   const { broadcastId, token } = c.req.param();
-  const data = store.read();
-  const member = data.broadcastMembers.find(
-    (m) => m.broadcastId === broadcastId && m.unsubscribeToken === token,
-  );
-  const broadcast = data.broadcasts.find((b) => b.id === broadcastId);
+  const { broadcast, contact } = findContactForBroadcast(broadcastId, token);
 
-  if (!member) {
+  if (!contact) {
     c.header("Content-Type", "text/html; charset=utf-8");
     return c.body(
       page({
@@ -96,25 +108,13 @@ crmUnsubscribe.get("/:broadcastId/:token/resubscribe", (c) => {
     );
   }
 
-  const now = new Date().toISOString();
-  store.update((draft) => {
-    const idx = draft.broadcastMembers.findIndex((m) => m.id === member.id);
-    if (idx < 0) return;
-    draft.broadcastMembers[idx] = {
-      ...draft.broadcastMembers[idx]!,
-      status: "active",
-      unsubscribedAt: null,
-      updatedAt: now,
-    };
-  });
-
-  syncAudienceSendStatusFromBroadcastMember({ ...member, status: "active", unsubscribedAt: null });
+  setAudienceContactSendStatus(broadcast!.audienceGroupId, contact.id, "active");
 
   c.header("Content-Type", "text/html; charset=utf-8");
   return c.body(
     page({
       heading: "You're resubscribed",
-      subtext: `${member.email} will receive emails from '${broadcast?.name ?? "this broadcast"}' again.`,
+      subtext: `${contact.email} will receive emails from '${broadcast?.name ?? "this list"}' again.`,
     }),
   );
 });

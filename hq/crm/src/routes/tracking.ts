@@ -31,16 +31,20 @@ function recordOpen(broadcastId: string, recipientId: string) {
         memberEmail: recipient.email,
         type: "open",
         url: null,
+        reason: null,
         occurredAt: now,
       });
-      if (firstOpen) {
-        const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
-        if (bIdx >= 0) {
-          draft.broadcasts[bIdx] = {
-            ...draft.broadcasts[bIdx]!,
-            stats: { ...draft.broadcasts[bIdx]!.stats, opened: draft.broadcasts[bIdx]!.stats.opened + 1 },
-          };
-        }
+      const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+      if (bIdx >= 0) {
+        const stats = draft.broadcasts[bIdx]!.stats;
+        draft.broadcasts[bIdx] = {
+          ...draft.broadcasts[bIdx]!,
+          stats: {
+            ...stats,
+            opened: firstOpen ? stats.opened + 1 : stats.opened,
+            totalOpens: stats.totalOpens + 1,
+          },
+        };
       }
     });
   } catch (err) {
@@ -69,16 +73,20 @@ function recordClick(broadcastId: string, recipientId: string, url: string) {
         memberEmail: recipient.email,
         type: "click",
         url,
+        reason: null,
         occurredAt: now,
       });
-      if (firstClick) {
-        const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
-        if (bIdx >= 0) {
-          draft.broadcasts[bIdx] = {
-            ...draft.broadcasts[bIdx]!,
-            stats: { ...draft.broadcasts[bIdx]!.stats, clicked: draft.broadcasts[bIdx]!.stats.clicked + 1 },
-          };
-        }
+      const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+      if (bIdx >= 0) {
+        const stats = draft.broadcasts[bIdx]!.stats;
+        draft.broadcasts[bIdx] = {
+          ...draft.broadcasts[bIdx]!,
+          stats: {
+            ...stats,
+            clicked: firstClick ? stats.clicked + 1 : stats.clicked,
+            totalClicks: stats.totalClicks + 1,
+          },
+        };
       }
     });
   } catch (err) {

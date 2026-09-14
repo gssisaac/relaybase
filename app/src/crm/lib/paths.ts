@@ -39,13 +39,13 @@ export function audienceDetailFromSearch(searchParams: {
   return { groupId, tab };
 }
 
-/** Broadcast detail tabs — audience, content, publish, stats, settings. */
-export type BroadcastDetailTab = "audience" | "content" | "publish" | "stats" | "settings";
+/** Broadcast detail tabs — content, publish, recipients, stats, settings. */
+export type BroadcastDetailTab = "content" | "publish" | "recipients" | "stats" | "settings";
 
-export function broadcastDetailHref(id: string, tab: BroadcastDetailTab = "audience"): string {
+export function broadcastDetailHref(id: string, tab: BroadcastDetailTab = "content"): string {
   const params = new URLSearchParams();
   params.set("id", id.trim());
-  if (tab !== "audience") params.set("tab", tab);
+  if (tab !== "content") params.set("tab", tab);
   return `/crm/broadcasts?${params.toString()}`;
 }
 
@@ -55,10 +55,14 @@ export function broadcastDetailFromSearch(searchParams: {
   const broadcastId = searchParams.get("id")?.trim() ?? "";
   if (!broadcastId) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
-  const tab: BroadcastDetailTab =
-    raw === "content" || raw === "publish" || raw === "stats" || raw === "settings"
-      ? raw
-      : "audience";
+  let tab: BroadcastDetailTab = "content";
+  if (raw === "publish" || raw === "recipients" || raw === "stats" || raw === "settings") {
+    tab = raw;
+  } else if (raw === "content") {
+    tab = "content";
+  } else if (raw === "audience") {
+    tab = "recipients";
+  }
   return { broadcastId, tab };
 }
 

@@ -1,5 +1,6 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
-import { dispatchBroadcastToAudience, resolveActiveAudienceMembers } from "./routes/broadcasts";
+import { resolveActiveAudienceContacts } from "./lib/audience-resolver";
+import { dispatchBroadcastToAudience } from "./routes/broadcasts";
 import { syncAudienceGroupAsync } from "./routes/audience-groups";
 
 /**
@@ -45,7 +46,7 @@ async function claimDueBroadcasts(): Promise<void> {
       // Late-binding resolution (§1.3): subscribers are resolved *now*, at
       // the exact dispatch moment — not frozen when the broadcast was scheduled.
       const broadcast = store.read().broadcasts.find((b) => b.id === claimedBroadcastId)!;
-      const members = resolveActiveAudienceMembers(broadcast.id);
+      const members = resolveActiveAudienceContacts(broadcast);
       await dispatchBroadcastToAudience(broadcast, members);
     } catch (err) {
       console.error(`[crm-scheduler] broadcast ${claimedBroadcastId} send failed`, err);
@@ -64,16 +65,38 @@ async function rollupStats(): Promise<void> {
 
   for (const broadcast of active) {
     const recipients = data.recipients.filter((r) => r.broadcastId === broadcast.id);
-    const sent = recipients.filter((r) => r.status === "sent").length;
+    const sent = recipients.filter((r) => r.status === "delivered" || r.status === "bounced").length;
+    const delivered = recipients.filter((r) => r.status === "delivered").length;
+    const bounced = recipients.filter((r) => r.status === "bounced").length;
     const failed = recipients.filter((r) => r.status === "failed").length;
     const opened = recipients.filter((r) => r.openedAt).length;
     const clicked = recipients.filter((r) => r.clickedAt).length;
+    const totalOpens = recipients.reduce((n, r) => n + r.openCount, 0);
+    const totalClicks = recipients.reduce((n, r) => n + r.clickCount, 0);
+    const unsubscribed = recipients.filter((r) => r.unsubscribedAt).length;
 
+    const next = {
+      sent,
+      delivered,
+      bounced,
+      failed,
+      opened,
+      totalOpens,
+      clicked,
+      totalClicks,
+      unsubscribed,
+    };
+    const prev = broadcast.stats;
     if (
-      sent === broadcast.stats.sent &&
-      failed === broadcast.stats.failed &&
-      opened === broadcast.stats.opened &&
-      clicked === broadcast.stats.clicked
+      next.sent === prev.sent &&
+      next.delivered === prev.delivered &&
+      next.bounced === prev.bounced &&
+      next.failed === prev.failed &&
+      next.opened === prev.opened &&
+      next.totalOpens === prev.totalOpens &&
+      next.clicked === prev.clicked &&
+      next.totalClicks === prev.totalClicks &&
+      next.unsubscribed === prev.unsubscribed
     ) {
       continue;
     }
@@ -81,7 +104,7 @@ async function rollupStats(): Promise<void> {
     store.update((draft) => {
       const idx = draft.broadcasts.findIndex((b) => b.id === broadcast.id);
       if (idx < 0) return;
-      draft.broadcasts[idx] = { ...draft.broadcasts[idx]!, stats: { sent, opened, clicked, failed } };
+      draft.broadcasts[idx] = { ...draft.broadcasts[idx]!, stats: next };
     });
   }
 }

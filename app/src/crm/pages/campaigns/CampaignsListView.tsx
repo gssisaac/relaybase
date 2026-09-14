@@ -131,7 +131,7 @@ export function BroadcastsListView() {
       toast.success(`Broadcast '${created.name}' created`);
       setCreateOpen(false);
       resetCreate();
-      router.push(broadcastDetailHref(created.id, "audience"));
+      router.push(broadcastDetailHref(created.id, "content"));
     } catch (err) {
       setCreateError(err instanceof CrmApiError ? err.message : "Could not create broadcast");
       setCreating(false);

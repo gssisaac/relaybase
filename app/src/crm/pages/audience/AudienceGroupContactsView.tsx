@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -53,6 +55,10 @@ export function AudienceGroupContactsView() {
   const [saving, setSaving] = useState(false);
   const [contactEmail, setContactEmail] = useState("");
   const [contactName, setContactName] = useState("");
+  const [unsubConfirm, setUnsubConfirm] = useState<{ contactId: string; email: string } | null>(
+    null,
+  );
+  const [unsubSubmitting, setUnsubSubmitting] = useState(false);
 
   if (!detail) return null;
 
@@ -91,6 +97,17 @@ export function AudienceGroupContactsView() {
       await refresh(true);
     } catch (e) {
       toast.error(friendlyCrmError(e, "Failed to update contact"));
+    }
+  }
+
+  async function confirmUnsubscribe() {
+    if (!unsubConfirm) return;
+    setUnsubSubmitting(true);
+    try {
+      await setSendStatus(unsubConfirm.contactId, "unsubscribed", unsubConfirm.email);
+      setUnsubConfirm(null);
+    } finally {
+      setUnsubSubmitting(false);
     }
   }
 
@@ -222,7 +239,7 @@ export function AudienceGroupContactsView() {
                       size="sm"
                       variant="ghost"
                       className="h-7 px-2 text-xs"
-                      onClick={() => void setSendStatus(c.id, "unsubscribed", c.email)}
+                      onClick={() => setUnsubConfirm({ contactId: c.id, email: c.email })}
                     >
                       Unsubscribe
                     </Button>
@@ -250,6 +267,42 @@ export function AudienceGroupContactsView() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={Boolean(unsubConfirm)} onOpenChange={(open) => !open && setUnsubConfirm(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unsubscribe this contact?</DialogTitle>
+            <DialogDescription>
+              {unsubConfirm ? (
+                <>
+                  <span className="font-medium text-foreground">{unsubConfirm.email}</span> will be
+                  marked unsubscribed for this audience group. They will be excluded from future
+                  broadcasts linked to this group. This does not delete the contact — use Remove if
+                  you want them off the list entirely.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setUnsubConfirm(null)}
+              disabled={unsubSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => void confirmUnsubscribe()}
+              disabled={unsubSubmitting}
+            >
+              {unsubSubmitting ? "Updating…" : "Confirm unsubscribe"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

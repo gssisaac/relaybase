@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -69,7 +70,8 @@ export function BroadcastPublishView() {
       const result = await crmApi.sendBroadcast(broadcastId);
       setBroadcast(result.broadcast);
       setConfirmSendOpen(false);
-      toast.success("Broadcast send started");
+      toast.success("Broadcast sent — view stats for delivery details");
+      router.push(broadcastDetailHref(broadcastId, "stats"));
     } catch (err) {
       setConfirmSendOpen(false);
       setBlockedError(err instanceof CrmApiError ? err.message : "Send failed");
@@ -206,32 +208,27 @@ export function BroadcastPublishView() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      {broadcast.status === "sent" || broadcast.stats.sent > 0 ? (
         <Card>
-          <CardHeader>
-            <CardDescription>Sent</CardDescription>
-            <CardTitle className="tabular-nums">{broadcast.stats.sent}</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="text-sm">Send summary</CardTitle>
+              <CardDescription>
+                {broadcast.stats.delivered} delivered · {broadcast.stats.opened} opened ·{" "}
+                {broadcast.stats.clicked} clicked
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={broadcastDetailHref(broadcastId, "stats")} />}
+            >
+              Full stats
+            </Button>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Opened</CardDescription>
-            <CardTitle className="tabular-nums">{broadcast.stats.opened}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Clicked</CardDescription>
-            <CardTitle className="tabular-nums">{broadcast.stats.clicked}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Failed</CardDescription>
-            <CardTitle className="tabular-nums">{broadcast.stats.failed}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      ) : null}
 
       {/* Send confirmation — UC-B4 */}
       <Dialog open={confirmSendOpen} onOpenChange={setConfirmSendOpen}>

@@ -18,9 +18,14 @@ export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "fail
 
 export type BroadcastStats = {
   sent: number;
-  opened: number;
-  clicked: number;
+  delivered: number;
+  bounced: number;
   failed: number;
+  opened: number;
+  totalOpens: number;
+  clicked: number;
+  totalClicks: number;
+  unsubscribed: number;
 };
 
 export type Broadcast = {
@@ -50,13 +55,14 @@ export type Broadcast = {
   updatedAt: string;
 };
 
-export type BroadcastMemberStatus = "active" | "unsubscribed" | "pending" | "bounced";
-export type BroadcastMemberSource = "manual" | "sync" | "csv" | "webhook" | "audience_group";
+export type BroadcastMemberStatus = "active" | "unsubscribed" | "bounced";
+export type BroadcastMemberSource = "manual" | "synced";
 
+/** Live audience contact as seen from a broadcast (group is source of truth). */
 export type BroadcastMember = {
   id: string;
   broadcastId: string;
-  audienceMemberId: string | null;
+  audienceMemberId: string;
   email: string;
   name: string | null;
   status: BroadcastMemberStatus;
@@ -64,21 +70,54 @@ export type BroadcastMember = {
   unsubscribedAt: string | null;
   bouncedAt: string | null;
   bounceReason: string | null;
-  createdAt: string;
-  updatedAt: string;
+  addedAt: string;
 };
 
-export type RecipientStatus = "queued" | "sending" | "sent" | "skipped" | "failed";
+export type RecipientStatus =
+  | "queued"
+  | "sending"
+  | "delivered"
+  | "bounced"
+  | "skipped"
+  | "failed";
+
+export type BroadcastTrackingEventType =
+  | "delivered"
+  | "open"
+  | "click"
+  | "bounce"
+  | "unsubscribe"
+  | "complaint";
+
+export type BroadcastTrackingEvent = {
+  id: string;
+  recipientId: string;
+  memberEmail: string;
+  type: BroadcastTrackingEventType;
+  url: string | null;
+  reason: string | null;
+  occurredAt: string;
+};
+
+export type BroadcastLinkClickStat = {
+  url: string;
+  clicks: number;
+  uniqueClicks: number;
+};
 
 export type BroadcastRecipient = {
   id: string;
+  audienceMemberId: string;
   email: string;
   name: string | null;
   status: RecipientStatus;
   errorMessage: string | null;
+  bounceReason: string | null;
   sentAt: string | null;
+  deliveredAt: string | null;
   openedAt: string | null;
   clickedAt: string | null;
+  unsubscribedAt: string | null;
   openCount: number;
   clickCount: number;
 };
@@ -164,24 +203,13 @@ export const crmApi = {
     );
   },
   syncBroadcastAudience: (broadcastId: string) =>
-    crmFetch<{ added: number; updated: number; skipped: number }>(
-      `/crm/broadcasts/${broadcastId}/audience/sync`,
-      { method: "POST" },
-    ),
-  removeBroadcastAudienceMember: (broadcastId: string, memberId: string) =>
-    crmFetch<{ ok: true }>(`/crm/broadcasts/${broadcastId}/audience/${memberId}`, {
-      method: "DELETE",
-    }),
-  updateBroadcastAudienceMember: (
-    broadcastId: string,
-    memberId: string,
-    input: { status: "active" | "unsubscribed" },
-  ) =>
-    crmFetch<BroadcastMember>(`/crm/broadcasts/${broadcastId}/audience/${memberId}`, {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    }),
-
+    crmFetch<{
+      added: number;
+      updated: number;
+      skipped: number;
+      contactCount: number;
+      activeCount: number;
+    }>(`/crm/broadcasts/${broadcastId}/audience/sync`, { method: "POST" }),
   testSendBroadcast: (broadcastId: string, to: string) =>
     crmFetch<{ ok: true }>(`/crm/broadcasts/${broadcastId}/test-send`, {
       method: "POST",
@@ -206,9 +234,12 @@ export const crmApi = {
       method: "POST",
     }),
   getBroadcastStats: (broadcastId: string) =>
-    crmFetch<{ broadcast: Broadcast; recipients: BroadcastRecipient[] }>(
-      `/crm/broadcasts/${broadcastId}/stats`,
-    ),
+    crmFetch<{
+      broadcast: Broadcast;
+      recipients: BroadcastRecipient[];
+      trackingEvents: BroadcastTrackingEvent[];
+      linkClicks: BroadcastLinkClickStat[];
+    }>(`/crm/broadcasts/${broadcastId}/stats`),
 
   uploadBroadcastAsset: (
     broadcastId: string,

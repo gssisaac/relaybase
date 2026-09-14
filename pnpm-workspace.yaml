@@ -2,5 +2,6 @@ packages:
   - hq/admin
   - app
   - hq/console
+  - hq/crm
   - desktop
   - hq/website

@@ -1,12 +1,14 @@
-export type SidebarMode = "email" | "dashboard";
+export type SidebarMode = "email" | "dashboard" | "crm";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
+export const DEFAULT_CRM_PATH = "/crm";
 
 const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
 
-export function modeFromPathname(pathname: string): SidebarMode {
-  return pathname === "/email" ||
+function isEmailPathname(pathname: string): boolean {
+  return (
+    pathname === "/email" ||
     pathname.startsWith("/email/") ||
     pathname === "/inbox" ||
     pathname.startsWith("/inbox/") ||
@@ -20,8 +22,17 @@ export function modeFromPathname(pathname: string): SidebarMode {
     pathname.startsWith("/trash/") ||
     pathname === "/mail-settings" ||
     pathname.startsWith("/mail-settings/")
-    ? "email"
-    : "dashboard";
+  );
+}
+
+function isCrmPathname(pathname: string): boolean {
+  return pathname === "/crm" || pathname.startsWith("/crm/");
+}
+
+export function modeFromPathname(pathname: string): SidebarMode {
+  if (isEmailPathname(pathname)) return "email";
+  if (isCrmPathname(pathname)) return "crm";
+  return "dashboard";
 }
 
 function pathnameOnly(path: string): string {
@@ -190,8 +201,7 @@ export function isRestorablePath(path: string, mode: SidebarMode): boolean {
   for (const prefix of BLOCKED_PATH_PREFIXES) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false;
   }
-  if (mode === "email") {
-    return pathname === "/email" || pathname.startsWith("/email/");
-  }
-  return pathname !== "/email" && !pathname.startsWith("/email/");
+  if (mode === "email") return isEmailPathname(pathname);
+  if (mode === "crm") return isCrmPathname(pathname);
+  return !isEmailPathname(pathname) && !isCrmPathname(pathname);
 }

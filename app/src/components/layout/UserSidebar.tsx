@@ -4,12 +4,11 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
-  ArrowLeftRight,
+  Check,
   ChevronDown,
   Download,
   FilePen,
   Inbox,
-  LayoutGrid,
   Loader2,
   LogOut,
   Mails,
@@ -20,6 +19,7 @@ import {
   Plus,
   Send,
   Trash2,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -34,8 +34,6 @@ import { AddTeamAccountDialog } from "@/email/components/accounts/AddTeamAccount
 import { useEmailMailbox } from "@/email/components/mailbox/EmailMailboxContext";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import {
-  DEFAULT_DASHBOARD_PATH,
-  DEFAULT_EMAIL_PATH,
   modeFromPathname,
   hydrateSidebarState,
   readLastPath,
@@ -64,12 +62,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -81,6 +73,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCrmPaths } from "@/crm/lib/paths";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
@@ -140,6 +133,9 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
       />
     );
   }
+  if (mode === "crm") {
+    return <Users className="size-4 shrink-0" aria-hidden />;
+  }
   return (
     <img
       src="/icon.png"
@@ -152,49 +148,28 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
 }
 
 function sidebarTitleForMode(mode: SidebarMode) {
-  return mode === "email" ? "Mailbox" : "Relaybase console";
+  if (mode === "email") return "Mailbox";
+  if (mode === "crm") return "CRM";
+  return "Relaybase console";
 }
 
-function ModeSwitchButton({
-  mode,
-  collapsed,
+function ModeMenuItem({
+  label,
+  active,
   onClick,
 }: {
-  mode: SidebarMode;
-  collapsed: boolean;
+  label: string;
+  active: boolean;
   onClick: () => void;
 }) {
-  const nextMode: SidebarMode = mode === "email" ? "dashboard" : "email";
-  const nextLabel = sidebarTitleForMode(nextMode);
-
   return (
-    <TooltipProvider delay={0}>
-      <Tooltip>
-        <TooltipTrigger
-          delay={0}
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size={collapsed ? "icon" : "icon-sm"}
-              className="shrink-0"
-              aria-label={`Switch to ${nextLabel}`}
-              onClick={onClick}
-            />
-          }
-        >
-          <ArrowLeftRight className={collapsed ? undefined : "size-3.5"} />
-        </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          sideOffset={8}
-          className="animate-none data-open:animate-none data-[state=delayed-open]:animate-none"
-        >
-          <TitleIcon mode={nextMode} />
-          {nextLabel}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <DropdownMenuItem onClick={onClick}>
+      <Check
+        className={cn("size-3.5", active ? "opacity-100" : "opacity-0")}
+        aria-hidden
+      />
+      {label}
+    </DropdownMenuItem>
   );
 }
 
@@ -204,7 +179,7 @@ function TitleMenuItems({
   canAddAccount = true,
   onAddAccount,
   onOpenSettings,
-  onSwitchMode,
+  onSwitchTo,
   onSignOut,
 }: {
   mode: SidebarMode;
@@ -212,11 +187,29 @@ function TitleMenuItems({
   canAddAccount?: boolean;
   onAddAccount: () => void;
   onOpenSettings: () => void;
-  onSwitchMode: () => void;
+  onSwitchTo: (mode: SidebarMode) => void;
   onSignOut: () => void;
 }) {
   return (
     <>
+      <ModeMenuItem
+        label="Email"
+        active={mode === "email"}
+        onClick={() => onSwitchTo("email")}
+      />
+      <ModeMenuItem
+        label="CRM"
+        active={mode === "crm"}
+        onClick={() => onSwitchTo("crm")}
+      />
+      {teamMode ? null : (
+        <ModeMenuItem
+          label="Console"
+          active={mode === "dashboard"}
+          onClick={() => onSwitchTo("dashboard")}
+        />
+      )}
+      <div role="separator" className="my-1 h-px bg-border" />
       {mode === "email" ? (
         <DropdownMenuItem onClick={onAddAccount} disabled={!canAddAccount}>
           <Plus className="size-3.5" />
@@ -229,16 +222,6 @@ function TitleMenuItems({
           Settings
         </DropdownMenuItem>
       ) : null}
-      {teamMode ? null : (
-        <DropdownMenuItem onClick={onSwitchMode}>
-          {mode === "email" ? (
-            <LayoutGrid className="size-3.5" />
-          ) : (
-            <Mails className="size-3.5" />
-          )}
-          {mode === "email" ? "Open dashboard" : "Open mailbox"}
-        </DropdownMenuItem>
-      )}
       <DropdownMenuItem variant="destructive" onClick={onSignOut}>
         <LogOut className="size-3.5" />
         Sign out
@@ -762,6 +745,39 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+function CrmModeNav({ collapsed }: { collapsed: boolean }) {
+  const pathname = usePathname();
+  const { tabs } = useCrmPaths();
+
+  return (
+    <>
+      {tabs.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(item.href, pathname);
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            title={collapsed ? item.label : undefined}
+            className={cn(
+              "flex items-center rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+              collapsed ? "justify-center gap-0" : "gap-2",
+            )}
+          >
+            <Icon className="size-3.5 shrink-0" aria-hidden />
+            {!collapsed ? (
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            ) : null}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
 export function UserSidebar({
   teamMode = false,
   presentation = "docked",
@@ -792,9 +808,13 @@ export function UserSidebar({
     readSidebarCollapsed(userId),
   );
   const detectedMode = useMemo(() => modeFromPathname(pathname), [pathname]);
-  // Team mode is locked to email — never show dashboard nav even on a
-  // dashboard URL (team users can't reach those routes anyway).
-  const mode: SidebarMode = isTeam ? "email" : detectedMode;
+  // Team mode can reach Email and CRM, never Console — fall back to email
+  // even on a dashboard URL (team users can't reach those routes anyway).
+  const mode: SidebarMode = isTeam
+    ? detectedMode === "crm"
+      ? "crm"
+      : "email"
+    : detectedMode;
   const {
     isDesktop,
     isMacOS,
@@ -830,11 +850,7 @@ export function UserSidebar({
       if (!unlocked && !session.consoleGateOpen) return;
     }
     writeSidebarMode(userId, next);
-    const target = readLastPath(userId, next);
-    router.push(
-      target ||
-        (next === "email" ? DEFAULT_EMAIL_PATH : DEFAULT_DASHBOARD_PATH),
-    );
+    router.push(readLastPath(userId, next));
   }
 
   function toggleCollapsed() {
@@ -878,8 +894,6 @@ export function UserSidebar({
   }
 
   const titleLabel = sidebarTitleForMode(mode);
-  const switchModeTarget = () =>
-    switchMode(mode === "email" ? "dashboard" : "email");
 
   return (
     <aside
@@ -924,13 +938,6 @@ export function UserSidebar({
             >
               <PanelLeftOpen />
             </Button>
-            {isTeam ? null : (
-              <ModeSwitchButton
-                mode={mode}
-                collapsed
-                onClick={switchModeTarget}
-              />
-            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -952,7 +959,7 @@ export function UserSidebar({
                   canAddAccount={canAddAccount}
                   onAddAccount={() => setAddOpen(true)}
                   onOpenSettings={openSettings}
-                  onSwitchMode={switchModeTarget}
+                  onSwitchTo={switchMode}
                   onSignOut={() => setSignOutOpen(true)}
                 />
               </DropdownMenuContent>
@@ -1009,20 +1016,13 @@ export function UserSidebar({
                       canAddAccount={canAddAccount}
                       onAddAccount={() => setAddOpen(true)}
                       onOpenSettings={openSettings}
-                      onSwitchMode={switchModeTarget}
+                      onSwitchTo={switchMode}
                       onSignOut={() => setSignOutOpen(true)}
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
 
                 <div className="flex shrink-0 items-center gap-0.5">
-                  {isTeam ? null : (
-                    <ModeSwitchButton
-                      mode={mode}
-                      collapsed={false}
-                      onClick={switchModeTarget}
-                    />
-                  )}
                   {macDesktopChrome || isSheet ? null : (
                     <Button
                       type="button"
@@ -1048,7 +1048,7 @@ export function UserSidebar({
           "flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-2",
           noDragClassName,
         )}
-        aria-label={mode === "email" ? "Mailbox" : "Dashboard"}
+        aria-label={titleLabel}
         {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
       >
         {mode === "email" ? (
@@ -1056,6 +1056,8 @@ export function UserSidebar({
             collapsed={sidebarCollapsed}
             onAddAccount={() => setAddOpen(true)}
           />
+        ) : mode === "crm" ? (
+          <CrmModeNav collapsed={sidebarCollapsed} />
         ) : (
           <DashboardModeNav collapsed={sidebarCollapsed} />
         )}

@@ -1,14 +1,12 @@
-import { blobToBase64, optimizeImageToWebp } from "./image-optimize";
+import { blobToBase64, optimizeForEmail } from "./image-optimize";
 import {
   DEFAULT_IMAGE_OPTIMIZATION_SETTINGS,
   type ImageOptimizationSettings,
 } from "./image-settings";
 import {
   classifyPageFile,
-  extensionFromFilename,
   humanizeAssetFilename,
   pageAssetFilename,
-  pageAssetMarkdownUrl,
   type PageAssetKind,
 } from "./assets";
 import { normalizeCampaignAssetUrl } from "./asset-url";
@@ -32,32 +30,20 @@ export async function ingestCampaignFile(opts: {
     throw new Error("Only images are supported in campaign editor (v0.2)");
   }
 
-  let blob: Blob = opts.file;
-  let ext = extensionFromFilename(opts.file.name);
-
-  const isGif = (opts.file.type || "").includes("gif") || ext === "gif";
-  if (isGif) {
-    ext = "gif";
-  } else {
-    const optimized = await optimizeImageToWebp(opts.file, settings);
-    blob = optimized.file;
-    ext = optimized.mimeType === "image/gif" ? "gif" : "webp";
-  }
-
-  const filename = pageAssetFilename(opts.file.name, ext);
-  const mimeType = ext === "gif" ? "image/gif" : "image/webp";
+  const optimized = await optimizeForEmail(opts.file, settings);
+  const filename = pageAssetFilename(opts.file.name, optimized.ext);
   const publicUrl = await uploadCampaignAsset(
     opts.campaignId,
     filename,
-    mimeType,
-    await blobToBase64(blob),
+    optimized.mimeType,
+    await blobToBase64(optimized.file),
   );
 
   return {
     markdownUrl: normalizeCampaignAssetUrl(publicUrl),
     name: humanizeAssetFilename(filename, "image"),
     kind: "image",
-    ext,
+    ext: optimized.ext,
   };
 }
 

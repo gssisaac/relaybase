@@ -61,6 +61,7 @@ crmAssets.get("/assets/:campaignId/:filename", (c) => {
     headers: {
       "content-type": asset.mimeType,
       "cache-control": "public, max-age=31536000, immutable",
+      "access-control-allow-origin": "*",
     },
   });
 });

@@ -12,6 +12,7 @@ import {
 import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
 import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
+import { crmApi, type CrmAccountCompliance } from "@/lib/crm/api";
 import {
   useCampaignEditorPersistence,
   type CampaignPersistBridge,
@@ -34,8 +35,10 @@ export function BroadcastContentView() {
     syncDraft,
     persistDraft,
     getLastSavedDraft,
+    refreshTemplates,
   } = useBroadcastDetail();
 
+  const [compliance, setCompliance] = useState<CrmAccountCompliance | null>(null);
   const [subject, setSubject] = useState(broadcast?.subject ?? "");
   const [bodyMarkdown, setBodyMarkdown] = useState(broadcast?.bodyMarkdown ?? "");
   const [previewHtml, setPreviewHtml] = useState("");
@@ -72,6 +75,22 @@ export function BroadcastContentView() {
     setPreviewPersonaId("sample-named");
   }, [broadcastId]);
 
+  useEffect(() => {
+    crmApi
+      .getAccountLink()
+      .then((link) =>
+        setCompliance(
+          link.compliance ?? {
+            organizationName: null,
+            postalAddress: null,
+            contactEmail: null,
+            updatedAt: "",
+          },
+        ),
+      )
+      .catch(() => setCompliance(null));
+  }, [broadcastId]);
+
   const personaOptions = useMemo(
     () => previewPersonaOptions(audienceMembers),
     [audienceMembers],
@@ -96,7 +115,19 @@ export function BroadcastContentView() {
 
   const template = templates.find((t) => t.id === templateId);
   const plainTextTemplate = isPlainTextTemplate(templateId);
-  const previewMergeOptions = useMemo(() => ({ unsubscribeUrl: "#" as const }), []);
+  const previewMergeOptions = useMemo(
+    () => ({
+      unsubscribeUrl: "#" as const,
+      compliance: compliance
+        ? {
+            organizationName: compliance.organizationName,
+            postalAddress: compliance.postalAddress,
+            complianceContactEmail: compliance.contactEmail,
+          }
+        : undefined,
+    }),
+    [compliance],
+  );
 
   const previewSubject = useMemo(
     () => applyBroadcastMergeTags(subject, previewRecipient, previewMergeOptions),
@@ -178,6 +209,11 @@ export function BroadcastContentView() {
         setPreviewPersonaId={setPreviewPersonaId}
         previewRecipient={previewRecipient}
         personaOptions={personaOptions}
+        compliance={compliance}
+        onTemplateImported={(id) => {
+          void refreshTemplates();
+          setTemplateId(id);
+        }}
       />
     </div>
   );

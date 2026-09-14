@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, Plus, RefreshCw } from "lucide-react";
+import { LayoutTemplate, Mail, Plus, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -26,7 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { useWorkerDomains } from "@/crm/lib/use-worker-domains";
+import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
+import { CrmTemplateLibraryDialog } from "@/crm/components/CrmTemplateLibraryDialog";
+import { BroadcastsSectionNav } from "@/crm/components/BroadcastsSectionNav";
 import { crmAudienceApi } from "@/lib/crm/audience-api";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
@@ -122,6 +126,11 @@ function statsLine(b: Broadcast): string {
 
 export function BroadcastsListView() {
   const router = useRouter();
+  const {
+    readyDomains,
+    loading: workerDomainsLoading,
+    refresh: refreshWorkerDomains,
+  } = useWorkerDomains();
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -130,6 +139,7 @@ export function BroadcastsListView() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newDomain, setNewDomain] = useState<string | null>(null);
   const [newAudienceGroupId, setNewAudienceGroupId] = useState<string>("");
   const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
   const [audienceLoading, setAudienceLoading] = useState(false);
@@ -168,13 +178,14 @@ export function BroadcastsListView() {
 
   useEffect(() => {
     if (!createOpen) return;
+    void refreshWorkerDomains();
     setAudienceLoading(true);
     crmAudienceApi
       .listGroups()
       .then(({ groups }) => setAudienceGroups(groups))
       .catch(() => toast.error("Could not load audience groups"))
       .finally(() => setAudienceLoading(false));
-  }, [createOpen]);
+  }, [createOpen, refreshWorkerDomains]);
 
   const counts = useMemo(() => {
     const visible = broadcasts.filter((b) => b.listStatus !== "archived");
@@ -204,17 +215,24 @@ export function BroadcastsListView() {
     });
   }, [broadcasts, filter, search]);
 
+  const groupsForDomain = useMemo(() => {
+    const d = newDomain?.toLowerCase();
+    if (!d) return [];
+    return audienceGroups.filter((g) => g.domain.toLowerCase() === d);
+  }, [audienceGroups, newDomain]);
+
   const audienceSelectItems = useMemo(
     () =>
-      audienceGroups.map((g) => ({
+      groupsForDomain.map((g) => ({
         value: g.id,
-        label: `${g.name} (${g.domain}) · ${g.contactCount} contacts`,
+        label: `${g.name} · ${g.contactCount} contacts`,
       })),
-    [audienceGroups],
+    [groupsForDomain],
   );
 
   function resetCreate() {
     setNewName("");
+    setNewDomain(readyDomains[0]?.domain ?? null);
     setNewAudienceGroupId("");
     setCreateError(null);
     setCreating(false);
@@ -227,6 +245,10 @@ export function BroadcastsListView() {
       setCreateError("Broadcast name is required");
       return;
     }
+    if (!newDomain) {
+      setCreateError("Select a sending domain");
+      return;
+    }
     if (!audienceGroupId) {
       setCreateError("Select an audience group");
       return;
@@ -234,9 +256,12 @@ export function BroadcastsListView() {
     setCreating(true);
     setCreateError(null);
     try {
+      const workerUrl = resolveEmailApiBase();
       const created = await crmApi.createBroadcast({
         name,
+        domain: newDomain,
         audienceGroupId,
+        ...(workerUrl ? { workerUrl } : {}),
       });
       toast.success(`Broadcast '${created.name}' created`);
       setCreateOpen(false);
@@ -254,13 +279,22 @@ export function BroadcastsListView() {
         open={createOpen}
         onOpenChange={(open) => {
           setCreateOpen(open);
-          if (!open) resetCreate();
+          if (open) resetCreate();
+          else resetCreate();
         }}
       >
         <DesktopTitleBar
           className="px-4 py-3"
           end={
             <>
+              <CrmTemplateLibraryDialog
+                trigger={
+                  <Button size="sm" variant="outline">
+                    <LayoutTemplate className="size-4" />
+                    Templates
+                  </Button>
+                }
+              />
               <DialogTrigger
                 render={<Button size="sm" />}
                 onClick={() => {
@@ -281,11 +315,14 @@ export function BroadcastsListView() {
             </>
           }
         >
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold tracking-tight">Broadcasts</h1>
-            <p className="text-sm text-muted-foreground">
-              Email broadcasts with linked audience and send lifecycle
-            </p>
+          <div className="min-w-0 space-y-2">
+            <div>
+              <h1 className="truncate text-lg font-semibold tracking-tight">Broadcasts</h1>
+              <p className="text-sm text-muted-foreground">
+                Email broadcasts with linked audience and send lifecycle
+              </p>
+            </div>
+            <BroadcastsSectionNav active="list" />
           </div>
         </DesktopTitleBar>
 
@@ -293,7 +330,7 @@ export function BroadcastsListView() {
           <DialogHeader>
             <DialogTitle>New broadcast</DialogTitle>
             <DialogDescription>
-              Pick an audience group — members sync as send targets with unsubscribe tracking.
+              Pick a domain from your Worker, then an audience group on that domain.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -309,12 +346,42 @@ export function BroadcastsListView() {
               />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="broadcast-domain">Domain</Label>
+              <Select
+                value={newDomain}
+                onValueChange={(value) => {
+                  setNewDomain(value);
+                  setNewAudienceGroupId("");
+                }}
+              >
+                <SelectTrigger id="broadcast-domain" className="w-full">
+                  <SelectValue placeholder="Select domain" />
+                </SelectTrigger>
+                <SelectContent>
+                  {readyDomains.map((d) => (
+                    <SelectItem key={d.domain} value={d.domain}>
+                      {d.domain}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {workerDomainsLoading ? (
+                <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
+              ) : readyDomains.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No domains on your Worker yet — add one in Console → Domains.
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="broadcast-audience">Audience</Label>
               {audienceLoading ? (
                 <p className="text-sm text-muted-foreground">Loading audience groups…</p>
-              ) : audienceGroups.length === 0 ? (
+              ) : !newDomain ? (
+                <p className="text-sm text-muted-foreground">Select a domain first.</p>
+              ) : groupsForDomain.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Create an audience group first, then return here to start a broadcast.
+                  No audience groups on this domain — create one in Audience first.
                 </p>
               ) : (
                 <Select
@@ -326,8 +393,8 @@ export function BroadcastsListView() {
                     <SelectValue placeholder="Select audience group" />
                   </SelectTrigger>
                   <SelectContent>
-                    {audienceGroups.map((g) => {
-                      const label = `${g.name} (${g.domain}) · ${g.contactCount} contacts`;
+                    {groupsForDomain.map((g) => {
+                      const label = `${g.name} · ${g.contactCount} contacts`;
                       return (
                         <SelectItem key={g.id} value={g.id} label={label}>
                           {label}
@@ -353,7 +420,9 @@ export function BroadcastsListView() {
             <Button
               type="button"
               size="sm"
-              disabled={creating || !newName.trim() || !newAudienceGroupId.trim()}
+              disabled={
+                creating || !newName.trim() || !newDomain || !newAudienceGroupId.trim()
+              }
               onClick={() => void handleCreate()}
             >
               {creating ? "Creating…" : "Create broadcast"}
@@ -440,7 +509,13 @@ export function BroadcastsListView() {
                   title="No broadcasts yet"
                   description="Create a broadcast to sync an audience and send email."
                   action={
-                    <Button size="sm" onClick={() => setCreateOpen(true)}>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        resetCreate();
+                        setCreateOpen(true);
+                      }}
+                    >
                       New broadcast
                     </Button>
                   }

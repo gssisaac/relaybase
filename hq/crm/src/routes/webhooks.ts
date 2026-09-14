@@ -10,7 +10,19 @@ export const crmWebhooks = new Hono();
  * (UC-S4, spec §5.3). Marks the audience contact bounced when the broadcast's
  * group is known, and always adds the address to account-wide suppression.
  */
+function verifyWebhookSecret(c: { req: { header: (name: string) => string | undefined } }): boolean {
+  const secret = process.env.CRM_WEBHOOK_SECRET?.trim();
+  if (!secret) return process.env.NODE_ENV !== "production";
+  const auth = c.req.header("Authorization")?.trim();
+  const bearer = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+  return bearer === secret || c.req.header("X-CRM-Webhook-Secret")?.trim() === secret;
+}
+
 crmWebhooks.post("/bounce", async (c) => {
+  if (!verifyWebhookSecret(c)) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
   let body: {
     email?: string;
     broadcastId?: string;
@@ -68,15 +80,29 @@ crmWebhooks.post("/bounce", async (c) => {
       }
     }
 
-    if (!draft.accountSuppressions.some((s) => s.email === email)) {
+    const groupId =
+      body.broadcastId ?
+        draft.broadcasts.find((b) => b.id === body.broadcastId)?.audienceGroupId ?? null
+      : null;
+    const exists = draft.accountSuppressions.some(
+      (s) =>
+        s.accountLinkId === DEV_ACCOUNT_LINK_ID &&
+        s.email === email &&
+        s.audienceGroupId === null &&
+        s.reason === reason,
+    );
+    if (!exists) {
       draft.accountSuppressions.push({
         id: newId("suppression"),
         accountLinkId: DEV_ACCOUNT_LINK_ID,
         email,
         reason,
+        audienceGroupId: null,
+        sourceBroadcastId: body.broadcastId ?? null,
         createdAt: now,
       });
     }
+    void groupId;
   });
 
   return c.json({ ok: true });

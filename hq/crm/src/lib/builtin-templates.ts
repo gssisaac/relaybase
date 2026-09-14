@@ -16,7 +16,10 @@ export type BuiltinTemplate = {
 
 const FOOTER = `
     <tr>
-      <td style="padding:24px 32px;text-align:center;font-size:12px;color:#94a3b8;">
+      <td style="padding:24px 32px;text-align:center;font-size:12px;color:#94a3b8;line-height:1.5;">
+        {{organization_name}}<br />
+        {{postal_address}}<br />
+        {{compliance_contact_email}}<br />
         <a href="{{unsubscribe_url}}" style="color:#94a3b8;">Unsubscribe</a>
       </td>
     </tr>`;

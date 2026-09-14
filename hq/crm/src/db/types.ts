@@ -3,17 +3,27 @@
  *
  * During active development, all state is stored in a structured JSON file.
  * Production D1 database schemas will be synthesized after the TypeScript
- * models and workflows stabilize (docs/features/crm-campaign-broadcast-subscriber-model.md §2).
+ * models and workflows stabilize (docs/features/crm-audience-broadcast-model.md).
  */
 
 // ============================================================================
 // Core Tenant & Settings
 // ============================================================================
 
+/** CAN-SPAM / marketing disclosure defaults merged into broadcast footers. */
+export type AccountComplianceSettings = {
+  organizationName: string | null;
+  /** Physical postal address (required for US commercial email). */
+  postalAddress: string | null;
+  contactEmail: string | null;
+  updatedAt: string;
+};
+
 export type AccountLink = {
   id: string;
   workerUrl: string | null;
   domain: string | null;
+  compliance: AccountComplianceSettings;
   createdAt: string;
 };
 
@@ -31,6 +41,10 @@ export type BroadcastStats = {
   delivered: number;
   bounced: number;
   failed: number;
+  /** Recipients skipped at dispatch (inactive / suppressed). */
+  skipped: number;
+  /** Unique recipients who filed a spam complaint. */
+  complained: number;
   /** Unique recipients who opened at least once. */
   opened: number;
   totalOpens: number;
@@ -48,6 +62,8 @@ export type Broadcast = {
   description?: string | null;
   /** Linked audience group — send targets are resolved from group contacts at dispatch. */
   audienceGroupId: string;
+  /** Console-managed sending domain (must match linked audience group). */
+  domain: string;
   fromName?: string | null;
   fromEmail?: string | null;
   replyTo?: string | null;
@@ -59,7 +75,11 @@ export type Broadcast = {
   templateId?: string | null;
   status: BroadcastStatus;
   scheduledAt?: string | null;
+  /** Dispatch start time (set when status becomes `sending`). */
   sentAt?: string | null;
+  startedAt?: string | null;
+  /** When status became `sent` or `failed`. */
+  finishedAt?: string | null;
   targetFilter?: Record<string, unknown>;
   stats: BroadcastStats;
   createdAt: string;
@@ -101,13 +121,20 @@ export type Recipient = {
 // 5. Account Suppression (Global Opt-Outs & Hard Bounces)
 // ============================================================================
 
-export type AccountSuppressionReason = "complaint" | "hard_bounce" | "manual_suppression";
+export type AccountSuppressionReason =
+  | "complaint"
+  | "hard_bounce"
+  | "manual_suppression"
+  | "unsubscribe";
 
 export type AccountSuppression = {
   id: string;
   accountLinkId: string;
   email: string;
   reason: AccountSuppressionReason;
+  /** null = account-wide; set = only this audience group. */
+  audienceGroupId: string | null;
+  sourceBroadcastId?: string | null;
   createdAt: string;
 };
 
@@ -220,6 +247,9 @@ export type AudienceMember = {
   bounceReason?: string | null;
   /** Per-contact token for list-scoped unsubscribe links. */
   unsubscribeToken: string;
+  /** When/how the contact became mailable (audit; not legal proof alone). */
+  consentSource: "manual" | "synced" | null;
+  consentedAt: string | null;
 };
 
 export type AudienceGroup = {

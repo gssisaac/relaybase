@@ -28,6 +28,7 @@ type Ctx = {
   notFound: boolean;
   setBroadcast: (broadcast: Broadcast) => void;
   refresh: () => Promise<void>;
+  refreshTemplates: () => Promise<void>;
   refreshAudience: () => Promise<void>;
   syncDraft: (fields: DraftFields) => void;
   persistDraft: () => Promise<boolean>;
@@ -59,6 +60,11 @@ export function BroadcastDetailProvider({
     const { members } = await crmApi.listBroadcastAudience(broadcastId);
     setAudienceMembers(members);
   }, [broadcastId]);
+
+  const refreshTemplates = useCallback(async () => {
+    const t = await crmApi.listTemplates();
+    setTemplates(t.templates);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -143,6 +149,7 @@ export function BroadcastDetailProvider({
         notFound,
         setBroadcast,
         refresh,
+        refreshTemplates,
         refreshAudience,
         syncDraft,
         persistDraft,

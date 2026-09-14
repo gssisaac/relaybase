@@ -1,15 +1,21 @@
 "use client";
 
 import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
-import { broadcastDetailFromSearch } from "@/crm/lib/paths";
+import {
+  broadcastDetailFromSearch,
+  broadcastsSectionFromLocation,
+} from "@/crm/lib/paths";
 import { BroadcastDetailProvider } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { BroadcastDetailSwitch } from "@/crm/pages/campaigns/BroadcastDetailSwitch";
+import { BroadcastInProgressView } from "@/crm/pages/campaigns/BroadcastInProgressView";
+import { BroadcastSentOverviewView } from "@/crm/pages/campaigns/BroadcastSentOverviewView";
 import { BroadcastsListView } from "@/crm/pages/campaigns/CampaignsListView";
 
 function BroadcastsRoute() {
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const detail = broadcastDetailFromSearch(searchParams);
 
   if (detail) {
@@ -22,6 +28,9 @@ function BroadcastsRoute() {
     );
   }
 
+  const section = broadcastsSectionFromLocation(pathname, searchParams);
+  if (section === "sent") return <BroadcastSentOverviewView />;
+  if (section === "in-progress") return <BroadcastInProgressView />;
   return <BroadcastsListView />;
 }
 

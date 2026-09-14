@@ -143,6 +143,14 @@ export function normalizeEntryPath(path: string): string {
   if (pathname === "/broadcasts/new") {
     return "/broadcasts?new=1";
   }
+  const crmBroadcastSection = pathname.match(/^\/crm\/broadcasts\/(sent|in-progress)\/?$/);
+  if (crmBroadcastSection) {
+    return `/crm/broadcasts?view=${crmBroadcastSection[1]}`;
+  }
+  const legacyBroadcastSection = pathname.match(/^\/broadcasts\/(sent|in-progress)\/?$/);
+  if (legacyBroadcastSection) {
+    return `/crm/broadcasts?view=${legacyBroadcastSection[1]}`;
+  }
   const broadcastMatch = pathname.match(
     /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,
   );

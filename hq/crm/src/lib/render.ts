@@ -1,6 +1,7 @@
 import { marked } from "marked";
 
 import { isPlainTextTemplate } from "./builtin-templates";
+import { applyComplianceMergeTags } from "./compliance-footer";
 
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's
@@ -116,8 +117,29 @@ function applyRecipientMergeTags(
     .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
 }
 
+function shouldSkipClickTracking(url: string, unsubscribeUrl: string): boolean {
+  if (!url || url.startsWith("mailto:") || url.startsWith("#") || url.includes("/crm/t/")) {
+    return true;
+  }
+  if (url.includes("/crm/unsubscribe/")) return true;
+  if (url === unsubscribeUrl) return true;
+  return false;
+}
+
+export function buildListUnsubscribeUrl(
+  crmBaseUrl: string,
+  broadcastId: string,
+  unsubscribeToken: string,
+): string {
+  return `${crmBaseUrl}/crm/unsubscribe/${broadcastId}/${unsubscribeToken}`;
+}
+
 export function renderBroadcastForRecipient(input: RenderBroadcastInput): string {
-  const unsubscribeUrl = `${input.crmBaseUrl}/crm/unsubscribe/${input.broadcastId}/${input.unsubscribeToken}`;
+  const unsubscribeUrl = buildListUnsubscribeUrl(
+    input.crmBaseUrl,
+    input.broadcastId,
+    input.unsubscribeToken,
+  );
 
   if (isPlainTextTemplate(input.templateId)) {
     const merged = applyRecipientMergeTags(
@@ -125,7 +147,8 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
       input.recipient,
       unsubscribeUrl,
     );
-    const html = `<div style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">${escapeHtml(merged)}</div>`;
+    let html = `<div style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">${escapeHtml(merged)}</div>`;
+    html = applyComplianceMergeTags(html);
     const pixelUrl = `${input.crmBaseUrl}/crm/t/o/${input.broadcastId}/${input.recipientId}`;
     return `${html}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;" />`;
   }
@@ -141,11 +164,10 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
     .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
 
   html = applyRecipientMergeTags(html, input.recipient, unsubscribeUrl);
+  html = applyComplianceMergeTags(html);
 
   html = html.replace(/href="([^"]*)"/g, (match, url: string) => {
-    if (!url || url.startsWith("mailto:") || url.startsWith("#") || url.includes("/crm/t/")) {
-      return match;
-    }
+    if (shouldSkipClickTracking(url, unsubscribeUrl)) return match;
     const redirect = `${input.crmBaseUrl}/crm/t/c/${input.broadcastId}/${input.recipientId}?u=${encodeURIComponent(url)}`;
     return `href="${redirect}"`;
   });

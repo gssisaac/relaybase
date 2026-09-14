@@ -1,5 +1,6 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
 import { resolveActiveAudienceContacts } from "./lib/audience-resolver";
+import { rollupBroadcastStatsFromRecipients } from "./lib/broadcast-stats";
 import {
   DISPATCH_BATCH_SIZE,
   dispatchBroadcastToAudience,
@@ -36,11 +37,14 @@ async function claimDueBroadcasts(): Promise<void> {
         return;
       }
       draft.scheduledJobs[jobIdx] = { ...draft.scheduledJobs[jobIdx]!, status: "done" };
+      const claimedAt = new Date().toISOString();
       draft.broadcasts[bIdx] = {
         ...draft.broadcasts[bIdx]!,
         status: "sending",
-        sentAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        sentAt: claimedAt,
+        startedAt: claimedAt,
+        finishedAt: null,
+        updatedAt: claimedAt,
       };
       claimedBroadcastId = draft.broadcasts[bIdx]!.id;
     });
@@ -56,7 +60,15 @@ async function claimDueBroadcasts(): Promise<void> {
       console.error(`[crm-scheduler] broadcast ${claimedBroadcastId} send failed`, err);
       store.update((draft) => {
         const idx = draft.broadcasts.findIndex((b) => b.id === claimedBroadcastId);
-        if (idx >= 0) draft.broadcasts[idx] = { ...draft.broadcasts[idx]!, status: "failed" };
+        if (idx >= 0) {
+          const failedAt = new Date().toISOString();
+          draft.broadcasts[idx] = {
+            ...draft.broadcasts[idx]!,
+            status: "failed",
+            finishedAt: failedAt,
+            updatedAt: failedAt,
+          };
+        }
       });
     }
   }
@@ -95,33 +107,16 @@ async function rollupStats(): Promise<void> {
 
   for (const broadcast of active) {
     const recipients = data.recipients.filter((r) => r.broadcastId === broadcast.id);
-    const sent = recipients.filter((r) => r.status === "delivered" || r.status === "bounced").length;
-    const delivered = recipients.filter((r) => r.status === "delivered").length;
-    const bounced = recipients.filter((r) => r.status === "bounced").length;
-    const failed = recipients.filter((r) => r.status === "failed").length;
-    const opened = recipients.filter((r) => r.openedAt).length;
-    const clicked = recipients.filter((r) => r.clickedAt).length;
-    const totalOpens = recipients.reduce((n, r) => n + r.openCount, 0);
-    const totalClicks = recipients.reduce((n, r) => n + r.clickCount, 0);
-    const unsubscribed = recipients.filter((r) => r.unsubscribedAt).length;
-
-    const next = {
-      sent,
-      delivered,
-      bounced,
-      failed,
-      opened,
-      totalOpens,
-      clicked,
-      totalClicks,
-      unsubscribed,
-    };
+    const events = data.trackingEvents.filter((e) => e.broadcastId === broadcast.id);
+    const next = rollupBroadcastStatsFromRecipients(recipients, events);
     const prev = broadcast.stats;
     if (
       next.sent === prev.sent &&
       next.delivered === prev.delivered &&
       next.bounced === prev.bounced &&
       next.failed === prev.failed &&
+      next.skipped === prev.skipped &&
+      next.complained === prev.complained &&
       next.opened === prev.opened &&
       next.totalOpens === prev.totalOpens &&
       next.clicked === prev.clicked &&

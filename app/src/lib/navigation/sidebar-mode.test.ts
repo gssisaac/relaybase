@@ -85,6 +85,25 @@ describe("normalizeEntryPath", () => {
     assert.equal(normalizeEntryPath("/broadcasts/new"), "/broadcasts?new=1");
   });
 
+  it("rewrites reserved broadcast section paths into ?view=", () => {
+    assert.equal(
+      normalizeEntryPath("/crm/broadcasts/sent"),
+      "/crm/broadcasts?view=sent",
+    );
+    assert.equal(
+      normalizeEntryPath("/crm/broadcasts/in-progress"),
+      "/crm/broadcasts?view=in-progress",
+    );
+    assert.equal(
+      normalizeEntryPath("/broadcasts/sent"),
+      "/crm/broadcasts?view=sent",
+    );
+    assert.equal(
+      normalizeEntryPath("/crm/broadcasts/broadcast_abc/stats"),
+      "/crm/broadcasts?id=broadcast_abc&tab=stats",
+    );
+  });
+
   it("keeps /settings/{tab} as nested routes", () => {
     assert.equal(normalizeEntryPath("/settings"), "/settings");
     assert.equal(normalizeEntryPath("/settings/"), "/settings");

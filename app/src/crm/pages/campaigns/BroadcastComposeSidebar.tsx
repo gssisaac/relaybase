@@ -1,8 +1,11 @@
 "use client";
 
-import { Braces, Copy, Plus } from "lucide-react";
+import { Braces, Copy, PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
+import { BroadcastPreflightChecklist } from "@/crm/components/BroadcastPreflightChecklist";
+import { CrmTemplateImportDialog } from "@/crm/components/CrmTemplateImportDialog";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -13,15 +16,16 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  applyBroadcastMergeTags,
   BROADCAST_MERGE_TAGS,
   displayNameForRecipient,
-  previewPersonaOptions,
+  MERGE_TAG_CATEGORIES,
   templateThumbnailVariant,
   type PreviewPersonaId,
   type PreviewRecipient,
 } from "@/crm/lib/broadcast-merge-tags";
+import { runBroadcastPreflight } from "@/crm/lib/broadcast-preflight";
 import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
+import type { CrmAccountCompliance } from "@/lib/crm/api";
 import type { CrmTemplate } from "@/lib/crm/api";
 import { cn } from "@/lib/utils";
 
@@ -120,167 +124,235 @@ function MergeTagRow({
 }
 
 export function BroadcastComposeSidebar({
+  broadcastId,
   templates,
   templateId,
   setTemplateId,
   editable,
+  subject,
+  bodyMarkdown,
+  fromEmail,
+  fromName,
+  compliance,
   previewPersonaId,
   setPreviewPersonaId,
   previewRecipient,
-  previewSubject,
-  previewBodySnippet,
   personaOptions,
   onInsertMergeTag,
+  onTemplateImported,
+  collapsed,
+  onCollapsedChange,
 }: {
+  broadcastId: string;
   templates: CrmTemplate[];
   templateId: string;
   setTemplateId: (id: string) => void;
   editable: boolean;
+  subject: string;
+  bodyMarkdown: string;
+  fromEmail: string | null;
+  fromName: string | null;
+  compliance: CrmAccountCompliance | null;
   previewPersonaId: PreviewPersonaId;
   setPreviewPersonaId: (id: PreviewPersonaId) => void;
   previewRecipient: PreviewRecipient;
-  previewSubject: string;
-  previewBodySnippet: string;
   personaOptions: { value: PreviewPersonaId; label: string }[];
   onInsertMergeTag: (token: string) => void;
+  onTemplateImported?: (templateId: string) => void;
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
 }) {
-  const resolvedSubject = applyBroadcastMergeTags(previewSubject, previewRecipient, {
-    unsubscribeUrl: "#",
+  const [importOpen, setImportOpen] = useState(false);
+
+  const template = templates.find((t) => t.id === templateId);
+  const preflight = runBroadcastPreflight({
+    subject,
+    bodyMarkdown,
+    templateHtml: template?.htmlSource ?? "",
+    fromEmail,
+    fromName,
+    compliance,
   });
-  const resolvedSnippet = applyBroadcastMergeTags(previewBodySnippet, previewRecipient, {
-    unsubscribeUrl: "#",
-  });
-  const displayName = displayNameForRecipient(previewRecipient);
+
+  if (collapsed) {
+    return (
+      <div className="flex shrink-0 flex-col items-center border-border py-2 lg:border-l">
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Expand sidebar"
+          onClick={() => onCollapsedChange(false)}
+        >
+          <PanelRightOpen className="size-4" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-border lg:w-[260px] lg:border-l">
-      <Tabs defaultValue="templates" className="flex min-h-0 flex-1 flex-col gap-0">
-        <div className="shrink-0 border-b border-border px-2 py-2">
-          <TabsList variant="line" className="h-8 w-full justify-start gap-0 px-0">
-            <TabsTrigger value="templates" className="flex-1 px-1 text-xs">
-              Templates
-            </TabsTrigger>
-            <TabsTrigger value="variables" className="flex-1 px-1 text-xs">
-              Variables
-            </TabsTrigger>
-            <TabsTrigger value="preview" className="flex-1 px-1 text-xs">
-              Preview
-            </TabsTrigger>
-          </TabsList>
+    <>
+      <aside className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-border lg:w-[280px] lg:border-l">
+        <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-1">
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Collapse sidebar"
+            onClick={() => onCollapsedChange(true)}
+          >
+            <PanelRightClose className="size-4" />
+          </Button>
         </div>
-
-        <TabsContent value="templates" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
-          {templates.length === 0 ? (
-            <p className="px-1 py-2 text-xs text-muted-foreground">No templates yet</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {templates.map((t) => {
-                const selected = t.id === templateId;
-                const variant = templateThumbnailVariant(t.id);
-                return (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      disabled={!editable}
-                      onClick={() => setTemplateId(t.id)}
-                      className={cn(
-                        "w-full rounded-md border bg-card p-2.5 text-left transition-colors",
-                        "hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60",
-                        selected ? "border-primary ring-1 ring-primary/30" : "border-border",
-                      )}
-                    >
-                      <TemplateWireframe variant={variant} />
-                      <span className="block text-sm font-medium leading-snug">{t.name}</span>
-                      {t.isBuiltin ? (
-                        <span className="mt-1 block text-[10px] text-muted-foreground">
-                          {isPlainTextTemplate(t.id)
-                            ? "Built-in · plain text"
-                            : "Built-in · 600px max width"}
-                        </span>
-                      ) : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </TabsContent>
-
-        <TabsContent value="variables" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
-          <p className="mb-2 flex items-start gap-1.5 px-0.5 text-[11px] leading-snug text-muted-foreground">
-            <Braces className="mt-0.5 size-3 shrink-0" aria-hidden />
-            Insert into the subject or body. Tags are replaced per recipient at send time.
-          </p>
-          <ul className="flex flex-col gap-2">
-            {BROADCAST_MERGE_TAGS.map((tag) => (
-              <MergeTagRow
-                key={tag.id}
-                tag={tag}
-                editable={editable}
-                onInsert={onInsertMergeTag}
-              />
-            ))}
-          </ul>
-        </TabsContent>
-
-        <TabsContent value="preview" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-foreground">Preview as</p>
-              <Select
-                value={previewPersonaId}
-                onValueChange={(value) => setPreviewPersonaId(value as PreviewPersonaId)}
-                items={personaOptions}
-              >
-                <SelectTrigger size="sm" className="w-full">
-                  <SelectValue placeholder="Choose recipient" />
-                </SelectTrigger>
-                <SelectContent>
-                  {personaOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="rounded-md border border-border bg-muted/20 p-2.5 text-[11px]">
-              <p className="font-medium text-foreground">Resolved values</p>
-              <dl className="mt-2 space-y-1.5 text-muted-foreground">
-                <div className="flex justify-between gap-2">
-                  <dt>{`{{contact.name}}`}</dt>
-                  <dd className="truncate text-right text-foreground">{displayName}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>{`{{contact.email}}`}</dt>
-                  <dd className="truncate text-right text-foreground">{previewRecipient.email}</dd>
-                </div>
-              </dl>
-            </div>
-
-            {resolvedSubject.trim() ? (
-              <div className="rounded-md border border-border bg-card p-2.5">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Subject
-                </p>
-                <p className="mt-1 text-xs leading-snug text-foreground">{resolvedSubject}</p>
-              </div>
-            ) : null}
-
-            {resolvedSnippet.trim() ? (
-              <div className="rounded-md border border-border bg-card p-2.5">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Body snippet
-                </p>
-                <p className="mt-1 line-clamp-4 text-xs leading-snug text-foreground">
-                  {resolvedSnippet}
-                </p>
-              </div>
-            ) : null}
+        <Tabs defaultValue="templates" className="flex min-h-0 flex-1 flex-col gap-0">
+          <div className="shrink-0 border-b border-border px-2 py-2">
+            <TabsList variant="line" className="h-8 w-full justify-start gap-0 px-0">
+              <TabsTrigger value="templates" className="flex-1 px-1 text-xs">
+                Templates
+              </TabsTrigger>
+              <TabsTrigger value="variables" className="flex-1 px-1 text-xs">
+                Variables
+              </TabsTrigger>
+              <TabsTrigger value="preflight" className="flex-1 px-1 text-xs">
+                Pre-flight
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </TabsContent>
-      </Tabs>
-    </aside>
+
+          <TabsContent value="templates" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
+            {templates.length === 0 ? (
+              <p className="px-1 py-2 text-xs text-muted-foreground">No templates yet</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {templates.map((t) => {
+                  const selected = t.id === templateId;
+                  const variant = templateThumbnailVariant(t.id);
+                  return (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        disabled={!editable}
+                        onClick={() => setTemplateId(t.id)}
+                        className={cn(
+                          "w-full rounded-md border bg-card p-2.5 text-left transition-colors",
+                          "hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60",
+                          selected ? "border-primary ring-1 ring-primary/30" : "border-border",
+                        )}
+                      >
+                        <TemplateWireframe variant={variant} />
+                        <span className="block text-sm font-medium leading-snug">{t.name}</span>
+                        {t.isBuiltin ? (
+                          <span className="mt-1 block text-[10px] text-muted-foreground">
+                            {isPlainTextTemplate(t.id)
+                              ? "Built-in · plain text"
+                              : "Built-in · 600px max width"}
+                          </span>
+                        ) : (
+                          <span className="mt-1 block text-[10px] text-muted-foreground">
+                            Custom import
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {editable ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => setImportOpen(true)}
+              >
+                Import HTML template
+              </Button>
+            ) : null}
+          </TabsContent>
+
+          <TabsContent value="variables" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
+            <p className="mb-2 flex items-start gap-1.5 px-0.5 text-[11px] leading-snug text-muted-foreground">
+              <Braces className="mt-0.5 size-3 shrink-0" aria-hidden />
+              Insert into subject or body. Legal tags use account compliance settings.
+            </p>
+            {MERGE_TAG_CATEGORIES.map((cat) => {
+              const tags = BROADCAST_MERGE_TAGS.filter((t) => t.category === cat.id);
+              if (tags.length === 0) return null;
+              return (
+                <div key={cat.id} className="mb-3">
+                  <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {cat.label}
+                  </p>
+                  <ul className="flex flex-col gap-2">
+                    {tags.map((tag) => (
+                      <MergeTagRow
+                        key={tag.id}
+                        tag={tag}
+                        editable={editable}
+                        onInsert={onInsertMergeTag}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </TabsContent>
+
+          <TabsContent value="preflight" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-foreground">Preview as</p>
+                <Select
+                  value={previewPersonaId}
+                  onValueChange={(value) => setPreviewPersonaId(value as PreviewPersonaId)}
+                  items={personaOptions}
+                >
+                  <SelectTrigger size="sm" className="w-full">
+                    <SelectValue placeholder="Choose recipient" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {personaOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="rounded-md border border-border bg-muted/20 p-2.5 text-[11px]">
+                <p className="font-medium text-foreground">Resolved recipient</p>
+                <dl className="mt-2 space-y-1.5 text-muted-foreground">
+                  <div className="flex justify-between gap-2">
+                    <dt>{`{{contact.name}}`}</dt>
+                    <dd className="truncate text-right text-foreground">
+                      {displayNameForRecipient(previewRecipient)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt>{`{{contact.email}}`}</dt>
+                    <dd className="truncate text-right text-foreground">{previewRecipient.email}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <BroadcastPreflightChecklist
+                checks={preflight}
+                broadcastId={broadcastId}
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
+      </aside>
+      <CrmTemplateImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={(id) => {
+          onTemplateImported?.(id);
+          setTemplateId(id);
+        }}
+      />
+    </>
   );
 }

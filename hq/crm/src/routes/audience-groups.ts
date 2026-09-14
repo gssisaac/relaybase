@@ -4,6 +4,7 @@ import type { AudienceDataSource, AudienceGroup, AudienceMember } from "../db/ty
 import { syncAllBroadcastsForAudienceGroup } from "../lib/broadcast-audience-sync";
 import { setAudienceContactSendStatus } from "../lib/audience-send-status";
 import { fetchDataSourceContacts } from "../lib/data-source-sync";
+import { isEmailSuppressedForGroup } from "../lib/account-suppression";
 import { newId, newToken } from "../lib/ids";
 
 export const crmAudience = new Hono();
@@ -110,18 +111,28 @@ export async function syncAudienceGroupAsync(
       );
       const manual = g.contacts.filter((c) => c.source === "manual");
       const synced: AudienceMember[] = contacts.map((c) => {
-        const prior = priorByEmail.get(c.email.trim().toLowerCase());
+        const emailKey = c.email.trim().toLowerCase();
+        const prior = priorByEmail.get(emailKey);
+        const ledgerBlocked = isEmailSuppressedForGroup(emailKey, groupId, g.accountLinkId);
+        let sendStatus = prior?.sendStatus ?? "active";
+        if (sendStatus === "active" && ledgerBlocked) sendStatus = "unsubscribed";
+        if (prior?.sendStatus === "unsubscribed" || prior?.sendStatus === "bounced") {
+          sendStatus = prior.sendStatus;
+        }
         return {
           id: prior?.id ?? newId("member"),
           email: c.email,
           name: c.name,
           source: "synced" as const,
           addedAt: prior?.addedAt ?? now,
-          sendStatus: prior?.sendStatus ?? "active",
-          unsubscribedAt: prior?.unsubscribedAt ?? null,
+          sendStatus,
+          unsubscribedAt:
+            sendStatus === "unsubscribed" ? (prior?.unsubscribedAt ?? now) : null,
           bouncedAt: prior?.bouncedAt ?? null,
           bounceReason: prior?.bounceReason ?? null,
           unsubscribeToken: prior?.unsubscribeToken ?? newToken(),
+          consentSource: prior?.consentSource ?? "synced",
+          consentedAt: prior?.consentedAt ?? (sendStatus === "active" ? now : null),
         };
       });
       g.contacts = [...manual, ...synced];
@@ -369,15 +380,28 @@ crmAudience.post("/:id/contacts", async (c) => {
     return c.json({ error: "contact already exists", contactId: duplicate.id }, 409);
   }
 
+  if (isEmailSuppressedForGroup(email, group.id, group.accountLinkId)) {
+    return c.json(
+      {
+        error:
+          "This address is on the account suppression list for this audience. Remove the suppression before re-adding.",
+      },
+      409,
+    );
+  }
+
+  const addedAt = new Date().toISOString();
   const member: AudienceMember = {
     id: newId("member"),
     email,
     name: body.name?.trim() || null,
     source: "manual",
-    addedAt: new Date().toISOString(),
+    addedAt,
     sendStatus: "active",
     unsubscribedAt: null,
     unsubscribeToken: newToken(),
+    consentSource: "manual",
+    consentedAt: addedAt,
   };
 
   store.update((draft) => {

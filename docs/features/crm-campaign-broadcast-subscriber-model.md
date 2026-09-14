@@ -1,7 +1,14 @@
 # CRM Campaign, Broadcast & Subscriber Architecture Specification
 
-**Status:** Approved Architecture Draft  
-**Target Engine:** `hq/crm` (Cloudflare Workers + D1 / local SQLite)  
+> **Historical draft — superseded (2026-09-15).**  
+> The shipped CRM model **removed the Campaign / Subscriber entities** in favor of **Audience Group → Broadcast**.  
+> **Canonical spec:** [`crm-audience-broadcast-model.md`](./crm-audience-broadcast-model.md)  
+> **Compliance backlog:** [`crm-compliance-improvements.md`](./crm-compliance-improvements.md)  
+>  
+> Keep this file for migration notes and UC copy; do not implement new features against the Campaign hierarchy below.
+
+**Status:** Superseded  
+**Target Engine:** `hq/crm` (Cloudflare Workers + D1 / local JSON store)  
 **App UI:** `app/src/crm/*` (Next.js App Router + shadcn/ui)  
 **Language:** English  
 **Date:** 2026-09-14  

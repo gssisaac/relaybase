@@ -1,7 +1,7 @@
 import { PLAIN_TEXT_TEMPLATE_ID } from "@/crm/lib/broadcast-templates";
 import type { BroadcastMember } from "@/lib/crm/api";
 
-export type BroadcastMergeTagCategory = "contact" | "system";
+export type BroadcastMergeTagCategory = "contact" | "legal" | "system";
 
 export type BroadcastMergeTag = {
   id: string;
@@ -32,6 +32,30 @@ export const BROADCAST_MERGE_TAGS: BroadcastMergeTag[] = [
     example: "alex@example.com",
   },
   {
+    id: "organization-name",
+    token: "{{organization_name}}",
+    label: "Organization name",
+    description: "Account compliance setting — sender organization.",
+    category: "legal",
+    example: "Acme Inc.",
+  },
+  {
+    id: "postal-address",
+    token: "{{postal_address}}",
+    label: "Postal address",
+    description: "Account compliance setting — physical mailing address (CAN-SPAM).",
+    category: "legal",
+    example: "123 Main St, City, ST 12345",
+  },
+  {
+    id: "compliance-email",
+    token: "{{compliance_contact_email}}",
+    label: "Compliance contact email",
+    description: "Account compliance setting — contact for opt-out questions.",
+    category: "legal",
+    example: "compliance@example.com",
+  },
+  {
     id: "unsubscribe-url",
     token: "{{unsubscribe_url}}",
     label: "Unsubscribe link",
@@ -39,6 +63,12 @@ export const BROADCAST_MERGE_TAGS: BroadcastMergeTag[] = [
     category: "system",
     example: "https://…/crm/unsubscribe/…",
   },
+];
+
+export const MERGE_TAG_CATEGORIES: { id: BroadcastMergeTagCategory; label: string }[] = [
+  { id: "contact", label: "Recipient" },
+  { id: "legal", label: "Legal & sender" },
+  { id: "system", label: "Compliance action" },
 ];
 
 export type PreviewPersonaId = "sample-named" | "sample-unnamed" | `member:${string}`;
@@ -72,17 +102,30 @@ export function displayNameForRecipient(recipient: {
   );
 }
 
+export type ComplianceMergeValues = {
+  organizationName?: string | null;
+  postalAddress?: string | null;
+  complianceContactEmail?: string | null;
+};
+
 export function applyBroadcastMergeTags(
   html: string,
   recipient: { email: string; name?: string | null },
-  options?: { unsubscribeUrl?: string },
+  options?: { unsubscribeUrl?: string; compliance?: ComplianceMergeValues },
 ): string {
   const displayName = displayNameForRecipient(recipient);
   const unsubscribeUrl = options?.unsubscribeUrl ?? "#";
+  const compliance = options?.compliance;
   return html
     .replaceAll("{{contact.name}}", displayName)
     .replaceAll("{{contact.email}}", recipient.email)
-    .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
+    .replaceAll("{{unsubscribe_url}}", unsubscribeUrl)
+    .replaceAll("{{organization_name}}", compliance?.organizationName?.trim() ?? "")
+    .replaceAll("{{postal_address}}", compliance?.postalAddress?.trim() ?? "")
+    .replaceAll(
+      "{{compliance_contact_email}}",
+      compliance?.complianceContactEmail?.trim() ?? "",
+    );
 }
 
 export function resolvePreviewRecipient(

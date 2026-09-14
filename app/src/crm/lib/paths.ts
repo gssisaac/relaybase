@@ -5,17 +5,39 @@ import { Mail, Users } from "lucide-react";
 
 export type AudienceDetailTab = "contacts" | "history" | "settings";
 
+export type BroadcastsSection = "list" | "sent" | "in-progress";
+
 export function useCrmPaths() {
   const base = "/crm";
   const audience = "/crm/audience";
   const broadcasts = "/crm/broadcasts";
+  const broadcastsSent = "/crm/broadcasts/sent";
+  const broadcastsInProgress = "/crm/broadcasts/in-progress";
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: audience, label: "Audience", icon: Users },
     { href: broadcasts, label: "Broadcasts", icon: Mail },
   ];
 
-  return { base, audience, broadcasts, tabs };
+  return { base, audience, broadcasts, broadcastsSent, broadcastsInProgress, tabs };
+}
+
+export function broadcastsSectionHref(section: BroadcastsSection = "list"): string {
+  if (section === "sent") return "/crm/broadcasts/sent";
+  if (section === "in-progress") return "/crm/broadcasts/in-progress";
+  return "/crm/broadcasts";
+}
+
+export function broadcastsSectionFromLocation(
+  pathname: string,
+  searchParams: { get: (name: string) => string | null },
+): BroadcastsSection {
+  const view = searchParams.get("view")?.trim().toLowerCase();
+  if (view === "sent" || /\/broadcasts\/sent\/?$/.test(pathname)) return "sent";
+  if (view === "in-progress" || /\/broadcasts\/in-progress\/?$/.test(pathname)) {
+    return "in-progress";
+  }
+  return "list";
 }
 
 export function crmAudienceDetailHref(

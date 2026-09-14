@@ -30,8 +30,13 @@ function serializeContact(
   };
 }
 
-export function isSuppressed(email: string): boolean {
-  return store.read().accountSuppressions.some((s) => s.email === email);
+export function isSuppressed(email: string, audienceGroupId?: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  return store.read().accountSuppressions.some((s) => {
+    if (s.email !== normalized) return false;
+    if (s.audienceGroupId === null) return true;
+    return audienceGroupId ? s.audienceGroupId === audienceGroupId : false;
+  });
 }
 
 // GET /crm/broadcasts/:broadcastId/audience?status=&q=

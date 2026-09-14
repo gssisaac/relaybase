@@ -1,7 +1,7 @@
 "use client";
 
 import { Braces, Monitor, Smartphone } from "lucide-react";
-import { useCallback, useRef, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,7 @@ import {
   type PreviewPersonaId,
   type PreviewRecipient,
 } from "@/crm/lib/broadcast-merge-tags";
-import type { CrmTemplate } from "@/lib/crm/api";
+import type { CrmAccountCompliance, CrmTemplate } from "@/lib/crm/api";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 /**
@@ -48,6 +48,8 @@ export function BroadcastComposeForm({
   setPreviewPersonaId,
   previewRecipient,
   personaOptions,
+  compliance,
+  onTemplateImported,
 }: {
   /** Broadcast id — asset upload namespace (`/crm/broadcasts/:id/assets`). */
   broadcastId: string;
@@ -74,7 +76,10 @@ export function BroadcastComposeForm({
   setPreviewPersonaId: (id: PreviewPersonaId) => void;
   previewRecipient: PreviewRecipient;
   personaOptions: { value: PreviewPersonaId; label: string }[];
+  compliance: CrmAccountCompliance | null;
+  onTemplateImported?: (templateId: string) => void;
 }) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const subjectInputRef = useRef<HTMLInputElement>(null);
   const insertTargetRef = useRef<"subject" | "body">("body");
 
@@ -97,10 +102,6 @@ export function BroadcastComposeForm({
     },
     [editorRef, setSubject],
   );
-
-  const previewBodySnippet =
-    bodyMarkdown.trim().slice(0, 280) ||
-    renderedPreview.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 280);
 
   const draftStatus =
     !editable
@@ -254,17 +255,24 @@ export function BroadcastComposeForm({
         </div>
 
         <BroadcastComposeSidebar
+          broadcastId={broadcastId}
           templates={templates}
           templateId={templateId}
           setTemplateId={setTemplateId}
           editable={editable}
+          subject={subject}
+          bodyMarkdown={bodyMarkdown}
+          fromEmail={previewFromEmail}
+          fromName={previewFromName}
+          compliance={compliance}
           previewPersonaId={previewPersonaId}
           setPreviewPersonaId={setPreviewPersonaId}
           previewRecipient={previewRecipient}
-          previewSubject={subject}
-          previewBodySnippet={previewBodySnippet}
           personaOptions={personaOptions}
           onInsertMergeTag={insertMergeTag}
+          onTemplateImported={onTemplateImported}
+          collapsed={sidebarCollapsed}
+          onCollapsedChange={setSidebarCollapsed}
         />
       </div>
     </div>

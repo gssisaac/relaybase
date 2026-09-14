@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { store } from "../db/store";
 import { newId } from "../lib/ids";
+import { resolveSafeRedirectTarget } from "../lib/tracking-redirect";
 
 export const crmTracking = new Hono();
 
@@ -110,7 +111,10 @@ crmTracking.get("/c/:broadcastId/:recipientId", async (c) => {
   const target = c.req.query("u");
   if (!target) return c.json({ error: "missing u" }, 400);
 
-  recordClick(broadcastId, recipientId, target);
+  const safe = resolveSafeRedirectTarget(target);
+  if (!safe) return c.json({ error: "invalid redirect target" }, 400);
 
-  return c.redirect(target, 302);
+  recordClick(broadcastId, recipientId, safe);
+
+  return c.redirect(safe, 302);
 });

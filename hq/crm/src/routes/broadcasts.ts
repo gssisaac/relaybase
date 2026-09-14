@@ -6,9 +6,10 @@ import {
   resolveActiveAudienceContacts,
 } from "../lib/audience-resolver";
 import { findAudienceGroup } from "../lib/broadcast-audience-sync";
-import { emptyBroadcastStats } from "../lib/broadcast-stats";
+import { buildInProgressOverview, buildSentOverview } from "../lib/broadcast-overview";
+import { emptyBroadcastStats, rollupBroadcastStatsFromRecipients } from "../lib/broadcast-stats";
 import { newId } from "../lib/ids";
-import { renderBroadcastForRecipient } from "../lib/render";
+import { buildListUnsubscribeUrl, renderBroadcastForRecipient } from "../lib/render";
 import { sendMail } from "../lib/mail-sender";
 import { crmBroadcastAudience } from "./broadcast-audience";
 
@@ -40,6 +41,7 @@ function serialize(row: Broadcast) {
     audienceGroupId: row.audienceGroupId || null,
     audienceGroupName: group?.name ?? null,
     audienceGroupDomain: group?.domain ?? null,
+    domain: row.domain || group?.domain || null,
     audienceContactCount: group?.contacts.length ?? null,
     fromName: row.fromName ?? null,
     fromEmail: row.fromEmail ?? null,
@@ -53,6 +55,8 @@ function serialize(row: Broadcast) {
     status: row.status,
     scheduledAt: row.scheduledAt ?? null,
     sentAt: row.sentAt ?? null,
+    startedAt: row.startedAt ?? row.sentAt ?? null,
+    finishedAt: row.finishedAt ?? null,
     stats: row.stats,
     audienceActiveCount: audienceActiveCountForBroadcast(row),
     createdAt: row.createdAt,
@@ -105,28 +109,12 @@ function enqueueBroadcastRecipients(
   });
 }
 
-function rollupBroadcastStatsFromRecipients(broadcastId: string) {
-  const recipients = store.read().recipients.filter((r) => r.broadcastId === broadcastId);
-  const sent = recipients.filter((r) => r.status === "delivered" || r.status === "bounced").length;
-  const delivered = recipients.filter((r) => r.status === "delivered").length;
-  const bounced = recipients.filter((r) => r.status === "bounced").length;
-  const failed = recipients.filter((r) => r.status === "failed").length;
-  const opened = recipients.filter((r) => r.openedAt).length;
-  const clicked = recipients.filter((r) => r.clickedAt).length;
-  const totalOpens = recipients.reduce((n, r) => n + r.openCount, 0);
-  const totalClicks = recipients.reduce((n, r) => n + r.clickCount, 0);
-  const unsubscribed = recipients.filter((r) => r.unsubscribedAt).length;
-  return {
-    sent,
-    delivered,
-    bounced,
-    failed,
-    opened,
-    totalOpens,
-    clicked,
-    totalClicks,
-    unsubscribed,
-  };
+function rollupStatsForBroadcast(broadcastId: string) {
+  const data = store.read();
+  return rollupBroadcastStatsFromRecipients(
+    data.recipients.filter((r) => r.broadcastId === broadcastId),
+    data.trackingEvents.filter((e) => e.broadcastId === broadcastId),
+  );
 }
 
 function finalizeBroadcastDispatchIfIdle(broadcastId: string): boolean {
@@ -144,7 +132,7 @@ function finalizeBroadcastDispatchIfIdle(broadcastId: string): boolean {
   if (pending.length > 0) return false;
 
   const now = new Date().toISOString();
-  const stats = rollupBroadcastStatsFromRecipients(broadcastId);
+  const stats = rollupStatsForBroadcast(broadcastId);
   store.update((draft) => {
     const rowIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
     if (rowIdx < 0) return;
@@ -152,6 +140,8 @@ function finalizeBroadcastDispatchIfIdle(broadcastId: string): boolean {
       ...draft.broadcasts[rowIdx]!,
       status: "sent",
       sentAt: draft.broadcasts[rowIdx]!.sentAt ?? now,
+      startedAt: draft.broadcasts[rowIdx]!.startedAt ?? draft.broadcasts[rowIdx]!.sentAt ?? now,
+      finishedAt: now,
       stats,
       updatedAt: now,
     };
@@ -211,7 +201,17 @@ export async function processBroadcastDispatchBatch(
       unsubscribeToken: member.unsubscribeToken,
       crmBaseUrl: CRM_BASE_URL,
     });
-    const result = await sendMail({ to: recipient.email, subject: broadcast.subject, html });
+    const listUnsubscribeUrl = buildListUnsubscribeUrl(
+      CRM_BASE_URL,
+      broadcast.id,
+      member.unsubscribeToken,
+    );
+    const result = await sendMail({
+      to: recipient.email,
+      subject: broadcast.subject,
+      html,
+      listUnsubscribeUrl,
+    });
     const sentAt = new Date().toISOString();
     store.update((draft) => {
       const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
@@ -233,7 +233,7 @@ export async function processBroadcastDispatchBatch(
     if (idx < 0) return;
     draft.broadcasts[idx] = {
       ...draft.broadcasts[idx]!,
-      stats: rollupBroadcastStatsFromRecipients(broadcastId),
+      stats: rollupStatsForBroadcast(broadcastId),
       updatedAt: new Date().toISOString(),
     };
   });
@@ -259,8 +259,6 @@ export async function dispatchBroadcastToAudience(
   return { sent: result.sent, failed: result.failed, skipped: result.skipped, async: false };
 }
 
-crmBroadcasts.route("/:broadcastId/audience", crmBroadcastAudience);
-
 // GET /crm/broadcasts
 crmBroadcasts.get("/", (c) => {
   const rows = store
@@ -270,10 +268,46 @@ crmBroadcasts.get("/", (c) => {
   return c.json({ broadcasts: rows.map(serialize) });
 });
 
+crmBroadcasts.get("/sent-stats", (c) => {
+  const data = store.read();
+  const audienceNameById = new Map(data.audienceGroups.map((g) => [g.id, g.name]));
+  return c.json(
+    buildSentOverview({
+      broadcasts: data.broadcasts.filter((b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID),
+      recipients: data.recipients,
+      trackingEvents: data.trackingEvents,
+      audienceNameById,
+    }),
+  );
+});
+
+crmBroadcasts.get("/in-progress", (c) => {
+  const data = store.read();
+  const mine = data.broadcasts.filter((b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID);
+  const sending = mine
+    .filter((b) => b.status === "sending")
+    .sort((a, b) => (b.startedAt ?? b.sentAt ?? b.updatedAt).localeCompare(a.startedAt ?? a.sentAt ?? a.updatedAt))
+    .map(serialize);
+  const scheduled = mine
+    .filter((b) => b.status === "scheduled")
+    .sort((a, b) => (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""))
+    .map(serialize);
+  return c.json(
+    buildInProgressOverview({
+      sending,
+      scheduled,
+      recipients: data.recipients,
+      trackingEvents: data.trackingEvents,
+    }),
+  );
+});
+
 // POST /crm/broadcasts { name, audienceGroupId, ... }
 crmBroadcasts.post("/", async (c) => {
   let body: {
     name?: string;
+    domain?: string;
+    workerUrl?: string;
     audienceGroupId?: string;
     slug?: string;
     fromName?: string;
@@ -289,10 +323,20 @@ crmBroadcasts.post("/", async (c) => {
 
   const name = body.name?.trim();
   if (!name) return c.json({ error: "Broadcast name is required" }, 400);
+  const domain = body.domain?.trim().toLowerCase();
+  if (!domain) return c.json({ error: "Select a sending domain for this broadcast" }, 400);
   const audienceGroupId = body.audienceGroupId?.trim();
   if (!audienceGroupId) return c.json({ error: "Select an audience group for this broadcast" }, 400);
   const audienceGroup = findAudienceGroup(audienceGroupId);
   if (!audienceGroup) return c.json({ error: "Audience group not found" }, 404);
+  if (audienceGroup.domain.toLowerCase() !== domain) {
+    return c.json({ error: "Audience group must belong to the selected domain" }, 400);
+  }
+  const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
+  store.update((draft) => {
+    draft.account.domain = domain;
+    if (workerUrl) draft.account.workerUrl = workerUrl;
+  });
   if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
     return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
   }
@@ -317,6 +361,7 @@ crmBroadcasts.post("/", async (c) => {
       slug,
       description: null,
       audienceGroupId,
+      domain,
       fromName: body.fromName?.trim() || null,
       fromEmail: body.fromEmail?.trim() || audienceGroup.defaultFrom || null,
       replyTo: body.replyTo?.trim() || null,
@@ -329,6 +374,8 @@ crmBroadcasts.post("/", async (c) => {
       status: "draft",
       scheduledAt: null,
       sentAt: null,
+      startedAt: null,
+      finishedAt: null,
       targetFilter: undefined,
       stats: emptyBroadcastStats(),
       createdAt: now,
@@ -339,6 +386,8 @@ crmBroadcasts.post("/", async (c) => {
 
   return c.json(serialize(created!), 201);
 });
+
+crmBroadcasts.route("/:broadcastId/audience", crmBroadcastAudience);
 
 // GET /crm/broadcasts/:id
 crmBroadcasts.get("/:id", (c) => {
@@ -357,6 +406,8 @@ crmBroadcasts.patch("/:id", async (c) => {
     name?: string;
     slug?: string;
     description?: string | null;
+    domain?: string;
+    workerUrl?: string;
     fromName?: string | null;
     fromEmail?: string | null;
     replyTo?: string | null;
@@ -375,6 +426,29 @@ crmBroadcasts.patch("/:id", async (c) => {
 
   if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
     return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
+  }
+
+  const domainPatch = body.domain?.trim().toLowerCase();
+  if (domainPatch !== undefined) {
+    if (!domainPatch) {
+      return c.json({ error: "Select a sending domain" }, 400);
+    }
+    const group = existing.audienceGroupId ? findAudienceGroup(existing.audienceGroupId) : undefined;
+    const prevDomain = (existing.domain || group?.domain || "").toLowerCase();
+    const domainChanging = domainPatch !== prevDomain;
+    if (domainChanging) {
+      if (group && group.domain.toLowerCase() !== domainPatch) {
+        return c.json(
+          {
+            error: `Audience group is on ${group.domain}. Choose that domain or change the linked audience.`,
+          },
+          400,
+        );
+      }
+      if (existing.status !== "draft") {
+        return c.json({ error: "Sending domain can only be changed on draft broadcasts" }, 409);
+      }
+    }
   }
 
   const contentTouched =
@@ -399,9 +473,15 @@ crmBroadcasts.patch("/:id", async (c) => {
     }
   }
 
+  const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
+
   const now = new Date().toISOString();
   let updated: Broadcast | null = null;
   store.update((draft) => {
+    if (domainPatch) {
+      draft.account.domain = domainPatch;
+      if (workerUrl) draft.account.workerUrl = workerUrl;
+    }
     const idx = draft.broadcasts.findIndex((r) => r.id === id);
     if (idx < 0) return;
     const prev = draft.broadcasts[idx]!;
@@ -410,6 +490,7 @@ crmBroadcasts.patch("/:id", async (c) => {
       name: body.name?.trim() || prev.name,
       slug: body.slug?.trim() ? slugify(body.slug) : prev.slug,
       description: body.description !== undefined ? body.description : prev.description,
+      domain: domainPatch ?? prev.domain,
       fromName: body.fromName !== undefined ? body.fromName?.trim() || null : prev.fromName,
       fromEmail: body.fromEmail !== undefined ? body.fromEmail?.trim() || null : prev.fromEmail,
       replyTo: body.replyTo !== undefined ? body.replyTo?.trim() || null : prev.replyTo,
@@ -466,7 +547,13 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
     unsubscribeToken: "test",
     crmBaseUrl: CRM_BASE_URL,
   });
-  const result = await sendMail({ to, subject: `[Test] ${broadcast.subject}`, html });
+  const listUnsubscribeUrl = buildListUnsubscribeUrl(CRM_BASE_URL, broadcast.id, "test");
+  const result = await sendMail({
+    to,
+    subject: `[Test] ${broadcast.subject}`,
+    html,
+    listUnsubscribeUrl,
+  });
   if (!result.ok) {
     return c.json({ error: "Worker rejected test send: Rate limit exceeded or invalid API key" }, 502);
   }
@@ -496,7 +583,14 @@ crmBroadcasts.post("/:id/send", async (c) => {
   store.update((draft) => {
     const idx = draft.broadcasts.findIndex((r) => r.id === id);
     if (idx >= 0) {
-      draft.broadcasts[idx] = { ...draft.broadcasts[idx]!, status: "sending", sentAt: now, updatedAt: now };
+      draft.broadcasts[idx] = {
+        ...draft.broadcasts[idx]!,
+        status: "sending",
+        sentAt: now,
+        startedAt: now,
+        finishedAt: null,
+        updatedAt: now,
+      };
     }
   });
 
@@ -606,6 +700,8 @@ crmBroadcasts.post("/:id/duplicate", (c) => {
       status: "draft",
       scheduledAt: null,
       sentAt: null,
+      startedAt: null,
+      finishedAt: null,
       stats: emptyBroadcastStats(),
       createdAt: now,
       updatedAt: now,

@@ -1,5 +1,6 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { AudienceMember, Broadcast } from "../db/types";
+import { isEmailSuppressedForGroup } from "./account-suppression";
 import { findAudienceGroup } from "./broadcast-audience-sync";
 
 export function findAudienceContactInGroup(
@@ -20,14 +21,20 @@ export function findAudienceContactByUnsubscribeToken(
 
 /** Contacts eligible to receive a broadcast at send time (live audience group). */
 export function resolveActiveAudienceContacts(broadcast: Broadcast): AudienceMember[] {
-  const data = store.read();
-  const suppressed = new Set(data.accountSuppressions.map((s) => s.email.toLowerCase()));
   const group = broadcast.audienceGroupId ? findAudienceGroup(broadcast.audienceGroupId) : undefined;
   if (!group) return [];
 
-  return group.contacts.filter(
-    (c) => c.sendStatus === "active" && !suppressed.has(c.email.toLowerCase()),
-  );
+  const seen = new Set<string>();
+  const eligible: AudienceMember[] = [];
+  for (const c of group.contacts) {
+    const email = c.email.trim().toLowerCase();
+    if (seen.has(email)) continue;
+    seen.add(email);
+    if (c.sendStatus !== "active") continue;
+    if (isEmailSuppressedForGroup(email, group.id, broadcast.accountLinkId)) continue;
+    eligible.push(c);
+  }
+  return eligible;
 }
 
 export function audienceActiveCountForBroadcast(broadcast: Broadcast): number {

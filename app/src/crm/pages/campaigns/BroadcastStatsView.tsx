@@ -196,6 +196,8 @@ export function BroadcastStatsView() {
     clicked,
     totalClicks,
     failed,
+    skipped = 0,
+    complained = 0,
     unsubscribed,
   } = stats;
 
@@ -294,13 +296,21 @@ export function BroadcastStatsView() {
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Bounced / Failed / Unsub</CardDescription>
+            <CardDescription>Bounce / fail / skip / unsub</CardDescription>
             <CardTitle className="tabular-nums text-base">
               {bounced}{" "}
               <span className="text-sm font-normal text-muted-foreground">bounce</span> · {failed}{" "}
-              <span className="text-sm font-normal text-muted-foreground">fail</span> ·{" "}
+              <span className="text-sm font-normal text-muted-foreground">fail</span> · {skipped}{" "}
+              <span className="text-sm font-normal text-muted-foreground">skip</span> ·{" "}
               {unsubscribed}{" "}
               <span className="text-sm font-normal text-muted-foreground">unsub</span>
+              {complained ? (
+                <>
+                  {" "}
+                  · {complained}{" "}
+                  <span className="text-sm font-normal text-muted-foreground">spam</span>
+                </>
+              ) : null}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -332,6 +342,46 @@ export function BroadcastStatsView() {
           </CardContent>
         </Card>
       ) : null}
+
+      {(() => {
+        const issues = recipients.filter(
+          (r) => r.status === "failed" || r.status === "skipped" || r.status === "bounced",
+        );
+        if (issues.length === 0) return null;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Delivery issues</CardTitle>
+              <CardDescription>
+                Failed, skipped, and bounced recipients with error detail from this send.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="divide-y divide-border p-0">
+              {issues.slice(0, 100).map((r) => (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-start justify-between gap-2 px-4 py-2.5 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{r.email}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {r.errorMessage ?? r.bounceReason ?? "No detail recorded"}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 text-[10px] capitalize">
+                    {r.status}
+                  </Badge>
+                </div>
+              ))}
+              {issues.length > 100 ? (
+                <p className="px-4 py-2 text-xs text-muted-foreground">
+                  Showing first 100 of {issues.length} — use Export CSV for the full list.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {linkClicks.length > 0 ? (
         <Card>

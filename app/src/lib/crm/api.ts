@@ -21,6 +21,8 @@ export type BroadcastStats = {
   delivered: number;
   bounced: number;
   failed: number;
+  skipped: number;
+  complained: number;
   opened: number;
   totalOpens: number;
   clicked: number;
@@ -36,6 +38,8 @@ export type Broadcast = {
   audienceGroupId: string | null;
   audienceGroupName: string | null;
   audienceGroupDomain: string | null;
+  /** Sending domain (Console); must match linked audience group when set. */
+  domain: string | null;
   audienceContactCount: number | null;
   fromName: string | null;
   fromEmail: string | null;
@@ -49,6 +53,8 @@ export type Broadcast = {
   status: BroadcastStatus;
   scheduledAt: string | null;
   sentAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
   stats: BroadcastStats;
   audienceActiveCount: number;
   createdAt: string;
@@ -105,6 +111,48 @@ export type BroadcastLinkClickStat = {
   uniqueClicks: number;
 };
 
+export type AccountSentOverview = {
+  period: { from: string; to: string };
+  totals: BroadcastStats & { broadcasts: number };
+  rates: { delivery: number; open: number; click: number; bounce: number };
+  byWeek: { weekStart: string; sent: number; opened: number; clicked: number }[];
+  byAudience: {
+    audienceGroupId: string;
+    name: string;
+    sent: number;
+    opened: number;
+    clicked: number;
+  }[];
+  broadcasts: Array<{
+    id: string;
+    name: string;
+    subject: string;
+    status: BroadcastStatus;
+    sentAt: string | null;
+    finishedAt: string | null;
+    stats: BroadcastStats;
+    audienceGroupName: string | null;
+  }>;
+  topLinks: { url: string; clicks: number; uniqueClicks: number; broadcastId: string }[];
+};
+
+export type InProgressOverview = {
+  sending: Array<{
+    broadcast: Broadcast;
+    queue: {
+      total: number;
+      queued: number;
+      sending: number;
+      processed: number;
+      skipped: number;
+    };
+    startedAt: string | null;
+    lastDispatchedAt: string | null;
+    recentEvents: BroadcastTrackingEvent[];
+  }>;
+  scheduled: Broadcast[];
+};
+
 export type BroadcastRecipient = {
   id: string;
   audienceMemberId: string;
@@ -146,7 +194,37 @@ export async function crmFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
 export { CrmApiError };
 
+export type CrmAccountCompliance = {
+  organizationName: string | null;
+  postalAddress: string | null;
+  contactEmail: string | null;
+  updatedAt: string;
+};
+
+export type CrmAccountLink = {
+  id: string;
+  workerUrl: string | null;
+  domain: string | null;
+  compliance?: CrmAccountCompliance;
+  createdAt: string;
+};
+
 export const crmApi = {
+  getAccountLink: () => crmFetch<CrmAccountLink>("/crm/account-link"),
+  updateAccountLink: (input: {
+    domain?: string | null;
+    workerUrl?: string | null;
+    compliance?: Partial<{
+      organizationName: string | null;
+      postalAddress: string | null;
+      contactEmail: string | null;
+    }>;
+  }) =>
+    crmFetch<CrmAccountLink>("/crm/account-link", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
   listTemplates: () => crmFetch<{ templates: CrmTemplate[] }>("/crm/templates"),
   importTemplate: (input: { name: string; htmlSource: string }) =>
     crmFetch<{ template: CrmTemplate; warnings: string[] }>("/crm/templates", {
@@ -155,9 +233,13 @@ export const crmApi = {
     }),
 
   listBroadcasts: () => crmFetch<{ broadcasts: Broadcast[] }>("/crm/broadcasts"),
+  getSentOverview: () => crmFetch<AccountSentOverview>("/crm/broadcasts/sent-stats"),
+  getInProgressOverview: () => crmFetch<InProgressOverview>("/crm/broadcasts/in-progress"),
   createBroadcast: (input: {
     name: string;
+    domain: string;
     audienceGroupId: string;
+    workerUrl?: string;
     slug?: string;
     fromName?: string;
     fromEmail?: string;
@@ -171,6 +253,8 @@ export const crmApi = {
       name: string;
       slug: string;
       description: string | null;
+      domain: string;
+      workerUrl?: string;
       fromName: string | null;
       fromEmail: string | null;
       replyTo: string | null;

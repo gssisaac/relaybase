@@ -4,7 +4,7 @@ import path from "node:path";
 import { BUILTIN_TEMPLATES } from "../lib/builtin-templates";
 import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcast-stats";
 import { newId, newToken } from "../lib/ids";
-import type { Broadcast, BroadcastAsset, CrmDataStore, Recipient } from "./types";
+import type { AccountComplianceSettings, Broadcast, BroadcastAsset, CrmDataStore, Recipient } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
@@ -22,6 +22,15 @@ function slugify(input: string): string {
     .slice(0, 80);
 }
 
+function defaultCompliance(now: string): AccountComplianceSettings {
+  return {
+    organizationName: null,
+    postalAddress: null,
+    contactEmail: null,
+    updatedAt: now,
+  };
+}
+
 function defaultStore(): CrmDataStore {
   const now = new Date().toISOString();
   return {
@@ -29,6 +38,7 @@ function defaultStore(): CrmDataStore {
       id: DEV_ACCOUNT_LINK_ID,
       workerUrl: null,
       domain: null,
+      compliance: defaultCompliance(now),
       createdAt: now,
     },
     broadcasts: [],
@@ -122,6 +132,7 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
           slug: slugBase,
           description: (campaign.description as string | null | undefined) ?? null,
           audienceGroupId: String(campaign.audienceGroupId ?? ""),
+          domain: "",
           fromName: (campaign.fromName as string | null | undefined) ?? null,
           fromEmail: (campaign.fromEmail as string | null | undefined) ?? null,
           replyTo: (campaign.replyTo as string | null | undefined) ?? null,
@@ -147,6 +158,11 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
     delete parsed.subscribers;
   }
 
+  const audienceGroupsForMigrate = (parsed.audienceGroups ?? []) as Array<{
+    id: string;
+    domain?: string;
+  }>;
+
   for (const row of parsed.broadcasts as Array<Record<string, unknown>>) {
     if (row.campaignId && !row.audienceGroupId) {
       row.audienceGroupId = "";
@@ -154,6 +170,11 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
     if (!row.name) row.name = String(row.subject ?? "Untitled broadcast");
     if (!row.slug) row.slug = slugify(String(row.name)) || String(row.id).slice(0, 12);
     if (!row.listStatus) row.listStatus = "active";
+    if (!row.domain && row.audienceGroupId) {
+      const group = audienceGroupsForMigrate.find((g) => g.id === row.audienceGroupId);
+      if (group?.domain) row.domain = group.domain;
+    }
+    if (!row.domain) row.domain = "";
     row.stats = normalizeBroadcastStats(row.stats as Broadcast["stats"]);
     delete row.campaignId;
   }
@@ -232,9 +253,36 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
 }
 
 function normalizeStore(store: CrmDataStore): CrmDataStore {
+  const now = new Date().toISOString();
+  if (!store.account.compliance) {
+    store.account.compliance = defaultCompliance(now);
+  } else {
+    const c = store.account.compliance;
+    if (c.organizationName === undefined) c.organizationName = null;
+    if (c.postalAddress === undefined) c.postalAddress = null;
+    if (c.contactEmail === undefined) c.contactEmail = null;
+    if (!c.updatedAt) c.updatedAt = now;
+  }
+
+  for (const row of store.accountSuppressions) {
+    if (row.audienceGroupId === undefined) row.audienceGroupId = null;
+    if (row.sourceBroadcastId === undefined) row.sourceBroadcastId = null;
+  }
+
   for (const row of store.broadcasts) {
     if (!row.audienceGroupId) row.audienceGroupId = "";
+    if (!row.domain) {
+      const group = store.audienceGroups.find((g) => g.id === row.audienceGroupId);
+      row.domain = group?.domain ?? "";
+    }
     row.stats = normalizeBroadcastStats(row.stats);
+    if (row.startedAt === undefined) {
+      row.startedAt = row.status === "draft" || row.status === "scheduled" ? null : (row.sentAt ?? null);
+    }
+    if (row.finishedAt === undefined) {
+      row.finishedAt =
+        row.status === "sent" || row.status === "failed" ? (row.updatedAt ?? row.sentAt ?? null) : null;
+    }
   }
 
   for (const row of store.audienceGroups) {
@@ -244,11 +292,38 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
       if (!contact.unsubscribeToken) contact.unsubscribeToken = newToken();
       if (contact.bouncedAt === undefined) contact.bouncedAt = null;
       if (contact.bounceReason === undefined) contact.bounceReason = null;
+      if (contact.consentSource === undefined) {
+        contact.consentSource = contact.source === "manual" ? "manual" : "synced";
+      }
+      if (contact.consentedAt === undefined) {
+        contact.consentedAt = contact.sendStatus === "active" ? contact.addedAt : null;
+      }
+
+      if (contact.sendStatus === "unsubscribed") {
+        const email = contact.email.trim().toLowerCase();
+        const exists = store.accountSuppressions.some(
+          (s) =>
+            s.accountLinkId === row.accountLinkId &&
+            s.email === email &&
+            s.audienceGroupId === row.id &&
+            s.reason === "unsubscribe",
+        );
+        if (!exists) {
+          store.accountSuppressions.push({
+            id: newId("suppression"),
+            accountLinkId: row.accountLinkId,
+            email,
+            reason: "unsubscribe",
+            audienceGroupId: row.id,
+            sourceBroadcastId: null,
+            createdAt: contact.unsubscribedAt ?? now,
+          });
+        }
+      }
     }
   }
 
   const templateIds = new Set(store.templates.map((t) => t.id));
-  const now = new Date().toISOString();
   for (const tpl of BUILTIN_TEMPLATES) {
     if (templateIds.has(tpl.id)) continue;
     store.templates.push({

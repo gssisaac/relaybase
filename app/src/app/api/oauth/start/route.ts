@@ -5,6 +5,7 @@
 // cookie instead of an in-process Mutex.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { webOAuthRedirectUri } from "@/server/cloudflare/oauth-redirect";
 import { COOKIE_NAMES, sealPkceState } from "@/server/cloudflare/session";
 
 function consoleBaseUrl(): string {
@@ -58,11 +59,9 @@ export async function GET(request: NextRequest) {
     config.scopes ??
     (purpose === "recover" ? "secrets-store.write" : "d1.write workers-r2.write workers-scripts.write");
 
-  // This app's own callback — must be registered as a redirect URI on the
-  // Cloudflare OAuth application identified by `clientId` (one-time
-  // dashboard setup, same requirement the desktop loopback/custom-scheme
-  // redirect URIs have).
-  const redirectUri = new URL("/api/oauth/callback", request.nextUrl.origin).toString();
+  // Must match a redirect URL on the Cloudflare OAuth client (see
+  // RELAYBASE_OAUTH_REDIRECT_URI / NEXT_PUBLIC_APP_URL / docs/auth/cf-oauth-install-token.md).
+  const redirectUri = webOAuthRedirectUri(request);
 
   const state = randomUUID();
   const verifier = newPkceVerifier();

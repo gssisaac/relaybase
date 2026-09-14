@@ -508,7 +508,6 @@ export function WorkerInstallPanel({
     const progressPath = backHref
       ? "/setup/worker-update/progress"
       : "/settings/worker/progress";
-    const authorizeHref = `/api/oauth/start?returnTo=${encodeURIComponent(progressPath)}`;
     return (
       <SetupScrollPage>
         <div className="space-y-6">
@@ -533,7 +532,7 @@ export function WorkerInstallPanel({
           </div>
           <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
             <WebAuthorizeCard
-              authorizeHref={authorizeHref}
+              afterAuthPath={progressPath}
               description="Sign in with Cloudflare so Relaybase can verify your Worker URL and deploy the update."
               buttonLabel="Authorize and update Worker"
             />

@@ -7,25 +7,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveAccountId } from "@/server/cloudflare/client";
 import { COOKIE_NAMES, readPkceCookie, sealOAuthSession } from "@/server/cloudflare/session";
 
+function oauthErrorDestination(
+  request: NextRequest,
+  pkce: ReturnType<typeof readPkceCookie>,
+  message: string,
+): URL {
+  const fallback =
+    pkce?.returnTo?.trim() ||
+    (pkce?.purpose === "recover" ? "/setup/recover-admin" : "/setup/install");
+  const destination = new URL(fallback, request.nextUrl.origin);
+  destination.searchParams.set("cf_oauth_error", message);
+  return destination;
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const state = request.nextUrl.searchParams.get("state");
   const oauthError = request.nextUrl.searchParams.get("error");
 
-  const setupInstall = new URL("/setup/install", request.nextUrl.origin);
+  const pkceEarly = readPkceCookie(request.cookies.get(COOKIE_NAMES.pkce)?.value);
 
   if (oauthError) {
-    setupInstall.searchParams.set("cf_oauth_error", oauthError);
-    return NextResponse.redirect(setupInstall);
+    const description = request.nextUrl.searchParams.get("error_description") ?? oauthError;
+    return NextResponse.redirect(oauthErrorDestination(request, pkceEarly, description));
   }
 
-  const pkce = readPkceCookie(request.cookies.get(COOKIE_NAMES.pkce)?.value);
+  const pkce = pkceEarly;
   if (!pkce || !code || !state || pkce.state !== state) {
-    setupInstall.searchParams.set(
-      "cf_oauth_error",
-      "OAuth state does not match the flow you started. Try again.",
+    return NextResponse.redirect(
+      oauthErrorDestination(
+        request,
+        pkce,
+        "OAuth state does not match the flow you started. Try again.",
+      ),
     );
-    return NextResponse.redirect(setupInstall);
   }
 
   const tokenBody = new URLSearchParams({
@@ -42,11 +57,9 @@ export async function GET(request: NextRequest) {
   });
   const tokenText = await tokenRes.text();
   if (!tokenRes.ok) {
-    setupInstall.searchParams.set(
-      "cf_oauth_error",
-      `Token exchange failed (HTTP ${tokenRes.status})`,
+    const response = NextResponse.redirect(
+      oauthErrorDestination(request, pkce, `Token exchange failed (HTTP ${tokenRes.status})`),
     );
-    const response = NextResponse.redirect(setupInstall);
     response.cookies.delete(COOKIE_NAMES.pkce);
     return response;
   }

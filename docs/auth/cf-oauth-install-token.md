@@ -60,7 +60,7 @@ Create **Manage account → OAuth clients → Create client** (two clients):
 | Response type | `Code` | `Code` |
 | Grant type | `Authorization Code` **and** `Refresh Token` | same |
 | Token authentication | **None (PKCE)** | **None (PKCE)** |
-| Redirect URL | `https://console.relaybase.xyz/oauth/callback` | same |
+| Redirect URL | `https://console.relaybase.xyz/oauth/callback` **plus** each hosted web app callback, e.g. `https://<your-web-app>/api/oauth/callback` and local dev `http://localhost:32830/api/oauth/callback` (and `http://127.0.0.1:32830/...` if you use that host) | same |
 
 Public clients need a `cloudflare_oauth_client_publisher=…` TXT on the `client_uri` domain (one record per client). Cloudflare polls until verified.
 
@@ -119,6 +119,14 @@ Rust:
 - `require_cf_oauth` (`desktop/src-tauri/src/cf_oauth.rs`) — only reader for CF commands. Returns `{ access_token, account_id }` from memory, or refreshes when the access token expires within 60s. No session → “Authorize with Cloudflare again”. Forgot-passtoken reset uses `require_cf_oauth_access_token()` instead — the recover client has `secrets-store.write` only, so the desktop cannot resolve `account_id` via `/accounts`; the Worker verifies the token against the pinned CF account (env, D1, or discover).
 
 Settings UI listens for **`cf-oauth-complete`** via `listenCfOAuthResult()` in `app/src/lib/desktop/bridge/oauth.ts` — not tied to staying on the Cloudflare settings page.
+
+---
+
+## Web app (browser) callback
+
+The dynamic web deploy (`app/` Route Handlers) runs PKCE itself. Cloudflare must redirect to **`{APP_URL}/api/oauth/callback`**, not `console.relaybase.xyz`. Add every origin you use (production hostname, `http://localhost:32830`, `http://127.0.0.1:32830`) to the **same** install OAuth client redirect list.
+
+Configure the app with `RELAYBASE_OAUTH_REDIRECT_URI` or `NEXT_PUBLIC_APP_URL` (see `app/.env.example`) so the authorize request uses the same URL you registered. Authorize opens in a **popup**; the opener stays on Worker update / Settings.
 
 ---
 

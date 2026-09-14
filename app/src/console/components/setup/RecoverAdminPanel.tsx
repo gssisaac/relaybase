@@ -25,7 +25,8 @@ import { resolveWorkerUrl } from "@/lib/desktop/app-session/resolve-worker-url";
 import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { SetupCenteredPage } from "@/console/components/setup/setup-page-chrome";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
-import { useWebCfOAuthComplete } from "@/lib/desktop/bridge/web-oauth-complete";
+import { useWebCfOAuthComplete } from "@/lib/desktop/bridge/use-web-cf-oauth-complete";
+import { openWebCfOAuthPopup } from "@/lib/desktop/bridge/web-oauth-authorize";
 
 /**
  * Forgot-passtoken recovery. Authorizes the Secrets Store Write OAuth
@@ -151,7 +152,18 @@ export function RecoverAdminPanel() {
     try {
       const start = await desktopStartCfOAuth("recover", "/setup/recover-admin");
       if (!isDesktopRuntime() && start.authorizeUrl.startsWith("/")) {
-        window.location.href = start.authorizeUrl;
+        openWebCfOAuthPopup(start.authorizeUrl, {
+          onComplete: () => {
+            void (async () => {
+              await refresh();
+              finishOauthWait({ error: null });
+              await runReset();
+            })();
+          },
+          onError: (message) => {
+            finishOauthWait({ error: explainCfOAuthError(message) });
+          },
+        });
         return;
       }
       await desktopOpenExternal(start.authorizeUrl);

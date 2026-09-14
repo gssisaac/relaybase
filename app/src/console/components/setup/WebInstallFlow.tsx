@@ -10,6 +10,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import {
+  openWebCfOAuthPopup,
+  webOAuthStartHrefForPath,
+} from "@/lib/desktop/bridge/web-oauth-authorize";
 import { downloadPasstokenBackup } from "@/lib/desktop/worker-url/download-passtoken-backup";
 import { ownerLogin } from "@/lib/desktop/auth";
 import { saveUserConnection } from "@/lib/desktop/user-data";
@@ -27,24 +32,41 @@ type InstallDone = {
 
 /** Cloudflare's authorize page, in a browser tab, needs one screen. */
 export function WebAuthorizeCard({
-  authorizeHref = "/api/oauth/start",
+  afterAuthPath = "/setup/progress",
   description = "Relaybase runs entirely in your own Cloudflare account. Click below to sign in with Cloudflare and authorize creating a Worker, R2 bucket, and D1 databases.",
   buttonLabel = "Authorize and install on Cloudflare",
 }: {
-  authorizeHref?: string;
+  /** In-app path to open after Cloudflare OAuth succeeds (install / update progress). */
+  afterAuthPath?: string;
   description?: string;
   buttonLabel?: string;
 }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  function startAuthorize() {
+    if (isDesktopRuntime()) return;
+    const authorizeHref = webOAuthStartHrefForPath(afterAuthPath);
+    setBusy(true);
+    openWebCfOAuthPopup(authorizeHref, {
+      onComplete: () => {
+        setBusy(false);
+        router.push(afterAuthPath);
+      },
+      onError: () => setBusy(false),
+    });
+  }
+
   return (
     <div className="flex min-h-100 flex-col items-center justify-center gap-4 py-2 text-center">
       <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
       <Button
         type="button"
         className="w-[300px] max-w-full"
-        onClick={() => {
-          window.location.href = authorizeHref;
-        }}
+        disabled={busy}
+        onClick={startAuthorize}
       >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
         {buttonLabel}
       </Button>
     </div>

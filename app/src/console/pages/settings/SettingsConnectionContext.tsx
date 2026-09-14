@@ -36,8 +36,9 @@ import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
 import {
   fetchWebCfOAuthSessionPresent,
   PENDING_SERVER_TOKEN_PUSH_KEY,
-  useWebCfOAuthComplete,
 } from "@/lib/desktop/bridge/web-oauth-complete";
+import { useWebCfOAuthComplete } from "@/lib/desktop/bridge/use-web-cf-oauth-complete";
+import { openWebCfOAuthPopup } from "@/lib/desktop/bridge/web-oauth-authorize";
 
 type HealthBlock = { tone: HealthTone; label: string; detail: string };
 
@@ -333,6 +334,33 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const runServerTokenPushRef = useRef(runServerTokenPush);
+  runServerTokenPushRef.current = runServerTokenPush;
+
+  const completeWebCfOAuth = async () => {
+    setWebCfOauthPresent(await fetchWebCfOAuthSessionPresent());
+    await refreshCredentials();
+    await refreshConnectionStatus();
+    setOauthBusy(false);
+    setOauthError(null);
+    if (!pendingPushRef.current) return;
+    pendingPushRef.current = false;
+    const pendingToken =
+      sessionStorage.getItem(PENDING_SERVER_TOKEN_PUSH_KEY)?.trim() ||
+      serverTokenRef.current;
+    sessionStorage.removeItem(PENDING_SERVER_TOKEN_PUSH_KEY);
+    if (pendingToken) setServerToken(pendingToken);
+    const fresh = await desktopGetCredentials();
+    await runServerTokenPushRef.current({
+      accountId: fresh?.accountId ?? fresh?.cfOauthAccountId,
+      serverToken: pendingToken,
+    });
+  };
+
+  useWebCfOAuthComplete(() => {
+    void completeWebCfOAuth();
+  });
+
   async function handleStartCfOAuth() {
     setOauthBusy(true);
     setOauthError(null);
@@ -341,7 +369,15 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       const start = await desktopStartCfOAuth("install", returnTo);
       oauthStartStateRef.current = start.state;
       if (!isDesktopRuntime() && start.authorizeUrl.startsWith("/")) {
-        window.location.href = start.authorizeUrl;
+        openWebCfOAuthPopup(start.authorizeUrl, {
+          onComplete: () => {
+            void completeWebCfOAuth();
+          },
+          onError: (message) => {
+            setOauthError(explainCfOAuthError(message));
+            setOauthBusy(false);
+          },
+        });
         return;
       }
       await desktopOpenExternal(start.authorizeUrl);
@@ -350,31 +386,6 @@ export function SettingsConnectionProvider({ children }: { children: ReactNode }
       setOauthBusy(false);
     }
   }
-
-  const runServerTokenPushRef = useRef(runServerTokenPush);
-  runServerTokenPushRef.current = runServerTokenPush;
-
-  useWebCfOAuthComplete(() => {
-    void (async () => {
-      setWebCfOauthPresent(await fetchWebCfOAuthSessionPresent());
-      await refreshCredentials();
-      await refreshConnectionStatus();
-      setOauthBusy(false);
-      setOauthError(null);
-      if (!pendingPushRef.current) return;
-      pendingPushRef.current = false;
-      const pendingToken =
-        sessionStorage.getItem(PENDING_SERVER_TOKEN_PUSH_KEY)?.trim() ||
-        serverTokenRef.current;
-      sessionStorage.removeItem(PENDING_SERVER_TOKEN_PUSH_KEY);
-      if (pendingToken) setServerToken(pendingToken);
-      const fresh = await desktopGetCredentials();
-      await runServerTokenPushRef.current({
-        accountId: fresh?.accountId ?? fresh?.cfOauthAccountId,
-        serverToken: pendingToken,
-      });
-    })();
-  });
 
   async function handleSaveWorker() {
     setWorkerBusy(true);

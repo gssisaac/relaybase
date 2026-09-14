@@ -1,5 +1,6 @@
 import type { DesktopCredentials } from "./credentials";
 import type { CfOAuthPurpose } from "./cloudflare";
+import { webOAuthReturnTo } from "./web-oauth-paths";
 import { invoke, isDesktopRuntime } from "./invoke";
 
 // --- Cloudflare OAuth (install token) ---
@@ -21,7 +22,13 @@ export async function desktopStartCfOAuth(
 }> {
   if (!isDesktopRuntime()) {
     const params = new URLSearchParams({ purpose });
-    if (returnTo?.trim()) params.set("returnTo", returnTo.trim());
+    if (returnTo?.trim()) {
+      const path = returnTo.trim();
+      const wrapped = path.startsWith("/oauth/web-complete")
+        ? path
+        : webOAuthReturnTo(path);
+      params.set("returnTo", wrapped);
+    }
     return {
       authorizeUrl: `/api/oauth/start?${params.toString()}`,
       state: "web",

@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-
 import { isDesktopRuntime } from "./invoke";
 
 export const PENDING_SERVER_TOKEN_PUSH_KEY = "relaybase.pending-push-server-token";
@@ -14,14 +12,6 @@ export function consumeWebCfOAuthCompleteParam(): boolean {
   const next = `${u.pathname}${u.search}${u.hash}`;
   window.history.replaceState({}, "", next);
   return true;
-}
-
-export function useWebCfOAuthComplete(onComplete: () => void) {
-  useEffect(() => {
-    if (!consumeWebCfOAuthCompleteParam()) return;
-    onComplete();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 }
 
 export async function fetchWebCfOAuthSessionPresent(): Promise<boolean> {

@@ -183,6 +183,7 @@ export function WorkerInstallPanel({
   }, [clearOauthWaitTimer]);
 
   useEffect(() => {
+    if (!isDesktopRuntime()) return;
     if (purpose !== "worker-update") return;
 
     const requestId = ++silentPreviewIdRef.current;
@@ -533,7 +534,6 @@ export function WorkerInstallPanel({
           <div className="flex min-h-100 flex-col rounded-lg border border-border p-4">
             <WebAuthorizeCard
               afterAuthPath={progressPath}
-              description="Sign in with Cloudflare so Relaybase can verify your Worker URL and deploy the update."
               buttonLabel="Authorize and update Worker"
             />
           </div>

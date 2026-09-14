@@ -9,6 +9,7 @@ import { UnlockView } from "@/console/components/setup/UnlockView";
 import { useAppSession } from "@/lib/desktop/app-session";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import { getWebTeamAuth } from "@/mail-platform/session/email-session";
+import { hasWebOwnerSession } from "@/mail-platform/session/web-owner-session";
 
 /**
  * Shared phase switch for `/` (outside the shell) and the dashboard gate.
@@ -32,13 +33,14 @@ export function SessionPhaseScreen({
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!isDesktopRuntime()) {
-      const auth = getWebTeamAuth();
-      if (auth) {
+      if (getWebTeamAuth()) {
         router.replace("/inbox");
-      } else {
-        router.replace("/sign-in");
+        return;
       }
-      return;
+      if (hasWebOwnerSession()) {
+        router.replace("/dashboard");
+        return;
+      }
     }
     const path = window.location.pathname;
     if (phase.kind === "choice" && path !== "/setup") {

@@ -34,15 +34,18 @@ function setWorkerUrlGlobal(workerUrl: string): void {
 }
 
 /**
- * Unified web sign-in — the first screen a browser visitor without a
- * session sees. Merges what used to be two separate desktop-only flows
- * (owner passtoken unlock, team mobile-password login) into one screen for
- * the web build, which has no keyring/Touch ID "choice" step.
+ * Unified web account login (owner passtoken or teammate password). Used on
+ * `/setup/connect`, `/login`, and backup `/sign-in` — the welcome choice at
+ * `/setup` is the primary entry, matching desktop.
  */
-export function AccountLoginView() {
+export function AccountLoginView({
+  defaultRole = "owner",
+}: {
+  defaultRole?: Role;
+}) {
   const router = useRouter();
   const { session } = useMailRuntime();
-  const [role, setRole] = useState<Role>("owner");
+  const [role, setRole] = useState<Role>(defaultRole);
   const [workerUrl, setWorkerUrl] = useState(workerUrlFromQuery);
   const [accountEmail, setAccountEmail] = useState("");
   const [secret, setSecret] = useState("");

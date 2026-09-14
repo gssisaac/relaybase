@@ -271,7 +271,7 @@ export function EmailSettingsView() {
     try {
       if (!mailSession.isDesktop) {
         await mailSession.logout();
-        router.replace("/sign-in");
+        router.replace("/setup");
       } else {
         await signOutRelaybase(isTeam, session);
         router.replace(signOutRedirectPath(isTeam, session));
@@ -281,7 +281,7 @@ export function EmailSettingsView() {
       router.replace(
         mailSession.isDesktop
           ? signOutRedirectPath(isTeam, session)
-          : "/sign-in",
+          : "/setup",
       );
     } finally {
       setSigningOut(false);

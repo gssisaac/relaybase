@@ -202,7 +202,7 @@ export function DesktopDashboardGate({
       if (auth) {
         router.replace(`/inbox${search}`);
       } else {
-        router.replace("/sign-in");
+        router.replace("/setup");
       }
     }
   }, [gateMode, pathname, router]);

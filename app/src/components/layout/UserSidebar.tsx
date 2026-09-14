@@ -850,13 +850,15 @@ export function UserSidebar({
     try {
       if (!mailSession.isDesktop) {
         await mailSession.logout();
-        router.replace("/sign-in");
+        router.replace("/setup");
       } else {
         await signOutRelaybase(isTeam, session);
         router.replace(signOutRedirectPath(isTeam, session));
       }
     } catch {
-      router.replace(mailSession.isDesktop ? signOutRedirectPath(isTeam, session) : "/sign-in");
+      router.replace(
+        mailSession.isDesktop ? signOutRedirectPath(isTeam, session) : "/setup",
+      );
     } finally {
       setSigningOut(false);
       setSignOutOpen(false);

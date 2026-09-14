@@ -3,9 +3,8 @@
 import { AccountLoginView } from "@/console/components/setup/AccountLoginView";
 
 /**
- * Web sign-in — unified Account Login (owner passtoken or teammate
- * password). Desktop keeps its separate choice/unlock/team-login flow via
- * SessionPhaseScreen; this route only ever renders for the web build.
+ * Backup web sign-in — same Account Login as `/setup/connect` and `/login`.
+ * Primary entry is `/setup` (welcome choice), matching desktop.
  */
 export default function SignInPage() {
   return <AccountLoginView />;

@@ -10,7 +10,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { SetupCloudflareAuthorizeCard } from "@/console/components/setup/SetupCloudflareAuthorizeCard";
 import { isDesktopRuntime } from "@/lib/desktop/bridge/invoke";
+import {
+  explainCfOAuthError,
+  oauthAuthorizationIncompleteHelp,
+  type DesktopErrorHelp,
+} from "@/lib/desktop/bridge";
 import {
   openWebCfOAuthPopup,
   webOAuthStartHrefForPath,
@@ -30,46 +36,50 @@ type InstallDone = {
   ownerAlreadyConfigured: boolean;
 };
 
-/** Cloudflare's authorize page, in a browser tab, needs one screen. */
+/** Web install / update — same Relaybase → Cloudflare authorize card as desktop. */
 export function WebAuthorizeCard({
   afterAuthPath = "/setup/progress",
-  description = "Relaybase runs entirely in your own Cloudflare account. Click below to sign in with Cloudflare and authorize creating a Worker, R2 bucket, and D1 databases.",
   buttonLabel = "Authorize and install on Cloudflare",
 }: {
   /** In-app path to open after Cloudflare OAuth succeeds (install / update progress). */
   afterAuthPath?: string;
-  description?: string;
   buttonLabel?: string;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthError, setOauthError] = useState<DesktopErrorHelp | null>(null);
 
   function startAuthorize() {
     if (isDesktopRuntime()) return;
+    setOauthError(null);
+    setOauthBusy(true);
     const authorizeHref = webOAuthStartHrefForPath(afterAuthPath);
-    setBusy(true);
     openWebCfOAuthPopup(authorizeHref, {
       onComplete: () => {
-        setBusy(false);
+        setOauthBusy(false);
         router.push(afterAuthPath);
       },
-      onError: () => setBusy(false),
+      onError: (message) => {
+        setOauthBusy(false);
+        setOauthError(explainCfOAuthError(message));
+      },
     });
   }
 
+  function handleCancelWait() {
+    setOauthBusy(false);
+    setOauthError(oauthAuthorizationIncompleteHelp("cancelled"));
+  }
+
   return (
-    <div className="flex min-h-100 flex-col items-center justify-center gap-4 py-2 text-center">
-      <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
-      <Button
-        type="button"
-        className="w-[300px] max-w-full"
-        disabled={busy}
-        onClick={startAuthorize}
-      >
-        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-        {buttonLabel}
-      </Button>
-    </div>
+    <SetupCloudflareAuthorizeCard
+      oauthBusy={oauthBusy}
+      oauthError={oauthError}
+      onAuthorize={startAuthorize}
+      onCancelWait={handleCancelWait}
+      authorizeLabel={buttonLabel}
+      diagramWaiting={oauthBusy}
+    />
   );
 }
 
@@ -163,7 +173,7 @@ export function WebInstallProgress() {
         // An owner was already configured on this Worker — nothing to log
         // in with here. Send them to sign in with their existing passtoken.
         router.push(
-          `/sign-in?workerUrl=${encodeURIComponent(workerUrl)}`,
+          `/setup/connect?workerUrl=${encodeURIComponent(workerUrl)}`,
         );
       }
     } catch (err) {

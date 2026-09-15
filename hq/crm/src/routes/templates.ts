@@ -1,23 +1,14 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
+import type { Template } from "../db/types";
+import { newId } from "../lib/shared/ids";
+import { serializeTemplate } from "../lib/templates/api-serialize";
 import {
   COMPLIANCE_FOOTER_TAG,
   templateHasEmbeddedComplianceFooter,
-} from "../lib/broadcast-standard-footer";
-import { newId } from "../lib/ids";
-import type { Template } from "../db/types";
+} from "../lib/templates/standard-footer";
 
 export const crmTemplates = new Hono();
-
-function serialize(row: Template) {
-  return {
-    id: row.id,
-    name: row.name,
-    htmlSource: row.htmlSource,
-    isBuiltin: row.isBuiltin,
-    createdAt: row.createdAt,
-  };
-}
 
 // GET /crm/templates — built-in (shared) + this account's custom imports
 crmTemplates.get("/", async (c) => {
@@ -25,7 +16,7 @@ crmTemplates.get("/", async (c) => {
   const rows = data.templates.filter(
     (t) => t.isBuiltin || t.accountLinkId === DEV_ACCOUNT_LINK_ID || t.accountLinkId === null,
   );
-  return c.json({ templates: rows.map(serialize) });
+  return c.json({ templates: rows.map(serializeTemplate) });
 });
 
 // POST /crm/templates { name, htmlSource } — custom import (P0-6 UC-5/6/7)
@@ -74,5 +65,5 @@ crmTemplates.post("/", async (c) => {
     draft.templates.push(created);
   });
 
-  return c.json({ template: serialize(created!), warnings }, 201);
+  return c.json({ template: serializeTemplate(created!), warnings }, 201);
 });

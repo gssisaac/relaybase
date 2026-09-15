@@ -1,43 +1,10 @@
 import { Hono } from "hono";
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import { listAudienceContactsForBroadcast } from "../lib/audience-resolver";
-import { refreshBroadcastAudienceLink } from "../lib/broadcast-audience-sync";
+import { listAudienceContactsForBroadcast } from "../lib/audience-groups/resolver";
+import { refreshBroadcastAudienceLink } from "../lib/broadcasts/audience-sync";
+import { serializeBroadcastAudienceContact } from "../lib/broadcasts/audience-api-serialize";
+import { findBroadcast } from "../lib/broadcasts/serialize";
 
 export const crmBroadcastAudience = new Hono();
-
-function findBroadcast(broadcastId: string) {
-  return store
-    .read()
-    .broadcasts.find((b) => b.id === broadcastId && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
-}
-
-function serializeContact(
-  broadcastId: string,
-  contact: ReturnType<typeof listAudienceContactsForBroadcast>[number],
-) {
-  return {
-    id: contact.id,
-    broadcastId,
-    audienceMemberId: contact.id,
-    email: contact.email,
-    name: contact.name,
-    status: contact.sendStatus,
-    source: contact.source,
-    unsubscribedAt: contact.unsubscribedAt,
-    bouncedAt: contact.bouncedAt ?? null,
-    bounceReason: contact.bounceReason ?? null,
-    addedAt: contact.addedAt,
-  };
-}
-
-export function isSuppressed(email: string, audienceGroupId?: string): boolean {
-  const normalized = email.trim().toLowerCase();
-  return store.read().accountSuppressions.some((s) => {
-    if (s.email !== normalized) return false;
-    if (s.audienceGroupId === null) return true;
-    return audienceGroupId ? s.audienceGroupId === audienceGroupId : false;
-  });
-}
 
 // GET /crm/broadcasts/:broadcastId/audience?status=&q=
 crmBroadcastAudience.get("/", (c) => {
@@ -52,7 +19,7 @@ crmBroadcastAudience.get("/", (c) => {
     q,
   });
 
-  return c.json({ members: rows.map((row) => serializeContact(broadcastId, row)) });
+  return c.json({ members: rows.map((row) => serializeBroadcastAudienceContact(broadcastId, row)) });
 });
 
 // POST /crm/broadcasts/:broadcastId/audience/sync — live group; returns current counts

@@ -1,16 +1,11 @@
 import { Hono } from "hono";
 
 import { store } from "../db/store";
-import { newId } from "../lib/ids";
+import { broadcastAssetKey } from "../lib/assets/key";
+import { CRM_PUBLIC_BASE_URL } from "../lib/shared/crm-url";
+import { newId } from "../lib/shared/ids";
 
 export const crmAssets = new Hono();
-
-const CRM_BASE_URL = process.env.CRM_PUBLIC_BASE_URL ?? "http://localhost:32831";
-
-function assetKey(broadcastId: string, filename: string): string {
-  const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 120);
-  return `${broadcastId}/${safeName}`;
-}
 
 // POST /crm/broadcasts/:id/assets { filename, mimeType, contentBase64 }
 crmAssets.post("/broadcasts/:id/assets", async (c) => {
@@ -32,7 +27,7 @@ crmAssets.post("/broadcasts/:id/assets", async (c) => {
     return c.json({ error: "filename and contentBase64 required" }, 400);
   }
 
-  const key = assetKey(broadcastId, filename);
+  const key = broadcastAssetKey(broadcastId, filename);
   const storedFilename = key.slice(broadcastId.length + 1);
   store.update((draft) => {
     draft.broadcastAssets = draft.broadcastAssets.filter((a) => a.key !== key);
@@ -47,7 +42,7 @@ crmAssets.post("/broadcasts/:id/assets", async (c) => {
     });
   });
 
-  const url = `${CRM_BASE_URL}/crm/assets/${encodeURIComponent(broadcastId)}/${encodeURIComponent(storedFilename)}`;
+  const url = `${CRM_PUBLIC_BASE_URL}/crm/assets/${encodeURIComponent(broadcastId)}/${encodeURIComponent(storedFilename)}`;
   return c.json({ url, key });
 });
 

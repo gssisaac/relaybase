@@ -1,11 +1,6 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { AudienceGroup } from "../db/types";
+import { findAudienceGroup } from "../audience-groups/group";
 
-export function findAudienceGroup(groupId: string): AudienceGroup | undefined {
-  return store
-    .read()
-    .audienceGroups.find((g) => g.id === groupId && g.accountLinkId === DEV_ACCOUNT_LINK_ID);
-}
+export { findAudienceGroup };
 
 /** Audience is live on the linked group — sync only reports current contact count. */
 export function refreshBroadcastAudienceLink(

@@ -1,4 +1,4 @@
-import type { BroadcastStats, Recipient, TrackingEvent } from "../db/types";
+import type { BroadcastStats, Recipient, TrackingEvent } from "../../db/types";
 
 export function emptyBroadcastStats(): BroadcastStats {
   return {

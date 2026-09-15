@@ -1,6 +1,6 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { AccountSuppressionReason } from "../db/types";
-import { newId } from "./ids";
+import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
+import type { AccountSuppressionReason } from "../../db/types";
+import { newId } from "../shared/ids";
 
 export function normalizeSuppressionEmail(email: string): string {
   return email.trim().toLowerCase();

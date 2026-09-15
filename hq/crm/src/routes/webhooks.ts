@@ -1,25 +1,13 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { AccountSuppressionReason } from "../db/types";
-import { newId } from "../lib/ids";
+import { newId } from "../lib/shared/ids";
+import { verifyCrmWebhookSecret } from "../lib/webhooks/verify-secret";
 
 export const crmWebhooks = new Hono();
 
-/**
- * Customer Worker webhook reporting a permanent SMTP bounce or spam complaint
- * (UC-S4, spec §5.3). Marks the audience contact bounced when the broadcast's
- * group is known, and always adds the address to account-wide suppression.
- */
-function verifyWebhookSecret(c: { req: { header: (name: string) => string | undefined } }): boolean {
-  const secret = process.env.CRM_WEBHOOK_SECRET?.trim();
-  if (!secret) return process.env.NODE_ENV !== "production";
-  const auth = c.req.header("Authorization")?.trim();
-  const bearer = auth?.startsWith("Bearer ") ? auth.slice(7).trim() : null;
-  return bearer === secret || c.req.header("X-CRM-Webhook-Secret")?.trim() === secret;
-}
-
 crmWebhooks.post("/bounce", async (c) => {
-  if (!verifyWebhookSecret(c)) {
+  if (!verifyCrmWebhookSecret(c)) {
     return c.json({ error: "unauthorized" }, 401);
   }
 

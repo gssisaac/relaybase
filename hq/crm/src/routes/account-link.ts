@@ -1,22 +1,12 @@
 import { Hono } from "hono";
 
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
+import { serializeAccountLink } from "../lib/account-link/serialize";
 
 export const crmAccountLink = new Hono();
 
-function serialize() {
-  const account = store.read().account;
-  return {
-    id: account.id,
-    workerUrl: account.workerUrl,
-    domain: account.domain,
-    compliance: account.compliance,
-    createdAt: account.createdAt,
-  };
-}
-
 // GET /crm/account-link
-crmAccountLink.get("/", (c) => c.json(serialize()));
+crmAccountLink.get("/", (c) => c.json(serializeAccountLink()));
 
 // PATCH /crm/account-link { domain?, workerUrl?, compliance? }
 crmAccountLink.patch("/", async (c) => {
@@ -61,5 +51,5 @@ crmAccountLink.patch("/", async (c) => {
     }
   });
 
-  return c.json(serialize());
+  return c.json(serializeAccountLink());
 });

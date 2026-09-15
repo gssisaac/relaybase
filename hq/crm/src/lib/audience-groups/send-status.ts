@@ -1,6 +1,6 @@
-import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { AudienceSendStatus } from "../db/types";
-import { normalizeSuppressionEmail, recordGroupUnsubscribe } from "./account-suppression";
+import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
+import type { AudienceSendStatus } from "../../db/types";
+import { normalizeSuppressionEmail, recordGroupUnsubscribe } from "../account/suppression";
 
 export function setAudienceContactSendStatus(
   groupId: string,

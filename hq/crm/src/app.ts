@@ -8,7 +8,7 @@ import { crmTracking } from "./routes/tracking";
 import { crmAssets } from "./routes/assets";
 import { crmUnsubscribe } from "./routes/unsubscribe";
 import { crmWebhooks } from "./routes/webhooks";
-import { crmApiAuthMiddleware } from "./lib/crm-api-auth";
+import { crmApiAuthMiddleware } from "./lib/auth/crm-api-auth";
 
 const app = new Hono();
 

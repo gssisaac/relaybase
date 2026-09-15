@@ -1,8 +1,8 @@
 import { marked } from "marked";
 
-import { isPlainTextTemplate } from "./builtin-templates";
-import { prepareBroadcastTemplateHtml } from "./broadcast-standard-footer";
-import { applyComplianceMergeTags } from "./compliance-footer";
+import { applyComplianceMergeTags } from "../compliance/footer";
+import { prepareBroadcastTemplateHtml } from "../templates/standard-footer";
+import { isPlainTextTemplate } from "../templates/builtin-templates";
 
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's

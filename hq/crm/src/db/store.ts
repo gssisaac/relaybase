@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { BUILTIN_TEMPLATES } from "../lib/builtin-templates";
-import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcast-stats";
-import { newId, newToken } from "../lib/ids";
+import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcasts/stats";
+import { newId, newToken } from "../lib/shared/ids";
+import { BUILTIN_TEMPLATES } from "../lib/templates/builtin-templates";
 import type { AccountComplianceSettings, Broadcast, BroadcastAsset, CrmDataStore, Recipient } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */

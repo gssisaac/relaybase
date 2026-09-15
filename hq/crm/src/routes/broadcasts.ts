@@ -1,263 +1,27 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { AudienceMember, Broadcast } from "../db/types";
+import type { Broadcast } from "../db/types";
+import { resolveActiveAudienceContacts } from "../lib/audience-groups/resolver";
+import { findAudienceGroup } from "../lib/audience-groups/group";
+import { dispatchBroadcastToAudience } from "../lib/broadcasts/dispatch";
+import { aggregateBroadcastLinkClicks } from "../lib/broadcasts/link-clicks";
+import { buildInProgressOverview, buildSentOverview } from "../lib/broadcasts/overview";
+import { slugifyBroadcast } from "../lib/broadcasts/slug";
 import {
-  audienceActiveCountForBroadcast,
-  resolveActiveAudienceContacts,
-} from "../lib/audience-resolver";
-import { findAudienceGroup } from "../lib/broadcast-audience-sync";
-import { buildInProgressOverview, buildSentOverview } from "../lib/broadcast-overview";
-import { emptyBroadcastStats, rollupBroadcastStatsFromRecipients } from "../lib/broadcast-stats";
-import { newId } from "../lib/ids";
-import { buildListUnsubscribeUrl, renderBroadcastForRecipient } from "../lib/render";
-import { sendMail } from "../lib/mail-sender";
+  findBroadcast,
+  getBroadcastTemplateHtml,
+  serializeBroadcast,
+} from "../lib/broadcasts/serialize";
+import { emptyBroadcastStats } from "../lib/broadcasts/stats";
+import { sendMail } from "../lib/mail/sender";
+import { buildListUnsubscribeUrl, renderBroadcastForRecipient } from "../lib/render/render";
+import { CRM_PUBLIC_BASE_URL } from "../lib/shared/crm-url";
+import { newId } from "../lib/shared/ids";
 import { crmBroadcastAudience } from "./broadcast-audience";
 
 export const crmBroadcasts = new Hono();
 
-const CRM_BASE_URL = process.env.CRM_PUBLIC_BASE_URL ?? "http://localhost:32831";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function slugify(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
-
-function findBroadcast(id: string): Broadcast | undefined {
-  return store.read().broadcasts.find((b) => b.id === id && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
-}
-
-function serialize(row: Broadcast) {
-  const group = row.audienceGroupId ? findAudienceGroup(row.audienceGroupId) : undefined;
-  return {
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    description: row.description ?? null,
-    audienceGroupId: row.audienceGroupId || null,
-    audienceGroupName: group?.name ?? null,
-    audienceGroupDomain: group?.domain ?? null,
-    domain: row.domain || group?.domain || null,
-    audienceContactCount: group?.contacts.length ?? null,
-    fromName: row.fromName ?? null,
-    fromEmail: row.fromEmail ?? null,
-    replyTo: row.replyTo ?? null,
-    defaultTemplateId: row.defaultTemplateId ?? null,
-    listStatus: row.listStatus,
-    subject: row.subject,
-    previewText: row.previewText ?? null,
-    bodyMarkdown: row.bodyMarkdown,
-    templateId: row.templateId ?? null,
-    status: row.status,
-    scheduledAt: row.scheduledAt ?? null,
-    sentAt: row.sentAt ?? null,
-    startedAt: row.startedAt ?? row.sentAt ?? null,
-    finishedAt: row.finishedAt ?? null,
-    stats: row.stats,
-    audienceActiveCount: audienceActiveCountForBroadcast(row),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
-
-function getTemplateHtml(templateId: string | null | undefined): string | null {
-  if (!templateId) return null;
-  return store.read().templates.find((t) => t.id === templateId)?.htmlSource ?? null;
-}
-
-/** Small lists send inline; larger audiences queue and drain via scheduler batches. */
-const INLINE_RECIPIENT_MAX = 50;
-export const DISPATCH_BATCH_SIZE = 20;
-
-function enqueueBroadcastRecipients(
-  broadcast: Broadcast,
-  members: AudienceMember[],
-  now: string,
-): void {
-  store.update((draft) => {
-    const existing = new Set(
-      draft.recipients
-        .filter((r) => r.broadcastId === broadcast.id)
-        .map((r) => r.audienceMemberId),
-    );
-    for (const m of members) {
-      if (existing.has(m.id)) continue;
-      draft.recipients.push({
-        id: newId("recipient"),
-        broadcastId: broadcast.id,
-        audienceMemberId: m.id,
-        email: m.email,
-        name: m.name ?? null,
-        status: "queued",
-        errorMessage: null,
-        bounceReason: null,
-        sentAt: null,
-        deliveredAt: null,
-        openedAt: null,
-        clickedAt: null,
-        unsubscribedAt: null,
-        openCount: 0,
-        clickCount: 0,
-        createdAt: now,
-      });
-      existing.add(m.id);
-    }
-  });
-}
-
-function rollupStatsForBroadcast(broadcastId: string) {
-  const data = store.read();
-  return rollupBroadcastStatsFromRecipients(
-    data.recipients.filter((r) => r.broadcastId === broadcastId),
-    data.trackingEvents.filter((e) => e.broadcastId === broadcastId),
-  );
-}
-
-function finalizeBroadcastDispatchIfIdle(broadcastId: string): boolean {
-  const data = store.read();
-  const idx = data.broadcasts.findIndex((b) => b.id === broadcastId);
-  if (idx < 0) return true;
-  const broadcast = data.broadcasts[idx]!;
-  if (broadcast.status !== "sending") return true;
-
-  const pending = data.recipients.filter(
-    (r) =>
-      r.broadcastId === broadcastId &&
-      (r.status === "queued" || r.status === "sending"),
-  );
-  if (pending.length > 0) return false;
-
-  const now = new Date().toISOString();
-  const stats = rollupStatsForBroadcast(broadcastId);
-  store.update((draft) => {
-    const rowIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
-    if (rowIdx < 0) return;
-    draft.broadcasts[rowIdx] = {
-      ...draft.broadcasts[rowIdx]!,
-      status: "sent",
-      sentAt: draft.broadcasts[rowIdx]!.sentAt ?? now,
-      startedAt: draft.broadcasts[rowIdx]!.startedAt ?? draft.broadcasts[rowIdx]!.sentAt ?? now,
-      finishedAt: now,
-      stats,
-      updatedAt: now,
-    };
-  });
-  return true;
-}
-
-/** Process up to `limit` queued recipients for a broadcast in `sending` status. */
-export async function processBroadcastDispatchBatch(
-  broadcastId: string,
-  limit: number,
-): Promise<{ sent: number; failed: number; skipped: number; completed: boolean }> {
-  const broadcast = store.read().broadcasts.find((b) => b.id === broadcastId);
-  if (!broadcast || broadcast.status !== "sending") {
-    return { sent: 0, failed: 0, skipped: 0, completed: true };
-  }
-
-  const templateHtml =
-    getTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ??
-    "<div>{{content}}</div>";
-
-  let sent = 0;
-  let failed = 0;
-  let skipped = 0;
-
-  const queued = store
-    .read()
-    .recipients.filter((r) => r.broadcastId === broadcastId && r.status === "queued")
-    .slice(0, limit);
-
-  for (const recipient of queued) {
-    const member = store
-      .read()
-      .audienceGroups.flatMap((g) => g.contacts)
-      .find((m) => m.id === recipient.audienceMemberId);
-    if (!member || member.sendStatus !== "active") {
-      skipped += 1;
-      store.update((draft) => {
-        const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
-        if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "skipped" };
-      });
-      continue;
-    }
-
-    store.update((draft) => {
-      const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
-      if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "sending" };
-    });
-
-    const html = renderBroadcastForRecipient({
-      broadcastId: broadcast.id,
-      recipientId: recipient.id,
-      bodyMarkdown: broadcast.bodyMarkdown,
-      templateId: broadcast.templateId ?? broadcast.defaultTemplateId,
-      templateHtml,
-      recipient: { email: recipient.email, name: recipient.name },
-      unsubscribeToken: member.unsubscribeToken,
-      crmBaseUrl: CRM_BASE_URL,
-    });
-    const listUnsubscribeUrl = buildListUnsubscribeUrl(
-      CRM_BASE_URL,
-      broadcast.id,
-      member.unsubscribeToken,
-    );
-    const result = await sendMail({
-      to: recipient.email,
-      subject: broadcast.subject,
-      html,
-      listUnsubscribeUrl,
-    });
-    const sentAt = new Date().toISOString();
-    store.update((draft) => {
-      const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
-      if (idx < 0) return;
-      draft.recipients[idx] = {
-        ...draft.recipients[idx]!,
-        status: result.ok ? "delivered" : "failed",
-        sentAt: result.ok ? sentAt : draft.recipients[idx]!.sentAt,
-        deliveredAt: result.ok ? sentAt : null,
-        errorMessage: result.ok ? null : result.error,
-      };
-    });
-    if (result.ok) sent += 1;
-    else failed += 1;
-  }
-
-  store.update((draft) => {
-    const idx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
-    if (idx < 0) return;
-    draft.broadcasts[idx] = {
-      ...draft.broadcasts[idx]!,
-      stats: rollupStatsForBroadcast(broadcastId),
-      updatedAt: new Date().toISOString(),
-    };
-  });
-
-  const completed = finalizeBroadcastDispatchIfIdle(broadcastId);
-  return { sent, failed, skipped, completed };
-}
-
-export async function dispatchBroadcastToAudience(
-  broadcast: Broadcast,
-  members: AudienceMember[],
-): Promise<{ sent: number; failed: number; skipped: number; async?: boolean; queued?: number }> {
-  const now = new Date().toISOString();
-  enqueueBroadcastRecipients(broadcast, members, now);
-
-  const asyncDispatch = members.length > INLINE_RECIPIENT_MAX;
-  if (asyncDispatch) {
-    await processBroadcastDispatchBatch(broadcast.id, DISPATCH_BATCH_SIZE);
-    return { sent: 0, failed: 0, skipped: 0, async: true, queued: members.length };
-  }
-
-  const result = await processBroadcastDispatchBatch(broadcast.id, members.length + 1000);
-  return { sent: result.sent, failed: result.failed, skipped: result.skipped, async: false };
-}
 
 // GET /crm/broadcasts
 crmBroadcasts.get("/", (c) => {
@@ -265,7 +29,7 @@ crmBroadcasts.get("/", (c) => {
     .read()
     .broadcasts.filter((b) => b.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  return c.json({ broadcasts: rows.map(serialize) });
+  return c.json({ broadcasts: rows.map(serializeBroadcast) });
 });
 
 crmBroadcasts.get("/sent-stats", (c) => {
@@ -287,11 +51,11 @@ crmBroadcasts.get("/in-progress", (c) => {
   const sending = mine
     .filter((b) => b.status === "sending")
     .sort((a, b) => (b.startedAt ?? b.sentAt ?? b.updatedAt).localeCompare(a.startedAt ?? a.sentAt ?? a.updatedAt))
-    .map(serialize);
+    .map(serializeBroadcast);
   const scheduled = mine
     .filter((b) => b.status === "scheduled")
     .sort((a, b) => (a.scheduledAt ?? "").localeCompare(b.scheduledAt ?? ""))
-    .map(serialize);
+    .map(serializeBroadcast);
   return c.json(
     buildInProgressOverview({
       sending,
@@ -342,7 +106,7 @@ crmBroadcasts.post("/", async (c) => {
   }
 
   const data = store.read();
-  const baseSlug = slugify(body.slug?.trim() || name) || newId("broadcast").slice(0, 12);
+  const baseSlug = slugifyBroadcast(body.slug?.trim() || name) || newId("broadcast").slice(0, 12);
   let slug = baseSlug;
   let suffix = 2;
   while (data.broadcasts.some((row) => row.accountLinkId === DEV_ACCOUNT_LINK_ID && row.slug === slug)) {
@@ -384,7 +148,7 @@ crmBroadcasts.post("/", async (c) => {
     draft.broadcasts.push(created);
   });
 
-  return c.json(serialize(created!), 201);
+  return c.json(serializeBroadcast(created!), 201);
 });
 
 crmBroadcasts.route("/:broadcastId/audience", crmBroadcastAudience);
@@ -393,7 +157,7 @@ crmBroadcasts.route("/:broadcastId/audience", crmBroadcastAudience);
 crmBroadcasts.get("/:id", (c) => {
   const row = findBroadcast(c.req.param("id")!);
   if (!row) return c.json({ error: "not found" }, 404);
-  return c.json(serialize(row));
+  return c.json(serializeBroadcast(row));
 });
 
 // PATCH /crm/broadcasts/:id
@@ -488,7 +252,7 @@ crmBroadcasts.patch("/:id", async (c) => {
     draft.broadcasts[idx] = {
       ...prev,
       name: body.name?.trim() || prev.name,
-      slug: body.slug?.trim() ? slugify(body.slug) : prev.slug,
+      slug: body.slug?.trim() ? slugifyBroadcast(body.slug) : prev.slug,
       description: body.description !== undefined ? body.description : prev.description,
       domain: domainPatch ?? prev.domain,
       fromName: body.fromName !== undefined ? body.fromName?.trim() || null : prev.fromName,
@@ -517,7 +281,7 @@ crmBroadcasts.patch("/:id", async (c) => {
     }
   });
 
-  return c.json(serialize(updated!));
+  return c.json(serializeBroadcast(updated!));
 });
 
 crmBroadcasts.post("/:id/test-send", async (c) => {
@@ -536,7 +300,8 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
   }
 
   const templateHtml =
-    getTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ?? "<div>{{content}}</div>";
+    getBroadcastTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ??
+    "<div>{{content}}</div>";
   const html = renderBroadcastForRecipient({
     broadcastId: broadcast.id,
     recipientId: "test",
@@ -545,9 +310,9 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
     templateHtml,
     recipient: { email: to, name: "Test Recipient" },
     unsubscribeToken: "test",
-    crmBaseUrl: CRM_BASE_URL,
+    crmBaseUrl: CRM_PUBLIC_BASE_URL,
   });
-  const listUnsubscribeUrl = buildListUnsubscribeUrl(CRM_BASE_URL, broadcast.id, "test");
+  const listUnsubscribeUrl = buildListUnsubscribeUrl(CRM_PUBLIC_BASE_URL, broadcast.id, "test");
   const result = await sendMail({
     to,
     subject: `[Test] ${broadcast.subject}`,
@@ -599,7 +364,7 @@ crmBroadcasts.post("/:id/send", async (c) => {
     members,
   );
   const row = store.read().broadcasts.find((r) => r.id === id)!;
-  return c.json({ broadcast: serialize(row), ...result });
+  return c.json({ broadcast: serializeBroadcast(row), ...result });
 });
 
 crmBroadcasts.post("/:id/schedule", async (c) => {
@@ -646,7 +411,7 @@ crmBroadcasts.post("/:id/schedule", async (c) => {
     }
   });
 
-  return c.json(serialize(store.read().broadcasts.find((r) => r.id === id)!));
+  return c.json(serializeBroadcast(store.read().broadcasts.find((r) => r.id === id)!));
 });
 
 crmBroadcasts.post("/:id/cancel-schedule", async (c) => {
@@ -673,7 +438,7 @@ crmBroadcasts.post("/:id/cancel-schedule", async (c) => {
     }
   });
 
-  return c.json(serialize(store.read().broadcasts.find((r) => r.id === id)!));
+  return c.json(serializeBroadcast(store.read().broadcasts.find((r) => r.id === id)!));
 });
 
 crmBroadcasts.post("/:id/duplicate", (c) => {
@@ -709,32 +474,8 @@ crmBroadcasts.post("/:id/duplicate", (c) => {
     draft.broadcasts.push(created);
   });
 
-  return c.json(serialize(created!), 201);
+  return c.json(serializeBroadcast(created!), 201);
 });
-
-function aggregateLinkClicks(broadcastId: string) {
-  const events = store
-    .read()
-    .trackingEvents.filter((e) => e.broadcastId === broadcastId && e.type === "click" && e.url);
-  const byUrl = new Map<string, { url: string; clicks: number; uniqueRecipients: Set<string> }>();
-  for (const event of events) {
-    const url = event.url!;
-    let row = byUrl.get(url);
-    if (!row) {
-      row = { url, clicks: 0, uniqueRecipients: new Set() };
-      byUrl.set(url, row);
-    }
-    row.clicks += 1;
-    row.uniqueRecipients.add(event.recipientId);
-  }
-  return [...byUrl.values()]
-    .map((row) => ({
-      url: row.url,
-      clicks: row.clicks,
-      uniqueClicks: row.uniqueRecipients.size,
-    }))
-    .sort((a, b) => b.clicks - a.clicks || a.url.localeCompare(b.url));
-}
 
 crmBroadcasts.get("/:id/stats", (c) => {
   const id = c.req.param("id")!;
@@ -751,7 +492,7 @@ crmBroadcasts.get("/:id/stats", (c) => {
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
   return c.json({
-    broadcast: serialize(broadcast),
+    broadcast: serializeBroadcast(broadcast),
     trackingEvents: trackingEvents.map((e) => ({
       id: e.id,
       recipientId: e.recipientId,
@@ -761,7 +502,7 @@ crmBroadcasts.get("/:id/stats", (c) => {
       reason: e.reason ?? null,
       occurredAt: e.occurredAt,
     })),
-    linkClicks: aggregateLinkClicks(id),
+    linkClicks: aggregateBroadcastLinkClicks(id),
     recipients: recipients.map((r) => ({
       id: r.id,
       audienceMemberId: r.audienceMemberId,

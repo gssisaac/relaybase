@@ -27,6 +27,7 @@ import {
   ACCOUNT_DEFAULT_COMPLIANCE_VALUE,
   findComplianceIdentityById,
 } from "@/scale/lib/compliance-identity";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError, type ScaleComplianceIdentity } from "@/lib/scale/api";
 
 type EditorMode = "account-default" | "broadcast";
@@ -231,7 +232,7 @@ export function ComplianceIdentityEditor({
               id="compliance-label"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Acme US marketing"
+              placeholder={examplePlaceholder("Acme US marketing")}
               autoComplete="off"
             />
           </div>
@@ -241,7 +242,7 @@ export function ComplianceIdentityEditor({
               id="compliance-org"
               value={organizationName}
               onChange={(e) => setOrganizationName(e.target.value)}
-              placeholder="Acme Inc."
+              placeholder={examplePlaceholder("Acme Inc.")}
               autoComplete="organization"
             />
           </div>
@@ -251,7 +252,7 @@ export function ComplianceIdentityEditor({
               id="compliance-address"
               value={postalAddress}
               onChange={(e) => setPostalAddress(e.target.value)}
-              placeholder="123 Main St, City, ST 12345, Country"
+              placeholder={examplePlaceholder("123 Main St, City, ST 12345, Country")}
               rows={compact ? 2 : 3}
             />
             <p className="text-xs text-muted-foreground">
@@ -302,7 +303,7 @@ export function ComplianceIdentityEditor({
                 id="new-compliance-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="EU entity"
+                placeholder={examplePlaceholder("EU entity")}
                 autoFocus
               />
             </div>
@@ -312,7 +313,7 @@ export function ComplianceIdentityEditor({
                 id="new-compliance-org"
                 value={organizationName}
                 onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="Acme Inc."
+                placeholder={examplePlaceholder("Acme Inc.")}
               />
             </div>
           </div>

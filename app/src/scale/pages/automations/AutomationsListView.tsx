@@ -37,6 +37,7 @@ import {
   type AutomationPurpose,
   type AutomationStatus,
 } from "@/lib/scale/api";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";
 import {
   EmailListContainer,
@@ -198,7 +199,7 @@ export function AutomationsListView() {
                 id="auto-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Verify email"
+                placeholder={examplePlaceholder("Verify Email")}
                 autoFocus
               />
             </div>

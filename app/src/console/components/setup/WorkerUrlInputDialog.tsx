@@ -20,6 +20,7 @@ import {
   normalizeWorkerUrl,
   parseDefaultWorkerSubdomain,
 } from "@/lib/desktop/worker-url/worker-url";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 
 type WorkerUrlInputDialogProps = {
   open: boolean;
@@ -115,7 +116,7 @@ export function WorkerUrlInputDialog({
                   setAccountName(e.target.value);
                   setError(null);
                 }}
-                placeholder="gssisaac"
+                placeholder={examplePlaceholder("gssisaac")}
                 autoComplete="off"
                 autoFocus={tab === "auto"}
               />

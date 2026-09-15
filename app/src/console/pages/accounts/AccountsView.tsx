@@ -96,6 +96,7 @@ import {
   TableCell,
   TableRow,
 } from "@/components/ui/table";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";
 
 function initialDefaultSelection(): Record<string, boolean> {
@@ -1056,7 +1057,7 @@ export function AccountsView() {
                         defaultInboundEnabledForLocalPart(next),
                       );
                     }}
-                    placeholder="support"
+                    placeholder={examplePlaceholder("support")}
                   />
                 </div>
                 <span className="pb-2 text-sm text-muted-foreground">
@@ -1068,7 +1069,7 @@ export function AccountsView() {
                 <Input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Support Team"
+                  placeholder={examplePlaceholder("Support Team")}
                 />
                 <p className="text-xs text-muted-foreground">
                   Shown as the From name when sending from this address.

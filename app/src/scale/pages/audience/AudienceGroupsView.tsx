@@ -12,6 +12,7 @@ import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { ScaleApiError, scaleAudienceApi } from "@/lib/scale/audience-api";
 
 import { Badge } from "@/components/ui/badge";
@@ -268,7 +269,7 @@ export function AudienceGroupsView() {
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Newsletter subscribers"
+                placeholder={examplePlaceholder("Newsletter subscribers")}
               />
             </div>
             <div className="space-y-1">

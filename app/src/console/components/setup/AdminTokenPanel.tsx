@@ -19,6 +19,7 @@ import {
   fetchWorkerInstallManifest,
 } from "@/lib/desktop/bridge";
 import { parseDefaultWorkerSubdomain } from "@/lib/desktop/worker-url/worker-url";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";
 
 import {
@@ -267,7 +268,7 @@ export function ManualInstallScriptPanel({
           id="manual-worker-subdomain"
           value={subdomain}
           onChange={(e) => handleSubdomainChange(e.target.value)}
-          placeholder="your-subdomain"
+          placeholder={examplePlaceholder("your-subdomain")}
           className="font-mono text-xs"
           autoComplete="off"
         />

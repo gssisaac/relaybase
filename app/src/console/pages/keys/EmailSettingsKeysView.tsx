@@ -26,6 +26,7 @@ import {
 } from "@/lib/dashboard/dashboard-cache-disk";
 import { useAccounts } from "@/lib/dashboard/AccountsContext";
 import { useDomain } from "@/lib/dashboard/DomainContext";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -600,7 +601,7 @@ export function EmailSettingsKeysView() {
                 id="relaybase-email-label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="production"
+                placeholder={examplePlaceholder("production")}
                 disabled={creating}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {

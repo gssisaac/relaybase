@@ -41,6 +41,7 @@ import {
   EmptyListState,
   ListToolbar,
 } from "@/email/components/mailbox/EmailListShell";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { broadcastDetailHref } from "@/scale/lib/paths";
 import {
   scaleApi,
@@ -341,7 +342,7 @@ export function BroadcastsListView() {
                 id="broadcast-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Engineering Updates"
+                placeholder={examplePlaceholder("Engineering Updates")}
                 autoComplete="off"
                 autoFocus
               />

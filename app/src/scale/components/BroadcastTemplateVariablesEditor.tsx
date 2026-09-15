@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { scaleApi } from "@/lib/scale/api";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";
 
 function ImageVariableField({
@@ -178,7 +179,8 @@ export function BroadcastTemplateVariablesEditor({
                   value={values[field.key] ?? ""}
                   placeholder={
                     field.defaultFrom === "compliance.organizationName"
-                      ? complianceOrganizationName?.trim() || "Organization name"
+                      ? complianceOrganizationName?.trim() ||
+                        examplePlaceholder("Organization name")
                       : undefined
                   }
                   disabled={!editable}

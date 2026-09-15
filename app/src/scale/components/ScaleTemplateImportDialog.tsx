@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { STANDARD_COMPLIANCE_FOOTER_HTML_APPEND } from "@/scale/lib/broadcast-standard-footer";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError } from "@/lib/scale/api";
 
 export function ScaleTemplateImportDialog({
@@ -96,7 +97,7 @@ export function ScaleTemplateImportDialog({
               id="tpl-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Company newsletter"
+              placeholder={examplePlaceholder("Company newsletter")}
               autoComplete="off"
             />
           </div>

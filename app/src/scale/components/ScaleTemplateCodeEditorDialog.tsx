@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError, type ScaleTemplate } from "@/lib/scale/api";
 
 export function ScaleTemplateCodeEditorDialog({
@@ -97,7 +98,7 @@ export function ScaleTemplateCodeEditorDialog({
                 id="tpl-code-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="My newsletter layout"
+                placeholder={examplePlaceholder("My newsletter layout")}
                 autoComplete="off"
               />
             </div>

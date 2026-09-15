@@ -5,6 +5,7 @@ export function serializeTemplate(row: Template) {
     id: row.id,
     name: row.name,
     htmlSource: row.htmlSource,
+    variablesSchema: row.variablesSchema ?? null,
     isBuiltin: row.isBuiltin,
     createdAt: row.createdAt,
   };

@@ -1,9 +1,9 @@
 "use client";
 
-import { Braces, Copy, PanelRightClose, PanelRightOpen, Plus } from "lucide-react";
+import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
+import { BroadcastTemplateVariablesEditor } from "@/crm/components/BroadcastTemplateVariablesEditor";
 import { ComplianceIdentityEditor } from "@/crm/components/ComplianceIdentityEditor";
 import { BroadcastPreflightChecklist } from "@/crm/components/BroadcastPreflightChecklist";
 import { CrmTemplateImportDialog } from "@/crm/components/CrmTemplateImportDialog";
@@ -17,9 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BROADCAST_MERGE_TAGS,
   displayNameForRecipient,
-  MERGE_TAG_CATEGORIES,
   templateThumbnailVariant,
   type PreviewPersonaId,
   type PreviewRecipient,
@@ -57,7 +55,10 @@ function TemplateWireframe({ variant }: { variant: "minimal" | "header" | "card"
         )}
       >
         {variant === "header" ? (
-          <div className="mb-1.5 h-1.5 rounded-sm bg-slate-800 dark:bg-slate-600" />
+          <div className="mb-1.5 flex items-center gap-1">
+            <div className="size-2.5 shrink-0 rounded-sm bg-muted-foreground/25" />
+            <div className="h-1 flex-1 rounded-sm bg-muted-foreground/20" />
+          </div>
         ) : null}
         <div className="space-y-1">
           <div className="h-1 w-full rounded bg-muted-foreground/20" />
@@ -69,66 +70,13 @@ function TemplateWireframe({ variant }: { variant: "minimal" | "header" | "card"
   );
 }
 
-function MergeTagRow({
-  tag,
-  editable,
-  onInsert,
-}: {
-  tag: (typeof BROADCAST_MERGE_TAGS)[number];
-  editable: boolean;
-  onInsert: (token: string) => void;
-}) {
-  async function copyToken() {
-    try {
-      await navigator.clipboard.writeText(tag.token);
-      toast.success("Copied to clipboard");
-    } catch {
-      toast.error("Could not copy");
-    }
-  }
-
-  return (
-    <li className="rounded-md border border-border bg-card p-2.5">
-      <code className="block text-[11px] font-medium text-foreground">{tag.token}</code>
-      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{tag.description}</p>
-      <p className="mt-1 text-[10px] text-muted-foreground/80">
-        Preview e.g. <span className="text-foreground/80">{tag.example}</span>
-      </p>
-      {tag.fallbackHint ? (
-        <p className="mt-1 text-[10px] text-muted-foreground/70">{tag.fallbackHint}</p>
-      ) : null}
-      <div className="mt-2 flex gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="h-7 flex-1 gap-1 text-xs"
-          disabled={!editable}
-          onClick={() => onInsert(tag.token)}
-        >
-          <Plus className="size-3" />
-          Insert
-        </Button>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="outline"
-          className="size-7 shrink-0"
-          aria-label={`Copy ${tag.token}`}
-          onClick={() => void copyToken()}
-        >
-          <Copy className="size-3" />
-        </Button>
-      </div>
-    </li>
-  );
-}
-
 export function BroadcastComposeSidebar({
   broadcastId,
   templates,
   templateId,
   setTemplateId,
+  templateVariables,
+  setTemplateVariables,
   editable,
   subject,
   bodyMarkdown,
@@ -143,7 +91,6 @@ export function BroadcastComposeSidebar({
   setPreviewPersonaId,
   previewRecipient,
   personaOptions,
-  onInsertMergeTag,
   onTemplateImported,
   collapsed,
   onCollapsedChange,
@@ -152,6 +99,8 @@ export function BroadcastComposeSidebar({
   templates: CrmTemplate[];
   templateId: string;
   setTemplateId: (id: string) => void;
+  templateVariables: Record<string, string>;
+  setTemplateVariables: (values: Record<string, string>) => void;
   editable: boolean;
   subject: string;
   bodyMarkdown: string;
@@ -166,7 +115,6 @@ export function BroadcastComposeSidebar({
   setPreviewPersonaId: (id: PreviewPersonaId) => void;
   previewRecipient: PreviewRecipient;
   personaOptions: { value: PreviewPersonaId; label: string }[];
-  onInsertMergeTag: (token: string) => void;
   onTemplateImported?: (templateId: string) => void;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
@@ -179,6 +127,8 @@ export function BroadcastComposeSidebar({
     bodyMarkdown,
     templateHtml: template?.htmlSource ?? "",
     templateId,
+    templateVariablesSchema: template?.variablesSchema ?? null,
+    templateVariables,
     fromEmail,
     fromName,
     compliance,
@@ -282,6 +232,17 @@ export function BroadcastComposeSidebar({
           </TabsContent>
 
           <TabsContent value="variables" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
+            <p className="mb-2 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Layout
+            </p>
+            <BroadcastTemplateVariablesEditor
+              broadcastId={broadcastId}
+              schema={template?.variablesSchema ?? null}
+              values={templateVariables}
+              onChange={setTemplateVariables}
+              editable={editable}
+              complianceOrganizationName={compliance?.organizationName}
+            />
             <div className="mb-3 rounded-md border border-border bg-muted/20 p-2.5">
               <ComplianceIdentityEditor
                 mode="broadcast"
@@ -293,31 +254,6 @@ export function BroadcastComposeSidebar({
                 description="Footer org, address, and contact come from the selected sender — edit once, reused everywhere."
               />
             </div>
-            <p className="mb-2 flex items-start gap-1.5 px-0.5 text-[11px] leading-snug text-muted-foreground">
-              <Braces className="mt-0.5 size-3 shrink-0" aria-hidden />
-              Insert personalization tags into subject or body.
-            </p>
-            {MERGE_TAG_CATEGORIES.map((cat) => {
-              const tags = BROADCAST_MERGE_TAGS.filter((t) => t.category === cat.id);
-              if (tags.length === 0) return null;
-              return (
-                <div key={cat.id} className="mb-3">
-                  <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {cat.label}
-                  </p>
-                  <ul className="flex flex-col gap-2">
-                    {tags.map((tag) => (
-                      <MergeTagRow
-                        key={tag.id}
-                        tag={tag}
-                        editable={editable}
-                        onInsert={onInsertMergeTag}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
           </TabsContent>
 
           <TabsContent value="preflight" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">

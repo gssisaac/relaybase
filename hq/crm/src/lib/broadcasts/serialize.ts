@@ -16,6 +16,11 @@ export function getBroadcastTemplateHtml(templateId: string | null | undefined):
   return getTemplateHtml(templateId);
 }
 
+export function getBroadcastTemplateSchema(templateId: string | null | undefined) {
+  if (!templateId) return null;
+  return store.read().templates.find((t) => t.id === templateId)?.variablesSchema ?? null;
+}
+
 export function serializeBroadcast(row: Broadcast) {
   const group = row.audienceGroupId ? findAudienceGroup(row.audienceGroupId) : undefined;
   return {
@@ -38,6 +43,7 @@ export function serializeBroadcast(row: Broadcast) {
     previewText: row.previewText ?? null,
     bodyMarkdown: row.bodyMarkdown,
     templateId: row.templateId ?? null,
+    templateVariables: row.templateVariables ?? {},
     status: row.status,
     scheduledAt: row.scheduledAt ?? null,
     sentAt: row.sentAt ?? null,

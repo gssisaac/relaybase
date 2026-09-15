@@ -4,6 +4,10 @@ import type { Template } from "../db/types";
 import { newId } from "../lib/shared/ids";
 import { serializeTemplate } from "../lib/templates/api-serialize";
 import {
+  normalizeTemplateVariablesSchema,
+  parseTemplateVariablesYaml,
+} from "../lib/templates/variable-schema";
+import {
   COMPLIANCE_FOOTER_TAG,
   templateHasEmbeddedComplianceFooter,
 } from "../lib/templates/standard-footer";
@@ -21,7 +25,7 @@ crmTemplates.get("/", async (c) => {
 
 // POST /crm/templates { name, htmlSource } — custom import (P0-6 UC-5/6/7)
 crmTemplates.post("/", async (c) => {
-  let body: { name?: string; htmlSource?: string };
+  let body: { name?: string; htmlSource?: string; variablesYaml?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -50,6 +54,10 @@ crmTemplates.post("/", async (c) => {
     warnings.push("Missing unsubscribe link increases spam-report risk.");
   }
 
+  const variablesSchema =
+    normalizeTemplateVariablesSchema(parseTemplateVariablesYaml(body.variablesYaml ?? "")) ??
+    null;
+
   const id = newId("template");
   const now = new Date().toISOString();
   let created: Template | null = null;
@@ -59,6 +67,7 @@ crmTemplates.post("/", async (c) => {
       accountLinkId: DEV_ACCOUNT_LINK_ID,
       name,
       htmlSource: resolvedHtml,
+      variablesSchema,
       isBuiltin: false,
       createdAt: now,
     };

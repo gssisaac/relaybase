@@ -29,6 +29,8 @@ export function BroadcastComposeForm({
   templates,
   templateId,
   setTemplateId,
+  templateVariables,
+  setTemplateVariables,
   subject,
   setSubject,
   bodyMarkdown,
@@ -61,6 +63,8 @@ export function BroadcastComposeForm({
   templates: CrmTemplate[];
   templateId: string;
   setTemplateId: (id: string) => void;
+  templateVariables: Record<string, string>;
+  setTemplateVariables: (values: Record<string, string>) => void;
   subject: string;
   setSubject: (v: string) => void;
   bodyMarkdown: string;
@@ -267,6 +271,8 @@ export function BroadcastComposeForm({
           templates={templates}
           templateId={templateId}
           setTemplateId={setTemplateId}
+          templateVariables={templateVariables}
+          setTemplateVariables={setTemplateVariables}
           editable={editable}
           subject={subject}
           bodyMarkdown={bodyMarkdown}
@@ -281,7 +287,6 @@ export function BroadcastComposeForm({
           setPreviewPersonaId={setPreviewPersonaId}
           previewRecipient={previewRecipient}
           personaOptions={personaOptions}
-          onInsertMergeTag={insertMergeTag}
           onTemplateImported={onTemplateImported}
           collapsed={sidebarCollapsed}
           onCollapsedChange={setSidebarCollapsed}

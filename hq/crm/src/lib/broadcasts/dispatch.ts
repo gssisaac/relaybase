@@ -4,7 +4,7 @@ import { sendMail } from "../mail/sender";
 import { buildListUnsubscribeUrl, renderBroadcastForRecipient } from "../render/render";
 import { CRM_PUBLIC_BASE_URL } from "../shared/crm-url";
 import { newId } from "../shared/ids";
-import { getBroadcastTemplateHtml } from "./serialize";
+import { getBroadcastTemplateHtml, getBroadcastTemplateSchema } from "./serialize";
 import { rollupBroadcastStatsFromRecipients } from "./stats";
 
 /** Small lists send inline; larger audiences queue and drain via scheduler batches. */
@@ -129,12 +129,15 @@ export async function processBroadcastDispatchBatch(
       if (idx >= 0) draft.recipients[idx] = { ...draft.recipients[idx]!, status: "sending" };
     });
 
+    const templateId = broadcast.templateId ?? broadcast.defaultTemplateId;
     const html = renderBroadcastForRecipient({
       broadcastId: broadcast.id,
       recipientId: recipient.id,
       bodyMarkdown: broadcast.bodyMarkdown,
-      templateId: broadcast.templateId ?? broadcast.defaultTemplateId,
+      templateId,
       templateHtml,
+      templateVariablesSchema: getBroadcastTemplateSchema(templateId),
+      templateVariables: broadcast.templateVariables ?? {},
       recipient: { email: recipient.email, name: recipient.name },
       unsubscribeToken: member.unsubscribeToken,
       crmBaseUrl: CRM_PUBLIC_BASE_URL,

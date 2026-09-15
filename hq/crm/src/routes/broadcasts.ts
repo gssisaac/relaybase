@@ -10,6 +10,7 @@ import { slugifyBroadcast } from "../lib/broadcasts/slug";
 import {
   findBroadcast,
   getBroadcastTemplateHtml,
+  getBroadcastTemplateSchema,
   serializeBroadcast,
 } from "../lib/broadcasts/serialize";
 import { emptyBroadcastStats } from "../lib/broadcasts/stats";
@@ -22,6 +23,17 @@ import { crmBroadcastAudience } from "./broadcast-audience";
 export const crmBroadcasts = new Hono();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function sanitizeTemplateVariables(raw: Record<string, string> | undefined): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== "string") continue;
+    if (!/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)*$/.test(key)) continue;
+    out[key] = value.trim();
+  }
+  return out;
+}
 
 // GET /crm/broadcasts
 crmBroadcasts.get("/", (c) => {
@@ -182,6 +194,7 @@ crmBroadcasts.patch("/:id", async (c) => {
     previewText?: string;
     bodyMarkdown?: string;
     templateId?: string;
+    templateVariables?: Record<string, string>;
     audienceGroupId?: string;
   };
   try {
@@ -258,7 +271,8 @@ crmBroadcasts.patch("/:id", async (c) => {
     body.subject !== undefined ||
     body.previewText !== undefined ||
     body.bodyMarkdown !== undefined ||
-    body.templateId !== undefined;
+    body.templateId !== undefined ||
+    body.templateVariables !== undefined;
 
   if (contentTouched && existing.status !== "draft") {
     return c.json({ error: "sent broadcasts are locked — duplicate as a new draft to edit" }, 409);
@@ -324,6 +338,10 @@ crmBroadcasts.patch("/:id", async (c) => {
       previewText: body.previewText !== undefined ? body.previewText : prev.previewText,
       bodyMarkdown: body.bodyMarkdown ?? prev.bodyMarkdown,
       templateId: body.templateId !== undefined ? body.templateId : prev.templateId,
+      templateVariables:
+        body.templateVariables !== undefined
+          ? sanitizeTemplateVariables(body.templateVariables)
+          : prev.templateVariables ?? {},
       updatedAt: now,
     };
     updated = draft.broadcasts[idx]!;
@@ -361,12 +379,15 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
   const templateHtml =
     getBroadcastTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ??
     "<div>{{content}}</div>";
+  const templateId = broadcast.templateId ?? broadcast.defaultTemplateId;
   const html = renderBroadcastForRecipient({
     broadcastId: broadcast.id,
     recipientId: "test",
     bodyMarkdown: broadcast.bodyMarkdown,
-    templateId: broadcast.templateId ?? broadcast.defaultTemplateId,
+    templateId,
     templateHtml,
+    templateVariablesSchema: getBroadcastTemplateSchema(templateId),
+    templateVariables: broadcast.templateVariables ?? {},
     recipient: { email: to, name: "Test Recipient" },
     unsubscribeToken: "test",
     crmBaseUrl: CRM_PUBLIC_BASE_URL,

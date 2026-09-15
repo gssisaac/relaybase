@@ -17,7 +17,12 @@ import {
   type CrmTemplate,
 } from "@/lib/crm/api";
 
-type DraftFields = { subject: string; bodyMarkdown: string; templateId: string };
+type DraftFields = {
+  subject: string;
+  bodyMarkdown: string;
+  templateId: string;
+  templateVariables: Record<string, string>;
+};
 
 type Ctx = {
   broadcastId: string;
@@ -50,7 +55,12 @@ export function BroadcastDetailProvider({
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const draftRef = useRef<DraftFields>({ subject: "", bodyMarkdown: "", templateId: "" });
+  const draftRef = useRef<DraftFields>({
+    subject: "",
+    bodyMarkdown: "",
+    templateId: "",
+    templateVariables: {},
+  });
   const lastSaved = useRef<DraftFields | null>(null);
   const persistInFlight = useRef<Promise<boolean> | null>(null);
   const broadcastRef = useRef<Broadcast | null>(null);
@@ -79,6 +89,7 @@ export function BroadcastDetailProvider({
         subject: b.subject,
         bodyMarkdown: b.bodyMarkdown,
         templateId: b.templateId ?? "",
+        templateVariables: b.templateVariables ?? {},
       };
       draftRef.current = fields;
       lastSaved.current = fields;
@@ -118,7 +129,8 @@ export function BroadcastDetailProvider({
       prev &&
       prev.subject === next.subject &&
       prev.bodyMarkdown === next.bodyMarkdown &&
-      prev.templateId === next.templateId
+      prev.templateId === next.templateId &&
+      templateVariablesEqual(prev.templateVariables, next.templateVariables)
     ) {
       return Promise.resolve(true);
     }
@@ -172,3 +184,11 @@ export const useCampaignDetail = useBroadcastDetail;
 
 /** @deprecated use BroadcastDetailProvider */
 export const CampaignDetailProvider = BroadcastDetailProvider;
+
+function templateVariablesEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if ((a[key] ?? "").trim() !== (b[key] ?? "").trim()) return false;
+  }
+  return true;
+}

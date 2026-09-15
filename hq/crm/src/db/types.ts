@@ -91,6 +91,8 @@ export type Broadcast = {
   previewText?: string | null;
   bodyMarkdown: string;
   templateId?: string | null;
+  /** Values for `{{vars.*}}` placeholders defined on the selected template. */
+  templateVariables?: Record<string, string>;
   status: BroadcastStatus;
   scheduledAt?: string | null;
   /** Dispatch start time (set when status becomes `sending`). */
@@ -177,11 +179,25 @@ export type Activity = {
   occurredAt: string;
 };
 
+export type TemplateVariableField = {
+  key: string;
+  type: "text" | "image";
+  label: string;
+  description?: string;
+  required?: boolean;
+  defaultFrom?: "compliance.organizationName";
+};
+
+export type TemplateVariablesSchema = {
+  fields: TemplateVariableField[];
+};
+
 export type Template = {
   id: string;
   accountLinkId: string | null;
   name: string;
   htmlSource: string;
+  variablesSchema?: TemplateVariablesSchema | null;
   isBuiltin: boolean;
   createdAt: string;
 };

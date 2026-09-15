@@ -3,6 +3,10 @@ import { marked } from "marked";
 import { applyComplianceMergeTags } from "../compliance/footer";
 import { prepareBroadcastTemplateHtml } from "../templates/standard-footer";
 import { isPlainTextTemplate } from "../templates/builtin-templates";
+import {
+  applyTemplateVariablesToHtml,
+  type TemplateVariablesSchema,
+} from "../templates/variable-schema";
 
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's
@@ -90,6 +94,8 @@ export type RenderBroadcastInput = {
   bodyMarkdown: string;
   templateId?: string | null;
   templateHtml: string;
+  templateVariablesSchema?: TemplateVariablesSchema | null;
+  templateVariables?: Record<string, string> | null;
   recipient: RenderRecipientInput;
   unsubscribeToken: string;
   crmBaseUrl: string;
@@ -142,9 +148,16 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
     input.unsubscribeToken,
   );
 
-  const templateHtml = prepareBroadcastTemplateHtml(
+  let templateHtml = prepareBroadcastTemplateHtml(
     input.templateHtml,
     input.templateId,
+  );
+
+  templateHtml = applyTemplateVariablesToHtml(
+    templateHtml,
+    input.templateVariablesSchema,
+    input.templateVariables,
+    { broadcastId: input.broadcastId, crmBaseUrl: input.crmBaseUrl },
   );
 
   if (isPlainTextTemplate(input.templateId)) {

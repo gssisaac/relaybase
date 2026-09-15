@@ -5,10 +5,24 @@ import { CRM_API_BASE } from "./api-base";
 
 export { CRM_API_BASE };
 
+export type TemplateVariableField = {
+  key: string;
+  type: "text" | "image";
+  label: string;
+  description?: string;
+  required?: boolean;
+  defaultFrom?: "compliance.organizationName";
+};
+
+export type TemplateVariablesSchema = {
+  fields: TemplateVariableField[];
+};
+
 export type CrmTemplate = {
   id: string;
   name: string;
   htmlSource: string;
+  variablesSchema: TemplateVariablesSchema | null;
   isBuiltin: boolean;
   createdAt: string;
 };
@@ -52,6 +66,7 @@ export type Broadcast = {
   previewText: string | null;
   bodyMarkdown: string;
   templateId: string | null;
+  templateVariables: Record<string, string>;
   status: BroadcastStatus;
   scheduledAt: string | null;
   sentAt: string | null;
@@ -270,7 +285,7 @@ export const crmApi = {
     }),
 
   listTemplates: () => crmFetch<{ templates: CrmTemplate[] }>("/crm/templates"),
-  importTemplate: (input: { name: string; htmlSource: string }) =>
+  importTemplate: (input: { name: string; htmlSource: string; variablesYaml?: string }) =>
     crmFetch<{ template: CrmTemplate; warnings: string[] }>("/crm/templates", {
       method: "POST",
       body: JSON.stringify(input),
@@ -309,6 +324,7 @@ export const crmApi = {
       previewText: string;
       bodyMarkdown: string;
       templateId: string;
+      templateVariables: Record<string, string>;
       audienceGroupId: string;
     }>,
   ) => crmFetch<Broadcast>(`/crm/broadcasts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),

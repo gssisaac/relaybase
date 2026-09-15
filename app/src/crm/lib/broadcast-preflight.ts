@@ -1,5 +1,6 @@
+import { missingRequiredTemplateVariables } from "@/crm/lib/broadcast-template-variables";
 import { prepareBroadcastTemplateHtml } from "@/crm/lib/broadcast-standard-footer";
-import type { CrmAccountCompliance } from "@/lib/crm/api";
+import type { CrmAccountCompliance, TemplateVariablesSchema } from "@/lib/crm/api";
 
 export type PreflightCheck = {
   id: string;
@@ -13,6 +14,8 @@ export function runBroadcastPreflight(input: {
   bodyMarkdown: string;
   templateHtml: string;
   templateId?: string | null;
+  templateVariablesSchema?: TemplateVariablesSchema | null;
+  templateVariables?: Record<string, string>;
   fromEmail: string | null;
   fromName: string | null;
   compliance: CrmAccountCompliance | null | undefined;
@@ -25,6 +28,11 @@ export function runBroadcastPreflight(input: {
   const hasUnsubscribeInTemplate =
     combined.includes("{{unsubscribe_url}}") || combined.includes("{{compliance_footer}}");
   const compliance = input.compliance;
+  const missingVars = missingRequiredTemplateVariables(
+    input.templateVariablesSchema,
+    input.templateVariables,
+    compliance?.organizationName,
+  );
 
   const checks: PreflightCheck[] = [
     {
@@ -80,6 +88,17 @@ export function runBroadcastPreflight(input: {
         : "No Base64 data URIs detected in markdown.",
     },
   ];
+
+  if (input.templateVariablesSchema?.fields.length) {
+    checks.splice(1, 0, {
+      id: "template-vars",
+      label: "Template variables",
+      status: missingVars.length ? "fail" : "pass",
+      detail: missingVars.length
+        ? `Fill required fields: ${missingVars.map((f) => f.label).join(", ")} (Variables tab).`
+        : "Required layout variables are set.",
+    });
+  }
 
   return checks;
 }

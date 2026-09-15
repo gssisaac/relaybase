@@ -9,6 +9,10 @@ import {
   resolvePreviewRecipient,
   type PreviewPersonaId,
 } from "@/crm/lib/broadcast-merge-tags";
+import {
+  applyTemplateVariablesToHtml,
+  resolveTemplateVariableDefaults,
+} from "@/crm/lib/broadcast-template-variables";
 import { prepareBroadcastTemplateHtml } from "@/crm/lib/broadcast-standard-footer";
 import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
 import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
@@ -53,6 +57,9 @@ export function BroadcastContentView() {
   const [bodyMarkdown, setBodyMarkdown] = useState(broadcast?.bodyMarkdown ?? "");
   const [previewHtml, setPreviewHtml] = useState("");
   const [templateId, setTemplateId] = useState(broadcast?.templateId ?? templates[0]?.id ?? "");
+  const [templateVariables, setTemplateVariables] = useState<Record<string, string>>(
+    broadcast?.templateVariables ?? {},
+  );
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewPersonaId, setPreviewPersonaId] = useState<PreviewPersonaId>("sample-named");
 
@@ -60,7 +67,7 @@ export function BroadcastContentView() {
 
   const bridge = useMemo<CampaignPersistBridge>(
     () => ({
-      getDraft: () => ({ subject, bodyMarkdown, templateId }),
+      getDraft: () => ({ subject, bodyMarkdown, templateId, templateVariables }),
       setBodyMarkdown: (body) => setBodyMarkdown(body),
       getLastPersistedBody: () => getLastSavedDraft().bodyMarkdown,
       persist: async () => {
@@ -68,7 +75,7 @@ export function BroadcastContentView() {
         if (!ok) throw new Error("persist failed");
       },
     }),
-    [subject, bodyMarkdown, templateId, getLastSavedDraft, persistDraft],
+    [subject, bodyMarkdown, templateId, templateVariables, getLastSavedDraft, persistDraft],
   );
 
   const { editorRef, ingestBody, checkpoint, saveStatus } = useCampaignEditorPersistence({
@@ -84,6 +91,11 @@ export function BroadcastContentView() {
     setPreviewHtml("");
     setPreviewPersonaId("sample-named");
   }, [broadcastId]);
+
+  useEffect(() => {
+    if (!broadcast) return;
+    setTemplateVariables(broadcast.templateVariables ?? {});
+  }, [broadcast?.id, broadcast?.templateVariables]);
 
   const refreshComplianceContext = useCallback(async () => {
     try {
@@ -114,8 +126,8 @@ export function BroadcastContentView() {
   );
 
   useEffect(() => {
-    syncDraft({ subject, bodyMarkdown, templateId });
-  }, [subject, bodyMarkdown, templateId, syncDraft]);
+    syncDraft({ subject, bodyMarkdown, templateId, templateVariables });
+  }, [subject, bodyMarkdown, templateId, templateVariables, syncDraft]);
 
   useEffect(() => {
     if (!broadcast || !editable) return;
@@ -123,7 +135,7 @@ export function BroadcastContentView() {
       void persistDraft();
     }, 3000);
     return () => clearTimeout(timer);
-  }, [subject, templateId, broadcast, editable, persistDraft]);
+  }, [subject, templateId, templateVariables, broadcast, editable, persistDraft]);
 
   const template = templates.find((t) => t.id === templateId);
   const plainTextTemplate = isPlainTextTemplate(templateId);
@@ -146,10 +158,24 @@ export function BroadcastContentView() {
     [subject, previewRecipient, previewMergeOptions],
   );
 
-  const preparedTemplateHtml = useMemo(
-    () => prepareBroadcastTemplateHtml(template?.htmlSource ?? "", templateId),
-    [template?.htmlSource, templateId],
+  const resolvedTemplateVariables = useMemo(
+    () =>
+      resolveTemplateVariableDefaults({
+        schema: template?.variablesSchema ?? null,
+        values: templateVariables,
+        complianceOrganizationName: compliance?.organizationName,
+      }),
+    [template?.variablesSchema, templateVariables, compliance?.organizationName],
   );
+
+  const preparedTemplateHtml = useMemo(() => {
+    const shell = prepareBroadcastTemplateHtml(template?.htmlSource ?? "", templateId);
+    return applyTemplateVariablesToHtml(
+      shell,
+      template?.variablesSchema ?? null,
+      resolvedTemplateVariables,
+    );
+  }, [template?.htmlSource, template?.variablesSchema, templateId, resolvedTemplateVariables]);
 
   const renderedPreview = useMemo(() => {
     if (plainTextTemplate) {
@@ -200,6 +226,8 @@ export function BroadcastContentView() {
         templates={templates}
         templateId={templateId}
         setTemplateId={setTemplateId}
+        templateVariables={templateVariables}
+        setTemplateVariables={setTemplateVariables}
         subject={subject}
         setSubject={setSubject}
         bodyMarkdown={bodyMarkdown}

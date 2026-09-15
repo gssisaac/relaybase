@@ -66,6 +66,7 @@ function defaultStore(): CrmDataStore {
       accountLinkId: null,
       name: tpl.name,
       htmlSource: tpl.htmlSource,
+      variablesSchema: tpl.variablesSchema ?? null,
       isBuiltin: true,
       createdAt: now,
     })),
@@ -339,11 +340,23 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
     }
   }
 
+  const legacyHeader = store.templates.find((t) => t.id === "tpl-header-image");
+  const modernHeader = store.templates.find((t) => t.id === "tpl-header");
+  if (legacyHeader && !modernHeader) {
+    legacyHeader.id = "tpl-header";
+    legacyHeader.isBuiltin = true;
+  }
+  for (const b of store.broadcasts) {
+    if (b.templateId === "tpl-header-image") b.templateId = "tpl-header";
+    if (b.defaultTemplateId === "tpl-header-image") b.defaultTemplateId = "tpl-header";
+  }
+
   for (const tpl of BUILTIN_TEMPLATES) {
     const existing = store.templates.find((t) => t.id === tpl.id);
     if (existing?.isBuiltin) {
       existing.name = tpl.name;
       existing.htmlSource = tpl.htmlSource;
+      existing.variablesSchema = tpl.variablesSchema ?? null;
       continue;
     }
     if (existing) continue;
@@ -352,6 +365,7 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
       accountLinkId: null,
       name: tpl.name,
       htmlSource: tpl.htmlSource,
+      variablesSchema: tpl.variablesSchema ?? null,
       isBuiltin: true,
       createdAt: now,
     });

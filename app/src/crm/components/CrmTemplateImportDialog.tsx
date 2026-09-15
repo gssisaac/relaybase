@@ -31,11 +31,13 @@ export function CrmTemplateImportDialog({
   const [htmlSource, setHtmlSource] = useState(
     `<table width="100%"><tr><td>{{content}}</td></tr></table>\n${COMPLIANCE_FOOTER_TAG}`,
   );
+  const [variablesYaml, setVariablesYaml] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setName("");
+    setVariablesYaml("");
     setError(null);
     setSaving(false);
   }
@@ -56,6 +58,7 @@ export function CrmTemplateImportDialog({
       const { template, warnings } = await crmApi.importTemplate({
         name: trimmedName,
         htmlSource,
+        variablesYaml: variablesYaml.trim() || undefined,
       });
       if (warnings.length > 0) {
         toast.warning(warnings[0]);
@@ -95,6 +98,17 @@ export function CrmTemplateImportDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="Company newsletter"
               autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tpl-vars">Variable schema (YAML, optional)</Label>
+            <Textarea
+              id="tpl-vars"
+              value={variablesYaml}
+              onChange={(e) => setVariablesYaml(e.target.value)}
+              placeholder={`fields:\n  - key: header.logo\n    type: image\n    label: Logo`}
+              className="min-h-[100px] font-mono text-xs"
+              spellCheck={false}
             />
           </div>
           <div className="space-y-1.5">

@@ -36,7 +36,8 @@ import {
   replaceAutomationSidebarList,
   upsertAutomationSidebarListRow,
 } from "@/scale/lib/automation-sidebar-list";
-import { automationDetailHref } from "@/scale/lib/paths";
+import { automationDetailHref, useScalePaths } from "@/scale/lib/paths";
+import { ScaleOverviewTopSection } from "@/scale/pages/overview/ScaleOverviewTopSection";
 import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import {
   scaleApi,
@@ -44,6 +45,7 @@ import {
   type Automation,
   type AutomationPurpose,
   type AutomationStatus,
+  type ScaleOverview,
 } from "@/lib/scale/api";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";
@@ -66,10 +68,13 @@ const FILTER_OPTIONS: { value: AutomationFilter; label: string }[] = [
 
 export function AutomationsListView() {
   const router = useRouter();
+  const scalePaths = useScalePaths();
   const { readyDomains, loading: domainsLoading, refresh: refreshWorkerDomains } =
     useWorkerDomains();
   const [rows, setRows] = useState<Automation[]>([]);
+  const [overview, setOverview] = useState<ScaleOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [overviewLoading, setOverviewLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<AutomationFilter>("all");
@@ -81,17 +86,31 @@ export function AutomationsListView() {
 
   const load = useCallback(async (force?: boolean) => {
     if (force) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const list = await scaleApi.listAutomations();
-      setRows(list.automations);
-      replaceAutomationSidebarList(list.automations);
-    } catch {
-      toast.error("Could not load automations");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    else {
+      setLoading(true);
+      setOverviewLoading(true);
     }
+    const [listResult, overviewResult] = await Promise.allSettled([
+      scaleApi.listAutomations(),
+      scaleApi.getOverview(),
+    ]);
+
+    if (listResult.status === "fulfilled") {
+      setRows(listResult.value.automations);
+      replaceAutomationSidebarList(listResult.value.automations);
+    } else {
+      toast.error("Could not load automations");
+    }
+
+    if (overviewResult.status === "fulfilled") {
+      setOverview(overviewResult.value);
+    } else if (!force) {
+      toast.error("Could not load overview stats — is hq/scale running on port 32831?");
+    }
+
+    setLoading(false);
+    setOverviewLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => {
@@ -271,7 +290,14 @@ export function AutomationsListView() {
       </Dialog>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-        <div className={dashboardScrollBodyClassName("space-y-4")}>
+        <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
+          {overviewLoading && !overview ? (
+            <p className="text-sm text-muted-foreground">Loading stats…</p>
+          ) : null}
+          {overview ? (
+            <ScaleOverviewTopSection data={overview} paths={scalePaths} />
+          ) : null}
+
           <EmailListContainer>
             <ListToolbar
               search={search}

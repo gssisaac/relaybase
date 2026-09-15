@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Mail, RefreshCw, Users, Zap } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -16,13 +16,8 @@ import { scaleApi, type ScaleOverview } from "@/lib/scale/api";
 import { broadcastDetailHref, useScalePaths } from "@/scale/lib/paths";
 import { cn } from "@/lib/utils";
 
-import {
-  ScaleOverviewAudienceChart,
-  ScaleOverviewEngagementChart,
-  ScaleOverviewSendsChart,
-  ScaleOverviewTriggersChart,
-} from "./ScaleOverviewCharts";
 import { OverviewExpandableBody } from "./OverviewExpandableBody";
+import { ScaleOverviewTopSection } from "./ScaleOverviewTopSection";
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -33,12 +28,6 @@ function formatWhen(iso: string): string {
   });
 }
 
-function formatCompact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 10_000) return `${(n / 1_000).toFixed(1)}k`;
-  return n.toLocaleString();
-}
-
 /**
  * Inset rows inside section cards. Dark theme sets --muted == --card, so use --secondary/--accent
  * for a visible lift above the card surface (see globals.css).
@@ -47,39 +36,6 @@ const overviewInsetItemClassName =
   "rounded-xl bg-secondary/70 px-3 py-2.5 transition-colors hover:bg-secondary dark:bg-accent/90 dark:hover:bg-accent";
 
 const overviewInsetHighlightClassName = "rounded-xl bg-secondary px-3 py-2.5 dark:bg-accent";
-
-/** Top KPI tiles — lifted from page canvas (#141414) with clear type hierarchy. */
-const overviewKpiClassName =
-  "block rounded-xl bg-card px-4 py-4 shadow-sm ring-1 ring-border transition-colors hover:bg-secondary/50 dark:hover:bg-accent/55";
-
-function KpiCard({
-  href,
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  href: string;
-  icon: typeof Mail;
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <Link href={href} className={overviewKpiClassName}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-2">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold tabular-nums leading-none tracking-tight text-foreground">{value}</p>
-          <p className="text-xs leading-snug text-muted-foreground">{hint}</p>
-        </div>
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary/80 text-muted-foreground dark:bg-accent">
-          <Icon className="size-4" aria-hidden />
-        </span>
-      </div>
-    </Link>
-  );
-}
 
 export function ScaleOverviewView() {
   const { schedule, automations, broadcasts, audience } = useScalePaths();
@@ -143,82 +99,10 @@ export function ScaleOverviewView() {
 
           {summary ? (
             <>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <KpiCard
-                  href={schedule}
-                  icon={CalendarClock}
-                  label="Schedule"
-                  value={String(summary.scheduledSends + summary.sendingNow)}
-                  hint={
-                    summary.sendingNow > 0
-                      ? `${summary.sendingNow} sending now · ${summary.scheduledSends} scheduled`
-                      : `${summary.scheduledSends} scheduled sends`
-                  }
-                />
-                <KpiCard
-                  href={automations}
-                  icon={Zap}
-                  label="Automations"
-                  value={String(summary.activeAutomations)}
-                  hint={`${data?.automations.triggers24h ?? 0} triggers in the last 24h`}
-                />
-                <KpiCard
-                  href={broadcasts}
-                  icon={Mail}
-                  label="Broadcasts"
-                  value={formatCompact(summary.monthlySentVolume)}
-                  hint={`${summary.avgOpenRate}% open · ${summary.avgClickRate}% click (all time)`}
-                />
-                <KpiCard
-                  href={audience}
-                  icon={Users}
-                  label="Audience"
-                  value={formatCompact(summary.totalContacts)}
-                  hint={`${summary.deliverableRate}% deliverable contacts`}
-                />
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-2">
-                <Card size="sm">
-                  <CardHeader className="gap-0.5 pb-1">
-                    <CardTitle className="text-sm">Send volume</CardTitle>
-                    <CardDescription className="text-xs">Weekly sent, opens, and clicks</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ScaleOverviewSendsChart data={data.charts.sendsByWeek} />
-                  </CardContent>
-                </Card>
-
-                <Card size="sm">
-                  <CardHeader className="gap-0.5 pb-1">
-                    <CardTitle className="text-sm">Engagement rates</CardTitle>
-                    <CardDescription className="text-xs">All sent broadcasts</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ScaleOverviewEngagementChart data={data.charts.engagementRates} />
-                  </CardContent>
-                </Card>
-
-                <Card size="sm">
-                  <CardHeader className="gap-0.5 pb-1">
-                    <CardTitle className="text-sm">Automation triggers</CardTitle>
-                    <CardDescription className="text-xs">Last 7 days</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ScaleOverviewTriggersChart data={data.charts.automationTriggersByDay} />
-                  </CardContent>
-                </Card>
-
-                <Card size="sm">
-                  <CardHeader className="gap-0.5 pb-1">
-                    <CardTitle className="text-sm">Audience health</CardTitle>
-                    <CardDescription className="text-xs">Active, unsubscribed, bounced</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ScaleOverviewAudienceChart data={data.charts.audienceHealth} />
-                  </CardContent>
-                </Card>
-              </div>
+              <ScaleOverviewTopSection
+                data={data}
+                paths={{ schedule, automations, broadcasts, audience }}
+              />
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card>

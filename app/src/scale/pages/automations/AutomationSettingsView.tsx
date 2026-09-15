@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import {
   Select,
   SelectContent,
@@ -83,6 +84,39 @@ export function AutomationSettingsView() {
     () => new Set(emailOptions.map((e) => e.toLowerCase())),
     [emailOptions],
   );
+
+  const domainSelectOptions = useMemo(
+    () => domainOptionValues.map((d) => ({ value: d, label: d })),
+    [domainOptionValues],
+  );
+
+  const accountEmailOptions = useMemo(
+    () => emailOptions.map((email) => ({ value: email, label: email })),
+    [emailOptions],
+  );
+
+  const domainPlaceholder =
+    domainsLoading && domainOptionValues.length === 0
+      ? "Loading domains…"
+      : domainOptionValues.length === 0
+        ? "No domains in Console"
+        : "Select sending domain";
+
+  const accountPlaceholder = !sendDomain
+    ? "Select a domain first"
+    : addressesLoading
+      ? "Loading accounts…"
+      : emailOptions.length === 0
+        ? "No senders on this domain"
+        : "Select sender address";
+
+  const replyToPlaceholder = !sendDomain
+    ? "Select a domain first"
+    : addressesLoading
+      ? "Loading accounts…"
+      : emailOptions.length === 0
+        ? "No accounts on this domain"
+        : "Select reply-to address";
 
   async function saveSettings() {
     if (!sendDomain) {
@@ -165,8 +199,14 @@ export function AutomationSettingsView() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="auto-domain">Domain</Label>
-            <Select
+            <CmdDropdown
+              triggerId="auto-domain"
+              triggerClassName="min-w-0"
               value={sendDomain}
+              placeholder={domainPlaceholder}
+              searchPlaceholder="Search domains…"
+              options={domainSelectOptions}
+              disabled={domainsLoading && domainOptionValues.length === 0}
               onValueChange={(next) => {
                 if (!next) {
                   setSendDomain(null);
@@ -181,27 +221,7 @@ export function AutomationSettingsView() {
                   setReplyTo(null);
                 }
               }}
-              disabled={domainsLoading && domainOptionValues.length === 0}
-            >
-              <SelectTrigger id="auto-domain" className="w-full">
-                <SelectValue
-                  placeholder={
-                    domainsLoading
-                      ? "Loading domains…"
-                      : domainOptionValues.length === 0
-                        ? "No domains in Console"
-                        : "Select sending domain"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {domainOptionValues.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
             {domainsLoading ? (
               <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
             ) : domainOptionValues.length === 0 ? (
@@ -216,8 +236,14 @@ export function AutomationSettingsView() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="auto-from-email">From email</Label>
-            <Select
+            <CmdDropdown
+              triggerId="auto-from-email"
+              triggerClassName="min-w-0"
               value={fromEmail}
+              placeholder={accountPlaceholder}
+              searchPlaceholder="Search accounts…"
+              options={accountEmailOptions}
+              disabled={!sendDomain || addressesLoading || emailOptions.length === 0}
               onValueChange={(email) => {
                 if (!email) {
                   setFromEmail(null);
@@ -227,29 +253,7 @@ export function AutomationSettingsView() {
                 const match = domainAddresses.find((a) => a.email === email);
                 if (match) setFromName(displayNameForAddress(match));
               }}
-              disabled={!sendDomain || addressesLoading || emailOptions.length === 0}
-            >
-              <SelectTrigger id="auto-from-email" className="w-full">
-                <SelectValue
-                  placeholder={
-                    !sendDomain
-                      ? "Select a domain first"
-                      : addressesLoading
-                        ? "Loading accounts…"
-                        : emailOptions.length === 0
-                          ? "No senders on this domain"
-                          : "Select sender address"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {emailOptions.map((email) => (
-                  <SelectItem key={email} value={email}>
-                    {email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="auto-from-name">From name</Label>
@@ -278,32 +282,16 @@ export function AutomationSettingsView() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="auto-reply-to">Reply-To</Label>
-            <Select
+            <CmdDropdown
+              triggerId="auto-reply-to"
+              triggerClassName="min-w-0"
               value={replyTo}
-              onValueChange={(email) => setReplyTo(email ?? null)}
+              placeholder={replyToPlaceholder}
+              searchPlaceholder="Search accounts…"
+              options={accountEmailOptions}
               disabled={!sendDomain || addressesLoading || emailOptions.length === 0}
-            >
-              <SelectTrigger id="auto-reply-to" className="w-full">
-                <SelectValue
-                  placeholder={
-                    !sendDomain
-                      ? "Select a domain first"
-                      : addressesLoading
-                        ? "Loading accounts…"
-                        : emailOptions.length === 0
-                          ? "No accounts on this domain"
-                          : "Select reply-to address"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {emailOptions.map((email) => (
-                  <SelectItem key={`reply-${email}`} value={email}>
-                    {email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(email) => setReplyTo(email ?? null)}
+            />
           </div>
           {identityError ? <p className="text-xs text-destructive">{identityError}</p> : null}
           <p className="text-xs text-muted-foreground">

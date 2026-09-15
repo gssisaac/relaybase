@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import {
   displayNameForAddress,
   useDomainAddresses,
@@ -121,6 +122,30 @@ export function BroadcastSettingsView() {
     () => new Set(emailOptions.map((e) => e.toLowerCase())),
     [emailOptions],
   );
+
+  const domainSelectOptions = useMemo(
+    () => domainOptionValues.map((d) => ({ value: d, label: d })),
+    [domainOptionValues],
+  );
+
+  const accountEmailOptions = useMemo(
+    () => emailOptions.map((email) => ({ value: email, label: email })),
+    [emailOptions],
+  );
+
+  const domainPlaceholder =
+    domainsLoading && domainOptionValues.length === 0
+      ? "Loading domains…"
+      : domainOptionValues.length === 0
+        ? "No domains in Console"
+        : "Select sending domain";
+
+  const fromEmailPlaceholder =
+    addressesLoading
+      ? "Loading accounts…"
+      : emailOptions.length === 0
+        ? "No senders on this domain"
+        : "Select sender address";
 
   if (!broadcast) return null;
 
@@ -237,8 +262,14 @@ export function BroadcastSettingsView() {
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="send-domain">Domain</Label>
-            <Select
+            <CmdDropdown
+              triggerId="send-domain"
+              triggerClassName="min-w-0"
               value={sendDomain}
+              placeholder={domainPlaceholder}
+              searchPlaceholder="Search domains…"
+              options={domainSelectOptions}
+              disabled={domainSelectDisabled}
               onValueChange={(next) => {
                 if (!next) {
                   setSendDomain(null);
@@ -248,27 +279,7 @@ export function BroadcastSettingsView() {
                 setFromEmail(null);
                 setFromName(null);
               }}
-              disabled={domainSelectDisabled}
-            >
-              <SelectTrigger id="send-domain" className="w-full">
-                <SelectValue
-                  placeholder={
-                    domainsLoading
-                      ? "Loading domains…"
-                      : domainOptionValues.length === 0
-                        ? "No domains in Console"
-                        : "Select sending domain"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {domainOptionValues.map((domain) => (
-                  <SelectItem key={domain} value={domain}>
-                    {domain}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
             {domainLocked ? (
               <p className="text-xs text-muted-foreground">
                 Domain can only be changed while the broadcast is a draft (current status:{" "}
@@ -292,8 +303,14 @@ export function BroadcastSettingsView() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="from-email">From email</Label>
-            <Select
+            <CmdDropdown
+              triggerId="from-email"
+              triggerClassName="min-w-0"
               value={fromEmail}
+              placeholder={fromEmailPlaceholder}
+              searchPlaceholder="Search accounts…"
+              options={accountEmailOptions}
+              disabled={addressesLoading || emailOptions.length === 0}
               onValueChange={(email) => {
                 if (!email) {
                   setFromEmail(null);
@@ -303,27 +320,7 @@ export function BroadcastSettingsView() {
                 const match = domainAddresses.find((a) => a.email === email);
                 if (match) setFromName(displayNameForAddress(match));
               }}
-              disabled={addressesLoading || emailOptions.length === 0}
-            >
-              <SelectTrigger id="from-email" className="w-full">
-                <SelectValue
-                  placeholder={
-                    addressesLoading
-                      ? "Loading accounts…"
-                      : emailOptions.length === 0
-                        ? "No senders on this domain"
-                        : "Select sender address"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {emailOptions.map((email) => (
-                  <SelectItem key={email} value={email}>
-                    {email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
             {fromEmailError ? <p className="text-xs text-destructive">{fromEmailError}</p> : null}
           </div>
           <div className="space-y-1.5">

@@ -10,13 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { CmdDropdown } from "@/components/ui/cmd-dropdown";
+import { Label } from "@/components/ui/label";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts";
 import { emailAccountHref } from "@/email/lib/paths";
@@ -75,6 +70,20 @@ export function AddEmailAccountDialog({
     );
   }, [candidates, selectedDomain]);
 
+  const domainOptions = useMemo(
+    () => domains.map((domain) => ({ value: domain, label: domain })),
+    [domains],
+  );
+
+  const accountOptions = useMemo(
+    () =>
+      accountsForDomain.map((address) => ({
+        value: address.email,
+        label: address.email,
+      })),
+    [accountsForDomain],
+  );
+
   useEffect(() => {
     if (!selectedDomain) return;
     if (!domains.includes(selectedDomain)) {
@@ -132,54 +141,34 @@ export function AddEmailAccountDialog({
           ) : (
             <>
               <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Domain
-                </p>
-                <Select
+                <Label htmlFor="add-account-domain">Domain</Label>
+                <CmdDropdown
+                  triggerId="add-account-domain"
+                  triggerClassName="min-w-0"
                   value={selectedDomain || null}
+                  placeholder="Select domain"
+                  searchPlaceholder="Search domains…"
+                  options={domainOptions}
                   onValueChange={(value) => {
                     setSelectedDomain(value ?? "");
                     setSelectedEmail("");
                   }}
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue placeholder="Select domain" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {domains.map((domain) => (
-                      <SelectItem key={domain} value={domain}>
-                        {domain}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
               <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Account
-                </p>
-                <Select
+                <Label htmlFor="add-account-email">Account</Label>
+                <CmdDropdown
+                  triggerId="add-account-email"
+                  triggerClassName="min-w-0"
                   value={selectedEmail || null}
-                  onValueChange={(value) => setSelectedEmail(value ?? "")}
+                  placeholder={
+                    selectedDomain ? "Select account" : "Select a domain first"
+                  }
+                  searchPlaceholder="Search accounts…"
+                  options={accountOptions}
                   disabled={!selectedDomain}
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue
-                      placeholder={
-                        selectedDomain
-                          ? "Select account"
-                          : "Select a domain first"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accountsForDomain.map((address) => (
-                      <SelectItem key={address.email} value={address.email}>
-                        {address.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onValueChange={(value) => setSelectedEmail(value ?? "")}
+                />
               </div>
             </>
           )}

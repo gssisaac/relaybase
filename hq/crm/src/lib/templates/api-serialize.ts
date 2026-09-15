@@ -7,6 +7,7 @@ export function serializeTemplate(row: Template) {
     htmlSource: row.htmlSource,
     variablesSchema: row.variablesSchema ?? null,
     isBuiltin: row.isBuiltin,
+    derivedFromTemplateId: row.derivedFromTemplateId ?? null,
     createdAt: row.createdAt,
   };
 }

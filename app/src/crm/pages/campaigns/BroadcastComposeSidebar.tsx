@@ -1,11 +1,12 @@
 "use client";
 
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Code2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useState } from "react";
 
 import { BroadcastTemplateVariablesEditor } from "@/crm/components/BroadcastTemplateVariablesEditor";
 import { ComplianceIdentityEditor } from "@/crm/components/ComplianceIdentityEditor";
 import { BroadcastPreflightChecklist } from "@/crm/components/BroadcastPreflightChecklist";
+import { CrmTemplateCodeEditorDialog } from "@/crm/components/CrmTemplateCodeEditorDialog";
 import { CrmTemplateImportDialog } from "@/crm/components/CrmTemplateImportDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,6 +93,7 @@ export function BroadcastComposeSidebar({
   previewRecipient,
   personaOptions,
   onTemplateImported,
+  onTemplateSourceSaved,
   collapsed,
   onCollapsedChange,
 }: {
@@ -116,10 +118,12 @@ export function BroadcastComposeSidebar({
   previewRecipient: PreviewRecipient;
   personaOptions: { value: PreviewPersonaId; label: string }[];
   onTemplateImported?: (templateId: string) => void;
+  onTemplateSourceSaved?: (result: { templateId: string; forked: boolean }) => void;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
 }) {
   const [importOpen, setImportOpen] = useState(false);
+  const [codeEditorTemplate, setCodeEditorTemplate] = useState<CrmTemplate | null>(null);
 
   const template = templates.find((t) => t.id === templateId);
   const preflight = runBroadcastPreflight({
@@ -186,19 +190,43 @@ export function BroadcastComposeSidebar({
               <ul className="flex flex-col gap-2">
                 {templates.map((t) => {
                   const selected = t.id === templateId;
-                  const variant = templateThumbnailVariant(t.id);
+                  const variant = templateThumbnailVariant(t.id, t.derivedFromTemplateId);
                   return (
                     <li key={t.id}>
-                      <button
-                        type="button"
-                        disabled={!editable}
-                        onClick={() => setTemplateId(t.id)}
+                      <div
                         className={cn(
-                          "w-full rounded-md border bg-card p-2.5 text-left transition-colors",
-                          "hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-60",
+                          "group relative w-full rounded-md border bg-card p-2.5 text-left transition-colors",
                           selected ? "border-primary ring-1 ring-primary/30" : "border-border",
                         )}
                       >
+                        {editable ? (
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            className={cn(
+                              "absolute right-1.5 top-1.5 z-10 size-7 bg-background opacity-0 shadow-none transition-opacity",
+                              "group-hover:opacity-100 group-focus-within:opacity-100",
+                              "focus-visible:opacity-100",
+                            )}
+                            aria-label={`View HTML for ${t.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCodeEditorTemplate(t);
+                            }}
+                          >
+                            <Code2 className="size-3.5" />
+                          </Button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={!editable}
+                          onClick={() => setTemplateId(t.id)}
+                          className={cn(
+                            "relative z-0 w-full text-left",
+                            "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60",
+                          )}
+                        >
                         <TemplateWireframe variant={variant} />
                         <span className="block text-sm font-medium leading-snug">{t.name}</span>
                         {t.isBuiltin ? (
@@ -212,7 +240,8 @@ export function BroadcastComposeSidebar({
                             Custom import
                           </span>
                         )}
-                      </button>
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
@@ -308,6 +337,17 @@ export function BroadcastComposeSidebar({
         onImported={(id) => {
           onTemplateImported?.(id);
           setTemplateId(id);
+        }}
+      />
+      <CrmTemplateCodeEditorDialog
+        template={codeEditorTemplate}
+        open={codeEditorTemplate !== null}
+        onOpenChange={(next) => {
+          if (!next) setCodeEditorTemplate(null);
+        }}
+        onSaved={({ template: saved, forked }) => {
+          onTemplateSourceSaved?.({ templateId: saved.id, forked });
+          if (forked) setTemplateId(saved.id);
         }}
       />
     </>

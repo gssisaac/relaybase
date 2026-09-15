@@ -1,0 +1,6 @@
+id: tpl-plain-text
+name: Plain text
+html: |
+  {{content}}
+
+  {{compliance_footer}}

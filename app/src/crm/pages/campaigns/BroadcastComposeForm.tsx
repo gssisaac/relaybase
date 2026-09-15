@@ -56,6 +56,7 @@ export function BroadcastComposeForm({
   onComplianceIdentityChange,
   onComplianceIdentitySaved,
   onTemplateImported,
+  onTemplateSourceSaved,
 }: {
   /** Broadcast id — asset upload namespace (`/crm/broadcasts/:id/assets`). */
   broadcastId: string;
@@ -90,6 +91,7 @@ export function BroadcastComposeForm({
   onComplianceIdentityChange: (id: string | null) => void | Promise<void>;
   onComplianceIdentitySaved?: () => void;
   onTemplateImported?: (templateId: string) => void;
+  onTemplateSourceSaved?: (result: { templateId: string; forked: boolean }) => void;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const subjectInputRef = useRef<HTMLInputElement>(null);
@@ -288,6 +290,7 @@ export function BroadcastComposeForm({
           previewRecipient={previewRecipient}
           personaOptions={personaOptions}
           onTemplateImported={onTemplateImported}
+          onTemplateSourceSaved={onTemplateSourceSaved}
           collapsed={sidebarCollapsed}
           onCollapsedChange={setSidebarCollapsed}
         />

@@ -174,9 +174,11 @@ export function previewPersonaOptions(members: BroadcastMember[]): {
 
 export function templateThumbnailVariant(
   templateId: string,
+  derivedFromTemplateId?: string | null,
 ): "minimal" | "header" | "card" | "plain" {
-  if (templateId === PLAIN_TEXT_TEMPLATE_ID) return "plain";
-  if (templateId.includes("header")) return "header";
-  if (templateId.includes("card")) return "card";
+  const key = derivedFromTemplateId ?? templateId;
+  if (key === PLAIN_TEXT_TEMPLATE_ID) return "plain";
+  if (key.includes("header")) return "header";
+  if (key.includes("card")) return "card";
   return "minimal";
 }

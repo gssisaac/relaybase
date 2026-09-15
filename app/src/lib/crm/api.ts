@@ -24,6 +24,7 @@ export type CrmTemplate = {
   htmlSource: string;
   variablesSchema: TemplateVariablesSchema | null;
   isBuiltin: boolean;
+  derivedFromTemplateId: string | null;
   createdAt: string;
 };
 
@@ -290,6 +291,14 @@ export const crmApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  saveTemplateSource: (id: string, input: { htmlSource: string }) =>
+    crmFetch<{ template: CrmTemplate; forked: boolean; warnings: string[] }>(
+      `/crm/templates/${id}/source`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+    ),
 
   listBroadcasts: () => crmFetch<{ broadcasts: Broadcast[] }>("/crm/broadcasts"),
   getSentOverview: () => crmFetch<AccountSentOverview>("/crm/broadcasts/sent-stats"),

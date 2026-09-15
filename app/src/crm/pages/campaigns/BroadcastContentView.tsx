@@ -268,6 +268,10 @@ export function BroadcastContentView() {
           void refreshTemplates();
           setTemplateId(id);
         }}
+        onTemplateSourceSaved={({ templateId, forked }) => {
+          void refreshTemplates();
+          if (forked) setTemplateId(templateId);
+        }}
       />
     </div>
   );

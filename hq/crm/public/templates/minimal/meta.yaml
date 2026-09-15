@@ -1,0 +1,13 @@
+id: tpl-minimal
+name: Minimal
+html: |
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:8px;">
+        <tr><td style="padding:32px;font-family:sans-serif;color:#0f172a;font-size:15px;line-height:1.6;">
+          {{content}}
+        </td></tr>
+        {{compliance_footer}}
+      </table>
+    </td></tr>
+  </table>

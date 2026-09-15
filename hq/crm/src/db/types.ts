@@ -199,6 +199,8 @@ export type Template = {
   htmlSource: string;
   variablesSchema?: TemplateVariablesSchema | null;
   isBuiltin: boolean;
+  /** When set, layout thumbnail follows the forked built-in (e.g. header). */
+  derivedFromTemplateId?: string | null;
   createdAt: string;
 };
 

@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcasts/stats";
 import { newId, newToken } from "../lib/shared/ids";
-import { BUILTIN_TEMPLATES } from "../lib/templates/builtin-templates";
+import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
 import type { AccountComplianceSettings, Broadcast, BroadcastAsset, CrmDataStore, Recipient } from "./types";
 
@@ -61,7 +61,7 @@ function defaultStore(): CrmDataStore {
     accountSuppressions: [],
     pipelineCards: [],
     activities: [],
-    templates: BUILTIN_TEMPLATES.map((tpl) => ({
+    templates: getBuiltinTemplates().map((tpl) => ({
       id: tpl.id,
       accountLinkId: null,
       name: tpl.name,
@@ -351,7 +351,7 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
     if (b.defaultTemplateId === "tpl-header-image") b.defaultTemplateId = "tpl-header";
   }
 
-  for (const tpl of BUILTIN_TEMPLATES) {
+  for (const tpl of getBuiltinTemplates()) {
     const existing = store.templates.find((t) => t.id === tpl.id);
     if (existing?.isBuiltin) {
       existing.name = tpl.name;

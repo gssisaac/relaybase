@@ -10,6 +10,7 @@ import {
   Star,
 } from "lucide-react";
 
+import { applyGmailContentLinkStyles } from "@/lib/markdown-editor/utils/editor-markdown";
 import { cn } from "@/lib/utils";
 
 function senderInitial(fromName: string | null, fromEmail: string): string {
@@ -53,6 +54,7 @@ export function BroadcastEmailPreview({
 }) {
   const displayFromName = fromName?.trim() || fromEmail.split("@")[0] || "Sender";
   const displaySubject = subject.trim() || "(No subject)";
+  const gmailBodyHtml = applyGmailContentLinkStyles(bodyHtml);
 
   return (
     <div
@@ -133,10 +135,13 @@ export function BroadcastEmailPreview({
               <div
                 className={cn(
                   "w-full [&_p]:my-[0.75em] [&_p:first-child]:mt-0 [&_p:last-child]:mb-0",
+                  // Gmail `.ii a[href]` — Tailwind preflight otherwise paints links as body text.
+                  "[&_a[href]]:text-[#1155cc] [&_a[href]]:underline",
+                  "[&_a[href]:visited]:text-[#1155cc] [&_a[href]:hover]:text-[#1155cc]",
                   device === "mobile" &&
                     "[&_table]:box-border [&_table]:max-w-full [&_table[width='600']]:!w-full",
                 )}
-                dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                dangerouslySetInnerHTML={{ __html: gmailBodyHtml }}
               />
             )}
           </div>

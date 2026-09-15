@@ -9,10 +9,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ComposeMergeTagInsertList } from "@/crm/components/ComposeMergeTagInsertList";
 import { BroadcastEmailPreview } from "@/crm/components/BroadcastEmailPreview";
 import { BroadcastComposeSidebar } from "@/crm/pages/campaigns/BroadcastComposeSidebar";
+import type { ComposeMergeTagSection } from "@/crm/lib/automation-merge-tags";
 import {
-  SUBJECT_MERGE_TAGS,
+  BROADCAST_MERGE_TAGS,
   type PreviewPersonaId,
   type PreviewRecipient,
 } from "@/crm/lib/broadcast-merge-tags";
@@ -59,6 +61,8 @@ export function BroadcastComposeForm({
   onComplianceIdentitySaved,
   onTemplateImported,
   onTemplateSourceSaved,
+  mergeTagSections,
+  triggerPreviewValues,
 }: {
   /** Broadcast id — asset upload namespace (`/crm/broadcasts/:id/assets`). */
   broadcastId: string;
@@ -95,14 +99,30 @@ export function BroadcastComposeForm({
   onComplianceIdentitySaved?: () => void;
   onTemplateImported?: (templateId: string) => void;
   onTemplateSourceSaved?: (result: { templateId: string; forked: boolean }) => void;
+  /** When set (automations), subject/body tag pickers include trigger payload tags. */
+  mergeTagSections?: ComposeMergeTagSection[];
+  /** Sample values for pre-flight preview of `{{trigger.*}}` tags. */
+  triggerPreviewValues?: Record<string, string>;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const subjectInputRef = useRef<HTMLInputElement>(null);
+  const editorShellRef = useRef<HTMLDivElement>(null);
   const insertTargetRef = useRef<"subject" | "body">("body");
+
+  const resolveInsertTarget = useCallback((): "subject" | "body" => {
+    const active = document.activeElement;
+    const subjectEl = subjectInputRef.current;
+    if (subjectEl && active === subjectEl) return "subject";
+    if (editorShellRef.current && active && editorShellRef.current.contains(active)) {
+      return "body";
+    }
+    return insertTargetRef.current;
+  }, []);
 
   const insertMergeTag = useCallback(
     (token: string) => {
-      if (insertTargetRef.current === "subject" && subjectInputRef.current) {
+      const target = resolveInsertTarget();
+      if (target === "subject" && subjectInputRef.current) {
         const el = subjectInputRef.current;
         const start = el.selectionStart ?? el.value.length;
         const end = el.selectionEnd ?? start;
@@ -117,7 +137,7 @@ export function BroadcastComposeForm({
       }
       editorRef.current?.insertText?.(token);
     },
-    [editorRef, setSubject],
+    [editorRef, resolveInsertTarget, setSubject],
   );
 
   const draftStatus =
@@ -128,6 +148,19 @@ export function BroadcastComposeForm({
         : saveState === "error"
           ? "Unsaved · retrying"
           : "Saved";
+
+  const tagSections: ComposeMergeTagSection[] =
+    mergeTagSections ??
+    [
+      {
+        title: "Recipient",
+        tags: BROADCAST_MERGE_TAGS.map((t) => ({
+          id: t.id,
+          token: t.token,
+          label: t.label,
+        })),
+      },
+    ];
 
   return (
     <div
@@ -164,34 +197,25 @@ export function BroadcastComposeForm({
                       size="icon-sm"
                       variant="ghost"
                       className="shrink-0"
-                      aria-label="Insert personalization tag in subject"
+                      aria-label="Insert personalization tag"
+                      onMouseDown={(e) => {
+                        insertTargetRef.current = resolveInsertTarget();
+                        e.preventDefault();
+                      }}
                     />
                   }
                 >
                   <Braces className="size-4" />
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-56 p-2">
+                <PopoverContent align="end" className="max-h-[min(420px,70vh)] w-72 overflow-y-auto p-2">
                   <p className="mb-2 px-1 text-[11px] text-muted-foreground">
-                    Insert into subject
+                    Inserts at the cursor in the subject or body field you last focused.
                   </p>
-                  <ul className="flex flex-col gap-1">
-                    {SUBJECT_MERGE_TAGS.map((tag) => (
-                      <li key={tag.id}>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto w-full justify-start px-2 py-1.5 font-normal"
-                          onClick={() => {
-                            insertTargetRef.current = "subject";
-                            insertMergeTag(tag.token);
-                          }}
-                        >
-                          <code className="text-xs">{tag.token}</code>
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
+                  <ComposeMergeTagInsertList
+                    compact
+                    sections={tagSections}
+                    onInsert={insertMergeTag}
+                  />
                 </PopoverContent>
               </Popover>
             ) : null}
@@ -212,6 +236,7 @@ export function BroadcastComposeForm({
             ) : null}
           </div>
           <div
+            ref={editorShellRef}
             className="relative min-h-0 flex-1 overflow-hidden bg-background"
             onFocusCapture={() => {
               insertTargetRef.current = "body";
@@ -296,6 +321,9 @@ export function BroadcastComposeForm({
             personaOptions={personaOptions}
             onTemplateImported={onTemplateImported}
             onTemplateSourceSaved={onTemplateSourceSaved}
+            mergeTagSections={tagSections}
+            onInsertMergeTag={insertMergeTag}
+            triggerPreviewValues={triggerPreviewValues}
             collapsed={sidebarCollapsed}
             onCollapsedChange={setSidebarCollapsed}
           />

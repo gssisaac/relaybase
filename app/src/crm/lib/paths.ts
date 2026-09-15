@@ -119,7 +119,7 @@ export function broadcastDetailFromSearch(searchParams: {
   return { broadcastId, tab };
 }
 
-export type AutomationDetailTab = "content" | "trigger" | "activity" | "stats" | "settings";
+export type AutomationDetailTab = "content" | "trigger" | "stats" | "settings";
 
 function automationDetailTabQueryParam(
   tab: AutomationDetailTab,
@@ -153,9 +153,10 @@ export function automationDetailFromSearch(searchParams: {
     return { automationId, tab: null };
   }
   let tab: AutomationDetailTab = "content";
-  if (
+  if (raw === "activity") {
+    tab = "stats";
+  } else if (
     raw === "trigger" ||
-    raw === "activity" ||
     raw === "stats" ||
     raw === "settings" ||
     raw === "content"

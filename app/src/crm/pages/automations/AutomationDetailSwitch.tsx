@@ -13,7 +13,6 @@ import {
   normalizeAutomationDetailTab,
 } from "@/crm/lib/automation-detail-nav";
 import { automationDetailHref, useCrmPaths, type AutomationDetailTab } from "@/crm/lib/paths";
-import { AutomationActivityView } from "@/crm/pages/automations/AutomationActivityView";
 import { AutomationContentView } from "@/crm/pages/automations/AutomationContentView";
 import { AutomationDetailShell } from "@/crm/pages/automations/AutomationDetailShell";
 import { AutomationSettingsView } from "@/crm/pages/automations/AutomationSettingsView";
@@ -78,7 +77,6 @@ export function AutomationDetailSwitch({ tab }: { tab: AutomationDetailTab | nul
     <AutomationDetailShell section={resolvedTab} fill={resolvedTab === "content"}>
       {resolvedTab === "content" ? <AutomationContentView /> : null}
       {resolvedTab === "trigger" ? <AutomationTriggerView /> : null}
-      {resolvedTab === "activity" ? <AutomationActivityView /> : null}
       {resolvedTab === "stats" ? <AutomationStatsView /> : null}
       {resolvedTab === "settings" ? <AutomationSettingsView /> : null}
     </AutomationDetailShell>

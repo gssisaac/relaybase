@@ -1,14 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import {
-  ArrowLeft,
-  BarChart3,
-  History,
-  Mail,
-  Settings,
-  Zap,
-} from "lucide-react";
+import { ArrowLeft, BarChart3, Mail, Settings, Zap } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -25,7 +18,6 @@ import { cn } from "@/lib/utils";
 const NAV: { id: AutomationDetailTab; label: string; icon: LucideIcon }[] = [
   { id: "content", label: "Content", icon: Mail },
   { id: "trigger", label: "Trigger", icon: Zap },
-  { id: "activity", label: "Activity", icon: History },
   { id: "stats", label: "Stats", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
 ];

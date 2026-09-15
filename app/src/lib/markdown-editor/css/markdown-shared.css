@@ -6,10 +6,15 @@
 
 .gtm-md-editor .bn-editor a,
 .gtm-md-editor [data-content-type="table"] a {
-  color: var(--color-primary);
+  color: #8ab4f8;
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+.gtm-md-editor[data-theme="light"] .bn-editor a,
+.gtm-md-editor[data-theme="light"] [data-content-type="table"] a {
+  color: #1155cc;
 }
 
 .gtm-md-editor .bn-inline-content code,

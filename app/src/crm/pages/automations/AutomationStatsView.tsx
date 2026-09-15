@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { crmApi, type AutomationStats } from "@/lib/crm/api";
+import { AutomationActivitySections } from "@/crm/pages/automations/AutomationActivityView";
 import { useAutomationDetail } from "@/crm/pages/automations/AutomationDetailContext";
 
 function rate(part: number, total: number): string {
@@ -21,14 +22,14 @@ export function AutomationStatsView() {
     });
   }, [automationId]);
 
-  if (!stats) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading stats…</p>;
-  }
-
-  const deliveryBase = stats.delivered || stats.sent;
+  const deliveryBase = stats ? stats.delivered || stats.sent : 0;
 
   return (
-    <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="space-y-8 p-4">
+      {!stats ? (
+        <p className="text-sm text-muted-foreground">Loading stats…</p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Triggers</CardTitle>
@@ -62,6 +63,10 @@ export function AutomationStatsView() {
           </p>
         </CardContent>
       </Card>
+        </div>
+      )}
+
+      <AutomationActivitySections automationId={automationId} />
     </div>
   );
 }

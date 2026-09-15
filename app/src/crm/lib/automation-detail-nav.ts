@@ -6,12 +6,13 @@ export function defaultAutomationDetailTab(status: AutomationStatus): Automation
 }
 
 export function normalizeAutomationDetailTab(
-  tab: AutomationDetailTab,
+  tab: AutomationDetailTab | "activity",
   _status: AutomationStatus,
 ): AutomationDetailTab {
+  if (tab === "activity") return "stats";
   return tab;
 }
 
 export function automationDetailNavTabs(_status: AutomationStatus): AutomationDetailTab[] {
-  return ["content", "trigger", "activity", "stats", "settings"];
+  return ["content", "trigger", "stats", "settings"];
 }

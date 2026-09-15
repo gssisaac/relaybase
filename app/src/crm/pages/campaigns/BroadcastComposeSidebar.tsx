@@ -3,7 +3,9 @@
 import { Code2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useState } from "react";
 
+import { ComposeMergeTagInsertList } from "@/crm/components/ComposeMergeTagInsertList";
 import { BroadcastTemplateVariablesEditor } from "@/crm/components/BroadcastTemplateVariablesEditor";
+import type { ComposeMergeTagSection } from "@/crm/lib/automation-merge-tags";
 import { ComplianceIdentityEditor } from "@/crm/components/ComplianceIdentityEditor";
 import { BroadcastPreflightChecklist } from "@/crm/components/BroadcastPreflightChecklist";
 import { CrmTemplateCodeEditorDialog } from "@/crm/components/CrmTemplateCodeEditorDialog";
@@ -96,6 +98,9 @@ export function BroadcastComposeSidebar({
   onTemplateSourceSaved,
   collapsed,
   onCollapsedChange,
+  mergeTagSections,
+  onInsertMergeTag,
+  triggerPreviewValues,
 }: {
   broadcastId: string;
   templates: CrmTemplate[];
@@ -121,6 +126,9 @@ export function BroadcastComposeSidebar({
   onTemplateSourceSaved?: (result: { templateId: string; forked: boolean }) => void;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
+  mergeTagSections?: ComposeMergeTagSection[];
+  onInsertMergeTag?: (token: string) => void;
+  triggerPreviewValues?: Record<string, string>;
 }) {
   const [importOpen, setImportOpen] = useState(false);
   const [codeEditorTemplate, setCodeEditorTemplate] = useState<CrmTemplate | null>(null);
@@ -261,6 +269,18 @@ export function BroadcastComposeSidebar({
           </TabsContent>
 
           <TabsContent value="variables" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
+            {mergeTagSections?.some((s) => s.tags.length) && onInsertMergeTag ? (
+              <div className="mb-4 rounded-md border border-border bg-muted/20 p-2.5">
+                <p className="mb-2 text-xs font-medium text-foreground">Personalization</p>
+                <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+                  Click to insert at the cursor in the subject or body (focus the field first).
+                </p>
+                <ComposeMergeTagInsertList
+                  sections={mergeTagSections}
+                  onInsert={onInsertMergeTag}
+                />
+              </div>
+            ) : null}
             <p className="mb-2 px-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Layout
             </p>
@@ -322,6 +342,20 @@ export function BroadcastComposeSidebar({
                   </div>
                 </dl>
               </div>
+
+              {triggerPreviewValues && Object.keys(triggerPreviewValues).length ? (
+                <div className="rounded-md border border-border bg-muted/20 p-2.5 text-[11px]">
+                  <p className="font-medium text-foreground">Sample trigger payload</p>
+                  <dl className="mt-2 max-h-40 space-y-1.5 overflow-y-auto text-muted-foreground">
+                    {Object.entries(triggerPreviewValues).map(([key, value]) => (
+                      <div key={key} className="flex justify-between gap-2">
+                        <dt className="shrink-0">{`{{trigger.${key}}}`}</dt>
+                        <dd className="truncate text-right text-foreground">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ) : null}
 
               <BroadcastPreflightChecklist
                 checks={preflight}

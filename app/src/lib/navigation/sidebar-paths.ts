@@ -211,14 +211,10 @@ export function normalizeEntryPath(path: string): string {
     const next = new URLSearchParams();
     next.set("id", automationId);
     const tabSeg = crmAutomationMatch[2];
-    if (
-      tabSeg === "content" ||
-      tabSeg === "trigger" ||
-      tabSeg === "activity" ||
-      tabSeg === "stats" ||
-      tabSeg === "settings"
-    ) {
+    if (tabSeg === "content" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
       next.set("tab", tabSeg);
+    } else if (tabSeg === "activity") {
+      next.set("tab", "stats");
     }
     return `/crm/automations?${next.toString()}`;
   }

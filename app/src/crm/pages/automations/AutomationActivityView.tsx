@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { crmApi, type AutomationSend, type AutomationTriggerEvent } from "@/lib/crm/api";
-import { useAutomationDetail } from "@/crm/pages/automations/AutomationDetailContext";
 
 function formatWhen(value: string): string {
   return new Date(value).toLocaleString(undefined, {
@@ -15,8 +14,7 @@ function formatWhen(value: string): string {
   });
 }
 
-export function AutomationActivityView() {
-  const { automationId } = useAutomationDetail();
+export function AutomationActivitySections({ automationId }: { automationId: string }) {
   const [events, setEvents] = useState<AutomationTriggerEvent[]>([]);
   const [sends, setSends] = useState<AutomationSend[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,11 +38,11 @@ export function AutomationActivityView() {
   }, [automationId]);
 
   if (loading) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading activity…</p>;
+    return <p className="text-sm text-muted-foreground">Loading activity…</p>;
   }
 
   return (
-    <div className="space-y-8 p-4">
+    <div className="space-y-8">
       <section>
         <h2 className="mb-3 text-sm font-semibold">Trigger events</h2>
         {events.length === 0 ? (

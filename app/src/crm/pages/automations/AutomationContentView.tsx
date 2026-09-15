@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { applyAutomationPreviewMergeTags } from "@/crm/lib/automation-merge-tags";
+import {
+  applyAutomationPreviewMergeTags,
+  composeMergeTagSectionsForAutomation,
+  sampleTriggerPreviewValues,
+} from "@/crm/lib/automation-merge-tags";
 import {
   applyTemplateVariablesToHtml,
   resolveTemplateVariableDefaults,
@@ -136,6 +140,16 @@ export function AutomationContentView() {
   const template = templates.find((t) => t.id === templateId);
   const plainTextTemplate = isPlainTextTemplate(templateId);
 
+  const mergeTagSections = useMemo(
+    () => (automation ? composeMergeTagSectionsForAutomation(automation.trigger) : []),
+    [automation?.trigger],
+  );
+
+  const triggerPreviewValues = useMemo(
+    () => (automation ? sampleTriggerPreviewValues(automation.trigger) : undefined),
+    [automation?.trigger],
+  );
+
   const previewMergeOptions = useMemo(
     () => ({
       compliancePreviewPlaceholders: true,
@@ -145,8 +159,10 @@ export function AutomationContentView() {
         postalAddress: compliance?.postalAddress ?? null,
         complianceContactEmail: compliance?.contactEmail ?? null,
       },
+      trigger: automation?.trigger,
+      triggerPayload: triggerPreviewValues,
     }),
-    [compliance, plainTextTemplate],
+    [compliance, plainTextTemplate, automation?.trigger, triggerPreviewValues],
   );
 
   const previewSubject = useMemo(
@@ -263,6 +279,8 @@ export function AutomationContentView() {
           void refreshTemplates();
           if (forked) setTemplateId(nextId);
         }}
+        mergeTagSections={mergeTagSections}
+        triggerPreviewValues={triggerPreviewValues}
       />
     </div>
   );

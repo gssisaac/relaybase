@@ -6,6 +6,7 @@ import {
   applyTemplateVariablesToHtml,
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
+import { applyGmailContentLinkStyles } from "../render/gmail-link-style";
 import { applyAutomationComplianceMergeTags, shouldIncludeListUnsubscribe } from "./compliance";
 import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "./merge-tags";
 import type { Automation } from "../../db/types";
@@ -129,7 +130,7 @@ export function renderAutomationForSend(input: RenderAutomationInput): string {
   }
 
   const contentHtml = sanitizeAutomationContentImages(
-    markdownToHtml(automation.bodyMarkdown),
+    applyGmailContentLinkStyles(markdownToHtml(automation.bodyMarkdown)),
     automationId,
     crmBaseUrl,
   );

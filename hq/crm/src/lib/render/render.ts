@@ -7,6 +7,7 @@ import {
   applyTemplateVariablesToHtml,
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
+import { applyGmailContentLinkStyles } from "./gmail-link-style";
 
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's
@@ -173,7 +174,7 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
   }
 
   const contentHtml = sanitizeBroadcastContentImages(
-    markdownToHtml(input.bodyMarkdown),
+    applyGmailContentLinkStyles(markdownToHtml(input.bodyMarkdown)),
     input.broadcastId,
     input.crmBaseUrl,
   );

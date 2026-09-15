@@ -7,6 +7,7 @@ const SCALE_UI_GET_PATHS = new Set([
   "/scale/broadcasts/sent",
   "/scale/broadcasts/in-progress",
   "/scale/automations",
+  "/scale/schedule",
 ]);
 
 /** True when this request should be forwarded to hq/scale (relaybase.email edge → upstream). */

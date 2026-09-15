@@ -5,6 +5,7 @@ import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcasts/
 import { normalizeAutomationStats } from "../lib/automations/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
+import { ensureDevScheduleFixtures } from "../lib/broadcasts/dev-schedule-fixtures";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
 import type { AccountComplianceSettings, Broadcast, BroadcastAsset, ScaleDataStore, Recipient } from "./types";
 
@@ -448,7 +449,11 @@ function readStore(): ScaleDataStore {
   const raw = fs.readFileSync(STORE_FILE, "utf8");
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return normalizeStore(migrateLegacyStore(parsed));
+    const store = normalizeStore(migrateLegacyStore(parsed));
+    if (ensureDevScheduleFixtures(store)) {
+      writeStore(store);
+    }
+    return store;
   } catch {
     const initial = defaultStore();
     fs.writeFileSync(STORE_FILE, `${JSON.stringify(initial, null, 2)}\n`, "utf8");

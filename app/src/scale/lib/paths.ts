@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Mail, Users, Zap } from "lucide-react";
+import { CalendarDays, Mail, Users, Zap } from "lucide-react";
 
 import type { AutomationStatus, BroadcastStatus } from "@/lib/scale/api";
 
@@ -16,11 +16,13 @@ export function useScalePaths() {
   const broadcastsSent = "/scale/broadcasts/sent";
   const broadcastsInProgress = "/scale/broadcasts/in-progress";
   const automations = "/scale/automations";
+  const schedule = "/scale/schedule";
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
-    { href: audience, label: "Audience", icon: Users },
-    { href: broadcasts, label: "Broadcasts", icon: Mail },
+    { href: schedule, label: "Schedule", icon: CalendarDays },
     { href: automations, label: "Automations", icon: Zap },
+    { href: broadcasts, label: "Broadcasts", icon: Mail },
+    { href: audience, label: "Audience", icon: Users },
   ];
 
   return {
@@ -30,6 +32,7 @@ export function useScalePaths() {
     broadcastsSent,
     broadcastsInProgress,
     automations,
+    schedule,
     tabs,
   };
 }

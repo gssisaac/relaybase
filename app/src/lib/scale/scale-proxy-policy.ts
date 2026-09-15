@@ -2,6 +2,7 @@ import { isScaleApiRequest } from "./scale-origin";
 
 const SCALE_UI_GET_PATHS = new Set([
   "/scale",
+  "/scale/overview",
   "/scale/audience",
   "/scale/broadcasts",
   "/scale/broadcasts/sent",
@@ -23,6 +24,12 @@ export function shouldProxyRequestToScale(pathname: string, method: string, head
   if (pathname.startsWith("/scale/compliance-identities")) return true;
   if (pathname.startsWith("/scale/brand/")) return true;
   if (pathname.startsWith("/scale/assets/")) return true;
+
+  if (pathname === "/scale/overview") {
+    if (method !== "GET") return true;
+    if (isScaleApiRequest(headers)) return true;
+    return false;
+  }
 
   if (pathname.startsWith("/scale/automations")) {
     if (method !== "GET") return true;

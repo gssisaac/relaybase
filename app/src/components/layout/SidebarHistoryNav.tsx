@@ -1,15 +1,10 @@
 "use client";
 
-import { ArrowLeft, ArrowRight } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { useDesktopChrome } from "@/lib/desktop/shell";
-import { cn } from "@/lib/utils";
-
 /** In-app back/forward that mirrors Link / router.push history (and gestures). */
-function useHistoryNavigation() {
+export function useSidebarHistoryNavigation() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -37,7 +32,6 @@ function useHistoryNavigation() {
 
     if (idx >= 0 && stack[idx] === fullPath) return;
 
-    // Trackpad / browser gesture back or forward.
     if (idx > 0 && stack[idx - 1] === fullPath) {
       indexRef.current = idx - 1;
       setCanGoBack(indexRef.current > 0);
@@ -79,19 +73,11 @@ function useHistoryNavigation() {
   return { canGoBack, canGoForward, goBack, goForward };
 }
 
-type SidebarHistoryNavProps = {
-  collapsed?: boolean;
-};
-
-/**
- * Back/forward on the macOS traffic-light strip (right end).
- * Registers ⌘[ / ⌘] (Ctrl on non-Mac).
- */
-export function SidebarHistoryNav({ collapsed = false }: SidebarHistoryNavProps) {
-  const { isDesktop, isMacOS, noDragClassName } = useDesktopChrome();
-  const { canGoBack, canGoForward, goBack, goForward } = useHistoryNavigation();
-
-  // App keyboard layer (capture): ⌘[ / ⌘] (Ctrl on non-Mac) for page history.
+/** Registers ⌘[ / ⌘] (Ctrl on non-Mac) for in-app page history. */
+export function useSidebarHistoryShortcuts(
+  goBack: () => void,
+  goForward: () => void,
+) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
@@ -106,50 +92,4 @@ export function SidebarHistoryNav({ collapsed = false }: SidebarHistoryNavProps)
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [goBack, goForward]);
-
-  if (!(isDesktop && isMacOS)) return null;
-
-  const backLabel = "Back (⌘[)";
-  const forwardLabel = "Forward (⌘])";
-
-  return (
-    <div className="flex w-full shrink-0 items-center justify-end pt-1">
-      {!collapsed ? (
-        <div
-          className={cn(
-            "mr-2 flex shrink-0 items-center gap-0.5",
-            noDragClassName,
-          )}
-          data-tauri-drag-region="false"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0"
-            aria-label={backLabel}
-            title={backLabel}
-            disabled={!canGoBack}
-            onClick={goBack}
-          >
-            <ArrowLeft />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="shrink-0"
-            aria-label={forwardLabel}
-            title={forwardLabel}
-            disabled={!canGoForward}
-            onClick={goForward}
-          >
-            <ArrowRight />
-          </Button>
-        </div>
-      ) : (
-        <div className="h-8 w-px shrink-0 opacity-0" aria-hidden />
-      )}
-    </div>
-  );
 }

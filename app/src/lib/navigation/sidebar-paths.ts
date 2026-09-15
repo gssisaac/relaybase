@@ -2,7 +2,7 @@ export type SidebarMode = "email" | "dashboard" | "scale";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
-export const DEFAULT_SCALE_PATH = "/scale/audience";
+export const DEFAULT_SCALE_PATH = "/scale/overview";
 
 const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
 

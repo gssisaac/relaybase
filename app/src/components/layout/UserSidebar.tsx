@@ -14,7 +14,6 @@ import {
   LogOut,
   Mails,
   MessageSquare,
-  PanelLeftClose,
   PanelLeftOpen,
   Pencil,
   Plus,
@@ -24,7 +23,14 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { SidebarHistoryNav } from "@/components/layout/SidebarHistoryNav";
+import { MacDesktopTitlebarSpacer } from "@/components/layout/MacDesktopTitlebarSpacer";
+import { SidebarChromeNav } from "@/components/layout/SidebarChromeNav";
+import {
+  useSidebarHistoryNavigation,
+  useSidebarHistoryShortcuts,
+} from "@/components/layout/SidebarHistoryNav";
+import { PanelSplitHandle } from "@/components/ui/panel-split-handle";
+import { usePersistedSidebarWidth } from "@/hooks/use-persisted-sidebar-width";
 import { AppUpdateBanner } from "@/console/components/AppUpdateBanner";
 import { WorkerUpdateBanner } from "@/console/components/WorkerUpdateBanner";
 import { useProductUpdateStatus } from "@/console/hooks/useProductUpdateStatus";
@@ -841,6 +847,10 @@ export function UserSidebar({
   const macDesktopChrome = isDesktop && isMacOS;
   const isSheet = presentation === "sheet";
   const sidebarCollapsed = isSheet ? false : collapsed;
+  const persistedWidth = usePersistedSidebarWidth(userId);
+  const history = useSidebarHistoryNavigation();
+  useSidebarHistoryShortcuts(history.goBack, history.goForward);
+  const dockedAsideWidth = sidebarCollapsed ? 56 : persistedWidth.width;
 
   useEffect(() => {
     let cancelled = false;
@@ -911,29 +921,35 @@ export function UserSidebar({
 
   const titleLabel = sidebarTitleForMode(mode);
 
-  return (
+  const sidebarChromeNav = (
+    <SidebarChromeNav
+      canBack={history.canGoBack}
+      canForward={history.canGoForward}
+      onBack={history.goBack}
+      onForward={history.goForward}
+      onCollapse={toggleCollapsed}
+      showCollapse={!isSheet}
+    />
+  );
+
+  const aside = (
     <aside
       className={cn(
-        "flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden bg-sidebar text-sidebar-foreground transition-[width] duration-300 ease-out",
-        isSheet
-          ? "w-full border-0"
-          : cn(
-              "border-r border-sidebar-border",
-              sidebarCollapsed ? "w-14" : "w-52",
-            ),
+        "flex h-full min-h-0 shrink-0 select-none flex-col overflow-hidden bg-sidebar text-sidebar-foreground",
+        isSheet ? "w-full border-0" : "border-r border-sidebar-border",
       )}
+      style={isSheet ? undefined : { width: dockedAsideWidth }}
     >
       <div
         {...dragRegionProps}
         className={cn(
-          "relative flex shrink-0 flex-col border-b border-sidebar-border",
+          "relative flex shrink-0 flex-col",
           dragRegionClassName,
         )}
       >
-        {/* Keep mounted for ⌘[ / ⌘] even when compact hides the buttons. */}
-        <div className={sidebarCollapsed ? "hidden" : "contents"}>
-          <SidebarHistoryNav collapsed={sidebarCollapsed} />
-        </div>
+        {!sidebarCollapsed && macDesktopChrome && !isSheet ? (
+          <MacDesktopTitlebarSpacer />
+        ) : null}
         {sidebarCollapsed && !isSheet ? (
           <div
             className={cn(
@@ -983,29 +999,17 @@ export function UserSidebar({
           </div>
         ) : (
           <>
-            {macDesktopChrome && !isSheet ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "fixed top-1 left-[84px] z-20 shrink-0",
-                  noDragClassName,
-                )}
-                data-tauri-drag-region="false"
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-                onClick={toggleCollapsed}
-              >
-                <PanelLeftClose />
-              </Button>
-            ) : null}
             <div
-              className={cn("space-y-2 px-3 py-3", noDragClassName)}
+              className={cn(
+                "space-y-2 px-3",
+                macDesktopChrome && !isSheet ? "pb-3 pt-1" : "py-3",
+                noDragClassName,
+              )}
               {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
             >
               <OfflineSidebarBadge collapsed={false} />
-              <div className="flex items-center justify-between gap-1">
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -1013,7 +1017,7 @@ export function UserSidebar({
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="max-w-full justify-start gap-1.5 px-1.5 focus-visible:border-transparent focus-visible:ring-0"
+                        className="min-w-0 max-w-full justify-start gap-1.5 px-1.5 focus-visible:border-transparent focus-visible:ring-0"
                         aria-label={`${titleLabel} menu`}
                         tabIndex={-1}
                         onMouseDown={(event) => event.preventDefault()}
@@ -1037,22 +1041,8 @@ export function UserSidebar({
                     />
                   </DropdownMenuContent>
                 </DropdownMenu>
-
-                <div className="flex shrink-0 items-center gap-0.5">
-                  {macDesktopChrome || isSheet ? null : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0"
-                      aria-label="Collapse sidebar"
-                      title="Collapse sidebar"
-                      onClick={toggleCollapsed}
-                    >
-                      <PanelLeftClose />
-                    </Button>
-                  )}
                 </div>
+                {sidebarChromeNav}
               </div>
             </div>
           </>
@@ -1131,5 +1121,24 @@ export function UserSidebar({
         </AlertDialogContent>
       </AlertDialog>
     </aside>
+  );
+
+  if (isSheet) return aside;
+
+  return (
+    <div
+      className={cn(
+        "flex h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-out",
+      )}
+      style={{ width: dockedAsideWidth + 4 }}
+    >
+      {aside}
+      {!sidebarCollapsed ? (
+        <PanelSplitHandle
+          onResize={persistedWidth.onResize}
+          onResizeEnd={persistedWidth.persist}
+        />
+      ) : null}
+    </div>
   );
 }

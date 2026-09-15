@@ -173,6 +173,99 @@ export type BroadcastDispatchProgress = {
   recipientsPerMinute: number | null;
 };
 
+export type ScaleOverview = {
+  generatedAt: string;
+  summary: {
+    totalContacts: number;
+    activeAutomations: number;
+    scheduledSends: number;
+    sendingNow: number;
+    monthlySentVolume: number;
+    avgOpenRate: number;
+    avgClickRate: number;
+    deliverableRate: number;
+  };
+  schedule: {
+    nextUpcoming: {
+      id: string;
+      name: string;
+      subject: string;
+      scheduledAt: string;
+      audienceGroupName: string | null;
+      recipientCount: number;
+      status: BroadcastStatus;
+    } | null;
+    upcomingCount: number;
+    upcomingList: Array<{
+      id: string;
+      name: string;
+      subject: string;
+      scheduledAt: string;
+      status: "scheduled" | "sending";
+      audienceGroupName: string | null;
+    }>;
+  };
+  automations: {
+    totalCount: number;
+    activeCount: number;
+    pausedCount: number;
+    draftCount: number;
+    triggers24h: number;
+    recentEvents: Array<{
+      id: string;
+      automationId: string | null;
+      automationName: string;
+      triggerType: string;
+      recipientEmail: string;
+      status: string;
+      occurredAt: string;
+    }>;
+  };
+  broadcasts: {
+    draftCount: number;
+    inProgressCount: number;
+    recentSent: Array<{
+      id: string;
+      name: string;
+      sentAt: string;
+      recipientCount: number;
+      delivered: number;
+      openRate: number;
+      clickRate: number;
+    }>;
+    cloudflareQuota: {
+      usedToday: number;
+      dailyLimit: number;
+      percentUsed: number;
+    };
+  };
+  audience: {
+    groupCount: number;
+    health: { active: number; unsubscribed: number; bounced: number };
+    recentSyncStatus: { lastSyncAt: string | null; failedGroupsCount: number };
+    groups: Array<{
+      id: string;
+      name: string;
+      domain: string;
+      contactCount: number;
+      lastSyncStatus?: "success" | "error";
+      lastSyncAt?: string;
+    }>;
+  };
+  charts: {
+    sendsByWeek: Array<{
+      weekStart: string;
+      label: string;
+      sent: number;
+      opened: number;
+      clicked: number;
+    }>;
+    audienceHealth: Array<{ key: string; label: string; count: number }>;
+    automationTriggersByDay: Array<{ day: string; label: string; count: number }>;
+    engagementRates: Array<{ key: string; label: string; value: number }>;
+  };
+};
+
 export type InProgressOverview = {
   sending: Array<{
     broadcast: Broadcast;
@@ -338,6 +431,7 @@ export const scaleApi = {
       },
     ),
 
+  getOverview: () => scaleFetch<ScaleOverview>("/scale/overview"),
   listBroadcasts: () => scaleFetch<{ broadcasts: Broadcast[] }>("/scale/broadcasts"),
   getSentOverview: () => scaleFetch<AccountSentOverview>("/scale/broadcasts/sent-stats"),
   getInProgressOverview: () => scaleFetch<InProgressOverview>("/scale/broadcasts/in-progress"),

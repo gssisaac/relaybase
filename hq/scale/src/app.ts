@@ -12,6 +12,7 @@ import { scaleWebhooks } from "./routes/webhooks";
 import { scaleAutomations } from "./routes/automations";
 import { scaleAutomationHooks } from "./routes/automation-hooks";
 import { scaleAutomationTracking } from "./routes/automation-tracking";
+import { scaleOverview } from "./routes/overview";
 import { scaleApiAuthMiddleware } from "./lib/auth/scale-api-auth";
 
 const app = new Hono();
@@ -20,7 +21,7 @@ app.use("*", cors({ origin: "*" }));
 app.use("*", scaleApiAuthMiddleware());
 
 /** Legacy public links and bookmarks still use /crm/* */
-app.all("/crm", (c) => c.redirect("/scale/audience", 308));
+app.all("/crm", (c) => c.redirect("/scale/overview", 308));
 app.all("/crm/*", (c) => {
   const url = new URL(c.req.url);
   url.pathname = url.pathname.replace(/^\/crm/, "/scale");
@@ -31,6 +32,7 @@ app.get("/health", (c) => c.json({ ok: true, service: "relaybase-scale" }));
 
 app.route("/scale/account-link", scaleAccountLink);
 app.route("/scale/compliance-identities", scaleComplianceIdentities);
+app.route("/scale/overview", scaleOverview);
 app.route("/scale/broadcasts", scaleBroadcasts);
 app.route("/scale/automations", scaleAutomations);
 app.route("/scale/hooks", scaleAutomationHooks);

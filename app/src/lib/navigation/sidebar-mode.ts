@@ -1,6 +1,11 @@
 import { readUiJson, UI_FILES, writeUiJson } from "@/email/lib/disk/user-ui-disk";
 import { isDesktopRuntime } from "@/lib/desktop/bridge";
 import {
+  clampSidebarWidth,
+  parseSidebarWidth,
+  SIDEBAR_WIDTH,
+} from "@/lib/navigation/sidebar-width";
+import {
   DEFAULT_SCALE_PATH,
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,
@@ -26,6 +31,7 @@ export type SidebarUiState = {
   lastDashboardPath: string | null;
   lastScalePath: string | null;
   collapsed: boolean;
+  width: number;
 };
 
 const MODE_PREFIX = "relaybase:sidebar:mode:";
@@ -34,6 +40,7 @@ const LAST_DASHBOARD_PREFIX = "relaybase:sidebar:lastPath:dashboard:";
 const LAST_SCALE_PREFIX = "relaybase:sidebar:lastPath:scale:";
 const LEGACY_LAST_CRM_PREFIX = "relaybase:sidebar:lastPath:crm:";
 const COLLAPSED_PREFIX = "relaybase:sidebar-collapsed:";
+const WIDTH_PREFIX = "relaybase:sidebar-width:";
 
 const DEFAULT_PATH_BY_MODE: Record<SidebarMode, string> = {
   email: DEFAULT_EMAIL_PATH,
@@ -66,6 +73,7 @@ function readLocalSidebar(userId: string): SidebarUiState {
     lastDashboardPath: null,
     lastScalePath: null,
     collapsed: false,
+    width: SIDEBAR_WIDTH.default,
   };
   if (typeof window === "undefined" || !userId) return empty;
   try {
@@ -78,6 +86,11 @@ function readLocalSidebar(userId: string): SidebarUiState {
       localStorage.getItem(`${LEGACY_LAST_CRM_PREFIX}${userId}`);
     const collapsed =
       localStorage.getItem(`${COLLAPSED_PREFIX}${userId}`) === "1";
+    const widthRaw = localStorage.getItem(`${WIDTH_PREFIX}${userId}`);
+    const width =
+      widthRaw != null
+        ? clampSidebarWidth(Number(widthRaw))
+        : SIDEBAR_WIDTH.default;
     return {
       mode,
       lastEmailPath:
@@ -86,6 +99,7 @@ function readLocalSidebar(userId: string): SidebarUiState {
         dashRaw && isRestorablePath(dashRaw, "dashboard") ? dashRaw : null,
       lastScalePath: crmRaw && isRestorablePath(crmRaw, "scale") ? crmRaw : null,
       collapsed,
+      width: Number.isFinite(width) ? width : SIDEBAR_WIDTH.default,
     };
   } catch {
     return empty;
@@ -118,6 +132,7 @@ function writeLocalSidebar(userId: string, state: SidebarUiState) {
       `${COLLAPSED_PREFIX}${userId}`,
       state.collapsed ? "1" : "0",
     );
+    localStorage.setItem(`${WIDTH_PREFIX}${userId}`, String(state.width));
   } catch {
     // ignore
   }
@@ -172,6 +187,21 @@ export function writeSidebarCollapsed(userId: string, collapsed: boolean) {
   persistSidebarDisk(userId, next);
 }
 
+export function readSidebarWidth(userId: string): number {
+  if (!userId) return SIDEBAR_WIDTH.default;
+  return readLocalSidebar(userId).width;
+}
+
+export function writeSidebarWidth(userId: string, width: number) {
+  if (typeof window === "undefined" || !userId) return;
+  const next = {
+    ...readLocalSidebar(userId),
+    width: clampSidebarWidth(width),
+  };
+  writeLocalSidebar(userId, next);
+  persistSidebarDisk(userId, next);
+}
+
 /** Load from ~/.relaybase (desktop), migrate legacy localStorage once. */
 export async function hydrateSidebarState(userId: string): Promise<SidebarUiState> {
   const empty: SidebarUiState = {
@@ -180,6 +210,7 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
     lastDashboardPath: null,
     lastScalePath: null,
     collapsed: false,
+    width: SIDEBAR_WIDTH.default,
   };
   if (!userId) return empty;
 
@@ -214,6 +245,9 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
       lastScalePath:
         crmPath && isRestorablePath(crmPath, "scale") ? crmPath : null,
       collapsed: Boolean(disk.collapsed),
+      width:
+        parseSidebarWidth((disk as { width?: unknown }).width) ??
+        SIDEBAR_WIDTH.default,
     };
     writeLocalSidebar(userId, state);
     return state;
@@ -237,7 +271,8 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
     migrated.lastEmailPath ||
     migrated.lastDashboardPath ||
     migrated.lastScalePath ||
-    migrated.collapsed
+    migrated.collapsed ||
+    migrated.width !== SIDEBAR_WIDTH.default
   ) {
     writeLocalSidebar(userId, migrated);
     await writeUiJson(userId, UI_FILES.sidebar, migrated);

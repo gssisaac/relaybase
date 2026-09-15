@@ -34,6 +34,14 @@ describe("shouldProxyRequestToScale", () => {
     );
   });
 
+  it("serves overview UI without API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/overview", "GET", headers()), false);
+  });
+
+  it("proxies overview JSON with Scale API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/overview", "GET", headers(true)), true);
+  });
+
   it("proxies broadcast detail JSON", () => {
     assert.equal(
       shouldProxyRequestToScale("/scale/broadcasts/broadcast_abc", "GET", headers(true)),

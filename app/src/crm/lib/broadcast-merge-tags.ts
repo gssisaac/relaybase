@@ -1,3 +1,7 @@
+import {
+  COMPLIANCE_PREVIEW_PLACEHOLDERS,
+  resolveComplianceFieldForPreview,
+} from "@/crm/lib/compliance-preview-values";
 import { PLAIN_TEXT_TEMPLATE_ID } from "@/crm/lib/broadcast-templates";
 import type { BroadcastMember } from "@/lib/crm/api";
 
@@ -116,10 +120,35 @@ export type ComplianceMergeValues = {
   complianceContactEmail?: string | null;
 };
 
+export type ApplyBroadcastMergeTagsOptions = {
+  unsubscribeUrl?: string;
+  compliance?: ComplianceMergeValues;
+  /** When true, empty compliance fields show Settings hints (Content preview only). */
+  compliancePreviewPlaceholders?: boolean;
+  compliancePlaceholderFormat?: "html" | "plain";
+};
+
+function resolveComplianceMergeValue(
+  value: string | null | undefined,
+  placeholderKey: keyof typeof COMPLIANCE_PREVIEW_PLACEHOLDERS,
+  options: ApplyBroadcastMergeTagsOptions | undefined,
+): string {
+  const trimmed = value?.trim();
+  if (trimmed) return trimmed;
+  if (options?.compliancePreviewPlaceholders) {
+    return resolveComplianceFieldForPreview(
+      null,
+      COMPLIANCE_PREVIEW_PLACEHOLDERS[placeholderKey],
+      options.compliancePlaceholderFormat ?? "html",
+    );
+  }
+  return "";
+}
+
 export function applyBroadcastMergeTags(
   html: string,
   recipient: { email: string; name?: string | null },
-  options?: { unsubscribeUrl?: string; compliance?: ComplianceMergeValues },
+  options?: ApplyBroadcastMergeTagsOptions,
 ): string {
   const displayName = displayNameForRecipient(recipient);
   const unsubscribeUrl = options?.unsubscribeUrl ?? "#";
@@ -128,11 +157,25 @@ export function applyBroadcastMergeTags(
     .replaceAll("{{contact.name}}", displayName)
     .replaceAll("{{contact.email}}", recipient.email)
     .replaceAll("{{unsubscribe_url}}", unsubscribeUrl)
-    .replaceAll("{{organization_name}}", compliance?.organizationName?.trim() ?? "")
-    .replaceAll("{{postal_address}}", compliance?.postalAddress?.trim() ?? "")
+    .replaceAll(
+      "{{organization_name}}",
+      resolveComplianceMergeValue(
+        compliance?.organizationName,
+        "organizationName",
+        options,
+      ),
+    )
+    .replaceAll(
+      "{{postal_address}}",
+      resolveComplianceMergeValue(compliance?.postalAddress, "postalAddress", options),
+    )
     .replaceAll(
       "{{compliance_contact_email}}",
-      compliance?.complianceContactEmail?.trim() ?? "",
+      resolveComplianceMergeValue(
+        compliance?.complianceContactEmail,
+        "complianceContactEmail",
+        options,
+      ),
     );
 }
 

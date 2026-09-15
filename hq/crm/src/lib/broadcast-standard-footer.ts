@@ -4,31 +4,40 @@ const PLAIN_TEXT_TEMPLATE_ID = "tpl-plain-text";
 /** Insert in templates; expanded to the standard footer block at preview/send time. */
 export const COMPLIANCE_FOOTER_TAG = "{{compliance_footer}}";
 
+const FOOTER_CELL_STYLE =
+  "padding:28px 32px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;";
+
 /** Table row footer for built-in HTML templates (inside a nested `<table>`). */
 export const STANDARD_COMPLIANCE_FOOTER_HTML_TR = `
     <tr>
-      <td style="padding:24px 32px;text-align:center;font-size:12px;color:#94a3b8;line-height:1.5;">
-        {{organization_name}}<br />
-        {{postal_address}}<br />
-        {{compliance_contact_email}}<br />
-        <a href="{{unsubscribe_url}}" style="color:#94a3b8;">Unsubscribe</a>
+      <td style="${FOOTER_CELL_STYLE}">
+        <p style="margin:0 0 10px;">Sent by {{organization_name}}</p>
+        <p style="margin:0 0 10px;white-space:pre-line;">{{postal_address}}</p>
+        <p style="margin:0 0 14px;">{{compliance_contact_email}}</p>
+        <p style="margin:0;">
+          <a href="{{unsubscribe_url}}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+          from this type of email.
+        </p>
       </td>
     </tr>`;
 
 /** Appended when a custom HTML template has no footer slot. */
 export const STANDARD_COMPLIANCE_FOOTER_HTML_APPEND = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
   <tr>
-    <td style="padding:24px 32px;text-align:center;font-size:12px;color:#94a3b8;line-height:1.5;">
-      {{organization_name}}<br />
-      {{postal_address}}<br />
-      {{compliance_contact_email}}<br />
-      <a href="{{unsubscribe_url}}" style="color:#94a3b8;">Unsubscribe</a>
+    <td style="${FOOTER_CELL_STYLE}">
+      <p style="margin:0 0 10px;">Sent by {{organization_name}}</p>
+      <p style="margin:0 0 10px;white-space:pre-line;">{{postal_address}}</p>
+      <p style="margin:0 0 14px;">{{compliance_contact_email}}</p>
+      <p style="margin:0;">
+        <a href="{{unsubscribe_url}}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+        from this type of email.
+      </p>
     </td>
   </tr>
 </table>`;
 
 export const STANDARD_COMPLIANCE_FOOTER_PLAIN = `---
-{{organization_name}}
+Sent by {{organization_name}}
 {{postal_address}}
 {{compliance_contact_email}}
 Unsubscribe: {{unsubscribe_url}}`;
@@ -40,6 +49,22 @@ export function templateHasEmbeddedComplianceFooter(templateHtml: string): boole
     templateHtml.includes("{{organization_name}}") &&
     templateHtml.includes("{{postal_address}}")
   );
+}
+
+/** Drop legacy unsubscribe-only rows so we do not duplicate the standard footer. */
+export function stripIncompleteComplianceFooters(templateHtml: string): string {
+  if (templateHtml.includes(COMPLIANCE_FOOTER_TAG)) return templateHtml;
+  if (templateHasEmbeddedComplianceFooter(templateHtml)) return templateHtml;
+
+  return templateHtml
+    .replace(
+      /<tr>\s*<td[^>]*>[\s\S]*?\{\{unsubscribe_url\}\}[\s\S]*?<\/td>\s*<\/tr>/gi,
+      "",
+    )
+    .replace(
+      /<table[^>]*>[\s\S]*?\{\{unsubscribe_url\}\}[\s\S]*?<\/table>/gi,
+      (block) => (block.includes("{{organization_name}}") ? block : ""),
+    );
 }
 
 export function expandComplianceFooterPlaceholder(
@@ -55,8 +80,9 @@ export function ensureComplianceFooterInTemplate(
   templateHtml: string,
   plainText: boolean,
 ): string {
-  const expanded = expandComplianceFooterPlaceholder(templateHtml, plainText);
-  if (templateHasEmbeddedComplianceFooter(templateHtml)) return expanded;
+  const cleaned = stripIncompleteComplianceFooters(templateHtml);
+  const expanded = expandComplianceFooterPlaceholder(cleaned, plainText);
+  if (templateHasEmbeddedComplianceFooter(cleaned)) return expanded;
   if (plainText) {
     return `${expanded.trimEnd()}\n\n${STANDARD_COMPLIANCE_FOOTER_PLAIN}`;
   }

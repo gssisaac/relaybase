@@ -119,15 +119,15 @@ export function BroadcastContentView() {
   const previewMergeOptions = useMemo(
     () => ({
       unsubscribeUrl: "#" as const,
-      compliance: compliance
-        ? {
-            organizationName: compliance.organizationName,
-            postalAddress: compliance.postalAddress,
-            complianceContactEmail: compliance.contactEmail,
-          }
-        : undefined,
+      compliancePreviewPlaceholders: true,
+      compliancePlaceholderFormat: (plainTextTemplate ? "plain" : "html") as "plain" | "html",
+      compliance: {
+        organizationName: compliance?.organizationName ?? null,
+        postalAddress: compliance?.postalAddress ?? null,
+        complianceContactEmail: compliance?.contactEmail ?? null,
+      },
     }),
-    [compliance],
+    [compliance, plainTextTemplate],
   );
 
   const previewSubject = useMemo(

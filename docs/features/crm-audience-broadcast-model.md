@@ -2,7 +2,7 @@
 
 **Status:** Approved (canonical, reduced scope)  
 **Supersedes:** campaign/subscriber layers in [`crm-campaign-broadcast-subscriber-model.md`](./crm-campaign-broadcast-subscriber-model.md) (historical)  
-**Engine:** `hq/crm` (dev: `data/store.json` → prod: D1 `strum-relaybase-crm`)  
+**Engine:** `hq/crm` (dev: `data/store.json` → prod: tenant-local CRM service on customer Cloudflare / BYO deploy)  
 **App:** `app/src/crm/*`  
 **Date:** 2026-09-15  
 

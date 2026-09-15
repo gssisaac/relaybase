@@ -27,7 +27,7 @@ This document tracks **legal/marketing compliance**, **Cloudflare platform limit
 |------|------------|
 | AUP / spam complaint rate on customer Worker or CRM domain | Suppression ledger, rate-limited dispatch, no send without auth |
 | Worker subrequest / CPU limits on bulk send | Queue + batch dispatch (scheduler), not single-request fan-out |
-| D1 write contention on open/click spikes | Tracking queue → batched inserts (production) |
+| Open/click tracking write spikes on CRM store | Buffered/batched tracking writes in production (same tenant as `hq/crm`) |
 | Open redirect abuse on `/crm/t/c` | Allow only `http:` / `https:` targets |
 | Trust & Safety phishing via CRM domain | Same redirect guard + monitoring |
 
@@ -48,16 +48,17 @@ This document tracks **legal/marketing compliance**, **Cloudflare platform limit
 
 ## Nice-to-have (P1+) — after P0 + UI review
 
+Production CRM is intended to run on **the customer’s own Cloudflare stack** (`hq/crm` beside their Worker), not a central Relaybase D1 catalog. Persistence may evolve from dev JSON to a tenant-local store; **no separate “D1 migration” track** is planned here.
+
 | # | Item |
 |---|------|
 | 7 | Legacy spec banner + canonical `crm-audience-broadcast-model.md` | Done |
 | 8 | Korea night-send guard (21:00–08:00 KST) — warn or block scheduled/immediate marketing sends |
 | 9 | Consent audit fields surfaced in UI (`consentSource`, `consentedAt`) |
 | 10 | DKIM/SPF domain verification banner before send |
-| 11 | D1 + Cloudflare Queue for tracking batch writes |
-| 12 | Optional per-broadcast “disable open/click tracking” (GDPR-sensitive lists) |
-| 13 | Webhook HMAC for `/crm/webhooks/bounce` |
-| 14 | Dedupe manual + synced contacts by email within a group at sync time |
+| 11 | Optional per-broadcast “disable open/click tracking” (GDPR-sensitive lists) |
+| 12 | Webhook HMAC for `/crm/webhooks/bounce` |
+| 13 | Dedupe manual + synced contacts by email within a group at sync time |
 
 ---
 

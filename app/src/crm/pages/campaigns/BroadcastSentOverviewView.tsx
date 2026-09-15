@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BroadcastCloudflareSendingLimitsCard } from "@/crm/components/BroadcastCloudflareSendingLimitsCard";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { BroadcastsSectionNav } from "@/crm/components/BroadcastsSectionNav";
 import { broadcastDetailHref } from "@/crm/lib/paths";
@@ -75,6 +76,7 @@ export function BroadcastSentOverviewView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
+          <BroadcastCloudflareSendingLimitsCard />
           {!data ? (
             <p className="text-sm text-muted-foreground">Loading sent statistics…</p>
           ) : data.totals.broadcasts === 0 ? (

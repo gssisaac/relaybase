@@ -28,6 +28,7 @@ import {
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { useWorkerDomains } from "@/crm/lib/use-worker-domains";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
+import { BroadcastCloudflareSendingLimitsCard } from "@/crm/components/BroadcastCloudflareSendingLimitsCard";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { CrmTemplateLibraryDialog } from "@/crm/components/CrmTemplateLibraryDialog";
 import { BroadcastsSectionNav } from "@/crm/components/BroadcastsSectionNav";
@@ -433,6 +434,7 @@ export function BroadcastsListView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
+          <BroadcastCloudflareSendingLimitsCard />
           <EmailListContainer>
             <ListToolbar
               search={search}

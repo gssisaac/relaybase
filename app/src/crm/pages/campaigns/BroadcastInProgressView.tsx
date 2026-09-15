@@ -9,6 +9,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BroadcastCloudflareSendingLimitsCard } from "@/crm/components/BroadcastCloudflareSendingLimitsCard";
 import { BroadcastSendingProgressPanel } from "@/crm/components/BroadcastSendingProgressPanel";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { BroadcastsSectionNav } from "@/crm/components/BroadcastsSectionNav";
@@ -75,6 +76,7 @@ export function BroadcastInProgressView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
+          <BroadcastCloudflareSendingLimitsCard />
           {!data ? (
             <p className="text-sm text-muted-foreground">Loading in-progress broadcasts…</p>
           ) : (

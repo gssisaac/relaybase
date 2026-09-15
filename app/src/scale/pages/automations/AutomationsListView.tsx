@@ -27,7 +27,11 @@ import {
 } from "@/components/ui/select";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { AutomationStatusBadge } from "@/scale/components/AutomationStatusBadge";
-import { automationStatsLine, automationTriggerSummary } from "@/scale/lib/automation-trigger-label";
+import {
+  automationListRelativeDate,
+  automationStatsLine,
+  automationTriggerSummary,
+} from "@/scale/lib/automation-trigger-label";
 import {
   replaceAutomationSidebarList,
   upsertAutomationSidebarListRow,
@@ -316,17 +320,7 @@ export function AutomationsListView() {
                       primary={row.name}
                       subject={automationStatsLine(row)}
                       preview={automationTriggerSummary(row.trigger)}
-                      date={
-                        row.lastSentAt
-                          ? new Date(row.lastSentAt).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                            })
-                          : new Date(row.updatedAt).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                            })
-                      }
+                      date={automationListRelativeDate(row)}
                       status={
                         <AutomationStatusBadge
                           status={row.status}

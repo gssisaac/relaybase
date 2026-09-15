@@ -31,6 +31,11 @@ export type CmdDropdownOption<Value extends string = string> = {
   onClick?: (event: React.MouseEvent) => void
 }
 
+export type CmdDropdownOptionGroup<Value extends string = string> = {
+  heading: string
+  options: CmdDropdownOption<Value>[]
+}
+
 export type CmdDropdownTriggerRenderProps = {
   openPopover: (event: React.MouseEvent) => void
   selectedOptions: CmdDropdownOption[]
@@ -38,7 +43,10 @@ export type CmdDropdownTriggerRenderProps = {
 }
 
 type CmdDropdownBaseProps<Value extends string = string> = {
-  options: CmdDropdownOption<Value>[]
+  /** Flat list — use for single-section pickers (e.g. domains). */
+  options?: CmdDropdownOption<Value>[]
+  /** Grouped list — use when options belong under headings (e.g. accounts by domain). */
+  groups?: CmdDropdownOptionGroup<Value>[]
   placeholder?: string
   searchPlaceholder?: string
   disabled?: boolean
@@ -76,6 +84,7 @@ function optionSearchValue(option: CmdDropdownOption): string {
 
 function CmdDropdown<Value extends string = string>({
   options,
+  groups,
   placeholder = "Select an option",
   searchPlaceholder,
   disabled = false,
@@ -93,6 +102,13 @@ function CmdDropdown<Value extends string = string>({
   ...selectionProps
 }: CmdDropdownProps<Value>) {
   const multiple = selectionProps.multiple === true
+  const flatOptions = React.useMemo(() => {
+    if (groups?.length) {
+      return groups.flatMap((group) => group.options)
+    }
+    return options ?? []
+  }, [groups, options])
+
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const open = openProp ?? uncontrolledOpen
 
@@ -115,9 +131,58 @@ function CmdDropdown<Value extends string = string>({
   }, [multiple, selectionProps.value])
 
   const selectedOptions = React.useMemo(
-    () => options.filter((option) => selectedValues.has(option.value)),
-    [options, selectedValues],
+    () => flatOptions.filter((option) => selectedValues.has(option.value)),
+    [flatOptions, selectedValues],
   )
+
+  const renderOption = (option: CmdDropdownOption<Value>) => {
+    const isSelected = selectedValues.has(option.value)
+    return (
+      <CommandItem
+        key={option.value}
+        value={optionSearchValue(option)}
+        disabled={option.disabled}
+        data-checked={isSelected ? true : undefined}
+        className={cn(
+          multiple && "[&>svg.ml-auto]:hidden",
+          !multiple && "justify-between",
+        )}
+        onClick={(event) => {
+          option.onClick?.(event)
+        }}
+        onSelect={() => {
+          if (option.disabled) return
+          if (option.onClick) return
+          toggleOption(option.value)
+          if (!multiple) {
+            setOpen(false)
+          }
+        }}
+      >
+        {multiple ? (
+          <span
+            className={cn(
+              "mr-2 flex size-4 shrink-0 items-center justify-center rounded-sm border border-primary",
+              isSelected
+                ? "bg-primary text-primary-foreground"
+                : "opacity-50",
+            )}
+            aria-hidden
+          >
+            {isSelected ? <CheckIcon className="size-3.5" /> : null}
+          </span>
+        ) : null}
+        <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+          {option.icon ? (
+            <span className="inline-flex shrink-0 text-muted-foreground [&>svg]:size-4">
+              {option.icon}
+            </span>
+          ) : null}
+          <span className="truncate">{option.label}</span>
+        </span>
+      </CommandItem>
+    )
+  }
 
   const emitChange = React.useCallback(
     (next: Set<Value>) => {
@@ -244,56 +309,17 @@ function CmdDropdown<Value extends string = string>({
           ) : null}
           <CommandList>
             <CommandEmpty>{emptyMessage}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => {
-                const isSelected = selectedValues.has(option.value)
-                return (
-                  <CommandItem
-                    key={option.value}
-                    value={optionSearchValue(option)}
-                    disabled={option.disabled}
-                    data-checked={isSelected ? true : undefined}
-                    className={cn(
-                      multiple && "[&>svg.ml-auto]:hidden",
-                      !multiple && "justify-between",
-                    )}
-                    onClick={(event) => {
-                      option.onClick?.(event)
-                    }}
-                    onSelect={() => {
-                      if (option.disabled) return
-                      if (option.onClick) return
-                      toggleOption(option.value)
-                      if (!multiple) {
-                        setOpen(false)
-                      }
-                    }}
-                  >
-                    {multiple ? (
-                      <span
-                        className={cn(
-                          "mr-2 flex size-4 shrink-0 items-center justify-center rounded-sm border border-primary",
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : "opacity-50",
-                        )}
-                        aria-hidden
-                      >
-                        {isSelected ? <CheckIcon className="size-3.5" /> : null}
-                      </span>
-                    ) : null}
-                    <span className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                      {option.icon ? (
-                        <span className="inline-flex shrink-0 text-muted-foreground [&>svg]:size-4">
-                          {option.icon}
-                        </span>
-                      ) : null}
-                      <span className="truncate">{option.label}</span>
-                    </span>
-                  </CommandItem>
-                )
-              })}
-            </CommandGroup>
+            {groups?.length ? (
+              groups.map((group) => (
+                <CommandGroup key={group.heading} heading={group.heading}>
+                  {group.options.map((option) => renderOption(option))}
+                </CommandGroup>
+              ))
+            ) : (
+              <CommandGroup>
+                {flatOptions.map((option) => renderOption(option))}
+              </CommandGroup>
+            )}
           </CommandList>
           {!required && selectedOptions.length > 0 ? (
             <>

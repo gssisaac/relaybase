@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,11 @@ function domainOf(email: string, domain?: string) {
   return at > 0 ? email.slice(at + 1).toLowerCase() : "";
 }
 
+function localPartOf(email: string) {
+  const at = email.indexOf("@");
+  return at > 0 ? email.slice(0, at) : email;
+}
+
 export function AddEmailAccountDialog({
   open,
   onOpenChange,
@@ -40,7 +45,6 @@ export function AddEmailAccountDialog({
     error,
     refreshAddresses,
   } = useMailAccounts();
-  const [selectedDomain, setSelectedDomain] = useState<string>("");
   const [selectedEmail, setSelectedEmail] = useState<string>("");
 
   const enabled = useMemo(
@@ -54,68 +58,56 @@ export function AddEmailAccountDialog({
     );
   }, [availableAddresses, enabled]);
 
-  const domains = useMemo(() => {
-    const set = new Set<string>();
+  const accountGroups = useMemo(() => {
+    const byDomain = new Map<string, typeof candidates>();
     for (const address of candidates) {
       const domain = domainOf(address.email, address.domain);
-      if (domain) set.add(domain);
+      if (!domain) continue;
+      const list = byDomain.get(domain) ?? [];
+      list.push(address);
+      byDomain.set(domain, list);
     }
-    return [...set].sort((a, b) => a.localeCompare(b));
+    return [...byDomain.keys()]
+      .sort((a, b) => a.localeCompare(b))
+      .map((domain) => ({
+        heading: domain,
+        options: (byDomain.get(domain) ?? []).map((address) => {
+          const email = address.email;
+          const local = localPartOf(email);
+          return {
+            value: email,
+            label: email,
+            keywords: [domain, local, email].join(" "),
+          };
+        }),
+      }));
   }, [candidates]);
 
-  const accountsForDomain = useMemo(() => {
-    if (!selectedDomain) return [];
-    return candidates.filter(
-      (address) => domainOf(address.email, address.domain) === selectedDomain,
-    );
-  }, [candidates, selectedDomain]);
-
-  const domainOptions = useMemo(
-    () => domains.map((domain) => ({ value: domain, label: domain })),
-    [domains],
+  const candidateEmails = useMemo(
+    () => new Set(candidates.map((a) => a.email)),
+    [candidates],
   );
 
-  const accountOptions = useMemo(
-    () =>
-      accountsForDomain.map((address) => ({
-        value: address.email,
-        label: address.email,
-      })),
-    [accountsForDomain],
-  );
-
-  useEffect(() => {
-    if (!selectedDomain) return;
-    if (!domains.includes(selectedDomain)) {
-      setSelectedDomain("");
-      setSelectedEmail("");
-    }
-  }, [domains, selectedDomain]);
-
-  useEffect(() => {
-    if (!selectedEmail) return;
-    if (!accountsForDomain.some((a) => a.email === selectedEmail)) {
-      setSelectedEmail("");
-    }
-  }, [accountsForDomain, selectedEmail]);
+  const selectedCandidateEmail =
+    selectedEmail && candidateEmails.has(selectedEmail) ? selectedEmail : null;
 
   function handleOpenChange(next: boolean) {
     if (next) {
       void refreshAddresses();
-      setSelectedDomain("");
       setSelectedEmail("");
     }
     onOpenChange(next);
   }
 
   function confirm() {
-    if (!selectedEmail) return;
-    addEnabledAccount(selectedEmail);
-    setSelectedDomain("");
+    if (!selectedCandidateEmail) return;
+    addEnabledAccount(selectedCandidateEmail);
     setSelectedEmail("");
     onOpenChange(false);
-    router.push(emailAccountHref("inbox", selectedEmail));
+    router.push(emailAccountHref("inbox", selectedCandidateEmail));
   }
+
+  const hasAccounts = accountGroups.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -125,56 +117,36 @@ export function AddEmailAccountDialog({
         </DialogHeader>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Pick a domain, then choose an existing address. Create new senders
-            under Dashboard → Accounts.
+            Choose an address to add to the sidebar. Accounts are grouped by domain —
+            search by email or domain. Create new senders under Dashboard → Accounts.
           </p>
           {error ? (
             <p className="text-sm text-destructive">{error}</p>
           ) : null}
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading addresses…</p>
-          ) : domains.length === 0 ? (
+          ) : !hasAccounts ? (
             <p className="text-sm text-muted-foreground">
-              No more addresses available. Add a sender under Dashboard →
-              Accounts first.
+              No more addresses available. Add a sender under Dashboard → Accounts
+              first.
             </p>
           ) : (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-account-domain">Domain</Label>
-                <CmdDropdown
-                  triggerId="add-account-domain"
-                  triggerClassName="min-w-0"
-                  value={selectedDomain || null}
-                  placeholder="Select domain"
-                  searchPlaceholder="Search domains…"
-                  options={domainOptions}
-                  onValueChange={(value) => {
-                    setSelectedDomain(value ?? "");
-                    setSelectedEmail("");
-                  }}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="add-account-email">Account</Label>
-                <CmdDropdown
-                  triggerId="add-account-email"
-                  triggerClassName="min-w-0"
-                  value={selectedEmail || null}
-                  placeholder={
-                    selectedDomain ? "Select account" : "Select a domain first"
-                  }
-                  searchPlaceholder="Search accounts…"
-                  options={accountOptions}
-                  disabled={!selectedDomain}
-                  onValueChange={(value) => setSelectedEmail(value ?? "")}
-                />
-              </div>
-            </>
+            <div className="space-y-1.5">
+              <Label htmlFor="add-account-email">Account</Label>
+              <CmdDropdown
+                triggerId="add-account-email"
+                triggerClassName="min-w-0"
+                value={selectedCandidateEmail}
+                placeholder="Select account"
+                searchPlaceholder="Search by email or domain…"
+                groups={accountGroups}
+                onValueChange={(value) => setSelectedEmail(value ?? "")}
+              />
+            </div>
           )}
           <Button
             className="w-full"
-            disabled={!selectedEmail || loading}
+            disabled={!selectedCandidateEmail || loading}
             onClick={confirm}
           >
             Add account

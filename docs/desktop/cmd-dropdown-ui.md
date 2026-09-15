@@ -76,3 +76,22 @@ type CmdDropdownOption = {
 ```
 
 Multi-select: `multiple` + `value: string[]` — use only when product UX needs it (CmdDropdown supports it; most identity forms are single-select).
+
+---
+
+## Grouped options (accounts by domain)
+
+Pass `groups` instead of `options` when items belong under section headings. Search still matches each item’s `label` and `keywords` (include domain + local part for emails).
+
+```tsx
+<CmdDropdown
+  triggerId="add-account-email"
+  value={selectedEmail}
+  placeholder="Select account"
+  searchPlaceholder="Search by email or domain…"
+  groups={accountGroups}
+  onValueChange={(email) => setSelectedEmail(email ?? "")}
+/>
+```
+
+**Reference:** `AddEmailAccountDialog` (single picker, all domains).

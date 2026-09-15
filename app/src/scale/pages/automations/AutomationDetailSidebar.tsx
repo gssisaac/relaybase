@@ -9,7 +9,10 @@ import { Input } from "@/components/ui/input";
 import { PanelSplitHandle } from "@/components/ui/panel-split-handle";
 import { usePersistedAutomationDetailSidebarWidth } from "@/hooks/use-persisted-automation-detail-sidebar-width";
 import { AutomationStatusBadge } from "@/scale/components/AutomationStatusBadge";
-import { automationTriggerSummary } from "@/scale/lib/automation-trigger-label";
+import {
+  automationListRelativeDate,
+  automationTriggerSummary,
+} from "@/scale/lib/automation-trigger-label";
 import { automationDetailHref, automationTabFromPathname, type AutomationDetailTab } from "@/scale/lib/paths";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 import { useAutomationSidebarList } from "@/scale/pages/automations/use-automation-sidebar-list";
@@ -34,18 +37,23 @@ const AutomationSidebarRow = memo(function AutomationSidebarRow({
       <Link
         href={href}
         className={cn(
-          "flex min-w-0 items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors",
+          "flex min-w-0 flex-col gap-1 rounded-md px-2.5 py-2 text-left transition-colors",
           active
             ? "bg-accent text-accent-foreground"
             : "text-foreground hover:bg-accent/60",
         )}
         aria-current={active ? "page" : undefined}
       >
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">{label}</span>
+        <div className="flex min-w-0 items-baseline justify-between gap-2">
+          <span className="min-w-0 flex-1 truncate text-xs font-medium">{label}</span>
+          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+            {automationListRelativeDate(row)}
+          </span>
+        </div>
         <AutomationStatusBadge
           status={row.status}
           listStatus={row.listStatus}
-          className="shrink-0 whitespace-nowrap"
+          className="w-fit shrink-0 whitespace-nowrap"
         />
       </Link>
     </li>

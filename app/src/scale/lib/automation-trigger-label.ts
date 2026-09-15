@@ -1,4 +1,11 @@
 import type { Automation, AutomationTrigger } from "@/lib/scale/api";
+import { formatRelativeDate } from "@/lib/utils";
+
+/** Prefer last send time; fall back to last edit for list / sidebar timestamps. */
+export function automationListRelativeDate(row: Automation): string {
+  const iso = row.lastSentAt ?? row.updatedAt;
+  return formatRelativeDate(iso);
+}
 
 export function automationTriggerSummary(trigger: AutomationTrigger): string {
   switch (trigger.type) {

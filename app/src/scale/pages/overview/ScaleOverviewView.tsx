@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { BroadcastStatusBadge } from "@/scale/components/BroadcastStatusBadge";
-import { CF_EMAIL_SENDING_LIMITS_URL } from "@/scale/components/BroadcastCloudflareSendingLimitsCard";
+import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
+import { CF_EMAIL_SENDING_LIMITS_URL } from "@/scale/components/campaigns/CampaignCloudflareSendingLimitsCard";
 import { scaleApi, type ScaleOverview } from "@/lib/scale/api";
-import { broadcastDetailHref, useScalePaths } from "@/scale/lib/paths";
+import { campaignDetailHref, useScalePaths } from "@/scale/lib/paths";
 import { cn } from "@/lib/utils";
 
 import { OverviewExpandableBody } from "./OverviewExpandableBody";
@@ -38,8 +38,9 @@ const overviewInsetItemClassName =
 const overviewInsetHighlightClassName = "rounded-xl bg-secondary px-3 py-2.5 dark:bg-accent";
 
 export function ScaleOverviewView() {
-  const { schedule, automations, broadcasts, audience } = useScalePaths();
+  const { schedule, templates, triggers, campaigns, audience } = useScalePaths();
   const [data, setData] = useState<ScaleOverview | null>(null);
+  const [templateCount, setTemplateCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -61,6 +62,13 @@ export function ScaleOverviewView() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void scaleApi
+      .listMessageTemplates()
+      .then((res) => setTemplateCount(res.templates.length))
+      .catch(() => setTemplateCount(0));
+  }, [data?.generatedAt]);
+
   const summary = data?.summary;
 
   return (
@@ -69,8 +77,11 @@ export function ScaleOverviewView() {
         className="shrink-0 px-4 py-3"
         end={
           <div className="flex items-center gap-2">
-            <Link href={broadcasts} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              New broadcast
+            <Link href={templates} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Templates
+            </Link>
+            <Link href={`${campaigns}?new=1`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              New campaign
             </Link>
             <Button
               variant="outline"
@@ -87,7 +98,7 @@ export function ScaleOverviewView() {
         <div className="min-w-0 space-y-1">
           <h1 className="truncate text-lg font-semibold tracking-tight">Overview</h1>
           <p className="text-sm text-muted-foreground">
-            Schedule, automations, broadcasts, and audience at a glance.
+            Schedule, triggers, campaigns, and audience at a glance.
           </p>
         </div>
       </DesktopTitleBar>
@@ -101,7 +112,7 @@ export function ScaleOverviewView() {
             <>
               <ScaleOverviewTopSection
                 data={data}
-                paths={{ schedule, automations, broadcasts, audience }}
+                paths={{ schedule, templates, triggers, campaigns, audience, templateCount }}
               />
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -135,7 +146,7 @@ export function ScaleOverviewView() {
                         {data.schedule.upcomingList.map((row) => (
                           <li key={row.id}>
                             <Link
-                              href={broadcastDetailHref(row.id, "publish", row.status)}
+                              href={campaignDetailHref(row.id, "publish", row.status)}
                               className={cn(
                                 overviewInsetItemClassName,
                                 "flex items-center justify-between gap-2 text-sm",
@@ -143,7 +154,7 @@ export function ScaleOverviewView() {
                             >
                               <span className="min-w-0 truncate font-medium">{row.name}</span>
                               <div className="flex shrink-0 items-center gap-2">
-                                <BroadcastStatusBadge status={row.status} />
+                                <CampaignStatusBadge status={row.status} />
                                 <span className="text-xs text-muted-foreground">{formatWhen(row.scheduledAt)}</span>
                               </div>
                             </Link>
@@ -157,13 +168,13 @@ export function ScaleOverviewView() {
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div>
-                      <CardTitle className="text-base">Recent broadcasts</CardTitle>
+                      <CardTitle className="text-base">Recent campaigns</CardTitle>
                       <CardDescription>
-                        {data.broadcasts.draftCount} drafts · {data.broadcasts.inProgressCount} in progress
+                        {data.campaigns.draftCount} drafts · {data.campaigns.inProgressCount} in progress
                       </CardDescription>
                     </div>
-                    <Link href={broadcasts} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                      All broadcasts
+                    <Link href={campaigns} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      All campaigns
                     </Link>
                   </CardHeader>
                   <CardContent>
@@ -172,7 +183,7 @@ export function ScaleOverviewView() {
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">Sent today (Scale)</span>
                           <span className="tabular-nums font-medium">
-                            {data.broadcasts.cloudflareQuota.usedToday}
+                            {data.campaigns.cloudflareQuota.usedToday}
                           </span>
                         </div>
                         <p className="text-[11px] leading-snug text-muted-foreground">
@@ -187,14 +198,14 @@ export function ScaleOverviewView() {
                           </a>
                         </p>
                       </div>
-                      {data.broadcasts.recentSent.length === 0 ? (
+                      {data.campaigns.recentSent.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No completed sends yet.</p>
                       ) : (
                         <ul className="space-y-2">
-                          {data.broadcasts.recentSent.map((row) => (
+                          {data.campaigns.recentSent.map((row) => (
                             <li key={row.id}>
                               <Link
-                                href={broadcastDetailHref(row.id, "stats", "sent")}
+                                href={campaignDetailHref(row.id, "stats", "sent")}
                                 className={cn(overviewInsetItemClassName, "block")}
                               >
                                 <div className="flex items-center justify-between gap-2">
@@ -219,22 +230,22 @@ export function ScaleOverviewView() {
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div>
-                      <CardTitle className="text-base">Automation activity</CardTitle>
+                      <CardTitle className="text-base">Trigger activity</CardTitle>
                       <CardDescription>
-                        {data.automations.activeCount} active · {data.automations.triggers24h} triggers / 24h
+                        {data.triggers.activeCount} active · {data.triggers.triggers24h} triggers / 24h
                       </CardDescription>
                     </div>
-                    <Link href={automations} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                      Automations
+                    <Link href={triggers} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      Triggers
                     </Link>
                   </CardHeader>
                   <CardContent>
                     <OverviewExpandableBody>
-                      {data.automations.recentEvents.length === 0 ? (
+                      {data.triggers.recentEvents.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No trigger events yet.</p>
                       ) : (
                         <ul className="space-y-2">
-                          {data.automations.recentEvents.map((row) => (
+                          {data.triggers.recentEvents.map((row) => (
                             <li
                               key={row.id}
                               className={cn(
@@ -243,7 +254,7 @@ export function ScaleOverviewView() {
                               )}
                             >
                               <div className="min-w-0">
-                                <p className="truncate font-medium">{row.automationName}</p>
+                                <p className="truncate font-medium">{row.triggerName}</p>
                                 <p className="truncate text-xs text-muted-foreground">{row.recipientEmail}</p>
                               </div>
                               <div className="shrink-0 text-right">

@@ -38,7 +38,7 @@ export async function ingestCampaignFile(opts: {
     filename,
     optimized.mimeType,
     await blobToBase64(optimized.file),
-    opts.assetOwner ?? "broadcast",
+    opts.assetOwner ?? "campaign",
   );
 
   return {

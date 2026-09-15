@@ -1,0 +1,735 @@
+"use client";
+
+import { ExternalLink, Loader2, Users } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+
+import type { AudienceGroupContact, AudienceGroupSummary } from "@/email/components/mailbox/types";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { CampaignSendingProgressPanel } from "@/scale/components/campaigns/CampaignSendingProgressPanel";
+import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
+import { scaleAudienceDetailHref, campaignDetailHref } from "@/scale/lib/paths";
+import { useCampaignDetail } from "@/scale/pages/campaigns/CampaignDetailContext";
+import { scaleAudienceApi } from "@/lib/scale/audience-api";
+import { syncScaleSendCredentials } from "@/scale/lib/sync-scale-send-credentials";
+import { useEmailPaths } from "@/email/lib/paths";
+import { scaleApi, ScaleApiError, type CampaignDispatchProgress } from "@/lib/scale/api";
+
+const PREVIEW_CONTACT_LIMIT = 40;
+
+type AudienceContactsDialog =
+  | { mode: "confirm"; groupId: string }
+  | { mode: "view"; groupId: string };
+
+function AudienceContactsList({
+  contacts,
+  loading,
+}: {
+  contacts: AudienceGroupContact[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        <Loader2 className="mr-2 size-4 animate-spin" />
+        Loading contacts…
+      </div>
+    );
+  }
+  return (
+    <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border">
+      <div className="divide-y divide-border">
+        {contacts.slice(0, PREVIEW_CONTACT_LIMIT).map((c) => (
+          <div key={c.id} className="px-3 py-2 text-sm">
+            <p className="truncate font-medium">{c.name || c.email}</p>
+            {c.name ? (
+              <p className="truncate text-xs text-muted-foreground">{c.email}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {contacts.length === 0 ? (
+        <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+          This group has no contacts yet.
+        </p>
+      ) : contacts.length > PREVIEW_CONTACT_LIMIT ? (
+        <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          Showing first {PREVIEW_CONTACT_LIMIT} of {contacts.length.toLocaleString()} contacts.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function formatWhen(value?: string | null): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export function CampaignPublishView() {
+  const router = useRouter();
+  const {
+    campaignId,
+    campaign,
+    setCampaign,
+    persistDraft,
+    refresh,
+    refreshAudience,
+  } = useCampaignDetail();
+  const { apiBase } = useEmailPaths();
+
+  const [sending, setSending] = useState(false);
+  const [confirmSendOpen, setConfirmSendOpen] = useState(false);
+  const [blockedError, setBlockedError] = useState<string | null>(null);
+  const [testEmailOpen, setTestEmailOpen] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
+  const [audienceGroupsLoading, setAudienceGroupsLoading] = useState(false);
+  const [audienceContactsDialog, setAudienceContactsDialog] =
+    useState<AudienceContactsDialog | null>(null);
+  const [dialogContacts, setDialogContacts] = useState<AudienceGroupContact[]>([]);
+  const [dialogContactsLoading, setDialogContactsLoading] = useState(false);
+  const [savingAudience, setSavingAudience] = useState(false);
+  const [sendDispatch, setSendDispatch] = useState<CampaignDispatchProgress | null>(null);
+
+  useEffect(() => {
+    if (campaign?.status !== "sending") {
+      setSendDispatch(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      scaleApi
+        .getCampaignStats(campaignId)
+        .then(({ dispatch, campaign: row }) => {
+          if (cancelled) return;
+          setSendDispatch(dispatch);
+          setCampaign(row);
+        })
+        .catch(() => {});
+    };
+    load();
+    const timer = setInterval(load, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [campaign?.status, campaignId, setCampaign]);
+
+  const sendDomain = campaign?.domain ?? campaign?.audienceGroupDomain ?? null;
+
+  useEffect(() => {
+    if (!campaign) return;
+    const canPickAudience =
+      campaign.status === "draft" || campaign.status === "scheduled";
+    if (!canPickAudience || !sendDomain) return;
+    setAudienceGroupsLoading(true);
+    scaleAudienceApi
+      .listGroups()
+      .then(({ groups }) => setAudienceGroups(groups))
+      .catch(() => toast.error("Could not load audience groups"))
+      .finally(() => setAudienceGroupsLoading(false));
+  }, [campaign, sendDomain]);
+
+  const groupsForDomain = useMemo(() => {
+    const d = sendDomain?.toLowerCase();
+    if (!d) return [];
+    return audienceGroups.filter((g) => g.domain.toLowerCase() === d);
+  }, [audienceGroups, sendDomain]);
+
+  const audienceSelectItems = useMemo(
+    () =>
+      groupsForDomain.map((g) => ({
+        value: g.id,
+        label: `${g.name} · ${g.contactCount} contacts`,
+      })),
+    [groupsForDomain],
+  );
+
+  if (!campaign) return null;
+
+  const canChangeAudience =
+    campaign.status === "draft" || campaign.status === "scheduled";
+  const editable = canChangeAudience;
+  const recipientCount = campaign.audienceActiveCount;
+  const hasLinkedAudience = Boolean(campaign.audienceGroupId);
+  const canOpenSend =
+    editable &&
+    !sending &&
+    Boolean(campaign.subject.trim()) &&
+    hasLinkedAudience &&
+    recipientCount > 0;
+
+  async function loadDialogContacts(groupId: string) {
+    setDialogContactsLoading(true);
+    setDialogContacts([]);
+    try {
+      const detail = await scaleAudienceApi.getGroup(groupId);
+      setDialogContacts(detail.contacts);
+    } catch {
+      toast.error("Could not load audience contacts");
+      setAudienceContactsDialog(null);
+    } finally {
+      setDialogContactsLoading(false);
+    }
+  }
+
+  function openAudienceChangeConfirm(nextGroupId: string) {
+    if (nextGroupId === campaign!.audienceGroupId) return;
+    setAudienceContactsDialog({ mode: "confirm", groupId: nextGroupId });
+    void loadDialogContacts(nextGroupId);
+  }
+
+  function openAudienceView() {
+    const groupId = campaign!.audienceGroupId;
+    if (!groupId) return;
+    setAudienceContactsDialog({ mode: "view", groupId });
+    void loadDialogContacts(groupId);
+  }
+
+  function closeAudienceContactsDialog() {
+    if (savingAudience) return;
+    setAudienceContactsDialog(null);
+    setDialogContacts([]);
+  }
+
+  async function confirmAudienceChange() {
+    if (!audienceContactsDialog || audienceContactsDialog.mode !== "confirm") return;
+    setSavingAudience(true);
+    try {
+      const updated = await scaleApi.updateCampaign(campaignId, {
+        audienceGroupId: audienceContactsDialog.groupId,
+      });
+      setCampaign(updated);
+      await refreshAudience();
+      closeAudienceContactsDialog();
+      toast.success("Audience updated for this campaign");
+    } catch (err) {
+      toast.error(err instanceof ScaleApiError ? err.message : "Could not update audience");
+    } finally {
+      setSavingAudience(false);
+    }
+  }
+
+  const dialogGroupId = audienceContactsDialog?.groupId;
+  const dialogGroup =
+    dialogGroupId != null
+      ? (groupsForDomain.find((g) => g.id === dialogGroupId) ??
+        (campaign.audienceGroupId === dialogGroupId
+          ? {
+              id: dialogGroupId,
+              name: campaign.audienceGroupName ?? "Audience group",
+              domain: campaign.audienceGroupDomain ?? sendDomain ?? "",
+              contactCount: campaign.audienceContactCount ?? dialogContacts.length,
+              createdAt: "",
+            }
+          : undefined))
+      : undefined;
+
+  async function ensureSaved(): Promise<boolean> {
+    const saved = await persistDraft();
+    if (!saved) toast.error("Could not save campaign");
+    return saved;
+  }
+
+  async function prepareSendCredentials(): Promise<boolean> {
+    const domain = sendDomain?.trim();
+    if (!domain) {
+      toast.error("Select a sending domain on Settings before sending.");
+      return false;
+    }
+    try {
+      await syncScaleSendCredentials({ apiBase, sendingDomain: domain });
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not configure Scale send credentials");
+      return false;
+    }
+  }
+
+  async function handleConfirmSend() {
+    setSending(true);
+    try {
+      const saved = await ensureSaved();
+      if (!saved) return;
+      if (!(await prepareSendCredentials())) return;
+      const result = await scaleApi.sendCampaign(campaignId);
+      setCampaign(result.campaign);
+      setConfirmSendOpen(false);
+      if (result.async || result.campaign.status === "sending") {
+        toast.success("Campaign is sending — stats update as delivery progresses");
+        router.push(campaignDetailHref(campaignId, "stats"));
+      } else {
+        toast.success("Campaign sent — view stats for delivery details");
+        router.push(campaignDetailHref(campaignId, "stats"));
+      }
+    } catch (err) {
+      setConfirmSendOpen(false);
+      setBlockedError(err instanceof ScaleApiError ? err.message : "Send failed");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleTestSend() {
+    if (!testEmail.includes("@")) return;
+    try {
+      const saved = await ensureSaved();
+      if (!saved) return;
+      if (!(await prepareSendCredentials())) return;
+      await scaleApi.testSendCampaign(campaignId, testEmail);
+      toast.success(`Test email sent to ${testEmail}`);
+      setTestEmailOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Send failed: check Worker connection");
+    }
+  }
+
+  async function handleSchedule() {
+    if (!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()) return;
+    try {
+      const saved = await ensureSaved();
+      if (!saved) return;
+      if (!(await prepareSendCredentials())) return;
+      const updated = await scaleApi.scheduleCampaign(campaignId, new Date(scheduleAt).toISOString());
+      setCampaign(updated);
+      setScheduleOpen(false);
+      toast.success(`Campaign scheduled for ${formatWhen(updated.scheduledAt)}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not schedule");
+    }
+  }
+
+  async function handleCancelSchedule() {
+    try {
+      const updated = await scaleApi.cancelSchedule(campaignId);
+      setCampaign(updated);
+      toast.success("Schedule cancelled. Campaign reverted to draft.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Cannot cancel: Campaign dispatch has already begun.");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold">Publish</h2>
+        <p className="text-xs text-muted-foreground">
+          Send to active campaign audience members (late binding at send time).
+        </p>
+      </div>
+
+      {campaign.status === "sending" && sendDispatch ? (
+        <CampaignSendingProgressPanel
+          dispatch={sendDispatch}
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={campaignDetailHref(campaignId, "stats")} />}
+            >
+              Live stats
+            </Button>
+          }
+        />
+      ) : campaign.status === "sending" ? (
+        <div className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-800 dark:text-sky-300">
+          <Loader2 className="size-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" />
+          <span>
+            Sending to {recipientCount.toLocaleString()} recipient
+            {recipientCount === 1 ? "" : "s"}… loading queue status.
+          </span>
+        </div>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Audience</CardTitle>
+          <CardDescription>
+            {canChangeAudience
+              ? "Choose who receives this campaign. Only groups on the same sending domain are listed."
+              : "Linked audience at send time (unsubscribed and bounced excluded)."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {canChangeAudience ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="publish-audience">Audience group</Label>
+              {!sendDomain ? (
+                <p className="text-sm text-muted-foreground">
+                  Set a sending domain on Settings before choosing an audience.
+                </p>
+              ) : audienceGroupsLoading ? (
+                <p className="text-sm text-muted-foreground">Loading audience groups…</p>
+              ) : groupsForDomain.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No audience groups on {sendDomain} — create one in Audience first.
+                </p>
+              ) : (
+                <div className="flex max-w-lg flex-wrap items-center gap-2">
+                  <Select
+                    items={audienceSelectItems}
+                    value={campaign.audienceGroupId || null}
+                    onValueChange={(value) => {
+                      if (value) openAudienceChangeConfirm(value);
+                    }}
+                  >
+                    <SelectTrigger id="publish-audience" className="min-w-0 flex-1">
+                      <SelectValue placeholder="Select audience group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groupsForDomain.map((g) => {
+                        const label = `${g.name} · ${g.contactCount} contacts`;
+                        return (
+                          <SelectItem key={g.id} value={g.id} label={label}>
+                            {label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!hasLinkedAudience}
+                    onClick={() => openAudienceView()}
+                  >
+                    <Users className="size-4" />
+                    View contacts
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">
+                  {campaign.audienceGroupName ?? "Audience group"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {campaign.audienceGroupDomain ?? sendDomain ?? "—"}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {campaign.audienceGroupId ? (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openAudienceView()}
+                    >
+                      <Users className="size-4" />
+                      View contacts
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      nativeButton={false}
+                      render={
+                        <Link href={scaleAudienceDetailHref(campaign.audienceGroupId)} />
+                      }
+                    >
+                      <ExternalLink className="size-3.5" />
+                      Open in Audience
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+            <p className="text-sm font-medium tabular-nums">
+              {recipientCount.toLocaleString()} active recipient{recipientCount === 1 ? "" : "s"}
+            </p>
+            <CampaignStatusBadge
+              status={campaign.status}
+              listStatus={campaign.listStatus}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Send</CardTitle>
+          <CardDescription>
+            {campaign.status === "scheduled" && campaign.scheduledAt
+              ? `Scheduled for ${formatWhen(campaign.scheduledAt)}`
+              : campaign.status === "sending"
+                ? `Sending in progress since ${formatWhen(campaign.sentAt)}`
+                : campaign.status === "sent"
+                  ? `Sent ${formatWhen(campaign.sentAt)}`
+                  : "Save content first, then send or schedule from here."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          {editable ? (
+            <Button size="sm" variant="outline" onClick={() => setTestEmailOpen(true)}>
+              Send test
+            </Button>
+          ) : null}
+          {campaign.status === "scheduled" ? (
+            <Button size="sm" variant="outline" onClick={() => void handleCancelSchedule()}>
+              Cancel schedule
+            </Button>
+          ) : campaign.status === "sending" ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-sky-600 dark:text-sky-400">
+                Dispatch in progress…
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                nativeButton={false}
+                render={<Link href={campaignDetailHref(campaignId, "stats")} />}
+              >
+                View delivery progress
+              </Button>
+            </div>
+          ) : editable ? (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setScheduleOpen(true)}>
+                Schedule
+              </Button>
+              <Button size="sm" onClick={() => setConfirmSendOpen(true)} disabled={!canOpenSend}>
+                {sending ? "Sending…" : "Send Now"}
+              </Button>
+            </>
+          ) : null}
+          {editable && !campaign.subject.trim() ? (
+            <p className="w-full text-xs text-muted-foreground">
+              Add a subject on the Content tab before sending.
+            </p>
+          ) : null}
+          {editable && campaign.subject.trim() && !hasLinkedAudience ? (
+            <p className="w-full text-xs text-muted-foreground">
+              Select an audience group above before sending.
+            </p>
+          ) : null}
+          {editable && hasLinkedAudience && recipientCount === 0 ? (
+            <p className="w-full text-xs text-muted-foreground">
+              Linked audience has no active contacts — add subscribers in Audience or pick another
+              group.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      {campaign.status === "sent" || campaign.stats.sent > 0 ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="text-sm">Send summary</CardTitle>
+              <CardDescription>
+                {campaign.stats.delivered} delivered · {campaign.stats.opened} opened ·{" "}
+                {campaign.stats.clicked} clicked
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={campaignDetailHref(campaignId, "stats")} />}
+            >
+              Full stats
+            </Button>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      <Dialog
+        open={audienceContactsDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) closeAudienceContactsDialog();
+        }}
+      >
+        <DialogContent className="flex max-h-[min(90vh,640px)] flex-col sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {audienceContactsDialog?.mode === "confirm"
+                ? "Switch audience for this campaign?"
+                : dialogGroup
+                  ? `Contacts in “${dialogGroup.name}”`
+                  : "Audience contacts"}
+            </DialogTitle>
+            <DialogDescription>
+              {dialogGroup
+                ? audienceContactsDialog?.mode === "confirm"
+                  ? `Send to “${dialogGroup.name}” on ${dialogGroup.domain} — ${dialogGroup.contactCount.toLocaleString()} contacts in the group. Review the list before confirming.`
+                  : `${recipientCount.toLocaleString()} active recipient${recipientCount === 1 ? "" : "s"} at send time (unsubscribed excluded).`
+                : "Review contacts in this audience group."}
+            </DialogDescription>
+          </DialogHeader>
+          <AudienceContactsList contacts={dialogContacts} loading={dialogContactsLoading} />
+          <DialogFooter>
+            {audienceContactsDialog?.mode === "confirm" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={savingAudience}
+                  onClick={() => closeAudienceContactsDialog()}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={savingAudience || dialogContactsLoading}
+                  onClick={() => void confirmAudienceChange()}
+                >
+                  {savingAudience ? "Saving…" : "Use this audience"}
+                </Button>
+              </>
+            ) : (
+              <>
+                {dialogGroupId ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={<Link href={scaleAudienceDetailHref(dialogGroupId)} />}
+                  >
+                    Open in Audience
+                  </Button>
+                ) : null}
+                <Button size="sm" onClick={() => closeAudienceContactsDialog()}>
+                  Close
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send confirmation — UC-B4 */}
+      <Dialog open={confirmSendOpen} onOpenChange={setConfirmSendOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send &apos;{campaign.subject || "Untitled draft"}&apos; immediately?</DialogTitle>
+            <DialogDescription>
+              This will send to {recipientCount.toLocaleString()} active recipient
+              {recipientCount === 1 ? "" : "s"} in &apos;
+              {campaign.audienceGroupName ?? "the selected audience"}&apos;.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setConfirmSendOpen(false)} disabled={sending}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={() => void handleConfirmSend()} disabled={sending}>
+              {sending ? "Sending…" : "Confirm Send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Blocked send (0 subscribers, etc.) */}
+      <Dialog open={Boolean(blockedError)} onOpenChange={(open) => !open && setBlockedError(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cannot send campaign</DialogTitle>
+            <DialogDescription>{blockedError}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button size="sm" onClick={() => setBlockedError(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={testEmailOpen} onOpenChange={setTestEmailOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send test email</DialogTitle>
+          </DialogHeader>
+          <Input
+            type="email"
+            placeholder="you@example.com"
+            value={testEmail}
+            onChange={(e) => setTestEmail(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setTestEmailOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void handleTestSend()}
+              disabled={!testEmail.includes("@")}
+            >
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule send</DialogTitle>
+          </DialogHeader>
+          <Input
+            type="datetime-local"
+            value={scheduleAt}
+            onChange={(e) => setScheduleAt(e.target.value)}
+          />
+          {scheduleAt && new Date(scheduleAt).getTime() <= Date.now() ? (
+            <p className="text-xs text-destructive">Choose a time after now</p>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setScheduleOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void handleSchedule()}
+              disabled={!scheduleAt || new Date(scheduleAt).getTime() <= Date.now()}
+            >
+              Schedule Campaign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

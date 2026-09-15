@@ -1,29 +1,23 @@
 /**
- * Scale Development JSON File Store Types (`data/store.json`).
+ * Scale dev JSON store types (`data/store.json`).
  *
- * During active development, all state is stored in a structured JSON file.
- * Production D1 database schemas will be synthesized after the TypeScript
- * models and workflows stabilize (docs/features/crm-audience-broadcast-model.md).
+ * Layout — HTML frame · Template — message copy · Trigger — event send · Campaign — audience send.
  */
 
 // ============================================================================
-// Core Tenant & Settings
+// Core tenant & settings
 // ============================================================================
 
-/** CAN-SPAM / marketing disclosure defaults merged into broadcast footers. */
 export type AccountComplianceSettings = {
   organizationName: string | null;
-  /** Physical postal address (required for US commercial email). */
   postalAddress: string | null;
   contactEmail: string | null;
   updatedAt: string;
 };
 
-/** Reusable sender disclosure block — shared across broadcasts and edited in one place. */
 export type ComplianceIdentity = {
   id: string;
   accountLinkId: string;
-  /** Short label in pickers (e.g. "Acme US", "EU entity"). */
   name: string;
   organizationName: string | null;
   postalAddress: string | null;
@@ -36,83 +30,113 @@ export type AccountLink = {
   id: string;
   workerUrl: string | null;
   domain: string | null;
-  /**
-   * Domain-scoped Worker API key for `POST /v1/send` (dev JSON store only).
-   * Production: encrypted at rest; never returned from GET account-link.
-   */
   sendApiKey?: string | null;
-  /** @deprecated Mirror of default identity — use `complianceIdentities` + `defaultComplianceIdentityId`. */
   compliance: AccountComplianceSettings;
-  /** Default footer identity for new broadcasts when `broadcast.complianceIdentityId` is unset. */
   defaultComplianceIdentityId: string | null;
   createdAt: string;
 };
 
 // ============================================================================
-// 1. Broadcasts (Audience scope + email send)
+// Layouts (HTML email frame)
 // ============================================================================
 
-export type BroadcastListStatus = "active" | "archived";
-
-export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
-
-export type BroadcastStats = {
-  /** Messages handed off to the mail pipeline (success + hard failures at SMTP). */
-  sent: number;
-  delivered: number;
-  bounced: number;
-  failed: number;
-  /** Recipients skipped at dispatch (inactive / suppressed). */
-  skipped: number;
-  /** Unique recipients who filed a spam complaint. */
-  complained: number;
-  /** Unique recipients who opened at least once. */
-  opened: number;
-  totalOpens: number;
-  /** Unique recipients who clicked at least once. */
-  clicked: number;
-  totalClicks: number;
-  unsubscribed: number;
+export type LayoutVariableField = {
+  key: string;
+  type: "text" | "image";
+  label: string;
+  description?: string;
+  required?: boolean;
+  defaultFrom?: "compliance.organizationName";
 };
 
-export type Broadcast = {
+export type LayoutVariablesSchema = {
+  fields: LayoutVariableField[];
+};
+
+export type Layout = {
+  id: string;
+  accountLinkId: string | null;
+  name: string;
+  htmlSource: string;
+  variablesSchema?: LayoutVariablesSchema | null;
+  isBuiltin: boolean;
+  derivedFromLayoutId?: string | null;
+  createdAt: string;
+};
+
+// ============================================================================
+// Templates (reusable message content)
+// ============================================================================
+
+export type TemplateCategory =
+  | "transactional"
+  | "conversational"
+  | "marketing"
+  | "newsletter";
+
+export type Template = {
   id: string;
   accountLinkId: string;
   name: string;
-  slug: string;
-  description?: string | null;
-  /** Linked audience group — send targets are resolved from group contacts at dispatch. */
-  audienceGroupId: string;
-  /** Console-managed sending domain (must match linked audience group). */
-  domain: string;
-  fromName?: string | null;
-  fromEmail?: string | null;
-  replyTo?: string | null;
-  defaultTemplateId?: string | null;
-  /** Footer / CAN-SPAM disclosure; falls back to account default when null. */
-  complianceIdentityId?: string | null;
-  listStatus: BroadcastListStatus;
   subject: string;
   previewText?: string | null;
   bodyMarkdown: string;
-  templateId?: string | null;
-  /** Values for `{{vars.*}}` placeholders defined on the selected template. */
+  layoutId?: string | null;
   templateVariables?: Record<string, string>;
-  status: BroadcastStatus;
-  scheduledAt?: string | null;
-  /** Dispatch start time (set when status becomes `sending`). */
-  sentAt?: string | null;
-  startedAt?: string | null;
-  /** When status became `sent` or `failed`. */
-  finishedAt?: string | null;
-  targetFilter?: Record<string, unknown>;
-  stats: BroadcastStats;
+  category?: TemplateCategory;
+  isPreset?: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
 // ============================================================================
-// 2. Recipients (Send-Time Immutable Queue & Engagement Ledger)
+// Campaigns (audience batch send)
+// ============================================================================
+
+export type CampaignListStatus = "active" | "archived";
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+
+export type CampaignStats = {
+  sent: number;
+  delivered: number;
+  bounced: number;
+  failed: number;
+  skipped: number;
+  complained: number;
+  opened: number;
+  totalOpens: number;
+  clicked: number;
+  totalClicks: number;
+  unsubscribed: number;
+};
+
+export type Campaign = {
+  id: string;
+  accountLinkId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  audienceGroupId: string;
+  domain: string;
+  fromName?: string | null;
+  fromEmail?: string | null;
+  replyTo?: string | null;
+  templateId: string;
+  complianceIdentityId?: string | null;
+  listStatus: CampaignListStatus;
+  status: CampaignStatus;
+  scheduledAt?: string | null;
+  sentAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  targetFilter?: Record<string, unknown>;
+  stats: CampaignStats;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ============================================================================
+// Recipients
 // ============================================================================
 
 export type RecipientStatus =
@@ -125,7 +149,7 @@ export type RecipientStatus =
 
 export type Recipient = {
   id: string;
-  broadcastId: string;
+  campaignId: string;
   audienceMemberId: string;
   email: string;
   name?: string | null;
@@ -143,7 +167,7 @@ export type Recipient = {
 };
 
 // ============================================================================
-// 5. Account Suppression (Global Opt-Outs & Hard Bounces)
+// Suppressions
 // ============================================================================
 
 export type AccountSuppressionReason =
@@ -157,14 +181,13 @@ export type AccountSuppression = {
   accountLinkId: string;
   email: string;
   reason: AccountSuppressionReason;
-  /** null = account-wide; set = only this audience group. */
   audienceGroupId: string | null;
-  sourceBroadcastId?: string | null;
+  sourceCampaignId?: string | null;
   createdAt: string;
 };
 
 // ============================================================================
-// 6. Shared Scale & System Support Types
+// Shared
 // ============================================================================
 
 export type PipelineCard = {
@@ -184,35 +207,10 @@ export type Activity = {
   occurredAt: string;
 };
 
-export type TemplateVariableField = {
-  key: string;
-  type: "text" | "image";
-  label: string;
-  description?: string;
-  required?: boolean;
-  defaultFrom?: "compliance.organizationName";
-};
-
-export type TemplateVariablesSchema = {
-  fields: TemplateVariableField[];
-};
-
-export type Template = {
-  id: string;
-  accountLinkId: string | null;
-  name: string;
-  htmlSource: string;
-  variablesSchema?: TemplateVariablesSchema | null;
-  isBuiltin: boolean;
-  /** When set, layout thumbnail follows the forked built-in (e.g. header). */
-  derivedFromTemplateId?: string | null;
-  createdAt: string;
-};
-
 export type ScheduledJob = {
   id: string;
   accountLinkId: string;
-  kind: "broadcast" | "sync" | string;
+  kind: "campaign" | "sync" | string;
   refId: string;
   runAt: string;
   status: "pending" | "done" | "failed" | string;
@@ -229,7 +227,7 @@ export type TrackingEventType =
 
 export type TrackingEvent = {
   id: string;
-  broadcastId: string;
+  campaignId: string;
   recipientId: string;
   memberEmail: string;
   type: TrackingEventType;
@@ -238,10 +236,10 @@ export type TrackingEvent = {
   occurredAt: string;
 };
 
-export type BroadcastAsset = {
+export type CampaignAsset = {
   id: string;
   key: string;
-  broadcastId: string;
+  campaignId: string;
   filename: string;
   mimeType: string;
   contentBase64: string;
@@ -249,19 +247,18 @@ export type BroadcastAsset = {
 };
 
 // ============================================================================
-// 3. Automations (Event-triggered 1:1 email — separate from broadcast sends)
+// Triggers (event-driven 1:1 send)
 // ============================================================================
 
-export type AutomationListStatus = "active" | "archived";
-export type AutomationStatus = "draft" | "active" | "paused";
-export type AutomationPurpose = "transactional" | "conversational" | "marketing";
+export type TriggerListStatus = "active" | "archived";
+export type TriggerStatus = "draft" | "active" | "paused";
+export type TriggerPurpose = "transactional" | "conversational" | "marketing";
 
-export type InternalAutomationEvent = "account.verify_email" | "account.created";
+export type InternalTriggerEvent = "account.verify_email" | "account.created";
 
-export type AutomationTrigger =
+export type TriggerSource =
   | {
       type: "http_webhook";
-      /** Bearer token for POST /scale/hooks/automation/:automationId */
       secret: string;
       emailPath: string;
       namePath?: string | null;
@@ -270,7 +267,6 @@ export type AutomationTrigger =
   | {
       type: "mailbox_inbound";
       domain: string;
-      /** Address local-part or `*` for catch-all on domain. */
       localPart: string;
       replyToSender: boolean;
       match?: {
@@ -280,18 +276,17 @@ export type AutomationTrigger =
     }
   | {
       type: "internal_event";
-      event: InternalAutomationEvent;
+      event: InternalTriggerEvent;
     }
   | {
       type: "form_submit";
-      /** Public key in POST /scale/hooks/form/:formKey */
       formKey: string;
       emailPath: string;
       namePath?: string | null;
       requiredFields?: string[];
     };
 
-export type AutomationSendStats = {
+export type TriggerSendStats = {
   sent: number;
   delivered: number;
   bounced: number;
@@ -305,13 +300,13 @@ export type AutomationSendStats = {
   unsubscribed: number;
 };
 
-export type AutomationStats = AutomationSendStats & {
+export type TriggerStats = TriggerSendStats & {
   triggered: number;
   matched: number;
   deduped: number;
 };
 
-export type Automation = {
+export type Trigger = {
   id: string;
   accountLinkId: string;
   name: string;
@@ -322,20 +317,15 @@ export type Automation = {
   fromEmail?: string | null;
   replyTo?: string | null;
   complianceIdentityId?: string | null;
-  purpose: AutomationPurpose;
-  listStatus: AutomationListStatus;
-  status: AutomationStatus;
-  trigger: AutomationTrigger;
-  /** Optional: upsert contact on send (conversational / marketing). */
+  purpose: TriggerPurpose;
+  listStatus: TriggerListStatus;
+  status: TriggerStatus;
+  source: TriggerSource;
   audienceGroupId?: string | null;
   cooldownSeconds: number;
   applyMarketingSuppression: boolean;
-  subject: string;
-  previewText?: string | null;
-  bodyMarkdown: string;
-  templateId?: string | null;
-  templateVariables?: Record<string, string>;
-  stats: AutomationStats;
+  templateId: string;
+  stats: TriggerStats;
   lastTriggeredAt?: string | null;
   lastSentAt?: string | null;
   createdAt: string;
@@ -363,8 +353,8 @@ export type TriggerEventSkipReason =
 export type TriggerEvent = {
   id: string;
   accountLinkId: string;
-  automationId: string | null;
-  triggerType: AutomationTrigger["type"];
+  triggerId: string | null;
+  triggerType: TriggerSource["type"];
   idempotencyKey: string;
   recipientEmail: string;
   recipientName?: string | null;
@@ -374,7 +364,7 @@ export type TriggerEvent = {
   occurredAt: string;
 };
 
-export type AutomationSendStatus =
+export type TriggerSendStatus =
   | "queued"
   | "sending"
   | "delivered"
@@ -382,14 +372,14 @@ export type AutomationSendStatus =
   | "skipped"
   | "failed";
 
-export type AutomationSend = {
+export type TriggerSend = {
   id: string;
-  automationId: string;
+  triggerId: string;
   triggerEventId: string;
   audienceMemberId?: string | null;
   email: string;
   name?: string | null;
-  status: AutomationSendStatus;
+  status: TriggerSendStatus;
   errorMessage?: string | null;
   bounceReason?: string | null;
   sentAt?: string | null;
@@ -402,8 +392,7 @@ export type AutomationSend = {
   createdAt: string;
 };
 
-/** Engagement ledger for automation sends — not mixed with broadcast trackingEvents. */
-export type AutomationTrackingEventType =
+export type TriggerTrackingEventType =
   | "delivered"
   | "open"
   | "click"
@@ -411,21 +400,31 @@ export type AutomationTrackingEventType =
   | "unsubscribe"
   | "complaint";
 
-export type AutomationTrackingEvent = {
+export type TriggerTrackingEvent = {
   id: string;
-  automationId: string;
-  automationSendId: string;
+  triggerId: string;
+  triggerSendId: string;
   memberEmail: string;
-  type: AutomationTrackingEventType;
+  type: TriggerTrackingEventType;
   url?: string | null;
   reason?: string | null;
   occurredAt: string;
 };
 
-export type AutomationAsset = {
+export type TriggerAsset = {
   id: string;
   key: string;
-  automationId: string;
+  triggerId: string;
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+  createdAt: string;
+};
+
+export type MessageTemplateAsset = {
+  id: string;
+  key: string;
+  templateId: string;
   filename: string;
   mimeType: string;
   contentBase64: string;
@@ -433,7 +432,7 @@ export type AutomationAsset = {
 };
 
 // ============================================================================
-// Audience Groups (Account-wide contact pools)
+// Audience
 // ============================================================================
 
 export type AudienceDataSource = {
@@ -470,9 +469,7 @@ export type AudienceMember = {
   unsubscribedAt: string | null;
   bouncedAt?: string | null;
   bounceReason?: string | null;
-  /** Per-contact token for list-scoped unsubscribe links. */
   unsubscribeToken: string;
-  /** When/how the contact became mailable (audit; not legal proof alone). */
   consentSource: "manual" | "synced" | null;
   consentedAt: string | null;
 };
@@ -495,26 +492,24 @@ export type AudienceGroup = {
   contacts: AudienceMember[];
 };
 
-// ============================================================================
-// Root Dev JSON Data Store (`data/store.json`)
-// ============================================================================
-
 export type ScaleDataStore = {
   account: AccountLink;
   complianceIdentities: ComplianceIdentity[];
-  broadcasts: Broadcast[];
+  layouts: Layout[];
+  templates: Template[];
+  campaigns: Campaign[];
   recipients: Recipient[];
-  automations: Automation[];
+  triggers: Trigger[];
   triggerEvents: TriggerEvent[];
-  automationSends: AutomationSend[];
-  automationTrackingEvents: AutomationTrackingEvent[];
+  triggerSends: TriggerSend[];
+  triggerTrackingEvents: TriggerTrackingEvent[];
   accountSuppressions: AccountSuppression[];
   pipelineCards: PipelineCard[];
   activities: Activity[];
-  templates: Template[];
   scheduledJobs: ScheduledJob[];
   trackingEvents: TrackingEvent[];
-  broadcastAssets: BroadcastAsset[];
-  automationAssets: AutomationAsset[];
+  campaignAssets: CampaignAsset[];
+  triggerAssets: TriggerAsset[];
+  templateAssets: MessageTemplateAsset[];
   audienceGroups: AudienceGroup[];
 };

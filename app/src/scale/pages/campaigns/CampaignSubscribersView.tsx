@@ -9,17 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { scaleAudienceDetailHref, useScalePaths } from "@/scale/lib/paths";
-import { useBroadcastDetail } from "@/scale/pages/campaigns/CampaignDetailContext";
-import { scaleApi, type BroadcastMemberStatus } from "@/lib/scale/api";
+import { useCampaignDetail } from "@/scale/pages/campaigns/CampaignDetailContext";
+import { scaleApi, type CampaignMemberStatus } from "@/lib/scale/api";
 import { cn } from "@/lib/utils";
 
-const STATUS_STYLE: Record<BroadcastMemberStatus, string> = {
+const STATUS_STYLE: Record<CampaignMemberStatus, string> = {
   active: "border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   unsubscribed: "border-border bg-muted text-muted-foreground",
   bounced: "border-destructive/30 bg-destructive/10 text-destructive",
 };
 
-function StatusBadge({ status }: { status: BroadcastMemberStatus }) {
+function StatusBadge({ status }: { status: CampaignMemberStatus }) {
   return (
     <Badge variant="outline" className={cn("text-[10px] capitalize", STATUS_STYLE[status])}>
       {status === "active" ? "subscribed" : status}
@@ -27,17 +27,17 @@ function StatusBadge({ status }: { status: BroadcastMemberStatus }) {
   );
 }
 
-export function BroadcastRecipientsView() {
-  const { broadcastId, broadcast, audienceMembers, refreshAudience, refresh } = useBroadcastDetail();
+export function CampaignSubscribersView() {
+  const { campaignId, campaign, audienceMembers, refreshAudience, refresh } = useCampaignDetail();
   const { audience: audienceHref } = useScalePaths();
   const [syncing, setSyncing] = useState(false);
 
-  if (!broadcast) return null;
+  if (!campaign) return null;
 
   async function handleSync() {
     setSyncing(true);
     try {
-      const result = await scaleApi.syncBroadcastAudience(broadcastId);
+      const result = await scaleApi.syncCampaignAudience(campaignId);
       toast.success(
         `Recipients refreshed: ${result.contactCount ?? 0} contacts (${result.activeCount ?? 0} active)`,
       );
@@ -50,8 +50,8 @@ export function BroadcastRecipientsView() {
   }
 
   const activeCount = audienceMembers.filter((m) => m.status === "active").length;
-  const groupId = broadcast.audienceGroupId;
-  const groupLabel = broadcast.audienceGroupName ?? "Audience group";
+  const groupId = campaign.audienceGroupId;
+  const groupLabel = campaign.audienceGroupName ?? "Audience group";
 
   return (
     <div className="space-y-4">
@@ -68,9 +68,9 @@ export function BroadcastRecipientsView() {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{groupLabel}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {broadcast.audienceGroupDomain ?? "—"}
-                {broadcast.audienceContactCount != null
-                  ? ` · ${broadcast.audienceContactCount.toLocaleString()} contacts`
+                {campaign.audienceGroupDomain ?? "—"}
+                {campaign.audienceContactCount != null
+                  ? ` · ${campaign.audienceContactCount.toLocaleString()} contacts`
                   : null}
               </p>
             </div>
@@ -141,9 +141,3 @@ export function BroadcastRecipientsView() {
     </div>
   );
 }
-
-/** @deprecated use BroadcastRecipientsView */
-export const BroadcastAudienceView = BroadcastRecipientsView;
-
-/** @deprecated use BroadcastRecipientsView */
-export const CampaignSubscribersView = BroadcastRecipientsView;

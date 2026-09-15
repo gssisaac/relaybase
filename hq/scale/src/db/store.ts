@@ -1,13 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcasts/stats";
-import { normalizeAutomationStats } from "../lib/automations/stats";
+import { emptyCampaignStats, normalizeCampaignStats } from "../lib/campaigns/stats";
+import { normalizeTriggerStats } from "../lib/triggers/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
-import { ensureDevScheduleFixtures } from "../lib/broadcasts/dev-schedule-fixtures";
+import { ensureDevScheduleFixtures } from "../lib/campaigns/dev-schedule-fixtures";
+import { getPresetMessageTemplates } from "../lib/messages/preset-templates";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
-import type { AccountComplianceSettings, Broadcast, BroadcastAsset, ScaleDataStore, Recipient } from "./types";
+import type { AccountComplianceSettings, ScaleDataStore } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
@@ -18,15 +19,6 @@ const DATA_DIR =
   path.join(process.cwd(), "data");
 
 const STORE_FILE = path.join(DATA_DIR, "store.json");
-
-function slugify(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
 
 function defaultCompliance(now: string): AccountComplianceSettings {
   return {
@@ -62,16 +54,7 @@ function defaultStore(): ScaleDataStore {
         updatedAt: now,
       },
     ],
-    broadcasts: [],
-    recipients: [],
-    automations: [],
-    triggerEvents: [],
-    automationSends: [],
-    automationTrackingEvents: [],
-    accountSuppressions: [],
-    pipelineCards: [],
-    activities: [],
-    templates: getBuiltinTemplates().map((tpl) => ({
+    layouts: getBuiltinTemplates().map((tpl) => ({
       id: tpl.id,
       accountLinkId: null,
       name: tpl.name,
@@ -80,208 +63,23 @@ function defaultStore(): ScaleDataStore {
       isBuiltin: true,
       createdAt: now,
     })),
+    templates: [],
+    campaigns: [],
+    recipients: [],
+    triggers: [],
+    triggerEvents: [],
+    triggerSends: [],
+    triggerTrackingEvents: [],
+    accountSuppressions: [],
+    pipelineCards: [],
+    activities: [],
     scheduledJobs: [],
     trackingEvents: [],
-    broadcastAssets: [],
-    automationAssets: [],
+    campaignAssets: [],
+    triggerAssets: [],
+    templateAssets: [],
     audienceGroups: [],
   };
-}
-
-type LegacyBroadcastMember = {
-  id?: string;
-  audienceMemberId?: string | null;
-  email?: string;
-  unsubscribeToken?: string;
-  status?: string;
-  unsubscribedAt?: string | null;
-  bouncedAt?: string | null;
-  bounceReason?: string | null;
-  broadcastId?: string;
-};
-
-/** One-time migration from campaign + nested broadcast + subscriber model. */
-function migrateLegacyStore(raw: Record<string, unknown>): ScaleDataStore {
-  const parsed = raw as ScaleDataStore & {
-    campaigns?: Array<Record<string, unknown>>;
-    subscribers?: Array<Record<string, unknown>>;
-    campaignAssets?: Array<Record<string, unknown>>;
-    broadcasts?: Array<Record<string, unknown>>;
-    broadcastMembers?: LegacyBroadcastMember[];
-  };
-
-  if (!parsed.broadcastAssets) parsed.broadcastAssets = [];
-  if (!parsed.automations) parsed.automations = [];
-  if (!parsed.triggerEvents) parsed.triggerEvents = [];
-  if (!parsed.automationSends) parsed.automationSends = [];
-  if (!parsed.automationTrackingEvents) parsed.automationTrackingEvents = [];
-  if (!parsed.automationAssets) parsed.automationAssets = [];
-  if (!parsed.broadcasts) parsed.broadcasts = [];
-
-  const legacyCampaigns = parsed.campaigns ?? [];
-  const legacySubs = parsed.subscribers ?? [];
-  const legacyBroadcasts = (parsed.broadcasts ?? []) as Array<Record<string, unknown>>;
-
-  if (legacyCampaigns.length > 0 || legacySubs.length > 0) {
-    const nextBroadcasts: Broadcast[] = [];
-
-    for (const campaign of legacyCampaigns) {
-      const campaignId = String(campaign.id ?? "");
-      const sends = legacyBroadcasts.filter((b) => b.campaignId === campaignId);
-
-      const targets =
-        sends.length > 0
-          ? sends
-          : [
-              {
-                id: campaignId,
-                campaignId,
-                subject: "",
-                previewText: null,
-                bodyMarkdown: "",
-                templateId: campaign.defaultTemplateId ?? null,
-                status: "draft",
-                scheduledAt: null,
-                sentAt: null,
-                stats: emptyBroadcastStats(),
-                createdAt: campaign.createdAt,
-                updatedAt: campaign.updatedAt,
-              },
-            ];
-
-      for (const send of targets) {
-        const broadcastId = String(send.id ?? newId("broadcast"));
-        const name =
-          String(campaign.name ?? "").trim() ||
-          String(send.subject ?? "").trim() ||
-          "Untitled broadcast";
-        const slugBase = slugify(String(campaign.slug ?? name)) || broadcastId.slice(0, 12);
-
-        nextBroadcasts.push({
-          id: broadcastId,
-          accountLinkId: String(campaign.accountLinkId ?? DEV_ACCOUNT_LINK_ID),
-          name,
-          slug: slugBase,
-          description: (campaign.description as string | null | undefined) ?? null,
-          audienceGroupId: String(campaign.audienceGroupId ?? ""),
-          domain: "",
-          fromName: (campaign.fromName as string | null | undefined) ?? null,
-          fromEmail: (campaign.fromEmail as string | null | undefined) ?? null,
-          replyTo: (campaign.replyTo as string | null | undefined) ?? null,
-          defaultTemplateId: (campaign.defaultTemplateId as string | null | undefined) ?? null,
-          listStatus: campaign.status === "archived" ? "archived" : "active",
-          subject: String(send.subject ?? ""),
-          previewText: (send.previewText as string | null | undefined) ?? null,
-          bodyMarkdown: String(send.bodyMarkdown ?? ""),
-          templateId: (send.templateId as string | null | undefined) ?? null,
-          status: (send.status as Broadcast["status"]) ?? "draft",
-          scheduledAt: (send.scheduledAt as string | null | undefined) ?? null,
-          sentAt: (send.sentAt as string | null | undefined) ?? null,
-          targetFilter: send.targetFilter as Record<string, unknown> | undefined,
-          stats: normalizeBroadcastStats(send.stats as Broadcast["stats"]),
-          createdAt: String(send.createdAt ?? campaign.createdAt ?? new Date().toISOString()),
-          updatedAt: String(send.updatedAt ?? campaign.updatedAt ?? new Date().toISOString()),
-        });
-      }
-    }
-
-    parsed.broadcasts = nextBroadcasts;
-    delete parsed.campaigns;
-    delete parsed.subscribers;
-  }
-
-  const audienceGroupsForMigrate = (parsed.audienceGroups ?? []) as Array<{
-    id: string;
-    domain?: string;
-  }>;
-
-  for (const row of parsed.broadcasts as Array<Record<string, unknown>>) {
-    if (row.campaignId && !row.audienceGroupId) {
-      row.audienceGroupId = "";
-    }
-    if (!row.name) row.name = String(row.subject ?? "Untitled broadcast");
-    if (!row.slug) row.slug = slugify(String(row.name)) || String(row.id).slice(0, 12);
-    if (!row.listStatus) row.listStatus = "active";
-    if (!row.domain && row.audienceGroupId) {
-      const group = audienceGroupsForMigrate.find((g) => g.id === row.audienceGroupId);
-      if (group?.domain) row.domain = group.domain;
-    }
-    if (!row.domain) row.domain = "";
-    row.stats = normalizeBroadcastStats(row.stats as Broadcast["stats"]);
-    delete row.campaignId;
-  }
-
-  for (const row of (parsed.recipients ?? []) as Array<Record<string, unknown>>) {
-    if (!row.audienceMemberId && row.broadcastMemberId) {
-      /* filled from broadcastMembers migration below */
-    }
-    if (row.subscriberId && !row.audienceMemberId) {
-      row.audienceMemberId = row.subscriberId;
-    }
-    if (row.status === "sent") row.status = "delivered";
-    delete row.subscriberId;
-    delete row.broadcastMemberId;
-    delete row.campaignId;
-  }
-
-  if (parsed.campaignAssets?.length) {
-    parsed.broadcastAssets = parsed.campaignAssets.map((a) => ({
-      id: String(a.id ?? newId("asset")),
-      key: String(a.key ?? "").replace(/^[^/]+\//, (m) => m),
-      broadcastId: String(a.campaignId ?? a.broadcastId ?? ""),
-      filename: String(a.filename ?? ""),
-      mimeType: String(a.mimeType ?? "application/octet-stream"),
-      contentBase64: String(a.contentBase64 ?? ""),
-      createdAt: String(a.createdAt ?? new Date().toISOString()),
-    })) as BroadcastAsset[];
-    delete parsed.campaignAssets;
-  }
-
-  const legacyMembers = parsed.broadcastMembers ?? [];
-  if (legacyMembers.length > 0 && parsed.audienceGroups) {
-    const tokenByContactId = new Map<string, string>();
-    for (const bm of legacyMembers) {
-      const contactId = bm.audienceMemberId;
-      if (contactId && bm.unsubscribeToken) {
-        tokenByContactId.set(contactId, bm.unsubscribeToken);
-      }
-    }
-
-    for (const group of parsed.audienceGroups) {
-      for (const contact of group.contacts) {
-        const fromMember = legacyMembers.find((bm) => bm.audienceMemberId === contact.id);
-        if (fromMember?.unsubscribeToken) {
-          contact.unsubscribeToken = fromMember.unsubscribeToken;
-        } else if (!contact.unsubscribeToken) {
-          contact.unsubscribeToken = newToken();
-        }
-        if (fromMember?.status === "unsubscribed" || fromMember?.status === "subscribed") {
-          const st = fromMember.status === "unsubscribed" ? "unsubscribed" : "active";
-          contact.sendStatus = st;
-          contact.unsubscribedAt = fromMember.unsubscribedAt ?? contact.unsubscribedAt ?? null;
-        }
-        if (fromMember?.status === "bounced") {
-          contact.sendStatus = "bounced";
-          contact.bouncedAt = fromMember.bouncedAt ?? null;
-          contact.bounceReason = fromMember.bounceReason ?? null;
-        }
-        if (!tokenByContactId.has(contact.id) && contact.unsubscribeToken) {
-          tokenByContactId.set(contact.id, contact.unsubscribeToken);
-        }
-      }
-    }
-
-    for (const row of (parsed.recipients ?? []) as Array<Record<string, unknown>>) {
-      if (!row.audienceMemberId && row.broadcastMemberId) {
-        const bm = legacyMembers.find((m) => m.id === row.broadcastMemberId);
-        if (bm?.audienceMemberId) row.audienceMemberId = bm.audienceMemberId;
-      }
-    }
-  }
-
-  delete parsed.broadcastMembers;
-
-  return parsed as ScaleDataStore;
 }
 
 function normalizeStore(store: ScaleDataStore): ScaleDataStore {
@@ -301,20 +99,42 @@ function normalizeStore(store: ScaleDataStore): ScaleDataStore {
     store.account.sendApiKey = null;
   }
 
-  for (const row of store.accountSuppressions) {
-    if (row.audienceGroupId === undefined) row.audienceGroupId = null;
-    if (row.sourceBroadcastId === undefined) row.sourceBroadcastId = null;
+  if (!store.layouts) store.layouts = [];
+  if (!store.templates) store.templates = [];
+  if (!store.campaigns) store.campaigns = [];
+  if (!store.triggers) store.triggers = [];
+  if (!store.triggerEvents) store.triggerEvents = [];
+  if (!store.triggerSends) store.triggerSends = [];
+  if (!store.triggerTrackingEvents) store.triggerTrackingEvents = [];
+  if (!store.campaignAssets) store.campaignAssets = [];
+  if (!store.triggerAssets) store.triggerAssets = [];
+  if (!store.templateAssets) store.templateAssets = [];
+
+  if (store.templates.length === 0) {
+    for (const preset of getPresetMessageTemplates(now)) {
+      store.templates.push(preset);
+    }
   }
 
-  for (const row of store.broadcasts) {
+  for (const job of store.scheduledJobs) {
+    if (job.kind === "broadcast") job.kind = "campaign";
+  }
+
+  for (const row of store.accountSuppressions) {
+    if (row.audienceGroupId === undefined) row.audienceGroupId = null;
+    if (row.sourceCampaignId === undefined) row.sourceCampaignId = null;
+  }
+
+  for (const row of store.campaigns) {
     if (!row.audienceGroupId) row.audienceGroupId = "";
     if (!row.domain) {
       const group = store.audienceGroups.find((g) => g.id === row.audienceGroupId);
       row.domain = group?.domain ?? "";
     }
-    row.stats = normalizeBroadcastStats(row.stats);
+    row.stats = normalizeCampaignStats(row.stats);
     if (row.startedAt === undefined) {
-      row.startedAt = row.status === "draft" || row.status === "scheduled" ? null : (row.sentAt ?? null);
+      row.startedAt =
+        row.status === "draft" || row.status === "scheduled" ? null : (row.sentAt ?? null);
     }
     if (row.finishedAt === undefined) {
       row.finishedAt =
@@ -352,7 +172,7 @@ function normalizeStore(store: ScaleDataStore): ScaleDataStore {
             email,
             reason: "unsubscribe",
             audienceGroupId: row.id,
-            sourceBroadcastId: null,
+            sourceCampaignId: null,
             createdAt: contact.unsubscribedAt ?? now,
           });
         }
@@ -360,42 +180,38 @@ function normalizeStore(store: ScaleDataStore): ScaleDataStore {
     }
   }
 
-  const legacyHeader = store.templates.find((t) => t.id === "tpl-header-image");
-  const modernHeader = store.templates.find((t) => t.id === "tpl-header");
+  const legacyHeader = store.layouts.find((t) => t.id === "tpl-header-image");
+  const modernHeader = store.layouts.find((t) => t.id === "tpl-header");
   if (legacyHeader && !modernHeader) {
     legacyHeader.id = "tpl-header";
     legacyHeader.isBuiltin = true;
   }
-  for (const b of store.broadcasts) {
-    if (b.templateId === "tpl-header-image") b.templateId = "tpl-header";
-    if (b.defaultTemplateId === "tpl-header-image") b.defaultTemplateId = "tpl-header";
+
+  for (const tpl of store.templates) {
+    if (tpl.layoutId === "tpl-header-image") tpl.layoutId = "tpl-header";
   }
 
-  for (const tpl of getBuiltinTemplates()) {
-    const existing = store.templates.find((t) => t.id === tpl.id);
+  for (const builtin of getBuiltinTemplates()) {
+    const existing = store.layouts.find((t) => t.id === builtin.id);
     if (existing?.isBuiltin) {
-      existing.name = tpl.name;
-      existing.htmlSource = tpl.htmlSource;
-      existing.variablesSchema = tpl.variablesSchema ?? null;
+      existing.name = builtin.name;
+      existing.htmlSource = builtin.htmlSource;
+      existing.variablesSchema = builtin.variablesSchema ?? null;
       continue;
     }
     if (existing) continue;
-    store.templates.push({
-      id: tpl.id,
+    store.layouts.push({
+      id: builtin.id,
       accountLinkId: null,
-      name: tpl.name,
-      htmlSource: tpl.htmlSource,
-      variablesSchema: tpl.variablesSchema ?? null,
+      name: builtin.name,
+      htmlSource: builtin.htmlSource,
+      variablesSchema: builtin.variablesSchema ?? null,
       isBuiltin: true,
       createdAt: now,
     });
   }
 
   for (const row of store.recipients) {
-    const legacy = row as Recipient & { broadcastMemberId?: string };
-    if (!row.audienceMemberId && legacy.broadcastMemberId) {
-      row.audienceMemberId = legacy.broadcastMemberId;
-    }
     if ((row.status as string) === "sent") row.status = "delivered";
     if (row.bounceReason === undefined) row.bounceReason = null;
     if (row.deliveredAt === undefined) {
@@ -404,25 +220,18 @@ function normalizeStore(store: ScaleDataStore): ScaleDataStore {
     if (row.unsubscribedAt === undefined) row.unsubscribedAt = null;
   }
 
-  if (!store.automations) store.automations = [];
-  if (!store.triggerEvents) store.triggerEvents = [];
-  if (!store.automationSends) store.automationSends = [];
-  if (!store.automationTrackingEvents) store.automationTrackingEvents = [];
-  if (!store.automationAssets) store.automationAssets = [];
-
-  for (const row of store.automations) {
+  for (const row of store.triggers) {
     if (row.cooldownSeconds === undefined) row.cooldownSeconds = 86_400;
     if (row.applyMarketingSuppression === undefined) {
       row.applyMarketingSuppression = row.purpose !== "transactional";
     }
     if (row.audienceGroupId === undefined) row.audienceGroupId = null;
-    if (row.templateVariables === undefined) row.templateVariables = {};
     if (row.lastTriggeredAt === undefined) row.lastTriggeredAt = null;
     if (row.lastSentAt === undefined) row.lastSentAt = null;
-    row.stats = normalizeAutomationStats(row.stats);
+    row.stats = normalizeTriggerStats(row.stats);
   }
 
-  for (const row of store.automationSends) {
+  for (const row of store.triggerSends) {
     if (row.bounceReason === undefined) row.bounceReason = null;
     if (row.deliveredAt === undefined) {
       row.deliveredAt = row.status === "delivered" ? (row.sentAt ?? null) : null;
@@ -448,8 +257,8 @@ function readStore(): ScaleDataStore {
   }
   const raw = fs.readFileSync(STORE_FILE, "utf8");
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const store = normalizeStore(migrateLegacyStore(parsed));
+    const parsed = JSON.parse(raw) as ScaleDataStore;
+    const store = normalizeStore(parsed);
     if (ensureDevScheduleFixtures(store)) {
       writeStore(store);
     }

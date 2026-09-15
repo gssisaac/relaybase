@@ -1,5 +1,5 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { AudienceMember, Broadcast } from "../../db/types";
+import type { AudienceMember, Campaign } from "../../db/types";
 import { isEmailSuppressedForGroup } from "../account/suppression";
 import { findAudienceGroup } from "./group";
 
@@ -20,7 +20,7 @@ export function findAudienceContactByUnsubscribeToken(
 }
 
 /** Contacts eligible to receive a broadcast at send time (live audience group). */
-export function resolveActiveAudienceContacts(broadcast: Broadcast): AudienceMember[] {
+export function resolveActiveAudienceContacts(broadcast: Campaign): AudienceMember[] {
   const group = broadcast.audienceGroupId ? findAudienceGroup(broadcast.audienceGroupId) : undefined;
   if (!group) return [];
 
@@ -37,17 +37,17 @@ export function resolveActiveAudienceContacts(broadcast: Broadcast): AudienceMem
   return eligible;
 }
 
-export function audienceActiveCountForBroadcast(broadcast: Broadcast): number {
+export function audienceActiveCountForCampaign(broadcast: Campaign): number {
   return resolveActiveAudienceContacts(broadcast).length;
 }
 
 export function listAudienceContactsForBroadcast(
-  broadcastId: string,
+  campaignId: string,
   filters?: { status?: string; q?: string },
 ): Array<AudienceMember & { audienceGroupId: string }> {
   const broadcast = store
     .read()
-    .broadcasts.find((b) => b.id === broadcastId && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
+    .campaigns.find((b) => b.id === campaignId && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
   if (!broadcast?.audienceGroupId) return [];
 
   const group = findAudienceGroup(broadcast.audienceGroupId);

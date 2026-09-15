@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Mail, Users, Zap } from "lucide-react";
+import { CalendarClock, LayoutTemplate, Mail, Users, Zap } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ScaleOverview } from "@/lib/scale/api";
@@ -15,9 +15,11 @@ import {
 
 type ScaleOverviewPaths = {
   schedule: string;
-  automations: string;
-  broadcasts: string;
+  templates: string;
+  triggers: string;
+  campaigns: string;
   audience: string;
+  templateCount: number;
 };
 
 export function ScaleOverviewTopSection({
@@ -31,7 +33,28 @@ export function ScaleOverviewTopSection({
 
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <OverviewKpiCard
+          href={paths.templates}
+          icon={LayoutTemplate}
+          label="Templates"
+          value={String(paths.templateCount)}
+          hint="Reusable message content"
+        />
+        <OverviewKpiCard
+          href={paths.triggers}
+          icon={Zap}
+          label="Triggers"
+          value={String(summary.activeTriggers)}
+          hint={`${data.triggers.triggers24h} triggers in the last 24h`}
+        />
+        <OverviewKpiCard
+          href={paths.campaigns}
+          icon={Mail}
+          label="Campaigns"
+          value={formatOverviewCompact(summary.monthlySentVolume)}
+          hint={`${summary.avgOpenRate}% open · ${summary.avgClickRate}% click (all time)`}
+        />
         <OverviewKpiCard
           href={paths.schedule}
           icon={CalendarClock}
@@ -42,20 +65,6 @@ export function ScaleOverviewTopSection({
               ? `${summary.sendingNow} sending now · ${summary.scheduledSends} scheduled`
               : `${summary.scheduledSends} scheduled sends`
           }
-        />
-        <OverviewKpiCard
-          href={paths.automations}
-          icon={Zap}
-          label="Automations"
-          value={String(summary.activeAutomations)}
-          hint={`${data.automations.triggers24h} triggers in the last 24h`}
-        />
-        <OverviewKpiCard
-          href={paths.broadcasts}
-          icon={Mail}
-          label="Broadcasts"
-          value={formatOverviewCompact(summary.monthlySentVolume)}
-          hint={`${summary.avgOpenRate}% open · ${summary.avgClickRate}% click (all time)`}
         />
         <OverviewKpiCard
           href={paths.audience}
@@ -80,7 +89,7 @@ export function ScaleOverviewTopSection({
         <Card size="sm">
           <CardHeader className="gap-0.5 pb-1">
             <CardTitle className="text-sm">Engagement rates</CardTitle>
-            <CardDescription className="text-xs">All sent broadcasts</CardDescription>
+            <CardDescription className="text-xs">All sent campaigns</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             <ScaleOverviewEngagementChart data={data.charts.engagementRates} />
@@ -89,7 +98,7 @@ export function ScaleOverviewTopSection({
 
         <Card size="sm">
           <CardHeader className="gap-0.5 pb-1">
-            <CardTitle className="text-sm">Automation triggers</CardTitle>
+            <CardTitle className="text-sm">Trigger volume</CardTitle>
             <CardDescription className="text-xs">Last 7 days</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">

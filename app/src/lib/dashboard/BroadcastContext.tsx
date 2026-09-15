@@ -51,7 +51,7 @@ export function useBroadcast(): BroadcastStore {
     return reaction(
       () => ({
         jobs: store.jobs.map((j) => [
-          j.broadcastId,
+          j.campaignId,
           j.phase,
           j.error,
           j.message,

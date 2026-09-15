@@ -55,9 +55,12 @@ function Select({
   )
 
   const items = itemsProp ?? registeredItems
+  const itemsForListContext: SelectItemRegistration[] = Array.isArray(items)
+    ? (items as SelectItemRegistration[])
+    : registeredItems
 
   return (
-    <SelectItemsListContext.Provider value={items}>
+    <SelectItemsListContext.Provider value={itemsForListContext}>
       <SelectItemsContext.Provider value={registry}>
         <SelectPrimitive.Root {...props} items={items}>
           {props.children}

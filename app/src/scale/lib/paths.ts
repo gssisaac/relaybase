@@ -1,58 +1,72 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { CalendarDays, LayoutDashboard, Mail, Users, Zap } from "lucide-react";
+import {
+  CalendarDays,
+  Layers,
+  LayoutDashboard,
+  LayoutTemplate,
+  Mail,
+  Users,
+  Zap,
+} from "lucide-react";
 
-import type { AutomationStatus, BroadcastStatus } from "@/lib/scale/api";
+import type { TriggerStatus, CampaignStatus } from "@/lib/scale/api";
 
 export type AudienceDetailTab = "contacts" | "history" | "settings";
 
-export type BroadcastsSection = "list" | "sent" | "in-progress";
+export type CampaignsSection = "list" | "sent" | "in-progress";
 
 export function useScalePaths() {
   const base = "/scale";
   const audience = "/scale/audience";
-  const broadcasts = "/scale/broadcasts";
-  const broadcastsSent = "/scale/broadcasts/sent";
-  const broadcastsInProgress = "/scale/broadcasts/in-progress";
-  const automations = "/scale/automations";
+  const campaigns = "/scale/campaigns";
+  const campaignsSent = "/scale/campaigns/sent";
+  const campaignsInProgress = "/scale/campaigns/in-progress";
+  const templates = "/scale/templates";
+  const layouts = "/scale/layouts";
+  const triggers = "/scale/triggers";
   const schedule = "/scale/schedule";
   const overview = "/scale/overview";
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: overview, label: "Overview", icon: LayoutDashboard },
+    { href: templates, label: "Templates", icon: LayoutTemplate },
+    { href: layouts, label: "Layouts", icon: Layers },
+    { href: triggers, label: "Triggers", icon: Zap },
+    { href: campaigns, label: "Campaigns", icon: Mail },
     { href: schedule, label: "Schedule", icon: CalendarDays },
-    { href: automations, label: "Automations", icon: Zap },
-    { href: broadcasts, label: "Broadcasts", icon: Mail },
     { href: audience, label: "Audience", icon: Users },
   ];
 
   return {
     base,
     audience,
-    broadcasts,
-    broadcastsSent,
-    broadcastsInProgress,
-    automations,
+    campaigns,
+    campaignsSent,
+    campaignsInProgress,
+    templates,
+    layouts,
+    triggers,
     schedule,
     overview,
     tabs,
   };
 }
 
-export function broadcastsSectionHref(section: BroadcastsSection = "list"): string {
-  if (section === "sent") return "/scale/broadcasts/sent";
-  if (section === "in-progress") return "/scale/broadcasts/in-progress";
-  return "/scale/broadcasts";
+export function campaignsSectionHref(section: CampaignsSection = "list"): string {
+  if (section === "sent") return "/scale/campaigns/sent";
+  if (section === "in-progress") return "/scale/campaigns/in-progress";
+  return "/scale/campaigns";
 }
 
-export function broadcastsSectionFromLocation(
+export function campaignsSectionFromLocation(
   pathname: string,
   searchParams: { get: (name: string) => string | null },
-): BroadcastsSection {
+): CampaignsSection {
   const view = searchParams.get("view")?.trim().toLowerCase();
-  if (view === "sent" || /\/broadcasts\/sent\/?$/.test(pathname)) return "sent";
-  if (view === "in-progress" || /\/broadcasts\/in-progress\/?$/.test(pathname)) {
+  if (view === "sent" || /\/campaigns\/sent\/?$/.test(pathname)) return "sent";
+  if (view === "in-progress" || /\/campaigns\/in-progress\/?$/.test(pathname)) {
     return "in-progress";
   }
   return "list";
@@ -79,42 +93,41 @@ export function audienceDetailFromSearch(searchParams: {
   return { groupId, tab };
 }
 
-/** Broadcast detail tabs — content, publish, recipients, stats, settings. */
-export type BroadcastDetailTab = "content" | "publish" | "recipients" | "stats" | "settings";
+/** Campaign detail tabs — content, publish, recipients, stats, settings. */
+export type CampaignDetailTab = "content" | "publish" | "recipients" | "stats" | "settings";
 
-/** Omit `tab` in the URL only for the status-specific landing tab (draft → content, else → stats). */
-function broadcastDetailTabQueryParam(
-  tab: BroadcastDetailTab,
-  status: BroadcastStatus | undefined,
-): BroadcastDetailTab | null {
+function campaignDetailTabQueryParam(
+  tab: CampaignDetailTab,
+  status: CampaignStatus | undefined,
+): CampaignDetailTab | null {
   if (!status || status === "draft") {
     return tab === "content" ? null : tab;
   }
   return tab === "stats" ? null : tab;
 }
 
-export function broadcastDetailHref(
+export function campaignDetailHref(
   id: string,
-  tab: BroadcastDetailTab = "content",
-  status?: BroadcastStatus,
+  tab: CampaignDetailTab = "content",
+  status?: CampaignStatus,
 ): string {
   const params = new URLSearchParams();
   params.set("id", id.trim());
-  const tabParam = broadcastDetailTabQueryParam(tab, status);
+  const tabParam = campaignDetailTabQueryParam(tab, status);
   if (tabParam) params.set("tab", tabParam);
-  return `/scale/broadcasts?${params.toString()}`;
+  return `/scale/campaigns?${params.toString()}`;
 }
 
-export function broadcastDetailFromSearch(searchParams: {
+export function campaignDetailFromSearch(searchParams: {
   get: (name: string) => string | null;
-}): { broadcastId: string; tab: BroadcastDetailTab | null } | null {
-  const broadcastId = searchParams.get("id")?.trim() ?? "";
-  if (!broadcastId) return null;
+}): { campaignId: string; tab: CampaignDetailTab | null } | null {
+  const campaignId = searchParams.get("id")?.trim() ?? "";
+  if (!campaignId) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
   if (!raw) {
-    return { broadcastId, tab: null };
+    return { campaignId, tab: null };
   }
-  let tab: BroadcastDetailTab = "content";
+  let tab: CampaignDetailTab = "content";
   if (raw === "publish" || raw === "recipients" || raw === "stats" || raw === "settings") {
     tab = raw;
   } else if (raw === "content") {
@@ -122,22 +135,22 @@ export function broadcastDetailFromSearch(searchParams: {
   } else if (raw === "audience") {
     tab = "recipients";
   }
-  return { broadcastId, tab };
+  return { campaignId, tab };
 }
 
-export const AUTOMATION_DETAIL_TABS = ["preview", "trigger", "stats", "settings"] as const;
+export const TRIGGER_DETAIL_TABS = ["preview", "trigger", "stats", "settings"] as const;
 
-export type AutomationDetailTab = (typeof AUTOMATION_DETAIL_TABS)[number];
+export type TriggerDetailTab = (typeof TRIGGER_DETAIL_TABS)[number];
 
-export function isAutomationDetailTab(value: string): value is AutomationDetailTab {
-  return (AUTOMATION_DETAIL_TABS as readonly string[]).includes(value);
+export function isTriggerDetailTab(value: string): value is TriggerDetailTab {
+  return (TRIGGER_DETAIL_TABS as readonly string[]).includes(value);
 }
 
-function encodeAutomationPathId(id: string): string {
+function encodeTriggerPathId(id: string): string {
   return encodeURIComponent(id.trim());
 }
 
-function decodeAutomationPathId(raw: string): string {
+function decodeTriggerPathId(raw: string): string {
   try {
     return decodeURIComponent(raw);
   } catch {
@@ -145,84 +158,81 @@ function decodeAutomationPathId(raw: string): string {
   }
 }
 
-export function resolveAutomationDetailTab(
-  tab: AutomationDetailTab | null | undefined,
-  _status?: AutomationStatus,
-): AutomationDetailTab {
+export function resolveTriggerDetailTab(
+  tab: TriggerDetailTab | null | undefined,
+  _status?: TriggerStatus,
+): TriggerDetailTab {
   if (tab) return tab;
   return "preview";
 }
 
-export function automationDetailHref(
+export function triggerDetailHref(
   id: string,
-  tab?: AutomationDetailTab,
-  status?: AutomationStatus,
+  tab?: TriggerDetailTab,
+  status?: TriggerStatus,
 ): string {
-  const resolved = resolveAutomationDetailTab(tab, status);
-  return `/scale/automations/${encodeAutomationPathId(id)}/${resolved}`;
+  const resolved = resolveTriggerDetailTab(tab, status);
+  return `/scale/triggers/${encodeTriggerPathId(id)}/${resolved}`;
 }
 
-export function automationContentEditHref(id: string): string {
-  return `/scale/automations/${encodeAutomationPathId(id)}/edit`;
+export function triggerContentEditHref(id: string): string {
+  return `/scale/triggers/${encodeTriggerPathId(id)}/edit`;
 }
 
-export function automationsTriggerStatsHref(): string {
-  return "/scale/automations/trigger-stats";
+export function triggersStatsHref(): string {
+  return "/scale/triggers/trigger-stats";
 }
 
-export type AutomationPathDetail = {
-  automationId: string;
-  tab: AutomationDetailTab | null;
+export type TriggerPathDetail = {
+  triggerId: string;
+  tab: TriggerDetailTab | null;
   isEdit: boolean;
 };
 
-/** Nested `/scale/automations/{id}/{preview|trigger|stats|settings|edit}`. */
-export function automationDetailFromPathname(pathname: string): AutomationPathDetail | null {
-  const match = pathname.match(/^\/scale\/automations\/([^/]+)(?:\/([^/]+))?\/?$/);
+/** Nested `/scale/triggers/{id}/{preview|trigger|stats|settings|edit}`. */
+export function triggerDetailFromPathname(pathname: string): TriggerPathDetail | null {
+  const match = pathname.match(/^\/scale\/triggers\/([^/]+)(?:\/([^/]+))?\/?$/);
   if (!match) return null;
   const rawId = match[1] ?? "";
   if (!rawId || rawId === "edit" || rawId === "trigger-stats") return null;
-  const automationId = decodeAutomationPathId(rawId).trim();
-  if (!automationId) return null;
+  const triggerId = decodeTriggerPathId(rawId).trim();
+  if (!triggerId) return null;
   const rawSeg = match[2]?.trim().toLowerCase();
   if (!rawSeg) {
-    return { automationId, tab: null, isEdit: false };
+    return { triggerId, tab: null, isEdit: false };
   }
   if (rawSeg === "edit" || rawSeg === "content") {
-    return { automationId, tab: "preview", isEdit: true };
+    return { triggerId, tab: "preview", isEdit: true };
   }
   if (rawSeg === "activity") {
-    return { automationId, tab: "stats", isEdit: false };
+    return { triggerId, tab: "stats", isEdit: false };
   }
-  if (isAutomationDetailTab(rawSeg)) {
-    return { automationId, tab: rawSeg, isEdit: false };
+  if (isTriggerDetailTab(rawSeg)) {
+    return { triggerId, tab: rawSeg, isEdit: false };
   }
-  return { automationId, tab: "preview", isEdit: false };
+  return { triggerId, tab: "preview", isEdit: false };
 }
 
-export function automationTabFromPathname(pathname: string): AutomationDetailTab {
-  return automationDetailFromPathname(pathname)?.tab ?? "preview";
+export function triggerTabFromPathname(pathname: string): TriggerDetailTab {
+  return triggerDetailFromPathname(pathname)?.tab ?? "preview";
 }
 
-export function automationDetailFromSearch(searchParams: {
+export function triggerDetailFromSearch(searchParams: {
   get: (name: string) => string | null;
-}): { automationId: string; tab: AutomationDetailTab | null } | null {
-  const automationId = searchParams.get("id")?.trim() ?? "";
-  if (!automationId) return null;
+}): { triggerId: string; tab: TriggerDetailTab | null } | null {
+  const triggerId = searchParams.get("id")?.trim() ?? "";
+  if (!triggerId) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
   if (!raw) {
-    return { automationId, tab: null };
+    return { triggerId, tab: null };
   }
-  let tab: AutomationDetailTab = "preview";
+  let tab: TriggerDetailTab = "preview";
   if (raw === "activity") {
     tab = "stats";
   } else if (raw === "content") {
     tab = "preview";
-  } else if (isAutomationDetailTab(raw)) {
+  } else if (isTriggerDetailTab(raw)) {
     tab = raw;
   }
-  return { automationId, tab };
+  return { triggerId, tab };
 }
-
-/** @deprecated use `broadcasts` from `useScalePaths()` */
-export const legacyCampaignsPath = "/scale/campaigns";

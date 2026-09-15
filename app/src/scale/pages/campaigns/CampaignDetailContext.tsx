@@ -12,9 +12,9 @@ import {
 
 import {
   scaleApi,
-  type Broadcast,
-  type BroadcastMember,
-  type ScaleTemplate,
+  type Campaign,
+  type CampaignMember,
+  type ScaleLayout,
 } from "@/lib/scale/api";
 
 type DraftFields = {
@@ -22,16 +22,17 @@ type DraftFields = {
   bodyMarkdown: string;
   templateId: string;
   templateVariables: Record<string, string>;
+  messageTemplateId: string | null;
 };
 
 type Ctx = {
-  broadcastId: string;
-  broadcast: Broadcast | null;
-  templates: ScaleTemplate[];
-  audienceMembers: BroadcastMember[];
+  campaignId: string;
+  campaign: Campaign | null;
+  templates: ScaleLayout[];
+  audienceMembers: CampaignMember[];
   loading: boolean;
   notFound: boolean;
-  setBroadcast: (broadcast: Broadcast) => void;
+  setCampaign: (campaign: Campaign) => void;
   refresh: () => Promise<void>;
   refreshTemplates: () => Promise<void>;
   refreshAudience: () => Promise<void>;
@@ -40,18 +41,18 @@ type Ctx = {
   getLastSavedDraft: () => DraftFields;
 };
 
-const BroadcastDetailCtx = createContext<Ctx | null>(null);
+const CampaignDetailCtx = createContext<Ctx | null>(null);
 
-export function BroadcastDetailProvider({
-  broadcastId,
+export function CampaignDetailProvider({
+  campaignId,
   children,
 }: {
-  broadcastId: string;
+  campaignId: string;
   children: ReactNode;
 }) {
-  const [broadcast, setBroadcast] = useState<Broadcast | null>(null);
-  const [templates, setTemplates] = useState<ScaleTemplate[]>([]);
-  const [audienceMembers, setAudienceMembers] = useState<BroadcastMember[]>([]);
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [templates, setTemplates] = useState<ScaleLayout[]>([]);
+  const [audienceMembers, setAudienceMembers] = useState<CampaignMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -60,48 +61,54 @@ export function BroadcastDetailProvider({
     bodyMarkdown: "",
     templateId: "",
     templateVariables: {},
+    messageTemplateId: null,
   });
   const lastSaved = useRef<DraftFields | null>(null);
   const persistInFlight = useRef<Promise<boolean> | null>(null);
-  const broadcastRef = useRef<Broadcast | null>(null);
-  broadcastRef.current = broadcast;
+  const campaignRef = useRef<Campaign | null>(null);
+  campaignRef.current = campaign;
 
   const refreshAudience = useCallback(async () => {
-    const { members } = await scaleApi.listBroadcastAudience(broadcastId);
+    const { members } = await scaleApi.listCampaignAudience(campaignId);
     setAudienceMembers(members);
-  }, [broadcastId]);
+  }, [campaignId]);
 
   const refreshTemplates = useCallback(async () => {
-    const t = await scaleApi.listTemplates();
-    setTemplates(t.templates);
+    const t = await scaleApi.listLayouts();
+    setTemplates(t.layouts);
   }, []);
 
   const refresh = useCallback(async () => {
     try {
       const [b, t] = await Promise.all([
-        scaleApi.getBroadcast(broadcastId),
-        scaleApi.listTemplates(),
+        scaleApi.getCampaign(campaignId),
+        scaleApi.listLayouts(),
       ]);
-      setBroadcast(b);
-      setTemplates(t.templates);
+      setCampaign(b);
+      setTemplates(t.layouts);
       setNotFound(false);
       const fields = {
         subject: b.subject,
         bodyMarkdown: b.bodyMarkdown,
-        templateId: b.templateId ?? "",
+        templateId: b.layoutId ?? "",
         templateVariables: b.templateVariables ?? {},
+        messageTemplateId: b.messageTemplateId ?? null,
       };
       draftRef.current = fields;
       lastSaved.current = fields;
-      await refreshAudience();
+      try {
+        await refreshAudience();
+      } catch {
+        setAudienceMembers([]);
+      }
     } catch (err) {
       const status = err && typeof err === "object" && "status" in err ? err.status : null;
       if (status === 404) setNotFound(true);
-      setBroadcast(null);
+      setCampaign(null);
     } finally {
       setLoading(false);
     }
-  }, [broadcastId, refreshAudience]);
+  }, [campaignId, refreshAudience]);
 
   useEffect(() => {
     setLoading(true);
@@ -119,7 +126,7 @@ export function BroadcastDetailProvider({
   }, []);
 
   const persistDraft = useCallback((): Promise<boolean> => {
-    const current = broadcastRef.current;
+    const current = campaignRef.current;
     if (!current || current.status !== "draft") return Promise.resolve(true);
     if (persistInFlight.current) return persistInFlight.current;
 
@@ -130,16 +137,23 @@ export function BroadcastDetailProvider({
       prev.subject === next.subject &&
       prev.bodyMarkdown === next.bodyMarkdown &&
       prev.templateId === next.templateId &&
+      prev.messageTemplateId === next.messageTemplateId &&
       templateVariablesEqual(prev.templateVariables, next.templateVariables)
     ) {
       return Promise.resolve(true);
     }
 
     const run = scaleApi
-      .updateBroadcast(broadcastId, next)
+      .updateCampaign(campaignId, {
+        subject: next.subject,
+        bodyMarkdown: next.bodyMarkdown,
+        layoutId: next.templateId,
+        templateVariables: next.templateVariables,
+        messageTemplateId: next.messageTemplateId,
+      })
       .then((updated) => {
         lastSaved.current = next;
-        setBroadcast(updated);
+        setCampaign(updated);
         return true;
       })
       .catch(() => false)
@@ -148,18 +162,18 @@ export function BroadcastDetailProvider({
       });
     persistInFlight.current = run;
     return run;
-  }, [broadcastId]);
+  }, [campaignId]);
 
   return (
-    <BroadcastDetailCtx.Provider
+    <CampaignDetailCtx.Provider
       value={{
-        broadcastId,
-        broadcast,
+        campaignId,
+        campaign,
         templates,
         audienceMembers,
         loading,
         notFound,
-        setBroadcast,
+        setCampaign,
         refresh,
         refreshTemplates,
         refreshAudience,
@@ -169,21 +183,15 @@ export function BroadcastDetailProvider({
       }}
     >
       {children}
-    </BroadcastDetailCtx.Provider>
+    </CampaignDetailCtx.Provider>
   );
 }
 
-export function useBroadcastDetail() {
-  const ctx = useContext(BroadcastDetailCtx);
-  if (!ctx) throw new Error("useBroadcastDetail must be used inside BroadcastDetailProvider");
+export function useCampaignDetail() {
+  const ctx = useContext(CampaignDetailCtx);
+  if (!ctx) throw new Error("useCampaignDetail must be used inside CampaignDetailProvider");
   return ctx;
 }
-
-/** @deprecated use useBroadcastDetail */
-export const useCampaignDetail = useBroadcastDetail;
-
-/** @deprecated use BroadcastDetailProvider */
-export const CampaignDetailProvider = BroadcastDetailProvider;
 
 function templateVariablesEqual(a: Record<string, string>, b: Record<string, string>): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);

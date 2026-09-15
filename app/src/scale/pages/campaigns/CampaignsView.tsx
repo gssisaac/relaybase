@@ -4,47 +4,44 @@ import { Suspense } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import {
-  broadcastDetailFromSearch,
-  broadcastsSectionFromLocation,
+  campaignDetailFromSearch,
+  campaignsSectionFromLocation,
 } from "@/scale/lib/paths";
-import { BroadcastDetailProvider } from "@/scale/pages/campaigns/CampaignDetailContext";
-import { BroadcastDetailSwitch } from "@/scale/pages/campaigns/BroadcastDetailSwitch";
-import { BroadcastInProgressView } from "@/scale/pages/campaigns/BroadcastInProgressView";
-import { BroadcastSentOverviewView } from "@/scale/pages/campaigns/BroadcastSentOverviewView";
-import { BroadcastsListView } from "@/scale/pages/campaigns/CampaignsListView";
+import { CampaignDetailProvider } from "@/scale/pages/campaigns/CampaignDetailContext";
+import { CampaignDetailSwitch } from "@/scale/pages/campaigns/CampaignDetailSwitch";
+import { CampaignInProgressView } from "@/scale/pages/campaigns/CampaignInProgressView";
+import { CampaignSentOverviewView } from "@/scale/pages/campaigns/CampaignSentOverviewView";
+import { CampaignsListView } from "@/scale/pages/campaigns/CampaignsListView";
 
-function BroadcastsRoute() {
+function CampaignsRoute() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const detail = broadcastDetailFromSearch(searchParams);
+  const detail = campaignDetailFromSearch(searchParams);
 
   if (detail) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <BroadcastDetailProvider key={detail.broadcastId} broadcastId={detail.broadcastId}>
-          <BroadcastDetailSwitch tab={detail.tab} />
-        </BroadcastDetailProvider>
+        <CampaignDetailProvider key={detail.campaignId} campaignId={detail.campaignId}>
+          <CampaignDetailSwitch tab={detail.tab} />
+        </CampaignDetailProvider>
       </div>
     );
   }
 
-  const section = broadcastsSectionFromLocation(pathname, searchParams);
-  if (section === "sent") return <BroadcastSentOverviewView />;
-  if (section === "in-progress") return <BroadcastInProgressView />;
-  return <BroadcastsListView />;
+  const section = campaignsSectionFromLocation(pathname, searchParams);
+  if (section === "sent") return <CampaignSentOverviewView />;
+  if (section === "in-progress") return <CampaignInProgressView />;
+  return <CampaignsListView />;
 }
 
-export function BroadcastsView() {
+export function CampaignsView() {
   return (
     <Suspense
       fallback={
         <div className="p-4 text-sm text-muted-foreground">Loading…</div>
       }
     >
-      <BroadcastsRoute />
+      <CampaignsRoute />
     </Suspense>
   );
 }
-
-/** @deprecated use BroadcastsView */
-export const CampaignsView = BroadcastsView;

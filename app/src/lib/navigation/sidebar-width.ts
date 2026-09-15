@@ -18,7 +18,7 @@ export function clampSidebarWidth(width: number): number {
   );
 }
 
-export function clampAutomationDetailSidebarWidth(width: number): number {
+export function clampTriggerDetailSidebarWidth(width: number): number {
   return Math.min(
     AUTOMATION_DETAIL_SIDEBAR_WIDTH.max,
     Math.max(AUTOMATION_DETAIL_SIDEBAR_WIDTH.min, Math.round(width)),

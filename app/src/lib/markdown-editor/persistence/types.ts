@@ -9,12 +9,12 @@ export type Mode = "read" | "edit";
 
 export type EditContext = {
   root: ScalePersistRoot | null;
-  /** Local snapshot/draft storage key — the document identity (e.g. broadcast id). */
+  /** Local snapshot/draft storage key — the document identity (e.g. campaign or template id). */
   path: string | null;
   /**
    * `/scale/campaigns/…` suffix used by the tab-close beacon PATCH — may
    * differ from `path` when the document lives under a parent resource
-   * (e.g. `<campaignId>/broadcasts/<broadcastId>`). Falls back to `path`.
+   * (e.g. a nested workspace path under the campaign id). Falls back to `path`.
    */
   beaconPath?: string | null;
   mode: Mode;
@@ -47,7 +47,7 @@ export type CheckpointResult = {
 export type EditorSnapshotProvider = {
   flushSnapshot(): string | null;
   filePath: string;
-  /** Insert plain text at the editor caret (broadcast merge tags, etc.). */
+  /** Insert plain text at the editor caret (merge tags, etc.). */
   insertText?: (text: string) => void;
 };
 

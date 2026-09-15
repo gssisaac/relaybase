@@ -13,11 +13,11 @@ import { useEditorSnapshotRef } from "./editor-capture";
 import { SCALE_PERSIST_ROOT, type EditorSnapshotProvider, type Mode, type SaveStatus } from "./types";
 
 export type UseCampaignEditorPersistenceOptions = {
-  /** Document identity / local persistence key (e.g. broadcast id). */
+  /** Document identity / local persistence key (e.g. campaign id). */
   campaignId: string;
   /**
    * `/scale/campaigns/…` suffix for the tab-close beacon PATCH, when it
-   * differs from `campaignId` (e.g. `<campaignId>/broadcasts/<broadcastId>`).
+   * differs from `campaignId` (e.g. nested workspace path under the campaign).
    * Defaults to `campaignId`.
    */
   beaconPath?: string;

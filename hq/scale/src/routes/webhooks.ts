@@ -13,7 +13,7 @@ scaleWebhooks.post("/bounce", async (c) => {
 
   let body: {
     email?: string;
-    broadcastId?: string;
+    campaignId?: string;
     reason?: AccountSuppressionReason;
     detail?: string;
   };
@@ -31,8 +31,8 @@ scaleWebhooks.post("/bounce", async (c) => {
 
   const now = new Date().toISOString();
   store.update((draft) => {
-    if (body.broadcastId) {
-      const broadcast = draft.broadcasts.find((b) => b.id === body.broadcastId);
+    if (body.campaignId) {
+      const broadcast = draft.campaigns.find((b) => b.id === body.campaignId);
       if (broadcast?.audienceGroupId) {
         const gIdx = draft.audienceGroups.findIndex((g) => g.id === broadcast.audienceGroupId);
         if (gIdx >= 0) {
@@ -50,7 +50,7 @@ scaleWebhooks.post("/bounce", async (c) => {
 
       for (let i = 0; i < draft.recipients.length; i += 1) {
         const r = draft.recipients[i]!;
-        if (r.broadcastId !== body.broadcastId || r.email !== email) continue;
+        if (r.campaignId !== body.campaignId || r.email !== email) continue;
         draft.recipients[i] = {
           ...r,
           status: "bounced",
@@ -58,19 +58,19 @@ scaleWebhooks.post("/bounce", async (c) => {
         };
       }
 
-      const bIdx = draft.broadcasts.findIndex((b) => b.id === body.broadcastId);
+      const bIdx = draft.campaigns.findIndex((b) => b.id === body.campaignId);
       if (bIdx >= 0) {
-        const stats = draft.broadcasts[bIdx]!.stats;
-        draft.broadcasts[bIdx] = {
-          ...draft.broadcasts[bIdx]!,
+        const stats = draft.campaigns[bIdx]!.stats;
+        draft.campaigns[bIdx] = {
+          ...draft.campaigns[bIdx]!,
           stats: { ...stats, bounced: stats.bounced + 1 },
         };
       }
     }
 
     const groupId =
-      body.broadcastId ?
-        draft.broadcasts.find((b) => b.id === body.broadcastId)?.audienceGroupId ?? null
+      body.campaignId ?
+        draft.campaigns.find((b) => b.id === body.campaignId)?.audienceGroupId ?? null
       : null;
     const exists = draft.accountSuppressions.some(
       (s) =>
@@ -86,7 +86,7 @@ scaleWebhooks.post("/bounce", async (c) => {
         email,
         reason,
         audienceGroupId: null,
-        sourceBroadcastId: body.broadcastId ?? null,
+        sourceCampaignId: body.campaignId ?? null,
         createdAt: now,
       });
     }

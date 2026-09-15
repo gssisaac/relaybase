@@ -54,6 +54,13 @@ export function normalizeEntryPath(path: string): string {
     pathname = pathname.replace(/^\/crm(?=\/|$)/, "/scale");
   }
 
+  if (pathname === "/scale/broadcasts" || pathname.startsWith("/scale/broadcasts/")) {
+    pathname = pathname.replace(/^\/scale\/broadcasts(?=\/|$)/, "/scale/campaigns");
+  }
+  if (pathname === "/scale/automations" || pathname.startsWith("/scale/automations/")) {
+    pathname = pathname.replace(/^\/scale\/automations(?=\/|$)/, "/scale/triggers");
+  }
+
   const emailSection = pathname.match(
     /^\/email\/(inbox|drafts|sent|compose|trash|settings)(?:\/(.*))?$/,
   );
@@ -145,53 +152,130 @@ export function normalizeEntryPath(path: string): string {
   }
 
   if (pathname === "/broadcasts/new") {
-    return "/scale/broadcasts?new=1";
+    return "/scale/campaigns?new=1";
   }
+  const scaleCampaignSection = pathname.match(/^\/scale\/campaigns\/(sent|in-progress)\/?$/);
+  if (scaleCampaignSection) {
+    return `/scale/campaigns?view=${scaleCampaignSection[1]}`;
+  }
+
+  const scaleCampaignMatch = pathname.match(
+    /^\/scale\/campaigns\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  );
+  if (scaleCampaignMatch) {
+    const segment = scaleCampaignMatch[1]!;
+    if (segment !== "sent" && segment !== "in-progress" && segment !== "edit") {
+      let campaignId = segment;
+      try {
+        campaignId = decodeURIComponent(campaignId);
+      } catch {
+        /* keep raw */
+      }
+      const next = new URLSearchParams();
+      next.set("id", campaignId);
+      const tabSeg = scaleCampaignMatch[2];
+      if (tabSeg === "audience" || tabSeg === "recipients") {
+        next.set("tab", "recipients");
+      } else if (
+        tabSeg === "content" ||
+        tabSeg === "publish" ||
+        tabSeg === "stats" ||
+        tabSeg === "settings"
+      ) {
+        next.set("tab", tabSeg);
+      }
+      return `/scale/campaigns?${next.toString()}`;
+    }
+  }
+
+  const scaleTriggerEditMatch = pathname.match(/^\/scale\/triggers\/([^/]+)\/(content|edit)\/?$/);
+  if (scaleTriggerEditMatch) {
+    let triggerId = scaleTriggerEditMatch[1]!;
+    if (triggerId !== "edit") {
+      try {
+        triggerId = decodeURIComponent(triggerId);
+      } catch {
+        /* keep raw */
+      }
+      const next = new URLSearchParams();
+      next.set("id", triggerId);
+      return `/scale/triggers/edit?${next.toString()}`;
+    }
+  }
+
+  const scaleTriggerMatch = pathname.match(
+    /^\/scale\/triggers\/([^/]+)(?:\/(preview|content|trigger|activity|stats|settings))?\/?$/,
+  );
+  if (scaleTriggerMatch) {
+    let triggerId = scaleTriggerMatch[1]!;
+    if (triggerId !== "edit") {
+      try {
+        triggerId = decodeURIComponent(triggerId);
+      } catch {
+        /* keep raw */
+      }
+      const tabSeg = scaleTriggerMatch[2];
+      if (tabSeg === "content") {
+        const next = new URLSearchParams();
+        next.set("id", triggerId);
+        return `/scale/triggers/edit?${next.toString()}`;
+      }
+      const next = new URLSearchParams();
+      next.set("id", triggerId);
+      if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
+        next.set("tab", tabSeg);
+      } else if (tabSeg === "activity") {
+        next.set("tab", "stats");
+      }
+      return `/scale/triggers?${next.toString()}`;
+    }
+  }
+
   const scaleBroadcastSection = pathname.match(/^\/scale\/broadcasts\/(sent|in-progress)\/?$/);
   if (scaleBroadcastSection) {
-    return `/scale/broadcasts?view=${scaleBroadcastSection[1]}`;
+    return `/scale/campaigns?view=${scaleBroadcastSection[1]}`;
   }
   const legacyCrmBroadcastSection = pathname.match(/^\/crm\/broadcasts\/(sent|in-progress)\/?$/);
   if (legacyCrmBroadcastSection) {
-    return `/scale/broadcasts?view=${legacyCrmBroadcastSection[1]}`;
+    return `/scale/campaigns?view=${legacyCrmBroadcastSection[1]}`;
   }
   const legacyBroadcastSection = pathname.match(/^\/broadcasts\/(sent|in-progress)\/?$/);
   if (legacyBroadcastSection) {
-    return `/scale/broadcasts?view=${legacyBroadcastSection[1]}`;
+    return `/scale/campaigns?view=${legacyBroadcastSection[1]}`;
   }
   const broadcastMatch = pathname.match(
     /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,
   );
   if (broadcastMatch) {
-    let broadcastId = broadcastMatch[1]!;
+    let campaignId = broadcastMatch[1]!;
     try {
-      broadcastId = decodeURIComponent(broadcastId);
+      campaignId = decodeURIComponent(campaignId);
     } catch {
       /* keep raw */
     }
     const next = new URLSearchParams();
-    next.set("id", broadcastId);
+    next.set("id", campaignId);
     const tabSeg = broadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
     } else if (tabSeg === "content" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "stats" : tabSeg);
     }
-    return `/scale/broadcasts?${next.toString()}`;
+    return `/scale/campaigns?${next.toString()}`;
   }
 
   const scaleBroadcastMatch = pathname.match(
     /^\/scale\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
   if (scaleBroadcastMatch) {
-    let broadcastId = scaleBroadcastMatch[1]!;
+    let campaignId = scaleBroadcastMatch[1]!;
     try {
-      broadcastId = decodeURIComponent(broadcastId);
+      campaignId = decodeURIComponent(campaignId);
     } catch {
       /* keep raw */
     }
     const next = new URLSearchParams();
-    next.set("id", broadcastId);
+    next.set("id", campaignId);
     const tabSeg = scaleBroadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
@@ -203,21 +287,21 @@ export function normalizeEntryPath(path: string): string {
     ) {
       next.set("tab", tabSeg);
     }
-    return `/scale/broadcasts?${next.toString()}`;
+    return `/scale/campaigns?${next.toString()}`;
   }
 
   const legacyCrmBroadcastMatch = pathname.match(
     /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
   if (legacyCrmBroadcastMatch) {
-    let broadcastId = legacyCrmBroadcastMatch[1]!;
+    let campaignId = legacyCrmBroadcastMatch[1]!;
     try {
-      broadcastId = decodeURIComponent(broadcastId);
+      campaignId = decodeURIComponent(campaignId);
     } catch {
       /* keep raw */
     }
     const next = new URLSearchParams();
-    next.set("id", broadcastId);
+    next.set("id", campaignId);
     const tabSeg = legacyCrmBroadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
@@ -229,23 +313,23 @@ export function normalizeEntryPath(path: string): string {
     ) {
       next.set("tab", tabSeg);
     }
-    return `/scale/broadcasts?${next.toString()}`;
+    return `/scale/campaigns?${next.toString()}`;
   }
 
   const scaleAutomationEditMatch = pathname.match(
     /^\/scale\/automations\/([^/]+)\/(content|edit)\/?$/,
   );
   if (scaleAutomationEditMatch) {
-    let automationId = scaleAutomationEditMatch[1]!;
-    if (automationId !== "edit") {
+    let triggerId = scaleAutomationEditMatch[1]!;
+    if (triggerId !== "edit") {
       try {
-        automationId = decodeURIComponent(automationId);
+        triggerId = decodeURIComponent(triggerId);
       } catch {
         /* keep raw */
       }
       const next = new URLSearchParams();
-      next.set("id", automationId);
-      return `/scale/automations/edit?${next.toString()}`;
+      next.set("id", triggerId);
+      return `/scale/triggers/edit?${next.toString()}`;
     }
   }
 
@@ -253,27 +337,27 @@ export function normalizeEntryPath(path: string): string {
     /^\/scale\/automations\/([^/]+)(?:\/(preview|content|trigger|activity|stats|settings))?\/?$/,
   );
   if (scaleAutomationMatch) {
-    let automationId = scaleAutomationMatch[1]!;
-    if (automationId !== "edit") {
+    let triggerId = scaleAutomationMatch[1]!;
+    if (triggerId !== "edit") {
       try {
-        automationId = decodeURIComponent(automationId);
+        triggerId = decodeURIComponent(triggerId);
       } catch {
         /* keep raw */
       }
       const tabSeg = scaleAutomationMatch[2];
       if (tabSeg === "content") {
         const next = new URLSearchParams();
-        next.set("id", automationId);
-        return `/scale/automations/edit?${next.toString()}`;
+        next.set("id", triggerId);
+        return `/scale/triggers/edit?${next.toString()}`;
       }
       const next = new URLSearchParams();
-      next.set("id", automationId);
+      next.set("id", triggerId);
       if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
         next.set("tab", tabSeg);
       } else if (tabSeg === "activity") {
         next.set("tab", "stats");
       }
-      return `/scale/automations?${next.toString()}`;
+      return `/scale/triggers?${next.toString()}`;
     }
   }
 
@@ -281,31 +365,31 @@ export function normalizeEntryPath(path: string): string {
     /^\/crm\/automations\/([^/]+)(?:\/(content|preview|trigger|activity|stats|settings))?\/?$/,
   );
   if (legacyCrmAutomationMatch) {
-    let automationId = legacyCrmAutomationMatch[1]!;
+    let triggerId = legacyCrmAutomationMatch[1]!;
     try {
-      automationId = decodeURIComponent(automationId);
+      triggerId = decodeURIComponent(triggerId);
     } catch {
       /* keep raw */
     }
     const tabSeg = legacyCrmAutomationMatch[2];
     if (tabSeg === "content") {
       const next = new URLSearchParams();
-      next.set("id", automationId);
-      return `/scale/automations/edit?${next.toString()}`;
+      next.set("id", triggerId);
+      return `/scale/triggers/edit?${next.toString()}`;
     }
     const next = new URLSearchParams();
-    next.set("id", automationId);
+    next.set("id", triggerId);
     if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     } else if (tabSeg === "activity") {
       next.set("tab", "stats");
     }
-    return `/scale/automations?${next.toString()}`;
+    return `/scale/triggers?${next.toString()}`;
   }
 
   if (pathname === "/automations" || pathname.startsWith("/automations/")) {
     const qs = params.toString();
-    return qs ? `/scale/automations?${qs}` : "/scale/automations";
+    return qs ? `/scale/triggers?${qs}` : "/scale/triggers";
   }
 
   const legacyCrmCampaignMatch = pathname.match(
@@ -325,7 +409,7 @@ export function normalizeEntryPath(path: string): string {
     if (tabSeg === "content" || tabSeg === "publish" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "publish" : tabSeg);
     }
-    return `/scale/broadcasts?${next.toString()}`;
+    return `/scale/campaigns?${next.toString()}`;
   }
 
   // Settings: /settings/{tab} are real nested routes now. Collapse

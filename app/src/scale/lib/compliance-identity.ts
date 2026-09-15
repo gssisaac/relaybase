@@ -3,10 +3,10 @@ import type { ScaleComplianceIdentity } from "@/lib/scale/api";
 export const ACCOUNT_DEFAULT_COMPLIANCE_VALUE = "__account_default__";
 
 export function effectiveComplianceIdentityId(
-  broadcastIdentityId: string | null | undefined,
+  campaignIdentityId: string | null | undefined,
   accountDefaultId: string | null | undefined,
 ): string | null {
-  return broadcastIdentityId?.trim() || accountDefaultId?.trim() || null;
+  return campaignIdentityId?.trim() || accountDefaultId?.trim() || null;
 }
 
 export function complianceFromIdentity(

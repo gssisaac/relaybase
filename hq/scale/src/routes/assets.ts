@@ -5,7 +5,7 @@ import { Hono } from "hono";
 
 import { store } from "../db/store";
 import { DEFAULT_BRAND_LOGO_FILENAME } from "../lib/templates/brand-logo";
-import { broadcastAssetKey } from "../lib/assets/key";
+import { campaignAssetKey } from "../lib/assets/key";
 import { SCALE_PUBLIC_BASE_URL } from "../lib/shared/scale-url";
 import { newId } from "../lib/shared/ids";
 
@@ -25,10 +25,10 @@ scaleAssets.get("/brand/relaybase-icon.png", (c) => {
   });
 });
 
-// POST /scale/broadcasts/:id/assets { filename, mimeType, contentBase64 }
-scaleAssets.post("/broadcasts/:id/assets", async (c) => {
-  const broadcastId = c.req.param("id");
-  const broadcast = store.read().broadcasts.find((row) => row.id === broadcastId);
+// POST /scale/campaigns/:id/assets { filename, mimeType, contentBase64 }
+scaleAssets.post("/campaigns/:id/assets", async (c) => {
+  const campaignId = c.req.param("id");
+  const broadcast = store.read().campaigns.find((row) => row.id === campaignId);
   if (!broadcast) return c.json({ error: "not found" }, 404);
 
   let body: { filename?: string; mimeType?: string; contentBase64?: string };
@@ -45,14 +45,14 @@ scaleAssets.post("/broadcasts/:id/assets", async (c) => {
     return c.json({ error: "filename and contentBase64 required" }, 400);
   }
 
-  const key = broadcastAssetKey(broadcastId, filename);
-  const storedFilename = key.slice(broadcastId.length + 1);
+  const key = campaignAssetKey(campaignId, filename);
+  const storedFilename = key.slice(campaignId.length + 1);
   store.update((draft) => {
-    draft.broadcastAssets = draft.broadcastAssets.filter((a) => a.key !== key);
-    draft.broadcastAssets.push({
+    draft.campaignAssets = draft.campaignAssets.filter((a) => a.key !== key);
+    draft.campaignAssets.push({
       id: newId("asset"),
       key,
-      broadcastId,
+      campaignId,
       filename: storedFilename,
       mimeType,
       contentBase64,
@@ -60,14 +60,14 @@ scaleAssets.post("/broadcasts/:id/assets", async (c) => {
     });
   });
 
-  const url = `${SCALE_PUBLIC_BASE_URL}/scale/assets/${encodeURIComponent(broadcastId)}/${encodeURIComponent(storedFilename)}`;
+  const url = `${SCALE_PUBLIC_BASE_URL}/scale/assets/${encodeURIComponent(campaignId)}/${encodeURIComponent(storedFilename)}`;
   return c.json({ url, key });
 });
 
-// POST /scale/automations/:id/assets { filename, mimeType, contentBase64 }
-scaleAssets.post("/automations/:id/assets", async (c) => {
-  const automationId = c.req.param("id");
-  const automation = store.read().automations.find((row) => row.id === automationId);
+// POST /scale/triggers/:id/assets { filename, mimeType, contentBase64 }
+scaleAssets.post("/triggers/:id/assets", async (c) => {
+  const triggerId = c.req.param("id");
+  const automation = store.read().triggers.find((row) => row.id === triggerId);
   if (!automation) return c.json({ error: "not found" }, 404);
 
   let body: { filename?: string; mimeType?: string; contentBase64?: string };
@@ -84,14 +84,14 @@ scaleAssets.post("/automations/:id/assets", async (c) => {
     return c.json({ error: "filename and contentBase64 required" }, 400);
   }
 
-  const key = broadcastAssetKey(automationId, filename);
-  const storedFilename = key.slice(automationId.length + 1);
+  const key = campaignAssetKey(triggerId, filename);
+  const storedFilename = key.slice(triggerId.length + 1);
   store.update((draft) => {
-    draft.automationAssets = draft.automationAssets.filter((a) => a.key !== key);
-    draft.automationAssets.push({
+    draft.triggerAssets = draft.triggerAssets.filter((a) => a.key !== key);
+    draft.triggerAssets.push({
       id: newId("asset"),
       key,
-      automationId,
+      triggerId,
       filename: storedFilename,
       mimeType,
       contentBase64,
@@ -99,14 +99,14 @@ scaleAssets.post("/automations/:id/assets", async (c) => {
     });
   });
 
-  const url = `${SCALE_PUBLIC_BASE_URL}/scale/assets/automation/${encodeURIComponent(automationId)}/${encodeURIComponent(storedFilename)}`;
+  const url = `${SCALE_PUBLIC_BASE_URL}/scale/assets/trigger/${encodeURIComponent(triggerId)}/${encodeURIComponent(storedFilename)}`;
   return c.json({ url, key });
 });
 
-// GET /scale/assets/automation/:automationId/:filename
-scaleAssets.get("/assets/automation/:automationId/:filename", (c) => {
-  const key = `${c.req.param("automationId")}/${c.req.param("filename")}`;
-  const asset = store.read().automationAssets.find((a) => a.key === key);
+// GET /scale/assets/trigger/:triggerId/:filename (legacy /assets/automation/* still served)
+scaleAssets.get("/assets/automation/:triggerId/:filename", (c) => {
+  const key = `${c.req.param("triggerId")}/${c.req.param("filename")}`;
+  const asset = store.read().triggerAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {
@@ -118,12 +118,43 @@ scaleAssets.get("/assets/automation/:automationId/:filename", (c) => {
   });
 });
 
-// GET /scale/assets/:broadcastId/:filename
-scaleAssets.get("/assets/:broadcastId/:filename", (c) => {
-  const broadcastId = c.req.param("broadcastId");
-  if (broadcastId === "automation") return c.text("not found", 404);
-  const key = `${broadcastId}/${c.req.param("filename")}`;
-  const asset = store.read().broadcastAssets.find((a) => a.key === key);
+scaleAssets.get("/assets/trigger/:triggerId/:filename", (c) => {
+  const key = `${c.req.param("triggerId")}/${c.req.param("filename")}`;
+  const asset = store.read().triggerAssets.find((a) => a.key === key);
+  if (!asset) return c.text("not found", 404);
+  const buf = Buffer.from(asset.contentBase64, "base64");
+  return new Response(buf, {
+    headers: {
+      "content-type": asset.mimeType,
+      "cache-control": "public, max-age=31536000, immutable",
+      "access-control-allow-origin": "*",
+    },
+  });
+});
+
+// GET /scale/assets/template/:templateId/:filename
+scaleAssets.get("/assets/template/:templateId/:filename", (c) => {
+  const key = `${c.req.param("templateId")}/${c.req.param("filename")}`;
+  const asset = store.read().templateAssets.find((a) => a.key === key);
+  if (!asset) return c.text("not found", 404);
+  const buf = Buffer.from(asset.contentBase64, "base64");
+  return new Response(buf, {
+    headers: {
+      "content-type": asset.mimeType,
+      "cache-control": "public, max-age=31536000, immutable",
+      "access-control-allow-origin": "*",
+    },
+  });
+});
+
+// GET /scale/assets/:campaignId/:filename
+scaleAssets.get("/assets/:campaignId/:filename", (c) => {
+  const campaignId = c.req.param("campaignId");
+  if (campaignId === "automation" || campaignId === "trigger" || campaignId === "template") {
+    return c.text("not found", 404);
+  }
+  const key = `${campaignId}/${c.req.param("filename")}`;
+  const asset = store.read().campaignAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {

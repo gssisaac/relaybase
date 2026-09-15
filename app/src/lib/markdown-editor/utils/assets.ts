@@ -21,7 +21,7 @@ export function slugify(input: string): string {
     .slice(0, 80);
 }
 
-/** Matches hq/scale broadcast/automation asset folder stems (see render.ts broadcastAssetStem). */
+/** Matches hq/scale campaign/trigger asset folder stems (legacy id prefixes stripped). */
 export function campaignAssetStem(campaignId: string): string {
   return (
     campaignId

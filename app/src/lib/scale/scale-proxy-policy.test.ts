@@ -13,23 +13,23 @@ function headers(api = false): Headers {
 describe("shouldProxyRequestToScale", () => {
   it("proxies public unsubscribe", () => {
     assert.equal(
-      shouldProxyRequestToScale("/scale/unsubscribe/broadcast_x/tok_y", "GET", headers()),
+      shouldProxyRequestToScale("/scale/unsubscribe/campaign_x/tok_y", "GET", headers()),
       true,
     );
   });
 
-  it("serves broadcast UI without API header", () => {
-    assert.equal(shouldProxyRequestToScale("/scale/broadcasts", "GET", headers()), false);
+  it("serves campaign UI without API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/campaigns", "GET", headers()), false);
     assert.equal(
-      shouldProxyRequestToScale("/scale/broadcasts/in-progress", "GET", headers()),
+      shouldProxyRequestToScale("/scale/campaigns/in-progress", "GET", headers()),
       false,
     );
   });
 
-  it("proxies broadcast API list with Scale API header", () => {
-    assert.equal(shouldProxyRequestToScale("/scale/broadcasts", "GET", headers(true)), true);
+  it("proxies campaign API list with Scale API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/campaigns", "GET", headers(true)), true);
     assert.equal(
-      shouldProxyRequestToScale("/scale/broadcasts/in-progress", "GET", headers(true)),
+      shouldProxyRequestToScale("/scale/campaigns/in-progress", "GET", headers(true)),
       true,
     );
   });
@@ -42,93 +42,90 @@ describe("shouldProxyRequestToScale", () => {
     assert.equal(shouldProxyRequestToScale("/scale/overview", "GET", headers(true)), true);
   });
 
-  it("proxies broadcast detail JSON", () => {
+  it("proxies campaign detail JSON", () => {
     assert.equal(
-      shouldProxyRequestToScale("/scale/broadcasts/broadcast_abc", "GET", headers(true)),
+      shouldProxyRequestToScale("/scale/campaigns/campaign_abc", "GET", headers(true)),
       true,
     );
   });
 
-  it("serves automation content edit UI without API header", () => {
-    assert.equal(shouldProxyRequestToScale("/scale/automations", "GET", headers()), false);
+  it("serves trigger content edit UI without API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/triggers", "GET", headers()), false);
+    assert.equal(shouldProxyRequestToScale("/scale/triggers/edit", "GET", headers()), false);
     assert.equal(
-      shouldProxyRequestToScale("/scale/automations/edit", "GET", headers()),
-      false,
-    );
-    assert.equal(
-      shouldProxyRequestToScale("/scale/automations/trigger-stats", "GET", headers()),
+      shouldProxyRequestToScale("/scale/triggers/trigger-stats", "GET", headers()),
       false,
     );
   });
 
-  it("proxies automation trigger-stats JSON with Scale API header", () => {
+  it("proxies trigger stats overview JSON with Scale API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/triggers/stats", "GET", headers()), false);
     assert.equal(
-      shouldProxyRequestToScale("/scale/automations/trigger-stats", "GET", headers(true)),
+      shouldProxyRequestToScale("/scale/triggers/stats", "GET", headers(true)),
       true,
     );
   });
 
-  it("serves automation detail tab UI without API header", () => {
+  it("serves trigger detail tab UI without API header", () => {
     assert.equal(
-      shouldProxyRequestToScale(
-        "/scale/automations/automation_abc/settings",
-        "GET",
-        headers(),
-      ),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc/settings", "GET", headers()),
       false,
     );
     assert.equal(
-      shouldProxyRequestToScale(
-        "/scale/automations/automation_abc/preview",
-        "GET",
-        headers(),
-      ),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc/preview", "GET", headers()),
       false,
     );
     assert.equal(
-      shouldProxyRequestToScale(
-        "/scale/automations/automation_abc/stats",
-        "GET",
-        headers(),
-      ),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc/stats", "GET", headers()),
       false,
     );
     assert.equal(
-      shouldProxyRequestToScale("/scale/automations/automation_abc", "GET", headers()),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc", "GET", headers()),
       false,
     );
     assert.equal(
-      shouldProxyRequestToScale(
-        "/scale/automations/automation_abc/settings",
-        "HEAD",
-        headers(),
-      ),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc/settings", "HEAD", headers()),
       false,
     );
   });
 
-  it("proxies automation API detail with Scale API header", () => {
+  it("proxies trigger API detail with Scale API header", () => {
     assert.equal(
-      shouldProxyRequestToScale("/scale/automations/automation_abc", "GET", headers(true)),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc", "GET", headers(true)),
       true,
     );
     assert.equal(
-      shouldProxyRequestToScale(
-        "/scale/automations/automation_abc/stats",
-        "GET",
-        headers(true),
-      ),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc/stats", "GET", headers(true)),
       true,
     );
   });
 
-  it("proxies automation activity API without treating it as a UI tab", () => {
+  it("proxies trigger activity API without treating it as a UI tab", () => {
     assert.equal(
-      shouldProxyRequestToScale(
-        "/scale/automations/automation_abc/activity",
-        "GET",
-        headers(),
-      ),
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc/activity", "GET", headers()),
+      true,
+    );
+  });
+
+  it("serves layouts UI without API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/layouts", "GET", headers()), false);
+  });
+
+  it("proxies layout API with Scale API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/layouts", "GET", headers(true)), true);
+    assert.equal(
+      shouldProxyRequestToScale("/scale/layouts/tpl-minimal", "GET", headers(true)),
+      true,
+    );
+  });
+
+  it("serves message templates UI without API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/templates", "GET", headers()), false);
+  });
+
+  it("proxies message template detail with Scale API header", () => {
+    assert.equal(
+      shouldProxyRequestToScale("/scale/templates/tmpl_abc", "GET", headers(true)),
       true,
     );
   });

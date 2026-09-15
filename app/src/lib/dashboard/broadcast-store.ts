@@ -16,8 +16,8 @@ import {
 import { desktopAwareFetch } from "@/lib/desktop/api";
 import { notifyIfCloudflarePlanError } from "@/lib/cloudflare/CloudflarePlanDialog";
 
-function clearBroadcastCaches(productId: string, broadcastId: string) {
-  clearEmailCache(productId, `broadcast:${broadcastId}`);
+function clearBroadcastCaches(productId: string, campaignId: string) {
+  clearEmailCache(productId, `broadcast:${campaignId}`);
   clearEmailCache(productId, "broadcasts:all");
 }
 
@@ -30,7 +30,7 @@ export type BroadcastJobPhase =
 
 export type BroadcastJob = {
   id: string;
-  broadcastId: string;
+  campaignId: string;
   phase: BroadcastJobPhase;
   message: string | null;
   error: string | null;
@@ -38,7 +38,7 @@ export type BroadcastJob = {
 };
 
 export type BroadcastQueueInput = {
-  broadcastId: string;
+  campaignId: string;
   groupIds: string[];
   from: string;
   subject: string;
@@ -168,7 +168,7 @@ export class BroadcastStore {
   /** Create or update a local draft so Unsend can restore compose fields. */
   persistQueueInput(input: BroadcastQueueInput) {
     const updated = this.upsertDraft({
-      id: input.broadcastId,
+      id: input.campaignId,
       groupIds: input.groupIds,
       from: input.from,
       subject: input.subject,
@@ -177,7 +177,7 @@ export class BroadcastStore {
     if (updated) return updated;
     const now = new Date().toISOString();
     const draft: LocalBroadcastDraft = {
-      id: input.broadcastId,
+      id: input.campaignId,
       subject: input.subject,
       body: input.body,
       from: input.from,
@@ -233,12 +233,12 @@ export class BroadcastStore {
     void this.persistDrafts();
   }
 
-  jobFor(broadcastId: string): BroadcastJob | undefined {
-    return this.jobs.find((j) => j.broadcastId === broadcastId);
+  jobFor(campaignId: string): BroadcastJob | undefined {
+    return this.jobs.find((j) => j.campaignId === campaignId);
   }
 
-  isActive(broadcastId: string): boolean {
-    const job = this.jobFor(broadcastId);
+  isActive(campaignId: string): boolean {
+    const job = this.jobFor(campaignId);
     return Boolean(job && isInFlightPhase(job.phase));
   }
 
@@ -247,7 +247,7 @@ export class BroadcastStore {
    * a pending job — no network until `queueBroadcast`.
    */
   armBroadcast(input: BroadcastQueueInput): BroadcastJob {
-    const existing = this.jobFor(input.broadcastId);
+    const existing = this.jobFor(input.campaignId);
     this.persistQueueInput(input);
     if (existing && isInFlightPhase(existing.phase)) {
       return existing;
@@ -255,7 +255,7 @@ export class BroadcastStore {
 
     const job: BroadcastJob = {
       id: crypto.randomUUID(),
-      broadcastId: input.broadcastId,
+      campaignId: input.campaignId,
       phase: "pending",
       message: "Starting broadcast…",
       error: null,
@@ -263,16 +263,16 @@ export class BroadcastStore {
     };
     this.jobs = [
       job,
-      ...this.jobs.filter((j) => j.broadcastId !== input.broadcastId),
+      ...this.jobs.filter((j) => j.campaignId !== input.campaignId),
     ];
     return job;
   }
 
   /** Cancel a pending Unsend window. No-op once upload/send has started. */
-  cancelArmed(broadcastId: string) {
-    const job = this.jobFor(broadcastId);
+  cancelArmed(campaignId: string) {
+    const job = this.jobFor(campaignId);
     if (!job || job.phase !== "pending") return;
-    this.dismissJob(broadcastId);
+    this.dismissJob(campaignId);
   }
 
   /**
@@ -281,7 +281,7 @@ export class BroadcastStore {
    * Returns immediately — caller should navigate to Progress.
    */
   queueBroadcast(input: BroadcastQueueInput): BroadcastJob {
-    const existing = this.jobFor(input.broadcastId);
+    const existing = this.jobFor(input.campaignId);
     if (
       existing &&
       (existing.phase === "uploading" || existing.phase === "sending")
@@ -302,7 +302,7 @@ export class BroadcastStore {
 
     const job: BroadcastJob = {
       id: crypto.randomUUID(),
-      broadcastId: input.broadcastId,
+      campaignId: input.campaignId,
       phase: "uploading",
       message: "Starting broadcast…",
       error: null,
@@ -310,14 +310,14 @@ export class BroadcastStore {
     };
     this.jobs = [
       job,
-      ...this.jobs.filter((j) => j.broadcastId !== input.broadcastId),
+      ...this.jobs.filter((j) => j.campaignId !== input.campaignId),
     ];
     void this.runJob(job, input);
     return job;
   }
 
-  dismissJob(broadcastId: string) {
-    this.jobs = this.jobs.filter((j) => j.broadcastId !== broadcastId);
+  dismissJob(campaignId: string) {
+    this.jobs = this.jobs.filter((j) => j.campaignId !== campaignId);
   }
 
   private async persistDrafts() {
@@ -330,14 +330,14 @@ export class BroadcastStore {
   }
 
   private async runJob(job: BroadcastJob, input: BroadcastQueueInput) {
-    const { broadcastId } = input;
+    const { campaignId } = input;
     try {
       // Upsert onto the server only at send time (not while drafting).
       const upsertRes = await desktopAwareFetch(`${this.apiBase}/broadcasts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: broadcastId,
+          id: campaignId,
           groupIds: input.groupIds,
           from: input.from || undefined,
           subject: input.subject,
@@ -357,11 +357,11 @@ export class BroadcastStore {
       });
 
       if (this.productId) {
-        clearBroadcastCaches(this.productId, broadcastId);
+        clearBroadcastCaches(this.productId, campaignId);
       }
 
       const sendRes = await desktopAwareFetch(
-        `${this.apiBase}/broadcasts/${encodeURIComponent(broadcastId)}/send`,
+        `${this.apiBase}/broadcasts/${encodeURIComponent(campaignId)}/send`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -390,10 +390,10 @@ export class BroadcastStore {
         job.phase = "done";
         job.message = "Broadcast sent";
         job.error = null;
-        this.removeDraft(broadcastId);
+        this.removeDraft(campaignId);
       });
       if (this.productId) {
-        clearBroadcastCaches(this.productId, broadcastId);
+        clearBroadcastCaches(this.productId, campaignId);
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Broadcast failed";
@@ -403,7 +403,7 @@ export class BroadcastStore {
         job.error = message;
       });
       if (this.productId) {
-        clearBroadcastCaches(this.productId, broadcastId);
+        clearBroadcastCaches(this.productId, campaignId);
       }
     }
   }

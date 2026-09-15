@@ -1,8 +1,8 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { Broadcast } from "../../db/types";
+import type { Campaign } from "../../db/types";
 import { audienceGroupToSummary } from "../audience-groups/api-serialize";
-import { buildSentOverview } from "../broadcasts/overview";
-import { serializeBroadcast } from "../broadcasts/serialize";
+import { buildSentOverview } from "../campaigns/overview";
+import { serializeCampaign } from "../campaigns/serialize";
 
 function rate(part: number, total: number): number {
   if (!total) return 0;
@@ -29,11 +29,11 @@ function formatDayLabel(dayKey: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-function openRateForBroadcast(row: Broadcast): number {
+function openRateForBroadcast(row: Campaign): number {
   return rate(row.stats.opened, row.stats.delivered);
 }
 
-function clickRateForBroadcast(row: Broadcast): number {
+function clickRateForBroadcast(row: Campaign): number {
   return rate(row.stats.clicked, row.stats.delivered);
 }
 
@@ -47,15 +47,15 @@ export function buildScaleOverview() {
   const since30d = new Date(now - 30 * dayMs).toISOString();
   const in7d = new Date(now + 7 * dayMs).toISOString();
 
-  const broadcasts = data.broadcasts.filter((b) => b.accountLinkId === accountId && b.listStatus === "active");
-  const automations = data.automations.filter((a) => a.accountLinkId === accountId && a.listStatus === "active");
+  const broadcasts = data.campaigns.filter((b) => b.accountLinkId === accountId && b.listStatus === "active");
+  const automations = data.triggers.filter((a) => a.accountLinkId === accountId && a.listStatus === "active");
   const groups = data.audienceGroups.filter((g) => g.accountLinkId === accountId);
   const triggerEvents = data.triggerEvents.filter((e) => e.accountLinkId === accountId);
 
   const audienceNameById = new Map(groups.map((g) => [g.id, g.name]));
 
   const sentOverview = buildSentOverview({
-    broadcasts,
+    campaigns: broadcasts,
     recipients: data.recipients,
     trackingEvents: data.trackingEvents,
     audienceNameById,
@@ -83,7 +83,7 @@ export function buildScaleOverview() {
 
   const scheduledRows = broadcasts
     .filter((b) => b.status === "scheduled" || b.status === "sending")
-    .map((row) => serializeBroadcast(row))
+    .map((row) => serializeCampaign(row))
     .sort((a, b) => {
       const aAt = a.scheduledAt ?? a.startedAt ?? a.updatedAt;
       const bAt = b.scheduledAt ?? b.startedAt ?? b.updatedAt;
@@ -120,12 +120,12 @@ export function buildScaleOverview() {
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
     .slice(0, 8)
     .map((row) => {
-      const automation = row.automationId ? automationById.get(row.automationId) : undefined;
+      const trigger = row.triggerId ? automationById.get(row.triggerId) : undefined;
       return {
         id: row.id,
-        automationId: row.automationId,
-        automationName: automation?.name ?? "Unknown automation",
-        triggerType: row.triggerType,
+        triggerId: row.triggerId,
+        triggerName: trigger?.name ?? "Unknown trigger",
+        sourceType: row.triggerType,
         recipientEmail: row.recipientEmail,
         status: row.status,
         occurredAt: row.occurredAt,
@@ -158,8 +158,8 @@ export function buildScaleOverview() {
     usedToday += row.stats.sent;
   }
   const automationIds = new Set(automations.map((a) => a.id));
-  for (const send of data.automationSends) {
-    if (!automationIds.has(send.automationId)) continue;
+  for (const send of data.triggerSends) {
+    if (!automationIds.has(send.triggerId)) continue;
     if (dayKeyUtc(send.createdAt) !== todayKey) continue;
     usedToday += 1;
   }
@@ -214,7 +214,7 @@ export function buildScaleOverview() {
     generatedAt: new Date(now).toISOString(),
     summary: {
       totalContacts,
-      activeAutomations: automations.filter((a) => a.status === "active").length,
+      activeTriggers: automations.filter((a) => a.status === "active").length,
       scheduledSends: scheduledRows.filter((r) => r.status === "scheduled").length,
       sendingNow: scheduledRows.filter((r) => r.status === "sending").length,
       monthlySentVolume,
@@ -234,7 +234,7 @@ export function buildScaleOverview() {
         audienceGroupName: row.audienceGroupName,
       })),
     },
-    automations: {
+    triggers: {
       totalCount: automations.length,
       activeCount: automations.filter((a) => a.status === "active").length,
       pausedCount: automations.filter((a) => a.status === "paused").length,
@@ -242,7 +242,7 @@ export function buildScaleOverview() {
       triggers24h: events24h.length,
       recentEvents,
     },
-    broadcasts: {
+    campaigns: {
       draftCount,
       inProgressCount,
       recentSent,

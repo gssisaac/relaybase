@@ -1,5 +1,5 @@
 /**
- * hq/scale client — Broadcast (audience + send) model.
+ * hq/scale client — Campaign (audience + send) and Trigger models.
  */
 import { getScaleApiBase } from "./api-base";
 import { SCALE_API_REQUEST_HEADER } from "./scale-origin";
@@ -19,20 +19,41 @@ export type TemplateVariablesSchema = {
   fields: TemplateVariableField[];
 };
 
-export type ScaleTemplate = {
+/** HTML email shell (was “templates” in older API). */
+export type ScaleLayout = {
   id: string;
   name: string;
   htmlSource: string;
   variablesSchema: TemplateVariablesSchema | null;
   isBuiltin: boolean;
-  derivedFromTemplateId: string | null;
+  derivedFromLayoutId: string | null;
   createdAt: string;
 };
 
-export type BroadcastListStatus = "active" | "archived";
-export type BroadcastStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+export type MessageTemplateCategory =
+  | "transactional"
+  | "marketing"
+  | "newsletter"
+  | "conversational";
 
-export type BroadcastStats = {
+export type MessageTemplate = {
+  id: string;
+  name: string;
+  subject: string;
+  previewText: string | null;
+  bodyMarkdown: string;
+  layoutId: string | null;
+  templateVariables: Record<string, string>;
+  category: MessageTemplateCategory | null;
+  isPreset: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CampaignListStatus = "active" | "archived";
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+
+export type CampaignStats = {
   sent: number;
   delivered: number;
   bounced: number;
@@ -46,7 +67,7 @@ export type BroadcastStats = {
   unsubscribed: number;
 };
 
-export type Broadcast = {
+export type Campaign = {
   id: string;
   name: string;
   slug: string;
@@ -54,44 +75,42 @@ export type Broadcast = {
   audienceGroupId: string | null;
   audienceGroupName: string | null;
   audienceGroupDomain: string | null;
-  /** Sending domain (Console); must match linked audience group when set. */
   domain: string | null;
   audienceContactCount: number | null;
   fromName: string | null;
   fromEmail: string | null;
   replyTo: string | null;
-  defaultTemplateId: string | null;
-  /** null = account default compliance sender. */
+  defaultLayoutId: string | null;
   complianceIdentityId: string | null;
-  listStatus: BroadcastListStatus;
+  listStatus: CampaignListStatus;
   subject: string;
   previewText: string | null;
   bodyMarkdown: string;
-  templateId: string | null;
+  layoutId: string | null;
+  messageTemplateId: string | null;
   templateVariables: Record<string, string>;
-  status: BroadcastStatus;
+  status: CampaignStatus;
   scheduledAt: string | null;
   sentAt: string | null;
   startedAt: string | null;
   finishedAt: string | null;
-  stats: BroadcastStats;
+  stats: CampaignStats;
   audienceActiveCount: number;
   createdAt: string;
   updatedAt: string;
 };
 
-export type BroadcastMemberStatus = "active" | "unsubscribed" | "bounced";
-export type BroadcastMemberSource = "manual" | "synced";
+export type CampaignMemberStatus = "active" | "unsubscribed" | "bounced";
+export type CampaignMemberSource = "manual" | "synced";
 
-/** Live audience contact as seen from a broadcast (group is source of truth). */
-export type BroadcastMember = {
+export type CampaignMember = {
   id: string;
-  broadcastId: string;
+  campaignId: string;
   audienceMemberId: string;
   email: string;
   name: string | null;
-  status: BroadcastMemberStatus;
-  source: BroadcastMemberSource;
+  status: CampaignMemberStatus;
+  source: CampaignMemberSource;
   unsubscribedAt: string | null;
   bouncedAt: string | null;
   bounceReason: string | null;
@@ -107,7 +126,7 @@ export type RecipientStatus =
   | "skipped"
   | "failed";
 
-export type BroadcastTrackingEventType =
+export type CampaignTrackingEventType =
   | "delivered"
   | "open"
   | "click"
@@ -115,17 +134,17 @@ export type BroadcastTrackingEventType =
   | "unsubscribe"
   | "complaint";
 
-export type BroadcastTrackingEvent = {
+export type CampaignTrackingEvent = {
   id: string;
   recipientId: string;
   memberEmail: string;
-  type: BroadcastTrackingEventType;
+  type: CampaignTrackingEventType;
   url: string | null;
   reason: string | null;
   occurredAt: string;
 };
 
-export type BroadcastLinkClickStat = {
+export type CampaignLinkClickStat = {
   url: string;
   clicks: number;
   uniqueClicks: number;
@@ -133,7 +152,7 @@ export type BroadcastLinkClickStat = {
 
 export type AccountSentOverview = {
   period: { from: string; to: string };
-  totals: BroadcastStats & { broadcasts: number };
+  totals: CampaignStats & { campaigns: number };
   rates: { delivery: number; open: number; click: number; bounce: number };
   byWeek: { weekStart: string; sent: number; opened: number; clicked: number }[];
   byAudience: {
@@ -143,20 +162,20 @@ export type AccountSentOverview = {
     opened: number;
     clicked: number;
   }[];
-  broadcasts: Array<{
+  campaigns: Array<{
     id: string;
     name: string;
     subject: string;
-    status: BroadcastStatus;
+    status: CampaignStatus;
     sentAt: string | null;
     finishedAt: string | null;
-    stats: BroadcastStats;
+    stats: CampaignStats;
     audienceGroupName: string | null;
   }>;
-  topLinks: { url: string; clicks: number; uniqueClicks: number; broadcastId: string }[];
+  topLinks: { url: string; clicks: number; uniqueClicks: number; campaignId: string }[];
 };
 
-export type BroadcastDispatchProgress = {
+export type CampaignDispatchProgress = {
   batchSize: number;
   batchIntervalSeconds: number;
   queue: {
@@ -173,28 +192,28 @@ export type BroadcastDispatchProgress = {
   recipientsPerMinute: number | null;
 };
 
-export type AutomationTriggerStatsOverview = {
+export type TriggerStatsOverview = {
   generatedAt: string;
   period: { from: string; to: string };
   triggers24h: number;
   triggers7d: number;
-  totals: AutomationStats & { automations: number };
+  totals: TriggerStats & { triggers: number };
   rates: { delivery: number; open: number; click: number; bounce: number };
   byDay: { day: string; label: string; count: number }[];
-  byAutomation: Array<{
+  byTrigger: Array<{
     id: string;
     name: string;
-    status: AutomationStatus;
-    stats: AutomationStats;
+    status: TriggerStatus;
+    stats: TriggerStats;
     triggers24h: number;
   }>;
   recentEvents: Array<{
     id: string;
-    automationId: string | null;
-    automationName: string;
-    triggerType: AutomationTrigger["type"];
+    triggerId: string | null;
+    triggerName: string;
+    sourceType: TriggerSource["type"];
     recipientEmail: string;
-    status: AutomationTriggerEventStatus;
+    status: TriggerEventStatus;
     occurredAt: string;
   }>;
 };
@@ -203,7 +222,7 @@ export type ScaleOverview = {
   generatedAt: string;
   summary: {
     totalContacts: number;
-    activeAutomations: number;
+    activeTriggers: number;
     scheduledSends: number;
     sendingNow: number;
     monthlySentVolume: number;
@@ -219,7 +238,7 @@ export type ScaleOverview = {
       scheduledAt: string;
       audienceGroupName: string | null;
       recipientCount: number;
-      status: BroadcastStatus;
+      status: CampaignStatus;
     } | null;
     upcomingCount: number;
     upcomingList: Array<{
@@ -231,7 +250,7 @@ export type ScaleOverview = {
       audienceGroupName: string | null;
     }>;
   };
-  automations: {
+  triggers: {
     totalCount: number;
     activeCount: number;
     pausedCount: number;
@@ -239,15 +258,15 @@ export type ScaleOverview = {
     triggers24h: number;
     recentEvents: Array<{
       id: string;
-      automationId: string | null;
-      automationName: string;
-      triggerType: string;
+      triggerId: string | null;
+      triggerName: string;
+      sourceType: string;
       recipientEmail: string;
       status: string;
       occurredAt: string;
     }>;
   };
-  broadcasts: {
+  campaigns: {
     draftCount: number;
     inProgressCount: number;
     recentSent: Array<{
@@ -261,7 +280,6 @@ export type ScaleOverview = {
     }>;
     cloudflareQuota: {
       usedToday: number;
-      /** Unknown until Cloudflare exposes per-account caps in API — do not assume a fixed ceiling. */
       dailyLimit: number | null;
       percentUsed: number | null;
     };
@@ -295,7 +313,7 @@ export type ScaleOverview = {
 
 export type InProgressOverview = {
   sending: Array<{
-    broadcast: Broadcast;
+    campaign: Campaign;
     queue: {
       total: number;
       queued: number;
@@ -305,13 +323,13 @@ export type InProgressOverview = {
     };
     startedAt: string | null;
     lastDispatchedAt: string | null;
-    dispatch: BroadcastDispatchProgress | null;
-    recentEvents: BroadcastTrackingEvent[];
+    dispatch: CampaignDispatchProgress | null;
+    recentEvents: CampaignTrackingEvent[];
   }>;
-  scheduled: Broadcast[];
+  scheduled: Campaign[];
 };
 
-export type BroadcastRecipient = {
+export type CampaignRecipient = {
   id: string;
   audienceMemberId: string;
   email: string;
@@ -443,26 +461,69 @@ export const scaleApi = {
       body: JSON.stringify(input),
     }),
 
-  listTemplates: () => scaleFetch<{ templates: ScaleTemplate[] }>("/scale/templates"),
-  importTemplate: (input: { name: string; htmlSource: string; variablesYaml?: string }) =>
-    scaleFetch<{ template: ScaleTemplate; warnings: string[] }>("/scale/templates", {
+  listLayouts: () => scaleFetch<{ layouts: ScaleLayout[] }>("/scale/layouts"),
+  getLayout: (id: string) => scaleFetch<{ layout: ScaleLayout }>(`/scale/layouts/${id}`),
+  deleteLayout: (id: string) =>
+    scaleFetch<{ ok: true }>(`/scale/layouts/${id}`, { method: "DELETE" }),
+  importLayout: (input: { name: string; htmlSource: string; variablesYaml?: string }) =>
+    scaleFetch<{ layout: ScaleLayout; warnings: string[] }>("/scale/layouts", {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  saveTemplateSource: (id: string, input: { htmlSource: string; name?: string }) =>
-    scaleFetch<{ template: ScaleTemplate; forked: boolean; warnings: string[] }>(
-      `/scale/templates/${id}/source`,
+  saveLayoutSource: (id: string, input: { htmlSource: string; name?: string }) =>
+    scaleFetch<{ layout: ScaleLayout; forked: boolean; warnings: string[] }>(
+      `/scale/layouts/${id}/source`,
       {
         method: "PATCH",
         body: JSON.stringify(input),
       },
     ),
 
+  listMessageTemplates: () =>
+    scaleFetch<{ templates: MessageTemplate[] }>("/scale/templates"),
+  getMessageTemplate: (id: string) =>
+    scaleFetch<{ template: MessageTemplate }>(`/scale/templates/${id}`),
+  createMessageTemplate: (input: {
+    name: string;
+    subject?: string;
+    previewText?: string | null;
+    bodyMarkdown?: string;
+    layoutId?: string | null;
+    category?: MessageTemplateCategory;
+  }) =>
+    scaleFetch<{ template: MessageTemplate }>("/scale/templates", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateMessageTemplate: (
+    id: string,
+    input: Partial<{
+      name: string;
+      subject: string;
+      previewText: string | null;
+      bodyMarkdown: string;
+      layoutId: string | null;
+      templateVariables: Record<string, string>;
+    }>,
+  ) =>
+    scaleFetch<{ template: MessageTemplate }>(`/scale/templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  uploadMessageTemplateAsset: (
+    templateId: string,
+    input: { filename: string; mimeType: string; contentBase64: string },
+  ) =>
+    scaleFetch<{ url: string; key: string }>(`/scale/templates/${templateId}/assets`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
   getOverview: () => scaleFetch<ScaleOverview>("/scale/overview"),
-  listBroadcasts: () => scaleFetch<{ broadcasts: Broadcast[] }>("/scale/broadcasts"),
-  getSentOverview: () => scaleFetch<AccountSentOverview>("/scale/broadcasts/sent-stats"),
-  getInProgressOverview: () => scaleFetch<InProgressOverview>("/scale/broadcasts/in-progress"),
-  createBroadcast: (input: {
+  listCampaigns: () => scaleFetch<{ campaigns: Campaign[] }>("/scale/campaigns"),
+  getSentOverview: () => scaleFetch<AccountSentOverview>("/scale/campaigns/sent-stats"),
+  getInProgressOverview: () => scaleFetch<InProgressOverview>("/scale/campaigns/in-progress"),
+  createCampaign: (input: {
     name: string;
     domain: string;
     audienceGroupId: string;
@@ -471,10 +532,10 @@ export const scaleApi = {
     fromName?: string;
     fromEmail?: string;
     replyTo?: string;
-    defaultTemplateId?: string;
-  }) => scaleFetch<Broadcast>("/scale/broadcasts", { method: "POST", body: JSON.stringify(input) }),
-  getBroadcast: (id: string) => scaleFetch<Broadcast>(`/scale/broadcasts/${id}`),
-  updateBroadcast: (
+    defaultLayoutId?: string;
+  }) => scaleFetch<Campaign>("/scale/campaigns", { method: "POST", body: JSON.stringify(input) }),
+  getCampaign: (id: string) => scaleFetch<Campaign>(`/scale/campaigns/${id}`),
+  updateCampaign: (
     id: string,
     input: Partial<{
       name: string;
@@ -485,105 +546,101 @@ export const scaleApi = {
       fromName: string | null;
       fromEmail: string | null;
       replyTo: string | null;
-      defaultTemplateId: string | null;
+      defaultLayoutId: string | null;
       complianceIdentityId: string | null;
-      listStatus: BroadcastListStatus;
+      listStatus: CampaignListStatus;
       subject: string;
       previewText: string;
       bodyMarkdown: string;
-      templateId: string;
+      layoutId: string;
+      messageTemplateId: string | null;
       templateVariables: Record<string, string>;
       audienceGroupId: string;
     }>,
-  ) => scaleFetch<Broadcast>(`/scale/broadcasts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
-  archiveBroadcast: (id: string) =>
-    scaleFetch<Broadcast>(`/scale/broadcasts/${id}`, {
+  ) => scaleFetch<Campaign>(`/scale/campaigns/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
+  archiveCampaign: (id: string) =>
+    scaleFetch<Campaign>(`/scale/campaigns/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ listStatus: "archived" }),
     }),
-  unarchiveBroadcast: (id: string) =>
-    scaleFetch<Broadcast>(`/scale/broadcasts/${id}`, {
+  unarchiveCampaign: (id: string) =>
+    scaleFetch<Campaign>(`/scale/campaigns/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ listStatus: "active" }),
     }),
 
-  listBroadcastAudience: (broadcastId: string, params?: { status?: string; q?: string }) => {
+  listCampaignAudience: (campaignId: string, params?: { status?: string; q?: string }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
     if (params?.q) qs.set("q", params.q);
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
-    return scaleFetch<{ members: BroadcastMember[] }>(
-      `/scale/broadcasts/${broadcastId}/audience${suffix}`,
+    return scaleFetch<{ members: CampaignMember[] }>(
+      `/scale/campaigns/${campaignId}/audience${suffix}`,
     );
   },
-  syncBroadcastAudience: (broadcastId: string) =>
+  syncCampaignAudience: (campaignId: string) =>
     scaleFetch<{
       added: number;
       updated: number;
       skipped: number;
       contactCount: number;
       activeCount: number;
-    }>(`/scale/broadcasts/${broadcastId}/audience/sync`, { method: "POST" }),
-  testSendBroadcast: (broadcastId: string, to: string) =>
-    scaleFetch<{ ok: true }>(`/scale/broadcasts/${broadcastId}/test-send`, {
+    }>(`/scale/campaigns/${campaignId}/audience/sync`, { method: "POST" }),
+  testSendCampaign: (campaignId: string, to: string) =>
+    scaleFetch<{ ok: true }>(`/scale/campaigns/${campaignId}/test-send`, {
       method: "POST",
       body: JSON.stringify({ to }),
     }),
-  sendBroadcast: (broadcastId: string) =>
+  sendCampaign: (campaignId: string) =>
     scaleFetch<{
-      broadcast: Broadcast;
+      campaign: Campaign;
       sent: number;
       failed: number;
       skipped: number;
       async?: boolean;
       queued?: number;
-    }>(
-      `/scale/broadcasts/${broadcastId}/send`,
-      { method: "POST" },
-    ),
-  scheduleBroadcast: (broadcastId: string, runAt: string) =>
-    scaleFetch<Broadcast>(`/scale/broadcasts/${broadcastId}/schedule`, {
+    }>(`/scale/campaigns/${campaignId}/send`, { method: "POST" }),
+  scheduleCampaign: (campaignId: string, runAt: string) =>
+    scaleFetch<Campaign>(`/scale/campaigns/${campaignId}/schedule`, {
       method: "POST",
       body: JSON.stringify({ runAt }),
     }),
-  cancelSchedule: (broadcastId: string) =>
-    scaleFetch<Broadcast>(`/scale/broadcasts/${broadcastId}/cancel-schedule`, {
+  cancelSchedule: (campaignId: string) =>
+    scaleFetch<Campaign>(`/scale/campaigns/${campaignId}/cancel-schedule`, {
       method: "POST",
     }),
-  duplicateBroadcast: (broadcastId: string) =>
-    scaleFetch<Broadcast>(`/scale/broadcasts/${broadcastId}/duplicate`, {
+  duplicateCampaign: (campaignId: string) =>
+    scaleFetch<Campaign>(`/scale/campaigns/${campaignId}/duplicate`, {
       method: "POST",
     }),
-  getBroadcastStats: (broadcastId: string) =>
+  getCampaignStats: (campaignId: string) =>
     scaleFetch<{
-      broadcast: Broadcast;
-      dispatch: BroadcastDispatchProgress | null;
-      recipients: BroadcastRecipient[];
-      trackingEvents: BroadcastTrackingEvent[];
-      linkClicks: BroadcastLinkClickStat[];
-    }>(`/scale/broadcasts/${broadcastId}/stats`),
+      campaign: Campaign;
+      dispatch: CampaignDispatchProgress | null;
+      recipients: CampaignRecipient[];
+      trackingEvents: CampaignTrackingEvent[];
+      linkClicks: CampaignLinkClickStat[];
+    }>(`/scale/campaigns/${campaignId}/stats`),
 
-  uploadBroadcastAsset: (
-    broadcastId: string,
+  uploadCampaignAsset: (
+    campaignId: string,
     input: { filename: string; mimeType: string; contentBase64: string },
   ) =>
-    scaleFetch<{ url: string; key: string }>(`/scale/broadcasts/${broadcastId}/assets`, {
+    scaleFetch<{ url: string; key: string }>(`/scale/campaigns/${campaignId}/assets`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
 
-  listAutomations: () => scaleFetch<{ automations: Automation[] }>("/scale/automations"),
-  getAutomationTriggerStats: () =>
-    scaleFetch<AutomationTriggerStatsOverview>("/scale/automations/trigger-stats"),
-  createAutomation: (input: {
+  listTriggers: () => scaleFetch<{ triggers: Trigger[] }>("/scale/triggers"),
+  getTriggerStatsOverview: () => scaleFetch<TriggerStatsOverview>("/scale/triggers/stats"),
+  createTrigger: (input: {
     name: string;
     domain?: string;
-    purpose?: AutomationPurpose;
-    triggerType?: AutomationTrigger["type"];
-  }) =>
-    scaleFetch<Automation>("/scale/automations", { method: "POST", body: JSON.stringify(input) }),
-  getAutomation: (id: string) => scaleFetch<Automation>(`/scale/automations/${id}`),
-  updateAutomation: (
+    purpose?: TriggerPurpose;
+    sourceType?: TriggerSource["type"];
+  }) => scaleFetch<Trigger>("/scale/triggers", { method: "POST", body: JSON.stringify(input) }),
+  getTrigger: (id: string) => scaleFetch<Trigger>(`/scale/triggers/${id}`),
+  updateTrigger: (
     id: string,
     input: Partial<{
       name: string;
@@ -594,68 +651,69 @@ export const scaleApi = {
       fromEmail: string | null;
       replyTo: string | null;
       complianceIdentityId: string | null;
-      listStatus: AutomationListStatus;
-      purpose: AutomationPurpose;
-      trigger: AutomationTrigger;
+      listStatus: TriggerListStatus;
+      purpose: TriggerPurpose;
+      source: TriggerSource;
       audienceGroupId: string | null;
       cooldownSeconds: number;
       applyMarketingSuppression: boolean;
       subject: string;
       previewText: string | null;
       bodyMarkdown: string;
-      templateId: string | null;
+      layoutId: string | null;
+      messageTemplateId: string | null;
       templateVariables: Record<string, string>;
     }>,
   ) =>
-    scaleFetch<Automation>(`/scale/automations/${id}`, {
+    scaleFetch<Trigger>(`/scale/triggers/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
-  activateAutomation: (id: string) =>
-    scaleFetch<Automation>(`/scale/automations/${id}/activate`, { method: "POST" }),
-  pauseAutomation: (id: string) =>
-    scaleFetch<Automation>(`/scale/automations/${id}/pause`, { method: "POST" }),
-  rotateAutomationWebhookSecret: (id: string) =>
-    scaleFetch<{ automation: Automation; secret: string }>(
-      `/scale/automations/${id}/rotate-webhook-secret`,
+  activateTrigger: (id: string) =>
+    scaleFetch<Trigger>(`/scale/triggers/${id}/activate`, { method: "POST" }),
+  pauseTrigger: (id: string) =>
+    scaleFetch<Trigger>(`/scale/triggers/${id}/pause`, { method: "POST" }),
+  rotateTriggerWebhookSecret: (id: string) =>
+    scaleFetch<{ trigger: Trigger; secret: string }>(
+      `/scale/triggers/${id}/rotate-webhook-secret`,
       { method: "POST" },
     ),
-  testSendAutomation: (
+  testSendTrigger: (
     id: string,
     input: { email: string; name?: string; payload?: Record<string, unknown> },
   ) =>
-    scaleFetch<{ ok: true; automationSendId: string; triggerEventId: string }>(
-      `/scale/automations/${id}/test-send`,
+    scaleFetch<{ ok: true; triggerSendId: string; triggerEventId: string }>(
+      `/scale/triggers/${id}/test-send`,
       { method: "POST", body: JSON.stringify(input) },
     ),
-  getAutomationActivity: (id: string) =>
-    scaleFetch<{ triggerEvents: AutomationTriggerEvent[]; sends: AutomationSend[] }>(
-      `/scale/automations/${id}/activity`,
+  getTriggerActivity: (id: string) =>
+    scaleFetch<{ triggerEvents: TriggerEvent[]; sends: TriggerSend[] }>(
+      `/scale/triggers/${id}/activity`,
     ),
-  getAutomationStats: (id: string) =>
+  getTriggerStats: (id: string) =>
     scaleFetch<{
-      automationId: string;
-      stats: AutomationStats;
+      triggerId: string;
+      stats: TriggerStats;
       lastTriggeredAt: string | null;
       lastSentAt: string | null;
-    }>(`/scale/automations/${id}/stats`),
-  uploadAutomationAsset: (
-    automationId: string,
+    }>(`/scale/triggers/${id}/stats`),
+  uploadTriggerAsset: (
+    triggerId: string,
     input: { filename: string; mimeType: string; contentBase64: string },
   ) =>
-    scaleFetch<{ url: string; key: string }>(`/scale/automations/${automationId}/assets`, {
+    scaleFetch<{ url: string; key: string }>(`/scale/triggers/${triggerId}/assets`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
 };
 
-export type AutomationListStatus = "active" | "archived";
-export type AutomationStatus = "draft" | "active" | "paused";
-export type AutomationPurpose = "transactional" | "conversational" | "marketing";
+export type TriggerListStatus = "active" | "archived";
+export type TriggerStatus = "draft" | "active" | "paused";
+export type TriggerPurpose = "transactional" | "conversational" | "marketing";
 
-export type InternalAutomationEvent = "account.verify_email" | "account.created";
+export type InternalTriggerEvent = "account.verify_email" | "account.created";
 
-export type AutomationTrigger =
+export type TriggerSource =
   | {
       type: "http_webhook";
       secret: string;
@@ -675,7 +733,7 @@ export type AutomationTrigger =
     }
   | {
       type: "internal_event";
-      event: InternalAutomationEvent;
+      event: InternalTriggerEvent;
     }
   | {
       type: "form_submit";
@@ -685,13 +743,13 @@ export type AutomationTrigger =
       requiredFields?: string[];
     };
 
-export type AutomationStats = BroadcastStats & {
+export type TriggerStats = CampaignStats & {
   triggered: number;
   matched: number;
   deduped: number;
 };
 
-export type Automation = {
+export type Trigger = {
   id: string;
   name: string;
   slug: string;
@@ -701,10 +759,10 @@ export type Automation = {
   fromEmail: string | null;
   replyTo: string | null;
   complianceIdentityId: string | null;
-  purpose: AutomationPurpose;
-  listStatus: AutomationListStatus;
-  status: AutomationStatus;
-  trigger: AutomationTrigger;
+  purpose: TriggerPurpose;
+  listStatus: TriggerListStatus;
+  status: TriggerStatus;
+  source: TriggerSource;
   audienceGroupId: string | null;
   audienceGroupName: string | null;
   cooldownSeconds: number;
@@ -712,16 +770,17 @@ export type Automation = {
   subject: string;
   previewText: string | null;
   bodyMarkdown: string;
-  templateId: string | null;
+  layoutId: string | null;
+  messageTemplateId: string | null;
   templateVariables: Record<string, string>;
-  stats: AutomationStats;
+  stats: TriggerStats;
   lastTriggeredAt: string | null;
   lastSentAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-export type AutomationTriggerEventStatus =
+export type TriggerEventStatus =
   | "received"
   | "matched"
   | "queued"
@@ -729,20 +788,20 @@ export type AutomationTriggerEventStatus =
   | "skipped"
   | "failed";
 
-export type AutomationTriggerEvent = {
+export type TriggerEvent = {
   id: string;
-  automationId: string | null;
-  triggerType: AutomationTrigger["type"];
+  triggerId: string | null;
+  sourceType: TriggerSource["type"];
   idempotencyKey: string;
   recipientEmail: string;
   recipientName: string | null;
   payload: Record<string, unknown>;
-  status: AutomationTriggerEventStatus;
+  status: TriggerEventStatus;
   skipReason: string | null;
   occurredAt: string;
 };
 
-export type AutomationSendStatus =
+export type TriggerSendStatus =
   | "queued"
   | "sending"
   | "delivered"
@@ -750,14 +809,14 @@ export type AutomationSendStatus =
   | "skipped"
   | "failed";
 
-export type AutomationSend = {
+export type TriggerSend = {
   id: string;
-  automationId: string;
+  triggerId: string;
   triggerEventId: string;
   audienceMemberId: string | null;
   email: string;
   name: string | null;
-  status: AutomationSendStatus;
+  status: TriggerSendStatus;
   errorMessage: string | null;
   bounceReason: string | null;
   sentAt: string | null;

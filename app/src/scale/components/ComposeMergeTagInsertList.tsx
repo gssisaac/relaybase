@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { ComposeMergeTagSection } from "@/scale/lib/automation-merge-tags";
+import type { ComposeMergeTagSection } from "@/scale/lib/triggers/trigger-merge-tags";
 
 export function ComposeMergeTagInsertList({
   sections,

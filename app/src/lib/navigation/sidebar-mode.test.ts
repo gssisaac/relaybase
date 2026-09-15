@@ -17,7 +17,7 @@ describe("modeFromPathname", () => {
 
   it("treats /scale as scale mode", () => {
     assert.equal(modeFromPathname("/scale/audience"), "scale");
-    assert.equal(modeFromPathname("/scale/broadcasts"), "scale");
+    assert.equal(modeFromPathname("/scale/campaigns"), "scale");
   });
 
   it("treats everything else as dashboard", () => {
@@ -85,42 +85,47 @@ describe("normalizeEntryPath", () => {
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/bc1/progress"),
-      "/scale/broadcasts?id=bc1&tab=stats",
+      "/scale/campaigns?id=bc1&tab=stats",
     );
-    assert.equal(normalizeEntryPath("/broadcasts/new"), "/scale/broadcasts?new=1");
+    assert.equal(normalizeEntryPath("/broadcasts/new"), "/scale/campaigns?new=1");
   });
 
   it("rewrites automation nested tabs into ?id=&tab= for last-path restore", () => {
     assert.equal(
-      normalizeEntryPath("/scale/automations/automation_abc/settings"),
-      "/scale/automations?id=automation_abc&tab=settings",
+      normalizeEntryPath("/scale/triggers/automation_abc/settings"),
+      "/scale/triggers?id=automation_abc&tab=settings",
     );
     assert.equal(
-      normalizeEntryPath("/scale/automations/automation_abc/preview"),
-      "/scale/automations?id=automation_abc&tab=preview",
+      normalizeEntryPath("/scale/triggers/automation_abc/preview"),
+      "/scale/triggers?id=automation_abc&tab=preview",
     );
     assert.equal(
-      normalizeEntryPath("/scale/automations/automation_abc/edit"),
-      "/scale/automations/edit?id=automation_abc",
+      normalizeEntryPath("/scale/triggers/automation_abc/edit"),
+      "/scale/triggers/edit?id=automation_abc",
     );
+  });
+
+  it("rewrites legacy /scale/broadcasts paths to /scale/campaigns", () => {
+    assert.equal(normalizeEntryPath("/scale/broadcasts/sent"), "/scale/campaigns?view=sent");
+    assert.equal(normalizeEntryPath("/scale/automations/edit"), "/scale/triggers/edit");
   });
 
   it("rewrites reserved broadcast section paths into ?view=", () => {
     assert.equal(
-      normalizeEntryPath("/scale/broadcasts/sent"),
-      "/scale/broadcasts?view=sent",
+      normalizeEntryPath("/scale/campaigns/sent"),
+      "/scale/campaigns?view=sent",
     );
     assert.equal(
-      normalizeEntryPath("/scale/broadcasts/in-progress"),
-      "/scale/broadcasts?view=in-progress",
+      normalizeEntryPath("/scale/campaigns/in-progress"),
+      "/scale/campaigns?view=in-progress",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/sent"),
-      "/scale/broadcasts?view=sent",
+      "/scale/campaigns?view=sent",
     );
     assert.equal(
-      normalizeEntryPath("/scale/broadcasts/broadcast_abc/stats"),
-      "/scale/broadcasts?id=broadcast_abc&tab=stats",
+      normalizeEntryPath("/scale/campaigns/broadcast_abc/stats"),
+      "/scale/campaigns?id=broadcast_abc&tab=stats",
     );
   });
 

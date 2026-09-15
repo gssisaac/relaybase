@@ -1,7 +1,7 @@
 import { store } from "../../db/store";
 import type { AudienceMember } from "../../db/types";
 import { isEmailSuppressedForGroup } from "../account/suppression";
-import { syncAllBroadcastsForAudienceGroup } from "../broadcasts/audience-sync";
+import { syncAllCampaignsForAudienceGroup } from "../campaigns/audience-sync";
 import { newId, newToken } from "../shared/ids";
 import { fetchDataSourceContacts } from "./data-source-sync";
 import { findAudienceGroup } from "./group";
@@ -81,7 +81,7 @@ export async function syncAudienceGroupAsync(
         run.successCount = synced.length;
       }
     });
-    syncAllBroadcastsForAudienceGroup(groupId);
+    syncAllCampaignsForAudienceGroup(groupId);
     return { ok: true, totalCount: contacts.length + skipped, skippedCount: skipped };
   } catch (err) {
     const message = err instanceof Error ? err.message : "sync failed";

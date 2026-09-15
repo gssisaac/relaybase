@@ -25,7 +25,7 @@ export function upsertAccountSuppression(input: {
   email: string;
   reason: AccountSuppressionReason;
   audienceGroupId: string | null;
-  sourceBroadcastId?: string | null;
+  sourceCampaignId?: string | null;
   accountLinkId?: string;
 }): void {
   const accountLinkId = input.accountLinkId ?? DEV_ACCOUNT_LINK_ID;
@@ -48,7 +48,7 @@ export function upsertAccountSuppression(input: {
       email,
       reason: input.reason,
       audienceGroupId: input.audienceGroupId,
-      sourceBroadcastId: input.sourceBroadcastId ?? null,
+      sourceCampaignId: input.sourceCampaignId ?? null,
       createdAt: now,
     });
   });
@@ -58,12 +58,12 @@ export function upsertAccountSuppression(input: {
 export function recordGroupUnsubscribe(input: {
   audienceGroupId: string;
   email: string;
-  sourceBroadcastId?: string | null;
+  sourceCampaignId?: string | null;
 }): void {
   upsertAccountSuppression({
     email: input.email,
     reason: "unsubscribe",
     audienceGroupId: input.audienceGroupId,
-    sourceBroadcastId: input.sourceBroadcastId ?? null,
+    sourceCampaignId: input.sourceCampaignId ?? null,
   });
 }

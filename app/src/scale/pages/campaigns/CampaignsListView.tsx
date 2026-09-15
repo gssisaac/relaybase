@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutTemplate, Mail, Plus, RefreshCw } from "lucide-react";
+import { Mail, Plus, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -28,10 +28,9 @@ import {
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
-import { BroadcastCloudflareSendingLimitsCard } from "@/scale/components/BroadcastCloudflareSendingLimitsCard";
-import { BroadcastStatusBadge } from "@/scale/components/BroadcastStatusBadge";
-import { ScaleTemplateLibraryDialog } from "@/scale/components/ScaleTemplateLibraryDialog";
-import { BroadcastsSectionNav } from "@/scale/components/BroadcastsSectionNav";
+import { CampaignCloudflareSendingLimitsCard } from "@/scale/components/campaigns/CampaignCloudflareSendingLimitsCard";
+import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
+import { CampaignsSectionNav } from "@/scale/components/campaigns/CampaignsSectionNav";
 import { scaleAudienceApi } from "@/lib/scale/audience-api";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import {
@@ -42,31 +41,31 @@ import {
   ListToolbar,
 } from "@/email/components/mailbox/EmailListShell";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
-import { broadcastDetailHref } from "@/scale/lib/paths";
+import { campaignDetailHref } from "@/scale/lib/paths";
 import {
   scaleApi,
   ScaleApiError,
-  type Broadcast,
-  type BroadcastStatus,
+  type Campaign,
+  type CampaignStatus,
 } from "@/lib/scale/api";
 import { cn } from "@/lib/utils";
 
-export type BroadcastFilter = "draft" | "sent" | "in_progress" | "all";
+export type CampaignFilter = "draft" | "sent" | "in_progress" | "all";
 
-const FILTER_OPTIONS: { value: BroadcastFilter; label: string }[] = [
+const FILTER_OPTIONS: { value: CampaignFilter; label: string }[] = [
   { value: "draft", label: "Draft" },
   { value: "sent", label: "Sent" },
   { value: "in_progress", label: "In progress" },
   { value: "all", label: "All" },
 ];
 
-function filterLabel(filter: BroadcastFilter): string {
+function filterLabel(filter: CampaignFilter): string {
   return FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
 }
 
-function matchesBroadcastFilter(
-  status: BroadcastStatus,
-  filter: BroadcastFilter,
+function matchesCampaignFilter(
+  status: CampaignStatus,
+  filter: CampaignFilter,
 ): boolean {
   switch (filter) {
     case "draft":
@@ -91,7 +90,7 @@ function formatWhen(value?: string | null): string {
   });
 }
 
-function statsLine(b: Broadcast): string {
+function statsLine(b: Campaign): string {
   if (b.status === "sending") {
     const total = b.audienceActiveCount || (b.stats.sent + b.stats.failed);
     const inFlight = b.stats.sent;
@@ -126,18 +125,18 @@ function statsLine(b: Broadcast): string {
   return `${count.toLocaleString()} recipient${count === 1 ? "" : "s"}`;
 }
 
-export function BroadcastsListView() {
+export function CampaignsListView() {
   const router = useRouter();
   const {
     readyDomains,
     loading: workerDomainsLoading,
     refresh: refreshWorkerDomains,
   } = useWorkerDomains();
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<BroadcastFilter>("draft");
+  const [filter, setFilter] = useState<CampaignFilter>("draft");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -151,10 +150,10 @@ export function BroadcastsListView() {
     if (force) setRefreshing(true);
     else setLoading(true);
     try {
-      const list = await scaleApi.listBroadcasts();
-      setBroadcasts(list.broadcasts);
+      const list = await scaleApi.listCampaigns();
+      setCampaigns(list.campaigns);
     } catch {
-      toast.error("Could not load broadcasts");
+      toast.error("Could not load campaigns");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -166,8 +165,8 @@ export function BroadcastsListView() {
   }, [load]);
 
   const hasSending = useMemo(
-    () => broadcasts.some((b) => b.status === "sending"),
-    [broadcasts],
+    () => campaigns.some((b) => b.status === "sending"),
+    [campaigns],
   );
 
   useEffect(() => {
@@ -190,7 +189,7 @@ export function BroadcastsListView() {
   }, [createOpen, refreshWorkerDomains]);
 
   const counts = useMemo(() => {
-    const visible = broadcasts.filter((b) => b.listStatus !== "archived");
+    const visible = campaigns.filter((b) => b.listStatus !== "archived");
     return {
       draft: visible.filter((b) => b.status === "draft").length,
       sent: visible.filter((b) => b.status === "sent").length,
@@ -199,13 +198,13 @@ export function BroadcastsListView() {
       ).length,
       all: visible.length,
     };
-  }, [broadcasts]);
+  }, [campaigns]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return broadcasts.filter((b) => {
+    return campaigns.filter((b) => {
       if (b.listStatus === "archived") return false;
-      if (!matchesBroadcastFilter(b.status, filter)) return false;
+      if (!matchesCampaignFilter(b.status, filter)) return false;
 
       if (!q) return true;
       return (
@@ -215,7 +214,7 @@ export function BroadcastsListView() {
         (b.audienceGroupName && b.audienceGroupName.toLowerCase().includes(q))
       );
     });
-  }, [broadcasts, filter, search]);
+  }, [campaigns, filter, search]);
 
   const groupsForDomain = useMemo(() => {
     const d = newDomain?.toLowerCase();
@@ -244,7 +243,7 @@ export function BroadcastsListView() {
     const name = newName.trim();
     const audienceGroupId = newAudienceGroupId.trim();
     if (!name) {
-      setCreateError("Broadcast name is required");
+      setCreateError("Campaign name is required");
       return;
     }
     if (!newDomain) {
@@ -259,18 +258,18 @@ export function BroadcastsListView() {
     setCreateError(null);
     try {
       const workerUrl = resolveEmailApiBase();
-      const created = await scaleApi.createBroadcast({
+      const created = await scaleApi.createCampaign({
         name,
         domain: newDomain,
         audienceGroupId,
         ...(workerUrl ? { workerUrl } : {}),
       });
-      toast.success(`Broadcast '${created.name}' created`);
+      toast.success(`Campaign '${created.name}' created`);
       setCreateOpen(false);
       resetCreate();
-      router.push(broadcastDetailHref(created.id, "content"));
+      router.push(campaignDetailHref(created.id, "content"));
     } catch (err) {
-      setCreateError(err instanceof ScaleApiError ? err.message : "Could not create broadcast");
+      setCreateError(err instanceof ScaleApiError ? err.message : "Could not create campaign");
       setCreating(false);
     }
   }
@@ -289,14 +288,6 @@ export function BroadcastsListView() {
           className="px-4 py-3"
           end={
             <>
-              <ScaleTemplateLibraryDialog
-                trigger={
-                  <Button size="sm" variant="outline">
-                    <LayoutTemplate className="size-4" />
-                    Templates
-                  </Button>
-                }
-              />
               <DialogTrigger
                 render={<Button size="sm" />}
                 onClick={() => {
@@ -304,7 +295,7 @@ export function BroadcastsListView() {
                 }}
               >
                 <Plus className="size-4" />
-                New broadcast
+                New campaign
               </DialogTrigger>
               <Button
                 variant="outline"
@@ -319,27 +310,27 @@ export function BroadcastsListView() {
         >
           <div className="min-w-0 space-y-2">
             <div>
-              <h1 className="truncate text-lg font-semibold tracking-tight">Broadcasts</h1>
+              <h1 className="truncate text-lg font-semibold tracking-tight">Campaigns</h1>
               <p className="text-sm text-muted-foreground">
-                Email broadcasts with linked audience and send lifecycle
+                Email campaigns with linked audience and send lifecycle
               </p>
             </div>
-            <BroadcastsSectionNav active="list" />
+            <CampaignsSectionNav active="list" />
           </div>
         </DesktopTitleBar>
 
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>New broadcast</DialogTitle>
+            <DialogTitle>New campaign</DialogTitle>
             <DialogDescription>
               Pick a domain from your Worker, then an audience group on that domain.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="broadcast-name">Name</Label>
+              <Label htmlFor="campaign-name">Name</Label>
               <Input
-                id="broadcast-name"
+                id="campaign-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder={examplePlaceholder("Engineering Updates")}
@@ -348,7 +339,7 @@ export function BroadcastsListView() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="broadcast-domain">Domain</Label>
+              <Label htmlFor="campaign-domain">Domain</Label>
               <Select
                 value={newDomain}
                 onValueChange={(value) => {
@@ -356,7 +347,7 @@ export function BroadcastsListView() {
                   setNewAudienceGroupId("");
                 }}
               >
-                <SelectTrigger id="broadcast-domain" className="w-full">
+                <SelectTrigger id="campaign-domain" className="w-full">
                   <SelectValue placeholder="Select domain" />
                 </SelectTrigger>
                 <SelectContent>
@@ -376,7 +367,7 @@ export function BroadcastsListView() {
               ) : null}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="broadcast-audience">Audience</Label>
+              <Label htmlFor="campaign-audience">Audience</Label>
               {audienceLoading ? (
                 <p className="text-sm text-muted-foreground">Loading audience groups…</p>
               ) : !newDomain ? (
@@ -391,7 +382,7 @@ export function BroadcastsListView() {
                   value={newAudienceGroupId || null}
                   onValueChange={(value) => setNewAudienceGroupId(value ?? "")}
                 >
-                  <SelectTrigger id="broadcast-audience" className="w-full">
+                  <SelectTrigger id="campaign-audience" className="w-full">
                     <SelectValue placeholder="Select audience group" />
                   </SelectTrigger>
                   <SelectContent>
@@ -427,7 +418,7 @@ export function BroadcastsListView() {
               }
               onClick={() => void handleCreate()}
             >
-              {creating ? "Creating…" : "Create broadcast"}
+              {creating ? "Creating…" : "Create campaign"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -435,12 +426,12 @@ export function BroadcastsListView() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-4")}>
-          <BroadcastCloudflareSendingLimitsCard />
+          <CampaignCloudflareSendingLimitsCard />
           <EmailListContainer>
             <ListToolbar
               search={search}
               onSearchChange={setSearch}
-              searchPlaceholder="Search broadcasts…"
+              searchPlaceholder="Search campaigns…"
               trailing={
                 <div className="inline-flex max-w-full items-center overflow-x-auto rounded-lg bg-muted p-0.5">
                   {FILTER_OPTIONS.map((opt) => {
@@ -478,7 +469,7 @@ export function BroadcastsListView() {
             {filtered.length > 0 ? (
               <>
                 <EmailTableHeader>
-                  <span>Broadcast</span>
+                  <span>Campaign</span>
                   <span className="hidden sm:block">Stats</span>
                   <span className="hidden sm:block">Updated</span>
                   <span className="text-right">Status</span>
@@ -487,7 +478,7 @@ export function BroadcastsListView() {
                   {filtered.map((b) => (
                     <EmailTableRow
                       key={b.id}
-                      href={broadcastDetailHref(b.id)}
+                      href={campaignDetailHref(b.id)}
                       primary={b.name}
                       subject={statsLine(b)}
                       preview={b.audienceGroupName ?? b.fromEmail ?? undefined}
@@ -496,7 +487,7 @@ export function BroadcastsListView() {
                         day: "numeric",
                       })}
                       status={
-                        <BroadcastStatusBadge
+                        <CampaignStatusBadge
                           status={b.status}
                           listStatus={b.listStatus}
                         />
@@ -506,11 +497,11 @@ export function BroadcastsListView() {
                 </div>
               </>
             ) : !loading ? (
-              broadcasts.length === 0 ? (
+              campaigns.length === 0 ? (
                 <EmptyListState
                   icon={Mail}
-                  title="No broadcasts yet"
-                  description="Create a broadcast to sync an audience and send email."
+                  title="No campaigns yet"
+                  description="Create a campaign to sync an audience and send email."
                   action={
                     <Button
                       size="sm"
@@ -519,18 +510,18 @@ export function BroadcastsListView() {
                         setCreateOpen(true);
                       }}
                     >
-                      New broadcast
+                      New campaign
                     </Button>
                   }
                 />
               ) : (
                 <EmptyListState
                   icon={Mail}
-                  title="No matching broadcasts"
+                  title="No matching campaigns"
                   description={
                     search
-                      ? `No broadcasts match "${search}" with filter "${filterLabel(filter)}".`
-                      : `There are no broadcasts with status "${filterLabel(filter)}".`
+                      ? `No campaigns match "${search}" with filter "${filterLabel(filter)}".`
+                      : `There are no campaigns with status "${filterLabel(filter)}".`
                   }
                   action={
                     <Button
@@ -555,6 +546,3 @@ export function BroadcastsListView() {
     </div>
   );
 }
-
-/** @deprecated use BroadcastsListView */
-export const CampaignsListView = BroadcastsListView;

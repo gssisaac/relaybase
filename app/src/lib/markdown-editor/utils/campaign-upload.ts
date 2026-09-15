@@ -1,6 +1,6 @@
 import { scaleApi } from "@/lib/scale/api";
 
-export type CrmContentAssetOwner = "broadcast" | "automation";
+export type CrmContentAssetOwner = "campaign" | "trigger" | "template";
 
 /** Upload optimized image bytes; returns a public URL for BlockNote `resolveFileUrl`. */
 export async function uploadCampaignAsset(
@@ -8,12 +8,14 @@ export async function uploadCampaignAsset(
   filename: string,
   mimeType: string,
   contentBase64: string,
-  owner: CrmContentAssetOwner = "broadcast",
+  owner: CrmContentAssetOwner = "campaign",
 ): Promise<string> {
   const payload = { filename, mimeType, contentBase64 };
   const res =
-    owner === "automation"
-      ? await scaleApi.uploadAutomationAsset(campaignId, payload)
-      : await scaleApi.uploadBroadcastAsset(campaignId, payload);
+    owner === "trigger"
+      ? await scaleApi.uploadTriggerAsset(campaignId, payload)
+      : owner === "template"
+        ? await scaleApi.uploadMessageTemplateAsset(campaignId, payload)
+        : await scaleApi.uploadCampaignAsset(campaignId, payload);
   return res.url;
 }

@@ -128,7 +128,7 @@ export function AudienceGroupContactsView() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm">Audience group</CardTitle>
           <CardDescription>
-            Contacts live here. Unsubscribe status is shared with linked broadcasts — remove
+            Contacts live here. Unsubscribe status is shared with linked campaigns — remove
             deletes the contact entirely.
           </CardDescription>
         </CardHeader>
@@ -277,7 +277,7 @@ export function AudienceGroupContactsView() {
                 <>
                   <span className="font-medium text-foreground">{unsubConfirm.email}</span> will be
                   marked unsubscribed for this audience group. They will be excluded from future
-                  broadcasts linked to this group. This does not delete the contact — use Remove if
+                  campaigns linked to this group. This does not delete the contact — use Remove if
                   you want them off the list entirely.
                 </>
               ) : null}

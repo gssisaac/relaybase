@@ -13,8 +13,8 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { BroadcastStatusBadge } from "@/scale/components/BroadcastStatusBadge";
-import { broadcastDetailHref } from "@/scale/lib/paths";
+import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
+import { campaignDetailHref } from "@/scale/lib/paths";
 import type { ScheduleItem } from "@/scale/lib/schedule-items";
 import {
   formatScheduleEventTime,
@@ -37,7 +37,7 @@ function ScheduleItemPopoverContent({
   item: ScheduleItem;
   timeZone: string;
 }) {
-  const href = broadcastDetailHref(item.broadcastId, "publish", item.status);
+  const href = campaignDetailHref(item.campaignId, "publish", item.status);
   const audience = item.audienceLabel ?? "Audience";
 
   return (
@@ -46,14 +46,18 @@ function ScheduleItemPopoverContent({
         <PopoverHeader className="min-w-0 flex-1 gap-1">
           <div className="flex flex-wrap items-center gap-2 pr-1">
             <PopoverTitle className="min-w-0 text-base leading-snug">{item.title}</PopoverTitle>
-            <BroadcastStatusBadge status={item.status} />
+            <CampaignStatusBadge status={item.status} />
           </div>
           <PopoverDescription className="line-clamp-3 break-words">{item.subject}</PopoverDescription>
         </PopoverHeader>
-        <Button variant="ghost" size="icon-sm" className="shrink-0" asChild>
-          <Link href={href} aria-label="Open broadcast">
-            <ExternalLink className="size-4" aria-hidden />
-          </Link>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0"
+          nativeButton={false}
+          render={<Link href={href} aria-label="Open campaign" />}
+        >
+          <ExternalLink className="size-4" aria-hidden />
         </Button>
       </div>
       <dl className="space-y-1.5 text-xs text-muted-foreground">
@@ -110,7 +114,7 @@ function triggerLabel(
     <>
       <span className="min-w-0 truncate font-medium">{item.title}</span>
       <div className="flex shrink-0 items-center gap-2">
-        <BroadcastStatusBadge status={item.status} />
+        <CampaignStatusBadge status={item.status} />
         <span className="text-xs text-muted-foreground">
           {formatScheduleWhen(item.at, timeZone)}
         </span>

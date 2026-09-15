@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { Broadcast } from "../../lib/scale/api.ts";
-import { upcomingBroadcastScheduleItems } from "./schedule-items.ts";
+import type { Campaign } from "../../lib/scale/api.ts";
+import { upcomingCampaignScheduleItems } from "./schedule-items.ts";
 
-function broadcast(partial: Partial<Broadcast>): Broadcast {
+function campaignRow(partial: Partial<Campaign>): Campaign {
   return {
     id: "b1",
     name: "Launch",
@@ -51,21 +51,21 @@ function broadcast(partial: Partial<Broadcast>): Broadcast {
   };
 }
 
-describe("upcomingBroadcastScheduleItems", () => {
-  it("returns scheduled broadcasts with future runAt, sorted", () => {
+describe("upcomingCampaignScheduleItems", () => {
+  it("returns scheduled campaigns with future runAt, sorted", () => {
     const now = new Date("2030-06-01T00:00:00.000Z");
-    const items = upcomingBroadcastScheduleItems(
+    const items = upcomingCampaignScheduleItems(
       [
-        broadcast({
+        campaignRow({
           id: "later",
           scheduledAt: "2030-06-20T10:00:00.000Z",
         }),
-        broadcast({
+        campaignRow({
           id: "sooner",
           scheduledAt: "2030-06-10T10:00:00.000Z",
         }),
-        broadcast({ id: "draft", status: "draft", scheduledAt: null }),
-        broadcast({
+        campaignRow({ id: "draft", status: "draft", scheduledAt: null }),
+        campaignRow({
           id: "past",
           scheduledAt: "2020-01-01T10:00:00.000Z",
         }),
@@ -73,8 +73,10 @@ describe("upcomingBroadcastScheduleItems", () => {
       now,
     );
     assert.deepEqual(
-      items.map((i) => i.broadcastId),
+      items.map((i) => i.campaignId),
       ["sooner", "later"],
     );
+    assert.equal(items[0]?.kind, "campaign");
+    assert.equal(items[0]?.id, "campaign:sooner");
   });
 });

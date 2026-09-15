@@ -234,7 +234,7 @@ export function UserDashboardView() {
               const value = stats?.totals?.[card.key] ?? 0;
               const href =
                 card.path === "broadcasts"
-                  ? "/scale/broadcasts"
+                  ? "/scale/campaigns"
                   : card.path === "audience"
                     ? "/scale/audience"
                     : paths[card.path];

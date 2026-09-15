@@ -64,10 +64,10 @@ type MarkdownEditorProps = {
    * must equal the `path` the caller's persistence hook uses, so a stale
    * snapshot from a previously-open document isn't applied to this one.
    * Defaults to `campaignId` when the document and asset namespace are the
-   * same entity (e.g. no broadcast-scoped content).
+   * same entity (e.g. template vs campaign send record).
    */
   documentId?: string;
-  /** Where uploaded images are stored (broadcast vs automation Scale routes). */
+  /** Which Scale asset namespace receives uploads (campaign, trigger, or message template). */
   assetOwner?: CrmContentAssetOwner;
   value: string;
   editable?: boolean;
@@ -190,7 +190,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   {
     campaignId,
     documentId = campaignId,
-    assetOwner = "broadcast",
+    assetOwner = "campaign",
     value,
     editable = true,
     onChange,
@@ -259,8 +259,11 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       const [cid, ...rest] = assetPath.split("/");
       const filename = rest.join("/");
       if (!cid || !filename) return url;
-      if (assetOwnerRef.current === "automation") {
-        return `${getScaleApiBase()}/scale/assets/automation/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+      if (assetOwnerRef.current === "trigger") {
+        return `${getScaleApiBase()}/scale/assets/trigger/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+      }
+      if (assetOwnerRef.current === "template") {
+        return `${getScaleApiBase()}/scale/assets/template/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
       }
       return `${getScaleApiBase()}/scale/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
     },

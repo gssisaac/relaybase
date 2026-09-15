@@ -21,10 +21,10 @@ export function accountDefaultComplianceIdentityId(data: ScaleDataStore): string
 }
 
 export function resolveComplianceIdentityForBroadcast(
-  broadcastId: string,
+  campaignId: string,
 ): ComplianceIdentity | undefined {
   const data = store.read();
-  const broadcast = data.broadcasts.find((b) => b.id === broadcastId);
+  const broadcast = data.campaigns.find((b) => b.id === campaignId);
   if (!broadcast) return undefined;
 
   const explicit = broadcast.complianceIdentityId
@@ -104,7 +104,7 @@ export function ensureComplianceIdentitiesFromLegacy(draft: ScaleDataStore, now:
       draft.complianceIdentities.find((row) => row.accountLinkId === draft.account.id)?.id ?? null;
   }
 
-  for (const row of draft.broadcasts) {
+  for (const row of draft.campaigns) {
     if (row.complianceIdentityId === undefined) row.complianceIdentityId = null;
   }
 

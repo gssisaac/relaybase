@@ -38,14 +38,14 @@ import {
 import Link from "next/link";
 
 import { scaleAudienceDetailHref } from "@/scale/lib/paths";
-import { useBroadcastDetail } from "@/scale/pages/campaigns/CampaignDetailContext";
+import { useCampaignDetail } from "@/scale/pages/campaigns/CampaignDetailContext";
 import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { ComplianceIdentityEditor } from "@/scale/components/ComplianceIdentityEditor";
 import { scaleApi, ScaleApiError } from "@/lib/scale/api";
 
-export function BroadcastSettingsView() {
-  const { broadcastId, broadcast, templates, setBroadcast } = useBroadcastDetail();
+export function CampaignSettingsView() {
+  const { campaignId, campaign, templates, setCampaign } = useCampaignDetail();
   const { readyDomainNames, loading: domainsLoading, refresh: refreshWorkerDomains } =
     useWorkerDomains();
 
@@ -53,10 +53,10 @@ export function BroadcastSettingsView() {
   const { domainAddresses, displayNameOptions, loading: addressesLoading } =
     useDomainAddresses(sendDomain);
 
-  const [fromName, setFromName] = useState<string | null>(broadcast?.fromName ?? null);
-  const [fromEmail, setFromEmail] = useState<string | null>(broadcast?.fromEmail ?? null);
-  const [replyTo, setReplyTo] = useState(broadcast?.replyTo ?? "");
-  const [defaultTemplateId, setDefaultTemplateId] = useState(broadcast?.defaultTemplateId ?? "");
+  const [fromName, setFromName] = useState<string | null>(campaign?.fromName ?? null);
+  const [fromEmail, setFromEmail] = useState<string | null>(campaign?.fromEmail ?? null);
+  const [replyTo, setReplyTo] = useState(campaign?.replyTo ?? "");
+  const [defaultLayoutId, setDefaultTemplateId] = useState(campaign?.defaultLayoutId ?? "");
   const [fromEmailError, setFromEmailError] = useState<string | null>(null);
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -70,11 +70,11 @@ export function BroadcastSettingsView() {
   );
 
   useEffect(() => {
-    if (!broadcast) return;
-    setFromName(broadcast.fromName ?? null);
-    setFromEmail(broadcast.fromEmail ?? null);
-    setSendDomain(broadcast.domain ?? broadcast.audienceGroupDomain ?? null);
-  }, [broadcast]);
+    if (!campaign) return;
+    setFromName(campaign.fromName ?? null);
+    setFromEmail(campaign.fromEmail ?? null);
+    setSendDomain(campaign.domain ?? campaign.audienceGroupDomain ?? null);
+  }, [campaign]);
 
   useEffect(() => {
     scaleApi
@@ -83,7 +83,7 @@ export function BroadcastSettingsView() {
         setDefaultComplianceIdentityId(link.defaultComplianceIdentityId ?? null);
       })
       .catch(() => {});
-  }, [broadcastId]);
+  }, [campaignId]);
 
   useEffect(() => {
     void refreshWorkerDomains();
@@ -91,16 +91,16 @@ export function BroadcastSettingsView() {
 
   const domainOptionValues = useMemo(() => {
     const values = new Set(readyDomainNames);
-    const pinned = (sendDomain ?? broadcast?.domain ?? broadcast?.audienceGroupDomain)?.trim();
+    const pinned = (sendDomain ?? campaign?.domain ?? campaign?.audienceGroupDomain)?.trim();
     if (pinned) values.add(pinned);
     return [...values].sort((a, b) => a.localeCompare(b));
-  }, [readyDomainNames, sendDomain, broadcast?.domain, broadcast?.audienceGroupDomain]);
+  }, [readyDomainNames, sendDomain, campaign?.domain, campaign?.audienceGroupDomain]);
 
   const domainMismatch =
-    Boolean(sendDomain && broadcast?.audienceGroupDomain) &&
-    sendDomain!.toLowerCase() !== broadcast!.audienceGroupDomain!.toLowerCase();
+    Boolean(sendDomain && campaign?.audienceGroupDomain) &&
+    sendDomain!.toLowerCase() !== campaign!.audienceGroupDomain!.toLowerCase();
 
-  const domainLocked = broadcast?.status !== "draft";
+  const domainLocked = campaign?.status !== "draft";
   const domainSelectDisabled =
     domainLocked || (domainsLoading && domainOptionValues.length === 0);
 
@@ -147,7 +147,7 @@ export function BroadcastSettingsView() {
         ? "No senders on this domain"
         : "Select sender address";
 
-  if (!broadcast) return null;
+  if (!campaign) return null;
 
   async function saveIdentity() {
     if (!sendDomain) {
@@ -156,7 +156,7 @@ export function BroadcastSettingsView() {
     }
     if (domainMismatch) {
       setFromEmailError(
-        `Audience is on ${broadcast.audienceGroupDomain}. Match that domain or change the linked audience.`,
+        `Audience is on ${campaign?.audienceGroupDomain}. Match that domain or change the linked audience.`,
       );
       return;
     }
@@ -168,16 +168,16 @@ export function BroadcastSettingsView() {
     setSavingIdentity(true);
     try {
       const workerUrl = resolveEmailApiBase();
-      const updated = await scaleApi.updateBroadcast(broadcastId, {
+      const updated = await scaleApi.updateCampaign(campaignId, {
         domain: sendDomain,
         ...(workerUrl ? { workerUrl } : {}),
         fromName: fromName?.trim() || null,
         fromEmail: fromEmail?.trim() || null,
         replyTo: replyTo.trim() || null,
-        defaultTemplateId: defaultTemplateId || null,
+        defaultLayoutId: defaultLayoutId || null,
       });
-      setBroadcast(updated);
-      toast.success("Broadcast settings saved");
+      setCampaign(updated);
+      toast.success("Campaign settings saved");
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (err) {
@@ -191,16 +191,16 @@ export function BroadcastSettingsView() {
   async function handleArchive() {
     setArchiving(true);
     try {
-      const updated = await scaleApi.archiveBroadcast(broadcastId);
-      setBroadcast(updated);
+      const updated = await scaleApi.archiveCampaign(campaignId);
+      setCampaign(updated);
       setArchiveOpen(false);
-      toast.success("Broadcast archived");
+      toast.success("Campaign archived");
     } catch (err) {
       if (err instanceof ScaleApiError) {
         setArchiveOpen(false);
         setArchiveBlocked(err.message);
       } else {
-        toast.error("Could not archive broadcast");
+        toast.error("Could not archive campaign");
       }
     } finally {
       setArchiving(false);
@@ -209,9 +209,9 @@ export function BroadcastSettingsView() {
 
   async function handleUnarchive() {
     try {
-      const updated = await scaleApi.unarchiveBroadcast(broadcastId);
-      setBroadcast(updated);
-      toast.success("Broadcast reactivated");
+      const updated = await scaleApi.unarchiveCampaign(campaignId);
+      setCampaign(updated);
+      toast.success("Campaign reactivated");
     } catch {
       toast.error("Could not reactivate campaign");
     }
@@ -222,7 +222,7 @@ export function BroadcastSettingsView() {
       <div>
         <h2 className="text-sm font-semibold">Settings</h2>
         <p className="text-xs text-muted-foreground">
-          Sender identity and defaults for this broadcast.
+          Sender identity and defaults for this campaign.
         </p>
       </div>
 
@@ -236,17 +236,17 @@ export function BroadcastSettingsView() {
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              {broadcast.audienceGroupName ?? "No audience linked"}
+              {campaign.audienceGroupName ?? "No audience linked"}
             </p>
-            {broadcast.audienceGroupDomain ? (
-              <p className="truncate text-xs text-muted-foreground">{broadcast.audienceGroupDomain}</p>
+            {campaign.audienceGroupDomain ? (
+              <p className="truncate text-xs text-muted-foreground">{campaign.audienceGroupDomain}</p>
             ) : null}
           </div>
-          {broadcast.audienceGroupId ? (
+          {campaign.audienceGroupId ? (
             <Button
               size="sm"
               variant="outline"
-              render={<Link href={scaleAudienceDetailHref(broadcast.audienceGroupId)} />}
+              render={<Link href={scaleAudienceDetailHref(campaign.audienceGroupId)} />}
             >
               Open audience
             </Button>
@@ -282,8 +282,8 @@ export function BroadcastSettingsView() {
             />
             {domainLocked ? (
               <p className="text-xs text-muted-foreground">
-                Domain can only be changed while the broadcast is a draft (current status:{" "}
-                {broadcast.status}). Duplicate the broadcast to pick a different domain.
+                Domain can only be changed while the campaign is a draft (current status:{" "}
+                {campaign.status}). Duplicate the campaign to pick a different domain.
               </p>
             ) : domainsLoading ? (
               <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
@@ -293,11 +293,11 @@ export function BroadcastSettingsView() {
               </p>
             ) : domainMismatch ? (
               <p className="text-xs text-destructive">
-                Audience is on {broadcast.audienceGroupDomain}. Pick that domain to send.
+                Audience is on {campaign.audienceGroupDomain}. Pick that domain to send.
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Same Worker domain catalog as when you create a broadcast.
+                Same Worker domain catalog as when you create a campaign.
               </p>
             )}
           </div>
@@ -364,7 +364,7 @@ export function BroadcastSettingsView() {
             <Label htmlFor="default-template">Default template</Label>
             <Select
               items={templates.map((t) => ({ value: t.id, label: t.name }))}
-              value={defaultTemplateId || null}
+              value={defaultLayoutId || null}
               onValueChange={(next) => setDefaultTemplateId(next ?? "")}
             >
               <SelectTrigger id="default-template" className="w-full">
@@ -392,7 +392,7 @@ export function BroadcastSettingsView() {
         <CardHeader>
           <CardTitle className="text-sm">Compliance & footer</CardTitle>
           <CardDescription>
-            Reusable sender records fill the built-in footer at send time. New broadcasts use the
+            Reusable sender records fill the built-in footer at send time. New campaigns use the
             default unless you pick another on Content → Variables.
           </CardDescription>
         </CardHeader>
@@ -428,7 +428,7 @@ export function BroadcastSettingsView() {
           </CardDescription>
         </CardHeader>
         <CardFooter className="items-center gap-2">
-          {broadcast.listStatus === "archived" ? (
+          {campaign.listStatus === "archived" ? (
             <>
               <Badge variant="secondary" className="text-[10px]">
                 Archived
@@ -439,7 +439,7 @@ export function BroadcastSettingsView() {
             </>
           ) : (
             <Button size="sm" variant="destructive" onClick={() => setArchiveOpen(true)}>
-              Archive broadcast
+              Archive campaign
             </Button>
           )}
         </CardFooter>
@@ -448,7 +448,7 @@ export function BroadcastSettingsView() {
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Archive &apos;{broadcast.name}&apos;?</DialogTitle>
+            <DialogTitle>Archive &apos;{campaign.name}&apos;?</DialogTitle>
             <DialogDescription>
               Pending scheduled sends will be cancelled, but delivery history is preserved.
             </DialogDescription>
@@ -467,7 +467,7 @@ export function BroadcastSettingsView() {
       <Dialog open={Boolean(archiveBlocked)} onOpenChange={(open) => !open && setArchiveBlocked(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Cannot archive broadcast</DialogTitle>
+            <DialogTitle>Cannot archive campaign</DialogTitle>
             <DialogDescription>{archiveBlocked}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -480,6 +480,3 @@ export function BroadcastSettingsView() {
     </div>
   );
 }
-
-/** @deprecated use BroadcastSettingsView */
-export const CampaignSettingsView = BroadcastSettingsView;

@@ -310,7 +310,7 @@ export type BroadcastDetail = {
 };
 
 export type BroadcastProgress = {
-  broadcastId: string;
+  campaignId: string;
   status: string;
   progress: BroadcastSendRun | null;
   history: BroadcastSendRun[];

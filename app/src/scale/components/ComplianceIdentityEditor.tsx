@@ -30,7 +30,7 @@ import {
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError, type ScaleComplianceIdentity } from "@/lib/scale/api";
 
-type EditorMode = "account-default" | "broadcast";
+type EditorMode = "account-default" | "campaign";
 
 export function ComplianceIdentityEditor({
   mode,
@@ -42,7 +42,7 @@ export function ComplianceIdentityEditor({
   description,
 }: {
   mode: EditorMode;
-  /** For broadcast mode, null/ACCOUNT_DEFAULT = use account default. */
+  /** For campaign mode, null/ACCOUNT_DEFAULT = use account default. */
   selectedIdentityId: string | null;
   onSelectedIdentityIdChange: (id: string | null) => void | Promise<void>;
   accountDefaultIdentityId: string | null;
@@ -81,14 +81,14 @@ export function ComplianceIdentityEditor({
   }, [refresh]);
 
   const pickerValue = useMemo(() => {
-    if (mode === "broadcast") {
+    if (mode === "campaign") {
       return selectedIdentityId ?? ACCOUNT_DEFAULT_COMPLIANCE_VALUE;
     }
     return selectedIdentityId ?? accountDefaultIdentityId ?? "";
   }, [mode, selectedIdentityId, accountDefaultIdentityId]);
 
   const editingId = useMemo(() => {
-    if (mode === "broadcast") {
+    if (mode === "campaign") {
       if (selectedIdentityId) return selectedIdentityId;
       return accountDefaultIdentityId;
     }
@@ -99,7 +99,7 @@ export function ComplianceIdentityEditor({
 
   const pickerItems = useMemo(() => {
     const rows = identities.map((row) => ({ value: row.id, label: row.name }));
-    if (mode === "broadcast") {
+    if (mode === "campaign") {
       const defaultName = identities.find((i) => i.id === accountDefaultIdentityId)?.name;
       rows.unshift({
         value: ACCOUNT_DEFAULT_COMPLIANCE_VALUE,
@@ -123,7 +123,7 @@ export function ComplianceIdentityEditor({
       setAddOpen(true);
       return;
     }
-    if (mode === "broadcast") {
+    if (mode === "campaign") {
       const next = value === ACCOUNT_DEFAULT_COMPLIANCE_VALUE ? null : value;
       await onSelectedIdentityIdChange(next);
       return;
@@ -169,7 +169,7 @@ export function ComplianceIdentityEditor({
       setIdentities((prev) => [...prev, identity]);
       setAddOpen(false);
       setNewName("");
-      await onSelectedIdentityIdChange(mode === "broadcast" ? identity.id : identity.id);
+      await onSelectedIdentityIdChange(mode === "campaign" ? identity.id : identity.id);
       if (mode === "account-default") {
         await scaleApi.updateAccountLink({ defaultComplianceIdentityId: identity.id });
       }
@@ -190,7 +190,7 @@ export function ComplianceIdentityEditor({
 
       <div className="space-y-1.5">
         <Label htmlFor="compliance-identity-picker">
-          {mode === "broadcast" ? "Footer sender for this broadcast" : "Default compliance sender"}
+          {mode === "campaign" ? "Footer sender for this campaign" : "Default compliance sender"}
         </Label>
         <Select
           items={pickerItems}
@@ -201,7 +201,7 @@ export function ComplianceIdentityEditor({
             <SelectValue placeholder={loading ? "Loading…" : "Select sender"} />
           </SelectTrigger>
           <SelectContent>
-            {mode === "broadcast" ? (
+            {mode === "campaign" ? (
               <SelectItem value={ACCOUNT_DEFAULT_COMPLIANCE_VALUE}>
                 Account default
                 {accountDefaultIdentityId
@@ -278,7 +278,7 @@ export function ComplianceIdentityEditor({
             {savedFlash ? <span className="text-xs text-emerald-600">✓ Saved</span> : null}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Changes apply everywhere this sender is selected — including other broadcasts and
+            Changes apply everywhere this sender is selected — including other campaigns and
             Settings.
           </p>
         </>
@@ -293,7 +293,7 @@ export function ComplianceIdentityEditor({
           <DialogHeader>
             <DialogTitle>Add compliance sender</DialogTitle>
             <DialogDescription>
-              Reusable footer details. You can select this sender on any broadcast.
+              Reusable footer details. You can select this sender on any campaign.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

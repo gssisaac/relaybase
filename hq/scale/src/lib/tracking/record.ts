@@ -1,9 +1,9 @@
 import { store } from "../../db/store";
 import { newId } from "../shared/ids";
 
-export function recordTrackingOpen(broadcastId: string, recipientId: string) {
+export function recordTrackingOpen(campaignId: string, recipientId: string) {
   try {
-    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.broadcastId === broadcastId);
+    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.campaignId === campaignId);
     if (!recipient) return;
     const now = new Date().toISOString();
     const firstOpen = !recipient.openedAt;
@@ -17,7 +17,7 @@ export function recordTrackingOpen(broadcastId: string, recipientId: string) {
       };
       draft.trackingEvents.push({
         id: newId("track"),
-        broadcastId,
+        campaignId,
         recipientId,
         memberEmail: recipient.email,
         type: "open",
@@ -25,11 +25,11 @@ export function recordTrackingOpen(broadcastId: string, recipientId: string) {
         reason: null,
         occurredAt: now,
       });
-      const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+      const bIdx = draft.campaigns.findIndex((b) => b.id === campaignId);
       if (bIdx >= 0) {
-        const stats = draft.broadcasts[bIdx]!.stats;
-        draft.broadcasts[bIdx] = {
-          ...draft.broadcasts[bIdx]!,
+        const stats = draft.campaigns[bIdx]!.stats;
+        draft.campaigns[bIdx] = {
+          ...draft.campaigns[bIdx]!,
           stats: {
             ...stats,
             opened: firstOpen ? stats.opened + 1 : stats.opened,
@@ -43,9 +43,9 @@ export function recordTrackingOpen(broadcastId: string, recipientId: string) {
   }
 }
 
-export function recordTrackingClick(broadcastId: string, recipientId: string, url: string) {
+export function recordTrackingClick(campaignId: string, recipientId: string, url: string) {
   try {
-    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.broadcastId === broadcastId);
+    const recipient = store.read().recipients.find((r) => r.id === recipientId && r.campaignId === campaignId);
     if (!recipient) return;
     const now = new Date().toISOString();
     const firstClick = !recipient.clickedAt;
@@ -59,7 +59,7 @@ export function recordTrackingClick(broadcastId: string, recipientId: string, ur
       };
       draft.trackingEvents.push({
         id: newId("track"),
-        broadcastId,
+        campaignId,
         recipientId,
         memberEmail: recipient.email,
         type: "click",
@@ -67,11 +67,11 @@ export function recordTrackingClick(broadcastId: string, recipientId: string, ur
         reason: null,
         occurredAt: now,
       });
-      const bIdx = draft.broadcasts.findIndex((b) => b.id === broadcastId);
+      const bIdx = draft.campaigns.findIndex((b) => b.id === campaignId);
       if (bIdx >= 0) {
-        const stats = draft.broadcasts[bIdx]!.stats;
-        draft.broadcasts[bIdx] = {
-          ...draft.broadcasts[bIdx]!,
+        const stats = draft.campaigns[bIdx]!.stats;
+        draft.campaigns[bIdx] = {
+          ...draft.campaigns[bIdx]!,
           stats: {
             ...stats,
             clicked: firstClick ? stats.clicked + 1 : stats.clicked,

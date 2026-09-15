@@ -38,6 +38,8 @@ import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { crmAudienceDetailHref, broadcastDetailHref } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { crmAudienceApi } from "@/lib/crm/audience-api";
+import { syncCrmSendCredentials } from "@/crm/lib/sync-crm-send-credentials";
+import { useEmailPaths } from "@/email/lib/paths";
 import { crmApi, CrmApiError, type BroadcastDispatchProgress } from "@/lib/crm/api";
 
 const PREVIEW_CONTACT_LIMIT = 40;
@@ -106,6 +108,7 @@ export function BroadcastPublishView() {
     refresh,
     refreshAudience,
   } = useBroadcastDetail();
+  const { apiBase } = useEmailPaths();
 
   const [sending, setSending] = useState(false);
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
@@ -263,11 +266,27 @@ export function BroadcastPublishView() {
     return saved;
   }
 
+  async function prepareSendCredentials(): Promise<boolean> {
+    const domain = sendDomain?.trim();
+    if (!domain) {
+      toast.error("Select a sending domain on Settings before sending.");
+      return false;
+    }
+    try {
+      await syncCrmSendCredentials({ apiBase, sendingDomain: domain });
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not configure CRM send credentials");
+      return false;
+    }
+  }
+
   async function handleConfirmSend() {
     setSending(true);
     try {
       const saved = await ensureSaved();
       if (!saved) return;
+      if (!(await prepareSendCredentials())) return;
       const result = await crmApi.sendBroadcast(broadcastId);
       setBroadcast(result.broadcast);
       setConfirmSendOpen(false);
@@ -291,6 +310,7 @@ export function BroadcastPublishView() {
     try {
       const saved = await ensureSaved();
       if (!saved) return;
+      if (!(await prepareSendCredentials())) return;
       await crmApi.testSendBroadcast(broadcastId, testEmail);
       toast.success(`Test email sent to ${testEmail}`);
       setTestEmailOpen(false);
@@ -304,6 +324,7 @@ export function BroadcastPublishView() {
     try {
       const saved = await ensureSaved();
       if (!saved) return;
+      if (!(await prepareSendCredentials())) return;
       const updated = await crmApi.scheduleBroadcast(broadcastId, new Date(scheduleAt).toISOString());
       setBroadcast(updated);
       setScheduleOpen(false);

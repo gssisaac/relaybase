@@ -36,6 +36,11 @@ export type AccountLink = {
   id: string;
   workerUrl: string | null;
   domain: string | null;
+  /**
+   * Domain-scoped Worker API key for `POST /v1/send` (dev JSON store only).
+   * Production: encrypted at rest; never returned from GET account-link.
+   */
+  sendApiKey?: string | null;
   /** @deprecated Mirror of default identity — use `complianceIdentities` + `defaultComplianceIdentityId`. */
   compliance: AccountComplianceSettings;
   /** Default footer identity for new broadcasts when `broadcast.complianceIdentityId` is unset. */

@@ -11,13 +11,13 @@ describe("isEmailRoutingPermissionError", () => {
     const err =
       "Could not configure inbox for support@hapfam.com: Cloudflare API: [10000] Authentication error API: GET /zones/8ec1246f49978407113fbca7ef2be8f8/email/routing";
     assert.equal(isEmailRoutingPermissionError(err), true);
-    assert.equal(isEmailApiNotConfiguredError(err), true);
+    assert.equal(isEmailApiNotConfiguredError(err), false);
   });
 
   it("matches structured cf_token_permission_missing code", () => {
     const err = "Failed to update inbound routing (cf_token_permission_missing)";
     assert.equal(isEmailRoutingPermissionError(err), true);
-    assert.equal(isEmailApiNotConfiguredError(err), true);
+    assert.equal(isEmailApiNotConfiguredError(err), false);
   });
 
   it("matches generic unconfigured email API errors in isEmailApiNotConfiguredError", () => {

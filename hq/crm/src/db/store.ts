@@ -40,6 +40,7 @@ function defaultStore(): CrmDataStore {
       id: DEV_ACCOUNT_LINK_ID,
       workerUrl: null,
       domain: null,
+      sendApiKey: null,
       compliance: defaultCompliance(now),
       defaultComplianceIdentityId: complianceId,
       createdAt: now,
@@ -280,6 +281,10 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
     if (!c.updatedAt) c.updatedAt = now;
   }
   ensureComplianceIdentitiesFromLegacy(store, now);
+
+  if (store.account.sendApiKey === undefined) {
+    store.account.sendApiKey = null;
+  }
 
   for (const row of store.accountSuppressions) {
     if (row.audienceGroupId === undefined) row.audienceGroupId = null;

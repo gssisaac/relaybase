@@ -17,6 +17,7 @@ crmAccountLink.patch("/", async (c) => {
   let body: {
     domain?: string;
     workerUrl?: string;
+    sendApiKey?: string | null;
     defaultComplianceIdentityId?: string | null;
     compliance?: {
       organizationName?: string | null;
@@ -36,11 +37,16 @@ crmAccountLink.patch("/", async (c) => {
     body.workerUrl === undefined
       ? undefined
       : body.workerUrl.trim().replace(/\/$/, "") || null;
+  const sendApiKey =
+    body.sendApiKey === undefined
+      ? undefined
+      : body.sendApiKey?.trim() || null;
 
   store.update((draft) => {
     if (draft.account.id !== DEV_ACCOUNT_LINK_ID) return;
     if (domain !== undefined) draft.account.domain = domain;
     if (workerUrl !== undefined) draft.account.workerUrl = workerUrl;
+    if (sendApiKey !== undefined) draft.account.sendApiKey = sendApiKey;
 
     if (body.defaultComplianceIdentityId !== undefined) {
       const next = body.defaultComplianceIdentityId?.trim() || null;

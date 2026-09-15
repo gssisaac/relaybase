@@ -68,7 +68,12 @@ export function cfTokenPermissionErrorHelp(
   options?: { workerVersion?: string | null },
 ): DesktopErrorHelp {
   const checks = cfTokenPermissionChecks(probe);
-  const failing = checks.filter((row) => isCfTokenPermissionFailure(row.status));
+  // Zone → Zone → Read is informational only — Cloudflare's list API often
+  // false-negatives; routing/DNS probes are the real gate.
+  const failing = checks.filter(
+    (row) =>
+      row.id !== "zoneRead" && isCfTokenPermissionFailure(row.status),
+  );
 
   let title = "Cloudflare token permissions missing";
   if (failing.length === 1) {

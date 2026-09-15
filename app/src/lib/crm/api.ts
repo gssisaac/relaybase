@@ -251,6 +251,7 @@ export type CrmAccountLink = {
   id: string;
   workerUrl: string | null;
   domain: string | null;
+  sendApiKeyConfigured?: boolean;
   compliance?: CrmAccountCompliance;
   defaultComplianceIdentityId: string | null;
   createdAt: string;
@@ -261,6 +262,7 @@ export const crmApi = {
   updateAccountLink: (input: {
     domain?: string | null;
     workerUrl?: string | null;
+    sendApiKey?: string | null;
     defaultComplianceIdentityId?: string | null;
     compliance?: Partial<{
       organizationName: string | null;

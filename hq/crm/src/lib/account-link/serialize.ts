@@ -8,6 +8,9 @@ export function serializeAccountLink() {
     id: account.id,
     workerUrl: account.workerUrl,
     domain: account.domain,
+    sendApiKeyConfigured: Boolean(
+      process.env.CRM_WORKER_SEND_API_KEY?.trim() || account.sendApiKey?.trim(),
+    ),
     compliance: account.compliance,
     defaultComplianceIdentityId: accountDefaultComplianceIdentityId(data),
     createdAt: account.createdAt,

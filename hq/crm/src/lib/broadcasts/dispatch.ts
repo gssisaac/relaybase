@@ -1,6 +1,7 @@
 import { store } from "../../db/store";
 import type { AudienceMember, Broadcast } from "../../db/types";
 import { sendMail } from "../mail/sender";
+import { resolveWorkerSendCredentials } from "../mail/credentials";
 import { buildListUnsubscribeUrl, renderBroadcastForRecipient } from "../render/render";
 import { CRM_PUBLIC_BASE_URL } from "../shared/crm-url";
 import { newId } from "../shared/ids";
@@ -112,6 +113,44 @@ export async function processBroadcastDispatchBatch(
     .recipients.filter((r) => r.broadcastId === broadcastId && r.status === "queued")
     .slice(0, limit);
 
+  const fromEmail = broadcast.fromEmail?.trim() ?? "";
+  if (!fromEmail) {
+    const now = new Date().toISOString();
+    for (const recipient of queued) {
+      failed += 1;
+      store.update((draft) => {
+        const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
+        if (idx < 0) return;
+        draft.recipients[idx] = {
+          ...draft.recipients[idx]!,
+          status: "failed",
+          errorMessage: "Missing sender email — set From on Settings before sending.",
+          sentAt: now,
+        };
+      });
+    }
+    return { sent: 0, failed, skipped: 0, completed: finalizeBroadcastDispatchIfIdle(broadcastId) };
+  }
+
+  const auth = resolveWorkerSendCredentials();
+  if (!auth.ok) {
+    const now = new Date().toISOString();
+    for (const recipient of queued) {
+      failed += 1;
+      store.update((draft) => {
+        const idx = draft.recipients.findIndex((r) => r.id === recipient.id);
+        if (idx < 0) return;
+        draft.recipients[idx] = {
+          ...draft.recipients[idx]!,
+          status: "failed",
+          errorMessage: auth.error,
+          sentAt: now,
+        };
+      });
+    }
+    return { sent: 0, failed, skipped: 0, completed: finalizeBroadcastDispatchIfIdle(broadcastId) };
+  }
+
   for (const recipient of queued) {
     const member = store
       .read()
@@ -151,6 +190,9 @@ export async function processBroadcastDispatchBatch(
     );
     const result = await sendMail({
       to: recipient.email,
+      from: fromEmail,
+      fromName: broadcast.fromName,
+      replyTo: broadcast.replyTo,
       subject: broadcast.subject,
       html,
       listUnsubscribeUrl,

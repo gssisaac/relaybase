@@ -23,12 +23,9 @@ export function isEmailRoutingPermissionError(message: string): boolean {
 export function isEmailApiNotConfiguredError(message: string): boolean {
   const m = message.toLowerCase();
   return (
-    isEmailRoutingPermissionError(message) ||
     m.includes("cloudflare email sending is not configured") ||
     m.includes("cloudflare api is not configured") ||
     m.includes("add a cf_api_token") ||
-    m.includes("cf_api_token secret") ||
-    m.includes("cf_account_id") ||
-    m.includes("could not configure inbox")
+    m.includes("cf_api_token secret")
   );
 }

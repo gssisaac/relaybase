@@ -4,6 +4,7 @@ import type { Broadcast } from "../db/types";
 import { resolveActiveAudienceContacts } from "../lib/audience-groups/resolver";
 import { findAudienceGroup } from "../lib/audience-groups/group";
 import { dispatchBroadcastToAudience } from "../lib/broadcasts/dispatch";
+import { resolveWorkerSendCredentials } from "../lib/mail/credentials";
 import { buildBroadcastDispatchProgress } from "../lib/broadcasts/dispatch-progress";
 import { aggregateBroadcastLinkClicks } from "../lib/broadcasts/link-clicks";
 import { buildInProgressOverview, buildSentOverview } from "../lib/broadcasts/overview";
@@ -376,6 +377,14 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
   if (!to || !to.includes("@")) {
     return c.json({ error: "Please enter a valid email address" }, 400);
   }
+  if (!broadcast.fromEmail?.trim()) {
+    return c.json({ error: "Set From email on Settings before sending a test." }, 400);
+  }
+
+  const sendAuth = resolveWorkerSendCredentials();
+  if (!sendAuth.ok) {
+    return c.json({ error: sendAuth.error }, 502);
+  }
 
   const templateHtml =
     getBroadcastTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ??
@@ -396,12 +405,15 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
   const listUnsubscribeUrl = buildListUnsubscribeUrl(CRM_PUBLIC_BASE_URL, broadcast.id, "test");
   const result = await sendMail({
     to,
+    from: broadcast.fromEmail.trim(),
+    fromName: broadcast.fromName,
+    replyTo: broadcast.replyTo,
     subject: `[Test] ${broadcast.subject}`,
     html,
     listUnsubscribeUrl,
   });
   if (!result.ok) {
-    return c.json({ error: "Worker rejected test send: Rate limit exceeded or invalid API key" }, 502);
+    return c.json({ error: result.error || "Worker rejected test send" }, 502);
   }
   return c.json({ ok: true });
 });
@@ -415,6 +427,14 @@ crmBroadcasts.post("/:id/send", async (c) => {
   }
   if (!broadcast.subject.trim()) {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
+  }
+  if (!broadcast.fromEmail?.trim()) {
+    return c.json({ error: "Set From email on Settings before sending." }, 400);
+  }
+
+  const sendAuth = resolveWorkerSendCredentials();
+  if (!sendAuth.ok) {
+    return c.json({ error: sendAuth.error }, 502);
   }
 
   const members = resolveActiveAudienceContacts(broadcast);

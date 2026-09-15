@@ -1,4 +1,5 @@
 import type { Broadcast, BroadcastStats, Recipient, TrackingEvent } from "../../db/types";
+import { buildBroadcastDispatchProgress, type BroadcastDispatchProgress } from "./dispatch-progress";
 import { emptyBroadcastStats } from "./stats";
 
 export type SerializedBroadcast = {
@@ -68,6 +69,7 @@ export type InProgressOverview = {
     };
     startedAt: string | null;
     lastDispatchedAt: string | null;
+    dispatch: BroadcastDispatchProgress | null;
     recentEvents: Array<{
       id: string;
       recipientId: string;
@@ -251,6 +253,10 @@ export function buildInProgressOverview(input: {
         },
         startedAt: broadcast.startedAt,
         lastDispatchedAt,
+        dispatch: buildBroadcastDispatchProgress({
+          recipients: recips,
+          startedAt: broadcast.startedAt,
+        }),
         recentEvents,
       };
     }),

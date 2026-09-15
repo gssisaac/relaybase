@@ -33,11 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BroadcastSendingProgressPanel } from "@/crm/components/BroadcastSendingProgressPanel";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { crmAudienceDetailHref, broadcastDetailHref } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { crmAudienceApi } from "@/lib/crm/audience-api";
-import { crmApi, CrmApiError } from "@/lib/crm/api";
+import { crmApi, CrmApiError, type BroadcastDispatchProgress } from "@/lib/crm/api";
 
 const PREVIEW_CONTACT_LIMIT = 40;
 
@@ -120,14 +121,31 @@ export function BroadcastPublishView() {
   const [dialogContacts, setDialogContacts] = useState<AudienceGroupContact[]>([]);
   const [dialogContactsLoading, setDialogContactsLoading] = useState(false);
   const [savingAudience, setSavingAudience] = useState(false);
+  const [sendDispatch, setSendDispatch] = useState<BroadcastDispatchProgress | null>(null);
 
   useEffect(() => {
-    if (broadcast?.status !== "sending") return;
-    const timer = setInterval(() => {
-      void refresh();
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [broadcast?.status, refresh]);
+    if (broadcast?.status !== "sending") {
+      setSendDispatch(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => {
+      crmApi
+        .getBroadcastStats(broadcastId)
+        .then(({ dispatch, broadcast: row }) => {
+          if (cancelled) return;
+          setSendDispatch(dispatch);
+          setBroadcast(row);
+        })
+        .catch(() => {});
+    };
+    load();
+    const timer = setInterval(load, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [broadcast?.status, broadcastId, setBroadcast]);
 
   const sendDomain = broadcast?.domain ?? broadcast?.audienceGroupDomain ?? null;
 
@@ -314,23 +332,27 @@ export function BroadcastPublishView() {
         </p>
       </div>
 
-      {broadcast.status === "sending" ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-800 dark:text-sky-300">
-          <div className="flex items-center gap-2">
-            <Loader2 className="size-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" />
-            <span>
-              This broadcast is currently sending to {recipientCount.toLocaleString()} recipient
-              {recipientCount === 1 ? "" : "s"}. Delivery stats update automatically.
-            </span>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<Link href={broadcastDetailHref(broadcastId, "stats")} />}
-          >
-            Live stats
-          </Button>
+      {broadcast.status === "sending" && sendDispatch ? (
+        <BroadcastSendingProgressPanel
+          dispatch={sendDispatch}
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link href={broadcastDetailHref(broadcastId, "stats")} />}
+            >
+              Live stats
+            </Button>
+          }
+        />
+      ) : broadcast.status === "sending" ? (
+        <div className="flex items-center gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-800 dark:text-sky-300">
+          <Loader2 className="size-4 shrink-0 animate-spin text-sky-600 dark:text-sky-400" />
+          <span>
+            Sending to {recipientCount.toLocaleString()} recipient
+            {recipientCount === 1 ? "" : "s"}… loading queue status.
+          </span>
         </div>
       ) : null}
 

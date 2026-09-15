@@ -1,17 +1,19 @@
 "use client";
 
-import { Download, ExternalLink, Loader2 } from "lucide-react";
+import { Download, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BroadcastSendingProgressPanel } from "@/crm/components/BroadcastSendingProgressPanel";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { broadcastDetailHref } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import {
   crmApi,
+  type BroadcastDispatchProgress,
   type BroadcastLinkClickStat,
   type BroadcastRecipient,
   type BroadcastTrackingEvent,
@@ -89,15 +91,17 @@ export function BroadcastStatsView() {
   const [recipients, setRecipients] = useState<BroadcastRecipient[]>([]);
   const [trackingEvents, setTrackingEvents] = useState<BroadcastTrackingEvent[]>([]);
   const [linkClicks, setLinkClicks] = useState<BroadcastLinkClickStat[]>([]);
+  const [dispatch, setDispatch] = useState<BroadcastDispatchProgress | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const loadStats = () => {
       crmApi
         .getBroadcastStats(broadcastId)
-        .then(({ broadcast: row, recipients: rows, trackingEvents: events, linkClicks: links }) => {
+        .then(({ broadcast: row, dispatch: progress, recipients: rows, trackingEvents: events, linkClicks: links }) => {
           if (cancelled) return;
           setBroadcast(row);
+          setDispatch(progress);
           setRecipients(rows);
           setTrackingEvents(events);
           setLinkClicks(links);
@@ -206,29 +210,8 @@ export function BroadcastStatsView() {
 
   return (
     <div className="space-y-4">
-      {broadcast.status === "sending" ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Loader2 className="size-4 animate-spin text-sky-600 dark:text-sky-400" />
-              <p className="text-sm font-semibold text-sky-950 dark:text-sky-100">
-                Sending in progress…
-              </p>
-            </div>
-            <p className="text-xs text-sky-800/90 dark:text-sky-300">
-              Processed {processedCount} of {totalRecipients} recipients (
-              {rate(processedCount, totalRecipients)} complete)
-            </p>
-          </div>
-          <div className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-sky-200 dark:bg-sky-950">
-            <div
-              className="h-full bg-sky-600 transition-all duration-300 dark:bg-sky-400"
-              style={{
-                width: `${totalRecipients ? Math.min(100, Math.round((processedCount / totalRecipients) * 100)) : 0}%`,
-              }}
-            />
-          </div>
-        </div>
+      {broadcast.status === "sending" && dispatch ? (
+        <BroadcastSendingProgressPanel dispatch={dispatch} />
       ) : null}
 
       <div className="flex flex-wrap items-start justify-between gap-3">

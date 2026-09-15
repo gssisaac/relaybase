@@ -1,11 +1,8 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "./db/store";
 import { syncAudienceGroupAsync } from "./lib/audience-groups/sync";
 import { resolveActiveAudienceContacts } from "./lib/audience-groups/resolver";
-import {
-  DISPATCH_BATCH_SIZE,
-  dispatchBroadcastToAudience,
-  processBroadcastDispatchBatch,
-} from "./lib/broadcasts/dispatch";
+import { dispatchBroadcastToAudience, processBroadcastDispatchBatch } from "./lib/broadcasts/dispatch";
+import { DISPATCH_BATCH_SIZE, DISPATCH_QUEUE_POLL_MS } from "./lib/broadcasts/dispatch-progress";
 import { rollupBroadcastStatsFromRecipients } from "./lib/broadcasts/stats";
 
 /**
@@ -14,7 +11,7 @@ import { rollupBroadcastStatsFromRecipients } from "./lib/broadcasts/stats";
  */
 
 const SCHEDULE_POLL_MS = 10_000;
-const STATS_ROLLUP_MS = 5_000;
+const STATS_ROLLUP_MS = DISPATCH_QUEUE_POLL_MS;
 const AUDIENCE_CRON_MS = 60_000;
 
 /** §5.1 — synchronous atomic claim on the document store guards against duplicate sends. */

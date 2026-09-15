@@ -4,12 +4,14 @@ import { sendMail } from "../mail/sender";
 import { buildListUnsubscribeUrl, renderBroadcastForRecipient } from "../render/render";
 import { CRM_PUBLIC_BASE_URL } from "../shared/crm-url";
 import { newId } from "../shared/ids";
+import { DISPATCH_BATCH_SIZE } from "./dispatch-progress";
 import { getBroadcastTemplateHtml, getBroadcastTemplateSchema } from "./serialize";
 import { rollupBroadcastStatsFromRecipients } from "./stats";
 
 /** Small lists send inline; larger audiences queue and drain via scheduler batches. */
 const INLINE_RECIPIENT_MAX = 50;
-export const DISPATCH_BATCH_SIZE = 20;
+
+export { DISPATCH_BATCH_SIZE };
 
 function enqueueBroadcastRecipients(
   broadcast: Broadcast,

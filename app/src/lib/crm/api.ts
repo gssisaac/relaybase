@@ -154,6 +154,23 @@ export type AccountSentOverview = {
   topLinks: { url: string; clicks: number; uniqueClicks: number; broadcastId: string }[];
 };
 
+export type BroadcastDispatchProgress = {
+  batchSize: number;
+  batchIntervalSeconds: number;
+  queue: {
+    total: number;
+    queued: number;
+    inFlight: number;
+    processed: number;
+    skipped: number;
+  };
+  startedAt: string | null;
+  lastBatchAt: string | null;
+  nextBatchAt: string | null;
+  estimatedCompletionAt: string | null;
+  recipientsPerMinute: number | null;
+};
+
 export type InProgressOverview = {
   sending: Array<{
     broadcast: Broadcast;
@@ -166,6 +183,7 @@ export type InProgressOverview = {
     };
     startedAt: string | null;
     lastDispatchedAt: string | null;
+    dispatch: BroadcastDispatchProgress | null;
     recentEvents: BroadcastTrackingEvent[];
   }>;
   scheduled: Broadcast[];
@@ -398,6 +416,7 @@ export const crmApi = {
   getBroadcastStats: (broadcastId: string) =>
     crmFetch<{
       broadcast: Broadcast;
+      dispatch: BroadcastDispatchProgress | null;
       recipients: BroadcastRecipient[];
       trackingEvents: BroadcastTrackingEvent[];
       linkClicks: BroadcastLinkClickStat[];

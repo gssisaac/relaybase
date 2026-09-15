@@ -4,6 +4,7 @@ import type { Broadcast } from "../db/types";
 import { resolveActiveAudienceContacts } from "../lib/audience-groups/resolver";
 import { findAudienceGroup } from "../lib/audience-groups/group";
 import { dispatchBroadcastToAudience } from "../lib/broadcasts/dispatch";
+import { buildBroadcastDispatchProgress } from "../lib/broadcasts/dispatch-progress";
 import { aggregateBroadcastLinkClicks } from "../lib/broadcasts/link-clicks";
 import { buildInProgressOverview, buildSentOverview } from "../lib/broadcasts/overview";
 import { slugifyBroadcast } from "../lib/broadcasts/slug";
@@ -571,8 +572,17 @@ crmBroadcasts.get("/:id/stats", (c) => {
     .filter((e) => e.broadcastId === id)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
+  const dispatch =
+    broadcast.status === "sending"
+      ? buildBroadcastDispatchProgress({
+          recipients,
+          startedAt: broadcast.startedAt ?? broadcast.sentAt ?? null,
+        })
+      : null;
+
   return c.json({
     broadcast: serializeBroadcast(broadcast),
+    dispatch,
     trackingEvents: trackingEvents.map((e) => ({
       id: e.id,
       recipientId: e.recipientId,

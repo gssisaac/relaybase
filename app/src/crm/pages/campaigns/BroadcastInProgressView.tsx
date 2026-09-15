@@ -9,6 +9,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BroadcastSendingProgressPanel } from "@/crm/components/BroadcastSendingProgressPanel";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
 import { BroadcastsSectionNav } from "@/crm/components/BroadcastsSectionNav";
 import { broadcastDetailHref } from "@/crm/lib/paths";
@@ -23,11 +24,6 @@ function formatWhen(value?: string | null): string {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-function pct(part: number, total: number): number {
-  if (!total) return 0;
-  return Math.min(100, Math.round((part / total) * 100));
 }
 
 export function BroadcastInProgressView() {
@@ -105,11 +101,7 @@ export function BroadcastInProgressView() {
                 </Card>
               ) : (
                 <div className="grid gap-3 lg:grid-cols-2">
-                  {data.sending.map((row) => {
-                    const total = row.queue.total || row.broadcast.audienceActiveCount;
-                    const processed = row.queue.processed + row.queue.skipped;
-                    const complete = pct(processed, total);
-                    return (
+                  {data.sending.map((row) => (
                       <Card key={row.broadcast.id}>
                         <CardHeader>
                           <div className="flex items-start justify-between gap-2">
@@ -124,27 +116,29 @@ export function BroadcastInProgressView() {
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>
-                                {processed} of {total} processed
-                              </span>
-                              <span className="tabular-nums">{complete}%</span>
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-sky-200 dark:bg-sky-950">
-                              <div
-                                className="h-full bg-sky-600 transition-all duration-300 dark:bg-sky-400"
-                                style={{ width: `${complete}%` }}
-                              />
-                            </div>
-                          </div>
-                          <p className="text-xs tabular-nums text-muted-foreground">
-                            {row.queue.queued} queued · {row.queue.sending} sending · {row.queue.processed}{" "}
-                            done · {row.queue.skipped} skipped
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Started {formatWhen(row.startedAt)} · last batch {formatWhen(row.lastDispatchedAt)}
-                          </p>
+                          {row.dispatch ? (
+                            <BroadcastSendingProgressPanel
+                              compact
+                              dispatch={row.dispatch}
+                              action={
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  nativeButton={false}
+                                  render={
+                                    <Link href={broadcastDetailHref(row.broadcast.id, "stats")} />
+                                  }
+                                >
+                                  View stats
+                                </Button>
+                              }
+                            />
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              Started {formatWhen(row.startedAt)} · last batch{" "}
+                              {formatWhen(row.lastDispatchedAt)}
+                            </p>
+                          )}
                           {row.recentEvents.length > 0 ? (
                             <div className="space-y-1">
                               {row.recentEvents.slice(0, 3).map((event) => (
@@ -155,18 +149,19 @@ export function BroadcastInProgressView() {
                               ))}
                             </div>
                           ) : null}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            nativeButton={false}
-                            render={<Link href={broadcastDetailHref(row.broadcast.id, "stats")} />}
-                          >
-                            View stats
-                          </Button>
+                          {!row.dispatch ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              nativeButton={false}
+                              render={<Link href={broadcastDetailHref(row.broadcast.id, "stats")} />}
+                            >
+                              View stats
+                            </Button>
+                          ) : null}
                         </CardContent>
                       </Card>
-                    );
-                  })}
+                    ))}
                 </div>
               )}
 

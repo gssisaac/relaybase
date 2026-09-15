@@ -27,7 +27,7 @@ describe("automationDetailHref", () => {
     );
     assert.equal(
       automationDetailHref("automation_abc", undefined, "active"),
-      "/scale/automations/automation_abc/stats",
+      "/scale/automations/automation_abc/preview",
     );
   });
 

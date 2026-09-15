@@ -147,10 +147,10 @@ function decodeAutomationPathId(raw: string): string {
 
 export function resolveAutomationDetailTab(
   tab: AutomationDetailTab | null | undefined,
-  status?: AutomationStatus,
+  _status?: AutomationStatus,
 ): AutomationDetailTab {
   if (tab) return tab;
-  return !status || status === "draft" ? "preview" : "stats";
+  return "preview";
 }
 
 export function automationDetailHref(

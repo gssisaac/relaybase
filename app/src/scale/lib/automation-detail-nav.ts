@@ -1,8 +1,9 @@
 import type { AutomationStatus } from "@/lib/scale/api";
 import type { AutomationDetailTab } from "@/scale/lib/paths";
 
-export function defaultAutomationDetailTab(status: AutomationStatus): AutomationDetailTab {
-  return status === "draft" ? "preview" : "stats";
+/** Landing tab when the URL has no tab segment (sidebar switches keep the current tab). */
+export function defaultAutomationDetailTab(_status: AutomationStatus): AutomationDetailTab {
+  return "preview";
 }
 
 export function normalizeAutomationDetailTab(

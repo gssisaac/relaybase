@@ -8,7 +8,10 @@ import { useEffect } from "react";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { normalizeBroadcastDetailTab } from "@/crm/lib/broadcast-detail-nav";
+import {
+  defaultBroadcastDetailTab,
+  normalizeBroadcastDetailTab,
+} from "@/crm/lib/broadcast-detail-nav";
 import { broadcastDetailHref, useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
 import { BroadcastRecipientsView } from "@/crm/pages/campaigns/CampaignSubscribersView";
 import { BroadcastContentView } from "@/crm/pages/campaigns/BroadcastContentView";
@@ -44,17 +47,22 @@ function BroadcastNotFound() {
   );
 }
 
-export function BroadcastDetailSwitch({ tab }: { tab: BroadcastDetailTab }) {
+export function BroadcastDetailSwitch({ tab }: { tab: BroadcastDetailTab | null }) {
   const router = useRouter();
   const { broadcastId, broadcast, loading, notFound } = useBroadcastDetail();
 
   const resolvedTab = broadcast
-    ? normalizeBroadcastDetailTab(tab, broadcast.status)
-    : tab;
+    ? normalizeBroadcastDetailTab(
+        tab ?? defaultBroadcastDetailTab(broadcast.status),
+        broadcast.status,
+      )
+    : tab ?? "content";
 
   useEffect(() => {
-    if (!broadcast || resolvedTab === tab) return;
-    router.replace(broadcastDetailHref(broadcastId, resolvedTab));
+    if (!broadcast || tab === null) return;
+    if (resolvedTab !== tab) {
+      router.replace(broadcastDetailHref(broadcastId, resolvedTab, broadcast.status));
+    }
   }, [broadcast, broadcastId, resolvedTab, router, tab]);
 
   if (loading && !broadcast) {

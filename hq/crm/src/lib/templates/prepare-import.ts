@@ -1,5 +1,5 @@
 import {
-  COMPLIANCE_FOOTER_TAG,
+  STANDARD_COMPLIANCE_FOOTER_HTML_APPEND,
   templateHasEmbeddedComplianceFooter,
 } from "./standard-footer";
 import {
@@ -26,14 +26,11 @@ export function prepareTemplateImport(input: {
 
   let resolvedHtml = htmlSource;
   if (!templateHasEmbeddedComplianceFooter(htmlSource)) {
-    resolvedHtml = `${htmlSource.trimEnd()}\n${COMPLIANCE_FOOTER_TAG}`;
+    resolvedHtml = `${htmlSource.trimEnd()}\n${STANDARD_COMPLIANCE_FOOTER_HTML_APPEND}`;
   }
 
   const warnings: string[] = [];
-  if (
-    !resolvedHtml.includes("{{unsubscribe_url}}") &&
-    !resolvedHtml.includes(COMPLIANCE_FOOTER_TAG)
-  ) {
+  if (!templateHasEmbeddedComplianceFooter(resolvedHtml)) {
     warnings.push("Missing unsubscribe link increases spam-report risk.");
   }
 

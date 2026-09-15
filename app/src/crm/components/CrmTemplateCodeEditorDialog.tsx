@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crmApi, CrmApiError, type CrmTemplate } from "@/lib/crm/api";
@@ -27,19 +28,25 @@ export function CrmTemplateCodeEditorDialog({
   onOpenChange: (open: boolean) => void;
   onSaved?: (result: { template: CrmTemplate; forked: boolean }) => void;
 }) {
+  const [name, setName] = useState("");
   const [htmlSource, setHtmlSource] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !template) return;
+    setName(template.name);
     setHtmlSource(template.htmlSource);
     setError(null);
     setSaving(false);
-  }, [open, template?.id, template?.htmlSource]);
+  }, [open, template?.id, template?.name, template?.htmlSource]);
 
   async function submit() {
     if (!template) return;
+    if (!template.isBuiltin && !name.trim()) {
+      setError("Template name is required");
+      return;
+    }
     if (!htmlSource.includes("{{content}}")) {
       setError("HTML must include a {{content}} placeholder");
       return;
@@ -49,6 +56,7 @@ export function CrmTemplateCodeEditorDialog({
     try {
       const { template: saved, forked, warnings } = await crmApi.saveTemplateSource(template.id, {
         htmlSource,
+        ...(template.isBuiltin ? {} : { name: name.trim() }),
       });
       if (warnings.length > 0) {
         toast.warning(warnings[0]);
@@ -68,28 +76,42 @@ export function CrmTemplateCodeEditorDialog({
 
   if (!template) return null;
 
+  const isCustom = !template.isBuiltin;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{template.name} — HTML</DialogTitle>
+          <DialogTitle>{isCustom ? "Edit custom template" : `${template.name} — HTML`}</DialogTitle>
           <DialogDescription>
             {template.isBuiltin
               ? "Built-in templates are read-only here. Saving creates a custom copy you can keep editing."
-              : "Changes apply to this custom template immediately."}
+              : "Update the template name and HTML. Changes apply immediately."}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-1">
-          <Label htmlFor="tpl-code-editor" className="sr-only">
-            HTML source
-          </Label>
-          <Textarea
-            id="tpl-code-editor"
-            value={htmlSource}
-            onChange={(e) => setHtmlSource(e.target.value)}
-            className="min-h-[min(420px,50vh)] font-mono text-xs leading-relaxed"
-            spellCheck={false}
-          />
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-1">
+          {isCustom ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="tpl-code-name">Name</Label>
+              <Input
+                id="tpl-code-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="My newsletter layout"
+                autoComplete="off"
+              />
+            </div>
+          ) : null}
+          <div className="space-y-1.5">
+            <Label htmlFor="tpl-code-editor">HTML source</Label>
+            <Textarea
+              id="tpl-code-editor"
+              value={htmlSource}
+              onChange={(e) => setHtmlSource(e.target.value)}
+              className="min-h-[min(420px,50vh)] font-mono text-xs leading-relaxed"
+              spellCheck={false}
+            />
+          </div>
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>

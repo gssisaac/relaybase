@@ -3,4 +3,7 @@ name: Plain text
 html: |
   {{content}}
 
-  {{compliance_footer}}
+  Sent by {{organization_name}}
+  {{postal_address}}
+  {{compliance_contact_email}}
+  Unsubscribe: {{unsubscribe_url}}

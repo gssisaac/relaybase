@@ -1,25 +1,27 @@
 import type { BroadcastDetailTab } from "@/crm/lib/paths";
 import type { BroadcastStatus } from "@/lib/crm/api";
 
-const ALL_TABS: BroadcastDetailTab[] = [
-  "content",
-  "publish",
-  "recipients",
-  "stats",
-  "settings",
-];
+const DRAFT_TABS: BroadcastDetailTab[] = ["content", "publish", "settings"];
+
+const NON_DRAFT_LEADING: BroadcastDetailTab[] = ["stats", "recipients"];
+const NON_DRAFT_TRAILING: BroadcastDetailTab[] = ["content", "publish", "settings"];
+
+/** Default landing tab when `tab` is omitted from the broadcast detail URL. */
+export function defaultBroadcastDetailTab(
+  status: BroadcastStatus | undefined,
+): BroadcastDetailTab {
+  if (!status || status === "draft") return "content";
+  return "stats";
+}
 
 /** Header tabs for a broadcast detail — draft hides recipients/stats (no send yet). */
 export function broadcastDetailNavTabs(
   status: BroadcastStatus | undefined,
 ): BroadcastDetailTab[] {
   if (!status || status === "draft") {
-    return ["content", "publish", "settings"];
+    return DRAFT_TABS;
   }
-  if (status === "scheduled") {
-    return ["content", "publish", "recipients", "settings"];
-  }
-  return ALL_TABS;
+  return [...NON_DRAFT_LEADING, ...NON_DRAFT_TRAILING];
 }
 
 export function normalizeBroadcastDetailTab(
@@ -28,6 +30,9 @@ export function normalizeBroadcastDetailTab(
 ): BroadcastDetailTab {
   const allowed = broadcastDetailNavTabs(status);
   if (allowed.includes(tab)) return tab;
-  if (tab === "recipients" || tab === "stats") return "publish";
-  return "content";
+  if (!status || status === "draft") {
+    if (tab === "recipients" || tab === "stats") return "publish";
+    return "content";
+  }
+  return defaultBroadcastDetailTab(status);
 }

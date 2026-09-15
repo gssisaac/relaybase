@@ -291,7 +291,7 @@ export const crmApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  saveTemplateSource: (id: string, input: { htmlSource: string }) =>
+  saveTemplateSource: (id: string, input: { htmlSource: string; name?: string }) =>
     crmFetch<{ template: CrmTemplate; forked: boolean; warnings: string[] }>(
       `/crm/templates/${id}/source`,
       {

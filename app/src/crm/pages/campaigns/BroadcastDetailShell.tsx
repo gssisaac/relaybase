@@ -48,9 +48,11 @@ export function BroadcastDetailShell({
     broadcast?.subject?.trim() ||
     (notFound ? "Broadcast not found" : "Untitled broadcast");
 
-  const navItems = NAV.filter((item) =>
-    broadcastDetailNavTabs(broadcast?.status).includes(item.id),
-  );
+  const navOrder = broadcastDetailNavTabs(broadcast?.status);
+  const navById = new Map(NAV.map((item) => [item.id, item]));
+  const navItems = navOrder
+    .map((id) => navById.get(id))
+    .filter((item): item is (typeof NAV)[number] => item != null);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -76,7 +78,11 @@ export function BroadcastDetailShell({
             <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>
             <nav className="flex shrink-0 gap-0.5 overflow-x-auto" aria-label="Broadcast">
               {navItems.map((item) => {
-                const href = broadcastDetailHref(broadcastId, item.id);
+                const href = broadcastDetailHref(
+                  broadcastId,
+                  item.id,
+                  broadcast?.status,
+                );
                 const Icon = item.icon;
                 const active = item.id === section;
                 return (

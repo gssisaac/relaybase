@@ -3,6 +3,8 @@
 import type { LucideIcon } from "lucide-react";
 import { Mail, Users } from "lucide-react";
 
+import type { BroadcastStatus } from "@/lib/crm/api";
+
 export type AudienceDetailTab = "contacts" | "history" | "settings";
 
 export type BroadcastsSection = "list" | "sent" | "in-progress";
@@ -64,19 +66,38 @@ export function audienceDetailFromSearch(searchParams: {
 /** Broadcast detail tabs — content, publish, recipients, stats, settings. */
 export type BroadcastDetailTab = "content" | "publish" | "recipients" | "stats" | "settings";
 
-export function broadcastDetailHref(id: string, tab: BroadcastDetailTab = "content"): string {
+/** Omit `tab` in the URL only for the status-specific landing tab (draft → content, else → stats). */
+function broadcastDetailTabQueryParam(
+  tab: BroadcastDetailTab,
+  status: BroadcastStatus | undefined,
+): BroadcastDetailTab | null {
+  if (!status || status === "draft") {
+    return tab === "content" ? null : tab;
+  }
+  return tab === "stats" ? null : tab;
+}
+
+export function broadcastDetailHref(
+  id: string,
+  tab: BroadcastDetailTab = "content",
+  status?: BroadcastStatus,
+): string {
   const params = new URLSearchParams();
   params.set("id", id.trim());
-  if (tab !== "content") params.set("tab", tab);
+  const tabParam = broadcastDetailTabQueryParam(tab, status);
+  if (tabParam) params.set("tab", tabParam);
   return `/crm/broadcasts?${params.toString()}`;
 }
 
 export function broadcastDetailFromSearch(searchParams: {
   get: (name: string) => string | null;
-}): { broadcastId: string; tab: BroadcastDetailTab } | null {
+}): { broadcastId: string; tab: BroadcastDetailTab | null } | null {
   const broadcastId = searchParams.get("id")?.trim() ?? "";
   if (!broadcastId) return null;
   const raw = searchParams.get("tab")?.trim().toLowerCase();
+  if (!raw) {
+    return { broadcastId, tab: null };
+  }
   let tab: BroadcastDetailTab = "content";
   if (raw === "publish" || raw === "recipients" || raw === "stats" || raw === "settings") {
     tab = raw;

@@ -77,7 +77,7 @@ crmTemplates.post("/", async (c) => {
  */
 crmTemplates.patch("/:id/source", async (c) => {
   const id = c.req.param("id");
-  let body: { htmlSource?: string };
+  let body: { htmlSource?: string; name?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -88,6 +88,7 @@ crmTemplates.patch("/:id/source", async (c) => {
   if (!htmlSource) {
     return c.json({ error: "htmlSource is required" }, 400);
   }
+  const nameFromBody = body.name?.trim();
 
   const data = store.read();
   const existing = data.templates.find((t) => t.id === id);
@@ -138,11 +139,16 @@ crmTemplates.patch("/:id/source", async (c) => {
     return c.json({ error: "forbidden" }, 403);
   }
 
+  if (nameFromBody !== undefined && !nameFromBody) {
+    return c.json({ error: "name cannot be empty" }, 400);
+  }
+
   let updated: Template | null = null;
   store.update((draft) => {
     const row = draft.templates.find((t) => t.id === id);
     if (!row || row.isBuiltin || !canAccessCustomTemplate(row)) return;
     row.htmlSource = prepared.htmlSource;
+    if (nameFromBody) row.name = nameFromBody;
     updated = row;
   });
 

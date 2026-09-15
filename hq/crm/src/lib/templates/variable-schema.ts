@@ -1,3 +1,8 @@
+import {
+  defaultBrandLogoUrl,
+  footerBrandLogoImageHtml,
+} from "./brand-logo";
+
 /**
  * Per-template variable definitions (authoring format may be YAML on import;
  * stored and served as JSON on `Template.variablesSchema`).
@@ -156,8 +161,12 @@ export function applyTemplateVariablesToHtml(
     if (field.type === "text") {
       replacement = escapeHtml(raw);
     } else if (field.type === "image") {
-      if (raw) {
-        let src = raw;
+      const isBrandLogoField = field.key === "brand.logo" || field.key === "header.logo";
+      let src = raw;
+      if (!src && isBrandLogoField) {
+        src = defaultBrandLogoUrl(context?.crmBaseUrl);
+      }
+      if (src) {
         if (context && !/^(https?:|data:|blob:)/i.test(src)) {
           const resolved = resolveRelativeBroadcastAssetUrl(
             context.broadcastId,
@@ -170,19 +179,35 @@ export function applyTemplateVariablesToHtml(
         replacement =
           field.key === "header.logo"
             ? headerLogoImageHtml(safeSrc)
-            : defaultVariableImageHtml(safeSrc);
+            : field.key === "brand.logo"
+              ? footerBrandLogoImageHtml(safeSrc)
+              : defaultVariableImageHtml(safeSrc);
       }
     }
     out = out.replaceAll(templateVariableToken(field.key), replacement);
   }
 
   out = out.replace(/<img\b[^>]*\bsrc=""[^>]*\/?>/gi, "");
+  out = applyHeaderSlotLogoSizing(out);
   // Header template: drop logo column when unset so org name aligns left.
   out = out.replace(
     /<td[^>]*data-crm-header-logo[^>]*>\s*<\/td>\s*/gi,
     "",
   );
   return out;
+}
+
+/** Footer-sized `brand.logo` img tags in the header row use the larger header slot. */
+function applyHeaderSlotLogoSizing(html: string): string {
+  return html.replace(
+    /<td([^>]*data-crm-header-logo="1"[^>]*)>([\s\S]*?)<\/td>/gi,
+    (block, tdAttrs, inner) => {
+      const srcMatch = inner.match(/src="([^"]+)"/);
+      if (!srcMatch) return block;
+      const src = srcMatch[1]!;
+      return `<td${tdAttrs}>${headerLogoImageHtml(src)}</td>`;
+    },
+  );
 }
 
 function broadcastAssetStem(broadcastId: string): string {
@@ -233,6 +258,9 @@ export function missingRequiredTemplateVariables(
   });
   return schema.fields.filter((f) => {
     if (!f.required) return false;
+    if (f.type === "image" && (f.key === "brand.logo" || f.key === "header.logo")) {
+      return false;
+    }
     return !resolved[f.key]?.trim();
   });
 }

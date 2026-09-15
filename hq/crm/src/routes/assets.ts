@@ -1,11 +1,29 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { Hono } from "hono";
 
 import { store } from "../db/store";
+import { DEFAULT_BRAND_LOGO_FILENAME } from "../lib/templates/brand-logo";
 import { broadcastAssetKey } from "../lib/assets/key";
 import { CRM_PUBLIC_BASE_URL } from "../lib/shared/crm-url";
 import { newId } from "../lib/shared/ids";
 
 export const crmAssets = new Hono();
+
+// GET /crm/brand/relaybase-icon.png — default template logo when none uploaded
+crmAssets.get("/brand/relaybase-icon.png", (c) => {
+  const filePath = path.join(process.cwd(), "public", "brand", DEFAULT_BRAND_LOGO_FILENAME);
+  if (!fs.existsSync(filePath)) return c.text("not found", 404);
+  const buf = fs.readFileSync(filePath);
+  return new Response(buf, {
+    headers: {
+      "content-type": "image/png",
+      "cache-control": "public, max-age=86400",
+      "access-control-allow-origin": "*",
+    },
+  });
+});
 
 // POST /crm/broadcasts/:id/assets { filename, mimeType, contentBase64 }
 crmAssets.post("/broadcasts/:id/assets", async (c) => {

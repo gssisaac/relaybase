@@ -2,6 +2,11 @@
  * Client mirror of hq/crm `variable-schema.ts` (preview + compose UI).
  */
 
+import {
+  defaultBrandLogoUrl,
+  footerBrandLogoImageHtml,
+} from "@/crm/lib/brand-logo";
+
 export type TemplateVariableType = "text" | "image";
 
 export type TemplateVariableDefaultFrom = "compliance.organizationName";
@@ -60,19 +65,41 @@ export function applyTemplateVariablesToHtml(
     let replacement = "";
     if (field.type === "text") {
       replacement = escapeHtml(raw);
-    } else if (field.type === "image" && raw) {
-      const safeSrc = escapeHtml(raw);
-      replacement =
-        field.key === "header.logo"
-          ? headerLogoImageHtml(safeSrc)
-          : defaultVariableImageHtml(safeSrc);
+    } else if (field.type === "image") {
+      const isBrandLogoField = field.key === "brand.logo" || field.key === "header.logo";
+      let src = raw;
+      if (!src && isBrandLogoField) {
+        src = defaultBrandLogoUrl();
+      }
+      if (src) {
+        const safeSrc = escapeHtml(src);
+        replacement =
+          field.key === "header.logo"
+            ? headerLogoImageHtml(safeSrc)
+            : field.key === "brand.logo"
+              ? footerBrandLogoImageHtml(safeSrc)
+              : defaultVariableImageHtml(safeSrc);
+      }
     }
     out = out.replaceAll(templateVariableToken(field.key), replacement);
   }
 
   out = out.replace(/<img\b[^>]*\bsrc=""[^>]*\/?>/gi, "");
+  out = applyHeaderSlotLogoSizing(out);
   out = out.replace(/<td[^>]*data-crm-header-logo[^>]*>\s*<\/td>\s*/gi, "");
   return out;
+}
+
+function applyHeaderSlotLogoSizing(html: string): string {
+  return html.replace(
+    /<td([^>]*data-crm-header-logo="1"[^>]*)>([\s\S]*?)<\/td>/gi,
+    (block, tdAttrs, inner) => {
+      const srcMatch = inner.match(/src="([^"]+)"/);
+      if (!srcMatch) return block;
+      const src = srcMatch[1]!;
+      return `<td${tdAttrs}>${headerLogoImageHtml(src)}</td>`;
+    },
+  );
 }
 
 export function resolveTemplateVariableDefaults(input: {
@@ -105,6 +132,9 @@ export function missingRequiredTemplateVariables(
   });
   return schema.fields.filter((f) => {
     if (!f.required) return false;
+    if (f.type === "image" && (f.key === "brand.logo" || f.key === "header.logo")) {
+      return false;
+    }
     return !resolved[f.key]?.trim();
   });
 }

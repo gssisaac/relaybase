@@ -1,7 +1,7 @@
 /** Must match `PLAIN_TEXT_TEMPLATE_ID` in builtin-templates.ts. */
 const PLAIN_TEXT_TEMPLATE_ID = "tpl-plain-text";
 
-/** Insert in templates; expanded to the standard footer block at preview/send time. */
+/** Legacy placeholder — prefer embedding footer HTML with compliance merge tags in template source. */
 export const COMPLIANCE_FOOTER_TAG = "{{compliance_footer}}";
 
 const FOOTER_CELL_STYLE =
@@ -42,12 +42,14 @@ Sent by {{organization_name}}
 {{compliance_contact_email}}
 Unsubscribe: {{unsubscribe_url}}`;
 
+/** True when the template HTML already includes compliance merge tags (editable footer in source). */
 export function templateHasEmbeddedComplianceFooter(templateHtml: string): boolean {
   if (templateHtml.includes(COMPLIANCE_FOOTER_TAG)) return true;
   return (
     templateHtml.includes("{{unsubscribe_url}}") &&
-    templateHtml.includes("{{organization_name}}") &&
-    templateHtml.includes("{{postal_address}}")
+    templateHtml.includes("{{postal_address}}") &&
+    (templateHtml.includes("{{organization_name}}") ||
+      templateHtml.includes("{{compliance_contact_email}}"))
   );
 }
 
@@ -59,11 +61,16 @@ export function stripIncompleteComplianceFooters(templateHtml: string): string {
   return templateHtml
     .replace(
       /<tr>\s*<td[^>]*>[\s\S]*?\{\{unsubscribe_url\}\}[\s\S]*?<\/td>\s*<\/tr>/gi,
-      "",
+      (row) => (row.includes("{{content}}") ? row : ""),
     )
     .replace(
       /<table[^>]*>[\s\S]*?\{\{unsubscribe_url\}\}[\s\S]*?<\/table>/gi,
-      (block) => (block.includes("{{organization_name}}") ? block : ""),
+      (block) => {
+        if (block.includes("{{content}}")) return block;
+        if (block.includes("{{organization_name}}")) return block;
+        if (block.includes("{{compliance_contact_email}}")) return block;
+        return "";
+      },
     );
 }
 
@@ -82,7 +89,7 @@ export function ensureComplianceFooterInTemplate(
 ): string {
   const cleaned = stripIncompleteComplianceFooters(templateHtml);
   const expanded = expandComplianceFooterPlaceholder(cleaned, plainText);
-  if (templateHasEmbeddedComplianceFooter(cleaned)) return expanded;
+  if (templateHasEmbeddedComplianceFooter(expanded)) return expanded;
   if (plainText) {
     return `${expanded.trimEnd()}\n\n${STANDARD_COMPLIANCE_FOOTER_PLAIN}`;
   }

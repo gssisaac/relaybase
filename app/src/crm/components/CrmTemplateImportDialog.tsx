@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { COMPLIANCE_FOOTER_TAG } from "@/crm/lib/broadcast-standard-footer";
+import { STANDARD_COMPLIANCE_FOOTER_HTML_APPEND } from "@/crm/lib/broadcast-standard-footer";
 import { crmApi, CrmApiError } from "@/lib/crm/api";
 
 export function CrmTemplateImportDialog({
@@ -29,7 +29,7 @@ export function CrmTemplateImportDialog({
 }) {
   const [name, setName] = useState("");
   const [htmlSource, setHtmlSource] = useState(
-    `<table width="100%"><tr><td>{{content}}</td></tr></table>\n${COMPLIANCE_FOOTER_TAG}`,
+    `<table width="100%"><tr><td>{{content}}</td></tr></table>\n${STANDARD_COMPLIANCE_FOOTER_HTML_APPEND}`,
   );
   const [variablesYaml, setVariablesYaml] = useState("");
   const [saving, setSaving] = useState(false);

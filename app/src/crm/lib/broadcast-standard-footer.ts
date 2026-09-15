@@ -1,6 +1,6 @@
 import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
 
-/** Must match hq/crm `COMPLIANCE_FOOTER_TAG`. */
+/** Legacy placeholder — prefer embedding footer HTML with compliance merge tags in template source. */
 export const COMPLIANCE_FOOTER_TAG = "{{compliance_footer}}";
 
 const FOOTER_CELL_STYLE =
@@ -43,8 +43,9 @@ export function templateHasEmbeddedComplianceFooter(templateHtml: string): boole
   if (templateHtml.includes(COMPLIANCE_FOOTER_TAG)) return true;
   return (
     templateHtml.includes("{{unsubscribe_url}}") &&
-    templateHtml.includes("{{organization_name}}") &&
-    templateHtml.includes("{{postal_address}}")
+    templateHtml.includes("{{postal_address}}") &&
+    (templateHtml.includes("{{organization_name}}") ||
+      templateHtml.includes("{{compliance_contact_email}}"))
   );
 }
 
@@ -55,11 +56,16 @@ export function stripIncompleteComplianceFooters(templateHtml: string): string {
   return templateHtml
     .replace(
       /<tr>\s*<td[^>]*>[\s\S]*?\{\{unsubscribe_url\}\}[\s\S]*?<\/td>\s*<\/tr>/gi,
-      "",
+      (row) => (row.includes("{{content}}") ? row : ""),
     )
     .replace(
       /<table[^>]*>[\s\S]*?\{\{unsubscribe_url\}\}[\s\S]*?<\/table>/gi,
-      (block) => (block.includes("{{organization_name}}") ? block : ""),
+      (block) => {
+        if (block.includes("{{content}}")) return block;
+        if (block.includes("{{organization_name}}")) return block;
+        if (block.includes("{{compliance_contact_email}}")) return block;
+        return "";
+      },
     );
 }
 
@@ -78,7 +84,7 @@ export function ensureComplianceFooterInTemplate(
 ): string {
   const cleaned = stripIncompleteComplianceFooters(templateHtml);
   const expanded = expandComplianceFooterPlaceholder(cleaned, plainText);
-  if (templateHasEmbeddedComplianceFooter(cleaned)) return expanded;
+  if (templateHasEmbeddedComplianceFooter(expanded)) return expanded;
   if (plainText) {
     return `${expanded.trimEnd()}\n\n${STANDARD_COMPLIANCE_FOOTER_PLAIN}`;
   }

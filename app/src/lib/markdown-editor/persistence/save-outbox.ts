@@ -12,7 +12,7 @@
  * only guarantees the *latest* edit survives.
  */
 
-import type { CrmPersistRoot } from "./types";
+import type { ScalePersistRoot } from "./types";
 import {
   canonicalWorkspacePath,
   getWorkspaceStorageScope,
@@ -26,7 +26,7 @@ import {
 export type OutboxEntry = {
   /** `${workspacePath}\\0${root}:${path}` — primary key. */
   id: string;
-  root: CrmPersistRoot;
+  root: ScalePersistRoot;
   path: string;
   /** Absolute workspace folder this save belongs to. Missing on legacy v1 rows. */
   workspacePath?: string;
@@ -74,7 +74,7 @@ export function outboxEntryBelongsToWorkspace(
   return scope != null && owner != null && scope === owner;
 }
 
-function outboxId(root: CrmPersistRoot, path: string, workspacePath: string): string {
+function outboxId(root: ScalePersistRoot, path: string, workspacePath: string): string {
   return `${workspacePath}\0${root}:${path}`;
 }
 
@@ -101,7 +101,7 @@ function tx<T>(
  * Skipped when no workspace is connected so the row cannot leak later.
  */
 export async function enqueueSave(
-  root: CrmPersistRoot,
+  root: ScalePersistRoot,
   path: string,
   content: string,
   workspacePath?: string | null,
@@ -129,7 +129,7 @@ export async function enqueueSave(
 
 /** Synchronous-ish enqueue via a fire-and-forget transaction. */
 export function enqueueSaveFireAndForget(
-  root: CrmPersistRoot,
+  root: ScalePersistRoot,
   path: string,
   content: string,
   workspacePath?: string | null,
@@ -139,7 +139,7 @@ export function enqueueSaveFireAndForget(
 
 /** Remove a pending entry after a successful disk persist. */
 export async function dequeueSave(
-  root: CrmPersistRoot,
+  root: ScalePersistRoot,
   path: string,
   workspacePath?: string | null,
 ): Promise<void> {
@@ -163,7 +163,7 @@ export async function readPendingSaves(): Promise<OutboxEntry[]> {
 
 /** Record a failed attempt on an entry so recovery can apply backoff. */
 export async function recordFailedAttempt(
-  root: CrmPersistRoot,
+  root: ScalePersistRoot,
   path: string,
   error: unknown,
   workspacePath?: string | null,
@@ -191,7 +191,7 @@ export async function recordFailedAttempt(
 
 /** True when at least one pending entry exists for the given file. */
 export async function hasPendingSave(
-  root: CrmPersistRoot,
+  root: ScalePersistRoot,
   path: string,
   workspacePath?: string | null,
 ): Promise<boolean> {

@@ -130,7 +130,7 @@ Relaybase Desktop today has two sidebar modes: **Mailbox** and **Console** (dash
 
 **Newsletters** are designed, repeatable publications sent to one or more **Audience groups**. They extend (and eventually supersede) Console **Broadcasts** for anything that needs layout, templates, compliance footers, scheduling, and analytics.
 
-**Not in scope for v1:** full marketing automation platform (drip sequences of arbitrary depth), CRM, or hosted ESP replacement on Relaybase infrastructure.
+**Not in scope for v1:** full marketing automation platform (drip sequences of arbitrary depth), Scale, or hosted ESP replacement on Relaybase infrastructure.
 
 ### 4.2 Relationship to Broadcasts
 

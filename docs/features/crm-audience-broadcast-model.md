@@ -1,16 +1,16 @@
-# CRM Audience Group & Broadcast Architecture
+# Scale Audience Group & Broadcast Architecture
 
 **Status:** Approved (canonical, reduced scope)  
 **Supersedes:** campaign/subscriber layers in [`crm-campaign-broadcast-subscriber-model.md`](./crm-campaign-broadcast-subscriber-model.md) (historical)  
-**Engine:** `hq/crm` (dev: `data/store.json` → prod: tenant-local CRM service on customer Cloudflare / BYO deploy)  
-**App:** `app/src/crm/*`  
+**Engine:** `hq/scale` (dev: `data/store.json` → prod: tenant-local Scale service on customer Cloudflare / BYO deploy)  
+**App:** `app/src/scale/*`  
 **Date:** 2026-09-15  
 
 ---
 
 ## 1. Why this model
 
-Relaybase CRM targets solo founders and small teams. A separate **Campaign** entity plus **Subscriber** membership duplicated what **Audience Groups** already express in the product Worker console.
+Relaybase Scale targets solo founders and small teams. A separate **Campaign** entity plus **Subscriber** membership duplicated what **Audience Groups** already express in the product Worker console.
 
 **Intentional reduction:**
 
@@ -77,16 +77,16 @@ Unsubscribe links use `(broadcastId, unsubscribeToken)` but **apply** to the bro
 
 ---
 
-## 5. Public endpoints (no CRM session)
+## 5. Public endpoints (no Scale session)
 
 | Path | Purpose |
 |------|---------|
-| `GET/POST /crm/unsubscribe/:broadcastId/:token` | Confirm + RFC 8058 unsubscribe |
-| `GET /crm/t/o/...` | Open pixel |
-| `GET /crm/t/c/...` | Click redirect (http/https only) |
-| `GET /crm/assets/...` | Campaign images CDN |
+| `GET/POST /scale/unsubscribe/:broadcastId/:token` | Confirm + RFC 8058 unsubscribe |
+| `GET /scale/t/o/...` | Open pixel |
+| `GET /scale/t/c/...` | Click redirect (http/https only) |
+| `GET /scale/assets/...` | Campaign images CDN |
 
-All other `/crm/*` routes require API auth in production.
+All other `/scale/*` routes require API auth in production.
 
 ---
 
@@ -102,7 +102,7 @@ All other `/crm/*` routes require API auth in production.
 
 | Route | Purpose |
 |-------|---------|
-| `/crm/audience` | Groups, contacts, settings, data source |
-| `/crm/broadcasts` | Broadcast list + detail (content, publish, stats, settings) |
+| `/scale/audience` | Groups, contacts, settings, data source |
+| `/scale/broadcasts` | Broadcast list + detail (content, publish, stats, settings) |
 
 Campaign routes are **not** used in this model.

@@ -1,18 +1,18 @@
 /**
- * CRM campaign editor persistence (adapted from Railmark editor-persistence).
+ * Scale campaign editor persistence (adapted from Railmark editor-persistence).
  */
 
-export type CrmPersistRoot = "crm";
-export const CRM_PERSIST_ROOT: CrmPersistRoot = "crm";
+export type ScalePersistRoot = "scale";
+export const SCALE_PERSIST_ROOT: ScalePersistRoot = "scale";
 
 export type Mode = "read" | "edit";
 
 export type EditContext = {
-  root: CrmPersistRoot | null;
+  root: ScalePersistRoot | null;
   /** Local snapshot/draft storage key — the document identity (e.g. broadcast id). */
   path: string | null;
   /**
-   * `/crm/campaigns/…` suffix used by the tab-close beacon PATCH — may
+   * `/scale/campaigns/…` suffix used by the tab-close beacon PATCH — may
    * differ from `path` when the document lives under a parent resource
    * (e.g. `<campaignId>/broadcasts/<broadcastId>`). Falls back to `path`.
    */

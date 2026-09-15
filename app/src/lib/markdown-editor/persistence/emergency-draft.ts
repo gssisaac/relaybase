@@ -10,12 +10,12 @@
  * FileStore draft-merge logic continues to work on reload.
  */
 
-import type { CrmPersistRoot } from "./types";
+import type { ScalePersistRoot } from "./types";
 import { readScopedItem, removeScopedItem, writeScopedItem } from "./workspace-storage";
 import { EMERGENCY_DRAFTS_KEY } from "./constants";
 
 export type FileDraft = {
-  root: CrmPersistRoot;
+  root: ScalePersistRoot;
   path: string;
   content: string;
   updatedAt: number;
@@ -23,7 +23,7 @@ export type FileDraft = {
 
 type FileDraftsMap = Record<string, FileDraft>;
 
-function fileCacheKey(root: CrmPersistRoot, filePath: string): string {
+function fileCacheKey(root: ScalePersistRoot, filePath: string): string {
   return `${root}:${filePath}`;
 }
 
@@ -58,7 +58,7 @@ function writeDraftsMap(map: FileDraftsMap): void {
  * quota failures are swallowed so the pipeline continues to the outbox
  * and disk flush.
  */
-export function syncEmergencyDraft(root: CrmPersistRoot, filePath: string, content: string): void {
+export function syncEmergencyDraft(root: ScalePersistRoot, filePath: string, content: string): void {
   const map = readDraftsMap();
   map[fileCacheKey(root, filePath)] = {
     root,
@@ -70,7 +70,7 @@ export function syncEmergencyDraft(root: CrmPersistRoot, filePath: string, conte
 }
 
 /** Remove a draft after a successful disk persist. */
-export function clearEmergencyDraft(root: CrmPersistRoot, filePath: string): void {
+export function clearEmergencyDraft(root: ScalePersistRoot, filePath: string): void {
   const map = readDraftsMap();
   const key = fileCacheKey(root, filePath);
   if (!(key in map)) return;
@@ -79,7 +79,7 @@ export function clearEmergencyDraft(root: CrmPersistRoot, filePath: string): voi
 }
 
 /** Read the draft for a file, or null. */
-export function readEmergencyDraft(root: CrmPersistRoot, filePath: string): FileDraft | null {
+export function readEmergencyDraft(root: ScalePersistRoot, filePath: string): FileDraft | null {
   return readDraftsMap()[fileCacheKey(root, filePath)] ?? null;
 }
 

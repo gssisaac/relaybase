@@ -1,4 +1,4 @@
-import { crmApi } from "@/lib/crm/api";
+import { scaleApi } from "@/lib/scale/api";
 
 export type CrmContentAssetOwner = "broadcast" | "automation";
 
@@ -13,7 +13,7 @@ export async function uploadCampaignAsset(
   const payload = { filename, mimeType, contentBase64 };
   const res =
     owner === "automation"
-      ? await crmApi.uploadAutomationAsset(campaignId, payload)
-      : await crmApi.uploadBroadcastAsset(campaignId, payload);
+      ? await scaleApi.uploadAutomationAsset(campaignId, payload)
+      : await scaleApi.uploadBroadcastAsset(campaignId, payload);
   return res.url;
 }

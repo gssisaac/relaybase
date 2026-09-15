@@ -15,6 +15,11 @@ describe("modeFromPathname", () => {
     assert.equal(modeFromPathname("/email/inbox"), "email");
   });
 
+  it("treats /scale as scale mode", () => {
+    assert.equal(modeFromPathname("/scale/audience"), "scale");
+    assert.equal(modeFromPathname("/scale/broadcasts"), "scale");
+  });
+
   it("treats everything else as dashboard", () => {
     assert.equal(modeFromPathname("/dashboard"), "dashboard");
     assert.equal(modeFromPathname("/accounts"), "dashboard");
@@ -76,31 +81,31 @@ describe("normalizeEntryPath", () => {
   it("rewrites audience and broadcast path details into ?id=&tab=", () => {
     assert.equal(
       normalizeEntryPath("/audience/grp1/settings"),
-      "/crm/audience?id=grp1&tab=settings",
+      "/scale/audience?id=grp1&tab=settings",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/bc1/progress"),
-      "/broadcasts?id=bc1&tab=stats",
+      "/scale/broadcasts?id=bc1&tab=stats",
     );
-    assert.equal(normalizeEntryPath("/broadcasts/new"), "/broadcasts?new=1");
+    assert.equal(normalizeEntryPath("/broadcasts/new"), "/scale/broadcasts?new=1");
   });
 
   it("rewrites reserved broadcast section paths into ?view=", () => {
     assert.equal(
-      normalizeEntryPath("/crm/broadcasts/sent"),
-      "/crm/broadcasts?view=sent",
+      normalizeEntryPath("/scale/broadcasts/sent"),
+      "/scale/broadcasts?view=sent",
     );
     assert.equal(
-      normalizeEntryPath("/crm/broadcasts/in-progress"),
-      "/crm/broadcasts?view=in-progress",
+      normalizeEntryPath("/scale/broadcasts/in-progress"),
+      "/scale/broadcasts?view=in-progress",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/sent"),
-      "/crm/broadcasts?view=sent",
+      "/scale/broadcasts?view=sent",
     );
     assert.equal(
-      normalizeEntryPath("/crm/broadcasts/broadcast_abc/stats"),
-      "/crm/broadcasts?id=broadcast_abc&tab=stats",
+      normalizeEntryPath("/scale/broadcasts/broadcast_abc/stats"),
+      "/scale/broadcasts?id=broadcast_abc&tab=stats",
     );
   });
 

@@ -47,7 +47,7 @@ describe("mapEmailApiToWorker", () => {
     );
   });
 
-  it("maps keys, stats; CRM owns audience/broadcasts", () => {
+  it("maps keys, stats; Scale owns audience/broadcasts", () => {
     assert.equal(mapEmailApiToWorker("/api/email/keys"), "/console/keys");
     assert.equal(
       mapEmailApiToWorker("/api/email/keys/abc/rotate"),

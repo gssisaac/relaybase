@@ -42,7 +42,7 @@ import {
   normalizeCampaignAssetUrl,
   normalizeCampaignAssetUrlsInHtml,
 } from "@/lib/markdown-editor/utils/asset-url";
-import { getCrmApiBase } from "@/lib/crm/api-base";
+import { getScaleApiBase } from "@/lib/scale/api-base";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/campaign-upload";
 import { cn } from "@/lib/utils";
 
@@ -53,7 +53,7 @@ import "@/lib/markdown-editor/css/markdown-shared.css";
 export type MarkdownEditorHandle = EditorSnapshotProvider;
 
 type MarkdownEditorProps = {
-  /** Real campaign id — asset upload/resolution namespace (`/crm/campaigns/:campaignId/assets`). */
+  /** Real campaign id — asset upload/resolution namespace (`/scale/campaigns/:campaignId/assets`). */
   campaignId: string;
   /**
    * Document identity for the persistence snapshot's `filePath` binding —
@@ -63,7 +63,7 @@ type MarkdownEditorProps = {
    * same entity (e.g. no broadcast-scoped content).
    */
   documentId?: string;
-  /** Where uploaded images are stored (broadcast vs automation CRM routes). */
+  /** Where uploaded images are stored (broadcast vs automation Scale routes). */
   assetOwner?: CrmContentAssetOwner;
   value: string;
   editable?: boolean;
@@ -256,9 +256,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       const filename = rest.join("/");
       if (!cid || !filename) return url;
       if (assetOwnerRef.current === "automation") {
-        return `${getCrmApiBase()}/crm/assets/automation/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+        return `${getScaleApiBase()}/scale/assets/automation/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
       }
-      return `${getCrmApiBase()}/crm/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+      return `${getScaleApiBase()}/scale/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
     },
     pasteHandler: ({ event, editor: pasteEditor, defaultPasteHandler }) => {
       const files = collectTransferFiles(event.clipboardData);

@@ -1,8 +1,8 @@
-# CRM Campaign Image Assets & Cloudflare R2 CDN Specification
+# Scale Campaign Image Assets & Cloudflare R2 CDN Specification
 
 **Status:** Approved Architecture Draft  
-**Target Engine:** `hq/crm` (Cloudflare Workers + R2 CDN / Local JSON Store)  
-**App Editor:** `app/src/lib/markdown-editor/*` & `app/src/crm/pages/campaigns/*`  
+**Target Engine:** `hq/scale` (Cloudflare Workers + R2 CDN / Local JSON Store)  
+**App Editor:** `app/src/lib/markdown-editor/*` & `app/src/scale/pages/campaigns/*`  
 **Storage Target:** Cloudflare R2 Bucket `crm-assets` (Public CDN domain)  
 **Language:** English  
 **Date:** 2026-09-14  
@@ -22,7 +22,7 @@ In web development, modern image formats such as WebP, AVIF, and inline Base64 d
 
 ### 1.2 Core Policy Decisions
 
-To guarantee **100% universal rendering, inbox deliverability, and optimal visual fidelity**, Relaybase CRM establishes the following strict image standards:
+To guarantee **100% universal rendering, inbox deliverability, and optimal visual fidelity**, Relaybase Scale establishes the following strict image standards:
 
 | Image Use Case | Standard Format | Fallback / Alternative | Forbidden Formats in Email Body |
 |---|---|---|---|
@@ -33,7 +33,7 @@ To guarantee **100% universal rendering, inbox deliverability, and optimal visua
 ### 1.3 Storage & CDN Strategy
 All campaign assets are hosted externally on a high-speed, globally distributed **Cloudflare R2 Bucket (`crm-assets`)** mapped to a public CDN custom domain (e.g., `https://assets.relaybase.xyz` or development host). 
 
-- **Local Dev Phase:** Assets are received via `POST /crm/campaigns/:id/assets` and stored in `hq/crm/data/store.json` under the key `{campaignId}/{filename}`.
+- **Local Dev Phase:** Assets are received via `POST /scale/campaigns/:id/assets` and stored in `hq/scale/data/store.json` under the key `{campaignId}/{filename}`.
 - **Cloudflare Production Phase:** The exact same key layout `{campaignId}/{filename}` is written directly to the R2 bucket `crm-assets` with public read access and cached at Cloudflare edge nodes with `public, max-age=31536000, immutable`.
 
 ---
@@ -41,7 +41,7 @@ All campaign assets are hosted externally on a high-speed, globally distributed 
 ## 2. Image Format Policy & Email Client Compatibility Matrix
 
 ```mermaid
-pie title Standard Image Format Distribution in Relaybase CRM
+pie title Standard Image Format Distribution in Relaybase Scale
     "JPEG (Photos, Heroes, Banners)" : 70
     "PNG (Logos, Transparent Icons)" : 25
     "GIF (Animations)" : 5
@@ -76,7 +76,7 @@ Assets are organized deterministically under each campaign ID to ensure isolatio
 
 ```text
 Storage Key:  {campaignId}/{assetShortId}-{slugifiedName}.{ext}
-Public CDN:   https://assets.relaybase.xyz/crm/assets/{campaignId}/{assetShortId}-{slugifiedName}.{ext}
+Public CDN:   https://assets.relaybase.xyz/scale/assets/{campaignId}/{assetShortId}-{slugifiedName}.{ext}
 ```
 
 ```text
@@ -91,12 +91,12 @@ Example Keys:
 
 The transition from local development store to Cloudflare R2 preserves exact route, key, and URL signatures:
 
-| Dimension | Local Development Store (`hq/crm`) | Production Cloudflare R2 (`strum-relaybase-crm`) |
+| Dimension | Local Development Store (`hq/scale`) | Production Cloudflare R2 (`strum-relaybase-scale`) |
 |---|---|---|
-| **Storage Engine** | Synchronous file store (`hq/crm/data/store.json`) | Cloudflare R2 (`env.CRM_ASSETS` bucket binding) |
-| **Ingestion Handler** | `POST /crm/campaigns/:id/assets` | `POST /crm/campaigns/:id/assets` (Worker route) |
-| **Retrieval Handler** | `GET /crm/assets/:campaignId/:filename` | Public R2 Custom Domain / Worker Cache API |
-| **URL Base** | `process.env.CRM_PUBLIC_BASE_URL` (`http://localhost:32831`) | `https://assets.relaybase.xyz` (Cloudflare CDN) |
+| **Storage Engine** | Synchronous file store (`hq/scale/data/store.json`) | Cloudflare R2 (`env.CRM_ASSETS` bucket binding) |
+| **Ingestion Handler** | `POST /scale/campaigns/:id/assets` | `POST /scale/campaigns/:id/assets` (Worker route) |
+| **Retrieval Handler** | `GET /scale/assets/:campaignId/:filename` | Public R2 Custom Domain / Worker Cache API |
+| **URL Base** | `process.env.SCALE_PUBLIC_BASE_URL` (`http://localhost:32831`) | `https://assets.relaybase.xyz` (Cloudflare CDN) |
 | **Cache Headers** | `public, max-age=31536000, immutable` | `public, max-age=31536000, immutable` |
 | **Security** | Unauthenticated public GET for image assets | Unauthenticated public GET (GoogleImageProxy allowed) |
 
@@ -116,9 +116,9 @@ The transition from local development store to Cloudflare R2 preserves exact rou
      - Compresses quality to `85%` JPEG.
      - Strips heavy EXIF/metadata.
   4. Generates unique asset key: `H7K2M9P4-summer-launch.jpg`.
-  5. POSTs Base64 payload to `/crm/campaigns/:id/assets`.
+  5. POSTs Base64 payload to `/scale/campaigns/:id/assets`.
   6. Server commits asset to storage (local JSON / R2) and returns public CDN URL.
-  7. Editor pastes markdown token: `![Summer Launch](https://assets.relaybase.xyz/crm/assets/campaign_123/H7K2M9P4-summer-launch.jpg)`.
+  7. Editor pastes markdown token: `![Summer Launch](https://assets.relaybase.xyz/scale/assets/campaign_123/H7K2M9P4-summer-launch.jpg)`.
 - **Postcondition:** The image renders instantly in the editor and right-side mobile/desktop preview; outbound HTML is guaranteed compliant with all email clients.
 
 ---
@@ -132,7 +132,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
   2. Optimization pipeline preserves PNG format to maintain crisp vector-like edges and alpha channel.
   3. Resizes dimensions to max width `600px` (or 2x `400px` for header logos) using lossless/high-quality PNG compression.
   4. Uploads to R2 as `L9X2P1A4-company-logo-dark.png` with `Content-Type: image/png`.
-  5. HTML template embeds `<img src="https://assets.relaybase.xyz/crm/assets/.../L9X2P1A4-company-logo-dark.png" alt="Company Logo" width="180" style="display:block; border:0; outline:none; text-decoration:none;" />`.
+  5. HTML template embeds `<img src="https://assets.relaybase.xyz/scale/assets/.../L9X2P1A4-company-logo-dark.png" alt="Company Logo" width="180" style="display:block; border:0; outline:none; text-decoration:none;" />`.
 - **Postcondition:** When viewed in dark mode or on colored template background cards (`#f8fafc`), the logo renders seamlessly without black artifacts in Gmail or Outlook.
 
 ---
@@ -144,8 +144,8 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 - **Execution Flow:**
   1. System detects MIME `image/gif`.
   2. Client-side WebP/JPEG re-encoders bypass the file to protect the animation frames.
-  3. Uploads raw GIF to `/crm/campaigns/:id/assets` with `image/gif` MIME type.
-  4. Markdown editor inserts `![Feature Demo](https://assets.relaybase.xyz/crm/assets/.../G4K8T2Q1-feature-demo.gif)`.
+  3. Uploads raw GIF to `/scale/campaigns/:id/assets` with `image/gif` MIME type.
+  4. Markdown editor inserts `![Feature Demo](https://assets.relaybase.xyz/scale/assets/.../G4K8T2Q1-feature-demo.gif)`.
 - **Postcondition:**
   - Modern webmail (Gmail, Apple Mail, Outlook Mac/Web) loops the animation smoothly.
   - Classic Outlook Desktop automatically renders the first frame as a static poster image without breaking the email layout.
@@ -169,7 +169,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 
 ### UC-5: Test Send & Live Dispatch Sanitization (Send-Time Safety Guards)
 - **Actor:** Sender clicking "Send Test Email" or executing a scheduled broadcast dispatch.
-- **Trigger:** `POST /crm/campaigns/:id/send` or `POST /crm/campaigns/:id/test-send`.
+- **Trigger:** `POST /scale/campaigns/:id/send` or `POST /scale/campaigns/:id/test-send`.
 - **Execution Flow:**
   1. `renderCampaignForRecipient` compiles `bodyMarkdown` to HTML via `marked`.
   2. **Sanitization Pass (`normalizeCampaignAssetUrlsInHtml` & Email Sanitizer):**
@@ -177,7 +177,7 @@ The transition from local development store to Cloudflare R2 preserves exact rou
      - Any relative path `./.campaign/...` is converted to absolute public CDN URL.
      - Any accidental Base64 data URI `src="data:image/..."` is flagged with a build error or safely stripped.
      - Adds mandatory email HTML attributes: `style="display:block; max-width:100%; height:auto;"` and default `alt=""`.
-  3. Embeds 1x1 transparent GIF open-tracking pixel (`/crm/t/o/:campaignId/:memberKey`).
+  3. Embeds 1x1 transparent GIF open-tracking pixel (`/scale/t/o/:campaignId/:memberKey`).
   4. Wraps inside recipient's selected template.
   5. Dispatches payload to Customer Worker `/v1/send`.
 - **Postcondition:** Outbound email payload is strictly standard HTML with absolute HTTPS CDN image links.
@@ -187,13 +187,13 @@ The transition from local development store to Cloudflare R2 preserves exact rou
 ### UC-6: Recipient Inbox Opening & Proxy Caching
 - **Actor:** Subscriber opens the received campaign email in Gmail Web or Mobile App.
 - **Execution Flow:**
-  1. Gmail's sanitizer scans HTML and replaces image URLs with `https://ci3.googleusercontent.com/proxy/...#https://assets.relaybase.xyz/crm/assets/...`.
+  1. Gmail's sanitizer scans HTML and replaces image URLs with `https://ci3.googleusercontent.com/proxy/...#https://assets.relaybase.xyz/scale/assets/...`.
   2. `GoogleImageProxy` sends an asynchronous HTTPS GET request to `assets.relaybase.xyz`.
   3. Cloudflare Edge CDN checks cache:
      - *Cache Hit:* Returns image bytes directly from Cloudflare Edge in < 15ms.
      - *Cache Miss:* Pulls from R2 bucket `crm-assets`, caches at edge, and returns HTTP 200 with `Content-Type: image/jpeg` and `Cache-Control: public, max-age=31536000, immutable`.
   4. Gmail proxies image to subscriber's viewport.
-- **Postcondition:** Image renders instantly; subsequent opens across thousands of subscribers hit Cloudflare CDN cache with zero load on central CRM compute.
+- **Postcondition:** Image renders instantly; subsequent opens across thousands of subscribers hit Cloudflare CDN cache with zero load on central Scale compute.
 
 ---
 
@@ -208,7 +208,7 @@ sequenceDiagram
     participant Editor as BlockNote Editor<br/>(CampaignContentView)
     participant Ingest as File Ingest Pipeline<br/>(file-ingest.ts)
     participant Compress as Image Optimizer<br/>(image-optimize.ts)
-    participant Server as HQ CRM API<br/>(hq/crm)
+    participant Server as HQ Scale API<br/>(hq/scale)
     participant Storage as Cloudflare R2 /<br/>Local store.json
 
     User->>Editor: Drag & Drop / Paste Image File
@@ -217,7 +217,7 @@ sequenceDiagram
     Note over Compress: Checks mimeType:<br/>- Photos/Banners -> JPEG (max 1200px)<br/>- Logos/Icons -> PNG<br/>- GIFs -> Passthrough GIF<br/>- WebP/SVG -> Auto-convert to JPEG/PNG
     Compress-->>Ingest: Optimized Blob + Target Extension (.jpg/.png/.gif)
     Ingest->>Ingest: Generate pageAssetFilename (e.g. H7K2M9P4-hero.jpg)
-    Ingest->>Server: POST /crm/campaigns/:id/assets<br/>{ filename, mimeType, contentBase64 }
+    Ingest->>Server: POST /scale/campaigns/:id/assets<br/>{ filename, mimeType, contentBase64 }
     
     alt Local Development Mode
         Server->>Storage: Update store.json (draft.campaignAssets)
@@ -226,7 +226,7 @@ sequenceDiagram
     end
     
     Storage-->>Server: Write Confirmed (HTTP 200)
-    Server-->>Ingest: { url: "https://assets.relaybase.xyz/crm/assets/...", key: "..." }
+    Server-->>Ingest: { url: "https://assets.relaybase.xyz/scale/assets/...", key: "..." }
     Ingest-->>Editor: pasteMarkdown("![Alt](https://assets.relaybase.xyz/...)")
     Editor->>Editor: Re-render DOM & Trigger autosave debounce
     Editor-->>User: Visual image preview loaded in editor & split view
@@ -240,12 +240,12 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor User as Marketer (App UI)
-    participant CRM as HQ CRM Server<br/>(crm.relaybase.xyz)
+    participant Scale as HQ Scale Server<br/>(crm.relaybase.xyz)
     participant Render as Template Engine<br/>(render.ts)
     participant Worker as Customer Worker<br/>(*.workers.dev)
     participant SMTP as Cloudflare Email /<br/>Upstream Mail Relay
 
-    User->>CRM: Click "Send Broadcast Now"<br/>POST /crm/campaigns/:id/send { recipients }
+    User->>CRM: Click "Send Broadcast Now"<br/>POST /scale/campaigns/:id/send { recipients }
     Note over CRM: Resolve active subscribers<br/>Snapshot campaign bodyMarkdown & template
     loop For each resolved recipient
         CRM->>Render: renderCampaignForRecipient({ campaignId, bodyMarkdown, recipient, ... })
@@ -274,13 +274,13 @@ sequenceDiagram
     participant R2 as Cloudflare R2 Bucket<br/>(crm-assets)
 
     Recipient->>Inbox: Opens Email Message
-    Note over Inbox: HTML contains:<br/><img src="https://assets.relaybase.xyz/crm/assets/c123/hero.jpg">
+    Note over Inbox: HTML contains:<br/><img src="https://assets.relaybase.xyz/scale/assets/c123/hero.jpg">
     
     alt Gmail Recipient
         Inbox->>Proxy: Request cached image via GoogleImageProxy
-        Proxy->>CDN: GET /crm/assets/c123/hero.jpg<br/>(Unauthenticated HTTPS request)
+        Proxy->>CDN: GET /scale/assets/c123/hero.jpg<br/>(Unauthenticated HTTPS request)
     else Apple Mail / Desktop Outlook
-        Inbox->>CDN: Direct GET /crm/assets/c123/hero.jpg
+        Inbox->>CDN: Direct GET /scale/assets/c123/hero.jpg
     end
 
     alt Cloudflare Edge Cache Hit
@@ -302,7 +302,7 @@ sequenceDiagram
 ### 6.1 Asset Upload Endpoint
 
 - **Method:** `POST`
-- **Path:** `/crm/campaigns/:id/assets`
+- **Path:** `/scale/campaigns/:id/assets`
 - **Request Body (JSON):**
   ```json
   {
@@ -314,7 +314,7 @@ sequenceDiagram
 - **Response Body (JSON, 200 OK):**
   ```json
   {
-    "url": "https://assets.relaybase.xyz/crm/assets/campaign_123/H7K2M9P4-summer-launch.jpg",
+    "url": "https://assets.relaybase.xyz/scale/assets/campaign_123/H7K2M9P4-summer-launch.jpg",
     "key": "campaign_123/H7K2M9P4-summer-launch.jpg"
   }
   ```
@@ -322,7 +322,7 @@ sequenceDiagram
 ### 6.2 Asset Retrieval Endpoint
 
 - **Method:** `GET`
-- **Path:** `/crm/assets/:campaignId/:filename`
+- **Path:** `/scale/assets/:campaignId/:filename`
 - **Response Headers:**
   ```http
   HTTP/1.1 200 OK
@@ -360,9 +360,9 @@ export const DEFAULT_EMAIL_IMAGE_SETTINGS: EmailImageOptimizeOptions = {
 | Phase | Milestone | Deliverable | Status |
 |---|---|---|---|
 | **Phase 1: Format Standardization** | Switch client optimizer from WebP default to **JPEG default** (`.jpg`) and **PNG for transparency** (`.png`). | `app/src/lib/markdown-editor/utils/file-ingest.ts`<br/>`app/src/lib/markdown-editor/utils/image-optimize.ts` | Done |
-| **Phase 2: Sanitization Pipeline** | Add strict HTML image validation in `hq/crm/src/lib/render.ts` to ensure no relative paths, Base64 strings, or unhosted media reach outbound mail. | `hq/crm/src/lib/render.ts` | Done |
-| **Phase 3: Storage Bridge Parity** | Maintain local JSON store structure in `hq/crm/data/store.json` with exact key parity to Cloudflare R2 bucket (`crm-assets`). | `hq/crm/src/routes/assets.ts` | Active (Dev) |
-| **Phase 4: Cloudflare R2 Production Binding** | Attach Cloudflare R2 bucket `crm-assets` and custom edge domain (`assets.relaybase.xyz`) to production Worker deployment. | `hq/crm/wrangler.jsonc` | Target (Prod) |
+| **Phase 2: Sanitization Pipeline** | Add strict HTML image validation in `hq/scale/src/lib/render.ts` to ensure no relative paths, Base64 strings, or unhosted media reach outbound mail. | `hq/scale/src/lib/render.ts` | Done |
+| **Phase 3: Storage Bridge Parity** | Maintain local JSON store structure in `hq/scale/data/store.json` with exact key parity to Cloudflare R2 bucket (`crm-assets`). | `hq/scale/src/routes/assets.ts` | Active (Dev) |
+| **Phase 4: Cloudflare R2 Production Binding** | Attach Cloudflare R2 bucket `crm-assets` and custom edge domain (`assets.relaybase.xyz`) to production Worker deployment. | `hq/scale/wrangler.jsonc` | Target (Prod) |
 
 ---
 

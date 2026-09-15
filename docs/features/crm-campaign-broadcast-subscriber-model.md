@@ -1,15 +1,15 @@
-# CRM Campaign, Broadcast & Subscriber Architecture Specification
+# Scale Campaign, Broadcast & Subscriber Architecture Specification
 
 > **Historical draft — superseded (2026-09-15).**  
-> The shipped CRM model **removed the Campaign / Subscriber entities** in favor of **Audience Group → Broadcast**.  
+> The shipped Scale model **removed the Campaign / Subscriber entities** in favor of **Audience Group → Broadcast**.  
 > **Canonical spec:** [`crm-audience-broadcast-model.md`](./crm-audience-broadcast-model.md)  
 > **Compliance backlog:** [`crm-compliance-improvements.md`](./crm-compliance-improvements.md)  
 >  
 > Keep this file for migration notes and UC copy; do not implement new features against the Campaign hierarchy below.
 
 **Status:** Superseded  
-**Target Engine:** `hq/crm` (Cloudflare Workers + D1 / local JSON store)  
-**App UI:** `app/src/crm/*` (Next.js App Router + shadcn/ui)  
+**Target Engine:** `hq/scale` (Cloudflare Workers + D1 / local JSON store)  
+**App UI:** `app/src/scale/*` (Next.js App Router + shadcn/ui)  
 **Language:** English  
 **Date:** 2026-09-14  
 
@@ -57,7 +57,7 @@ erDiagram
 
 ### 1.3 Key Architectural Principles
 
-1. **Campaign = Consent Scope**: Unsubscribing from *"Product Updates"* flips `Subscriber.status = 'unsubscribed'` on that campaign only. The user remains `subscribed` in *"Security Advisories"* and retains their CRM Lead/Customer Pipeline status.
+1. **Campaign = Consent Scope**: Unsubscribing from *"Product Updates"* flips `Subscriber.status = 'unsubscribed'` on that campaign only. The user remains `subscribed` in *"Security Advisories"* and retains their Scale Lead/Customer Pipeline status.
 2. **Broadcasts are Calendar Events, Not Sequences**: Creating Broadcast A for Tuesday 08:00 and Broadcast B for Wednesday 12:00 schedules two independent calendar events. They are not relative drip delays (drip sequences are a separate entity).
 3. **Send-Time Resolution (Late Binding)**: Scheduled broadcasts do **not** freeze their recipient list at the moment of scheduling. They resolve active `subscribed` members at the precise execution timestamp (`runAt`). Subscribers who opt out prior to `runAt` are excluded automatically; new subscribers joining before `runAt` are included.
 4. **Separation of Content and Container**: A Campaign never contains `bodyMarkdown` or `subject`. All copywriting, rich media, and layout templates belong strictly to individual Broadcasts.
@@ -66,7 +66,7 @@ erDiagram
 
 ## 2. TypeScript Data Model for JSON File Store (Development Phase)
 
-> **Development Policy:** No database schemas or SQL tables (D1/SQLite) are created during this active development phase. All CRM state is persisted in a local JSON document store (`data/store.json`). Database schemas and migrations will be introduced only after the TypeScript object model and end-to-end workflows are fully validated.
+> **Development Policy:** No database schemas or SQL tables (D1/SQLite) are created during this active development phase. All Scale state is persisted in a local JSON document store (`data/store.json`). Database schemas and migrations will be introduced only after the TypeScript object model and end-to-end workflows are fully validated.
 
 ```typescript
 // ============================================================================
@@ -207,7 +207,7 @@ export type AccountSuppression = {
 };
 
 // ============================================================================
-// 6. Shared CRM & System Support Types
+// 6. Shared Scale & System Support Types
 // ============================================================================
 
 export type PipelineCard = {
@@ -309,18 +309,18 @@ UI COMPONENT REFERENCE MATRIX:
 ### 3.1 Campaign Management Use Cases (`C1` - `C5`)
 
 #### UC-C1: Create New Campaign
-* **Trigger:** User clicks *"New Campaign"* in the `/crm/campaigns` header toolbar.
+* **Trigger:** User clicks *"New Campaign"* in the `/scale/campaigns` header toolbar.
 * **System Logic:** Opens create dialog. User provides `name`, optional `slug`, optional `fromName`, `fromEmail`. Generates UUID, sets `status = 'active'`.
 * **Success Presentation:**
   * **UI/UX:** [Dialog Modal] closes automatically. [Toast] appears: `"Campaign 'Engineering Updates' created"`.
-  * **View Transition:** User is redirected directly to `/crm/campaigns/:id?tab=subscribers`.
+  * **View Transition:** User is redirected directly to `/scale/campaigns/:id?tab=subscribers`.
 * **Failure / Edge Cases:**
   * *Empty Campaign Name:* [Inline Field] beneath name input: `"Campaign name is required"`. Save button remains disabled.
   * *Duplicate Slug / Name:* [Inline Field] beneath name/slug input: `"A campaign with this identifier already exists in this account"`.
   * *Network Failure:* [Toast] (Destructive): `"Failed to create campaign. Check your connection and retry."`
 
 #### UC-C2: Update Campaign Settings & Sender Identity
-* **Trigger:** User modifies default From Name, From Email, or Default Layout Template in `/crm/campaigns/:id?tab=settings`.
+* **Trigger:** User modifies default From Name, From Email, or Default Layout Template in `/scale/campaigns/:id?tab=settings`.
 * **System Logic:** Validates email format, saves to `crm_campaigns`. Future broadcasts inherit these defaults automatically.
 * **Success Presentation:**
   * **UI/UX:** [Toast]: `"Campaign settings saved successfully"`. Settings card displays subtle green checkmark icon for 2 seconds.
@@ -348,7 +348,7 @@ UI COMPONENT REFERENCE MATRIX:
 ### 3.2 Subscriber & Consent Lifecycle Use Cases (`S1` - `S7`)
 
 #### UC-S1: Manual Single Subscriber Add
-* **Trigger:** User clicks *"Add Subscriber"* on `/crm/campaigns/:id?tab=subscribers`.
+* **Trigger:** User clicks *"Add Subscriber"* on `/scale/campaigns/:id?tab=subscribers`.
 * **System Logic:** Checks email against `crm_account_suppressions` and existing `crm_subscribers` for this campaign. Generates cryptographically secure `unsubscribe_token`.
 * **Success Presentation:**
   * **UI/UX:** [Dialog Modal] closes. [Toast]: `"Added alex@example.com to subscribers"`. Subscriber row inserted optimistically at top of table with [Status Badge] `"Subscribed"` (emerald green).
@@ -371,10 +371,10 @@ UI COMPONENT REFERENCE MATRIX:
   * *File Exceeds Size Limit (>5,000 rows in sync mode):* [Inline Field]: `"File contains 8,200 rows. Maximum synchronous import limit is 5,000 rows. Please split the file."`
 
 #### UC-S3: Recipient One-Click Unsubscribe via Web Link
-* **Trigger:** Recipient clicks `{{unsubscribe_url}}` rendered as `https://crm.relaybase.xyz/crm/unsubscribe/:campaignId/:token`.
+* **Trigger:** Recipient clicks `{{unsubscribe_url}}` rendered as `https://crm.relaybase.xyz/scale/unsubscribe/:campaignId/:token`.
 * **System Logic:** Look up subscriber by `(campaignId, unsubscribe_token)`. Sets `status = 'unsubscribed'`, records `unsubscribed_at = now()`.
 * **Success Presentation (Public Web View):**
-  * **UI/UX:** Dedicated minimal public landing page (`/crm/unsubscribe/confirmed`):
+  * **UI/UX:** Dedicated minimal public landing page (`/scale/unsubscribe/confirmed`):
     * Heading: `"You have been unsubscribed"`
     * Subtext: `"alex@example.com will no longer receive emails from 'Engineering Weekly'."`
     * Re-subscribe safety button: `"Unsubscribed by mistake? Click here to resubscribe."`
@@ -392,10 +392,10 @@ UI COMPONENT REFERENCE MATRIX:
 ### 3.3 Broadcast Composition & Scheduling Use Cases (`B1` - `B12`)
 
 #### UC-B1: Create Broadcast Draft
-* **Trigger:** User clicks *"New Broadcast"* inside `/crm/campaigns/:id?tab=broadcasts`.
+* **Trigger:** User clicks *"New Broadcast"* inside `/scale/campaigns/:id?tab=broadcasts`.
 * **System Logic:** Inserts `crm_broadcasts` row with `status = 'draft'`, sets `subject = ''`, assigns `campaign.default_template_id`.
 * **Success Presentation:**
-  * **UI/UX:** Seamless navigation to `/crm/campaigns/:id/broadcasts/:broadcastId/content`. Editor mounts ready for input with [Status Badge] `"Draft"`.
+  * **UI/UX:** Seamless navigation to `/scale/campaigns/:id/broadcasts/:broadcastId/content`. Editor mounts ready for input with [Status Badge] `"Draft"`.
 
 #### UC-B2: Rich Content Autosave
 * **Trigger:** User edits subject, BlockNote markdown body, or swaps template wrapper.
@@ -447,7 +447,7 @@ UI COMPONENT REFERENCE MATRIX:
 
 #### UC-B7: Editing a Sent Broadcast (Immutable Protection)
 * **Trigger:** User navigates to an already `sent` broadcast and attempts to edit subject or markdown body.
-* **System Logic:** API rejects `PATCH /crm/broadcasts/:id` with HTTP 409 Conflict.
+* **System Logic:** API rejects `PATCH /scale/broadcasts/:id` with HTTP 409 Conflict.
 * **Presentation:**
   * **UI/UX:** Content editor is completely read-only. All formatting tools are disabled.
   * Top banner displays: [Banner] (neutral gray): `"This broadcast was sent on Sep 14, 2026 and is locked. To reuse this content, click 'Duplicate as New Draft'."`
@@ -479,10 +479,10 @@ UI COMPONENT REFERENCE MATRIX:
 
 #### UC-D3: Engagement Tracking (Opens & Clicks)
 * **System Logic:**
-  * Open Tracking: `GET /crm/t/o/:broadcastId/:recipientId` returns 1x1 transparent GIF; records unique open.
-  * Click Tracking: `GET /crm/t/c/:broadcastId/:recipientId?u=:targetUrl` records click timestamp and returns 302 redirect.
+  * Open Tracking: `GET /scale/t/o/:broadcastId/:recipientId` returns 1x1 transparent GIF; records unique open.
+  * Click Tracking: `GET /scale/t/c/:broadcastId/:recipientId?u=:targetUrl` records click timestamp and returns 302 redirect.
 * **Presentation:**
-  * In `/crm/campaigns/:id/broadcasts/:broadcastId/stats`:
+  * In `/scale/campaigns/:id/broadcasts/:broadcastId/stats`:
     * Metric Card 1: `"Sent: 1,240 (100%)"`
     * Metric Card 2: `"Opens: 496 (40.0% Unique Open Rate)"`
     * Metric Card 3: `"Clicks: 124 (10.0% Click-Through Rate)"`
@@ -518,7 +518,7 @@ TIMELINE WALKTHROUGH: Multi-Broadcast Calendar Scheduling & Dynamic Unsubscribe
 
 [DAY 1 - Tuesday 07:45] (15 mins prior to Broadcast 1)
   5. bob@ clicks unsubscribe link from a prior newsletter:
-     POST /crm/unsubscribe/eng-updates/tok_bob_02
+     POST /scale/unsubscribe/eng-updates/tok_bob_02
      -> crm_subscribers for bob@ set to: status = 'unsubscribed', unsubscribed_at = 07:45
 
 [DAY 1 - Tuesday 08:00] (Broadcast 1 Dispatch Triggered by Cron)
@@ -533,7 +533,7 @@ TIMELINE WALKTHROUGH: Multi-Broadcast Calendar Scheduling & Dynamic Unsubscribe
 
 [DAY 2 - Wednesday 09:30]
   7. dan@ signs up via webhook or website form:
-     POST /crm/campaigns/eng-updates/subscribers { email: "dan@example.com", name: "Dan" }
+     POST /scale/campaigns/eng-updates/subscribers { email: "dan@example.com", name: "Dan" }
      -> crm_subscribers creates dan@: status = 'subscribed', token: tok_dan_04
 
 [DAY 2 - Wednesday 12:00] (Broadcast 2 Dispatch Triggered by Cron)
@@ -587,7 +587,7 @@ To ensure long-term stability and compliance, the following edge cases and safeg
 
 ```text
 /crm
- ├── /pipeline                     (Sales pipeline Kanban — shared CRM entity)
+ ├── /pipeline                     (Sales pipeline Kanban — shared Scale entity)
  ├── /quotes                       (Quote composition & e-signature audit)
  └── /campaigns                    (Top-level Campaign List View)
       ├── /new                     (Create Campaign Modal Dialog)
@@ -609,7 +609,7 @@ To ensure long-term stability and compliance, the following edge cases and safeg
    * Transition `data/store.json` arrays to `campaigns`, `subscribers`, `broadcasts`, `recipients`, and `accountSuppressions`.
    * Existing `audienceGroups` in dev stores can be transformed into `campaigns` + `subscribers` rows.
 2. **API Routing Cutover:**
-   * `/crm/campaigns` endpoints updated to serve the Campaign -> Broadcast hierarchy.
+   * `/scale/campaigns` endpoints updated to serve the Campaign -> Broadcast hierarchy.
    * Deprecate global `fetchAllAudienceRecipients()` in frontend code in favor of campaign-scoped subscriber resolution.
 3. **Future Production D1 Database Schema:**
    * Once the TypeScript types, UI flows, and edge cases are validated in real usage, matching Cloudflare D1 SQL schemas and migrations will be synthesized directly from these TypeScript models.

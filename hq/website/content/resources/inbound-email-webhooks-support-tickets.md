@@ -1,7 +1,7 @@
 ---
 title: "Inbound Email Webhooks: Turning support@ Replies Into Tickets Automatically"
 navTitle: "Inbound email webhooks"
-description: "How signed inbound email webhooks turn a support@ reply into a ticket, Slack ping, or CRM record automatically — without a Gmail forwarding chain in the middle."
+description: "How signed inbound email webhooks turn a support@ reply into a ticket, Slack ping, or Scale record automatically — without a Gmail forwarding chain in the middle."
 keyword: "inbound email webhook support tickets"
 order: 7
 date: "2026-08-05"

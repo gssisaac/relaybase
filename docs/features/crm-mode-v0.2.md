@@ -1,4 +1,4 @@
-# CRM Mode — v0.2 Product Spec
+# Scale Mode — v0.2 Product Spec
 
 **Status:** Proposed (design locked, pre-implementation) · **Revised v0.2-rev1**
 **Audience:** humans and coding agents building the third product mode (`email` / `console` / `crm`)
@@ -7,13 +7,13 @@
 
 > **Disclaimer (product design, not legal advice).** This document records product-architecture recommendations so Quote approval can approach international e-signature reliability criteria (UNCITRAL MLES Art. 6, EU eIDAS AdES-adjacent). It is **not** a legal opinion, does **not** certify enforceability in any jurisdiction, and does **not** claim Qualified Electronic Signature (QES) status. Counsel review is required before marketing “legally binding e-sign.”
 
-This document is the v0.2 product spec for adding a third mode, **CRM**, to Relaybase. It locks the feature list, priorities, per-feature scope, and the most important **architecture decision**: CRM is not the customer’s Cloudflare Worker—it is a centrally operated cloud service run by Relaybase.
+This document is the v0.2 product spec for adding a third mode, **CRM**, to Relaybase. It locks the feature list, priorities, per-feature scope, and the most important **architecture decision**: Scale is not the customer’s Cloudflare Worker—it is a centrally operated cloud service run by Relaybase.
 
 Related docs: [`decisions/pivot-byo-cloudflare.md`](../decisions/pivot-byo-cloudflare.md), [`architecture/storage-architecture.md`](../architecture/storage-architecture.md), [`architecture/hq-ops-d1.md`](../architecture/hq-ops-d1.md), [`features/audience-and-broadcasts.md`](./audience-and-broadcasts.md).
 
 ---
 
-## 0. Why CRM
+## 0. Why Scale
 
 Relaybase is a product for product builders and solo founders. Until now there were two modes: mailbox (**email**) and operations console (**console**: domains, accounts, Audience, Broadcast, keys, logs). Solo founders need more than an inbox—they need to grow the market with newsletters, follow up on leads without dropping them, send quotes, and save time with scheduled sends. **CRM** is split out as the third mode, and Audience/Broadcast from the existing console move here.
 
@@ -40,77 +40,77 @@ In short:
 | **Customer Worker** (existing, BYO) | Customer’s Cloudflare account | Actual send/receive mail (R2), domains/DKIM, `RELAYBASE_DB` catalog |
 | **CRM central server** (new) | Relaybase operations | Contacts, pipeline, campaign/sequence definitions, quotes, **quote snapshots / hashes / signatures / append-only audit**, scheduled queue, open/click stats |
 
-The CRM central server does not send mail directly—sending domain reputation, SPF/DKIM, and the actual SMTP path remain the customer Worker’s responsibility. The central server only decides and assembles *what to send, when, and to whom*; actual delivery always **requests** the customer Worker. Signals such as whether someone replied are **queried** from the customer Worker.
+The Scale central server does not send mail directly—sending domain reputation, SPF/DKIM, and the actual SMTP path remain the customer Worker’s responsibility. The central server only decides and assembles *what to send, when, and to whom*; actual delivery always **requests** the customer Worker. Signals such as whether someone replied are **queried** from the customer Worker.
 
-> **Revised (v0.2-rev1).** The sent quote *email* still lives in the customer Worker’s R2 (unchanged). The **canonical quote snapshot, content hash, cryptographic signature, and audit trail** live only in `strum-relaybase-crm`. An auditor must be able to verify *what was approved* from the central D1 alone, even if the customer later mutates their R2 mailbox. Customer R2 is a delivery artifact, not the system of record for Quote integrity.
+> **Revised (v0.2-rev1).** The sent quote *email* still lives in the customer Worker’s R2 (unchanged). The **canonical quote snapshot, content hash, cryptographic signature, and audit trail** live only in `strum-relaybase-scale`. An auditor must be able to verify *what was approved* from the central D1 alone, even if the customer later mutates their R2 mailbox. Customer R2 is a delivery artifact, not the system of record for Quote integrity.
 
 > After this document is approved, we recommend adding a one-line cross-reference in `storage-architecture.md` / `hq-ops-d1.md` that “CRM is an intentional exception” (out of scope for this document).
 
 ### 1.2 Communication model — target zero new Worker routes
 
-The existing Worker already exposes `/v1/*` that third parties can call with “domain-scoped API keys” (`domain-scoped-api-keys-multi-product` policy—one key per domain, `from` must match that domain to send). Treating the CRM central server as “another external consumer with that API key” means **v0.2 works with no new Worker code** using only these three existing endpoints:
+The existing Worker already exposes `/v1/*` that third parties can call with “domain-scoped API keys” (`domain-scoped-api-keys-multi-product` policy—one key per domain, `from` must match that domain to send). Treating the Scale central server as “another external consumer with that API key” means **v0.2 works with no new Worker code** using only these three existing endpoints:
 
-| Existing endpoint | Auth | CRM use |
+| Existing endpoint | Auth | Scale use |
 |---|---|---|
-| `POST /console/keys` (`worker/src/routes/console/keys.ts`) | owner session | Issue one domain-scoped key with `label: "CRM"` when CRM is enabled |
+| `POST /console/keys` (`worker/src/routes/console/keys.ts`) | owner session | Issue one domain-scoped key with `label: "CRM"` when Scale is enabled |
 | `POST /v1/send` (`worker/src/routes/send.ts`) | API key (`requireApiKey`) | **Delegate actual send** for newsletter/sequence/quote mail |
 | `GET /v1/events` + `POST /v1/events/ack` (`worker/src/routes/v1-inbox.ts`) | API key | Poll inbound events → reply detection (follow-up / pipeline) |
 
-Additionally, the **one-time Audience migration** on first CRM enable does not require new Worker APIs: the client (desktop/web app) reads `GET /console/audience-groups` etc. with the owner session it already has and passes that payload to the CRM enable API (client relay—see §7).
+Additionally, the **one-time Audience migration** on first Scale enable does not require new Worker APIs: the client (desktop/web app) reads `GET /console/audience-groups` etc. with the owner session it already has and passes that payload to the Scale enable API (client relay—see §7).
 
-**Conclusion: for v0.2, required changes in the `worker/` repo are zero lines (by new routes).** Open/click tracking pixel and redirect endpoints also live on the CRM central domain (`crm.relaybase.xyz`), so they are unrelated to the Worker. Quote public pages, respond/sign, and verification endpoints likewise live on `crm.relaybase.xyz` (P1-2)—still **zero new Worker routes**.
+**Conclusion: for v0.2, required changes in the `worker/` repo are zero lines (by new routes).** Open/click tracking pixel and redirect endpoints also live on the Scale central domain (`crm.relaybase.xyz`), so they are unrelated to the Worker. Quote public pages, respond/sign, and verification endpoints likewise live on `crm.relaybase.xyz` (P1-2)—still **zero new Worker routes**.
 
-### 1.3 New deployment unit — `main/hq/crm`
+### 1.3 New deployment unit — `main/hq/scale`
 
 Add a new app using the same pattern as existing `hq/console`, `hq/admin`, `hq/website` (Next.js + OpenNext + Cloudflare Workers).
 
 | Item | Value (proposed) |
 |---|---|
-| Path | `main/hq/crm/` |
-| Deploy | Cloudflare Worker `strum-relaybase-crm`, domain `crm.relaybase.xyz` |
-| DB (new) | D1 `strum-relaybase-crm` — binding `DB`. CRM-only tables (§3) |
+| Path | `main/hq/scale/` |
+| Deploy | Cloudflare Worker `strum-relaybase-scale`, domain `crm.relaybase.xyz` |
+| DB (new) | D1 `strum-relaybase-scale` — binding `DB`. CRM-only tables (§3) |
 | DB (reference) | D1 `strum-relaybase-ops` — binding `OPS_DB`, **read-mostly**. `accounts` / `account_workers` for login account ↔ Worker URL mapping |
 | Auth | Reuse session cookies from `console.relaybase.xyz` — cookie domain `.relaybase.xyz` (parent domain), validated with the same `CONSOLE_SESSION_SECRET`. **Do not build a separate signup/login screen.** |
-| Secret storage | Domain-scoped API keys for the customer Worker (plaintext required—Bearer on every request to Worker) stored **encrypted** in `strum-relaybase-crm` (differs from HQ ops “hash only” principle—see §8 risks). **Quote signing keys** (`QUOTE_SIGNING_SECRET` / Ed25519 private key) are a second decryptable secret—same KMS pattern, separate key id, access-logged. |
+| Secret storage | Domain-scoped API keys for the customer Worker (plaintext required—Bearer on every request to Worker) stored **encrypted** in `strum-relaybase-scale` (differs from HQ ops “hash only” principle—see §8 risks). **Quote signing keys** (`QUOTE_SIGNING_SECRET` / Ed25519 private key) are a second decryptable secret—same KMS pattern, separate key id, access-logged. |
 | Queue (new) | Cloudflare Queue `crm-tracking-events` — buffer open/click tracking events for batched D1 insert (P0-2) |
 | R2 (new) | Bucket `crm-assets` — images pasted in the campaign editor (P0-6). Separate from the customer Worker’s `relaybase-mailbox` R2. **Do not** store quote snapshots or signatures only in customer R2. |
 
 ### 1.4 Three core flows
 
 **A. Newsletter / campaign send**
-1. User composes campaign in CRM UI (subject/body/target segment) → saved in `strum-relaybase-crm.campaigns`
-2. Send time reached (immediate or scheduled) → hq/crm Cron Trigger iterates target Contacts
+1. User composes campaign in Scale UI (subject/body/target segment) → saved in `strum-relaybase-scale.campaigns`
+2. Send time reached (immediate or scheduled) → hq/scale Cron Trigger iterates target Contacts
 3. Render per-recipient HTML, inserting open pixel + click redirect links (`crm.relaybase.xyz/t/...`)
 4. Call customer Worker `POST {workerUrl}/v1/send` with stored domain-scoped key (batched, rate-limited sends per second)
 5. Worker sends and records to its own R2/sendlog as today (unchanged)
-6. hq/crm updates only its `tracking_events` / campaign stats
+6. hq/scale updates only its `tracking_events` / campaign stats
 
 **B. Reply detection (follow-up reminder / pipeline update)**
-1. hq/crm background job (e.g. every 5 minutes) polls `GET /v1/events?limit=50` per active account with stored API key
-2. If inbound event `from_email` matches a CRM Contact, update that Contact’s `lastReplyAt`, remove from “awaiting reply” list
+1. hq/scale background job (e.g. every 5 minutes) polls `GET /v1/events?limit=50` per active account with stored API key
+2. If inbound event `from_email` matches a Scale Contact, update that Contact’s `lastReplyAt`, remove from “awaiting reply” list
 3. Ack processed events with `POST /v1/events/ack`
 
-**C. CRM enable (onboarding / first migration)**
-1. User clicks “Enable CRM mode” in the app (already has Worker owner session + console session)
+**C. Scale enable (onboarding / first migration)**
+1. User clicks “Enable Scale mode” in the app (already has Worker owner session + console session)
 2. Client issues key via Worker `POST /console/keys` with `label: "CRM"`
 3. Client reads Worker `GET /console/audience-groups` + contacts per group
-4. Client calls hq/crm `POST /crm/enable` with `{ workerUrl, domain, apiKey, importedContacts }`
-5. hq/crm stores account↔Worker↔API key record + one-time import into Contacts table
+4. Client calls hq/scale `POST /scale/enable` with `{ workerUrl, domain, apiKey, importedContacts }`
+5. hq/scale stores account↔Worker↔API key record + one-time import into Contacts table
 
 **D. Quote send & legal-grade-ready approval** *(added v0.2-rev1; still uses flow A for delivery)*
-1. Author finalizes line items → hq/crm **freezes** a canonical snapshot (`quotes.canonicalSnapshotJson`) and stores `contentHash = SHA-256(canonical)` in `strum-relaybase-crm`. After this point the quote body is immutable (edit = duplicate as new).
-2. hq/crm emails the public link via flow A (`POST {workerUrl}/v1/send`). The email is a pointer; the signed object is the central snapshot, not the R2 MIME copy.
+1. Author finalizes line items → hq/scale **freezes** a canonical snapshot (`quotes.canonicalSnapshotJson`) and stores `contentHash = SHA-256(canonical)` in `strum-relaybase-scale`. After this point the quote body is immutable (edit = duplicate as new).
+2. hq/scale emails the public link via flow A (`POST {workerUrl}/v1/send`). The email is a pointer; the signed object is the central snapshot, not the R2 MIME copy.
 3. Customer opens `crm.relaybase.xyz/q/:publicToken`, reads the frozen quote, expresses **intent** (consent checkbox + typed name), then Approve/Reject.
-4. hq/crm binds `{ contentHash, action, signerEmail, occurredAt, nonce }` with HMAC-SHA256 or Ed25519 (`QUOTE_SIGNING_SECRET`, `signatureKeyId`), writes `quote_signatures` + an **append-only** `quote_audit_events` row (hash-chained). IP/UA are supporting evidence, not the signature.
+4. hq/scale binds `{ contentHash, action, signerEmail, occurredAt, nonce }` with HMAC-SHA256 or Ed25519 (`QUOTE_SIGNING_SECRET`, `signatureKeyId`), writes `quote_signatures` + an **append-only** `quote_audit_events` row (hash-chained). IP/UA are supporting evidence, not the signature.
 5. Pipeline Quoted → Won on approve (P0-4). Author (or later auditor) verifies from D1 alone: recompute hash of snapshot, recompute MAC/signature, walk the audit chain. Customer R2 mutation cannot rewrite this record.
 
 ```mermaid
 flowchart LR
-  UI["main/app UI\n(crm mode)"] -->|"session cookie (.relaybase.xyz)"| CRM["hq/crm\ncrm.relaybase.xyz"]
-  CRM -->|"read"| OPS["D1 strum-relaybase-ops\naccounts, account_workers"]
-  CRM -->|"read/write"| CRMDB["D1 strum-relaybase-crm\ncontacts, pipeline, campaigns,\nsequences, quotes, signatures,\naudit, tracking"]
-  CRM -->|"POST /v1/send (API key)"| W["Customer Worker\n*.workers.dev"]
-  CRM -->|"GET /v1/events (API key)"| W
+  UI["main/app UI\n(crm mode)"] -->|"session cookie (.relaybase.xyz)"| CRM["hq/scale\ncrm.relaybase.xyz"]
+  Scale -->|"read"| OPS["D1 strum-relaybase-ops\naccounts, account_workers"]
+  Scale -->|"read/write"| CRMDB["D1 strum-relaybase-scale\ncontacts, pipeline, campaigns,\nsequences, quotes, signatures,\naudit, tracking"]
+  Scale -->|"POST /v1/send (API key)"| W["Customer Worker\n*.workers.dev"]
+  Scale -->|"GET /v1/events (API key)"| W
   W -->|"actual send/receive"| R2["Customer R2 / D1\n(RELAYBASE_DB, mail source)"]
 ```
 
@@ -120,18 +120,18 @@ Informal “Approve click + timestamp/IP” is **not** treated as an electronic 
 
 **Design recommendation (not legal advice) — map to UNCITRAL Model Law on Electronic Signatures (2001) Art. 6 and eIDAS AdES:**
 
-| Criterion | International reference | v0.2 minimum (feasible on hq/crm) | Deferred (P2-2 / v0.3+) |
+| Criterion | International reference | v0.2 minimum (feasible on hq/scale) | Deferred (P2-2 / v0.3+) |
 |---|---|---|---|
 | **Intent** | eIDAS: signature used to sign; clear act of approval | Explicit consent copy + required checkbox + typed display name before Approve/Reject | Qualified certificate “I sign” ceremony |
 | **Attribution** | UNCITRAL 6(a)(b): creation data linked to, and under control of, the signatory | Unique unguessable token delivered only to `contacts.email`; recorded `signerEmail` / typed name; token is single-use | Signer-held private key, WebAuthn, national eID, OTP step-up |
 | **Integrity** | UNCITRAL 6(c)(d); eIDAS AdES: subsequent change detectable | SHA-256 of frozen canonical snapshot; sent quotes immutable; signature covers the hash | PDF/A + PAdES, content timestamping authority (TSA) |
-| **Independent audit trail** | eIDAS evidence / record | Append-only, hash-chained `quote_audit_events` in **central** D1 `strum-relaybase-crm` | External qualified trust service / timestamp |
+| **Independent audit trail** | eIDAS evidence / record | Append-only, hash-chained `quote_audit_events` in **central** D1 `strum-relaybase-scale` | External qualified trust service / timestamp |
 | **Record retention** | Commercial practice; eIDAS evidence retention | Retain snapshot + signature + audit ≥ **7 years** (product default; account cannot hard-delete a signed quote in v0.2) | Jurisdiction-specific legal hold, customer-exportable evidence pack as a first-class product |
 | **Sole control of signing key** | UNCITRAL 6(b); eIDAS AdES “sole control” | **Partial only**: inbox control of the mailed token ≈ SES+; the HMAC/Ed25519 key is Relaybase-held | QES: qualified certificate + QSCD; SignWell / DocuSign / EU QTSP |
 
 **Why this is enough for v0.2 (and why it is not QES).** Email + frozen-hash + explicit intent + independent central audit is the usual commercial-quote pattern (clickwrap / SES+). Most B2B quote/approve flows rely on that combination. It does **not** satisfy AdES “sole control of signature-creation data” or eIDAS QES (qualified certificate + qualified device). Do not label the v0.2 button “legally binding e-signature” or “QES.” UI copy: **“Approve this quote”** plus a short evidence receipt (hash prefix, time, signer).
 
-**Central vs customer R2.** If the only copy of “what was approved” is the email in the customer’s R2, Relaybase cannot independently prove integrity or support non-repudiation after R2 overwrite. v0.2 therefore **requires** the snapshot/hash/signature/audit in `strum-relaybase-crm`, independent of Worker R2.
+**Central vs customer R2.** If the only copy of “what was approved” is the email in the customer’s R2, Relaybase cannot independently prove integrity or support non-repudiation after R2 overwrite. v0.2 therefore **requires** the snapshot/hash/signature/audit in `strum-relaybase-scale`, independent of Worker R2.
 
 ---
 
@@ -141,35 +141,35 @@ Informal “Approve click + timestamp/IP” is **not** treated as an electronic 
 
 `main/app/src/lib/navigation/sidebar-mode.ts` / `sidebar-paths.ts` currently use a binary `SidebarMode = "email" | "dashboard"` (UI label “Console” = internal value `"dashboard"`). Keep the `"dashboard"` token for backward compatibility with stored values; add new value `"crm"`.
 
-- `SidebarMode`: `"email" | "dashboard" | "crm"`
-- Add `DEFAULT_CRM_PATH` (e.g. `/crm/contacts`)
-- Add `SidebarUiState.lastCrmPath`, `LAST_CRM_PREFIX` localStorage key
+- `SidebarMode`: `"email" | "dashboard" | "scale"`
+- Add `DEFAULT_SCALE_PATH` (e.g. `/scale/contacts`)
+- Add `SidebarUiState.lastScalePath`, `LAST_SCALE_PREFIX` localStorage key
 - Add `crm` branches to `isRestorablePath` / `modeFromPathname` (`sidebar-paths.ts`)
-- Extend sidebar state schema in `account_state` (D1, namespace `ui`) to include `lastCrmPath` (impacts `account-state-d1.md`)
+- Extend sidebar state schema in `account_state` (D1, namespace `ui`) to include `lastScalePath` (impacts `account-state-d1.md`)
 
-### 2.2 Move from console to CRM
+### 2.2 Move from console to Scale
 
-Remove **Audience** and **Broadcasts** from the tab list in `main/app/src/console/lib/paths.ts` `useDashboardPaths()`. Move/rebuild those page trees (`main/app/src/console/pages/audience/*`, `main/app/src/console/pages/broadcasts/*`) under `main/app/src/crm/pages/*`, and add routing via new route group `main/app/src/app/(shell)/crm/*`.
+Remove **Audience** and **Broadcasts** from the tab list in `main/app/src/console/lib/paths.ts` `useDashboardPaths()`. Move/rebuild those page trees (`main/app/src/console/pages/audience/*`, `main/app/src/console/pages/broadcasts/*`) under `main/app/src/scale/pages/*`, and add routing via new route group `main/app/src/app/(shell)/scale/*`.
 
 Proposed routes:
 
 | Path | Screen |
 |---|---|
-| `/crm/contacts` | Contact list (tag/segment filters) |
-| `/crm/pipeline` | Pipeline kanban |
-| `/crm/campaigns` | Newsletter/campaign list (formerly Broadcasts) |
-| `/crm/campaigns/:id` | Campaign compose/send/stats |
-| `/crm/sequences` | Drip sequence list & edit |
-| `/crm/quotes` | Quote list & compose |
-| `/crm/quotes/:id` | Quote detail/tracking **+ signature evidence** |
+| `/scale/contacts` | Contact list (tag/segment filters) |
+| `/scale/pipeline` | Pipeline kanban |
+| `/scale/campaigns` | Newsletter/campaign list (formerly Broadcasts) |
+| `/scale/campaigns/:id` | Campaign compose/send/stats |
+| `/scale/sequences` | Drip sequence list & edit |
+| `/scale/quotes` | Quote list & compose |
+| `/scale/quotes/:id` | Quote detail/tracking **+ signature evidence** |
 
 ### 2.3 New client layer
 
-Same pattern as `main/app/src/lib/desktop/api/email-api-map.ts` mapping `/api/email/*` → Worker: add `main/app/src/lib/crm/api-map.ts` mapping `/api/crm/*` → `crm.relaybase.xyz`. Reuse `desktopAwareFetch` as-is.
+Same pattern as `main/app/src/lib/desktop/api/email-api-map.ts` mapping `/api/email/*` → Worker: add `main/app/src/lib/scale/api-map.ts` mapping `/api/scale/*` → `crm.relaybase.xyz`. Reuse `desktopAwareFetch` as-is.
 
 ---
 
-## 3. Data model (D1 `strum-relaybase-crm`, new)
+## 3. Data model (D1 `strum-relaybase-scale`, new)
 
 Drizzle schema draft (field overview only; exact types/indexes at implementation):
 
@@ -242,34 +242,34 @@ Existing Worker-side `audience_groups` / `audience_contacts` / `broadcasts` (`RE
 
 ## 4. Feature spec (priority · scope)
 
-Priority order follows prior research (light CRM / email automation / quote tools / GTM stack benchmarks). **All 13 features are in v0.2 doc scope; each has explicit in/out scope below to prevent over-building.**
+Priority order follows prior research (light Scale / email automation / quote tools / GTM stack benchmarks). **All 13 features are in v0.2 doc scope; each has explicit in/out scope below to prevent over-building.**
 
 ### P0 — Foundation (M1)
 
 #### P0-1. Unified contacts (Contacts)
 
 **Purpose**
-The CRM base unit replacing Audience. Pipeline, campaigns, sequences, and quotes all reference Contact—nothing else works without this.
+The Scale base unit replacing Audience. Pipeline, campaigns, sequences, and quotes all reference Contact—nothing else works without this.
 
 - **In v0.2**: `contacts` table (§3), manual add/edit/delete, tag CRUD, search/filter by email/name/tags/status, one-time snapshot import when migrating from legacy Audience data source (Generic JSON)
-- **Out of v0.2**: Company (organization) entity, custom fields, automatic duplicate merge, Audience “external JSON source cron re-sync” itself (reimplementation later—only snapshot at migration; CRM is sole update path afterward)
+- **Out of v0.2**: Company (organization) entity, custom fields, automatic duplicate merge, Audience “external JSON source cron re-sync” itself (reimplementation later—only snapshot at migration; Scale is sole update path afterward)
 
 **Data · cache**
 - Table: `contacts` (§3). `email` UNIQUE per `accountLinkId` (case-insensitive, normalize to lowercase on store)
-- List cache: desktop `~/.relaybase/cache/crm/contacts-{accountLinkId}.json` (TTL 60s, stale-while-revalidate—same as existing `cache/dashboard/**`), web mirrors in localStorage
+- List cache: desktop `~/.relaybase/cache/scale/contacts-{accountLinkId}.json` (TTL 60s, stale-while-revalidate—same as existing `cache/dashboard/**`), web mirrors in localStorage
 - Search: `email`/`name` prefix `LIKE` (assume thousands of rows; footnote: consider FTS above 10k)
 - Pagination: cursor on `createdAt DESC, id`, 50 per page
 
 **UI**
-- `/crm/contacts` — table list, top search + multi-tag filter + status filter + “Add” top-right
+- `/scale/contacts` — table list, top search + multi-tag filter + status filter + “Add” top-right
 - Row click → right Sheet `?id=<contactId>` (tabs: profile / timeline / notes)—reuse `AudienceGroupDetailSheet` pattern
 - “Add” is Dialog (email*, name, tags, status)—follow workspace rule `dashboard-add-dialog`
 - Tags: inline create in Sheet (Enter to create new tag)
 
 **Happy path**
-1. `/crm/contacts` → “Add” → Dialog
+1. `/scale/contacts` → “Add” → Dialog
 2. Enter email (required, live format validation) → optional name/tags → “Save”
-3. `POST /crm/contacts` → 201 → Dialog closes → optimistic insert at top → toast “Contact added”
+3. `POST /scale/contacts` → 201 → Dialog closes → optimistic insert at top → toast “Contact added”
 
 **Use cases**
 
@@ -297,20 +297,20 @@ Missing in the product today. Visible send performance is required for follow-up
 > Insertion point: last step of P0-6 rendering pipeline (markdown→HTML assembly, template insert, CSS inline)—details in P0-6.
 
 **Data · cache**
-- Table: `tracking_events` (§3). High write rate → buffer via **Cloudflare Queue** `crm-tracking-events`, batch insert (avoid D1 write spikes)—added to hq/crm infra §1.3
+- Table: `tracking_events` (§3). High write rate → buffer via **Cloudflare Queue** `crm-tracking-events`, batch insert (avoid D1 write spikes)—added to hq/scale infra §1.3
 - Pixel: immediate 200 + 1×1 GIF regardless of queue; click redirect: immediate 302 (user-perceived latency is top priority)
 - Rollup: `campaigns.stats` (sent/opened/clicked) updated by 5-minute batch job from `tracking_events`—**not real-time**; state clearly in UI
 - Cache: campaign stats via Cloudflare Cache API, 60s TTL (per-campaign key)
 
 **UI**
-- `/crm/campaigns/:id` “Stats” tab — three cards: sent / opens (open rate %) / clicks (click rate %) (charts optional in v0.2)
+- `/scale/campaigns/:id` “Stats” tab — three cards: sent / opens (open rate %) / clicks (click rate %) (charts optional in v0.2)
 - Contact Sheet timeline line: “Opened · {campaign name} · 2026-09-14 10:32”
 
 **Happy path**
-1. Campaign send completes → recipient client loads images → pixel request hits hq/crm
-2. hq/crm returns 1×1 GIF immediately + pushes event to queue
+1. Campaign send completes → recipient client loads images → pixel request hits hq/scale
+2. hq/scale returns 1×1 GIF immediately + pushes event to queue
 3. 5-minute batch writes `tracking_events` → `campaigns.stats.opened` increases
-4. Refresh stats tab on `/crm/campaigns/:id` shows updated numbers
+4. Refresh stats tab on `/scale/campaigns/:id` shows updated numbers
 
 **Use cases**
 
@@ -338,11 +338,11 @@ Don’t lose track of who hasn’t replied—the most common way solo founders l
 - Threshold N: `accounts_link.followupThresholdDays` (default 3)
 
 **UI**
-- CRM home widget “Awaiting reply (N)” — click → `/crm/contacts?view=followup`
+- Scale home widget “Awaiting reply (N)” — click → `/scale/contacts?view=followup`
 - Each row: secondary text “Last sent 5 days ago · no reply” + “Send reminder” quick action
 
 **Happy path**
-1. hq/crm background job polls every 5 minutes (§1.4 flow B)
+1. hq/scale background job polls every 5 minutes (§1.4 flow B)
 2. Contacts past threshold with no reply → widget count updates
 3. User clicks widget → filtered list → “Send reminder” → simple compose (manual) → send
 4. `lastActivityAt` updates → auto-removed from list
@@ -353,7 +353,7 @@ Don’t lose track of who hasn’t replied—the most common way solo founders l
 |---|---|---|---|---|
 | UC-1 | Success | No reply within 3 days | Widget count +1 | Dashboard “Awaiting reply (N)” |
 | UC-2 | Success | Contact replies after reminder | Poll detects → update `lastReplyAt` | Removed from widget; timeline “Replied” event |
-| UC-3 | Error | API key rotated/revoked on Worker | `/v1/events` 401 | Persistent CRM banner “Worker connection lost. Reconnect in CRM settings”—click reruns §1.4 flow C (re-issue key) |
+| UC-3 | Error | API key rotated/revoked on Worker | `/v1/events` 401 | Persistent Scale banner “Worker connection lost. Reconnect in Scale settings”—click reruns §1.4 flow C (re-issue key) |
 | UC-4 | Error | Worker down / network error on poll | Exponential backoff (max 3) | If persistent, same banner as UC-3 with “Connection temporarily unstable” |
 | UC-5 | Error | Threshold N ≤ 0 | Client validation | “Set to at least 1 day” |
 | UC-6 | Success | Manual exclude from reminder (“Ignore”) | `contacts.followupSnoozed=true` | Removed from list; Sheet badge “Reminder off” + “Turn back on” link |
@@ -368,18 +368,18 @@ See lead → closed progress on one screen.
 
 **Data · cache**
 - `pipeline_cards` (§3): `contactId` UNIQUE (one card per Contact; schema enforces no multi-deal)
-- `GET /crm/pipeline` returns all 5 stage counts + lists in one response (max 50 preview per stage)
+- `GET /scale/pipeline` returns all 5 stage counts + lists in one response (max 50 preview per stage)
 - Sort within stage: `updatedAt DESC` fixed (custom order storage out of v0.2)
 
 **UI**
-- `/crm/pipeline` — 5 columns, count on header, card shows name/email/first line of note/last activity
+- `/scale/pipeline` — 5 columns, count on header, card shows name/email/first line of note/last activity
 - Card click → Contact detail Sheet (same as P0-1)
 - Drag card → change stage
 
 **Happy path**
-1. Enter `/crm/pipeline` → load 5 columns
+1. Enter `/scale/pipeline` → load 5 columns
 2. Drag card from Lead to Contacted
-3. `PATCH /crm/pipeline/:contactId { stage }` optimistic (instant move, rollback on failure)
+3. `PATCH /scale/pipeline/:contactId { stage }` optimistic (instant move, rollback on failure)
 4. Auto-record stage change in `activities`
 
 **Use cases**
@@ -399,12 +399,12 @@ See lead → closed progress on one screen.
 **Purpose**
 “I want Tue/Thu morning, not now.”
 
-- **In v0.2**: Future send time on campaign; hq/crm Cron polls `scheduled_jobs`, at due time runs flow A; cancel/edit until send
+- **In v0.2**: Future send time on campaign; hq/scale Cron polls `scheduled_jobs`, at due time runs flow A; cancel/edit until send
 - **Out of v0.2**: Per-recipient timezone send, send-rate (msgs/sec) UI—safe defaults hard-coded
 
 **Data · cache**
 - `campaigns.status=scheduled`, `scheduledAt` / `scheduled_jobs` (§3)—Cron (every minute) picks `runAt <= now() AND status='pending'`
-- Concurrency: atomic claim via `UPDATE ... WHERE status='pending' RETURNING` to prevent duplicate sends (safe if hq/crm runs multiple instances)
+- Concurrency: atomic claim via `UPDATE ... WHERE status='pending' RETURNING` to prevent duplicate sends (safe if hq/scale runs multiple instances)
 
 **UI**
 - Campaign compose: dropdown next to Send: “Send now” / “Schedule” → date/time picker
@@ -438,14 +438,14 @@ Separate campaign “content” from “design”. Content changes every send �
 **Implementation (reuse)**
 Do not build from scratch—port the finished markdown WYSIWYG from **Railmark** (`/Users/isaaclee/Projects/pilots/railmark`). Railmark production-hardens a **BlockNote** editor (`@blocknote/core` / `@blocknote/react` / `@blocknote/shadcn`, v0.51.4) (`app/docs/markdown-editor.md`). Initial directions mentioned `../railmark/`; actual path is `pilots/railmark`.
 
-| What to port | Railmark source | CRM changes |
+| What to port | Railmark source | Scale changes |
 |---|---|---|
 | Editor component | `app/src/components/content/MarkdownEditor.tsx` | Port as Next.js client component (`"use client"` + `next/dynamic` `{ ssr: false }`—BlockNote/ProseMirror cannot SSR) |
-| Markdown round-trip · autosave flush | `app/src/lib/markdown-editor-flush.ts`, `editor-persistence/*` | Replace local file save with hq/crm `PATCH /crm/campaigns/:id` autosave; keep “don’t write if unchanged” flush logic |
+| Markdown round-trip · autosave flush | `app/src/lib/markdown-editor-flush.ts`, `editor-persistence/*` | Replace local file save with hq/scale `PATCH /scale/campaigns/:id` autosave; keep “don’t write if unchanged” flush logic |
 | Editor CSS (typography, list markers, table grippers) | `app/src/markdown-editor.css` | Port as-is (light/dark done) |
-| Image/file paste | `app/src/lib/page-file-ingest.ts` | Replace local vault with hq/crm upload endpoint → R2 `crm-assets` (§1.3) |
+| Image/file paste | `app/src/lib/page-file-ingest.ts` | Replace local vault with hq/scale upload endpoint → R2 `crm-assets` (§1.3) |
 | Table gripper menu | `app/src/components/content/TableHandleMenu.tsx` | Port as-is |
-| Link handling (`markdown-links.ts`) | — | **Do not port**—Railmark hash-router only; CRM uses normal Next.js routing |
+| Link handling (`markdown-links.ts`) | — | **Do not port**—Railmark hash-router only; Scale uses normal Next.js routing |
 | Vault/skill routing/`layout.yaml` | — | **Do not port**—Railmark-specific |
 
 **Rendering pipeline** (only at send time; while editing, client approximate preview only):
@@ -462,14 +462,14 @@ Do not build from scratch—port the finished markdown WYSIWYG from **Railmark**
 - `campaigns.bodyMarkdown`, `campaigns.templateId` (§3)
 - `templates` (§3)—three rows with `accountLinkId=null` are built-in (shared, read-only); custom imports scoped by `accountLinkId`
 - R2 `crm-assets` (§1.3)—pasted images, public read URLs
-- Autosave: 3s debounce `PATCH /crm/campaigns/:id { bodyMarkdown }`
+- Autosave: 3s debounce `PATCH /scale/campaigns/:id { bodyMarkdown }`
 
 **UI**
-- `/crm/campaigns/:id` — top-left: template dropdown (3 built-in + account custom + “Import HTML file”) / center: BlockNote (margins/width match selected template) / right: preview (desktop/mobile) + “Send test email”
+- `/scale/campaigns/:id` — top-left: template dropdown (3 built-in + account custom + “Import HTML file”) / center: BlockNote (margins/width match selected template) / right: preview (desktop/mobile) + “Send test email”
 - Template import Dialog: HTML upload + validation for required placeholders (`{{content}}`, unsubscribe link)
 
 **Happy path**
-1. `/crm/campaigns/:id` → pick template (default: first built-in) → compose in BlockNote
+1. `/scale/campaigns/:id` → pick template (default: first built-in) → compose in BlockNote
 2. Autosave every 3s; right preview updates (client approximate—server rebuilds real HTML at send)
 3. “Send test email” → full pipeline to own address
 4. “Send” (or P0-5 schedule) → server runs pipeline → `/v1/send`
@@ -507,12 +507,12 @@ Automatically send a few emails in order when a new lead arrives—automate manu
 - Cron every minute atomically claims `sequence_runs WHERE status='active' AND nextStepDueAt <= now()` (same claim pattern as P0-5)
 
 **UI**
-- `/crm/sequences` list (name/trigger/active/enrolled count)
-- `/crm/sequences/:id` — trigger (Contact created / tag added + tag picker), step list (wait days + subject + body), “+ Add step” (max 5), active toggle
+- `/scale/sequences` list (name/trigger/active/enrolled count)
+- `/scale/sequences/:id` — trigger (Contact created / tag added + tag picker), step list (wait days + subject + body), “+ Add step” (max 5), active toggle
 - Contact Sheet timeline: “Sequence ‘Onboarding’ step 2 in progress”
 
 **Happy path**
-1. `/crm/sequences` → “New sequence” → trigger “Contact created”
+1. `/scale/sequences` → “New sequence” → trigger “Contact created”
 2. Add step 1 (wait 0 days) and step 2 (wait 3 days) → save → activate
 3. New Contact created → create `sequence_runs` (`currentStep=0`, `nextStepDueAt=now`)
 4. Cron sends step 1 immediately (reuse flow A) → `nextStepDueAt = now+3d`
@@ -543,7 +543,7 @@ Instead of pricing in email body, one-click approve on the web—with a **legal-
   - **Freeze** canonical snapshot + SHA-256 `contentHash` at send; sent quotes are immutable (edit = duplicate)
   - Public approve/reject **only after** explicit intent (consent statement + required checkbox + typed name). Use shadcn `FieldCheck` / inputs—no native checkbox.
   - Cryptographic binding: HMAC-SHA256 or Ed25519 over `(contentHash ‖ action ‖ signerEmail ‖ occurredAt ‖ nonce)` with `QUOTE_SIGNING_SECRET` + `signatureKeyId`
-  - Independent **append-only, hash-chained** audit in `strum-relaybase-crm` (`quote_signatures`, `quote_audit_events`)—not customer R2
+  - Independent **append-only, hash-chained** audit in `strum-relaybase-scale` (`quote_signatures`, `quote_audit_events`)—not customer R2
   - Supporting evidence: server timestamp, IP, UA (kept; no longer sufficient alone)
   - Author verification view: recompute hash + MAC, show valid/invalid + hash prefix
   - Status transition + pipeline auto-move (Quoted → Won on approve)
@@ -554,15 +554,15 @@ Instead of pricing in email body, one-click approve on the web—with a **legal-
 - `quotes`, `quote_signatures`, `quote_audit_events` (§3). `itemsJson: [{ name, qty, unitPrice }]`, `total` recalculated server-side (don’t trust client). Canonical snapshot is the **server-normalized** JSON (stable key order, integer minor-units for money) hashed with SHA-256.
 - `publicToken`: 32-byte unguessable random—public URL `crm.relaybase.xyz/q/:publicToken` is token-gated (no login). After respond, store `tokenHash` only; treat the token as single-use.
 - Public quote page: Cache API 30s for **GET** of frozen snapshot; approve/reject POST bypasses cache and is serialized (idempotent).
-- Signing secret: hq/crm Worker secret, rotatable via `signatureKeyId`. Old key ids remain for verify. Access-logged like API-key decrypt.
+- Signing secret: hq/scale Worker secret, rotatable via `signatureKeyId`. Old key ids remain for verify. Access-logged like API-key decrypt.
 
 **Canonical snapshot (minimum fields, hashed):**
 `{ quoteId, accountLinkId, contactId, contactEmail, items[], total, currency:"USD"(fixed v0.2), sentFromEmail, sentAt }` — no client-supplied extra keys.
 
 **UI**
-- `/crm/quotes` list (customer/amount/status/sent date)
-- `/crm/quotes/:id` compose — pick Contact, line items (add/remove/auto total), “Send”. “Add quote” is Dialog from the list toolbar (`dashboard-add-dialog`); detail page is compose/edit of an existing draft, not a persistent inline create Card.
-- `/crm/quotes/:id` after send — read-only items + **Evidence** panel: content hash (full), signature alg/key id, signer, time, IP, verify status
+- `/scale/quotes` list (customer/amount/status/sent date)
+- `/scale/quotes/:id` compose — pick Contact, line items (add/remove/auto total), “Send”. “Add quote” is Dialog from the list toolbar (`dashboard-add-dialog`); detail page is compose/edit of an existing draft, not a persistent inline create Card.
+- `/scale/quotes/:id` after send — read-only items + **Evidence** panel: content hash (full), signature alg/key id, signer, time, IP, verify status
 - Public `crm.relaybase.xyz/q/:token` — read-only table + total; intent block (fixed legal-style copy, `FieldCheck`, typed name matching Contact name **or** email local-part—server decides); then Approve/Reject. If already responded, result + hash prefix only (no re-click)
 - Quote detail: “Customer approved 2026-09-15 14:20 · hash 9f3a… · signature valid”
 
@@ -570,12 +570,12 @@ Instead of pricing in email body, one-click approve on the web—with a **legal-
 “I am [typed name], I have read this quote, and I [approve / reject] it. I understand this records my decision with the quote contents shown above.”
 
 **Happy path**
-1. `/crm/quotes` → “New quote” → Contact → line items → “Send”
-2. hq/crm freezes snapshot + `contentHash`, issues `publicToken`, writes `quote_audit_events` type=`sent`, then flow A email with quote link
+1. `/scale/quotes` → “New quote” → Contact → line items → “Send”
+2. hq/scale freezes snapshot + `contentHash`, issues `publicToken`, writes `quote_audit_events` type=`sent`, then flow A email with quote link
 3. Customer opens link → `viewed` audit → reads table → checks intent + types name → Approve
 4. `POST /q/:token/respond { action, signerDisplayName, intentAccepted: true }` → verify token, freeze still matches hash, write `quote_signatures` + `signed` audit, `status=approved`, record IP/UA
 5. Pipeline card Quoted → Won; activity “Quote approved”
-6. Author sees status + Evidence panel on next `/crm/quotes/:id` visit (no real-time notification in v0.2)
+6. Author sees status + Evidence panel on next `/scale/quotes/:id` visit (no real-time notification in v0.2)
 
 **Use cases**
 
@@ -599,7 +599,7 @@ Instead of pricing in email body, one-click approve on the web—with a **legal-
 #### P1-3. Form/webhook → auto-create Contact
 
 **Purpose**
-Stack leads from landing pages and external forms in CRM automatically.
+Stack leads from landing pages and external forms in Scale automatically.
 
 - **In v0.2**: One inbound webhook URL per account (`crm.relaybase.xyz/hooks/:token`), `POST { email, name?, tags? }` → create Contact
 - **Out of v0.2**: Hosted embeddable form builder, official Zapier/Make connectors, landing page builder
@@ -609,22 +609,22 @@ Stack leads from landing pages and external forms in CRM automatically.
 - Rate limit: 60/min per token (Worker standard limit against abuse)
 
 **UI**
-- `/crm/settings/webhook` — URL with copy, “Rotate” button, read-only curl example (same guide pattern as `AudienceDataSourceGuide`)
+- `/scale/settings/webhook` — URL with copy, “Rotate” button, read-only curl example (same guide pattern as `AudienceDataSourceGuide`)
 - Mini log table (last 20: time/email/success/fail)
 
 **Happy path**
 1. User copies webhook URL into external form/Zapier
 2. External `POST {webhookUrl} { email, name?, tags? }`
-3. hq/crm validates token → create Contact (if exists, merge tags only) → 200
-4. New Contact on next `/crm/contacts` refresh
+3. hq/scale validates token → create Contact (if exists, merge tags only) → 200
+4. New Contact on next `/scale/contacts` refresh
 
 **Use cases**
 
 | UC | Type | Trigger/condition | System behavior | User-visible |
 |---|---|---|---|---|
-| UC-1 | Success | POST with valid email | Create Contact (`status=lead`, `source=webhook`) | Webhook 200 `{ ok: true, contactId }`, CRM log |
+| UC-1 | Success | POST with valid email | Create Contact (`status=lead`, `source=webhook`) | Webhook 200 `{ ok: true, contactId }`, Scale log |
 | UC-2 | Error | Missing `email` | 400 | `{ error: "email is required" }`, log row “Failed: missing email” |
-| UC-3 | Error | Bad/expired token | 404 | `{ error: "invalid webhook token" }` (no CRM log if token unknown) |
+| UC-3 | Error | Bad/expired token | 404 | `{ error: "invalid webhook token" }` (no Scale log if token unknown) |
 | UC-4 | Error | Duplicate email | Merge tags only | Webhook 200, log “Updated: tags added” |
 | UC-5 | Error | Rate limit (>60/min) | 429 | `{ error: "rate limited, retry later" }`, settings banner when applicable |
 | UC-6 | Success | Click “Rotate” | Invalidate old, issue new | Confirm “Old URL will stop working. Continue?” → show new URL |
@@ -643,7 +643,7 @@ Bulk move contacts from other tools; export for backup/analysis.
 - No extra table (direct Contact insert). Sync processing must fit Workers CPU—benchmark 2,000 rows (footnote)
 
 **UI**
-- `/crm/contacts` → “Import” → Dialog 3 steps: ① upload CSV ② map columns ③ preview 5 rows + “Import N”
+- `/scale/contacts` → “Import” → Dialog 3 steps: ① upload CSV ② map columns ③ preview 5 rows + “Import N”
 - Result: “48 imported, 2 skipped (duplicate)” + download skipped list
 - “Export” (list top) → immediate CSV for current filter (no Dialog)
 
@@ -681,7 +681,7 @@ Approved quotes can lead to payment (not full automation—attach link only).
 - `quotes.stripePaymentLinkUrl` (§3)—plain URL; format validation only
 
 **UI**
-- `/crm/quotes/:id` bottom “Payment link (optional)” + help “Create a Stripe Payment Link and paste [Create in Stripe ↗]”
+- `/scale/quotes/:id` bottom “Payment link (optional)” + help “Create a Stripe Payment Link and paste [Create in Stripe ↗]”
 - Public quote after approve: “Pay now” button if link set (external, new tab)
 
 **Happy path**
@@ -736,11 +736,11 @@ Approved quotes can lead to payment (not full automation—attach link only).
 
 ## 6. Milestones
 
-- **M1 (P0)**: `hq/crm` skeleton + D1 + auth (shared cookies) + Contacts + tracking pixel/redirect + pipeline kanban + scheduled send + follow-up reminder + Railmark content editor & templates (P0-6). CRM mode is usable for the first time.
+- **M1 (P0)**: `hq/scale` skeleton + D1 + auth (shared cookies) + Contacts + tracking pixel/redirect + pipeline kanban + scheduled send + follow-up reminder + Railmark content editor & templates (P0-6). Scale mode is usable for the first time.
 - **M2 (P1)**: Drip sequences, Quotes **including legal-grade-ready approval** (canonical snapshot, content hash, intent UI, HMAC/Ed25519 bind, central append-only audit, author Verify), webhook lead capture, CSV import/export.
 - **M3 (P2 minimal slice)**: Stripe Payment Link field on quotes. **QES / SignWell / Chrome / AI remain backlog only.**
 
-Each milestone must be independently deployable—if M2 slips, M1 alone must make CRM mode work.
+Each milestone must be independently deployable—if M2 slips, M1 alone must make Scale mode work.
 
 > **Scope guard.** M2 Quote work is the SES+ evidence pack—not a SignWell integration and not a PDF signer. If M2 is at risk, ship freeze+hash+intent+audit **before** Evidence-panel polish; do not ship approve-click-only without a hash and audit row.
 
@@ -748,21 +748,21 @@ Each milestone must be independently deployable—if M2 slips, M1 alone must mak
 
 ## 7. Migration plan (Audience/Broadcast → CRM)
 
-1. Until CRM is enabled, existing console Audience/Broadcasts **keep working** (nothing is cut off).
-2. User clicks “Enable CRM mode” → one-time snapshot import via §1.4 flow C.
+1. Until Scale is enabled, existing console Audience/Broadcasts **keep working** (nothing is cut off).
+2. User clicks “Enable Scale mode” → one-time snapshot import via §1.4 flow C.
 3. After import, hide Audience/Broadcasts tabs in console sidebar (per-account flag `crmEnabled`).
-4. Worker tables `audience_groups` / `audience_contacts` / `broadcasts` and routes `/console/audience-groups`, `/console/broadcasts` are **not deleted—legacy** for users who never enable CRM or need rollback.
-5. Disable then re-enable CRM is out of v0.2 scope (re-import adds new Contacts only, no overwrite—policy at implementation).
+4. Worker tables `audience_groups` / `audience_contacts` / `broadcasts` and routes `/console/audience-groups`, `/console/broadcasts` are **not deleted—legacy** for users who never enable Scale or need rollback.
+5. Disable then re-enable Scale is out of v0.2 scope (re-import adds new Contacts only, no overwrite—policy at implementation).
 
 ---
 
 ## 8. Risks & open issues
 
-- **Positioning review (updated 2026-09-14)**: Initial concern was central CRM hosting vs “We do not host your mail / Not a hosted ESP” marketing. Post-launch, converting users were often **not** drawn by BYO/security—they wanted **cheap multi-domain** usage and asked for a **hosted web version** regardless of security. So central CRM hosting conflicts with old marketing copy but aligns with observed demand.
-  - **Conclusion**: This risk does not change CRM design. §1’s central server direction matches market pull—when designing `hq/crm`, don’t assume “CRM data only” so narrowly; leave room long-term for fully hosted web including email/console (not designed now—out of this doc).
+- **Positioning review (updated 2026-09-14)**: Initial concern was central Scale hosting vs “We do not host your mail / Not a hosted ESP” marketing. Post-launch, converting users were often **not** drawn by BYO/security—they wanted **cheap multi-domain** usage and asked for a **hosted web version** regardless of security. So central Scale hosting conflicts with old marketing copy but aligns with observed demand.
+  - **Conclusion**: This risk does not change Scale design. §1’s central server direction matches market pull—when designing `hq/scale`, don’t assume “CRM data only” so narrowly; leave room long-term for fully hosted web including email/console (not designed now—out of this doc).
   - **Follow-up (separate track)**: Revisit BYO-centric copy in `main/hq/website/content/resources/why-we-built-relaybase.md`, update `main/PRODUCT.md` “Not a hosted ESP”, pricing/ToS.
-- **Cost structure**: Previously customers paid only their Cloudflare bill (Relaybase marginal cost ~0). CRM central server is Relaybase-hosted—**pricing (e.g. monthly subscription) should be decided before** safe M1 start. This doc does not cover pricing.
-- **API key storage**: HQ ops D1 is hash-only, no plaintext credentials; CRM must hold domain-scoped keys **plaintext (or decryptable)** to send on behalf of users. KMS/Secrets encryption + access logging required. Document exception only on `strum-relaybase-crm`, separate from `hq-ops-d1.md`.
+- **Cost structure**: Previously customers paid only their Cloudflare bill (Relaybase marginal cost ~0). Scale central server is Relaybase-hosted—**pricing (e.g. monthly subscription) should be decided before** safe M1 start. This doc does not cover pricing.
+- **API key storage**: HQ ops D1 is hash-only, no plaintext credentials; Scale must hold domain-scoped keys **plaintext (or decryptable)** to send on behalf of users. KMS/Secrets encryption + access logging required. Document exception only on `strum-relaybase-scale`, separate from `hq-ops-d1.md`.
 - **Abuse/rate limits**: First case of central server bulk-sending on behalf of accounts—per-account/per-campaign caps needed from v0.2 beta (similar to Broadcast `BROADCAST_BETA_MAX_RECIPIENTS` 50).
 - **Sync failures only**: Treat synchronous `/v1/send` failures as bounces; async bounce event parsing out of v0.2—may affect open/click accuracy awareness.
 
@@ -774,7 +774,7 @@ Each milestone must be independently deployable—if M2 slips, M1 alone must mak
 - **AdES “sole control” is only partial.** The HMAC/Ed25519 key is Relaybase-held. Attribution rests on *control of the inbox that received `publicToken`*. Token leak (forwarded email, shared mailbox, malware) = an attacker can produce a valid-looking signature. Residual SES+ risk; mitigate with 32-byte tokens, single-use, HTTPS-only public pages, and optional v0.3 OTP/WebAuthn. Do not pretend this is signer-held key material.
 - **Independent audit vs customer R2.** Mail in customer R2 can be deleted or rewritten. If snapshot/hash/signature lived only there, integrity and non-repudiation collapse. Central D1 is mandatory. Conversely, **Relaybase operators** with D1 write access could theoretically insert a fake audit row unless we add operational controls (least-privilege role, no UPDATE on audit table, key access logs, optional periodic export of audit hashes). v0.2 is tamper-**evident** to the customer (hash chain + signing key), not operator-unforgeable in the QES sense.
 - **Signing-key compromise.** If `QUOTE_SIGNING_SECRET` leaks, an attacker can forge `signatureValue` for any known `contentHash`. Rotation via `signatureKeyId` is required; a leak is an incident (revoke + re-sign is **not** possible without the signer—flag affected quotes `signatureValid=unknown`). Same KMS/access-log discipline as Worker API keys (§1.3).
-- **Clock and timestamp quality.** `occurredAt` is hq/crm server time, not a qualified TSA. Fine for commercial quotes; insufficient where a jurisdiction demands a qualified timestamp. Document as “Relaybase server time (UTC).”
+- **Clock and timestamp quality.** `occurredAt` is hq/scale server time, not a qualified TSA. Fine for commercial quotes; insufficient where a jurisdiction demands a qualified timestamp. Document as “Relaybase server time (UTC).”
 - **Retention vs erasure.** 7-year retain of signed quotes conflicts with GDPR/CCPA deletion requests. Open issue: signed evidence may need a statutory-retention exception in ToS/DPA; unsigned drafts can be deleted. v0.2: no hard-delete of signed rows; legal/product to resolve before GA.
 - **Jurisdiction variance.** UNCITRAL is a model law; ESIGN/UETA (US), eIDAS (EU), and Korean Digital Signature / Framework Act on Electronic Documents differ. A SES+ quote approval may be persuasive commercially and still fail a specific statutory form (real estate, consumer credit, wet-ink mandates). **Out of product scope to enumerate.** Flag in ToS: “not a substitute for qualified e-sign where required.”
 - **Hash algorithm agility.** SHA-256 is the v0.2 `contentHashAlg`. Store the alg name so a future migration is possible; do not silently re-hash old snapshots.
@@ -787,7 +787,7 @@ Each milestone must be independently deployable—if M2 slips, M1 alone must mak
 ## 9. Out of scope for this document
 
 - Pricing/billing model
-- Exact Drizzle types/migration SQL for `hq/crm`
+- Exact Drizzle types/migration SQL for `hq/scale`
 - Pixel-perfect Contacts/Pipeline/Campaigns UI design
 - Email template editor implementation (rich-text library choice, etc.)
 - Legal opinion on enforceability of Quote approval in any jurisdiction; ToS/DPA retention-vs-erasure wording
@@ -799,7 +799,7 @@ After this document is approved, a separate implementation plan (file-level task
 
 ## 10. Revision notes (v0.2-rev1)
 
-Kept: overall section structure, P0/P1/P2 numbering, central CRM server, Worker **zero new routes**, flows A–C, and M1–M3 independence.
+Kept: overall section structure, P0/P1/P2 numbering, central Scale server, Worker **zero new routes**, flows A–C, and M1–M3 independence.
 
 | Section | What changed | Why |
 |---|---|---|
@@ -815,4 +815,4 @@ Kept: overall section structure, P0/P1/P2 numbering, central CRM server, Worker 
 | §8 | E-sign legal/technical risks | Token leak, key leak, operator forge, retention, jurisdiction |
 | §9 | Legal opinion + QES design out of this doc | Boundary of the spec |
 
-**Intentionally not in v0.2:** QES, SignWell, PDF/PAdES, TSA, WebAuthn/OTP step-up, new Worker routes, expanding CRM off the central server.
+**Intentionally not in v0.2:** QES, SignWell, PDF/PAdES, TSA, WebAuthn/OTP step-up, new Worker routes, expanding Scale off the central server.

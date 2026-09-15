@@ -1,6 +1,6 @@
-/** Scoped localStorage for CRM editor drafts / outbox (Railmark workspace-storage subset). */
+/** Scoped localStorage for Scale editor drafts / outbox (Railmark workspace-storage subset). */
 
-const SCOPE = "relaybase-crm";
+const SCOPE = "relaybase-scale";
 
 export function getWorkspaceStorageScope(): string {
   return SCOPE;

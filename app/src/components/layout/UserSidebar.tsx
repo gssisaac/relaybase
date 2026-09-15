@@ -8,8 +8,8 @@ import {
   ChevronDown,
   Download,
   FilePen,
-  Handshake,
   Inbox,
+  Megaphone,
   Loader2,
   LogOut,
   Mails,
@@ -73,7 +73,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useCrmPaths } from "@/crm/lib/paths";
+import { useScalePaths } from "@/scale/lib/paths";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
@@ -89,8 +89,8 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 import { Settings } from "lucide-react";
 
-/** Matches the product mail mark (orange), as a Lucide stroke. */
-const MAILBOX_TITLE_ICON_COLOR = "#D8663B";
+/** Matches the product mail mark (orange), as a Lucide stroke — Mailbox & Scale. */
+const MODE_TITLE_ICON_COLOR = "#D8663B";
 
 function OfflineSidebarBadge({ collapsed }: { collapsed: boolean }) {
   const session = useAppSession();
@@ -130,19 +130,17 @@ function ModeIcon({
   mode: SidebarMode;
   className?: string;
 }) {
+  const accentIconProps = {
+    className: cn("size-4 shrink-0", className),
+    style: { color: MODE_TITLE_ICON_COLOR },
+    "aria-hidden": true as const,
+  };
+
   if (mode === "email") {
-    return (
-      <Mails
-        className={cn("size-4 shrink-0", className)}
-        style={{ color: MAILBOX_TITLE_ICON_COLOR }}
-        aria-hidden
-      />
-    );
+    return <Mails {...accentIconProps} />;
   }
-  if (mode === "crm") {
-    return (
-      <Handshake className={cn("size-4 shrink-0", className)} aria-hidden />
-    );
+  if (mode === "scale") {
+    return <Megaphone {...accentIconProps} />;
   }
   return (
     <img
@@ -161,8 +159,8 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
 
 function sidebarTitleForMode(mode: SidebarMode) {
   if (mode === "email") return "Mailbox";
-  if (mode === "crm") return "CRM";
-  return "Relaybase console";
+  if (mode === "scale") return "Scale";
+  return "Console";
 }
 
 function ModeMenuItem({
@@ -214,10 +212,10 @@ function TitleMenuItems({
         onClick={() => onSwitchTo("email")}
       />
       <ModeMenuItem
-        label="CRM"
-        mode="crm"
-        active={mode === "crm"}
-        onClick={() => onSwitchTo("crm")}
+        label="Scale"
+        mode="scale"
+        active={mode === "scale"}
+        onClick={() => onSwitchTo("scale")}
       />
       {teamMode ? null : (
         <ModeMenuItem
@@ -763,9 +761,9 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function CrmModeNav({ collapsed }: { collapsed: boolean }) {
+function ScaleModeNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
-  const { tabs } = useCrmPaths();
+  const { tabs } = useScalePaths();
 
   return (
     <>
@@ -826,11 +824,11 @@ export function UserSidebar({
     readSidebarCollapsed(userId),
   );
   const detectedMode = useMemo(() => modeFromPathname(pathname), [pathname]);
-  // Team mode can reach Email and CRM, never Console — fall back to email
+  // Team mode can reach Email and Scale, never Console — fall back to email
   // even on a dashboard URL (team users can't reach those routes anyway).
   const mode: SidebarMode = isTeam
-    ? detectedMode === "crm"
-      ? "crm"
+    ? detectedMode === "scale"
+      ? "scale"
       : "email"
     : detectedMode;
   const {
@@ -1074,8 +1072,8 @@ export function UserSidebar({
             collapsed={sidebarCollapsed}
             onAddAccount={() => setAddOpen(true)}
           />
-        ) : mode === "crm" ? (
-          <CrmModeNav collapsed={sidebarCollapsed} />
+        ) : mode === "scale" ? (
+          <ScaleModeNav collapsed={sidebarCollapsed} />
         ) : (
           <DashboardModeNav collapsed={sidebarCollapsed} />
         )}

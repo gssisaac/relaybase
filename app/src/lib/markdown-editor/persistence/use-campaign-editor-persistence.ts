@@ -10,13 +10,13 @@ import {
   type CampaignPersistBridge,
 } from "./campaign-persist-adapter";
 import { useEditorSnapshotRef } from "./editor-capture";
-import { CRM_PERSIST_ROOT, type EditorSnapshotProvider, type Mode, type SaveStatus } from "./types";
+import { SCALE_PERSIST_ROOT, type EditorSnapshotProvider, type Mode, type SaveStatus } from "./types";
 
 export type UseCampaignEditorPersistenceOptions = {
   /** Document identity / local persistence key (e.g. broadcast id). */
   campaignId: string;
   /**
-   * `/crm/campaigns/…` suffix for the tab-close beacon PATCH, when it
+   * `/scale/campaigns/…` suffix for the tab-close beacon PATCH, when it
    * differs from `campaignId` (e.g. `<campaignId>/broadcasts/<broadcastId>`).
    * Defaults to `campaignId`.
    */
@@ -47,7 +47,7 @@ export function useCampaignEditorPersistence(
 
   const getEditContext = useCallback(
     () => ({
-      root: CRM_PERSIST_ROOT,
+      root: SCALE_PERSIST_ROOT,
       path: campaignIdRef.current,
       beaconPath: beaconPathRef.current ?? campaignIdRef.current,
       mode: (editableRef.current ? "edit" : "read") as Mode,

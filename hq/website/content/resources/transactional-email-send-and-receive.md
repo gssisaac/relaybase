@@ -25,7 +25,7 @@ Inbound product email isn't about hosting a mailbox. Nobody's expected to open a
 
 - A lightweight event the moment mail arrives (`inbound.email.received`), so you can react fast without pulling a full body
 - The ability to **fetch the full message** on demand — subject, body, attachments — once you've decided it matters
-- A way to **push** that signal instead of polling, for systems that want mail to show up in a ticket queue, Slack channel, or CRM without a cron job checking in
+- A way to **push** that signal instead of polling, for systems that want mail to show up in a ticket queue, Slack channel, or Scale without a cron job checking in
 
 That's the shape of a webhook-and-poll model, and it's a fundamentally different design than "give this address an inbox."
 

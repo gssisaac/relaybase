@@ -1,8 +1,8 @@
-export type SidebarMode = "email" | "dashboard" | "crm";
+export type SidebarMode = "email" | "dashboard" | "scale";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
-export const DEFAULT_CRM_PATH = "/crm/audience";
+export const DEFAULT_SCALE_PATH = "/scale/audience";
 
 const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
 
@@ -25,13 +25,13 @@ function isEmailPathname(pathname: string): boolean {
   );
 }
 
-function isCrmPathname(pathname: string): boolean {
-  return pathname === "/crm" || pathname.startsWith("/crm/");
+function isScalePathname(pathname: string): boolean {
+  return pathname === "/scale" || pathname.startsWith("/scale/");
 }
 
 export function modeFromPathname(pathname: string): SidebarMode {
   if (isEmailPathname(pathname)) return "email";
-  if (isCrmPathname(pathname)) return "crm";
+  if (isScalePathname(pathname)) return "scale";
   return "dashboard";
 }
 
@@ -47,8 +47,12 @@ function pathnameOnly(path: string): string {
  */
 export function normalizeEntryPath(path: string): string {
   const [pathnamePart, query = ""] = path.split("?");
-  const pathname = pathnamePart || "/";
+  let pathname = pathnamePart || "/";
   const params = new URLSearchParams(query);
+
+  if (pathname === "/crm" || pathname.startsWith("/crm/")) {
+    pathname = pathname.replace(/^\/crm(?=\/|$)/, "/scale");
+  }
 
   const emailSection = pathname.match(
     /^\/email\/(inbox|drafts|sent|compose|trash|settings)(?:\/(.*))?$/,
@@ -97,11 +101,11 @@ export function normalizeEntryPath(path: string): string {
     }
   }
 
-  const crmAudienceMatch = pathname.match(
-    /^\/crm\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  const scaleAudienceMatch = pathname.match(
+    /^\/scale\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
   );
-  if (crmAudienceMatch) {
-    let groupId = crmAudienceMatch[1]!;
+  if (scaleAudienceMatch) {
+    let groupId = scaleAudienceMatch[1]!;
     try {
       groupId = decodeURIComponent(groupId);
     } catch {
@@ -109,11 +113,11 @@ export function normalizeEntryPath(path: string): string {
     }
     const next = new URLSearchParams();
     next.set("id", groupId);
-    const tabSeg = crmAudienceMatch[2];
+    const tabSeg = scaleAudienceMatch[2];
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/crm/audience?${next.toString()}`;
+    return `/scale/audience?${next.toString()}`;
   }
 
   const audienceMatch = pathname.match(
@@ -132,24 +136,28 @@ export function normalizeEntryPath(path: string): string {
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/crm/audience?${next.toString()}`;
+    return `/scale/audience?${next.toString()}`;
   }
 
   if (pathname === "/audience" || pathname.startsWith("/audience/")) {
     const qs = params.toString();
-    return qs ? `/crm/audience?${qs}` : "/crm/audience";
+    return qs ? `/scale/audience?${qs}` : "/scale/audience";
   }
 
   if (pathname === "/broadcasts/new") {
-    return "/broadcasts?new=1";
+    return "/scale/broadcasts?new=1";
   }
-  const crmBroadcastSection = pathname.match(/^\/crm\/broadcasts\/(sent|in-progress)\/?$/);
-  if (crmBroadcastSection) {
-    return `/crm/broadcasts?view=${crmBroadcastSection[1]}`;
+  const scaleBroadcastSection = pathname.match(/^\/scale\/broadcasts\/(sent|in-progress)\/?$/);
+  if (scaleBroadcastSection) {
+    return `/scale/broadcasts?view=${scaleBroadcastSection[1]}`;
+  }
+  const legacyCrmBroadcastSection = pathname.match(/^\/crm\/broadcasts\/(sent|in-progress)\/?$/);
+  if (legacyCrmBroadcastSection) {
+    return `/scale/broadcasts?view=${legacyCrmBroadcastSection[1]}`;
   }
   const legacyBroadcastSection = pathname.match(/^\/broadcasts\/(sent|in-progress)\/?$/);
   if (legacyBroadcastSection) {
-    return `/crm/broadcasts?view=${legacyBroadcastSection[1]}`;
+    return `/scale/broadcasts?view=${legacyBroadcastSection[1]}`;
   }
   const broadcastMatch = pathname.match(
     /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,
@@ -169,14 +177,14 @@ export function normalizeEntryPath(path: string): string {
     } else if (tabSeg === "content" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "stats" : tabSeg);
     }
-    return `/broadcasts?${next.toString()}`;
+    return `/scale/broadcasts?${next.toString()}`;
   }
 
-  const crmBroadcastMatch = pathname.match(
-    /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  const scaleBroadcastMatch = pathname.match(
+    /^\/scale\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
-  if (crmBroadcastMatch) {
-    let broadcastId = crmBroadcastMatch[1]!;
+  if (scaleBroadcastMatch) {
+    let broadcastId = scaleBroadcastMatch[1]!;
     try {
       broadcastId = decodeURIComponent(broadcastId);
     } catch {
@@ -184,7 +192,7 @@ export function normalizeEntryPath(path: string): string {
     }
     const next = new URLSearchParams();
     next.set("id", broadcastId);
-    const tabSeg = crmBroadcastMatch[2];
+    const tabSeg = scaleBroadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
     } else if (
@@ -195,14 +203,40 @@ export function normalizeEntryPath(path: string): string {
     ) {
       next.set("tab", tabSeg);
     }
-    return `/crm/broadcasts?${next.toString()}`;
+    return `/scale/broadcasts?${next.toString()}`;
   }
 
-  const crmAutomationMatch = pathname.match(
+  const legacyCrmBroadcastMatch = pathname.match(
+    /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  );
+  if (legacyCrmBroadcastMatch) {
+    let broadcastId = legacyCrmBroadcastMatch[1]!;
+    try {
+      broadcastId = decodeURIComponent(broadcastId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", broadcastId);
+    const tabSeg = legacyCrmBroadcastMatch[2];
+    if (tabSeg === "audience" || tabSeg === "recipients") {
+      next.set("tab", "recipients");
+    } else if (
+      tabSeg === "content" ||
+      tabSeg === "publish" ||
+      tabSeg === "stats" ||
+      tabSeg === "settings"
+    ) {
+      next.set("tab", tabSeg);
+    }
+    return `/scale/broadcasts?${next.toString()}`;
+  }
+
+  const legacyCrmAutomationMatch = pathname.match(
     /^\/crm\/automations\/([^/]+)(?:\/(content|trigger|activity|stats|settings))?\/?$/,
   );
-  if (crmAutomationMatch) {
-    let automationId = crmAutomationMatch[1]!;
+  if (legacyCrmAutomationMatch) {
+    let automationId = legacyCrmAutomationMatch[1]!;
     try {
       automationId = decodeURIComponent(automationId);
     } catch {
@@ -210,26 +244,26 @@ export function normalizeEntryPath(path: string): string {
     }
     const next = new URLSearchParams();
     next.set("id", automationId);
-    const tabSeg = crmAutomationMatch[2];
+    const tabSeg = legacyCrmAutomationMatch[2];
     if (tabSeg === "content" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     } else if (tabSeg === "activity") {
       next.set("tab", "stats");
     }
-    return `/crm/automations?${next.toString()}`;
+    return `/scale/automations?${next.toString()}`;
   }
 
   if (pathname === "/automations" || pathname.startsWith("/automations/")) {
     const qs = params.toString();
-    return qs ? `/crm/automations?${qs}` : "/crm/automations";
+    return qs ? `/scale/automations?${qs}` : "/scale/automations";
   }
 
-  const crmCampaignMatch = pathname.match(
+  const legacyCrmCampaignMatch = pathname.match(
     /^\/crm\/campaigns(?:\/([^/]+))?(?:\/(content|publish|progress|overview))?\/?$/,
   );
-  if (crmCampaignMatch) {
+  if (legacyCrmCampaignMatch) {
     const next = new URLSearchParams();
-    const legacyId = crmCampaignMatch[1];
+    const legacyId = legacyCrmCampaignMatch[1];
     if (legacyId) {
       try {
         next.set("id", decodeURIComponent(legacyId));
@@ -237,11 +271,11 @@ export function normalizeEntryPath(path: string): string {
         next.set("id", legacyId);
       }
     }
-    const tabSeg = crmCampaignMatch[2];
+    const tabSeg = legacyCrmCampaignMatch[2];
     if (tabSeg === "content" || tabSeg === "publish" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "publish" : tabSeg);
     }
-    return `/crm/broadcasts?${next.toString()}`;
+    return `/scale/broadcasts?${next.toString()}`;
   }
 
   // Settings: /settings/{tab} are real nested routes now. Collapse
@@ -304,6 +338,6 @@ export function isRestorablePath(path: string, mode: SidebarMode): boolean {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false;
   }
   if (mode === "email") return isEmailPathname(pathname);
-  if (mode === "crm") return isCrmPathname(pathname);
-  return !isEmailPathname(pathname) && !isCrmPathname(pathname);
+  if (mode === "scale") return isScalePathname(pathname);
+  return !isEmailPathname(pathname) && !isScalePathname(pathname);
 }

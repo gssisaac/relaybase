@@ -1,4 +1,4 @@
-/** Page-adjacent asset paths (ported from Railmark; CRM resolves to public URLs). */
+/** Page-adjacent asset paths (ported from Railmark; Scale resolves to public URLs). */
 
 export type PageAssetKind = "image" | "video" | "audio" | "document" | "file";
 

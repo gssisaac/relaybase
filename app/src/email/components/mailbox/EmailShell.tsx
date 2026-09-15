@@ -42,9 +42,9 @@ export function EmailShell({
     pathname.startsWith("/emails/") ||
     pathname === "/emails";
 
-  // CRM owns DesktopTitleBar + compose/list chrome (same as mailbox / dashboard).
-  // Without this, `/crm/*` falls through to the padded max-w form page.
-  const isCrmRoute = modeFromPathname(pathname) === "crm";
+  // Scale owns DesktopTitleBar + compose/list chrome (same as mailbox / dashboard).
+  // Without this, `/scale/*` falls through to the padded max-w form page.
+  const isCrmRoute = modeFromPathname(pathname) === "scale";
 
   const isMailbox =
     forceFullBleed ||

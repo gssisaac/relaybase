@@ -21,8 +21,15 @@ export function slugify(input: string): string {
     .slice(0, 80);
 }
 
+/** Matches hq/scale broadcast/automation asset folder stems (see render.ts broadcastAssetStem). */
 export function campaignAssetStem(campaignId: string): string {
-  return campaignId.replace(/^campaign_/, "").slice(0, 32) || "campaign";
+  return (
+    campaignId
+      .replace(/^campaign_/, "")
+      .replace(/^broadcast_/, "")
+      .replace(/^automation_/, "")
+      .slice(0, 32) || "campaign"
+  );
 }
 
 export function pageAssetFolderName(campaignId: string): string {

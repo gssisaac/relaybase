@@ -1,10 +1,19 @@
 import { getScaleApiBase } from "@/lib/scale/api-base";
 
-/** Fix legacy upload URLs that encoded `campaignId/filename` as one path segment. */
+const SCALE_ASSET_PATH_RE = /^\/scale\/assets(\/|$)/;
+
+/**
+ * Editor/preview should load assets via the same origin as `scaleFetch` (local Next
+ * proxy in dev). Upload responses use `SCALE_PUBLIC_BASE_URL` (relaybase.email),
+ * which 404s for assets that only exist in local hq/scale store.json.
+ */
 export function normalizeCampaignAssetUrl(url: string): string {
   if (!/^https?:/i.test(url)) return url;
   try {
     const u = new URL(url);
+    if (SCALE_ASSET_PATH_RE.test(u.pathname)) {
+      return `${getScaleApiBase()}${u.pathname}${u.search}`;
+    }
     const legacy = u.pathname.match(/^\/(?:crm|scale)\/assets\/([^/]+)$/);
     if (legacy?.[1]?.includes("%2F")) {
       const parts = decodeURIComponent(legacy[1]).split("/");

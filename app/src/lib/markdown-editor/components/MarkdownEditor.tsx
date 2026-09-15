@@ -23,7 +23,11 @@ import {
 import { TableHandleWithIcons } from "@/lib/markdown-editor/components/TableHandleMenu";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 import { fingerprintEditorDocument, markdownFlushStrategy } from "@/lib/markdown-editor/utils/flush";
-import { collectTransferFiles, transferHasFiles } from "@/lib/markdown-editor/utils/image-optimize";
+import {
+  collectTransferFiles,
+  getClipboardImageFile,
+  transferHasFiles,
+} from "@/lib/markdown-editor/utils/image-optimize";
 import { DEFAULT_IMAGE_OPTIMIZATION_SETTINGS } from "@/lib/markdown-editor/utils/image-settings";
 import {
   ingestCampaignFile,
@@ -261,7 +265,12 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       return `${getScaleApiBase()}/scale/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
     },
     pasteHandler: ({ event, editor: pasteEditor, defaultPasteHandler }) => {
-      const files = collectTransferFiles(event.clipboardData);
+      const clipboard = event.clipboardData;
+      let files = collectTransferFiles(clipboard);
+      if (files.length === 0) {
+        const imageOnly = getClipboardImageFile(clipboard);
+        if (imageOnly) files = [imageOnly];
+      }
       if (files.length > 0) {
         void ingestAndInsert(files, pasteEditor);
         return true;

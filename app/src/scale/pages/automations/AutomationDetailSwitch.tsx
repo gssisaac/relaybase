@@ -17,6 +17,35 @@ import { AutomationStatsView } from "@/scale/pages/automations/AutomationStatsVi
 import { AutomationTriggerView } from "@/scale/pages/automations/AutomationTriggerView";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 
+export function AutomationDefaultTabRedirect() {
+  const router = useRouter();
+  const { automationId, automation, loading, notFound } = useAutomationDetail();
+
+  useEffect(() => {
+    if (!automation) return;
+    router.replace(
+      automationDetailHref(automationId, defaultAutomationDetailTab(automation.status), automation.status),
+    );
+  }, [automation, automationId, router]);
+
+  if (notFound && !loading) {
+    return (
+      <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
+        This automation does not exist or was removed.{" "}
+        <Link href="/scale/automations" className="text-primary underline-offset-4 hover:underline">
+          Back to automations
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
+      Loading…
+    </div>
+  );
+}
+
 export function AutomationDetailSwitch({ tab }: { tab: AutomationDetailTab | null }) {
   const router = useRouter();
   const { automationId, automation, loading, notFound } = useAutomationDetail();

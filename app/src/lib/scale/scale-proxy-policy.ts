@@ -12,6 +12,27 @@ const SCALE_UI_GET_PATHS = new Set([
   "/scale/schedule",
 ]);
 
+const AUTOMATION_UI_TAB_SEGMENTS = new Set([
+  "preview",
+  "trigger",
+  "stats",
+  "settings",
+  "edit",
+  "content",
+]);
+
+/** GET UI routes under `/scale/automations/{id}/{tab}` — not the JSON API. */
+function isAutomationUiGetPath(pathname: string): boolean {
+  if (SCALE_UI_GET_PATHS.has(pathname)) return true;
+  const match = pathname.match(/^\/scale\/automations\/([^/]+)(?:\/([^/]+))?\/?$/);
+  if (!match) return false;
+  const id = match[1] ?? "";
+  if (!id || id === "edit") return false;
+  const tab = match[2];
+  if (!tab) return true;
+  return AUTOMATION_UI_TAB_SEGMENTS.has(tab);
+}
+
 /** True when this request should be forwarded to hq/scale (relaybase.email edge → upstream). */
 export function shouldProxyRequestToScale(pathname: string, method: string, headers: Headers): boolean {
   if (!pathname.startsWith("/scale/")) return false;
@@ -33,9 +54,9 @@ export function shouldProxyRequestToScale(pathname: string, method: string, head
   }
 
   if (pathname.startsWith("/scale/automations")) {
-    if (method !== "GET") return true;
+    if (method !== "GET" && method !== "HEAD") return true;
     if (isScaleApiRequest(headers)) return true;
-    if (SCALE_UI_GET_PATHS.has(pathname)) return false;
+    if (isAutomationUiGetPath(pathname)) return false;
     return true;
   }
 

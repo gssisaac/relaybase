@@ -2,20 +2,22 @@
 
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
+
+import { isDesktopRuntime } from "@/lib/desktop/bridge";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { AutomationStatusBadge } from "@/scale/components/AutomationStatusBadge";
-import { automationDetailHref } from "@/scale/lib/paths";
+import { automationContentEditHref, automationDetailHref } from "@/scale/lib/paths";
 import { AutomationContentView } from "@/scale/pages/automations/AutomationContentView";
 import { AutomationDetailProvider } from "@/scale/pages/automations/AutomationDetailContext";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
-function AutomationContentEditInner() {
+export function AutomationContentEditInner() {
   const { automationId, automation, loading, notFound } = useAutomationDetail();
   const { noDragClassName, isDesktop } = useDesktopChrome();
 
@@ -97,8 +99,14 @@ function AutomationContentEditInner() {
 }
 
 function AutomationContentEditRoute() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const automationId = searchParams.get("id")?.trim() ?? "";
+
+  useEffect(() => {
+    if (!automationId || isDesktopRuntime()) return;
+    router.replace(automationContentEditHref(automationId));
+  }, [automationId, router]);
 
   if (!automationId) {
     return (

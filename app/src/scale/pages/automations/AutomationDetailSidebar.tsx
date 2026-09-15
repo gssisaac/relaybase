@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { memo, useMemo, useState } from "react";
 
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { PanelSplitHandle } from "@/components/ui/panel-split-handle";
 import { usePersistedAutomationDetailSidebarWidth } from "@/hooks/use-persisted-automation-detail-sidebar-width";
 import { AutomationStatusBadge } from "@/scale/components/AutomationStatusBadge";
 import { automationTriggerSummary } from "@/scale/lib/automation-trigger-label";
-import { automationDetailHref } from "@/scale/lib/paths";
+import { automationDetailHref, automationTabFromPathname, type AutomationDetailTab } from "@/scale/lib/paths";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 import { useAutomationSidebarList } from "@/scale/pages/automations/use-automation-sidebar-list";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
@@ -19,12 +20,14 @@ import { cn } from "@/lib/utils";
 const AutomationSidebarRow = memo(function AutomationSidebarRow({
   row,
   active,
+  tab,
 }: {
   row: Automation;
   active: boolean;
+  tab: AutomationDetailTab;
 }) {
   const label = row.name?.trim() || row.subject?.trim() || "Untitled automation";
-  const href = automationDetailHref(row.id, "preview", row.status);
+  const href = automationDetailHref(row.id, tab);
 
   return (
     <li>
@@ -51,6 +54,8 @@ const AutomationSidebarRow = memo(function AutomationSidebarRow({
 
 function AutomationDetailSidebarInner() {
   const userId = useProductId();
+  const pathname = usePathname();
+  const currentTab = automationTabFromPathname(pathname);
   const { automationId } = useAutomationDetail();
   const { width, onResize, persist } = usePersistedAutomationDetailSidebarWidth(userId);
   const { rows, loading } = useAutomationSidebarList();
@@ -102,7 +107,12 @@ function AutomationDetailSidebarInner() {
         ) : (
           <ul className="flex flex-col gap-0.5">
             {filtered.map((row) => (
-              <AutomationSidebarRow key={row.id} row={row} active={row.id === automationId} />
+              <AutomationSidebarRow
+                key={row.id}
+                row={row}
+                active={row.id === automationId}
+                tab={currentTab}
+              />
             ))}
           </ul>
         )}

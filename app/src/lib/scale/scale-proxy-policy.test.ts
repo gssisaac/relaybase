@@ -57,9 +57,67 @@ describe("shouldProxyRequestToScale", () => {
     );
   });
 
+  it("serves automation detail tab UI without API header", () => {
+    assert.equal(
+      shouldProxyRequestToScale(
+        "/scale/automations/automation_abc/settings",
+        "GET",
+        headers(),
+      ),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToScale(
+        "/scale/automations/automation_abc/preview",
+        "GET",
+        headers(),
+      ),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToScale(
+        "/scale/automations/automation_abc/stats",
+        "GET",
+        headers(),
+      ),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToScale("/scale/automations/automation_abc", "GET", headers()),
+      false,
+    );
+    assert.equal(
+      shouldProxyRequestToScale(
+        "/scale/automations/automation_abc/settings",
+        "HEAD",
+        headers(),
+      ),
+      false,
+    );
+  });
+
   it("proxies automation API detail with Scale API header", () => {
     assert.equal(
       shouldProxyRequestToScale("/scale/automations/automation_abc", "GET", headers(true)),
+      true,
+    );
+    assert.equal(
+      shouldProxyRequestToScale(
+        "/scale/automations/automation_abc/stats",
+        "GET",
+        headers(true),
+      ),
+      true,
+    );
+  });
+
+  it("proxies automation activity API without treating it as a UI tab", () => {
+    assert.equal(
+      shouldProxyRequestToScale(
+        "/scale/automations/automation_abc/activity",
+        "GET",
+        headers(),
+      ),
       true,
     );
   });

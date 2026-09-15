@@ -1,16 +1,20 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, BarChart3, Eye, Settings, Zap } from "lucide-react";
+import { BarChart3, Eye, Settings, Zap } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { AutomationStatusBadge } from "@/scale/components/AutomationStatusBadge";
 import { automationDetailNavTabs } from "@/scale/lib/automation-detail-nav";
-import { automationDetailHref, useScalePaths, type AutomationDetailTab } from "@/scale/lib/paths";
+import {
+  automationDetailHref,
+  automationTabFromPathname,
+  type AutomationDetailTab,
+} from "@/scale/lib/paths";
 import { AutomationDetailSidebar } from "@/scale/pages/automations/AutomationDetailSidebar";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
@@ -32,14 +36,8 @@ export function AutomationDetailShell({
   fill?: boolean;
   children: ReactNode;
 }) {
-  const { automations } = useScalePaths();
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const { automationId, automation, notFound } = useAutomationDetail();
-
-  const title =
-    automation?.name?.trim() ||
-    automation?.subject?.trim() ||
-    (notFound ? "Automation not found" : "Untitled automation");
+  const { automationId, automation } = useAutomationDetail();
 
   const navOrder = automationDetailNavTabs(automation?.status ?? "draft");
   const navById = new Map(NAV.map((item) => [item.id, item]));
@@ -59,25 +57,10 @@ export function AutomationDetailShell({
           )}
           {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
         >
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="-ml-2 shrink-0"
-            nativeButton={false}
-            aria-label="Back"
-            render={<Link href={automations} />}
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-          </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
-            <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>
             <nav className="flex shrink-0 gap-0.5 overflow-x-auto" aria-label="Automation">
               {navItems.map((item) => {
-                const href = automationDetailHref(
-                  automationId,
-                  item.id,
-                  automation?.status,
-                );
+                const href = automationDetailHref(automationId, item.id);
                 const Icon = item.icon;
                 const active = item.id === section;
                 return (
@@ -124,5 +107,15 @@ export function AutomationDetailShell({
       </div>
       </div>
     </div>
+  );
+}
+
+export function AutomationDetailSectionLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const section = automationTabFromPathname(pathname);
+  return (
+    <AutomationDetailShell section={section} fill={section === "preview"}>
+      {children}
+    </AutomationDetailShell>
   );
 }

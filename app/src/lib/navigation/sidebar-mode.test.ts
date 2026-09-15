@@ -90,6 +90,21 @@ describe("normalizeEntryPath", () => {
     assert.equal(normalizeEntryPath("/broadcasts/new"), "/scale/broadcasts?new=1");
   });
 
+  it("rewrites automation nested tabs into ?id=&tab= for last-path restore", () => {
+    assert.equal(
+      normalizeEntryPath("/scale/automations/automation_abc/settings"),
+      "/scale/automations?id=automation_abc&tab=settings",
+    );
+    assert.equal(
+      normalizeEntryPath("/scale/automations/automation_abc/preview"),
+      "/scale/automations?id=automation_abc&tab=preview",
+    );
+    assert.equal(
+      normalizeEntryPath("/scale/automations/automation_abc/edit"),
+      "/scale/automations/edit?id=automation_abc",
+    );
+  });
+
   it("rewrites reserved broadcast section paths into ?view=", () => {
     assert.equal(
       normalizeEntryPath("/scale/broadcasts/sent"),

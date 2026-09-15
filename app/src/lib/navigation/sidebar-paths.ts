@@ -232,7 +232,9 @@ export function normalizeEntryPath(path: string): string {
     return `/scale/broadcasts?${next.toString()}`;
   }
 
-  const scaleAutomationEditMatch = pathname.match(/^\/scale\/automations\/([^/]+)\/content\/?$/);
+  const scaleAutomationEditMatch = pathname.match(
+    /^\/scale\/automations\/([^/]+)\/(content|edit)\/?$/,
+  );
   if (scaleAutomationEditMatch) {
     let automationId = scaleAutomationEditMatch[1]!;
     if (automationId !== "edit") {

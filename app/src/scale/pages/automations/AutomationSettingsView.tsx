@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,43 +14,99 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  displayNameForAddress,
+  useDomainAddresses,
+} from "@/scale/lib/use-domain-addresses";
 import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 import { scaleApi, ScaleApiError, type AutomationPurpose } from "@/lib/scale/api";
 
 export function AutomationSettingsView() {
   const { automationId, automation, setAutomation } = useAutomationDetail();
-  const { readyDomainNames } = useWorkerDomains();
+  const { readyDomainNames, loading: domainsLoading, refresh: refreshWorkerDomains } =
+    useWorkerDomains();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [domain, setDomain] = useState("");
-  const [fromName, setFromName] = useState("");
-  const [fromEmail, setFromEmail] = useState("");
-  const [replyTo, setReplyTo] = useState("");
+  const [sendDomain, setSendDomain] = useState<string | null>(null);
+  const { domainAddresses, displayNameOptions, loading: addressesLoading } =
+    useDomainAddresses(sendDomain);
+
+  const [fromName, setFromName] = useState<string | null>(null);
+  const [fromEmail, setFromEmail] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<AutomationPurpose>("transactional");
   const [saving, setSaving] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshWorkerDomains();
+  }, [refreshWorkerDomains]);
+
   useEffect(() => {
     if (!automation) return;
     setName(automation.name);
     setDescription(automation.description ?? "");
-    setDomain(automation.domain);
-    setFromName(automation.fromName ?? "");
-    setFromEmail(automation.fromEmail ?? "");
-    setReplyTo(automation.replyTo ?? "");
+    setSendDomain(automation.domain || null);
+    setFromName(automation.fromName ?? null);
+    setFromEmail(automation.fromEmail ?? null);
+    setReplyTo(automation.replyTo ?? null);
     setPurpose(automation.purpose);
   }, [automation]);
 
+  const domainOptionValues = useMemo(() => {
+    const values = new Set(readyDomainNames);
+    const pinned = (sendDomain ?? automation?.domain)?.trim();
+    if (pinned) values.add(pinned);
+    return [...values].sort((a, b) => a.localeCompare(b));
+  }, [readyDomainNames, sendDomain, automation?.domain]);
+
+  const emailOptions = useMemo(() => {
+    const emails = domainAddresses.map((a) => a.email);
+    if (fromEmail && !emails.some((e) => e.toLowerCase() === fromEmail.toLowerCase())) {
+      emails.unshift(fromEmail);
+    }
+    if (replyTo && !emails.some((e) => e.toLowerCase() === replyTo.toLowerCase())) {
+      emails.unshift(replyTo);
+    }
+    return [...new Set(emails)];
+  }, [domainAddresses, fromEmail, replyTo]);
+
+  const nameOptions = useMemo(() => {
+    const names = [...displayNameOptions];
+    if (fromName && !names.includes(fromName)) names.unshift(fromName);
+    return names;
+  }, [displayNameOptions, fromName]);
+
+  const allowedEmails = useMemo(
+    () => new Set(emailOptions.map((e) => e.toLowerCase())),
+    [emailOptions],
+  );
+
   async function saveSettings() {
+    if (!sendDomain) {
+      setIdentityError("Select a sending domain");
+      return;
+    }
+    if (fromEmail && !allowedEmails.has(fromEmail.toLowerCase())) {
+      setIdentityError("Select a sender address from your accounts on this domain");
+      return;
+    }
+    if (replyTo && !allowedEmails.has(replyTo.toLowerCase())) {
+      setIdentityError("Select a reply-to address from your accounts on this domain");
+      return;
+    }
+    setIdentityError(null);
     setSaving(true);
     try {
       const updated = await scaleApi.updateAutomation(automationId, {
         name: name.trim(),
         description: description.trim() || null,
-        domain: domain.trim().toLowerCase(),
-        fromName: fromName.trim() || null,
-        fromEmail: fromEmail.trim() || null,
-        replyTo: replyTo.trim() || null,
+        domain: sendDomain.trim().toLowerCase(),
+        fromName: fromName?.trim() || null,
+        fromEmail: fromEmail?.trim() || null,
+        replyTo: replyTo?.trim() || null,
         purpose,
       });
       setAutomation(updated);
@@ -108,37 +164,148 @@ export function AutomationSettingsView() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Domain</Label>
+            <Label htmlFor="auto-domain">Domain</Label>
             <Select
-              value={domain}
-              onValueChange={(next) => setDomain(next ?? "")}
+              value={sendDomain}
+              onValueChange={(next) => {
+                if (!next) {
+                  setSendDomain(null);
+                  return;
+                }
+                setSendDomain(next);
+                if (fromEmail && !fromEmail.toLowerCase().endsWith(`@${next.toLowerCase()}`)) {
+                  setFromEmail(null);
+                  setFromName(null);
+                }
+                if (replyTo && !replyTo.toLowerCase().endsWith(`@${next.toLowerCase()}`)) {
+                  setReplyTo(null);
+                }
+              }}
+              disabled={domainsLoading && domainOptionValues.length === 0}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select domain" />
+              <SelectTrigger id="auto-domain" className="w-full">
+                <SelectValue
+                  placeholder={
+                    domainsLoading
+                      ? "Loading domains…"
+                      : domainOptionValues.length === 0
+                        ? "No domains in Console"
+                        : "Select sending domain"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {[...new Set([domain, ...readyDomainNames].filter(Boolean))].map((d) => (
+                {domainOptionValues.map((d) => (
                   <SelectItem key={d} value={d}>
                     {d}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>From name</Label>
-              <Input value={fromName} onChange={(e) => setFromName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>From email</Label>
-              <Input value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} />
-            </div>
+            {domainsLoading ? (
+              <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
+            ) : domainOptionValues.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No domains on your Worker — add one in Console → Domains.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Same Worker domain catalog as broadcasts and audience groups.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
-            <Label>Reply-To</Label>
-            <Input value={replyTo} onChange={(e) => setReplyTo(e.target.value)} />
+            <Label htmlFor="auto-from-email">From email</Label>
+            <Select
+              value={fromEmail}
+              onValueChange={(email) => {
+                if (!email) {
+                  setFromEmail(null);
+                  return;
+                }
+                setFromEmail(email);
+                const match = domainAddresses.find((a) => a.email === email);
+                if (match) setFromName(displayNameForAddress(match));
+              }}
+              disabled={!sendDomain || addressesLoading || emailOptions.length === 0}
+            >
+              <SelectTrigger id="auto-from-email" className="w-full">
+                <SelectValue
+                  placeholder={
+                    !sendDomain
+                      ? "Select a domain first"
+                      : addressesLoading
+                        ? "Loading accounts…"
+                        : emailOptions.length === 0
+                          ? "No senders on this domain"
+                          : "Select sender address"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {emailOptions.map((email) => (
+                  <SelectItem key={email} value={email}>
+                    {email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="auto-from-name">From name</Label>
+            <Select
+              value={fromName}
+              onValueChange={(next) => setFromName(next)}
+              disabled={nameOptions.length === 0}
+            >
+              <SelectTrigger id="auto-from-name" className="w-full">
+                <SelectValue placeholder="Select display name" />
+              </SelectTrigger>
+              <SelectContent>
+                {nameOptions.map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Senders come from Accounts on {sendDomain ?? "the selected domain"}.
+              {domainAddresses.length === 0 && !addressesLoading && sendDomain
+                ? " Add an address in Console → Accounts first."
+                : null}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="auto-reply-to">Reply-To</Label>
+            <Select
+              value={replyTo}
+              onValueChange={(email) => setReplyTo(email ?? null)}
+              disabled={!sendDomain || addressesLoading || emailOptions.length === 0}
+            >
+              <SelectTrigger id="auto-reply-to" className="w-full">
+                <SelectValue
+                  placeholder={
+                    !sendDomain
+                      ? "Select a domain first"
+                      : addressesLoading
+                        ? "Loading accounts…"
+                        : emailOptions.length === 0
+                          ? "No accounts on this domain"
+                          : "Select reply-to address"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {emailOptions.map((email) => (
+                  <SelectItem key={`reply-${email}`} value={email}>
+                    {email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {identityError ? <p className="text-xs text-destructive">{identityError}</p> : null}
           <p className="text-xs text-muted-foreground">
             Compliance footer identity is edited on the Content tab.
           </p>

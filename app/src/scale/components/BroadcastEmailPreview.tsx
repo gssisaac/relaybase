@@ -58,16 +58,16 @@ export function BroadcastEmailPreview({
 
   return (
     <div
-      className="flex h-full min-h-full flex-1 flex-col bg-[#f6f8fc] text-[#202124]"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#f6f8fc] text-[#202124]"
       style={{ colorScheme: "light" }}
     >
       <div
         className={cn(
-          "mx-auto flex min-h-full w-full flex-1 flex-col",
+          "mx-auto flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden",
           device === "mobile" ? "max-w-[375px]" : "max-w-none",
         )}
       >
-        <div className="flex min-h-full flex-1 flex-col bg-white">
+        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-white">
           <div className="shrink-0 border-b border-[#e0e0e0] px-4 pb-3 pt-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -123,8 +123,8 @@ export function BroadcastEmailPreview({
 
           <div
             className={cn(
-              "min-h-0 flex-1 bg-white",
-              previewIsPlainText ? "px-4 py-5" : "overflow-x-hidden",
+              "min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-white",
+              previewIsPlainText && "px-4 py-5",
             )}
           >
             {previewIsPlainText ? (

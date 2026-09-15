@@ -13,7 +13,7 @@ export function useAutomationSidebarList() {
   const rows = useSyncExternalStore(
     subscribeAutomationSidebarList,
     getAutomationSidebarListSnapshot,
-    () => [],
+    getAutomationSidebarListSnapshot,
   );
 
   const [hydrated, setHydrated] = useState(() => getCachedAutomationSidebarList() !== null);

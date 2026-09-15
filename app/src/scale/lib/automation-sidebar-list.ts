@@ -4,6 +4,9 @@ let cachedRows: Automation[] | null = null;
 let inflight: Promise<Automation[]> | null = null;
 const listeners = new Set<() => void>();
 
+/** Stable snapshot when the list has not loaded yet (required for useSyncExternalStore). */
+const EMPTY_SIDEBAR_ROWS: Automation[] = [];
+
 function filterSidebarRows(automations: Automation[]): Automation[] {
   return automations.filter((row) => row.listStatus !== "archived");
 }
@@ -18,7 +21,7 @@ export function subscribeAutomationSidebarList(listener: () => void): () => void
 }
 
 export function getAutomationSidebarListSnapshot(): Automation[] {
-  return cachedRows ?? [];
+  return cachedRows ?? EMPTY_SIDEBAR_ROWS;
 }
 
 export function getCachedAutomationSidebarList(): Automation[] | null {

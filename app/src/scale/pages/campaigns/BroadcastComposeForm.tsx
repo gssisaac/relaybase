@@ -281,7 +281,7 @@ export function BroadcastComposeForm({
             </Button>
           </div>
           <div
-            className="flex min-h-0 flex-1 flex-col overflow-auto overflow-x-hidden bg-[#f6f8fc]"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f6f8fc]"
             style={{ colorScheme: "light" }}
           >
             <BroadcastEmailPreview

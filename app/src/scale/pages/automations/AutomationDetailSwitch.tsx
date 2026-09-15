@@ -14,7 +14,6 @@ import { AutomationDetailShell } from "@/scale/pages/automations/AutomationDetai
 import { AutomationPreviewView } from "@/scale/pages/automations/AutomationPreviewView";
 import { AutomationSettingsView } from "@/scale/pages/automations/AutomationSettingsView";
 import { AutomationStatsView } from "@/scale/pages/automations/AutomationStatsView";
-import { AutomationTriggerView } from "@/scale/pages/automations/AutomationTriggerView";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 
 export function AutomationDefaultTabRedirect() {
@@ -82,7 +81,6 @@ export function AutomationDetailSwitch({ tab }: { tab: AutomationDetailTab | nul
       ) : (
         <>
           {resolvedTab === "preview" ? <AutomationPreviewView /> : null}
-          {resolvedTab === "trigger" ? <AutomationTriggerView /> : null}
           {resolvedTab === "stats" ? <AutomationStatsView /> : null}
           {resolvedTab === "settings" ? <AutomationSettingsView /> : null}
         </>

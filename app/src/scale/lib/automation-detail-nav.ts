@@ -11,9 +11,10 @@ export function normalizeAutomationDetailTab(
 ): AutomationDetailTab {
   if (tab === "activity") return "stats";
   if (tab === "content") return "preview";
+  if (tab === "trigger") return "settings";
   return tab;
 }
 
 export function automationDetailNavTabs(_status: AutomationStatus): AutomationDetailTab[] {
-  return ["preview", "trigger", "stats", "settings"];
+  return ["preview", "stats", "settings"];
 }

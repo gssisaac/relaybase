@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Eye, Settings, Zap } from "lucide-react";
+import { BarChart3, Eye, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -22,7 +22,6 @@ import { cn } from "@/lib/utils";
 
 const NAV: { id: AutomationDetailTab; label: string; icon: LucideIcon }[] = [
   { id: "preview", label: "Preview", icon: Eye },
-  { id: "trigger", label: "Trigger", icon: Zap },
   { id: "stats", label: "Stats", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
 ];

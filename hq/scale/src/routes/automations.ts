@@ -119,7 +119,7 @@ scaleAutomations.post("/", async (c) => {
       domain,
       fromName: draft.account.compliance.organizationName,
       fromEmail: defaultFromForDomain(domain),
-      replyTo: draft.account.compliance.contactEmail,
+      replyTo: null,
       complianceIdentityId: draft.account.defaultComplianceIdentityId,
       purpose,
       listStatus: "active",

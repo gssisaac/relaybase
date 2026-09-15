@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { broadcastDetailHref } from "@/scale/lib/paths";
+import { ScheduleItemPopover } from "@/scale/components/ScheduleItemPopover";
 import {
   dateKeyLocal,
   isSameLocalDay,
@@ -24,13 +23,6 @@ function monthStart(year: number, month: number): Date {
 function addMonths(year: number, month: number, delta: number): { year: number; month: number } {
   const d = new Date(year, month + delta, 1);
   return { year: d.getFullYear(), month: d.getMonth() };
-}
-
-function formatEventTime(at: Date): string {
-  return at.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 export function ScheduleMonthCalendar({
@@ -148,17 +140,7 @@ export function ScheduleMonthCalendar({
 
               <div className="mt-0.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
                 {shown.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={broadcastDetailHref(item.broadcastId, "publish", item.status)}
-                    title={`${formatEventTime(item.at)} — ${item.title}`}
-                    className="block min-w-0 truncate rounded-sm bg-primary/15 px-1 py-0.5 text-[10px] leading-tight text-foreground hover:bg-primary/25 sm:text-[11px]"
-                  >
-                    <span className="font-medium tabular-nums text-primary/90">
-                      {formatEventTime(item.at)}
-                    </span>{" "}
-                    <span>{item.title}</span>
-                  </Link>
+                  <ScheduleItemPopover key={item.id} item={item} variant="calendar" />
                 ))}
                 {overflow > 0 ? (
                   <p className="truncate px-0.5 text-[10px] text-muted-foreground">

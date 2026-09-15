@@ -9,6 +9,7 @@ export type ScheduleItem = {
   title: string;
   subject: string;
   audienceLabel: string | null;
+  recipientCount: number;
   at: Date;
   atIso: string;
   status: Broadcast["status"];
@@ -55,6 +56,7 @@ export function upcomingBroadcastScheduleItems(
       title: b.name.trim() || "Untitled broadcast",
       subject: b.subject.trim() || "(No subject)",
       audienceLabel: b.audienceGroupName,
+      recipientCount: b.audienceContactCount ?? b.audienceActiveCount,
       at,
       atIso: b.scheduledAt,
       status: b.status,

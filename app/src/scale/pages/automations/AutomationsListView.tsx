@@ -36,8 +36,8 @@ import {
   replaceAutomationSidebarList,
   upsertAutomationSidebarListRow,
 } from "@/scale/lib/automation-sidebar-list";
-import { automationDetailHref, useScalePaths } from "@/scale/lib/paths";
-import { ScaleOverviewTopSection } from "@/scale/pages/overview/ScaleOverviewTopSection";
+import { automationDetailHref } from "@/scale/lib/paths";
+import { AutomationsOverviewTopSection } from "@/scale/pages/automations/AutomationsOverviewTopSection";
 import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import {
   scaleApi,
@@ -68,7 +68,6 @@ const FILTER_OPTIONS: { value: AutomationFilter; label: string }[] = [
 
 export function AutomationsListView() {
   const router = useRouter();
-  const scalePaths = useScalePaths();
   const { readyDomains, loading: domainsLoading, refresh: refreshWorkerDomains } =
     useWorkerDomains();
   const [rows, setRows] = useState<Automation[]>([]);
@@ -295,7 +294,11 @@ export function AutomationsListView() {
             <p className="text-sm text-muted-foreground">Loading stats…</p>
           ) : null}
           {overview ? (
-            <ScaleOverviewTopSection data={overview} paths={scalePaths} />
+            <AutomationsOverviewTopSection
+              data={overview}
+              filter={filter}
+              onFilterChange={setFilter}
+            />
           ) : null}
 
           <EmailListContainer>

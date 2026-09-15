@@ -15,6 +15,7 @@ import {
 import { slugifyAutomation } from "../lib/automations/slug";
 import { emptyAutomationStats, normalizeAutomationStats } from "../lib/automations/stats";
 import { defaultHttpWebhookTrigger, defaultTriggerForPurpose } from "../lib/automations/trigger-defaults";
+import { buildAutomationTriggerStatsOverview } from "../lib/automations/trigger-stats-overview";
 import { validateAutomationForActivation } from "../lib/automations/validate";
 import { newId, newToken } from "../lib/shared/ids";
 
@@ -59,6 +60,10 @@ scaleAutomations.get("/", (c) => {
     .automations.filter((a) => a.accountLinkId === DEV_ACCOUNT_LINK_ID)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return c.json({ automations: rows.map((row) => serializeAutomation(row)) });
+});
+
+scaleAutomations.get("/trigger-stats", (c) => {
+  return c.json(buildAutomationTriggerStatsOverview());
 });
 
 scaleAutomations.post("/", async (c) => {

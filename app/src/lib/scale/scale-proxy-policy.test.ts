@@ -55,6 +55,17 @@ describe("shouldProxyRequestToScale", () => {
       shouldProxyRequestToScale("/scale/automations/edit", "GET", headers()),
       false,
     );
+    assert.equal(
+      shouldProxyRequestToScale("/scale/automations/trigger-stats", "GET", headers()),
+      false,
+    );
+  });
+
+  it("proxies automation trigger-stats JSON with Scale API header", () => {
+    assert.equal(
+      shouldProxyRequestToScale("/scale/automations/trigger-stats", "GET", headers(true)),
+      true,
+    );
   });
 
   it("serves automation detail tab UI without API header", () => {

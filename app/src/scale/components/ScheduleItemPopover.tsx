@@ -16,32 +16,27 @@ import {
 import { BroadcastStatusBadge } from "@/scale/components/BroadcastStatusBadge";
 import { broadcastDetailHref } from "@/scale/lib/paths";
 import type { ScheduleItem } from "@/scale/lib/schedule-items";
+import {
+  formatScheduleEventTime,
+  formatScheduleWhen,
+} from "@/scale/lib/schedule-timezone";
 import { cn } from "@/lib/utils";
-
-function formatWhen(at: Date): string {
-  return at.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatEventTime(at: Date): string {
-  return at.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 type ScheduleItemPopoverProps = {
   item: ScheduleItem;
   variant: "list" | "nextUp" | "calendar";
+  timeZone: string;
   listInsetClassName?: string;
   nextUpInsetClassName?: string;
 };
 
-function ScheduleItemPopoverContent({ item }: { item: ScheduleItem }) {
+function ScheduleItemPopoverContent({
+  item,
+  timeZone,
+}: {
+  item: ScheduleItem;
+  timeZone: string;
+}) {
   const href = broadcastDetailHref(item.broadcastId, "publish", item.status);
   const audience = item.audienceLabel ?? "Audience";
 
@@ -64,7 +59,9 @@ function ScheduleItemPopoverContent({ item }: { item: ScheduleItem }) {
       <dl className="space-y-1.5 text-xs text-muted-foreground">
         <div className="flex justify-between gap-3">
           <dt>Scheduled</dt>
-          <dd className="text-right tabular-nums text-foreground">{formatWhen(item.at)}</dd>
+          <dd className="text-right tabular-nums text-foreground">
+            {formatScheduleWhen(item.at, timeZone)}
+          </dd>
         </div>
         <div className="flex justify-between gap-3">
           <dt>Audience</dt>
@@ -79,7 +76,11 @@ function ScheduleItemPopoverContent({ item }: { item: ScheduleItem }) {
   );
 }
 
-function triggerLabel(item: ScheduleItem, variant: ScheduleItemPopoverProps["variant"]): ReactNode {
+function triggerLabel(
+  item: ScheduleItem,
+  variant: ScheduleItemPopoverProps["variant"],
+  timeZone: string,
+): ReactNode {
   if (variant === "nextUp") {
     return (
       <>
@@ -87,7 +88,7 @@ function triggerLabel(item: ScheduleItem, variant: ScheduleItemPopoverProps["var
         <p className="font-medium">{item.title}</p>
         <p className="text-xs text-muted-foreground">{item.subject}</p>
         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-          {formatWhen(item.at)} · {item.audienceLabel ?? "Audience"} ·{" "}
+          {formatScheduleWhen(item.at, timeZone)} · {item.audienceLabel ?? "Audience"} ·{" "}
           {item.recipientCount.toLocaleString()} recipients
         </p>
       </>
@@ -97,7 +98,9 @@ function triggerLabel(item: ScheduleItem, variant: ScheduleItemPopoverProps["var
   if (variant === "calendar") {
     return (
       <>
-        <span className="font-medium tabular-nums text-primary/90">{formatEventTime(item.at)}</span>{" "}
+        <span className="font-medium tabular-nums text-primary/90">
+          {formatScheduleEventTime(item.at, timeZone)}
+        </span>{" "}
         <span>{item.title}</span>
       </>
     );
@@ -108,7 +111,9 @@ function triggerLabel(item: ScheduleItem, variant: ScheduleItemPopoverProps["var
       <span className="min-w-0 truncate font-medium">{item.title}</span>
       <div className="flex shrink-0 items-center gap-2">
         <BroadcastStatusBadge status={item.status} />
-        <span className="text-xs text-muted-foreground">{formatWhen(item.at)}</span>
+        <span className="text-xs text-muted-foreground">
+          {formatScheduleWhen(item.at, timeZone)}
+        </span>
       </div>
     </>
   );
@@ -117,6 +122,7 @@ function triggerLabel(item: ScheduleItem, variant: ScheduleItemPopoverProps["var
 export function ScheduleItemPopover({
   item,
   variant,
+  timeZone,
   listInsetClassName,
   nextUpInsetClassName,
 }: ScheduleItemPopoverProps) {
@@ -140,18 +146,22 @@ export function ScheduleItemPopover({
           <button
             type="button"
             className={triggerClassName}
-            title={variant === "calendar" ? `${formatEventTime(item.at)} — ${item.title}` : undefined}
+            title={
+              variant === "calendar"
+                ? `${formatScheduleEventTime(item.at, timeZone)} — ${item.title}`
+                : undefined
+            }
           />
         }
       >
-        {triggerLabel(item, variant)}
+        {triggerLabel(item, variant, timeZone)}
       </PopoverTrigger>
       <PopoverContent
         align="start"
         side={variant === "list" || variant === "nextUp" ? "right" : "bottom"}
         className="w-80 max-w-[min(20rem,calc(100vw-2rem))]"
       >
-        <ScheduleItemPopoverContent item={item} />
+        <ScheduleItemPopoverContent item={item} timeZone={timeZone} />
       </PopoverContent>
     </Popover>
   );

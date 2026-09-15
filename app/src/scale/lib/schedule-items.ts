@@ -1,4 +1,5 @@
 import type { Broadcast } from "@/lib/scale/api";
+import { dateKeyInTimeZone } from "./schedule-timezone";
 
 export type ScheduleItemKind = "broadcast";
 
@@ -67,10 +68,16 @@ export function upcomingBroadcastScheduleItems(
   return items;
 }
 
-export function scheduleItemsByDayKey(items: ScheduleItem[]): Map<string, ScheduleItem[]> {
+export function scheduleItemsByDayKey(
+  items: ScheduleItem[],
+  timeZone?: string,
+): Map<string, ScheduleItem[]> {
+  const keyFor = timeZone
+    ? (d: Date) => dateKeyInTimeZone(d, timeZone)
+    : (d: Date) => dateKeyLocal(d);
   const map = new Map<string, ScheduleItem[]>();
   for (const item of items) {
-    const key = dateKeyLocal(item.at);
+    const key = keyFor(item.at);
     const bucket = map.get(key);
     if (bucket) bucket.push(item);
     else map.set(key, [item]);

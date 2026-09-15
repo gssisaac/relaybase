@@ -173,6 +173,32 @@ export type BroadcastDispatchProgress = {
   recipientsPerMinute: number | null;
 };
 
+export type AutomationTriggerStatsOverview = {
+  generatedAt: string;
+  period: { from: string; to: string };
+  triggers24h: number;
+  triggers7d: number;
+  totals: AutomationStats & { automations: number };
+  rates: { delivery: number; open: number; click: number; bounce: number };
+  byDay: { day: string; label: string; count: number }[];
+  byAutomation: Array<{
+    id: string;
+    name: string;
+    status: AutomationStatus;
+    stats: AutomationStats;
+    triggers24h: number;
+  }>;
+  recentEvents: Array<{
+    id: string;
+    automationId: string | null;
+    automationName: string;
+    triggerType: AutomationTrigger["type"];
+    recipientEmail: string;
+    status: AutomationTriggerEventStatus;
+    occurredAt: string;
+  }>;
+};
+
 export type ScaleOverview = {
   generatedAt: string;
   summary: {
@@ -547,6 +573,8 @@ export const scaleApi = {
     }),
 
   listAutomations: () => scaleFetch<{ automations: Automation[] }>("/scale/automations"),
+  getAutomationTriggerStats: () =>
+    scaleFetch<AutomationTriggerStatsOverview>("/scale/automations/trigger-stats"),
   createAutomation: (input: {
     name: string;
     domain?: string;

@@ -166,6 +166,10 @@ export function automationContentEditHref(id: string): string {
   return `/scale/automations/${encodeAutomationPathId(id)}/edit`;
 }
 
+export function automationsTriggerStatsHref(): string {
+  return "/scale/automations/trigger-stats";
+}
+
 export type AutomationPathDetail = {
   automationId: string;
   tab: AutomationDetailTab | null;
@@ -177,7 +181,7 @@ export function automationDetailFromPathname(pathname: string): AutomationPathDe
   const match = pathname.match(/^\/scale\/automations\/([^/]+)(?:\/([^/]+))?\/?$/);
   if (!match) return null;
   const rawId = match[1] ?? "";
-  if (!rawId || rawId === "edit") return null;
+  if (!rawId || rawId === "edit" || rawId === "trigger-stats") return null;
   const automationId = decodeAutomationPathId(rawId).trim();
   if (!automationId) return null;
   const rawSeg = match[2]?.trim().toLowerCase();

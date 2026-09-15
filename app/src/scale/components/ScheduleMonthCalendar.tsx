@@ -7,11 +7,15 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScheduleItemPopover } from "@/scale/components/ScheduleItemPopover";
 import {
-  dateKeyLocal,
-  isSameLocalDay,
   scheduleItemsByDayKey,
   type ScheduleItem,
 } from "@/scale/lib/schedule-items";
+import {
+  addGregorianDays,
+  dateKeyInTimeZone,
+  gregorianDateKey,
+  weekdayOfGregorianDateInTimeZone,
+} from "@/scale/lib/schedule-timezone";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MAX_EVENTS_SHOWN = 4;
@@ -30,34 +34,44 @@ export function ScheduleMonthCalendar({
   viewMonth,
   onViewMonthChange,
   items,
+  timeZone,
   className,
 }: {
   viewYear: number;
   viewMonth: number;
   onViewMonthChange: (year: number, month: number) => void;
   items: ScheduleItem[];
+  timeZone: string;
   className?: string;
 }) {
-  const itemsByDay = useMemo(() => scheduleItemsByDayKey(items), [items]);
+  const itemsByDay = useMemo(
+    () => scheduleItemsByDayKey(items, timeZone),
+    [items, timeZone],
+  );
 
   const monthLabel = useMemo(
     () =>
       monthStart(viewYear, viewMonth).toLocaleString(undefined, {
         month: "long",
         year: "numeric",
+        timeZone,
       }),
-    [viewYear, viewMonth],
+    [viewYear, viewMonth, timeZone],
   );
 
   const cells = useMemo(() => {
-    const first = monthStart(viewYear, viewMonth);
-    const startOffset = first.getDay();
+    const startOffset = weekdayOfGregorianDateInTimeZone(
+      viewYear,
+      viewMonth,
+      1,
+      timeZone,
+    );
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
     const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
-    const today = new Date();
+    const todayKey = dateKeyInTimeZone(new Date(), timeZone);
 
     const out: Array<{
-      date: Date;
+      dayNum: number;
       inMonth: boolean;
       key: string;
       isToday: boolean;
@@ -65,20 +79,19 @@ export function ScheduleMonthCalendar({
     }> = [];
 
     for (let i = 0; i < totalCells; i++) {
-      const dayIndex = i - startOffset + 1;
-      const date = new Date(viewYear, viewMonth, dayIndex);
-      const inMonth = dayIndex >= 1 && dayIndex <= daysInMonth;
-      const key = dateKeyLocal(date);
+      const g = addGregorianDays(viewYear, viewMonth, 1, i - startOffset);
+      const inMonth = g.monthIndex === viewMonth && g.year === viewYear;
+      const key = gregorianDateKey(g.year, g.monthIndex, g.day);
       out.push({
-        date,
+        dayNum: g.day,
         inMonth,
         key,
-        isToday: isSameLocalDay(date, today),
+        isToday: key === todayKey,
         dayEvents: itemsByDay.get(key) ?? [],
       });
     }
     return out;
-  }, [viewYear, viewMonth, itemsByDay]);
+  }, [viewYear, viewMonth, itemsByDay, timeZone]);
 
   function shiftMonth(delta: number) {
     const next = addMonths(viewYear, viewMonth, delta);
@@ -112,7 +125,6 @@ export function ScheduleMonthCalendar({
 
       <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 border-x border-b border-border/80">
         {cells.map((cell) => {
-          const dayNum = cell.date.getDate();
           const shown = cell.dayEvents.slice(0, MAX_EVENTS_SHOWN);
           const overflow = cell.dayEvents.length - shown.length;
 
@@ -134,13 +146,18 @@ export function ScheduleMonthCalendar({
                       "rounded-full bg-primary font-semibold text-primary-foreground",
                   )}
                 >
-                  {dayNum}
+                  {cell.dayNum}
                 </span>
               </div>
 
               <div className="mt-0.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
                 {shown.map((item) => (
-                  <ScheduleItemPopover key={item.id} item={item} variant="calendar" />
+                  <ScheduleItemPopover
+                    key={item.id}
+                    item={item}
+                    variant="calendar"
+                    timeZone={timeZone}
+                  />
                 ))}
                 {overflow > 0 ? (
                   <p className="truncate px-0.5 text-[10px] text-muted-foreground">

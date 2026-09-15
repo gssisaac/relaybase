@@ -3,6 +3,8 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 /** Top KPI tiles — lifted from page canvas with clear type hierarchy. */
 export const overviewKpiClassName =
   "block rounded-xl bg-card px-4 py-4 shadow-sm ring-1 ring-border transition-colors hover:bg-secondary/50 dark:hover:bg-accent/55";
@@ -15,17 +17,27 @@ export function formatOverviewCompact(n: number): string {
 
 export function OverviewKpiCard({
   href,
+  onClick,
+  selected,
   icon: Icon,
   label,
   value,
   hint,
 }: {
   href?: string;
+  onClick?: () => void;
+  selected?: boolean;
   icon: LucideIcon;
   label: string;
   value: string;
   hint: string;
 }) {
+  const tileClassName = cn(
+    overviewKpiClassName,
+    onClick && "cursor-pointer text-left",
+    selected && "bg-secondary/50 ring-2 ring-primary dark:bg-accent/55",
+  );
+
   const inner = (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 space-y-2">
@@ -41,11 +53,24 @@ export function OverviewKpiCard({
 
   if (href) {
     return (
-      <Link href={href} className={overviewKpiClassName}>
+      <Link href={href} className={tileClassName}>
         {inner}
       </Link>
     );
   }
 
-  return <div className={overviewKpiClassName}>{inner}</div>;
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(tileClassName, "w-full")}
+        aria-pressed={selected}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return <div className={tileClassName}>{inner}</div>;
 }

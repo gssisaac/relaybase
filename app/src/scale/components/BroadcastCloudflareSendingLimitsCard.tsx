@@ -6,9 +6,6 @@ import { ExternalLink, TriangleAlert } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-/** Shown in UI — Cloudflare daily cap varies by account; plan broadcasts around this ceiling. */
-export const CF_EMAIL_DAILY_SEND_LIMIT = 100;
-
 /** Cloudflare Email Service — daily limits & limit-increase form (docs-linked). */
 export const CF_EMAIL_SENDING_LIMITS_URL =
   "https://developers.cloudflare.com/email-service/platform/limits/";
@@ -44,23 +41,20 @@ export function BroadcastCloudflareSendingLimitsCard({ className }: { className?
             aria-hidden
           />
           <div className="min-w-0 space-y-1.5">
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <CardTitle className="text-sm font-medium text-amber-950 dark:text-amber-50">
-                Daily send limit (Cloudflare)
-              </CardTitle>
-              <span className="text-lg font-semibold tabular-nums text-amber-950 dark:text-amber-50">
-                {CF_EMAIL_DAILY_SEND_LIMIT}
-                <span className="text-xs font-normal text-amber-950/75 dark:text-amber-100/75">
-                  {" "}
-                  emails / day
-                </span>
-              </span>
-            </div>
+            <CardTitle className="text-sm font-medium text-amber-950 dark:text-amber-50">
+              Cloudflare daily send quota
+            </CardTitle>
             <p className="text-xs leading-snug text-amber-950/85 dark:text-amber-100/85">
-              Broadcasts use your Worker and Cloudflare Email Sending. Going over{" "}
-              {CF_EMAIL_DAILY_SEND_LIMIT}/day can fail remaining recipients mid-send (
+              Broadcasts send through your Worker and Cloudflare Email Sending. New accounts start on a
+              conservative daily cap; Cloudflare does not publish a fixed starting number. Limits rise
+              over time as your sending pattern and deliverability improve.
+            </p>
+            <p className="text-xs leading-snug text-amber-950/85 dark:text-amber-100/85">
+              Hitting the cap can stop a broadcast mid-run (
               <span className="font-medium">account daily sending quota exceeded</span>). Workers Paid
-              is separate from this daily cap.
+              billing is separate from this quota. Mail to verified destination addresses may not count
+              toward monthly or daily quotas on established accounts, but new or not-yet-warmed setups
+              can still hit anti-abuse limits first.
             </p>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-amber-950/75 dark:text-amber-100/75">
               <DocLink href={CF_EMAIL_SENDING_LIMITS_URL}>Cloudflare limits</DocLink>

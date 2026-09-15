@@ -11,7 +11,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { BroadcastStatusBadge } from "@/scale/components/BroadcastStatusBadge";
-import { CF_EMAIL_DAILY_SEND_LIMIT } from "@/scale/components/BroadcastCloudflareSendingLimitsCard";
+import { CF_EMAIL_SENDING_LIMITS_URL } from "@/scale/components/BroadcastCloudflareSendingLimitsCard";
 import { scaleApi, type ScaleOverview } from "@/lib/scale/api";
 import { broadcastDetailHref, useScalePaths } from "@/scale/lib/paths";
 import { cn } from "@/lib/utils";
@@ -284,21 +284,24 @@ export function ScaleOverviewView() {
                   </CardHeader>
                   <CardContent>
                     <OverviewExpandableBody className="space-y-3">
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Cloudflare daily quota</span>
-                          <span className="tabular-nums">
-                            {data.broadcasts.cloudflareQuota.usedToday} / {CF_EMAIL_DAILY_SEND_LIMIT}
+                          <span className="text-muted-foreground">Sent today (Scale)</span>
+                          <span className="tabular-nums font-medium">
+                            {data.broadcasts.cloudflareQuota.usedToday}
                           </span>
                         </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-primary transition-[width]"
-                            style={{
-                              width: `${Math.min(100, data.broadcasts.cloudflareQuota.percentUsed)}%`,
-                            }}
-                          />
-                        </div>
+                        <p className="text-[11px] leading-snug text-muted-foreground">
+                          Cloudflare&apos;s daily cap is account-specific and not shown here.{" "}
+                          <a
+                            href={CF_EMAIL_SENDING_LIMITS_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline-offset-2 hover:underline"
+                          >
+                            Limits docs
+                          </a>
+                        </p>
                       </div>
                       {data.broadcasts.recentSent.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No completed sends yet.</p>

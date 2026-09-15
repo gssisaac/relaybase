@@ -235,8 +235,9 @@ export type ScaleOverview = {
     }>;
     cloudflareQuota: {
       usedToday: number;
-      dailyLimit: number;
-      percentUsed: number;
+      /** Unknown until Cloudflare exposes per-account caps in API — do not assume a fixed ceiling. */
+      dailyLimit: number | null;
+      percentUsed: number | null;
     };
   };
   audience: {

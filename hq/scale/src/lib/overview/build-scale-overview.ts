@@ -4,8 +4,6 @@ import { audienceGroupToSummary } from "../audience-groups/api-serialize";
 import { buildSentOverview } from "../broadcasts/overview";
 import { serializeBroadcast } from "../broadcasts/serialize";
 
-const CF_EMAIL_DAILY_SEND_LIMIT = 100;
-
 function rate(part: number, total: number): number {
   if (!total) return 0;
   return Number(((part / total) * 100).toFixed(1));
@@ -250,8 +248,8 @@ export function buildScaleOverview() {
       recentSent,
       cloudflareQuota: {
         usedToday,
-        dailyLimit: CF_EMAIL_DAILY_SEND_LIMIT,
-        percentUsed: rate(usedToday, CF_EMAIL_DAILY_SEND_LIMIT),
+        dailyLimit: null,
+        percentUsed: null,
       },
     },
     audience: {

@@ -22,6 +22,7 @@ import {
   ScaleOverviewSendsChart,
   ScaleOverviewTriggersChart,
 } from "./ScaleOverviewCharts";
+import { OverviewExpandableBody } from "./OverviewExpandableBody";
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -38,6 +39,19 @@ function formatCompact(n: number): string {
   return n.toLocaleString();
 }
 
+/**
+ * Inset rows inside section cards. Dark theme sets --muted == --card, so use --secondary/--accent
+ * for a visible lift above the card surface (see globals.css).
+ */
+const overviewInsetItemClassName =
+  "rounded-xl bg-secondary/70 px-3 py-2.5 transition-colors hover:bg-secondary dark:bg-accent/90 dark:hover:bg-accent";
+
+const overviewInsetHighlightClassName = "rounded-xl bg-secondary px-3 py-2.5 dark:bg-accent";
+
+/** Top KPI tiles — lifted from page canvas (#141414) with clear type hierarchy. */
+const overviewKpiClassName =
+  "block rounded-xl bg-card px-4 py-4 shadow-sm ring-1 ring-border transition-colors hover:bg-secondary/50 dark:hover:bg-accent/55";
+
 function KpiCard({
   href,
   icon: Icon,
@@ -52,17 +66,16 @@ function KpiCard({
   hint: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="block rounded-md border bg-card px-4 py-3 transition-colors hover:bg-muted/40"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          <p className="text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-          <p className="text-xs text-muted-foreground">{hint}</p>
+    <Link href={href} className={overviewKpiClassName}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="text-3xl font-bold tabular-nums leading-none tracking-tight text-foreground">{value}</p>
+          <p className="text-xs leading-snug text-muted-foreground">{hint}</p>
         </div>
-        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary/80 text-muted-foreground dark:bg-accent">
+          <Icon className="size-4" aria-hidden />
+        </span>
       </div>
     </Link>
   );
@@ -165,43 +178,43 @@ export function ScaleOverviewView() {
                 />
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Send volume</CardTitle>
-                    <CardDescription>Weekly sent, opens, and clicks across broadcasts</CardDescription>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <Card size="sm">
+                  <CardHeader className="gap-0.5 pb-1">
+                    <CardTitle className="text-sm">Send volume</CardTitle>
+                    <CardDescription className="text-xs">Weekly sent, opens, and clicks</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-0">
                     <ScaleOverviewSendsChart data={data.charts.sendsByWeek} />
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Engagement rates</CardTitle>
-                    <CardDescription>Delivery, open, and click rates (all sent broadcasts)</CardDescription>
+                <Card size="sm">
+                  <CardHeader className="gap-0.5 pb-1">
+                    <CardTitle className="text-sm">Engagement rates</CardTitle>
+                    <CardDescription className="text-xs">All sent broadcasts</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-0">
                     <ScaleOverviewEngagementChart data={data.charts.engagementRates} />
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Automation triggers</CardTitle>
-                    <CardDescription>Events received over the last 7 days</CardDescription>
+                <Card size="sm">
+                  <CardHeader className="gap-0.5 pb-1">
+                    <CardTitle className="text-sm">Automation triggers</CardTitle>
+                    <CardDescription className="text-xs">Last 7 days</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-0">
                     <ScaleOverviewTriggersChart data={data.charts.automationTriggersByDay} />
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Audience health</CardTitle>
-                    <CardDescription>Active, unsubscribed, and bounced contacts</CardDescription>
+                <Card size="sm">
+                  <CardHeader className="gap-0.5 pb-1">
+                    <CardTitle className="text-sm">Audience health</CardTitle>
+                    <CardDescription className="text-xs">Active, unsubscribed, bounced</CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-0">
                     <ScaleOverviewAudienceChart data={data.charts.audienceHealth} />
                   </CardContent>
                 </Card>
@@ -218,37 +231,42 @@ export function ScaleOverviewView() {
                       Open schedule
                     </Link>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    {data.schedule.nextUpcoming ? (
-                      <div className="rounded-md border bg-muted/30 px-3 py-2.5">
-                        <p className="text-xs font-medium text-muted-foreground">Next up</p>
-                        <p className="font-medium">{data.schedule.nextUpcoming.name}</p>
-                        <p className="text-xs text-muted-foreground">{data.schedule.nextUpcoming.subject}</p>
-                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                          {formatWhen(data.schedule.nextUpcoming.scheduledAt)} ·{" "}
-                          {data.schedule.nextUpcoming.audienceGroupName ?? "Audience"} ·{" "}
-                          {data.schedule.nextUpcoming.recipientCount.toLocaleString()} recipients
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
-                    )}
-                    <ul className="space-y-2">
-                      {data.schedule.upcomingList.map((row) => (
-                        <li key={row.id}>
-                          <Link
-                            href={broadcastDetailHref(row.id, "publish", row.status)}
-                            className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-sm hover:bg-muted/40"
-                          >
-                            <span className="min-w-0 truncate font-medium">{row.name}</span>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <BroadcastStatusBadge status={row.status} />
-                              <span className="text-xs text-muted-foreground">{formatWhen(row.scheduledAt)}</span>
-                            </div>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
+                  <CardContent>
+                    <OverviewExpandableBody className="space-y-3">
+                      {data.schedule.nextUpcoming ? (
+                        <div className={overviewInsetHighlightClassName}>
+                          <p className="text-xs font-medium text-muted-foreground">Next up</p>
+                          <p className="font-medium">{data.schedule.nextUpcoming.name}</p>
+                          <p className="text-xs text-muted-foreground">{data.schedule.nextUpcoming.subject}</p>
+                          <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                            {formatWhen(data.schedule.nextUpcoming.scheduledAt)} ·{" "}
+                            {data.schedule.nextUpcoming.audienceGroupName ?? "Audience"} ·{" "}
+                            {data.schedule.nextUpcoming.recipientCount.toLocaleString()} recipients
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
+                      )}
+                      <ul className="space-y-2">
+                        {data.schedule.upcomingList.map((row) => (
+                          <li key={row.id}>
+                            <Link
+                              href={broadcastDetailHref(row.id, "publish", row.status)}
+                              className={cn(
+                                overviewInsetItemClassName,
+                                "flex items-center justify-between gap-2 text-sm",
+                              )}
+                            >
+                              <span className="min-w-0 truncate font-medium">{row.name}</span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <BroadcastStatusBadge status={row.status} />
+                                <span className="text-xs text-muted-foreground">{formatWhen(row.scheduledAt)}</span>
+                              </div>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </OverviewExpandableBody>
                   </CardContent>
                 </Card>
 
@@ -264,46 +282,50 @@ export function ScaleOverviewView() {
                       All broadcasts
                     </Link>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Cloudflare daily quota</span>
-                        <span className="tabular-nums">
-                          {data.broadcasts.cloudflareQuota.usedToday} / {CF_EMAIL_DAILY_SEND_LIMIT}
-                        </span>
+                  <CardContent>
+                    <OverviewExpandableBody className="space-y-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Cloudflare daily quota</span>
+                          <span className="tabular-nums">
+                            {data.broadcasts.cloudflareQuota.usedToday} / {CF_EMAIL_DAILY_SEND_LIMIT}
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-primary transition-[width]"
+                            style={{
+                              width: `${Math.min(100, data.broadcasts.cloudflareQuota.percentUsed)}%`,
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary transition-[width]"
-                          style={{
-                            width: `${Math.min(100, data.broadcasts.cloudflareQuota.percentUsed)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    {data.broadcasts.recentSent.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No completed sends yet.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {data.broadcasts.recentSent.map((row) => (
-                          <li key={row.id}>
-                            <Link
-                              href={broadcastDetailHref(row.id, "stats", "sent")}
-                              className="block rounded-md border px-2.5 py-2 hover:bg-muted/40"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="truncate text-sm font-medium">{row.name}</p>
-                                <span className="shrink-0 text-xs text-muted-foreground">{formatWhen(row.sentAt)}</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                {row.recipientCount.toLocaleString()} sent · {row.openRate}% open · {row.clickRate}%
-                                click
-                              </p>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                      {data.broadcasts.recentSent.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No completed sends yet.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {data.broadcasts.recentSent.map((row) => (
+                            <li key={row.id}>
+                              <Link
+                                href={broadcastDetailHref(row.id, "stats", "sent")}
+                                className={cn(overviewInsetItemClassName, "block")}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="truncate text-sm font-medium">{row.name}</p>
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    {formatWhen(row.sentAt)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {row.recipientCount.toLocaleString()} sent · {row.openRate}% open · {row.clickRate}%
+                                  click
+                                </p>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </OverviewExpandableBody>
                   </CardContent>
                 </Card>
 
@@ -320,29 +342,34 @@ export function ScaleOverviewView() {
                     </Link>
                   </CardHeader>
                   <CardContent>
-                    {data.automations.recentEvents.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No trigger events yet.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {data.automations.recentEvents.map((row) => (
-                          <li
-                            key={row.id}
-                            className="flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 text-sm"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">{row.automationName}</p>
-                              <p className="truncate text-xs text-muted-foreground">{row.recipientEmail}</p>
-                            </div>
-                            <div className="shrink-0 text-right">
-                              <Badge variant="outline" className="text-[10px]">
-                                {row.status}
-                              </Badge>
-                              <p className="mt-1 text-[11px] text-muted-foreground">{formatWhen(row.occurredAt)}</p>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <OverviewExpandableBody>
+                      {data.automations.recentEvents.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No trigger events yet.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {data.automations.recentEvents.map((row) => (
+                            <li
+                              key={row.id}
+                              className={cn(
+                                overviewInsetItemClassName,
+                                "flex items-start justify-between gap-2 text-sm",
+                              )}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">{row.automationName}</p>
+                                <p className="truncate text-xs text-muted-foreground">{row.recipientEmail}</p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {row.status}
+                                </Badge>
+                                <p className="mt-1 text-[11px] text-muted-foreground">{formatWhen(row.occurredAt)}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </OverviewExpandableBody>
                   </CardContent>
                 </Card>
 
@@ -362,33 +389,40 @@ export function ScaleOverviewView() {
                     </Link>
                   </CardHeader>
                   <CardContent>
-                    {data.audience.groups.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Create a group to start collecting contacts.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {data.audience.groups.map((group) => (
-                          <li key={group.id}>
-                            <Link
-                              href={`${audience}?id=${encodeURIComponent(group.id)}`}
-                              className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 hover:bg-muted/40"
-                            >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium">{group.name}</p>
-                                <p className="text-xs text-muted-foreground">{group.domain}</p>
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <p className="text-sm tabular-nums font-medium">{group.contactCount.toLocaleString()}</p>
-                                {group.lastSyncStatus === "error" ? (
-                                  <Badge variant="destructive" className="mt-0.5 text-[10px]">
-                                    Sync error
-                                  </Badge>
-                                ) : null}
-                              </div>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <OverviewExpandableBody>
+                      {data.audience.groups.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Create a group to start collecting contacts.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {data.audience.groups.map((group) => (
+                            <li key={group.id}>
+                              <Link
+                                href={`${audience}?id=${encodeURIComponent(group.id)}`}
+                                className={cn(
+                                  overviewInsetItemClassName,
+                                  "flex items-center justify-between gap-2",
+                                )}
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{group.name}</p>
+                                  <p className="text-xs text-muted-foreground">{group.domain}</p>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <p className="text-sm tabular-nums font-medium">
+                                    {group.contactCount.toLocaleString()}
+                                  </p>
+                                  {group.lastSyncStatus === "error" ? (
+                                    <Badge variant="destructive" className="mt-0.5 text-[10px]">
+                                      Sync error
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </OverviewExpandableBody>
                   </CardContent>
                 </Card>
               </div>

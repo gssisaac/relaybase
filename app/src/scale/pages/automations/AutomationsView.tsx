@@ -15,7 +15,7 @@ function AutomationsRoute() {
   if (detail) {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <AutomationDetailProvider key={detail.automationId} automationId={detail.automationId}>
+        <AutomationDetailProvider automationId={detail.automationId}>
           <AutomationDetailSwitch tab={detail.tab} />
         </AutomationDetailProvider>
       </div>

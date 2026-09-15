@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, BarChart3, Mail, Settings, Zap } from "lucide-react";
+import { ArrowLeft, BarChart3, Eye, Settings, Zap } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -11,12 +11,13 @@ import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { AutomationStatusBadge } from "@/scale/components/AutomationStatusBadge";
 import { automationDetailNavTabs } from "@/scale/lib/automation-detail-nav";
 import { automationDetailHref, useScalePaths, type AutomationDetailTab } from "@/scale/lib/paths";
+import { AutomationDetailSidebar } from "@/scale/pages/automations/AutomationDetailSidebar";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 const NAV: { id: AutomationDetailTab; label: string; icon: LucideIcon }[] = [
-  { id: "content", label: "Content", icon: Mail },
+  { id: "preview", label: "Preview", icon: Eye },
   { id: "trigger", label: "Trigger", icon: Zap },
   { id: "stats", label: "Stats", icon: BarChart3 },
   { id: "settings", label: "Settings", icon: Settings },
@@ -47,7 +48,9 @@ export function AutomationDetailShell({
     .filter((item): item is (typeof NAV)[number] => item != null);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <AutomationDetailSidebar />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar className="gap-2 px-4 py-3">
         <div
           className={cn(
@@ -118,6 +121,7 @@ export function AutomationDetailShell({
         >
           {children}
         </div>
+      </div>
       </div>
     </div>
   );

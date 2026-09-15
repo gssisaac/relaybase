@@ -28,6 +28,10 @@ import {
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { AutomationStatusBadge } from "@/scale/components/AutomationStatusBadge";
 import { automationStatsLine, automationTriggerSummary } from "@/scale/lib/automation-trigger-label";
+import {
+  replaceAutomationSidebarList,
+  upsertAutomationSidebarListRow,
+} from "@/scale/lib/automation-sidebar-list";
 import { automationDetailHref } from "@/scale/lib/paths";
 import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import {
@@ -77,6 +81,7 @@ export function AutomationsListView() {
     try {
       const list = await scaleApi.listAutomations();
       setRows(list.automations);
+      replaceAutomationSidebarList(list.automations);
     } catch {
       toast.error("Could not load automations");
     } finally {
@@ -138,10 +143,11 @@ export function AutomationsListView() {
     setCreating(true);
     try {
       const created = await scaleApi.createAutomation({ name, domain, purpose: newPurpose });
+      upsertAutomationSidebarListRow(created);
       toast.success(`Automation '${created.name}' created`);
       setCreateOpen(false);
       resetCreate();
-      router.push(automationDetailHref(created.id, "content", created.status));
+      router.push(automationDetailHref(created.id, "preview", created.status));
     } catch (e) {
       toast.error(e instanceof ScaleApiError ? e.message : "Could not create automation");
       setCreating(false);

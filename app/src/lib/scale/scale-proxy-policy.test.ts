@@ -48,4 +48,19 @@ describe("shouldProxyRequestToScale", () => {
       true,
     );
   });
+
+  it("serves automation content edit UI without API header", () => {
+    assert.equal(shouldProxyRequestToScale("/scale/automations", "GET", headers()), false);
+    assert.equal(
+      shouldProxyRequestToScale("/scale/automations/edit", "GET", headers()),
+      false,
+    );
+  });
+
+  it("proxies automation API detail with Scale API header", () => {
+    assert.equal(
+      shouldProxyRequestToScale("/scale/automations/automation_abc", "GET", headers(true)),
+      true,
+    );
+  });
 });

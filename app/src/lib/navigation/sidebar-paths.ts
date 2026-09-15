@@ -232,8 +232,51 @@ export function normalizeEntryPath(path: string): string {
     return `/scale/broadcasts?${next.toString()}`;
   }
 
+  const scaleAutomationEditMatch = pathname.match(/^\/scale\/automations\/([^/]+)\/content\/?$/);
+  if (scaleAutomationEditMatch) {
+    let automationId = scaleAutomationEditMatch[1]!;
+    if (automationId !== "edit") {
+      try {
+        automationId = decodeURIComponent(automationId);
+      } catch {
+        /* keep raw */
+      }
+      const next = new URLSearchParams();
+      next.set("id", automationId);
+      return `/scale/automations/edit?${next.toString()}`;
+    }
+  }
+
+  const scaleAutomationMatch = pathname.match(
+    /^\/scale\/automations\/([^/]+)(?:\/(preview|content|trigger|activity|stats|settings))?\/?$/,
+  );
+  if (scaleAutomationMatch) {
+    let automationId = scaleAutomationMatch[1]!;
+    if (automationId !== "edit") {
+      try {
+        automationId = decodeURIComponent(automationId);
+      } catch {
+        /* keep raw */
+      }
+      const tabSeg = scaleAutomationMatch[2];
+      if (tabSeg === "content") {
+        const next = new URLSearchParams();
+        next.set("id", automationId);
+        return `/scale/automations/edit?${next.toString()}`;
+      }
+      const next = new URLSearchParams();
+      next.set("id", automationId);
+      if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
+        next.set("tab", tabSeg);
+      } else if (tabSeg === "activity") {
+        next.set("tab", "stats");
+      }
+      return `/scale/automations?${next.toString()}`;
+    }
+  }
+
   const legacyCrmAutomationMatch = pathname.match(
-    /^\/crm\/automations\/([^/]+)(?:\/(content|trigger|activity|stats|settings))?\/?$/,
+    /^\/crm\/automations\/([^/]+)(?:\/(content|preview|trigger|activity|stats|settings))?\/?$/,
   );
   if (legacyCrmAutomationMatch) {
     let automationId = legacyCrmAutomationMatch[1]!;
@@ -242,10 +285,15 @@ export function normalizeEntryPath(path: string): string {
     } catch {
       /* keep raw */
     }
+    const tabSeg = legacyCrmAutomationMatch[2];
+    if (tabSeg === "content") {
+      const next = new URLSearchParams();
+      next.set("id", automationId);
+      return `/scale/automations/edit?${next.toString()}`;
+    }
     const next = new URLSearchParams();
     next.set("id", automationId);
-    const tabSeg = legacyCrmAutomationMatch[2];
-    if (tabSeg === "content" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
+    if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     } else if (tabSeg === "activity") {
       next.set("tab", "stats");

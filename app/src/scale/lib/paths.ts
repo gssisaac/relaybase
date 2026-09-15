@@ -125,21 +125,21 @@ export function broadcastDetailFromSearch(searchParams: {
   return { broadcastId, tab };
 }
 
-export type AutomationDetailTab = "content" | "trigger" | "stats" | "settings";
+export type AutomationDetailTab = "preview" | "trigger" | "stats" | "settings";
 
 function automationDetailTabQueryParam(
   tab: AutomationDetailTab,
   status: AutomationStatus | undefined,
 ): AutomationDetailTab | null {
   if (!status || status === "draft") {
-    return tab === "content" ? null : tab;
+    return tab === "preview" ? null : tab;
   }
   return tab === "stats" ? null : tab;
 }
 
 export function automationDetailHref(
   id: string,
-  tab: AutomationDetailTab = "content",
+  tab: AutomationDetailTab = "preview",
   status?: AutomationStatus,
 ): string {
   const params = new URLSearchParams();
@@ -147,6 +147,12 @@ export function automationDetailHref(
   const tabParam = automationDetailTabQueryParam(tab, status);
   if (tabParam) params.set("tab", tabParam);
   return `/scale/automations?${params.toString()}`;
+}
+
+export function automationContentEditHref(id: string): string {
+  const params = new URLSearchParams();
+  params.set("id", id.trim());
+  return `/scale/automations/edit?${params.toString()}`;
 }
 
 export function automationDetailFromSearch(searchParams: {
@@ -158,14 +164,16 @@ export function automationDetailFromSearch(searchParams: {
   if (!raw) {
     return { automationId, tab: null };
   }
-  let tab: AutomationDetailTab = "content";
+  let tab: AutomationDetailTab = "preview";
   if (raw === "activity") {
     tab = "stats";
+  } else if (raw === "content") {
+    tab = "preview";
   } else if (
+    raw === "preview" ||
     raw === "trigger" ||
     raw === "stats" ||
-    raw === "settings" ||
-    raw === "content"
+    raw === "settings"
   ) {
     tab = raw;
   }

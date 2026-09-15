@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { upsertAutomationSidebarListRow } from "@/scale/lib/automation-sidebar-list";
 import { scaleApi, type Automation, type ScaleTemplate } from "@/lib/scale/api";
 
 type DraftFields = {
@@ -80,6 +81,7 @@ export function AutomationDetailProvider({
         scaleApi.listTemplates(),
       ]);
       setAutomation(row);
+      upsertAutomationSidebarListRow(row);
       setTemplates(t.templates);
       setNotFound(false);
       const fields: DraftFields = {
@@ -103,9 +105,10 @@ export function AutomationDetailProvider({
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
+    setAutomation(null);
     lastSaved.current = null;
     void refresh();
-  }, [refresh]);
+  }, [automationId, refresh]);
 
   const syncDraft = useCallback((fields: DraftFields) => {
     draftRef.current = fields;
@@ -143,6 +146,7 @@ export function AutomationDetailProvider({
       .then((updated) => {
         lastSaved.current = next;
         setAutomation(updated);
+        upsertAutomationSidebarListRow(updated);
         return true;
       })
       .catch(() => false)
@@ -161,7 +165,10 @@ export function AutomationDetailProvider({
         templates,
         loading,
         notFound,
-        setAutomation,
+        setAutomation: (next) => {
+          setAutomation(next);
+          upsertAutomationSidebarListRow(next);
+        },
         refresh,
         refreshTemplates,
         syncDraft,

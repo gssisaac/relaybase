@@ -8,6 +8,7 @@ const SCALE_UI_GET_PATHS = new Set([
   "/scale/broadcasts/sent",
   "/scale/broadcasts/in-progress",
   "/scale/automations",
+  "/scale/automations/edit",
   "/scale/schedule",
 ]);
 

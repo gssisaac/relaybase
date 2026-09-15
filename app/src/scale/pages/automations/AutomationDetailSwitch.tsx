@@ -1,50 +1,21 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
-import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import {
   defaultAutomationDetailTab,
   normalizeAutomationDetailTab,
 } from "@/scale/lib/automation-detail-nav";
-import { automationDetailHref, useScalePaths, type AutomationDetailTab } from "@/scale/lib/paths";
-import { AutomationContentView } from "@/scale/pages/automations/AutomationContentView";
+import { automationDetailHref, type AutomationDetailTab } from "@/scale/lib/paths";
 import { AutomationDetailShell } from "@/scale/pages/automations/AutomationDetailShell";
+import { AutomationPreviewView } from "@/scale/pages/automations/AutomationPreviewView";
 import { AutomationSettingsView } from "@/scale/pages/automations/AutomationSettingsView";
 import { AutomationStatsView } from "@/scale/pages/automations/AutomationStatsView";
 import { AutomationTriggerView } from "@/scale/pages/automations/AutomationTriggerView";
 import { useAutomationDetail } from "@/scale/pages/automations/AutomationDetailContext";
-
-function AutomationNotFound() {
-  const { automations } = useScalePaths();
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <DesktopTitleBar className="px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="-ml-2"
-            nativeButton={false}
-            aria-label="Back"
-            render={<Link href={automations} />}
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-          </Button>
-          <h1 className="truncate text-sm font-semibold">Automation not found</h1>
-        </div>
-      </DesktopTitleBar>
-      <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
-        This automation does not exist or was removed.
-      </div>
-    </div>
-  );
-}
 
 export function AutomationDetailSwitch({ tab }: { tab: AutomationDetailTab | null }) {
   const router = useRouter();
@@ -55,7 +26,7 @@ export function AutomationDetailSwitch({ tab }: { tab: AutomationDetailTab | nul
         tab ?? defaultAutomationDetailTab(automation.status),
         automation.status,
       )
-    : tab ?? "content";
+    : normalizeAutomationDetailTab(tab ?? "preview", "draft");
 
   useEffect(() => {
     if (!automation || tab === null) return;
@@ -64,21 +35,29 @@ export function AutomationDetailSwitch({ tab }: { tab: AutomationDetailTab | nul
     }
   }, [automation, automationId, resolvedTab, router, tab]);
 
-  if (loading && !automation) {
-    return (
-      <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
-        Loading…
-      </div>
-    );
-  }
-  if (notFound || !automation) return <AutomationNotFound />;
+  const fill = resolvedTab === "preview";
 
   return (
-    <AutomationDetailShell section={resolvedTab} fill={resolvedTab === "content"}>
-      {resolvedTab === "content" ? <AutomationContentView /> : null}
-      {resolvedTab === "trigger" ? <AutomationTriggerView /> : null}
-      {resolvedTab === "stats" ? <AutomationStatsView /> : null}
-      {resolvedTab === "settings" ? <AutomationSettingsView /> : null}
+    <AutomationDetailShell section={resolvedTab} fill={fill}>
+      {notFound && !loading ? (
+        <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
+          This automation does not exist or was removed.{" "}
+          <Link href="/scale/automations" className="text-primary underline-offset-4 hover:underline">
+            Back to automations
+          </Link>
+        </div>
+      ) : loading && !automation ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-sm text-muted-foreground">
+          Loading…
+        </div>
+      ) : (
+        <>
+          {resolvedTab === "preview" ? <AutomationPreviewView /> : null}
+          {resolvedTab === "trigger" ? <AutomationTriggerView /> : null}
+          {resolvedTab === "stats" ? <AutomationStatsView /> : null}
+          {resolvedTab === "settings" ? <AutomationSettingsView /> : null}
+        </>
+      )}
     </AutomationDetailShell>
   );
 }

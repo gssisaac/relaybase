@@ -221,11 +221,6 @@ export function AutomationContentView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {automation.status === "active" ? (
-        <div className="shrink-0 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
-          Active automations apply content changes on the next send.
-        </div>
-      ) : null}
       <BroadcastComposeForm
         broadcastId={automationId}
         assetOwner="automation"

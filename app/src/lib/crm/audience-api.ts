@@ -38,6 +38,7 @@ export const crmAudienceApi = {
   createGroup: (input: {
     name: string;
     domain: string;
+    workerUrl?: string;
     dataSource?: {
       type: "generic_json";
       endpointUrl: string;
@@ -54,6 +55,8 @@ export const crmAudienceApi = {
     groupId: string,
     input: Partial<{
       name: string;
+      domain: string;
+      workerUrl?: string;
       defaultFrom: string | null;
       cronEnabled: boolean;
       cronIntervalMinutes: number;

@@ -243,6 +243,7 @@ crmAudience.post("/", async (c) => {
   let body: {
     name?: string;
     domain?: string;
+    workerUrl?: string;
     dataSource?: AudienceDataSource;
   };
   try {
@@ -256,6 +257,12 @@ crmAudience.post("/", async (c) => {
   if (!name || !domain) {
     return c.json({ error: "name and domain are required" }, 400);
   }
+
+  const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
+  store.update((draft) => {
+    draft.account.domain = domain;
+    if (workerUrl) draft.account.workerUrl = workerUrl;
+  });
 
   const id = newId("audience");
   const now = new Date().toISOString();
@@ -309,6 +316,8 @@ crmAudience.patch("/:id", async (c) => {
 
   let body: {
     name?: string;
+    domain?: string;
+    workerUrl?: string;
     defaultFrom?: string | null;
     cronEnabled?: boolean;
     cronIntervalMinutes?: number;
@@ -320,13 +329,40 @@ crmAudience.patch("/:id", async (c) => {
     return c.json({ error: "invalid JSON body" }, 400);
   }
 
+  const domainPatch = body.domain?.trim().toLowerCase();
+  if (domainPatch !== undefined && !domainPatch) {
+    return c.json({ error: "Select a sending domain" }, 400);
+  }
+
+  const workerUrl = body.workerUrl?.trim().replace(/\/$/, "") || null;
+  const activeDomain = domainPatch ?? existing.domain;
+  if (body.defaultFrom !== undefined) {
+    const nextFrom = body.defaultFrom?.trim() || null;
+    if (nextFrom && !nextFrom.toLowerCase().endsWith(`@${activeDomain}`)) {
+      return c.json({ error: "Default sender must be an address on the selected domain" }, 400);
+    }
+  }
+
   const dataSourceTouched = body.dataSource !== undefined;
   store.update((draft) => {
+    if (domainPatch) {
+      draft.account.domain = domainPatch;
+      if (workerUrl) draft.account.workerUrl = workerUrl;
+    }
     const idx = draft.audienceGroups.findIndex((g) => g.id === id);
     if (idx < 0) return;
     const g = draft.audienceGroups[idx]!;
     if (body.name !== undefined) g.name = body.name.trim() || g.name;
-    if (body.defaultFrom !== undefined) g.defaultFrom = body.defaultFrom?.trim() || null;
+    if (domainPatch !== undefined && domainPatch !== g.domain) {
+      g.domain = domainPatch;
+      const from = g.defaultFrom?.trim().toLowerCase();
+      if (from && !from.endsWith(`@${domainPatch}`)) {
+        g.defaultFrom = null;
+      }
+    }
+    if (body.defaultFrom !== undefined) {
+      g.defaultFrom = body.defaultFrom?.trim() || null;
+    }
     if (body.cronEnabled !== undefined) g.cronEnabled = body.cronEnabled;
     if (body.cronIntervalMinutes !== undefined) {
       g.cronIntervalMinutes = Math.max(15, Number(body.cronIntervalMinutes) || 60);

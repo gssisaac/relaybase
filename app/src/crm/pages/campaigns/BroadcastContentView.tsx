@@ -9,6 +9,7 @@ import {
   resolvePreviewRecipient,
   type PreviewPersonaId,
 } from "@/crm/lib/broadcast-merge-tags";
+import { prepareBroadcastTemplateHtml } from "@/crm/lib/broadcast-standard-footer";
 import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
 import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
@@ -134,22 +135,26 @@ export function BroadcastContentView() {
     [subject, previewRecipient, previewMergeOptions],
   );
 
+  const preparedTemplateHtml = useMemo(
+    () => prepareBroadcastTemplateHtml(template?.htmlSource ?? "", templateId),
+    [template?.htmlSource, templateId],
+  );
+
   const renderedPreview = useMemo(() => {
     if (plainTextTemplate) {
       const body = bodyMarkdown.trim() || "Nothing to preview yet";
-      const wrapped =
-        template?.htmlSource.replaceAll("{{content}}", body) ??
-        `${body}\n\n---\nUnsubscribe: {{unsubscribe_url}}`;
+      const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyBroadcastMergeTags(wrapped, previewRecipient, previewMergeOptions);
     }
     const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
     if (!template) {
       return applyBroadcastMergeTags(content, previewRecipient, previewMergeOptions);
     }
-    const wrapped = template.htmlSource.replaceAll("{{content}}", content);
+    const wrapped = preparedTemplateHtml.replaceAll("{{content}}", content);
     return applyBroadcastMergeTags(wrapped, previewRecipient, previewMergeOptions);
   }, [
     template,
+    preparedTemplateHtml,
     plainTextTemplate,
     bodyMarkdown,
     previewHtml,

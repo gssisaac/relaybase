@@ -323,9 +323,14 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
     }
   }
 
-  const templateIds = new Set(store.templates.map((t) => t.id));
   for (const tpl of BUILTIN_TEMPLATES) {
-    if (templateIds.has(tpl.id)) continue;
+    const existing = store.templates.find((t) => t.id === tpl.id);
+    if (existing?.isBuiltin) {
+      existing.name = tpl.name;
+      existing.htmlSource = tpl.htmlSource;
+      continue;
+    }
+    if (existing) continue;
     store.templates.push({
       id: tpl.id,
       accountLinkId: null,

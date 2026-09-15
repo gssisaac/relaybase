@@ -6,8 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { AudienceDataSourceGuide } from "@/crm/pages/audience/AudienceDataSourceGuide";
-import { useDomain } from "@/lib/dashboard/DomainContext";
+import { useWorkerDomains } from "@/crm/lib/use-worker-domains";
 import { useAudienceRoutes } from "@/crm/pages/audience/AudienceRouteContext";
+import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
@@ -82,12 +83,11 @@ function friendlyCrmError(e: unknown, fallback: string): string {
 export function AudienceGroupsView() {
   const router = useRouter();
   const { audienceDetailHref } = useAudienceRoutes();
-  const { domains } = useDomain();
-  const readyDomains = useMemo(
-    () =>
-      domains.filter((d) => !d.onboarding || d.onboarding.status === "ready"),
-    [domains],
-  );
+  const {
+    readyDomains,
+    loading: workerDomainsLoading,
+    refresh: refreshWorkerDomains,
+  } = useWorkerDomains();
 
   const [groups, setGroups] = useState<AudienceGroupSummary[]>([]);
   const [search, setSearch] = useState("");
@@ -183,9 +183,11 @@ export function AudienceGroupsView() {
     setRegistering(true);
     setError(null);
     try {
+      const workerUrl = resolveEmailApiBase();
       const data = await crmAudienceApi.createGroup({
         name,
         domain,
+        ...(workerUrl ? { workerUrl } : {}),
         dataSource: useDataSource
           ? {
               type: "generic_json",
@@ -216,7 +218,10 @@ export function AudienceGroupsView() {
         open={addOpen}
         onOpenChange={(open) => {
           setAddOpen(open);
-          if (open) resetAddForm();
+          if (open) {
+            void refreshWorkerDomains();
+            resetAddForm();
+          }
         }}
       >
         <DesktopTitleBar
@@ -253,8 +258,8 @@ export function AudienceGroupsView() {
           <DialogHeader>
             <DialogTitle>Add audience group</DialogTitle>
             <DialogDescription>
-              Groups belong to a domain and can optionally sync contacts from
-              an external endpoint.
+              Choose a sending domain from your Worker, then optionally sync
+              contacts from an external endpoint.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
@@ -280,11 +285,18 @@ export function AudienceGroupsView() {
                   ))}
                 </SelectContent>
               </Select>
-              {readyDomains.length === 0 ? (
+              {workerDomainsLoading ? (
+                <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
+              ) : readyDomains.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  No ready domains yet — finish onboarding a domain first.
+                  No domains on your Worker — add one in Console → Domains.
                 </p>
-              ) : null}
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Contact emails (e.g. mock @relaybase.email) are recipients only — not this
+                  sending domain.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2 rounded-lg border border-border/60 p-3">

@@ -169,6 +169,7 @@ export function BroadcastComposeSidebar({
     subject,
     bodyMarkdown,
     templateHtml: template?.htmlSource ?? "",
+    templateId,
     fromEmail,
     fromName,
     compliance,

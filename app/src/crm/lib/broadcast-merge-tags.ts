@@ -63,6 +63,14 @@ export const BROADCAST_MERGE_TAGS: BroadcastMergeTag[] = [
     category: "system",
     example: "https://…/crm/unsubscribe/…",
   },
+  {
+    id: "compliance-footer",
+    token: "{{compliance_footer}}",
+    label: "Compliance footer block",
+    description: "Built-in templates use this placeholder; expands to org, address, contact, and unsubscribe.",
+    category: "system",
+    example: "(auto-expanded in preview and at send)",
+  },
 ];
 
 export const MERGE_TAG_CATEGORIES: { id: BroadcastMergeTagCategory; label: string }[] = [

@@ -1,3 +1,4 @@
+import { prepareBroadcastTemplateHtml } from "@/crm/lib/broadcast-standard-footer";
 import type { CrmAccountCompliance } from "@/lib/crm/api";
 
 export type PreflightCheck = {
@@ -11,11 +12,16 @@ export function runBroadcastPreflight(input: {
   subject: string;
   bodyMarkdown: string;
   templateHtml: string;
+  templateId?: string | null;
   fromEmail: string | null;
   fromName: string | null;
   compliance: CrmAccountCompliance | null | undefined;
 }): PreflightCheck[] {
-  const combined = `${input.templateHtml}\n${input.bodyMarkdown}`;
+  const preparedTemplate = prepareBroadcastTemplateHtml(
+    input.templateHtml,
+    input.templateId,
+  );
+  const combined = `${preparedTemplate}\n${input.bodyMarkdown}`;
   const hasUnsubscribeInTemplate = combined.includes("{{unsubscribe_url}}");
   const compliance = input.compliance;
 
@@ -37,8 +43,8 @@ export function runBroadcastPreflight(input: {
       label: "Unsubscribe link",
       status: hasUnsubscribeInTemplate ? "pass" : "warn",
       detail: hasUnsubscribeInTemplate
-        ? "Template or body includes {{unsubscribe_url}} (footer on built-in templates)."
-        : "Add {{unsubscribe_url}} or use a built-in template with footer.",
+        ? "Standard compliance footer includes {{unsubscribe_url}}."
+        : "Footer could not be resolved — check template HTML.",
     },
     {
       id: "from",

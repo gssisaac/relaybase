@@ -1,6 +1,7 @@
 import { marked } from "marked";
 
 import { isPlainTextTemplate } from "./builtin-templates";
+import { prepareBroadcastTemplateHtml } from "./broadcast-standard-footer";
 import { applyComplianceMergeTags } from "./compliance-footer";
 
 /**
@@ -141,9 +142,14 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
     input.unsubscribeToken,
   );
 
+  const templateHtml = prepareBroadcastTemplateHtml(
+    input.templateHtml,
+    input.templateId,
+  );
+
   if (isPlainTextTemplate(input.templateId)) {
     const merged = applyRecipientMergeTags(
-      input.templateHtml.replaceAll("{{content}}", input.bodyMarkdown ?? ""),
+      templateHtml.replaceAll("{{content}}", input.bodyMarkdown ?? ""),
       input.recipient,
       unsubscribeUrl,
     );
@@ -159,7 +165,7 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
     input.crmBaseUrl,
   );
 
-  let html = input.templateHtml
+  let html = templateHtml
     .replaceAll("{{content}}", contentHtml)
     .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
 

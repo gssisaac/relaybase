@@ -3,24 +3,18 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { useDomainAddresses } from "@/crm/lib/use-domain-addresses";
+import { useWorkerDomains } from "@/crm/lib/use-worker-domains";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { useEmailPaths } from "@/email/lib/paths";
 import { useAudienceRoutes } from "@/crm/pages/audience/AudienceRouteContext";
 import { CrmApiError, crmAudienceApi } from "@/lib/crm/audience-api";
+import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { AudienceDataSourceGuide } from "@/crm/pages/audience/AudienceDataSourceGuide";
 import {
   clearAudienceGroupDetailCache,
   useAudienceGroupDetail,
 } from "@/crm/pages/audience/AudienceGroupDetailContext";
-import { fetchEmailCachedOptional } from "@/email/components/mailbox/email-cached-fetch";
-import { readEmailStale } from "@/email/components/mailbox/useEmailViewLoading";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
-import type { Address } from "@/email/components/mailbox/types";
-import {
-  desktopAwareFetch,
-  friendlyDesktopFetchError,
-  readResponseJson,
-} from "@/lib/desktop/api";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -73,14 +67,16 @@ const CRON_INTERVALS = [
 
 export function AudienceGroupSettingsView() {
   const productId = useProductId();
-  const { apiBase } = useEmailPaths();
   const { audienceRoot } = useAudienceRoutes();
   const router = useRouter();
   const { groupId, detail, refresh } = useAudienceGroupDetail();
+  const { readyDomainNames, loading: domainsLoading, refresh: refreshWorkerDomains } =
+    useWorkerDomains();
 
   const [name, setName] = useState("");
+  const [groupDomain, setGroupDomain] = useState<string | null>(null);
   const [defaultFrom, setDefaultFrom] = useState<string | null>(null);
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const { domainAddresses, loading: addressesLoading } = useDomainAddresses(groupDomain);
   const [useDataSource, setUseDataSource] = useState(false);
   const [endpointUrl, setEndpointUrl] = useState("");
   const [credential, setCredential] = useState("");
@@ -98,32 +94,22 @@ export function AudienceGroupSettingsView() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const domainAddresses = useMemo(() => {
-    const domain = detail?.group.domain;
-    if (!domain) return [];
-    return addresses.filter((a) => a.domain === domain);
-  }, [addresses, detail?.group.domain]);
-
   useEffect(() => {
-    const stale = readEmailStale<{ addresses?: Address[] }>(
-      productId,
-      "addresses:all",
-    );
-    if (stale) setAddresses(stale.addresses ?? []);
-    void fetchEmailCachedOptional<{ addresses?: Address[] }>(
-      productId,
-      "addresses:all",
-      `${apiBase}/addresses?all=1`,
-      { onUpdate: (data) => setAddresses(data?.addresses ?? []) },
-    ).then((r) => {
-      if (r.ok) setAddresses(r.data?.addresses ?? []);
-    });
-  }, [apiBase, productId]);
+    void refreshWorkerDomains();
+  }, [refreshWorkerDomains]);
+
+  const domainOptionValues = useMemo(() => {
+    const values = new Set(readyDomainNames);
+    const pinned = (groupDomain ?? detail?.group.domain)?.trim();
+    if (pinned) values.add(pinned);
+    return [...values].sort((a, b) => a.localeCompare(b));
+  }, [readyDomainNames, groupDomain, detail?.group.domain]);
 
   useEffect(() => {
     if (!detail) return;
     const { group } = detail;
     setName(group.name);
+    setGroupDomain(group.domain);
     setDefaultFrom(group.defaultFrom ?? null);
     setUseDataSource(Boolean(group.dataSource));
     setEndpointUrl(group.dataSource?.endpointUrl ?? "");
@@ -184,8 +170,15 @@ export function AudienceGroupSettingsView() {
           }
         : null;
 
+      if (!groupDomain) {
+        setError("Select a sending domain");
+        return;
+      }
+      const workerUrl = resolveEmailApiBase();
       await crmAudienceApi.updateGroup(groupId, {
         name,
+        domain: groupDomain,
+        ...(workerUrl ? { workerUrl } : {}),
         defaultFrom: defaultFrom || null,
         cronEnabled,
         cronIntervalMinutes: Number(cronIntervalMinutes),
@@ -234,6 +227,7 @@ export function AudienceGroupSettingsView() {
   // Token can be left blank when one is already stored.
   const canSave =
     name.trim().length > 0 &&
+    Boolean(groupDomain) &&
     (!useDataSource ||
       !dataSourceEdited ||
       (testState.status === "success" &&
@@ -258,13 +252,61 @@ export function AudienceGroupSettingsView() {
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1">
+            <Label className="text-xs">Domain</Label>
+            <Select
+              value={groupDomain}
+              onValueChange={(next) => {
+                if (!next) {
+                  setGroupDomain(null);
+                  return;
+                }
+                setGroupDomain(next);
+                if (
+                  defaultFrom &&
+                  !defaultFrom.toLowerCase().endsWith(`@${next.toLowerCase()}`)
+                ) {
+                  setDefaultFrom(null);
+                }
+              }}
+              disabled={domainsLoading && domainOptionValues.length === 0}
+            >
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue
+                  placeholder={
+                    domainsLoading ? "Loading domains…" : "Select sending domain"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {domainOptionValues.map((domain) => (
+                  <SelectItem key={domain} value={domain}>
+                    {domain}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Sending domain from your Worker catalog (same as broadcast create). Recipient
+              contact addresses are unrelated.
+            </p>
+          </div>
+          <div className="space-y-1">
             <Label className="text-xs">Default sender</Label>
             <Select
               value={defaultFrom}
               onValueChange={(v) => setDefaultFrom(v)}
+              disabled={!groupDomain || addressesLoading || domainAddresses.length === 0}
             >
               <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="Select sender" />
+                <SelectValue
+                  placeholder={
+                    !groupDomain
+                      ? "Select a domain first"
+                      : addressesLoading
+                        ? "Loading accounts…"
+                        : "Select sender"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {domainAddresses.map((a) => (
@@ -275,9 +317,9 @@ export function AudienceGroupSettingsView() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Used as the From address when sending broadcasts from this group.
-              {domainAddresses.length === 0
-                ? " Add a sender on this domain in Accounts first."
+              From address on the selected domain when sending broadcasts to this group.
+              {domainAddresses.length === 0 && groupDomain && !addressesLoading
+                ? " Add a sender on this domain in Console → Accounts."
                 : null}
             </p>
           </div>

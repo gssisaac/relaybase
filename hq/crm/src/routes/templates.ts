@@ -1,5 +1,9 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
+import {
+  COMPLIANCE_FOOTER_TAG,
+  templateHasEmbeddedComplianceFooter,
+} from "../lib/broadcast-standard-footer";
 import { newId } from "../lib/ids";
 import type { Template } from "../db/types";
 
@@ -45,8 +49,13 @@ crmTemplates.post("/", async (c) => {
     );
   }
 
+  let resolvedHtml = htmlSource;
+  if (!templateHasEmbeddedComplianceFooter(htmlSource)) {
+    resolvedHtml = `${htmlSource.trimEnd()}\n${COMPLIANCE_FOOTER_TAG}`;
+  }
+
   const warnings: string[] = [];
-  if (!htmlSource.includes("{{unsubscribe_url}}")) {
+  if (!resolvedHtml.includes("{{unsubscribe_url}}") && !resolvedHtml.includes(COMPLIANCE_FOOTER_TAG)) {
     warnings.push("Missing unsubscribe link increases spam-report risk.");
   }
 
@@ -58,7 +67,7 @@ crmTemplates.post("/", async (c) => {
       id,
       accountLinkId: DEV_ACCOUNT_LINK_ID,
       name,
-      htmlSource,
+      htmlSource: resolvedHtml,
       isBuiltin: false,
       createdAt: now,
     };

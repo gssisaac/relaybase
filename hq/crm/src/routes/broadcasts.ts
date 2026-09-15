@@ -19,12 +19,20 @@ import { emptyBroadcastStats } from "../lib/broadcasts/stats";
 import { sendMail } from "../lib/mail/sender";
 import { buildListUnsubscribeUrl, renderBroadcastForRecipient } from "../lib/render/render";
 import { CRM_PUBLIC_BASE_URL } from "../lib/shared/crm-url";
-import { newId } from "../lib/shared/ids";
+import { newId, newToken } from "../lib/shared/ids";
 import { crmBroadcastAudience } from "./broadcast-audience";
 
 export const crmBroadcasts = new Hono();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function resolveTestSendUnsubscribeToken(broadcast: Broadcast, toEmail: string): string {
+  if (!broadcast.audienceGroupId) return newToken();
+  const group = findAudienceGroup(broadcast.audienceGroupId);
+  const normalized = toEmail.trim().toLowerCase();
+  const contact = group?.contacts.find((c) => c.email.trim().toLowerCase() === normalized);
+  return contact?.unsubscribeToken ?? newToken();
+}
 
 /** Atomically move draft → sending so duplicate POST /send cannot double-dispatch. */
 function claimBroadcastForSend(id: string): Broadcast | null {
@@ -412,6 +420,7 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
     getBroadcastTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ??
     "<div>{{content}}</div>";
   const templateId = broadcast.templateId ?? broadcast.defaultTemplateId;
+  const unsubscribeToken = resolveTestSendUnsubscribeToken(broadcast, to);
   const html = renderBroadcastForRecipient({
     broadcastId: broadcast.id,
     recipientId: "test",
@@ -421,10 +430,14 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
     templateVariablesSchema: getBroadcastTemplateSchema(templateId),
     templateVariables: broadcast.templateVariables ?? {},
     recipient: { email: to, name: "Test Recipient" },
-    unsubscribeToken: "test",
+    unsubscribeToken,
     crmBaseUrl: CRM_PUBLIC_BASE_URL,
   });
-  const listUnsubscribeUrl = buildListUnsubscribeUrl(CRM_PUBLIC_BASE_URL, broadcast.id, "test");
+  const listUnsubscribeUrl = buildListUnsubscribeUrl(
+    CRM_PUBLIC_BASE_URL,
+    broadcast.id,
+    unsubscribeToken,
+  );
   const result = await sendMail({
     to,
     from: broadcast.fromEmail.trim(),

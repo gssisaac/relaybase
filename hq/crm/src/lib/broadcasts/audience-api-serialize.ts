@@ -16,5 +16,7 @@ export function serializeBroadcastAudienceContact(
     bouncedAt: contact.bouncedAt ?? null,
     bounceReason: contact.bounceReason ?? null,
     addedAt: contact.addedAt,
+    /** Author-only; used for content preview unsubscribe URL (same as send-time token). */
+    unsubscribeToken: contact.unsubscribeToken,
   };
 }

@@ -1,4 +1,4 @@
-import { CRM_API_BASE } from "@/lib/crm/api-base";
+import { getCrmApiBase } from "@/lib/crm/api-base";
 
 /** Fix legacy upload URLs that encoded `campaignId/filename` as one path segment. */
 export function normalizeCampaignAssetUrl(url: string): string {
@@ -11,7 +11,7 @@ export function normalizeCampaignAssetUrl(url: string): string {
       const campaignId = parts[0];
       const filename = parts.slice(1).join("/");
       if (campaignId && filename) {
-        return `${CRM_API_BASE}/crm/assets/${encodeURIComponent(campaignId)}/${encodeURIComponent(filename)}`;
+        return `${getCrmApiBase()}/crm/assets/${encodeURIComponent(campaignId)}/${encodeURIComponent(filename)}`;
       }
     }
   } catch {

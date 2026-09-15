@@ -1,8 +1,8 @@
-import { CRM_API_BASE } from "@/lib/crm/api-base";
+import { getCrmApiBase } from "@/lib/crm/api-base";
 
 export const DEFAULT_BRAND_LOGO_FILENAME = "relaybase-icon.png";
 
-export function defaultBrandLogoUrl(crmBaseUrl: string = CRM_API_BASE): string {
+export function defaultBrandLogoUrl(crmBaseUrl: string = getCrmApiBase()): string {
   return `${crmBaseUrl.replace(/\/$/, "")}/crm/brand/${DEFAULT_BRAND_LOGO_FILENAME}`;
 }
 

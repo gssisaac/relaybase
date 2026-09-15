@@ -1,9 +1,10 @@
 /**
  * hq/crm client — Broadcast (audience + send) model.
  */
-import { CRM_API_BASE } from "./api-base";
+import { getCrmApiBase } from "./api-base";
+import { CRM_API_REQUEST_HEADER } from "./crm-origin";
 
-export { CRM_API_BASE };
+export { getCrmApiBase, CRM_PUBLIC_LINK_ORIGIN } from "./api-base";
 
 export type TemplateVariableField = {
   key: string;
@@ -95,6 +96,7 @@ export type BroadcastMember = {
   bouncedAt: string | null;
   bounceReason: string | null;
   addedAt: string;
+  unsubscribeToken?: string;
 };
 
 export type RecipientStatus =
@@ -217,13 +219,29 @@ class CrmApiError extends Error {
 }
 
 export async function crmFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${CRM_API_BASE}${path}`, {
+  const res = await fetch(`${getCrmApiBase()}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
+    headers: {
+      "content-type": "application/json",
+      [CRM_API_REQUEST_HEADER]: "1",
+      ...init?.headers,
+    },
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new CrmApiError(res.status, body?.error ?? `request failed (${res.status})`, body);
+    const fallback =
+      body?.error ??
+      (body === null && res.headers.get("content-type")?.includes("text/html")
+        ? "CRM API returned HTML — is hq/crm running (pnpm dev in hq/crm)?"
+        : `request failed (${res.status})`);
+    throw new CrmApiError(res.status, fallback, body);
+  }
+  if (body === null) {
+    throw new CrmApiError(
+      res.status,
+      "CRM API returned a non-JSON response — is hq/crm running on port 32831?",
+      null,
+    );
   }
   return body as T;
 }

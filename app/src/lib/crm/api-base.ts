@@ -1,2 +1,4 @@
-export const CRM_API_BASE =
-  process.env.NEXT_PUBLIC_CRM_API_BASE?.replace(/\/$/, "") ?? "http://localhost:32831";
+export {
+  CRM_PUBLIC_LINK_ORIGIN,
+  getCrmApiBase,
+} from "@/lib/crm/crm-origin";

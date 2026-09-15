@@ -1,4 +1,5 @@
-import { CRM_API_BASE } from "@/lib/crm/api-base";
+import { getCrmApiBase } from "@/lib/crm/api-base";
+import { CRM_API_REQUEST_HEADER } from "@/lib/crm/crm-origin";
 
 /**
  * Best-effort body PATCH on tab close (fetch keepalive). `path` is the
@@ -8,9 +9,12 @@ export function tryCampaignBeaconSave(path: string, bodyMarkdown: string): boole
   if (typeof fetch === "undefined") return false;
   try {
     const broadcastId = path.split("/").filter(Boolean).pop() ?? path;
-    void fetch(`${CRM_API_BASE}/crm/broadcasts/${encodeURIComponent(broadcastId)}`, {
+    void fetch(`${getCrmApiBase()}/crm/broadcasts/${encodeURIComponent(broadcastId)}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        [CRM_API_REQUEST_HEADER]: "1",
+      },
       body: JSON.stringify({ bodyMarkdown }),
       keepalive: true,
     });

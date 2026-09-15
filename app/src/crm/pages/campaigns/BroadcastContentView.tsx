@@ -26,6 +26,7 @@ import {
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
 } from "@/crm/lib/compliance-identity";
+import { buildPreviewUnsubscribeUrl } from "@/crm/lib/preview-unsubscribe-url";
 import { crmApi, type BroadcastStatus, type CrmAccountCompliance } from "@/lib/crm/api";
 import {
   useCampaignEditorPersistence,
@@ -164,7 +165,7 @@ export function BroadcastContentView() {
   const plainTextTemplate = isPlainTextTemplate(templateId);
   const previewMergeOptions = useMemo(
     () => ({
-      unsubscribeUrl: "#" as const,
+      unsubscribeUrl: buildPreviewUnsubscribeUrl(broadcastId, previewPersonaId, audienceMembers),
       compliancePreviewPlaceholders: true,
       compliancePlaceholderFormat: (plainTextTemplate ? "plain" : "html") as "plain" | "html",
       compliance: {
@@ -173,7 +174,7 @@ export function BroadcastContentView() {
         complianceContactEmail: compliance?.contactEmail ?? null,
       },
     }),
-    [compliance, plainTextTemplate],
+    [broadcastId, previewPersonaId, audienceMembers, compliance, plainTextTemplate],
   );
 
   const previewSubject = useMemo(

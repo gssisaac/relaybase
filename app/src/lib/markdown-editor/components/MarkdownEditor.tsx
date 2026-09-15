@@ -42,7 +42,7 @@ import {
   normalizeCampaignAssetUrl,
   normalizeCampaignAssetUrlsInHtml,
 } from "@/lib/markdown-editor/utils/asset-url";
-import { CRM_API_BASE } from "@/lib/crm/api-base";
+import { getCrmApiBase } from "@/lib/crm/api-base";
 import { cn } from "@/lib/utils";
 
 import "@blocknote/shadcn/style.css";
@@ -241,7 +241,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       const [cid, ...rest] = assetPath.split("/");
       const filename = rest.join("/");
       if (!cid || !filename) return url;
-      return `${CRM_API_BASE}/crm/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+      return `${getCrmApiBase()}/crm/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
     },
     pasteHandler: ({ event, editor: pasteEditor, defaultPasteHandler }) => {
       const files = collectTransferFiles(event.clipboardData);

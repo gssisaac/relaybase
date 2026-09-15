@@ -1,10 +1,12 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+import type { AudienceGroupContact, AudienceGroupSummary } from "@/email/components/mailbox/types";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -23,10 +25,65 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
-import { broadcastDetailHref } from "@/crm/lib/paths";
+import { crmAudienceDetailHref, broadcastDetailHref } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
+import { crmAudienceApi } from "@/lib/crm/audience-api";
 import { crmApi, CrmApiError } from "@/lib/crm/api";
+
+const PREVIEW_CONTACT_LIMIT = 40;
+
+type AudienceContactsDialog =
+  | { mode: "confirm"; groupId: string }
+  | { mode: "view"; groupId: string };
+
+function AudienceContactsList({
+  contacts,
+  loading,
+}: {
+  contacts: AudienceGroupContact[];
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        <Loader2 className="mr-2 size-4 animate-spin" />
+        Loading contacts…
+      </div>
+    );
+  }
+  return (
+    <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border">
+      <div className="divide-y divide-border">
+        {contacts.slice(0, PREVIEW_CONTACT_LIMIT).map((c) => (
+          <div key={c.id} className="px-3 py-2 text-sm">
+            <p className="truncate font-medium">{c.name || c.email}</p>
+            {c.name ? (
+              <p className="truncate text-xs text-muted-foreground">{c.email}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {contacts.length === 0 ? (
+        <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+          This group has no contacts yet.
+        </p>
+      ) : contacts.length > PREVIEW_CONTACT_LIMIT ? (
+        <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          Showing first {PREVIEW_CONTACT_LIMIT} of {contacts.length.toLocaleString()} contacts.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 function formatWhen(value?: string | null): string {
   if (!value) return "—";
@@ -40,8 +97,14 @@ function formatWhen(value?: string | null): string {
 
 export function BroadcastPublishView() {
   const router = useRouter();
-  const { broadcastId, broadcast, setBroadcast, persistDraft, refresh } =
-    useBroadcastDetail();
+  const {
+    broadcastId,
+    broadcast,
+    setBroadcast,
+    persistDraft,
+    refresh,
+    refreshAudience,
+  } = useBroadcastDetail();
 
   const [sending, setSending] = useState(false);
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
@@ -52,6 +115,14 @@ export function BroadcastPublishView() {
   const [scheduleAt, setScheduleAt] = useState("");
   const [duplicating, setDuplicating] = useState(false);
 
+  const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
+  const [audienceGroupsLoading, setAudienceGroupsLoading] = useState(false);
+  const [audienceContactsDialog, setAudienceContactsDialog] =
+    useState<AudienceContactsDialog | null>(null);
+  const [dialogContacts, setDialogContacts] = useState<AudienceGroupContact[]>([]);
+  const [dialogContactsLoading, setDialogContactsLoading] = useState(false);
+  const [savingAudience, setSavingAudience] = useState(false);
+
   useEffect(() => {
     if (broadcast?.status !== "sending") return;
     const timer = setInterval(() => {
@@ -60,11 +131,115 @@ export function BroadcastPublishView() {
     return () => clearInterval(timer);
   }, [broadcast?.status, refresh]);
 
+  const sendDomain = broadcast?.domain ?? broadcast?.audienceGroupDomain ?? null;
+
+  useEffect(() => {
+    if (!broadcast) return;
+    const canPickAudience =
+      broadcast.status === "draft" || broadcast.status === "scheduled";
+    if (!canPickAudience || !sendDomain) return;
+    setAudienceGroupsLoading(true);
+    crmAudienceApi
+      .listGroups()
+      .then(({ groups }) => setAudienceGroups(groups))
+      .catch(() => toast.error("Could not load audience groups"))
+      .finally(() => setAudienceGroupsLoading(false));
+  }, [broadcast, sendDomain]);
+
+  const groupsForDomain = useMemo(() => {
+    const d = sendDomain?.toLowerCase();
+    if (!d) return [];
+    return audienceGroups.filter((g) => g.domain.toLowerCase() === d);
+  }, [audienceGroups, sendDomain]);
+
+  const audienceSelectItems = useMemo(
+    () =>
+      groupsForDomain.map((g) => ({
+        value: g.id,
+        label: `${g.name} · ${g.contactCount} contacts`,
+      })),
+    [groupsForDomain],
+  );
+
   if (!broadcast) return null;
 
-  const editable = broadcast.status === "draft";
+  const canChangeAudience =
+    broadcast.status === "draft" || broadcast.status === "scheduled";
+  const editable = canChangeAudience;
   const recipientCount = broadcast.audienceActiveCount;
-  const canOpenSend = editable && !sending && Boolean(broadcast.subject.trim());
+  const hasLinkedAudience = Boolean(broadcast.audienceGroupId);
+  const canOpenSend =
+    editable &&
+    !sending &&
+    Boolean(broadcast.subject.trim()) &&
+    hasLinkedAudience &&
+    recipientCount > 0;
+
+  async function loadDialogContacts(groupId: string) {
+    setDialogContactsLoading(true);
+    setDialogContacts([]);
+    try {
+      const detail = await crmAudienceApi.getGroup(groupId);
+      setDialogContacts(detail.contacts);
+    } catch {
+      toast.error("Could not load audience contacts");
+      setAudienceContactsDialog(null);
+    } finally {
+      setDialogContactsLoading(false);
+    }
+  }
+
+  function openAudienceChangeConfirm(nextGroupId: string) {
+    if (nextGroupId === broadcast!.audienceGroupId) return;
+    setAudienceContactsDialog({ mode: "confirm", groupId: nextGroupId });
+    void loadDialogContacts(nextGroupId);
+  }
+
+  function openAudienceView() {
+    const groupId = broadcast!.audienceGroupId;
+    if (!groupId) return;
+    setAudienceContactsDialog({ mode: "view", groupId });
+    void loadDialogContacts(groupId);
+  }
+
+  function closeAudienceContactsDialog() {
+    if (savingAudience) return;
+    setAudienceContactsDialog(null);
+    setDialogContacts([]);
+  }
+
+  async function confirmAudienceChange() {
+    if (!audienceContactsDialog || audienceContactsDialog.mode !== "confirm") return;
+    setSavingAudience(true);
+    try {
+      const updated = await crmApi.updateBroadcast(broadcastId, {
+        audienceGroupId: audienceContactsDialog.groupId,
+      });
+      setBroadcast(updated);
+      await refreshAudience();
+      closeAudienceContactsDialog();
+      toast.success("Audience updated for this broadcast");
+    } catch (err) {
+      toast.error(err instanceof CrmApiError ? err.message : "Could not update audience");
+    } finally {
+      setSavingAudience(false);
+    }
+  }
+
+  const dialogGroupId = audienceContactsDialog?.groupId;
+  const dialogGroup =
+    dialogGroupId != null
+      ? (groupsForDomain.find((g) => g.id === dialogGroupId) ??
+        (broadcast.audienceGroupId === dialogGroupId
+          ? {
+              id: dialogGroupId,
+              name: broadcast.audienceGroupName ?? "Audience group",
+              domain: broadcast.audienceGroupDomain ?? sendDomain ?? "",
+              contactCount: broadcast.audienceContactCount ?? dialogContacts.length,
+              createdAt: "",
+            }
+          : undefined))
+      : undefined;
 
   async function ensureSaved(): Promise<boolean> {
     const saved = await persistDraft();
@@ -189,19 +364,112 @@ export function BroadcastPublishView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Recipients</CardTitle>
+          <CardTitle className="text-sm">Audience</CardTitle>
           <CardDescription>
-            Resolved from &apos;{broadcast.name}&apos; audience at send time (unsubscribed excluded).
+            {canChangeAudience
+              ? "Choose who receives this broadcast. Only groups on the same sending domain are listed."
+              : "Linked audience at send time (unsubscribed and bounced excluded)."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-medium tabular-nums">
-            {recipientCount.toLocaleString()} active recipient{recipientCount === 1 ? "" : "s"}
-          </p>
-          <BroadcastStatusBadge
-            status={broadcast.status}
-            listStatus={broadcast.listStatus}
-          />
+        <CardContent className="space-y-4">
+          {canChangeAudience ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="publish-audience">Audience group</Label>
+              {!sendDomain ? (
+                <p className="text-sm text-muted-foreground">
+                  Set a sending domain on Settings before choosing an audience.
+                </p>
+              ) : audienceGroupsLoading ? (
+                <p className="text-sm text-muted-foreground">Loading audience groups…</p>
+              ) : groupsForDomain.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No audience groups on {sendDomain} — create one in Audience first.
+                </p>
+              ) : (
+                <div className="flex max-w-lg flex-wrap items-center gap-2">
+                  <Select
+                    items={audienceSelectItems}
+                    value={broadcast.audienceGroupId || null}
+                    onValueChange={(value) => {
+                      if (value) openAudienceChangeConfirm(value);
+                    }}
+                  >
+                    <SelectTrigger id="publish-audience" className="min-w-0 flex-1">
+                      <SelectValue placeholder="Select audience group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groupsForDomain.map((g) => {
+                        const label = `${g.name} · ${g.contactCount} contacts`;
+                        return (
+                          <SelectItem key={g.id} value={g.id} label={label}>
+                            {label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!hasLinkedAudience}
+                    onClick={() => openAudienceView()}
+                  >
+                    <Users className="size-4" />
+                    View contacts
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">
+                  {broadcast.audienceGroupName ?? "Audience group"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {broadcast.audienceGroupDomain ?? sendDomain ?? "—"}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {broadcast.audienceGroupId ? (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openAudienceView()}
+                    >
+                      <Users className="size-4" />
+                      View contacts
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      nativeButton={false}
+                      render={
+                        <Link href={crmAudienceDetailHref(broadcast.audienceGroupId)} />
+                      }
+                    >
+                      <ExternalLink className="size-3.5" />
+                      Open in Audience
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+            <p className="text-sm font-medium tabular-nums">
+              {recipientCount.toLocaleString()} active recipient{recipientCount === 1 ? "" : "s"}
+            </p>
+            <BroadcastStatusBadge
+              status={broadcast.status}
+              listStatus={broadcast.listStatus}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -257,6 +525,17 @@ export function BroadcastPublishView() {
               Add a subject on the Content tab before sending.
             </p>
           ) : null}
+          {editable && broadcast.subject.trim() && !hasLinkedAudience ? (
+            <p className="w-full text-xs text-muted-foreground">
+              Select an audience group above before sending.
+            </p>
+          ) : null}
+          {editable && hasLinkedAudience && recipientCount === 0 ? (
+            <p className="w-full text-xs text-muted-foreground">
+              Linked audience has no active contacts — add subscribers in Audience or pick another
+              group.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -282,14 +561,79 @@ export function BroadcastPublishView() {
         </Card>
       ) : null}
 
+      <Dialog
+        open={audienceContactsDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) closeAudienceContactsDialog();
+        }}
+      >
+        <DialogContent className="flex max-h-[min(90vh,640px)] flex-col sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {audienceContactsDialog?.mode === "confirm"
+                ? "Switch audience for this broadcast?"
+                : dialogGroup
+                  ? `Contacts in “${dialogGroup.name}”`
+                  : "Audience contacts"}
+            </DialogTitle>
+            <DialogDescription>
+              {dialogGroup
+                ? audienceContactsDialog?.mode === "confirm"
+                  ? `Send to “${dialogGroup.name}” on ${dialogGroup.domain} — ${dialogGroup.contactCount.toLocaleString()} contacts in the group. Review the list before confirming.`
+                  : `${recipientCount.toLocaleString()} active recipient${recipientCount === 1 ? "" : "s"} at send time (unsubscribed excluded).`
+                : "Review contacts in this audience group."}
+            </DialogDescription>
+          </DialogHeader>
+          <AudienceContactsList contacts={dialogContacts} loading={dialogContactsLoading} />
+          <DialogFooter>
+            {audienceContactsDialog?.mode === "confirm" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={savingAudience}
+                  onClick={() => closeAudienceContactsDialog()}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={savingAudience || dialogContactsLoading}
+                  onClick={() => void confirmAudienceChange()}
+                >
+                  {savingAudience ? "Saving…" : "Use this audience"}
+                </Button>
+              </>
+            ) : (
+              <>
+                {dialogGroupId ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    nativeButton={false}
+                    render={<Link href={crmAudienceDetailHref(dialogGroupId)} />}
+                  >
+                    Open in Audience
+                  </Button>
+                ) : null}
+                <Button size="sm" onClick={() => closeAudienceContactsDialog()}>
+                  Close
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Send confirmation — UC-B4 */}
       <Dialog open={confirmSendOpen} onOpenChange={setConfirmSendOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send &apos;{broadcast.subject || "Untitled draft"}&apos; immediately?</DialogTitle>
             <DialogDescription>
-              This will send to {recipientCount.toLocaleString()} recipient
-              {recipientCount === 1 ? "" : "s"}.
+              This will send to {recipientCount.toLocaleString()} active recipient
+              {recipientCount === 1 ? "" : "s"} in &apos;
+              {broadcast.audienceGroupName ?? "the selected audience"}&apos;.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -20,7 +20,7 @@ export function resolveComplianceFieldForPreview(
 ): string {
   const trimmed = value?.trim();
   if (trimmed) return trimmed;
-  const label = `[${placeholder} — set in Settings → Compliance]`;
+  const label = `[${placeholder} — set in Compliance sender]`;
   if (format === "plain") return label;
   return `<span data-compliance-placeholder="true" style="color:#94a3b8;font-style:italic;">${escapeHtml(label)}</span>`;
 }

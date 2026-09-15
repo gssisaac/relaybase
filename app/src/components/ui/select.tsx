@@ -11,10 +11,28 @@ type SelectItemRegistration = {
   label: string
 }
 
+const SelectItemsListContext = React.createContext<SelectItemRegistration[]>([])
+
 const SelectItemsContext = React.createContext<{
   register: (item: SelectItemRegistration) => void
-  unregister: (value: string) => void
 } | null>(null)
+
+function extractLabelFromChildren(children: React.ReactNode): string | undefined {
+  if (children == null || typeof children === "boolean") return undefined
+  if (typeof children === "string" || typeof children === "number") {
+    return String(children)
+  }
+  if (Array.isArray(children)) {
+    const parts = children
+      .map((child) => extractLabelFromChildren(child))
+      .filter((part): part is string => Boolean(part?.trim()))
+    return parts.length ? parts.join("") : undefined
+  }
+  if (React.isValidElement<{ children?: React.ReactNode }>(children)) {
+    return extractLabelFromChildren(children.props.children)
+  }
+  return undefined
+}
 
 function Select({
   items: itemsProp,
@@ -32,9 +50,6 @@ function Select({
           return [...without, item]
         })
       },
-      unregister(value: string) {
-        setRegisteredItems((prev) => prev.filter((entry) => entry.value !== value))
-      },
     }),
     [],
   )
@@ -42,11 +57,13 @@ function Select({
   const items = itemsProp ?? registeredItems
 
   return (
-    <SelectItemsContext.Provider value={registry}>
-      <SelectPrimitive.Root {...props} items={items}>
-        {props.children}
-      </SelectPrimitive.Root>
-    </SelectItemsContext.Provider>
+    <SelectItemsListContext.Provider value={items}>
+      <SelectItemsContext.Provider value={registry}>
+        <SelectPrimitive.Root {...props} items={items}>
+          {props.children}
+        </SelectPrimitive.Root>
+      </SelectItemsContext.Provider>
+    </SelectItemsListContext.Provider>
   )
 }
 
@@ -60,13 +77,33 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({
+  className,
+  children,
+  ...props
+}: SelectPrimitive.Value.Props) {
+  const items = React.useContext(SelectItemsListContext)
+
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("min-w-0 flex-1 truncate text-left", className)}
       {...props}
-    />
+    >
+      {(value: string | null) => {
+        if (typeof children === "function") {
+          return children(value)
+        }
+        if (children != null) {
+          return children
+        }
+        if (value == null || value === "") {
+          return null
+        }
+        const match = items.find((item) => item.value === value)
+        return match?.label ?? value
+      }}
+    </SelectPrimitive.Value>
   )
 }
 
@@ -161,7 +198,10 @@ function SelectItem({
 }) {
   const registry = React.useContext(SelectItemsContext)
   const resolvedLabel =
-    labelProp ?? (typeof children === "string" ? children : undefined)
+    labelProp ??
+    (typeof children === "string" || typeof children === "number"
+      ? String(children)
+      : extractLabelFromChildren(children))
   const serializedValue = value == null ? "" : String(value)
 
   React.useLayoutEffect(() => {
@@ -169,7 +209,7 @@ function SelectItem({
       return undefined
     }
     registry.register({ value: serializedValue, label: resolvedLabel })
-    return () => registry.unregister(serializedValue)
+    return undefined
   }, [registry, serializedValue, resolvedLabel])
 
   return (

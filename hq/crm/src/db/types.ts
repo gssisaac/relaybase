@@ -19,11 +19,27 @@ export type AccountComplianceSettings = {
   updatedAt: string;
 };
 
+/** Reusable sender disclosure block — shared across broadcasts and edited in one place. */
+export type ComplianceIdentity = {
+  id: string;
+  accountLinkId: string;
+  /** Short label in pickers (e.g. "Acme US", "EU entity"). */
+  name: string;
+  organizationName: string | null;
+  postalAddress: string | null;
+  contactEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AccountLink = {
   id: string;
   workerUrl: string | null;
   domain: string | null;
+  /** @deprecated Mirror of default identity — use `complianceIdentities` + `defaultComplianceIdentityId`. */
   compliance: AccountComplianceSettings;
+  /** Default footer identity for new broadcasts when `broadcast.complianceIdentityId` is unset. */
+  defaultComplianceIdentityId: string | null;
   createdAt: string;
 };
 
@@ -68,6 +84,8 @@ export type Broadcast = {
   fromEmail?: string | null;
   replyTo?: string | null;
   defaultTemplateId?: string | null;
+  /** Footer / CAN-SPAM disclosure; falls back to account default when null. */
+  complianceIdentityId?: string | null;
   listStatus: BroadcastListStatus;
   subject: string;
   previewText?: string | null;
@@ -276,6 +294,7 @@ export type AudienceGroup = {
 
 export type CrmDataStore = {
   account: AccountLink;
+  complianceIdentities: ComplianceIdentity[];
   broadcasts: Broadcast[];
   recipients: Recipient[];
   accountSuppressions: AccountSuppression[];

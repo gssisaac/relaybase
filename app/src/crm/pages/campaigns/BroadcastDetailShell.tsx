@@ -16,6 +16,7 @@ import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { BroadcastStatusBadge } from "@/crm/components/BroadcastStatusBadge";
+import { broadcastDetailNavTabs } from "@/crm/lib/broadcast-detail-nav";
 import { broadcastDetailHref, useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
@@ -47,6 +48,10 @@ export function BroadcastDetailShell({
     broadcast?.subject?.trim() ||
     (notFound ? "Broadcast not found" : "Untitled broadcast");
 
+  const navItems = NAV.filter((item) =>
+    broadcastDetailNavTabs(broadcast?.status).includes(item.id),
+  );
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar className="gap-2 px-4 py-3">
@@ -70,7 +75,7 @@ export function BroadcastDetailShell({
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
             <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>
             <nav className="flex shrink-0 gap-0.5 overflow-x-auto" aria-label="Broadcast">
-              {NAV.map((item) => {
+              {navItems.map((item) => {
                 const href = broadcastDetailHref(broadcastId, item.id);
                 const Icon = item.icon;
                 const active = item.id === section;

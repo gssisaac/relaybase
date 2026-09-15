@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { crmAccountLink } from "./routes/account-link";
+import { crmComplianceIdentities } from "./routes/compliance-identities";
 import { crmAudience } from "./routes/audience-groups";
 import { crmBroadcasts } from "./routes/broadcasts";
 import { crmTemplates } from "./routes/templates";
@@ -18,6 +19,7 @@ app.use("*", crmApiAuthMiddleware());
 app.get("/health", (c) => c.json({ ok: true, service: "relaybase-crm" }));
 
 app.route("/crm/account-link", crmAccountLink);
+app.route("/crm/compliance-identities", crmComplianceIdentities);
 app.route("/crm/broadcasts", crmBroadcasts);
 app.route("/crm/audience-groups", crmAudience);
 app.route("/crm/templates", crmTemplates);

@@ -154,7 +154,7 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
       unsubscribeUrl,
     );
     let html = `<div style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">${escapeHtml(merged)}</div>`;
-    html = applyComplianceMergeTags(html);
+    html = applyComplianceMergeTags(html, input.broadcastId);
     const pixelUrl = `${input.crmBaseUrl}/crm/t/o/${input.broadcastId}/${input.recipientId}`;
     return `${html}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;" />`;
   }
@@ -170,7 +170,7 @@ export function renderBroadcastForRecipient(input: RenderBroadcastInput): string
     .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
 
   html = applyRecipientMergeTags(html, input.recipient, unsubscribeUrl);
-  html = applyComplianceMergeTags(html);
+  html = applyComplianceMergeTags(html, input.broadcastId);
 
   html = html.replace(/href="([^"]*)"/g, (match, url: string) => {
     if (shouldSkipClickTracking(url, unsubscribeUrl)) return match;

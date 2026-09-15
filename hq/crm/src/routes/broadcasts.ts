@@ -176,11 +176,13 @@ crmBroadcasts.patch("/:id", async (c) => {
     fromEmail?: string | null;
     replyTo?: string | null;
     defaultTemplateId?: string | null;
+    complianceIdentityId?: string | null;
     listStatus?: "active" | "archived";
     subject?: string;
     previewText?: string;
     bodyMarkdown?: string;
     templateId?: string;
+    audienceGroupId?: string;
   };
   try {
     body = await c.req.json();
@@ -188,8 +190,45 @@ crmBroadcasts.patch("/:id", async (c) => {
     return c.json({ error: "invalid JSON body" }, 400);
   }
 
+  const audienceGroupIdPatch =
+    body.audienceGroupId !== undefined ? body.audienceGroupId.trim() : undefined;
+  if (audienceGroupIdPatch !== undefined) {
+    if (existing.status !== "draft" && existing.status !== "scheduled") {
+      return c.json({ error: "Audience can only be changed before send" }, 409);
+    }
+    if (!audienceGroupIdPatch) {
+      return c.json({ error: "Select an audience group" }, 400);
+    }
+    const nextGroup = findAudienceGroup(audienceGroupIdPatch);
+    if (!nextGroup) return c.json({ error: "Audience group not found" }, 404);
+    const domainFromBody = body.domain?.trim().toLowerCase();
+    const effectiveDomain = (
+      domainFromBody ??
+      existing.domain ??
+      (existing.audienceGroupId ? findAudienceGroup(existing.audienceGroupId)?.domain : "") ??
+      ""
+    ).toLowerCase();
+    if (!effectiveDomain) {
+      return c.json({ error: "Select a sending domain before linking an audience" }, 400);
+    }
+    if (nextGroup.domain.toLowerCase() !== effectiveDomain) {
+      return c.json(
+        {
+          error: `Audience group is on ${nextGroup.domain}. Choose a group on ${effectiveDomain}.`,
+        },
+        400,
+      );
+    }
+  }
+
   if (body.fromEmail && !EMAIL_RE.test(body.fromEmail.trim())) {
     return c.json({ error: "Enter a valid sender email (e.g., newsletter@yourdomain.com)" }, 400);
+  }
+
+  if (body.complianceIdentityId !== undefined && body.complianceIdentityId !== null) {
+    const identityId = body.complianceIdentityId.trim();
+    const exists = store.read().complianceIdentities.some((row) => row.id === identityId);
+    if (!exists) return c.json({ error: "Compliance sender not found" }, 400);
   }
 
   const domainPatch = body.domain?.trim().toLowerCase();
@@ -249,17 +288,37 @@ crmBroadcasts.patch("/:id", async (c) => {
     const idx = draft.broadcasts.findIndex((r) => r.id === id);
     if (idx < 0) return;
     const prev = draft.broadcasts[idx]!;
+    const prevGroup = prev.audienceGroupId ? findAudienceGroup(prev.audienceGroupId) : undefined;
+    const nextAudienceGroupId =
+      audienceGroupIdPatch !== undefined ? audienceGroupIdPatch : prev.audienceGroupId;
+    const nextGroup =
+      audienceGroupIdPatch !== undefined ? findAudienceGroup(audienceGroupIdPatch) : prevGroup;
+    let nextFromEmail = prev.fromEmail;
+    if (
+      audienceGroupIdPatch !== undefined &&
+      nextGroup &&
+      (!prev.fromEmail || prev.fromEmail === prevGroup?.defaultFrom)
+    ) {
+      nextFromEmail = nextGroup.defaultFrom ?? prev.fromEmail;
+    }
+    const resolvedFromEmail =
+      body.fromEmail !== undefined ? body.fromEmail?.trim() || null : nextFromEmail;
     draft.broadcasts[idx] = {
       ...prev,
+      audienceGroupId: nextAudienceGroupId,
       name: body.name?.trim() || prev.name,
       slug: body.slug?.trim() ? slugifyBroadcast(body.slug) : prev.slug,
       description: body.description !== undefined ? body.description : prev.description,
       domain: domainPatch ?? prev.domain,
       fromName: body.fromName !== undefined ? body.fromName?.trim() || null : prev.fromName,
-      fromEmail: body.fromEmail !== undefined ? body.fromEmail?.trim() || null : prev.fromEmail,
+      fromEmail: resolvedFromEmail,
       replyTo: body.replyTo !== undefined ? body.replyTo?.trim() || null : prev.replyTo,
       defaultTemplateId:
         body.defaultTemplateId !== undefined ? body.defaultTemplateId : prev.defaultTemplateId,
+      complianceIdentityId:
+        body.complianceIdentityId !== undefined
+          ? body.complianceIdentityId?.trim() || null
+          : prev.complianceIdentityId ?? null,
       listStatus: body.listStatus ?? prev.listStatus,
       subject: body.subject ?? prev.subject,
       previewText: body.previewText !== undefined ? body.previewText : prev.previewText,

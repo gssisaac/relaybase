@@ -4,6 +4,7 @@ import path from "node:path";
 import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcasts/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { BUILTIN_TEMPLATES } from "../lib/templates/builtin-templates";
+import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
 import type { AccountComplianceSettings, Broadcast, BroadcastAsset, CrmDataStore, Recipient } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
@@ -33,14 +34,28 @@ function defaultCompliance(now: string): AccountComplianceSettings {
 
 function defaultStore(): CrmDataStore {
   const now = new Date().toISOString();
+  const complianceId = newId("compliance");
   return {
     account: {
       id: DEV_ACCOUNT_LINK_ID,
       workerUrl: null,
       domain: null,
       compliance: defaultCompliance(now),
+      defaultComplianceIdentityId: complianceId,
       createdAt: now,
     },
+    complianceIdentities: [
+      {
+        id: complianceId,
+        accountLinkId: DEV_ACCOUNT_LINK_ID,
+        name: "Default sender",
+        organizationName: null,
+        postalAddress: null,
+        contactEmail: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
     broadcasts: [],
     recipients: [],
     accountSuppressions: [],
@@ -263,6 +278,7 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
     if (c.contactEmail === undefined) c.contactEmail = null;
     if (!c.updatedAt) c.updatedAt = now;
   }
+  ensureComplianceIdentitiesFromLegacy(store, now);
 
   for (const row of store.accountSuppressions) {
     if (row.audienceGroupId === undefined) row.audienceGroupId = null;

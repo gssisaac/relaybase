@@ -32,6 +32,7 @@ export function serializeBroadcast(row: Broadcast) {
     fromEmail: row.fromEmail ?? null,
     replyTo: row.replyTo ?? null,
     defaultTemplateId: row.defaultTemplateId ?? null,
+    complianceIdentityId: row.complianceIdentityId ?? null,
     listStatus: row.listStatus,
     subject: row.subject,
     previewText: row.previewText ?? null,

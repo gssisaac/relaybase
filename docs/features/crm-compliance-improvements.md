@@ -66,7 +66,10 @@ Production CRM is intended to run on **the customer’s own Cloudflare stack** (
 
 See `hq/crm/src/db/types.ts`:
 
-- `account.compliance` — organization name, postal address, contact email (CAN-SPAM / disclosure)
+- `complianceIdentities[]` — reusable footer senders (org, postal address, contact email)
+- `account.defaultComplianceIdentityId` — default for broadcasts without `complianceIdentityId`
+- `broadcast.complianceIdentityId` — optional per-send footer sender
+- `account.compliance` — deprecated mirror of the default identity (API compat)
 - `accountSuppressions.audienceGroupId` — `null` = account-wide; set = group-scoped unsubscribe
 - `accountSuppressions.reason` includes `unsubscribe`
 - `AudienceMember.consentSource` / `consentedAt` — audit trail (optional at import)

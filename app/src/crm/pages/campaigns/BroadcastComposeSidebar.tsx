@@ -4,6 +4,7 @@ import { Braces, Copy, PanelRightClose, PanelRightOpen, Plus } from "lucide-reac
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { ComplianceIdentityEditor } from "@/crm/components/ComplianceIdentityEditor";
 import { BroadcastPreflightChecklist } from "@/crm/components/BroadcastPreflightChecklist";
 import { CrmTemplateImportDialog } from "@/crm/components/CrmTemplateImportDialog";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,10 @@ export function BroadcastComposeSidebar({
   fromEmail,
   fromName,
   compliance,
+  complianceIdentityId,
+  accountDefaultComplianceIdentityId,
+  onComplianceIdentityChange,
+  onComplianceIdentitySaved,
   previewPersonaId,
   setPreviewPersonaId,
   previewRecipient,
@@ -153,6 +158,10 @@ export function BroadcastComposeSidebar({
   fromEmail: string | null;
   fromName: string | null;
   compliance: CrmAccountCompliance | null;
+  complianceIdentityId: string | null;
+  accountDefaultComplianceIdentityId: string | null;
+  onComplianceIdentityChange: (id: string | null) => void | Promise<void>;
+  onComplianceIdentitySaved?: () => void;
   previewPersonaId: PreviewPersonaId;
   setPreviewPersonaId: (id: PreviewPersonaId) => void;
   previewRecipient: PreviewRecipient;
@@ -273,9 +282,20 @@ export function BroadcastComposeSidebar({
           </TabsContent>
 
           <TabsContent value="variables" className="mt-0 min-h-0 flex-1 overflow-y-auto p-2">
+            <div className="mb-3 rounded-md border border-border bg-muted/20 p-2.5">
+              <ComplianceIdentityEditor
+                mode="broadcast"
+                compact
+                selectedIdentityId={complianceIdentityId}
+                accountDefaultIdentityId={accountDefaultComplianceIdentityId}
+                onSelectedIdentityIdChange={onComplianceIdentityChange}
+                onIdentitySaved={() => onComplianceIdentitySaved?.()}
+                description="Footer org, address, and contact come from the selected sender — edit once, reused everywhere."
+              />
+            </div>
             <p className="mb-2 flex items-start gap-1.5 px-0.5 text-[11px] leading-snug text-muted-foreground">
               <Braces className="mt-0.5 size-3 shrink-0" aria-hidden />
-              Insert into subject or body. Legal tags use account compliance settings.
+              Insert personalization tags into subject or body.
             </p>
             {MERGE_TAG_CATEGORIES.map((cat) => {
               const tags = BROADCAST_MERGE_TAGS.filter((t) => t.category === cat.id);

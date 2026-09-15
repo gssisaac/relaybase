@@ -1,12 +1,15 @@
 import { store } from "../../db/store";
+import { accountDefaultComplianceIdentityId } from "../compliance/identity";
 
 export function serializeAccountLink() {
-  const account = store.read().account;
+  const data = store.read();
+  const account = data.account;
   return {
     id: account.id,
     workerUrl: account.workerUrl,
     domain: account.domain,
     compliance: account.compliance,
+    defaultComplianceIdentityId: accountDefaultComplianceIdentityId(data),
     createdAt: account.createdAt,
   };
 }

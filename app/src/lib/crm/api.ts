@@ -45,6 +45,8 @@ export type Broadcast = {
   fromEmail: string | null;
   replyTo: string | null;
   defaultTemplateId: string | null;
+  /** null = account default compliance sender. */
+  complianceIdentityId: string | null;
   listStatus: BroadcastListStatus;
   subject: string;
   previewText: string | null;
@@ -201,11 +203,22 @@ export type CrmAccountCompliance = {
   updatedAt: string;
 };
 
+export type CrmComplianceIdentity = {
+  id: string;
+  name: string;
+  organizationName: string | null;
+  postalAddress: string | null;
+  contactEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CrmAccountLink = {
   id: string;
   workerUrl: string | null;
   domain: string | null;
   compliance?: CrmAccountCompliance;
+  defaultComplianceIdentityId: string | null;
   createdAt: string;
 };
 
@@ -214,6 +227,7 @@ export const crmApi = {
   updateAccountLink: (input: {
     domain?: string | null;
     workerUrl?: string | null;
+    defaultComplianceIdentityId?: string | null;
     compliance?: Partial<{
       organizationName: string | null;
       postalAddress: string | null;
@@ -221,6 +235,36 @@ export const crmApi = {
     }>;
   }) =>
     crmFetch<CrmAccountLink>("/crm/account-link", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  listComplianceIdentities: () =>
+    crmFetch<{
+      identities: CrmComplianceIdentity[];
+      defaultComplianceIdentityId: string | null;
+    }>("/crm/compliance-identities"),
+  createComplianceIdentity: (input: {
+    name?: string;
+    organizationName?: string | null;
+    postalAddress?: string | null;
+    contactEmail?: string | null;
+    setAsDefault?: boolean;
+  }) =>
+    crmFetch<{ identity: CrmComplianceIdentity }>("/crm/compliance-identities", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateComplianceIdentity: (
+    id: string,
+    input: Partial<{
+      name: string;
+      organizationName: string | null;
+      postalAddress: string | null;
+      contactEmail: string | null;
+    }>,
+  ) =>
+    crmFetch<{ identity: CrmComplianceIdentity }>(`/crm/compliance-identities/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
@@ -259,11 +303,13 @@ export const crmApi = {
       fromEmail: string | null;
       replyTo: string | null;
       defaultTemplateId: string | null;
+      complianceIdentityId: string | null;
       listStatus: BroadcastListStatus;
       subject: string;
       previewText: string;
       bodyMarkdown: string;
       templateId: string;
+      audienceGroupId: string;
     }>,
   ) => crmFetch<Broadcast>(`/crm/broadcasts/${id}`, { method: "PATCH", body: JSON.stringify(input) }),
   archiveBroadcast: (id: string) =>

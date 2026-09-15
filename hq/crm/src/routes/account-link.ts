@@ -2,17 +2,22 @@ import { Hono } from "hono";
 
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import { serializeAccountLink } from "../lib/account-link/serialize";
+import {
+  accountDefaultComplianceIdentityId,
+  syncAccountComplianceMirror,
+} from "../lib/compliance/identity";
 
 export const crmAccountLink = new Hono();
 
 // GET /crm/account-link
 crmAccountLink.get("/", (c) => c.json(serializeAccountLink()));
 
-// PATCH /crm/account-link { domain?, workerUrl?, compliance? }
+// PATCH /crm/account-link { domain?, workerUrl?, defaultComplianceIdentityId?, compliance? }
 crmAccountLink.patch("/", async (c) => {
   let body: {
     domain?: string;
     workerUrl?: string;
+    defaultComplianceIdentityId?: string | null;
     compliance?: {
       organizationName?: string | null;
       postalAddress?: string | null;
@@ -36,18 +41,34 @@ crmAccountLink.patch("/", async (c) => {
     if (draft.account.id !== DEV_ACCOUNT_LINK_ID) return;
     if (domain !== undefined) draft.account.domain = domain;
     if (workerUrl !== undefined) draft.account.workerUrl = workerUrl;
+
+    if (body.defaultComplianceIdentityId !== undefined) {
+      const next = body.defaultComplianceIdentityId?.trim() || null;
+      if (next && !draft.complianceIdentities.some((row) => row.id === next)) {
+        return;
+      }
+      draft.account.defaultComplianceIdentityId = next;
+      syncAccountComplianceMirror(draft);
+    }
+
     if (body.compliance) {
-      const cpl = draft.account.compliance;
+      const defaultId = accountDefaultComplianceIdentityId(draft);
+      const idx = draft.complianceIdentities.findIndex((row) => row.id === defaultId);
+      if (idx < 0) return;
+      const prev = draft.complianceIdentities[idx]!;
+      const now = new Date().toISOString();
       if (body.compliance.organizationName !== undefined) {
-        cpl.organizationName = body.compliance.organizationName?.trim() || null;
+        prev.organizationName = body.compliance.organizationName?.trim() || null;
       }
       if (body.compliance.postalAddress !== undefined) {
-        cpl.postalAddress = body.compliance.postalAddress?.trim() || null;
+        prev.postalAddress = body.compliance.postalAddress?.trim() || null;
       }
       if (body.compliance.contactEmail !== undefined) {
-        cpl.contactEmail = body.compliance.contactEmail?.trim() || null;
+        prev.contactEmail = body.compliance.contactEmail?.trim() || null;
       }
-      cpl.updatedAt = new Date().toISOString();
+      prev.updatedAt = now;
+      draft.complianceIdentities[idx] = prev;
+      syncAccountComplianceMirror(draft);
     }
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -13,6 +13,11 @@ import { prepareBroadcastTemplateHtml } from "@/crm/lib/broadcast-standard-foote
 import { isPlainTextTemplate } from "@/crm/lib/broadcast-templates";
 import { BroadcastComposeForm } from "@/crm/pages/campaigns/BroadcastComposeForm";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
+import {
+  complianceFromIdentity,
+  effectiveComplianceIdentityId,
+  findComplianceIdentityById,
+} from "@/crm/lib/compliance-identity";
 import { crmApi, type CrmAccountCompliance } from "@/lib/crm/api";
 import {
   useCampaignEditorPersistence,
@@ -37,9 +42,13 @@ export function BroadcastContentView() {
     persistDraft,
     getLastSavedDraft,
     refreshTemplates,
+    setBroadcast,
   } = useBroadcastDetail();
 
   const [compliance, setCompliance] = useState<CrmAccountCompliance | null>(null);
+  const [accountDefaultComplianceIdentityId, setAccountDefaultComplianceIdentityId] = useState<
+    string | null
+  >(null);
   const [subject, setSubject] = useState(broadcast?.subject ?? "");
   const [bodyMarkdown, setBodyMarkdown] = useState(broadcast?.bodyMarkdown ?? "");
   const [previewHtml, setPreviewHtml] = useState("");
@@ -76,21 +85,23 @@ export function BroadcastContentView() {
     setPreviewPersonaId("sample-named");
   }, [broadcastId]);
 
+  const refreshComplianceContext = useCallback(async () => {
+    try {
+      const res = await crmApi.listComplianceIdentities();
+      setAccountDefaultComplianceIdentityId(res.defaultComplianceIdentityId);
+      const effectiveId = effectiveComplianceIdentityId(
+        broadcast?.complianceIdentityId,
+        res.defaultComplianceIdentityId,
+      );
+      setCompliance(complianceFromIdentity(findComplianceIdentityById(res.identities, effectiveId)));
+    } catch {
+      setCompliance(null);
+    }
+  }, [broadcast?.complianceIdentityId]);
+
   useEffect(() => {
-    crmApi
-      .getAccountLink()
-      .then((link) =>
-        setCompliance(
-          link.compliance ?? {
-            organizationName: null,
-            postalAddress: null,
-            contactEmail: null,
-            updatedAt: "",
-          },
-        ),
-      )
-      .catch(() => setCompliance(null));
-  }, [broadcastId]);
+    void refreshComplianceContext();
+  }, [refreshComplianceContext, broadcastId]);
 
   const personaOptions = useMemo(
     () => previewPersonaOptions(audienceMembers),
@@ -215,6 +226,16 @@ export function BroadcastContentView() {
         previewRecipient={previewRecipient}
         personaOptions={personaOptions}
         compliance={compliance}
+        complianceIdentityId={broadcast.complianceIdentityId ?? null}
+        accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
+        onComplianceIdentityChange={async (id) => {
+          const updated = await crmApi.updateBroadcast(broadcastId, {
+            complianceIdentityId: id,
+          });
+          setBroadcast(updated);
+          await refreshComplianceContext();
+        }}
+        onComplianceIdentitySaved={() => void refreshComplianceContext()}
         onTemplateImported={(id) => {
           void refreshTemplates();
           setTemplateId(id);

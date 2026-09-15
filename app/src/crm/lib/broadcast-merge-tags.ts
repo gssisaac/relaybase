@@ -5,7 +5,7 @@ import {
 import { PLAIN_TEXT_TEMPLATE_ID } from "@/crm/lib/broadcast-templates";
 import type { BroadcastMember } from "@/lib/crm/api";
 
-export type BroadcastMergeTagCategory = "contact" | "legal" | "system";
+export type BroadcastMergeTagCategory = "contact";
 
 export type BroadcastMergeTag = {
   id: string;
@@ -35,53 +35,14 @@ export const BROADCAST_MERGE_TAGS: BroadcastMergeTag[] = [
     category: "contact",
     example: "alex@example.com",
   },
-  {
-    id: "organization-name",
-    token: "{{organization_name}}",
-    label: "Organization name",
-    description: "Account compliance setting — sender organization.",
-    category: "legal",
-    example: "Acme Inc.",
-  },
-  {
-    id: "postal-address",
-    token: "{{postal_address}}",
-    label: "Postal address",
-    description: "Account compliance setting — physical mailing address (CAN-SPAM).",
-    category: "legal",
-    example: "123 Main St, City, ST 12345",
-  },
-  {
-    id: "compliance-email",
-    token: "{{compliance_contact_email}}",
-    label: "Compliance contact email",
-    description: "Account compliance setting — contact for opt-out questions.",
-    category: "legal",
-    example: "compliance@example.com",
-  },
-  {
-    id: "unsubscribe-url",
-    token: "{{unsubscribe_url}}",
-    label: "Unsubscribe link",
-    description: "Personalized unsubscribe URL (also in template footer).",
-    category: "system",
-    example: "https://…/crm/unsubscribe/…",
-  },
-  {
-    id: "compliance-footer",
-    token: "{{compliance_footer}}",
-    label: "Compliance footer block",
-    description: "Built-in templates use this placeholder; expands to org, address, contact, and unsubscribe.",
-    category: "system",
-    example: "(auto-expanded in preview and at send)",
-  },
 ];
 
 export const MERGE_TAG_CATEGORIES: { id: BroadcastMergeTagCategory; label: string }[] = [
   { id: "contact", label: "Recipient" },
-  { id: "legal", label: "Legal & sender" },
-  { id: "system", label: "Compliance action" },
 ];
+
+/** Insertable merge tags for subject lines (same as body recipient tags). */
+export const SUBJECT_MERGE_TAGS = BROADCAST_MERGE_TAGS;
 
 export type PreviewPersonaId = "sample-named" | "sample-unnamed" | `member:${string}`;
 

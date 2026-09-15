@@ -22,7 +22,8 @@ export function runBroadcastPreflight(input: {
     input.templateId,
   );
   const combined = `${preparedTemplate}\n${input.bodyMarkdown}`;
-  const hasUnsubscribeInTemplate = combined.includes("{{unsubscribe_url}}");
+  const hasUnsubscribeInTemplate =
+    combined.includes("{{unsubscribe_url}}") || combined.includes("{{compliance_footer}}");
   const compliance = input.compliance;
 
   const checks: PreflightCheck[] = [
@@ -43,8 +44,8 @@ export function runBroadcastPreflight(input: {
       label: "Unsubscribe link",
       status: hasUnsubscribeInTemplate ? "pass" : "warn",
       detail: hasUnsubscribeInTemplate
-        ? "Standard compliance footer includes {{unsubscribe_url}}."
-        : "Footer could not be resolved — check template HTML.",
+        ? "Template includes the standard compliance footer with unsubscribe."
+        : "Footer could not be resolved — pick a built-in template or import HTML with {{content}}.",
     },
     {
       id: "from",
@@ -60,7 +61,7 @@ export function runBroadcastPreflight(input: {
       status: compliance?.postalAddress?.trim() ? "pass" : "warn",
       detail: compliance?.postalAddress?.trim()
         ? undefined
-        : "CAN-SPAM requires a physical address in the footer — set in Settings → Compliance.",
+        : "CAN-SPAM requires a physical address in the footer — set in Compliance sender.",
     },
     {
       id: "org",
@@ -68,7 +69,7 @@ export function runBroadcastPreflight(input: {
       status: compliance?.organizationName?.trim() ? "pass" : "warn",
       detail: compliance?.organizationName?.trim()
         ? undefined
-        : "Recommended for marketing disclosure — set in Settings → Compliance.",
+        : "Recommended for marketing disclosure — set in Compliance sender.",
     },
     {
       id: "images",

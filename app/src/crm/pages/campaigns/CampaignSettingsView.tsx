@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   displayNameForAddress,
   useDomainAddresses,
@@ -41,6 +40,7 @@ import { crmAudienceDetailHref } from "@/crm/lib/paths";
 import { useBroadcastDetail } from "@/crm/pages/campaigns/CampaignDetailContext";
 import { useWorkerDomains } from "@/crm/lib/use-worker-domains";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
+import { ComplianceIdentityEditor } from "@/crm/components/ComplianceIdentityEditor";
 import { crmApi, CrmApiError } from "@/lib/crm/api";
 
 export function BroadcastSettingsView() {
@@ -64,11 +64,9 @@ export function BroadcastSettingsView() {
   const [archiveBlocked, setArchiveBlocked] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
 
-  const [organizationName, setOrganizationName] = useState("");
-  const [postalAddress, setPostalAddress] = useState("");
-  const [complianceContactEmail, setComplianceContactEmail] = useState("");
-  const [savingCompliance, setSavingCompliance] = useState(false);
-  const [complianceFlash, setComplianceFlash] = useState(false);
+  const [defaultComplianceIdentityId, setDefaultComplianceIdentityId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!broadcast) return;
@@ -81,9 +79,7 @@ export function BroadcastSettingsView() {
     crmApi
       .getAccountLink()
       .then((link) => {
-        setOrganizationName(link.compliance?.organizationName ?? "");
-        setPostalAddress(link.compliance?.postalAddress ?? "");
-        setComplianceContactEmail(link.compliance?.contactEmail ?? "");
+        setDefaultComplianceIdentityId(link.defaultComplianceIdentityId ?? null);
       })
       .catch(() => {});
   }, [broadcastId]);
@@ -183,26 +179,6 @@ export function BroadcastSettingsView() {
       }
     } finally {
       setArchiving(false);
-    }
-  }
-
-  async function saveCompliance() {
-    setSavingCompliance(true);
-    try {
-      await crmApi.updateAccountLink({
-        compliance: {
-          organizationName: organizationName.trim() || null,
-          postalAddress: postalAddress.trim() || null,
-          contactEmail: complianceContactEmail.trim() || null,
-        },
-      });
-      toast.success("Compliance footer settings saved");
-      setComplianceFlash(true);
-      setTimeout(() => setComplianceFlash(false), 2000);
-    } catch (err) {
-      toast.error(err instanceof CrmApiError ? err.message : "Could not save compliance settings");
-    } finally {
-      setSavingCompliance(false);
     }
   }
 
@@ -419,54 +395,32 @@ export function BroadcastSettingsView() {
         <CardHeader>
           <CardTitle className="text-sm">Compliance & footer</CardTitle>
           <CardDescription>
-            Used in built-in templates via {"{{organization_name}}"}, {"{{postal_address}}"}, and{" "}
-            {"{{compliance_contact_email}}"} at send time. Applies account-wide to all broadcasts.
+            Reusable sender records fill the built-in footer at send time. New broadcasts use the
+            default unless you pick another on Content → Variables.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="compliance-org">Organization name</Label>
-            <Input
-              id="compliance-org"
-              value={organizationName}
-              onChange={(e) => setOrganizationName(e.target.value)}
-              placeholder="Acme Inc."
-              autoComplete="organization"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="compliance-address">Physical postal address</Label>
-            <Textarea
-              id="compliance-address"
-              value={postalAddress}
-              onChange={(e) => setPostalAddress(e.target.value)}
-              placeholder="123 Main St, City, ST 12345, Country"
-              rows={3}
-            />
-            <p className="text-xs text-muted-foreground">
-              Required for CAN-SPAM commercial email in the US.
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="compliance-email">Compliance contact email</Label>
-            <Input
-              id="compliance-email"
-              type="email"
-              value={complianceContactEmail}
-              onChange={(e) => setComplianceContactEmail(e.target.value)}
-              placeholder="compliance@yourdomain.com"
-              autoComplete="off"
-            />
-          </div>
+        <CardContent>
+          <ComplianceIdentityEditor
+            mode="account-default"
+            selectedIdentityId={defaultComplianceIdentityId}
+            accountDefaultIdentityId={defaultComplianceIdentityId}
+            description="Organization, postal address, and compliance contact are shared with the template footer — not separate merge tags."
+            onSelectedIdentityIdChange={async (id) => {
+              if (!id) return;
+              try {
+                const link = await crmApi.updateAccountLink({
+                  defaultComplianceIdentityId: id,
+                });
+                setDefaultComplianceIdentityId(link.defaultComplianceIdentityId ?? id);
+                toast.success("Default compliance sender updated");
+              } catch (err) {
+                toast.error(
+                  err instanceof CrmApiError ? err.message : "Could not update default sender",
+                );
+              }
+            }}
+          />
         </CardContent>
-        <CardFooter className="gap-2">
-          <Button size="sm" onClick={() => void saveCompliance()} disabled={savingCompliance}>
-            {savingCompliance ? "Saving…" : "Save compliance"}
-          </Button>
-          {complianceFlash ? (
-            <span className="text-xs text-emerald-600">✓ Saved</span>
-          ) : null}
-        </CardFooter>
       </Card>
 
       <Card className="border-destructive/30">

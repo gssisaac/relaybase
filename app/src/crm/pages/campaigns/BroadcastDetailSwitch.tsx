@@ -2,11 +2,14 @@
 
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
+import { normalizeBroadcastDetailTab } from "@/crm/lib/broadcast-detail-nav";
+import { broadcastDetailHref, useCrmPaths, type BroadcastDetailTab } from "@/crm/lib/paths";
 import { BroadcastRecipientsView } from "@/crm/pages/campaigns/CampaignSubscribersView";
 import { BroadcastContentView } from "@/crm/pages/campaigns/BroadcastContentView";
 import { BroadcastDetailShell } from "@/crm/pages/campaigns/BroadcastDetailShell";
@@ -42,7 +45,17 @@ function BroadcastNotFound() {
 }
 
 export function BroadcastDetailSwitch({ tab }: { tab: BroadcastDetailTab }) {
-  const { broadcast, loading, notFound } = useBroadcastDetail();
+  const router = useRouter();
+  const { broadcastId, broadcast, loading, notFound } = useBroadcastDetail();
+
+  const resolvedTab = broadcast
+    ? normalizeBroadcastDetailTab(tab, broadcast.status)
+    : tab;
+
+  useEffect(() => {
+    if (!broadcast || resolvedTab === tab) return;
+    router.replace(broadcastDetailHref(broadcastId, resolvedTab));
+  }, [broadcast, broadcastId, resolvedTab, router, tab]);
 
   if (loading && !broadcast) {
     return (
@@ -54,12 +67,12 @@ export function BroadcastDetailSwitch({ tab }: { tab: BroadcastDetailTab }) {
   if (notFound || !broadcast) return <BroadcastNotFound />;
 
   return (
-    <BroadcastDetailShell section={tab} fill={tab === "content"}>
-      {tab === "content" ? <BroadcastContentView /> : null}
-      {tab === "publish" ? <BroadcastPublishView /> : null}
-      {tab === "recipients" ? <BroadcastRecipientsView /> : null}
-      {tab === "stats" ? <BroadcastStatsView /> : null}
-      {tab === "settings" ? <BroadcastSettingsView /> : null}
+    <BroadcastDetailShell section={resolvedTab} fill={resolvedTab === "content"}>
+      {resolvedTab === "content" ? <BroadcastContentView /> : null}
+      {resolvedTab === "publish" ? <BroadcastPublishView /> : null}
+      {resolvedTab === "recipients" ? <BroadcastRecipientsView /> : null}
+      {resolvedTab === "stats" ? <BroadcastStatsView /> : null}
+      {resolvedTab === "settings" ? <BroadcastSettingsView /> : null}
     </BroadcastDetailShell>
   );
 }

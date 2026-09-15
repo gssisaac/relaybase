@@ -12,7 +12,7 @@ import {
 import { BroadcastEmailPreview } from "@/crm/components/BroadcastEmailPreview";
 import { BroadcastComposeSidebar } from "@/crm/pages/campaigns/BroadcastComposeSidebar";
 import {
-  BROADCAST_MERGE_TAGS,
+  SUBJECT_MERGE_TAGS,
   type PreviewPersonaId,
   type PreviewRecipient,
 } from "@/crm/lib/broadcast-merge-tags";
@@ -49,6 +49,10 @@ export function BroadcastComposeForm({
   previewRecipient,
   personaOptions,
   compliance,
+  complianceIdentityId,
+  accountDefaultComplianceIdentityId,
+  onComplianceIdentityChange,
+  onComplianceIdentitySaved,
   onTemplateImported,
 }: {
   /** Broadcast id — asset upload namespace (`/crm/broadcasts/:id/assets`). */
@@ -77,6 +81,10 @@ export function BroadcastComposeForm({
   previewRecipient: PreviewRecipient;
   personaOptions: { value: PreviewPersonaId; label: string }[];
   compliance: CrmAccountCompliance | null;
+  complianceIdentityId: string | null;
+  accountDefaultComplianceIdentityId: string | null;
+  onComplianceIdentityChange: (id: string | null) => void | Promise<void>;
+  onComplianceIdentitySaved?: () => void;
   onTemplateImported?: (templateId: string) => void;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -158,7 +166,7 @@ export function BroadcastComposeForm({
                     Insert into subject
                   </p>
                   <ul className="flex flex-col gap-1">
-                    {BROADCAST_MERGE_TAGS.map((tag) => (
+                    {SUBJECT_MERGE_TAGS.map((tag) => (
                       <li key={tag.id}>
                         <Button
                           type="button"
@@ -265,6 +273,10 @@ export function BroadcastComposeForm({
           fromEmail={previewFromEmail}
           fromName={previewFromName}
           compliance={compliance}
+          complianceIdentityId={complianceIdentityId}
+          accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
+          onComplianceIdentityChange={onComplianceIdentityChange}
+          onComplianceIdentitySaved={onComplianceIdentitySaved}
           previewPersonaId={previewPersonaId}
           setPreviewPersonaId={setPreviewPersonaId}
           previewRecipient={previewRecipient}

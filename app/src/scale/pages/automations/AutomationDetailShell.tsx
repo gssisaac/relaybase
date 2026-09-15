@@ -58,13 +58,13 @@ export function AutomationDetailShell({
         >
           <Button
             variant="ghost"
-            size="sm"
+            size="icon-sm"
             className="-ml-2 shrink-0"
             nativeButton={false}
+            aria-label="Back"
             render={<Link href={automations} />}
           >
-            <ArrowLeft className="size-4" />
-            <span className="hidden sm:inline">Automations</span>
+            <ArrowLeft className="size-4" aria-hidden />
           </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
             <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>

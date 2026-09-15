@@ -28,13 +28,13 @@ function AutomationNotFound() {
         <div className="flex min-w-0 items-center gap-3">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon-sm"
             className="-ml-2"
             nativeButton={false}
+            aria-label="Back"
             render={<Link href={automations} />}
           >
-            <ArrowLeft className="size-4" />
-            Automations
+            <ArrowLeft className="size-4" aria-hidden />
           </Button>
           <h1 className="truncate text-sm font-semibold">Automation not found</h1>
         </div>

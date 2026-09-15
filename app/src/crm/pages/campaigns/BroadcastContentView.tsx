@@ -1,7 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { broadcastDetailHref } from "@/crm/lib/paths";
 
 import {
   applyBroadcastMergeTags,
@@ -22,7 +26,7 @@ import {
   effectiveComplianceIdentityId,
   findComplianceIdentityById,
 } from "@/crm/lib/compliance-identity";
-import { crmApi, type CrmAccountCompliance } from "@/lib/crm/api";
+import { crmApi, type BroadcastStatus, type CrmAccountCompliance } from "@/lib/crm/api";
 import {
   useCampaignEditorPersistence,
   type CampaignPersistBridge,
@@ -36,7 +40,25 @@ function mapSaveStatus(status: SaveStatus | null): "idle" | "saving" | "error" {
   return "idle";
 }
 
+function lockedBroadcastMessage(
+  status: BroadcastStatus,
+  scheduledAt: string | null | undefined,
+  sentAt: string | null | undefined,
+): string {
+  if (status === "scheduled" && scheduledAt) {
+    return `This broadcast is scheduled for ${new Date(scheduledAt).toLocaleString()} and is locked.`;
+  }
+  if (status === "sending") {
+    return "This broadcast is currently sending and is locked.";
+  }
+  if (status === "failed") {
+    return "This broadcast failed to send and is locked.";
+  }
+  return `This broadcast was sent on ${sentAt ? new Date(sentAt).toLocaleDateString() : "an earlier date"} and is locked.`;
+}
+
 export function BroadcastContentView() {
+  const router = useRouter();
   const {
     broadcastId,
     broadcast,
@@ -62,6 +84,7 @@ export function BroadcastContentView() {
   );
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewPersonaId, setPreviewPersonaId] = useState<PreviewPersonaId>("sample-named");
+  const [duplicating, setDuplicating] = useState(false);
 
   const editable = broadcast?.status === "draft";
 
@@ -206,18 +229,35 @@ export function BroadcastContentView() {
     else toast.error("Could not save broadcast");
   }
 
+  async function handleDuplicate() {
+    setDuplicating(true);
+    try {
+      const duplicate = await crmApi.duplicateBroadcast(broadcastId);
+      router.push(broadcastDetailHref(duplicate.id, "content"));
+    } catch {
+      toast.error("Could not duplicate broadcast");
+      setDuplicating(false);
+    }
+  }
+
   if (!broadcast) return null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {!editable ? (
-        <div className="shrink-0 border-b border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
-          {broadcast.status === "scheduled" && broadcast.scheduledAt
-            ? `This broadcast is scheduled for ${new Date(broadcast.scheduledAt).toLocaleString()} and is locked.`
-            : broadcast.status === "sending"
-              ? "This broadcast is currently sending and is locked."
-              : `This broadcast was sent on ${broadcast.sentAt ? new Date(broadcast.sentAt).toLocaleDateString() : "an earlier date"} and is locked.`}{" "}
-          Duplicate it as a new draft to reuse this content.
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2">
+          <p className="text-xs text-muted-foreground">
+            {lockedBroadcastMessage(broadcast.status, broadcast.scheduledAt, broadcast.sentAt)}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => void handleDuplicate()}
+            disabled={duplicating}
+          >
+            {duplicating ? "Duplicating…" : "Duplicate as New Draft"}
+          </Button>
         </div>
       ) : null}
       <BroadcastComposeForm

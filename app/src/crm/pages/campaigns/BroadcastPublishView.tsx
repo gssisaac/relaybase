@@ -113,8 +113,6 @@ export function BroadcastPublishView() {
   const [testEmail, setTestEmail] = useState("");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState("");
-  const [duplicating, setDuplicating] = useState(false);
-
   const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
   const [audienceGroupsLoading, setAudienceGroupsLoading] = useState(false);
   const [audienceContactsDialog, setAudienceContactsDialog] =
@@ -307,17 +305,6 @@ export function BroadcastPublishView() {
     }
   }
 
-  async function handleDuplicate() {
-    setDuplicating(true);
-    try {
-      const duplicate = await crmApi.duplicateBroadcast(broadcastId);
-      router.push(broadcastDetailHref(duplicate.id, "content"));
-    } catch {
-      toast.error("Could not duplicate broadcast");
-      setDuplicating(false);
-    }
-  }
-
   return (
     <div className="space-y-4">
       <div>
@@ -326,21 +313,6 @@ export function BroadcastPublishView() {
           Send to active broadcast audience members (late binding at send time).
         </p>
       </div>
-
-      {broadcast.status === "sent" ? (
-        <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
-          This broadcast was sent on {formatWhen(broadcast.sentAt)} and is locked.
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-3"
-            onClick={() => void handleDuplicate()}
-            disabled={duplicating}
-          >
-            {duplicating ? "Duplicating…" : "Duplicate as New Draft"}
-          </Button>
-        </div>
-      ) : null}
 
       {broadcast.status === "sending" ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs text-sky-800 dark:text-sky-300">

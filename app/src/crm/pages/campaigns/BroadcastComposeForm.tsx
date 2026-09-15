@@ -268,32 +268,34 @@ export function BroadcastComposeForm({
           </div>
         </div>
 
-        <BroadcastComposeSidebar
-          broadcastId={broadcastId}
-          templates={templates}
-          templateId={templateId}
-          setTemplateId={setTemplateId}
-          templateVariables={templateVariables}
-          setTemplateVariables={setTemplateVariables}
-          editable={editable}
-          subject={subject}
-          bodyMarkdown={bodyMarkdown}
-          fromEmail={previewFromEmail}
-          fromName={previewFromName}
-          compliance={compliance}
-          complianceIdentityId={complianceIdentityId}
-          accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
-          onComplianceIdentityChange={onComplianceIdentityChange}
-          onComplianceIdentitySaved={onComplianceIdentitySaved}
-          previewPersonaId={previewPersonaId}
-          setPreviewPersonaId={setPreviewPersonaId}
-          previewRecipient={previewRecipient}
-          personaOptions={personaOptions}
-          onTemplateImported={onTemplateImported}
-          onTemplateSourceSaved={onTemplateSourceSaved}
-          collapsed={sidebarCollapsed}
-          onCollapsedChange={setSidebarCollapsed}
-        />
+        {editable ? (
+          <BroadcastComposeSidebar
+            broadcastId={broadcastId}
+            templates={templates}
+            templateId={templateId}
+            setTemplateId={setTemplateId}
+            templateVariables={templateVariables}
+            setTemplateVariables={setTemplateVariables}
+            editable={editable}
+            subject={subject}
+            bodyMarkdown={bodyMarkdown}
+            fromEmail={previewFromEmail}
+            fromName={previewFromName}
+            compliance={compliance}
+            complianceIdentityId={complianceIdentityId}
+            accountDefaultComplianceIdentityId={accountDefaultComplianceIdentityId}
+            onComplianceIdentityChange={onComplianceIdentityChange}
+            onComplianceIdentitySaved={onComplianceIdentitySaved}
+            previewPersonaId={previewPersonaId}
+            setPreviewPersonaId={setPreviewPersonaId}
+            previewRecipient={previewRecipient}
+            personaOptions={personaOptions}
+            onTemplateImported={onTemplateImported}
+            onTemplateSourceSaved={onTemplateSourceSaved}
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={setSidebarCollapsed}
+          />
+        ) : null}
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import type { BroadcastStatus } from "@/lib/crm/api";
 const DRAFT_TABS: BroadcastDetailTab[] = ["content", "publish", "settings"];
 
 const NON_DRAFT_LEADING: BroadcastDetailTab[] = ["stats", "recipients"];
-const NON_DRAFT_TRAILING: BroadcastDetailTab[] = ["content", "publish", "settings"];
+const NON_DRAFT_TRAILING: BroadcastDetailTab[] = ["content", "settings"];
 
 /** Default landing tab when `tab` is omitted from the broadcast detail URL. */
 export function defaultBroadcastDetailTab(

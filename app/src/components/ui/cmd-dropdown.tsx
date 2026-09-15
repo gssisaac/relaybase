@@ -56,6 +56,7 @@ type CmdDropdownBaseProps<Value extends string = string> = {
   triggerId?: string
   triggerClassName?: string
   contentClassName?: string
+  contentAlign?: "start" | "center" | "end"
   emptyMessage?: string
   clearLabel?: string
   open?: boolean
@@ -94,6 +95,7 @@ function CmdDropdown<Value extends string = string>({
   triggerId,
   triggerClassName,
   contentClassName,
+  contentAlign = "start",
   emptyMessage = "No results found.",
   clearLabel = "Clear selection",
   open: openProp,
@@ -269,11 +271,30 @@ function CmdDropdown<Value extends string = string>({
     <Popover open={open} onOpenChange={setOpen}>
       <div className={cn("min-w-0", className)}>
         {children ? (
-          children({
-            openPopover: openFromEvent,
-            selectedOptions,
-            disabled,
-          })
+          <PopoverTrigger
+            disabled={disabled}
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                disabled={disabled}
+                id={triggerId}
+                className={cn(
+                  "h-8 w-full min-w-[12rem] justify-between gap-2 font-normal",
+                  triggerClassName,
+                )}
+              />
+            }
+          >
+            <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+              {children({
+                openPopover: openFromEvent,
+                selectedOptions,
+                disabled,
+              })}
+            </span>
+            <ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
+          </PopoverTrigger>
         ) : (
           <PopoverTrigger
             disabled={disabled}
@@ -295,7 +316,7 @@ function CmdDropdown<Value extends string = string>({
         )}
       </div>
       <PopoverContent
-        align="start"
+        align={contentAlign}
         className={cn(
           "w-(--anchor-width) min-w-[var(--anchor-width)] max-w-[min(24rem,calc(100vw-2rem))] gap-0 p-1",
           contentClassName,

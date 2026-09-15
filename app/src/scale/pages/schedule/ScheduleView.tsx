@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Globe, RefreshCw } from "lucide-react";
+import { CalendarClock, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import { usePersistedScheduleTimeZone } from "@/hooks/use-persisted-schedule-timezone";
+import { TimezoneDropdown } from "@/scale/components/TimezoneDropdown";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScheduleItemPopover } from "@/scale/components/ScheduleItemPopover";
 import { ScheduleMonthCalendar } from "@/scale/components/ScheduleMonthCalendar";
@@ -19,7 +19,6 @@ import {
   type ScheduleItem,
 } from "@/scale/lib/schedule-items";
 import { scaleApi } from "@/lib/scale/api";
-import { buildScheduleTimeZoneOptions } from "@/scale/lib/schedule-timezone";
 /** Match ScaleOverviewView inset rows — bg lift, no borders. */
 const scheduleInsetItemClassName =
   "rounded-xl bg-secondary/70 px-3 py-2.5 transition-colors hover:bg-secondary dark:bg-accent/90 dark:hover:bg-accent";
@@ -34,10 +33,6 @@ function countUpcomingWithinDays(items: ScheduleItem[], from: Date, days: number
 export function ScheduleView() {
   const { broadcasts } = useScalePaths();
   const { timeZone, setTimeZone, deviceTimeZone } = usePersistedScheduleTimeZone();
-  const timeZoneOptions = useMemo(
-    () => buildScheduleTimeZoneOptions(deviceTimeZone),
-    [deviceTimeZone],
-  );
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,36 +79,11 @@ export function ScheduleView() {
         className="shrink-0 px-4 py-3"
         end={
           <div className="flex shrink-0 items-center gap-2">
-            <CmdDropdown
-              triggerId="schedule-timezone"
-              required
+            <TimezoneDropdown
               value={timeZone}
-              placeholder="Time zone"
-              searchPlaceholder="Search time zones…"
-              options={timeZoneOptions}
-              triggerClassName="h-8 w-auto min-w-[11rem] max-w-[15rem]"
-              contentClassName="min-w-[18rem] w-[min(22rem,calc(100vw-2rem))]"
-              onValueChange={(next) => {
-                if (next) setTimeZone(next);
-              }}
-            >
-              {({ openPopover, selectedOptions, disabled }) => (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  id="schedule-timezone"
-                  disabled={disabled}
-                  className="h-8 max-w-[15rem] gap-2 font-normal"
-                  onClick={openPopover}
-                >
-                  <Globe className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="min-w-0 truncate">
-                    {selectedOptions[0]?.label ?? "Time zone"}
-                  </span>
-                </Button>
-              )}
-            </CmdDropdown>
+              deviceTimeZone={deviceTimeZone}
+              onValueChange={setTimeZone}
+            />
             <Button
               variant="outline"
               size="sm"

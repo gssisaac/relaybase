@@ -147,7 +147,9 @@ function GateInner({ children }: { children: ReactNode }) {
 function WebOwnerGate({ children }: { children: ReactNode }) {
   return (
     <WebConsoleAppProviders>
-      <DashboardShell userId={WEB_OWNER_USER_ID}>{children}</DashboardShell>
+      <EnableEmailApiDialogHost>
+        <DashboardShell userId={WEB_OWNER_USER_ID}>{children}</DashboardShell>
+      </EnableEmailApiDialogHost>
     </WebConsoleAppProviders>
   );
 }

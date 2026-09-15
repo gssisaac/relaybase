@@ -6,6 +6,7 @@ const CRM_UI_GET_PATHS = new Set([
   "/crm/broadcasts",
   "/crm/broadcasts/sent",
   "/crm/broadcasts/in-progress",
+  "/crm/automations",
 ]);
 
 /** True when this request should be forwarded to hq/crm (relaybase.email edge → upstream). */
@@ -21,6 +22,13 @@ export function shouldProxyRequestToCrm(pathname: string, method: string, header
   if (pathname.startsWith("/crm/compliance-identities")) return true;
   if (pathname.startsWith("/crm/brand/")) return true;
   if (pathname.startsWith("/crm/assets/")) return true;
+
+  if (pathname.startsWith("/crm/automations")) {
+    if (method !== "GET") return true;
+    if (isCrmApiRequest(headers)) return true;
+    if (CRM_UI_GET_PATHS.has(pathname)) return false;
+    return true;
+  }
 
   if (!pathname.startsWith("/crm/broadcasts")) return false;
 

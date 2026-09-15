@@ -450,4 +450,199 @@ export const crmApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+
+  listAutomations: () => crmFetch<{ automations: Automation[] }>("/crm/automations"),
+  createAutomation: (input: {
+    name: string;
+    domain?: string;
+    purpose?: AutomationPurpose;
+    triggerType?: AutomationTrigger["type"];
+  }) =>
+    crmFetch<Automation>("/crm/automations", { method: "POST", body: JSON.stringify(input) }),
+  getAutomation: (id: string) => crmFetch<Automation>(`/crm/automations/${id}`),
+  updateAutomation: (
+    id: string,
+    input: Partial<{
+      name: string;
+      slug: string;
+      description: string | null;
+      domain: string;
+      fromName: string | null;
+      fromEmail: string | null;
+      replyTo: string | null;
+      complianceIdentityId: string | null;
+      listStatus: AutomationListStatus;
+      purpose: AutomationPurpose;
+      trigger: AutomationTrigger;
+      audienceGroupId: string | null;
+      cooldownSeconds: number;
+      applyMarketingSuppression: boolean;
+      subject: string;
+      previewText: string | null;
+      bodyMarkdown: string;
+      templateId: string | null;
+      templateVariables: Record<string, string>;
+    }>,
+  ) =>
+    crmFetch<Automation>(`/crm/automations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  activateAutomation: (id: string) =>
+    crmFetch<Automation>(`/crm/automations/${id}/activate`, { method: "POST" }),
+  pauseAutomation: (id: string) =>
+    crmFetch<Automation>(`/crm/automations/${id}/pause`, { method: "POST" }),
+  rotateAutomationWebhookSecret: (id: string) =>
+    crmFetch<{ automation: Automation; secret: string }>(
+      `/crm/automations/${id}/rotate-webhook-secret`,
+      { method: "POST" },
+    ),
+  testSendAutomation: (
+    id: string,
+    input: { email: string; name?: string; payload?: Record<string, unknown> },
+  ) =>
+    crmFetch<{ ok: true; automationSendId: string; triggerEventId: string }>(
+      `/crm/automations/${id}/test-send`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+  getAutomationActivity: (id: string) =>
+    crmFetch<{ triggerEvents: AutomationTriggerEvent[]; sends: AutomationSend[] }>(
+      `/crm/automations/${id}/activity`,
+    ),
+  getAutomationStats: (id: string) =>
+    crmFetch<{
+      automationId: string;
+      stats: AutomationStats;
+      lastTriggeredAt: string | null;
+      lastSentAt: string | null;
+    }>(`/crm/automations/${id}/stats`),
+  uploadAutomationAsset: (
+    automationId: string,
+    input: { filename: string; mimeType: string; contentBase64: string },
+  ) =>
+    crmFetch<{ url: string; key: string }>(`/crm/automations/${automationId}/assets`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+};
+
+export type AutomationListStatus = "active" | "archived";
+export type AutomationStatus = "draft" | "active" | "paused";
+export type AutomationPurpose = "transactional" | "conversational" | "marketing";
+
+export type InternalAutomationEvent = "account.verify_email" | "account.created";
+
+export type AutomationTrigger =
+  | {
+      type: "http_webhook";
+      secret: string;
+      emailPath: string;
+      namePath?: string | null;
+      requiredFields?: string[];
+    }
+  | {
+      type: "mailbox_inbound";
+      domain: string;
+      localPart: string;
+      replyToSender: boolean;
+      match?: {
+        subjectContains?: string | null;
+        fromDomain?: string | null;
+      } | null;
+    }
+  | {
+      type: "internal_event";
+      event: InternalAutomationEvent;
+    }
+  | {
+      type: "form_submit";
+      formKey: string;
+      emailPath: string;
+      namePath?: string | null;
+      requiredFields?: string[];
+    };
+
+export type AutomationStats = BroadcastStats & {
+  triggered: number;
+  matched: number;
+  deduped: number;
+};
+
+export type Automation = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  domain: string;
+  fromName: string | null;
+  fromEmail: string | null;
+  replyTo: string | null;
+  complianceIdentityId: string | null;
+  purpose: AutomationPurpose;
+  listStatus: AutomationListStatus;
+  status: AutomationStatus;
+  trigger: AutomationTrigger;
+  audienceGroupId: string | null;
+  audienceGroupName: string | null;
+  cooldownSeconds: number;
+  applyMarketingSuppression: boolean;
+  subject: string;
+  previewText: string | null;
+  bodyMarkdown: string;
+  templateId: string | null;
+  templateVariables: Record<string, string>;
+  stats: AutomationStats;
+  lastTriggeredAt: string | null;
+  lastSentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AutomationTriggerEventStatus =
+  | "received"
+  | "matched"
+  | "queued"
+  | "sent"
+  | "skipped"
+  | "failed";
+
+export type AutomationTriggerEvent = {
+  id: string;
+  automationId: string | null;
+  triggerType: AutomationTrigger["type"];
+  idempotencyKey: string;
+  recipientEmail: string;
+  recipientName: string | null;
+  payload: Record<string, unknown>;
+  status: AutomationTriggerEventStatus;
+  skipReason: string | null;
+  occurredAt: string;
+};
+
+export type AutomationSendStatus =
+  | "queued"
+  | "sending"
+  | "delivered"
+  | "bounced"
+  | "skipped"
+  | "failed";
+
+export type AutomationSend = {
+  id: string;
+  automationId: string;
+  triggerEventId: string;
+  audienceMemberId: string | null;
+  email: string;
+  name: string | null;
+  status: AutomationSendStatus;
+  errorMessage: string | null;
+  bounceReason: string | null;
+  sentAt: string | null;
+  deliveredAt: string | null;
+  openedAt: string | null;
+  clickedAt: string | null;
+  unsubscribedAt: string | null;
+  openCount: number;
+  clickCount: number;
+  createdAt: string;
 };

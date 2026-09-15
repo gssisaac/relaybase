@@ -249,6 +249,190 @@ export type BroadcastAsset = {
 };
 
 // ============================================================================
+// 3. Automations (Event-triggered 1:1 email — separate from broadcast sends)
+// ============================================================================
+
+export type AutomationListStatus = "active" | "archived";
+export type AutomationStatus = "draft" | "active" | "paused";
+export type AutomationPurpose = "transactional" | "conversational" | "marketing";
+
+export type InternalAutomationEvent = "account.verify_email" | "account.created";
+
+export type AutomationTrigger =
+  | {
+      type: "http_webhook";
+      /** Bearer token for POST /crm/hooks/automation/:automationId */
+      secret: string;
+      emailPath: string;
+      namePath?: string | null;
+      requiredFields?: string[];
+    }
+  | {
+      type: "mailbox_inbound";
+      domain: string;
+      /** Address local-part or `*` for catch-all on domain. */
+      localPart: string;
+      replyToSender: boolean;
+      match?: {
+        subjectContains?: string | null;
+        fromDomain?: string | null;
+      } | null;
+    }
+  | {
+      type: "internal_event";
+      event: InternalAutomationEvent;
+    }
+  | {
+      type: "form_submit";
+      /** Public key in POST /crm/hooks/form/:formKey */
+      formKey: string;
+      emailPath: string;
+      namePath?: string | null;
+      requiredFields?: string[];
+    };
+
+export type AutomationSendStats = {
+  sent: number;
+  delivered: number;
+  bounced: number;
+  failed: number;
+  skipped: number;
+  complained: number;
+  opened: number;
+  totalOpens: number;
+  clicked: number;
+  totalClicks: number;
+  unsubscribed: number;
+};
+
+export type AutomationStats = AutomationSendStats & {
+  triggered: number;
+  matched: number;
+  deduped: number;
+};
+
+export type Automation = {
+  id: string;
+  accountLinkId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  domain: string;
+  fromName?: string | null;
+  fromEmail?: string | null;
+  replyTo?: string | null;
+  complianceIdentityId?: string | null;
+  purpose: AutomationPurpose;
+  listStatus: AutomationListStatus;
+  status: AutomationStatus;
+  trigger: AutomationTrigger;
+  /** Optional: upsert contact on send (conversational / marketing). */
+  audienceGroupId?: string | null;
+  cooldownSeconds: number;
+  applyMarketingSuppression: boolean;
+  subject: string;
+  previewText?: string | null;
+  bodyMarkdown: string;
+  templateId?: string | null;
+  templateVariables?: Record<string, string>;
+  stats: AutomationStats;
+  lastTriggeredAt?: string | null;
+  lastSentAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TriggerEventStatus =
+  | "received"
+  | "matched"
+  | "queued"
+  | "sent"
+  | "skipped"
+  | "failed";
+
+export type TriggerEventSkipReason =
+  | "no_match"
+  | "paused"
+  | "draft"
+  | "cooldown"
+  | "suppressed"
+  | "invalid_payload"
+  | "duplicate"
+  | "send_failed";
+
+export type TriggerEvent = {
+  id: string;
+  accountLinkId: string;
+  automationId: string | null;
+  triggerType: AutomationTrigger["type"];
+  idempotencyKey: string;
+  recipientEmail: string;
+  recipientName?: string | null;
+  payload: Record<string, unknown>;
+  status: TriggerEventStatus;
+  skipReason?: TriggerEventSkipReason | null;
+  occurredAt: string;
+};
+
+export type AutomationSendStatus =
+  | "queued"
+  | "sending"
+  | "delivered"
+  | "bounced"
+  | "skipped"
+  | "failed";
+
+export type AutomationSend = {
+  id: string;
+  automationId: string;
+  triggerEventId: string;
+  audienceMemberId?: string | null;
+  email: string;
+  name?: string | null;
+  status: AutomationSendStatus;
+  errorMessage?: string | null;
+  bounceReason?: string | null;
+  sentAt?: string | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
+  clickedAt?: string | null;
+  unsubscribedAt?: string | null;
+  openCount: number;
+  clickCount: number;
+  createdAt: string;
+};
+
+/** Engagement ledger for automation sends — not mixed with broadcast trackingEvents. */
+export type AutomationTrackingEventType =
+  | "delivered"
+  | "open"
+  | "click"
+  | "bounce"
+  | "unsubscribe"
+  | "complaint";
+
+export type AutomationTrackingEvent = {
+  id: string;
+  automationId: string;
+  automationSendId: string;
+  memberEmail: string;
+  type: AutomationTrackingEventType;
+  url?: string | null;
+  reason?: string | null;
+  occurredAt: string;
+};
+
+export type AutomationAsset = {
+  id: string;
+  key: string;
+  automationId: string;
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+  createdAt: string;
+};
+
+// ============================================================================
 // Audience Groups (Account-wide contact pools)
 // ============================================================================
 
@@ -320,6 +504,10 @@ export type CrmDataStore = {
   complianceIdentities: ComplianceIdentity[];
   broadcasts: Broadcast[];
   recipients: Recipient[];
+  automations: Automation[];
+  triggerEvents: TriggerEvent[];
+  automationSends: AutomationSend[];
+  automationTrackingEvents: AutomationTrackingEvent[];
   accountSuppressions: AccountSuppression[];
   pipelineCards: PipelineCard[];
   activities: Activity[];
@@ -327,5 +515,6 @@ export type CrmDataStore = {
   scheduledJobs: ScheduledJob[];
   trackingEvents: TrackingEvent[];
   broadcastAssets: BroadcastAsset[];
+  automationAssets: AutomationAsset[];
   audienceGroups: AudienceGroup[];
 };

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { emptyBroadcastStats, normalizeBroadcastStats } from "../lib/broadcasts/stats";
+import { normalizeAutomationStats } from "../lib/automations/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
@@ -59,6 +60,10 @@ function defaultStore(): CrmDataStore {
     ],
     broadcasts: [],
     recipients: [],
+    automations: [],
+    triggerEvents: [],
+    automationSends: [],
+    automationTrackingEvents: [],
     accountSuppressions: [],
     pipelineCards: [],
     activities: [],
@@ -74,6 +79,7 @@ function defaultStore(): CrmDataStore {
     scheduledJobs: [],
     trackingEvents: [],
     broadcastAssets: [],
+    automationAssets: [],
     audienceGroups: [],
   };
 }
@@ -101,6 +107,11 @@ function migrateLegacyStore(raw: Record<string, unknown>): CrmDataStore {
   };
 
   if (!parsed.broadcastAssets) parsed.broadcastAssets = [];
+  if (!parsed.automations) parsed.automations = [];
+  if (!parsed.triggerEvents) parsed.triggerEvents = [];
+  if (!parsed.automationSends) parsed.automationSends = [];
+  if (!parsed.automationTrackingEvents) parsed.automationTrackingEvents = [];
+  if (!parsed.automationAssets) parsed.automationAssets = [];
   if (!parsed.broadcasts) parsed.broadcasts = [];
 
   const legacyCampaigns = parsed.campaigns ?? [];
@@ -387,6 +398,34 @@ function normalizeStore(store: CrmDataStore): CrmDataStore {
       row.deliveredAt = row.status === "delivered" ? (row.sentAt ?? null) : null;
     }
     if (row.unsubscribedAt === undefined) row.unsubscribedAt = null;
+  }
+
+  if (!store.automations) store.automations = [];
+  if (!store.triggerEvents) store.triggerEvents = [];
+  if (!store.automationSends) store.automationSends = [];
+  if (!store.automationTrackingEvents) store.automationTrackingEvents = [];
+  if (!store.automationAssets) store.automationAssets = [];
+
+  for (const row of store.automations) {
+    if (row.cooldownSeconds === undefined) row.cooldownSeconds = 86_400;
+    if (row.applyMarketingSuppression === undefined) {
+      row.applyMarketingSuppression = row.purpose !== "transactional";
+    }
+    if (row.audienceGroupId === undefined) row.audienceGroupId = null;
+    if (row.templateVariables === undefined) row.templateVariables = {};
+    if (row.lastTriggeredAt === undefined) row.lastTriggeredAt = null;
+    if (row.lastSentAt === undefined) row.lastSentAt = null;
+    row.stats = normalizeAutomationStats(row.stats);
+  }
+
+  for (const row of store.automationSends) {
+    if (row.bounceReason === undefined) row.bounceReason = null;
+    if (row.deliveredAt === undefined) {
+      row.deliveredAt = row.status === "delivered" ? (row.sentAt ?? null) : null;
+    }
+    if (row.unsubscribedAt === undefined) row.unsubscribedAt = null;
+    if (row.openCount === undefined) row.openCount = 0;
+    if (row.clickCount === undefined) row.clickCount = 0;
   }
 
   return store;

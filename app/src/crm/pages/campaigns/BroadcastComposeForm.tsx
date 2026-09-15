@@ -17,6 +17,7 @@ import {
   type PreviewRecipient,
 } from "@/crm/lib/broadcast-merge-tags";
 import type { CrmAccountCompliance, CrmTemplate } from "@/lib/crm/api";
+import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/campaign-upload";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
 import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/types";
 /**
@@ -25,6 +26,7 @@ import type { EditorSnapshotProvider } from "@/lib/markdown-editor/persistence/t
  */
 export function BroadcastComposeForm({
   broadcastId,
+  assetOwner = "broadcast",
   editorRef,
   templates,
   templateId,
@@ -60,6 +62,7 @@ export function BroadcastComposeForm({
 }: {
   /** Broadcast id — asset upload namespace (`/crm/broadcasts/:id/assets`). */
   broadcastId: string;
+  assetOwner?: CrmContentAssetOwner;
   editorRef: RefObject<EditorSnapshotProvider | null>;
   templates: CrmTemplate[];
   templateId: string;
@@ -220,6 +223,7 @@ export function BroadcastComposeForm({
                 key={broadcastId}
                 campaignId={broadcastId}
                 documentId={broadcastId}
+                assetOwner={assetOwner}
                 value={bodyMarkdown}
                 onChange={onBodyChange}
                 editable={editable}

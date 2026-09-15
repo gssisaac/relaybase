@@ -7,6 +7,10 @@ const PUBLIC_PATH_PREFIXES = [
   "/crm/assets/",
 ] as const;
 
+function isAutomationHookPath(path: string): boolean {
+  return path.startsWith("/crm/hooks/");
+}
+
 function isPublicCrmPath(path: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(prefix));
 }
@@ -24,7 +28,7 @@ export function crmApiAuthMiddleware() {
       return;
     }
 
-    if (isCrmWebhookPath(path)) {
+    if (isCrmWebhookPath(path) || isAutomationHookPath(path)) {
       await next();
       return;
     }

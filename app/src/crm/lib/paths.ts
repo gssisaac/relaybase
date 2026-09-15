@@ -1,9 +1,9 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Mail, Users } from "lucide-react";
+import { Mail, Users, Zap } from "lucide-react";
 
-import type { BroadcastStatus } from "@/lib/crm/api";
+import type { AutomationStatus, BroadcastStatus } from "@/lib/crm/api";
 
 export type AudienceDetailTab = "contacts" | "history" | "settings";
 
@@ -15,13 +15,23 @@ export function useCrmPaths() {
   const broadcasts = "/crm/broadcasts";
   const broadcastsSent = "/crm/broadcasts/sent";
   const broadcastsInProgress = "/crm/broadcasts/in-progress";
+  const automations = "/crm/automations";
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: audience, label: "Audience", icon: Users },
     { href: broadcasts, label: "Broadcasts", icon: Mail },
+    { href: automations, label: "Automations", icon: Zap },
   ];
 
-  return { base, audience, broadcasts, broadcastsSent, broadcastsInProgress, tabs };
+  return {
+    base,
+    audience,
+    broadcasts,
+    broadcastsSent,
+    broadcastsInProgress,
+    automations,
+    tabs,
+  };
 }
 
 export function broadcastsSectionHref(section: BroadcastsSection = "list"): string {
@@ -107,6 +117,52 @@ export function broadcastDetailFromSearch(searchParams: {
     tab = "recipients";
   }
   return { broadcastId, tab };
+}
+
+export type AutomationDetailTab = "content" | "trigger" | "activity" | "stats" | "settings";
+
+function automationDetailTabQueryParam(
+  tab: AutomationDetailTab,
+  status: AutomationStatus | undefined,
+): AutomationDetailTab | null {
+  if (!status || status === "draft") {
+    return tab === "content" ? null : tab;
+  }
+  return tab === "stats" ? null : tab;
+}
+
+export function automationDetailHref(
+  id: string,
+  tab: AutomationDetailTab = "content",
+  status?: AutomationStatus,
+): string {
+  const params = new URLSearchParams();
+  params.set("id", id.trim());
+  const tabParam = automationDetailTabQueryParam(tab, status);
+  if (tabParam) params.set("tab", tabParam);
+  return `/crm/automations?${params.toString()}`;
+}
+
+export function automationDetailFromSearch(searchParams: {
+  get: (name: string) => string | null;
+}): { automationId: string; tab: AutomationDetailTab | null } | null {
+  const automationId = searchParams.get("id")?.trim() ?? "";
+  if (!automationId) return null;
+  const raw = searchParams.get("tab")?.trim().toLowerCase();
+  if (!raw) {
+    return { automationId, tab: null };
+  }
+  let tab: AutomationDetailTab = "content";
+  if (
+    raw === "trigger" ||
+    raw === "activity" ||
+    raw === "stats" ||
+    raw === "settings" ||
+    raw === "content"
+  ) {
+    tab = raw;
+  }
+  return { automationId, tab };
 }
 
 /** @deprecated use `broadcasts` from `useCrmPaths()` */

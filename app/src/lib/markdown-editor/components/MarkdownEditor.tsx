@@ -43,6 +43,7 @@ import {
   normalizeCampaignAssetUrlsInHtml,
 } from "@/lib/markdown-editor/utils/asset-url";
 import { getCrmApiBase } from "@/lib/crm/api-base";
+import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/campaign-upload";
 import { cn } from "@/lib/utils";
 
 import "@blocknote/shadcn/style.css";
@@ -62,6 +63,8 @@ type MarkdownEditorProps = {
    * same entity (e.g. no broadcast-scoped content).
    */
   documentId?: string;
+  /** Where uploaded images are stored (broadcast vs automation CRM routes). */
+  assetOwner?: CrmContentAssetOwner;
   value: string;
   editable?: boolean;
   onChange: (payload: { markdown: string; html: string }) => void;
@@ -180,7 +183,15 @@ function openExternalLink(event: React.MouseEvent) {
 }
 
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(function MarkdownEditor(
-  { campaignId, documentId = campaignId, value, editable = true, onChange, className },
+  {
+    campaignId,
+    documentId = campaignId,
+    assetOwner = "broadcast",
+    value,
+    editable = true,
+    onChange,
+    className,
+  },
   ref,
 ) {
   const { resolvedTheme } = useTheme();
@@ -192,6 +203,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   const editorMountedRef = useRef(false);
   const editorRef = useRef<BlockNoteEditor | null>(null);
   const campaignIdRef = useRef(campaignId);
+  const assetOwnerRef = useRef(assetOwner);
   const hydratedRef = useRef(false);
   const hydratedFingerprintRef = useRef<string | null>(null);
   const hydrateGenRef = useRef(0);
@@ -199,11 +211,13 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
   onChangeRef.current = onChange;
   valueRef.current = value;
   campaignIdRef.current = campaignId;
+  assetOwnerRef.current = assetOwner;
 
   const ingestFile = useCallback(async (file: File) => {
     return ingestCampaignFile({
       file,
       campaignId: campaignIdRef.current,
+      assetOwner: assetOwnerRef.current,
       settings: DEFAULT_IMAGE_OPTIMIZATION_SETTINGS,
     });
   }, []);
@@ -241,6 +255,9 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       const [cid, ...rest] = assetPath.split("/");
       const filename = rest.join("/");
       if (!cid || !filename) return url;
+      if (assetOwnerRef.current === "automation") {
+        return `${getCrmApiBase()}/crm/assets/automation/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+      }
       return `${getCrmApiBase()}/crm/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
     },
     pasteHandler: ({ event, editor: pasteEditor, defaultPasteHandler }) => {

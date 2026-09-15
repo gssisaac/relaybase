@@ -10,7 +10,7 @@ import {
   type PageAssetKind,
 } from "./assets";
 import { normalizeCampaignAssetUrl } from "./asset-url";
-import { uploadCampaignAsset } from "./campaign-upload";
+import { uploadCampaignAsset, type CrmContentAssetOwner } from "./campaign-upload";
 
 export type IngestedPageFile = {
   markdownUrl: string;
@@ -22,6 +22,7 @@ export type IngestedPageFile = {
 export async function ingestCampaignFile(opts: {
   file: File;
   campaignId: string;
+  assetOwner?: CrmContentAssetOwner;
   settings?: ImageOptimizationSettings;
 }): Promise<IngestedPageFile> {
   const settings = opts.settings ?? DEFAULT_IMAGE_OPTIMIZATION_SETTINGS;
@@ -37,6 +38,7 @@ export async function ingestCampaignFile(opts: {
     filename,
     optimized.mimeType,
     await blobToBase64(optimized.file),
+    opts.assetOwner ?? "broadcast",
   );
 
   return {

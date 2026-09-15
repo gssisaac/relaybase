@@ -198,6 +198,36 @@ export function normalizeEntryPath(path: string): string {
     return `/crm/broadcasts?${next.toString()}`;
   }
 
+  const crmAutomationMatch = pathname.match(
+    /^\/crm\/automations\/([^/]+)(?:\/(content|trigger|activity|stats|settings))?\/?$/,
+  );
+  if (crmAutomationMatch) {
+    let automationId = crmAutomationMatch[1]!;
+    try {
+      automationId = decodeURIComponent(automationId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", automationId);
+    const tabSeg = crmAutomationMatch[2];
+    if (
+      tabSeg === "content" ||
+      tabSeg === "trigger" ||
+      tabSeg === "activity" ||
+      tabSeg === "stats" ||
+      tabSeg === "settings"
+    ) {
+      next.set("tab", tabSeg);
+    }
+    return `/crm/automations?${next.toString()}`;
+  }
+
+  if (pathname === "/automations" || pathname.startsWith("/automations/")) {
+    const qs = params.toString();
+    return qs ? `/crm/automations?${qs}` : "/crm/automations";
+  }
+
   const crmCampaignMatch = pathname.match(
     /^\/crm\/campaigns(?:\/([^/]+))?(?:\/(content|publish|progress|overview))?\/?$/,
   );

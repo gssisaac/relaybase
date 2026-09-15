@@ -14,6 +14,9 @@ const INLINE_RECIPIENT_MAX = 50;
 
 export { DISPATCH_BATCH_SIZE };
 
+/** Prevents scheduler + HTTP send from processing the same broadcast concurrently. */
+const dispatchInFlight = new Set<string>();
+
 function enqueueBroadcastRecipients(
   broadcast: Broadcast,
   members: AudienceMember[],
@@ -99,6 +102,26 @@ export async function processBroadcastDispatchBatch(
   if (!broadcast || broadcast.status !== "sending") {
     return { sent: 0, failed: 0, skipped: 0, completed: true };
   }
+  if (dispatchInFlight.has(broadcastId)) {
+    return { sent: 0, failed: 0, skipped: 0, completed: false };
+  }
+  dispatchInFlight.add(broadcastId);
+
+  try {
+    return await runBroadcastDispatchBatch(broadcastId, limit);
+  } finally {
+    dispatchInFlight.delete(broadcastId);
+  }
+}
+
+async function runBroadcastDispatchBatch(
+  broadcastId: string,
+  limit: number,
+): Promise<{ sent: number; failed: number; skipped: number; completed: boolean }> {
+  const broadcast = store.read().broadcasts.find((b) => b.id === broadcastId);
+  if (!broadcast || broadcast.status !== "sending") {
+    return { sent: 0, failed: 0, skipped: 0, completed: true };
+  }
 
   const templateHtml =
     getBroadcastTemplateHtml(broadcast.templateId ?? broadcast.defaultTemplateId) ??
@@ -152,6 +175,18 @@ export async function processBroadcastDispatchBatch(
   }
 
   for (const recipient of queued) {
+    const live = store.read().recipients.find((r) => r.id === recipient.id);
+    if (
+      live &&
+      (live.status === "delivered" ||
+        live.status === "failed" ||
+        live.status === "skipped" ||
+        (live.status === "sending" && live.sentAt))
+    ) {
+      skipped += 1;
+      continue;
+    }
+
     const member = store
       .read()
       .audienceGroups.flatMap((g) => g.contacts)

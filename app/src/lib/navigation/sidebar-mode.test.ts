@@ -76,11 +76,11 @@ describe("normalizeEntryPath", () => {
   it("rewrites audience and broadcast path details into ?id=&tab=", () => {
     assert.equal(
       normalizeEntryPath("/audience/grp1/settings"),
-      "/audience?id=grp1&tab=settings",
+      "/crm/audience?id=grp1&tab=settings",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/bc1/progress"),
-      "/broadcasts?id=bc1&tab=progress",
+      "/broadcasts?id=bc1&tab=stats",
     );
     assert.equal(normalizeEntryPath("/broadcasts/new"), "/broadcasts?new=1");
   });

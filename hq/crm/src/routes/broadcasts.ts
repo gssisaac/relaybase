@@ -26,6 +26,28 @@ export const crmBroadcasts = new Hono();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Atomically move draft → sending so duplicate POST /send cannot double-dispatch. */
+function claimBroadcastForSend(id: string): Broadcast | null {
+  let claimed: Broadcast | null = null;
+  store.update((draft) => {
+    const idx = draft.broadcasts.findIndex((r) => r.id === id);
+    if (idx < 0) return;
+    const row = draft.broadcasts[idx]!;
+    if (row.status !== "draft") return;
+    const now = new Date().toISOString();
+    claimed = {
+      ...row,
+      status: "sending",
+      sentAt: now,
+      startedAt: now,
+      finishedAt: null,
+      updatedAt: now,
+    };
+    draft.broadcasts[idx] = claimed;
+  });
+  return claimed;
+}
+
 function sanitizeTemplateVariables(raw: Record<string, string> | undefined): Record<string, string> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, string> = {};
@@ -420,15 +442,18 @@ crmBroadcasts.post("/:id/test-send", async (c) => {
 
 crmBroadcasts.post("/:id/send", async (c) => {
   const id = c.req.param("id")!;
-  const broadcast = findBroadcast(id);
-  if (!broadcast) return c.json({ error: "not found" }, 404);
-  if (broadcast.status !== "draft") {
-    return c.json({ error: `cannot send from status "${broadcast.status}"` }, 409);
+  const existing = findBroadcast(id);
+  if (!existing) return c.json({ error: "not found" }, 404);
+  if (existing.status !== "draft") {
+    if (existing.status === "sending") {
+      return c.json({ error: "Broadcast is already sending" }, 409);
+    }
+    return c.json({ error: `cannot send from status "${existing.status}"` }, 409);
   }
-  if (!broadcast.subject.trim()) {
+  if (!existing.subject.trim()) {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
   }
-  if (!broadcast.fromEmail?.trim()) {
+  if (!existing.fromEmail?.trim()) {
     return c.json({ error: "Set From email on Settings before sending." }, 400);
   }
 
@@ -437,7 +462,7 @@ crmBroadcasts.post("/:id/send", async (c) => {
     return c.json({ error: sendAuth.error }, 502);
   }
 
-  const members = resolveActiveAudienceContacts(broadcast);
+  const members = resolveActiveAudienceContacts(existing);
   if (members.length === 0) {
     return c.json(
       { error: "Cannot send: this broadcast has 0 active audience contacts in the linked group." },
@@ -445,25 +470,12 @@ crmBroadcasts.post("/:id/send", async (c) => {
     );
   }
 
-  const now = new Date().toISOString();
-  store.update((draft) => {
-    const idx = draft.broadcasts.findIndex((r) => r.id === id);
-    if (idx >= 0) {
-      draft.broadcasts[idx] = {
-        ...draft.broadcasts[idx]!,
-        status: "sending",
-        sentAt: now,
-        startedAt: now,
-        finishedAt: null,
-        updatedAt: now,
-      };
-    }
-  });
+  const broadcast = claimBroadcastForSend(id);
+  if (!broadcast) {
+    return c.json({ error: "Broadcast is already sending or no longer a draft" }, 409);
+  }
 
-  const result = await dispatchBroadcastToAudience(
-    store.read().broadcasts.find((b) => b.id === id)!,
-    members,
-  );
+  const result = await dispatchBroadcastToAudience(broadcast, members);
   const row = store.read().broadcasts.find((r) => r.id === id)!;
   return c.json({ broadcast: serializeBroadcast(row), ...result });
 });

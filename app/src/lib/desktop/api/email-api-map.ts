@@ -81,10 +81,10 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
     return `/console/keys${rest.slice("/keys".length)}${search}`;
   }
   if (rest === "/audience-groups" || rest.startsWith("/audience-groups")) {
-    return `/console/audience-groups${rest.slice("/audience-groups".length)}${search}`;
+    return null;
   }
   if (rest === "/broadcasts" || rest.startsWith("/broadcasts")) {
-    return `/console/broadcasts${rest.slice("/broadcasts".length)}${search}`;
+    return null;
   }
   if (rest === "/stats" || rest.startsWith("/stats/")) {
     return `/console/stats${search}`;
@@ -105,7 +105,7 @@ export function mapEmailApiToWorker(path: string): EmailApiMapResult {
     return `/mail/account-state${rest.slice("/account-state".length)}${search}`;
   }
   if (rest === "/broadcast-drafts" || rest.startsWith("/broadcast-drafts/")) {
-    return `/console/broadcast-drafts${rest.slice("/broadcast-drafts".length)}${search}`;
+    return null;
   }
 
   return null;

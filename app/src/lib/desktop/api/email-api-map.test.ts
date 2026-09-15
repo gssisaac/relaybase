@@ -47,20 +47,14 @@ describe("mapEmailApiToWorker", () => {
     );
   });
 
-  it("maps keys, audience, broadcasts, stats", () => {
+  it("maps keys, stats; CRM owns audience/broadcasts", () => {
     assert.equal(mapEmailApiToWorker("/api/email/keys"), "/console/keys");
     assert.equal(
       mapEmailApiToWorker("/api/email/keys/abc/rotate"),
       "/console/keys/abc/rotate",
     );
-    assert.equal(
-      mapEmailApiToWorker("/api/email/audience-groups"),
-      "/console/audience-groups",
-    );
-    assert.equal(
-      mapEmailApiToWorker("/api/email/broadcasts/x/send"),
-      "/console/broadcasts/x/send",
-    );
+    assert.equal(mapEmailApiToWorker("/api/email/audience-groups"), null);
+    assert.equal(mapEmailApiToWorker("/api/email/broadcasts/x/send"), null);
     assert.equal(mapEmailApiToWorker("/api/email/stats"), "/console/stats");
     assert.equal(
       mapEmailApiToWorker("/api/email/account-stats?email=a@b.com"),
@@ -121,9 +115,6 @@ describe("mapEmailApiToWorker", () => {
       ),
       "/mail/account-state/drafts/d1/attachments/a1",
     );
-    assert.equal(
-      mapEmailApiToWorker("/api/email/broadcast-drafts"),
-      "/console/broadcast-drafts",
-    );
+    assert.equal(mapEmailApiToWorker("/api/email/broadcast-drafts"), null);
   });
 });

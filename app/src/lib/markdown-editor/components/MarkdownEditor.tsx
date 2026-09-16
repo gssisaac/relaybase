@@ -262,7 +262,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       if (assetOwnerRef.current === "trigger") {
         return `${getStudioApiBase()}/studio/assets/trigger/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
       }
-      if (assetOwnerRef.current === "template") {
+      if (assetOwnerRef.current === "message") {
         return `${getStudioApiBase()}/studio/assets/template/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
       }
       return `${getStudioApiBase()}/studio/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;

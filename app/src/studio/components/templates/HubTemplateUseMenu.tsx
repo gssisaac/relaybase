@@ -41,7 +41,6 @@ import {
   type BroadcastMergeTag,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import { syncStudioSendCredentials } from "@/studio/lib/sync-studio-send-credentials";
-import { useTemplateDetail } from "@/studio/pages/templates/TemplateDetailContext";
 
 function mergeTagKey(token: string): string {
   return token.replace(/^\{\{|\}\}$/g, "").trim();
@@ -60,22 +59,6 @@ const TRIGGER_PURPOSE_OPTIONS: { value: TriggerPurpose; label: string }[] = [
   { value: "marketing", label: "Marketing" },
 ];
 
-function snapshotFromDraft(draft: {
-  subject: string;
-  previewText: string;
-  bodyMarkdown: string;
-  templateId: string;
-  templateVariables: Record<string, string>;
-}): HubTemplateSnapshot {
-  return {
-    subject: draft.subject,
-    previewText: draft.previewText,
-    bodyMarkdown: draft.bodyMarkdown,
-    layoutId: draft.templateId,
-    templateVariables: draft.templateVariables,
-  };
-}
-
 function resolveGroupDomain(
   groups: AudienceGroupSummary[],
   groupId: string,
@@ -84,10 +67,27 @@ function resolveGroupDomain(
   return group?.domain.trim().toLowerCase() || null;
 }
 
-export function TemplateUseActions() {
+export function HubTemplateUseMenu({
+  defaultTitle,
+  hubTemplateId,
+  mergeTagSource,
+  resolveSnapshot,
+  runTestSend,
+  triggerLabel = "Use template",
+}: {
+  defaultTitle: string;
+  hubTemplateId: string;
+  mergeTagSource: { subject: string; bodyMarkdown: string };
+  resolveSnapshot: () => Promise<HubTemplateSnapshot | null>;
+  runTestSend: (input: {
+    to: string;
+    fromEmail: string;
+    mergeTags: Record<string, string>;
+  }) => Promise<void>;
+  triggerLabel?: string;
+}) {
   const router = useRouter();
   const { apiBase } = useEmailPaths();
-  const { messageTemplateId, template, persistDraft, getDraft } = useTemplateDetail();
 
   const [testOpen, setTestOpen] = useState(false);
   const [newsletterOpen, setNewsletterOpen] = useState(false);
@@ -112,9 +112,6 @@ export function TemplateUseActions() {
   const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
   const [audienceLoading, setAudienceLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const defaultTitle =
-    template?.name.trim() || template?.subject.trim() || "Untitled template";
 
   useEffect(() => {
     setAudienceLoading(true);
@@ -145,23 +142,16 @@ export function TemplateUseActions() {
     setTestFromEmail(null);
     setTestToEmail("");
     setFormError(null);
-    const draft = getDraft();
-    const fields = mergeTagsUsedInContent(draft.subject, draft.bodyMarkdown);
+    const fields = mergeTagsUsedInContent(
+      mergeTagSource.subject,
+      mergeTagSource.bodyMarkdown,
+    );
     setTestMergeTagFields(fields);
     const values: Record<string, string> = {};
     for (const field of fields) {
       values[mergeTagKey(field.token)] = field.example;
     }
     setTestMergeValues(values);
-  }
-
-  async function ensureTemplateSaved(): Promise<HubTemplateSnapshot | null> {
-    const saved = await persistDraft();
-    if (!saved) {
-      toast.error("Could not save template");
-      return null;
-    }
-    return snapshotFromDraft(getDraft());
   }
 
   async function prepareCredentials(domain: string): Promise<boolean> {
@@ -196,14 +186,14 @@ export function TemplateUseActions() {
     setBusy(true);
     setFormError(null);
     try {
-      const snapshot = await ensureTemplateSaved();
+      const snapshot = await resolveSnapshot();
       if (!snapshot) return;
 
       const newsletter = await createNewsletterFromHubTemplate({
         name,
         domain,
         audienceGroupId,
-        hubTemplateId: messageTemplateId,
+        hubTemplateId,
         snapshot,
       });
 
@@ -246,14 +236,14 @@ export function TemplateUseActions() {
     setBusy(true);
     setFormError(null);
     try {
-      const snapshot = await ensureTemplateSaved();
+      const snapshot = await resolveSnapshot();
       if (!snapshot) return;
 
       const trigger = await createTriggerFromHubTemplate({
         name,
         domain,
         purpose: triggerPurpose,
-        hubTemplateId: messageTemplateId,
+        hubTemplateId,
         snapshot,
       });
       toast.success(`Trigger “${trigger.name}” created`);
@@ -282,14 +272,9 @@ export function TemplateUseActions() {
     setBusy(true);
     setFormError(null);
     try {
-      const saved = await persistDraft();
-      if (!saved) {
-        toast.error("Could not save template");
-        return;
-      }
       if (!(await prepareCredentials(domain))) return;
 
-      await studioApi.testSendMessageTemplate(messageTemplateId, {
+      await runTestSend({
         to,
         fromEmail: from,
         mergeTags: {
@@ -308,78 +293,77 @@ export function TemplateUseActions() {
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button size="sm" disabled={busy}>
-                Use template
-                <ChevronDown className="size-4 opacity-70" />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => {
-                resetNewsletterForm("draft");
-                setNewsletterOpen(true);
-              }}
-            >
-              <Mail className="size-4" />
-              Create newsletter
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                resetNewsletterForm("schedule");
-                setNewsletterOpen(true);
-              }}
-            >
-              <Calendar className="size-4" />
-              Schedule send
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                resetTriggerForm();
-                setTriggerOpen(true);
-              }}
-            >
-              <Zap className="size-4" />
-              Create trigger
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                resetTestForm();
-                setTestOpen(true);
-              }}
-            >
-              <Send className="size-4" />
-              Test send
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button size="sm" disabled={busy}>
+              {triggerLabel}
+              <ChevronDown className="size-4 opacity-70" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => {
+              resetNewsletterForm("draft");
+              setNewsletterOpen(true);
+            }}
+          >
+            <Mail className="size-4" />
+            Create newsletter
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              resetNewsletterForm("schedule");
+              setNewsletterOpen(true);
+            }}
+          >
+            <Calendar className="size-4" />
+            Schedule send
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              resetTriggerForm();
+              setTriggerOpen(true);
+            }}
+          >
+            <Zap className="size-4" />
+            Create trigger
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              resetTestForm();
+              setTestOpen(true);
+            }}
+          >
+            <Send className="size-4" />
+            Test send
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Dialog open={testOpen} onOpenChange={setTestOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Send test email</DialogTitle>
             <DialogDescription>
-              Sends one message with this template’s current content. Nothing is saved to Newsletters.
+              Sends one message with this template’s current content. Nothing is saved to
+              Newsletters.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="template-test-from">From</Label>
+              <Label htmlFor="hub-template-test-from">From</Label>
               <AccountCmdDropdown
-                triggerId="template-test-from"
+                triggerId="hub-template-test-from"
                 value={testFromEmail}
                 onValueChange={(email) => setTestFromEmail(email ?? null)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-test-to">To</Label>
+              <Label htmlFor="hub-template-test-to">To</Label>
               <Input
-                id="template-test-to"
+                id="hub-template-test-to"
                 type="email"
                 placeholder={examplePlaceholder("you@example.com")}
                 value={testToEmail}
@@ -392,9 +376,9 @@ export function TemplateUseActions() {
                 const key = mergeTagKey(field.token);
                 return (
                   <div key={key} className="space-y-1.5">
-                    <Label htmlFor={`template-test-merge-${key}`}>{field.label}</Label>
+                    <Label htmlFor={`hub-template-test-merge-${key}`}>{field.label}</Label>
                     <Input
-                      id={`template-test-merge-${key}`}
+                      id={`hub-template-test-merge-${key}`}
                       value={testMergeValues[key] ?? ""}
                       onChange={(e) =>
                         setTestMergeValues((prev) => ({ ...prev, [key]: e.target.value }))
@@ -437,18 +421,18 @@ export function TemplateUseActions() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="template-newsletter-name">Name</Label>
+              <Label htmlFor="hub-template-newsletter-name">Name</Label>
               <Input
-                id="template-newsletter-name"
+                id="hub-template-newsletter-name"
                 value={newsletterName}
                 onChange={(e) => setNewsletterName(e.target.value)}
                 placeholder={examplePlaceholder("March newsletter")}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-newsletter-audience">Subscriber group</Label>
+              <Label htmlFor="hub-template-newsletter-audience">Subscriber group</Label>
               <AudienceGroupCmdDropdown
-                triggerId="template-newsletter-audience"
+                triggerId="hub-template-newsletter-audience"
                 groups={audienceGroups}
                 loading={audienceLoading}
                 value={newsletterAudienceId || null}
@@ -457,9 +441,9 @@ export function TemplateUseActions() {
             </div>
             {newsletterMode === "schedule" ? (
               <div className="space-y-1.5">
-                <Label htmlFor="template-schedule-at">Send at</Label>
+                <Label htmlFor="hub-template-schedule-at">Send at</Label>
                 <Input
-                  id="template-schedule-at"
+                  id="hub-template-schedule-at"
                   type="datetime-local"
                   value={scheduleAt}
                   onChange={(e) => setScheduleAt(e.target.value)}
@@ -469,7 +453,12 @@ export function TemplateUseActions() {
             {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" disabled={busy} onClick={() => setNewsletterOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => setNewsletterOpen(false)}
+            >
               Cancel
             </Button>
             <Button size="sm" disabled={busy} onClick={() => void handleCreateNewsletter()}>
@@ -494,9 +483,9 @@ export function TemplateUseActions() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="template-trigger-name">Name</Label>
+              <Label htmlFor="hub-template-trigger-name">Name</Label>
               <Input
-                id="template-trigger-name"
+                id="hub-template-trigger-name"
                 value={triggerName}
                 onChange={(e) => setTriggerName(e.target.value)}
                 placeholder={examplePlaceholder("Verify Email")}
@@ -517,9 +506,9 @@ export function TemplateUseActions() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-trigger-sender">Sending account</Label>
+              <Label htmlFor="hub-template-trigger-sender">Sending account</Label>
               <AccountCmdDropdown
-                triggerId="template-trigger-sender"
+                triggerId="hub-template-trigger-sender"
                 value={triggerSenderEmail}
                 onValueChange={(email, ctx) => {
                   setTriggerSenderEmail(email ?? null);

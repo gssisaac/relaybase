@@ -32,7 +32,10 @@ export async function fetchAccountStateJson<T>(
   }
 }
 
-/** Throws on failure — callers already wrap writes in their own try/catch or `.catch()`. */
+/**
+ * Best-effort remote sync — throws on unexpected failures.
+ * 401/403 are ignored (unsigned-in or wrong surface); callers keep local mirrors.
+ */
 export async function saveAccountStateJson(
   namespace: string,
   key: string,
@@ -42,6 +45,9 @@ export async function saveAccountStateJson(
     method: "PUT",
     body: JSON.stringify({ value }),
   });
+  if (res.status === 401 || res.status === 403) {
+    return;
+  }
   if (!res.ok) {
     throw new Error(`account-state write failed (${res.status})`);
   }

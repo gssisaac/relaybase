@@ -1,5 +1,5 @@
-import type { Layout, StudioDataStore, Template, Trigger } from "../../db/types";
-import { templateFileStore } from "../templates/template-file-store";
+import type { Layout, Message, StudioDataStore, Trigger } from "../../db/types";
+import { messageFileStore } from "./message-file-store";
 
 export type ResolvedMessage = {
   subject: string;
@@ -9,7 +9,8 @@ export type ResolvedMessage = {
   templateVariables: Record<string, string>;
 };
 
-export function messageTemplateIdForOwner(ownerId: string): string {
+/** Stable message id for an owning entity (newsletter, trigger, …). */
+export function messageIdForOwner(ownerId: string): string {
   return `msgtpl_${ownerId}`;
 }
 
@@ -21,13 +22,13 @@ export function findLayout(
   return data.layouts.find((l) => l.id === layoutId);
 }
 
-export function findMessageTemplate(_data: StudioDataStore, id: string): Template | undefined {
-  return templateFileStore.findById(id);
+export function findMessage(_data: StudioDataStore, id: string): Message | undefined {
+  return messageFileStore.findById(id);
 }
 
-export function requireMessage(data: StudioDataStore, messageTemplateId: string): ResolvedMessage {
+export function requireMessage(data: StudioDataStore, messageId: string): ResolvedMessage {
   return (
-    resolveMessage(data, messageTemplateId) ?? {
+    resolveMessage(data, messageId) ?? {
       subject: "",
       previewText: null,
       bodyMarkdown: "",
@@ -37,18 +38,15 @@ export function requireMessage(data: StudioDataStore, messageTemplateId: string)
   );
 }
 
-export function resolveMessage(
-  data: StudioDataStore,
-  messageTemplateId: string,
-): ResolvedMessage | null {
-  const tpl = findMessageTemplate(data, messageTemplateId);
-  if (!tpl) return null;
+export function resolveMessage(data: StudioDataStore, messageId: string): ResolvedMessage | null {
+  const row = findMessage(data, messageId);
+  if (!row) return null;
   return {
-    subject: tpl.subject,
-    previewText: tpl.previewText ?? null,
-    bodyMarkdown: tpl.bodyMarkdown,
-    layoutId: tpl.layoutId ?? null,
-    templateVariables: tpl.templateVariables ?? {},
+    subject: row.subject,
+    previewText: row.previewText ?? null,
+    bodyMarkdown: row.bodyMarkdown,
+    layoutId: row.layoutId ?? null,
+    templateVariables: row.templateVariables ?? {},
   };
 }
 
@@ -62,4 +60,8 @@ export function getLayoutHtml(data: StudioDataStore, layoutId: string | null | u
 
 export function getLayoutSchema(data: StudioDataStore, layoutId: string | null | undefined) {
   return findLayout(data, layoutId)?.variablesSchema ?? null;
+}
+
+export function rowMessageId(row: { messageId: string }): string {
+  return row.messageId;
 }

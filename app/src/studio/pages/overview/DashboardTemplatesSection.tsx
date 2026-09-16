@@ -5,9 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageTemplateThumbnailGrid } from "@/studio/components/templates/MessageTemplateThumbnailGrid";
-import { messageTemplatesRootHref } from "@/studio/lib/template-paths";
-import { studioApi, type MessageTemplate, type StudioLayout } from "@/lib/studio/api";
+import { CatalogTemplatePreviewDialog } from "@/studio/components/templates/CatalogTemplatePreviewDialog";
+import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThumbnailGrid";
+import { templatesRootHref } from "@/studio/lib/template-paths";
+import { studioApi, type StudioLayout, type StudioTemplate } from "@/lib/studio/api";
 
 const DASHBOARD_TEMPLATE_LIMIT = 5;
 
@@ -16,15 +17,16 @@ export function DashboardTemplatesSection({
 }: {
   refreshKey?: string;
 }) {
-  const templatesHref = messageTemplatesRootHref();
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const templatesHref = templatesRootHref();
+  const [templates, setTemplates] = useState<StudioTemplate[]>([]);
   const [layouts, setLayouts] = useState<StudioLayout[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewTemplate, setPreviewTemplate] = useState<StudioTemplate | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void Promise.all([studioApi.listMessageTemplates(), studioApi.listLayouts()])
+    void Promise.all([studioApi.listTemplates(), studioApi.listLayouts()])
       .then(([templateRes, layoutRes]) => {
         if (cancelled) return;
         setTemplates(templateRes.templates);
@@ -86,9 +88,22 @@ export function DashboardTemplatesSection({
             </Link>
           </div>
         ) : (
-          <MessageTemplateThumbnailGrid templates={visible} layouts={layouts} />
+          <TemplateThumbnailGrid
+            templates={visible}
+            layouts={layouts}
+            onTemplateSelect={setPreviewTemplate}
+          />
         )}
       </CardContent>
+
+      <CatalogTemplatePreviewDialog
+        template={previewTemplate}
+        layouts={layouts}
+        open={previewTemplate !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewTemplate(null);
+        }}
+      />
     </Card>
   );
 }

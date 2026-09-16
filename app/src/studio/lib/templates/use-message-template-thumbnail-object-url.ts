@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { MessageTemplate, StudioLayout } from "@/lib/studio/api";
+import type { StudioMessage, StudioLayout } from "@/lib/studio/api";
 
 import { captureMessageTemplateThumbnailBlob } from "./capture-message-template-thumbnail-client";
 import {
@@ -15,7 +15,7 @@ const inflight = new Map<string, Promise<Blob>>();
 
 async function loadOrCaptureThumbnail(input: {
   templateId: string;
-  template: Pick<MessageTemplate, "bodyMarkdown" | "layoutId" | "templateVariables" | "subject">;
+  template: Pick<StudioMessage, "bodyMarkdown" | "layoutId" | "templateVariables" | "subject">;
   layout: StudioLayout | null;
 }): Promise<Blob> {
   const layoutId = input.layout?.id ?? input.template.layoutId ?? "";
@@ -44,7 +44,7 @@ async function loadOrCaptureThumbnail(input: {
 
 export function useMessageTemplateThumbnailObjectUrl(input: {
   templateId: string;
-  template: Pick<MessageTemplate, "bodyMarkdown" | "layoutId" | "templateVariables" | "subject">;
+  template: Pick<StudioMessage, "bodyMarkdown" | "layoutId" | "templateVariables" | "subject">;
   layout: StudioLayout | null;
   enabled: boolean;
 }): { objectUrl: string | null; failed: boolean } {

@@ -1,38 +1,39 @@
 "use client";
 
-import { LayoutTemplate, Plus, RefreshCw } from "lucide-react";
+import { LayoutTemplate, Mail, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
-import { MessageTemplateThumbnailGrid } from "@/studio/components/templates/MessageTemplateThumbnailGrid";
+import { CatalogTemplatePreviewDialog } from "@/studio/components/templates/CatalogTemplatePreviewDialog";
+import { TemplateThumbnailGrid } from "@/studio/components/templates/TemplateThumbnailGrid";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 import { useStudioPaths } from "@/studio/lib/paths";
-import { messageTemplatePreviewHref } from "@/studio/lib/template-paths";
-import { NewTemplateDialog } from "@/studio/pages/templates/NewTemplateDialog";
-import { studioApi, type MessageTemplate, type StudioLayout } from "@/lib/studio/api";
+import { messagesRootHref } from "@/studio/lib/message-paths";
+import { templatesRootHref } from "@/studio/lib/template-paths";
+import { studioApi, type StudioTemplate, type StudioLayout } from "@/lib/studio/api";
 import { cn } from "@/lib/utils";
 
 export function TemplatesGridView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { layouts: layoutsPath } = useStudioPaths();
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [templates, setTemplates] = useState<StudioTemplate[]>([]);
   const [layouts, setLayouts] = useState<StudioLayout[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
-
+  const [previewTemplate, setPreviewTemplate] = useState<StudioTemplate | null>(null);
   const load = useCallback(async (force?: boolean) => {
     if (force) setRefreshing(true);
     else setLoading(true);
     try {
       const [templateRes, layoutRes] = await Promise.all([
-        studioApi.listMessageTemplates(),
+        studioApi.listTemplates(),
         studioApi.listLayouts(),
       ]);
       setTemplates(templateRes.templates);
@@ -48,6 +49,14 @@ export function TemplatesGridView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const legacyId = searchParams.get("id")?.trim();
+    if (!legacyId || templates.length === 0) return;
+    const match = templates.find((row) => row.id === legacyId);
+    if (match) setPreviewTemplate(match);
+    router.replace(templatesRootHref());
+  }, [searchParams, templates, router]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -74,17 +83,10 @@ export function TemplatesGridView() {
               <LayoutTemplate className="size-4" />
               Layouts
             </Button>
-            <NewTemplateDialog
-              open={addOpen}
-              onOpenChange={setAddOpen}
-              onCreated={(templateId) => router.push(messageTemplatePreviewHref(templateId))}
-              trigger={
-                <Button size="sm">
-                  <Plus className="size-4" />
-                  New template
-                </Button>
-              }
-            />
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={messagesRootHref()} />}>
+              <Mail className="size-4" />
+              Messages
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -99,7 +101,7 @@ export function TemplatesGridView() {
         <div className="min-w-0 space-y-1">
           <h1 className="truncate text-lg font-semibold tracking-tight">Templates</h1>
           <p className="text-sm text-muted-foreground">
-            Pick a starter or your own design — preview, edit, and use in newsletters and triggers.
+            Read-only catalog — preview a blueprint, then use it to create an editable message.
           </p>
         </div>
       </DesktopTitleBar>
@@ -119,20 +121,27 @@ export function TemplatesGridView() {
               <p className="text-sm text-muted-foreground">
                 {search.trim()
                   ? "No templates match your search."
-                  : "No templates yet — create one to get started."}
+                  : "No catalog templates yet."}
               </p>
-              {!search.trim() ? (
-                <Button size="sm" onClick={() => setAddOpen(true)}>
-                  <Plus className="size-4" />
-                  New template
-                </Button>
-              ) : null}
             </div>
           ) : (
-            <MessageTemplateThumbnailGrid templates={filtered} layouts={layouts} />
+            <TemplateThumbnailGrid
+              templates={filtered}
+              layouts={layouts}
+              onTemplateSelect={setPreviewTemplate}
+            />
           )}
         </div>
       </div>
+
+      <CatalogTemplatePreviewDialog
+        template={previewTemplate}
+        layouts={layouts}
+        open={previewTemplate !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewTemplate(null);
+        }}
+      />
     </div>
   );
 }

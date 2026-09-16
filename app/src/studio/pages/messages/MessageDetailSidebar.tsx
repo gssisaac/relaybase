@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutTemplate, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { Mail, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useMemo, useState } from "react";
@@ -30,21 +30,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { PanelSplitHandle } from "@/components/ui/panel-split-handle";
 import { usePersistedTemplateDetailSidebarWidth } from "@/hooks/use-persisted-template-detail-sidebar-width";
-import { studioApi, StudioApiError, type MessageTemplate } from "@/lib/studio/api";
+import { studioApi, StudioApiError, type StudioMessage } from "@/lib/studio/api";
 import { useStudioPaths } from "@/studio/lib/paths";
-import { messageTemplatePreviewHref, messageTemplatesRootHref } from "@/studio/lib/template-paths";
+import { messageLinkedOwnerLabel } from "@/studio/components/messages/MessageLinkedOwnerBadge";
+import { messagePreviewHref, messagesRootHref } from "@/studio/lib/message-paths";
 import {
-  getTemplateSidebarListSnapshot,
-  removeTemplateSidebarListRow,
-} from "@/studio/lib/templates/template-sidebar-list";
-import { NewTemplateDialog } from "@/studio/pages/templates/NewTemplateDialog";
-import { useTemplateSidebarNew } from "@/studio/pages/templates/TemplateSidebarNewContext";
-import { useTemplateDetail } from "@/studio/pages/templates/TemplateDetailContext";
-import { useTemplateSidebarList } from "@/studio/pages/templates/use-template-sidebar-list";
+  getMessageSidebarListSnapshot,
+  removeMessageSidebarListRow,
+} from "@/studio/lib/messages/message-sidebar-list";
+import { NewMessageDialog } from "@/studio/pages/messages/NewMessageDialog";
+import { useMessageSidebarNew } from "@/studio/pages/messages/MessageSidebarNewContext";
+import { useMessageDetail } from "@/studio/pages/messages/MessageDetailContext";
+import { useMessageSidebarList } from "@/studio/pages/messages/use-message-sidebar-list";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
 import { cn } from "@/lib/utils";
 
-function templateListRelativeDate(row: MessageTemplate): string {
+function templateListRelativeDate(row: StudioMessage): string {
   const ms = Date.parse(row.updatedAt);
   if (!Number.isFinite(ms)) return "";
   const diff = Date.now() - ms;
@@ -55,8 +56,8 @@ function templateListRelativeDate(row: MessageTemplate): string {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function templateRowLabel(row: MessageTemplate): string {
-  return row.name?.trim() || row.subject?.trim() || "Untitled template";
+function templateRowLabel(row: StudioMessage): string {
+  return row.name?.trim() || row.subject?.trim() || "Untitled message";
 }
 
 function TemplateSidebarDeleteActions({
@@ -68,7 +69,7 @@ function TemplateSidebarDeleteActions({
     <>
       <DropdownMenuItem variant="destructive" onClick={onDelete}>
         <Trash2 className="size-4" />
-        Delete template
+        Delete message
       </DropdownMenuItem>
     </>
   );
@@ -79,13 +80,13 @@ const TemplateSidebarRow = memo(function TemplateSidebarRow({
   active,
   onRequestDelete,
 }: {
-  row: MessageTemplate;
+  row: StudioMessage;
   active: boolean;
-  onRequestDelete: (row: MessageTemplate) => void;
+  onRequestDelete: (row: StudioMessage) => void;
 }) {
   const label = templateRowLabel(row);
-  const href = messageTemplatePreviewHref(row.id);
-  const deletable = !row.isPreset;
+  const href = messagePreviewHref(row.id);
+  const deletable = !row.linkedOwner;
 
   const rowBody = (
     <div
@@ -110,7 +111,11 @@ const TemplateSidebarRow = memo(function TemplateSidebarRow({
             {templateListRelativeDate(row)}
           </span>
         </div>
-        {row.subject.trim() ? (
+        {row.linkedOwner ? (
+          <span className="truncate text-[10px] text-muted-foreground">
+            {messageLinkedOwnerLabel(row.linkedOwner)}
+          </span>
+        ) : row.subject.trim() ? (
           <span className="truncate text-[10px] text-muted-foreground">{row.subject}</span>
         ) : null}
       </Link>
@@ -158,7 +163,7 @@ const TemplateSidebarRow = memo(function TemplateSidebarRow({
         <ContextMenuContent className="min-w-44">
           <ContextMenuItem variant="destructive" onClick={() => onRequestDelete(row)}>
             <Trash2 className="size-4" />
-            Delete template
+            Delete message
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -166,27 +171,27 @@ const TemplateSidebarRow = memo(function TemplateSidebarRow({
   );
 });
 
-function TemplateSidebarHeader() {
-  const newTemplate = useTemplateSidebarNew();
+function MessageSidebarHeader() {
+  const newTemplate = useMessageSidebarNew();
 
   return (
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2.5 py-2">
       <div className="flex min-w-0 items-center gap-2">
-        <LayoutTemplate className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <Mail className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <Link
-          href={messageTemplatesRootHref()}
+          href={messagesRootHref()}
           className="truncate text-xs font-semibold tracking-tight hover:underline"
         >
-          All templates
+          All messages
         </Link>
       </div>
       {newTemplate ? (
-        <NewTemplateDialog
+        <NewMessageDialog
           open={newTemplate.addOpen}
           onOpenChange={newTemplate.setAddOpen}
           onCreated={newTemplate.onCreated}
           trigger={
-            <Button type="button" size="icon-sm" variant="ghost" aria-label="New template">
+            <Button type="button" size="icon-sm" variant="ghost" aria-label="New message">
               <Plus className="size-4" />
             </Button>
           }
@@ -196,14 +201,14 @@ function TemplateSidebarHeader() {
   );
 }
 
-function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: string | null }) {
+function MessageListSidebarInner({ activeMessageId }: { activeMessageId: string | null }) {
   const router = useRouter();
-  const { templates: templatesPath } = useStudioPaths();
+  const { messages: messagesPath } = useStudioPaths();
   const userId = useProductId();
   const { width, onResize, persist } = usePersistedTemplateDetailSidebarWidth(userId);
-  const { rows, loading } = useTemplateSidebarList();
+  const { rows, loading } = useMessageSidebarList();
   const [search, setSearch] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<MessageTemplate | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StudioMessage | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
@@ -221,20 +226,20 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
   }, [rows, search]);
 
   const confirmDelete = useCallback(async () => {
-    if (!deleteTarget || deleteTarget.isPreset) return;
+    if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await studioApi.deleteMessageTemplate(deleteTarget.id);
-      removeTemplateSidebarListRow(deleteTarget.id);
+      await studioApi.deleteMessage(deleteTarget.id);
+      removeMessageSidebarListRow(deleteTarget.id);
 
-      if (activeTemplateId === deleteTarget.id) {
-        const remaining = getTemplateSidebarListSnapshot()
+      if (activeMessageId === deleteTarget.id) {
+        const remaining = getMessageSidebarListSnapshot()
           .filter((r) => r.id !== deleteTarget.id)
           .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
         if (remaining[0]) {
-          router.replace(messageTemplatePreviewHref(remaining[0].id));
+          router.replace(messagePreviewHref(remaining[0].id));
         } else {
-          router.replace(templatesPath);
+          router.replace(messagesPath);
         }
       }
 
@@ -245,15 +250,15 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
     } finally {
       setDeleting(false);
     }
-  }, [activeTemplateId, deleteTarget, router, templatesPath]);
+  }, [activeMessageId, deleteTarget, router, messagesPath]);
 
   const aside = (
     <aside
       className="flex h-full shrink-0 flex-col border-r border-border bg-muted/20"
       style={{ width }}
-      aria-label="Templates"
+      aria-label="Messages"
     >
-      <TemplateSidebarHeader />
+      <MessageSidebarHeader />
       <div className="shrink-0 border-b border-border px-2.5 py-2">
         <div className="relative">
           <Search
@@ -264,7 +269,7 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search templates…"
+            placeholder="Search messages…"
             autoComplete="off"
             className="h-8 border-border/60 bg-background pl-8 text-xs shadow-none"
           />
@@ -274,16 +279,16 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
         {loading ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">No templates</p>
+          <p className="px-2 py-3 text-xs text-muted-foreground">No messages</p>
         ) : filtered.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">No matching templates</p>
+          <p className="px-2 py-3 text-xs text-muted-foreground">No matching messages</p>
         ) : (
           <ul className="flex flex-col gap-0.5">
             {filtered.map((row) => (
               <TemplateSidebarRow
                 key={row.id}
                 row={row}
-                active={activeTemplateId != null && row.id === activeTemplateId}
+                active={activeMessageId != null && row.id === activeMessageId}
                 onRequestDelete={setDeleteTarget}
               />
             ))}
@@ -303,7 +308,7 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
       <Dialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete template?</DialogTitle>
+            <DialogTitle>Delete message?</DialogTitle>
             <DialogDescription>
               {deleteTarget ? (
                 <>
@@ -338,13 +343,13 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
   );
 }
 
-function TemplateDetailSidebarInner() {
-  const { messageTemplateId } = useTemplateDetail();
-  return <TemplateListSidebarInner activeTemplateId={messageTemplateId} />;
+function MessageDetailSidebarInner() {
+  const { messageId } = useMessageDetail();
+  return <MessageListSidebarInner activeMessageId={messageId} />;
 }
 
-export const TemplateDetailSidebar = memo(TemplateDetailSidebarInner);
+export const MessageDetailSidebar = memo(MessageDetailSidebarInner);
 
-export const TemplateBrowseSidebarEmpty = memo(function TemplateBrowseSidebarEmpty() {
-  return <TemplateListSidebarInner activeTemplateId={null} />;
+export const MessageBrowseSidebarEmpty = memo(function MessageBrowseSidebarEmpty() {
+  return <MessageListSidebarInner activeMessageId={null} />;
 });

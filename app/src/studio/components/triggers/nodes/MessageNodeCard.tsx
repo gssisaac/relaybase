@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, LayoutTemplate, Mail, Pencil } from "lucide-react";
+import { Eye, Mail, Pencil, Type } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,10 @@ import { triggerContentEditHref } from "@/studio/lib/paths";
 import type { Trigger } from "@/lib/studio/api";
 import { cn } from "@/lib/utils";
 
-export function TemplateNodeCard({
+export function MessageNodeCard({
   triggerId,
   trigger,
-  templateName,
+  messageName,
   selected,
   flowActive,
   onSelect,
@@ -20,7 +20,7 @@ export function TemplateNodeCard({
 }: {
   triggerId: string;
   trigger: Trigger;
-  templateName: string | null;
+  messageName: string | null;
   selected: boolean;
   flowActive?: boolean;
   onSelect: () => void;
@@ -57,13 +57,13 @@ export function TemplateNodeCard({
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-muted-foreground">Send email</p>
             <p className="truncate text-sm font-semibold text-foreground">
-              {templateName?.trim() || "Message"}
+              {messageName?.trim() || "Message"}
             </p>
           </div>
         </div>
         <div className="space-y-2 px-4 py-3">
           <div className="flex items-start gap-2 text-xs">
-            <LayoutTemplate className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            <Type className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
             <div className="min-w-0">
               <p className="text-muted-foreground">Subject</p>
               <p className="truncate font-medium text-foreground">{subject}</p>

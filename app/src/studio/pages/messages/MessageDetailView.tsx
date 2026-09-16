@@ -5,35 +5,35 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { StudioDetailPageHeader } from "@/studio/components/StudioDetailPageHeader";
-import { messageTemplatePreviewHref } from "@/studio/lib/template-paths";
-import { TemplateContentView } from "@/studio/pages/templates/TemplateContentView";
-import { TemplateEditableTitle } from "@/studio/pages/templates/TemplateEditableTitle";
+import { messagePreviewHref } from "@/studio/lib/message-paths";
+import { MessageContentView } from "@/studio/pages/messages/MessageContentView";
+import { TemplateEditableTitle } from "@/studio/pages/messages/TemplateEditableTitle";
 import {
-  TemplateDetailProvider,
-  useTemplateDetail,
-} from "@/studio/pages/templates/TemplateDetailContext";
+  MessageDetailProvider,
+  useMessageDetail,
+} from "@/studio/pages/messages/MessageDetailContext";
 import {
   TemplateEditChromeProvider,
   useTemplateEditChrome,
-} from "@/studio/pages/templates/template-edit-chrome";
+} from "@/studio/pages/messages/template-edit-chrome";
 
 function TemplateDetailBody() {
-  const { messageTemplateId, template, loading, notFound } = useTemplateDetail();
+  const { messageId, message, loading, notFound } = useMessageDetail();
   const { name, setName, subjectFallback, saveState, requestSave } = useTemplateEditChrome();
-  const previewHref = messageTemplatePreviewHref(messageTemplateId);
+  const previewHref = messagePreviewHref(messageId);
 
-  if (loading && !template) {
+  if (loading && !message) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <StudioDetailPageHeader backHref={previewHref} backLabel="Back to preview" title="Loading…" />
         <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
-          Loading template…
+          Loading message…
         </div>
       </div>
     );
   }
 
-  if (notFound || !template) {
+  if (notFound || !message) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <StudioDetailPageHeader
@@ -75,17 +75,17 @@ function TemplateDetailBody() {
           </Button>
         }
       />
-      <TemplateContentView />
+      <MessageContentView />
     </div>
   );
 }
 
-export function TemplateDetailView({ templateId }: { templateId: string }) {
+export function MessageDetailView({ messageId }: { messageId: string }) {
   return (
-    <TemplateDetailProvider messageTemplateId={templateId}>
+    <MessageDetailProvider messageId={messageId}>
       <TemplateEditChromeProvider>
         <TemplateDetailBody />
       </TemplateEditChromeProvider>
-    </TemplateDetailProvider>
+    </MessageDetailProvider>
   );
 }

@@ -137,10 +137,10 @@ studioAssets.get("/assets/trigger/:triggerId/:filename", (c) => {
   });
 });
 
-// GET /studio/assets/template/:templateId/:filename
-studioAssets.get("/assets/template/:templateId/:filename", (c) => {
-  const key = `${c.req.param("templateId")}/${c.req.param("filename")}`;
-  const asset = store.read().templateAssets.find((a) => a.key === key);
+// GET /studio/assets/message/:messageId/:filename
+studioAssets.get("/assets/message/:messageId/:filename", (c) => {
+  const key = `${c.req.param("messageId")}/${c.req.param("filename")}`;
+  const asset = store.read().messageAssets.find((a) => a.key === key);
   if (!asset) return c.text("not found", 404);
   const buf = Buffer.from(asset.contentBase64, "base64");
   return new Response(buf, {
@@ -155,7 +155,7 @@ studioAssets.get("/assets/template/:templateId/:filename", (c) => {
 // GET /studio/assets/:newsletterId/:filename
 studioAssets.get("/assets/:newsletterId/:filename", (c) => {
   const newsletterId = c.req.param("newsletterId");
-  if (newsletterId === "automation" || newsletterId === "trigger" || newsletterId === "template") {
+  if (newsletterId === "automation" || newsletterId === "trigger" || newsletterId === "message") {
     return c.text("not found", 404);
   }
   const key = `${newsletterId}/${c.req.param("filename")}`;

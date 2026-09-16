@@ -22,7 +22,7 @@ type DraftFields = {
   bodyMarkdown: string;
   templateId: string;
   templateVariables: Record<string, string>;
-  messageTemplateId: string | null;
+  messageId: string | null;
 };
 
 type Ctx = {
@@ -61,7 +61,7 @@ export function NewsletterDetailProvider({
     bodyMarkdown: "",
     templateId: "",
     templateVariables: {},
-    messageTemplateId: null,
+    messageId: null,
   });
   const lastSaved = useRef<DraftFields | null>(null);
   const persistInFlight = useRef<Promise<boolean> | null>(null);
@@ -92,7 +92,7 @@ export function NewsletterDetailProvider({
         bodyMarkdown: b.bodyMarkdown,
         templateId: b.layoutId ?? "",
         templateVariables: b.templateVariables ?? {},
-        messageTemplateId: b.messageTemplateId ?? null,
+        messageId: b.messageId ?? null,
       };
       draftRef.current = fields;
       lastSaved.current = fields;
@@ -137,7 +137,7 @@ export function NewsletterDetailProvider({
       prev.subject === next.subject &&
       prev.bodyMarkdown === next.bodyMarkdown &&
       prev.templateId === next.templateId &&
-      prev.messageTemplateId === next.messageTemplateId &&
+      prev.messageId === next.messageId &&
       templateVariablesEqual(prev.templateVariables, next.templateVariables)
     ) {
       return Promise.resolve(true);
@@ -149,7 +149,7 @@ export function NewsletterDetailProvider({
         bodyMarkdown: next.bodyMarkdown,
         layoutId: next.templateId,
         templateVariables: next.templateVariables,
-        messageTemplateId: next.messageTemplateId,
+        messageId: next.messageId,
       })
       .then((updated) => {
         lastSaved.current = next;

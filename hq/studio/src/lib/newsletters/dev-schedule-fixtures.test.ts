@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { Newsletter, StudioDataStore, Template } from "../../db/types.ts";
+import type { Message, Newsletter, StudioDataStore } from "../../db/types.ts";
 import { ensureDevScheduleFixtures } from "./dev-schedule-fixtures.ts";
 
-function messageTemplate(newsletterId: string): Template {
+function messageForNewsletter(newsletterId: string): Message {
   return {
     id: `msgtpl_${newsletterId}`,
     accountLinkId: "dev",
@@ -14,7 +14,7 @@ function messageTemplate(newsletterId: string): Template {
     bodyMarkdown: "Hi",
     layoutId: "tpl-minimal",
     templateVariables: {},
-    category: "marketing",
+    forkedFromTemplateId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
@@ -32,7 +32,7 @@ function newsletter(id: string): Newsletter {
     fromName: null,
     fromEmail: "a@relaybase.xyz",
     replyTo: null,
-    templateId: `msgtpl_${id}`,
+    messageId: `msgtpl_${id}`,
     complianceIdentityId: null,
     listStatus: "active",
     status: "draft",
@@ -81,7 +81,8 @@ describe("ensureDevScheduleFixtures", () => {
       },
       complianceIdentities: [],
       layouts: [],
-      templates: newsletterIds.map(messageTemplate),
+      templates: [],
+      messages: newsletterIds.map(messageForNewsletter),
       newsletters: newsletterIds.map(newsletter),
       recipients: [],
       triggers: [],

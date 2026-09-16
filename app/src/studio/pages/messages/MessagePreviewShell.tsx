@@ -13,10 +13,11 @@ import {
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
-import { messageTemplateEditHref } from "@/studio/lib/template-paths";
-import { TemplateUseActions } from "@/studio/pages/templates/TemplateUseActions";
-import { TemplateDetailSidebar } from "@/studio/pages/templates/TemplateDetailSidebar";
-import { useTemplateDetail } from "@/studio/pages/templates/TemplateDetailContext";
+import { MessageLinkedOwnerBadge } from "@/studio/components/messages/MessageLinkedOwnerBadge";
+import { messageEditHref } from "@/studio/lib/message-paths";
+import { MessageUseActions } from "@/studio/pages/messages/MessageUseActions";
+import { MessageDetailSidebar } from "@/studio/pages/messages/MessageDetailSidebar";
+import { useMessageDetail } from "@/studio/pages/messages/MessageDetailContext";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +31,7 @@ const TemplatePreviewDeviceContext = createContext<{
 export function useTemplatePreviewDevice() {
   const ctx = useContext(TemplatePreviewDeviceContext);
   if (!ctx) {
-    throw new Error("useTemplatePreviewDevice must be used within TemplatePreviewShell");
+    throw new Error("useTemplatePreviewDevice must be used within MessagePreviewShell");
   }
   return ctx;
 }
@@ -64,47 +65,52 @@ function TemplatePreviewDeviceToggle() {
   );
 }
 
-export function TemplatePreviewShell({ children }: { children: ReactNode }) {
+export function MessagePreviewShell({ children }: { children: ReactNode }) {
   const { noDragClassName, isDesktop } = useDesktopChrome();
-  const { messageTemplateId, template } = useTemplateDetail();
+  const { messageId, message } = useMessageDetail();
   const [device, setDevice] = useState<TemplatePreviewDevice>("desktop");
 
   const title =
-    template?.name.trim() || template?.subject.trim() || "Untitled template";
+    message?.name.trim() || message?.subject.trim() || "Untitled message";
 
   return (
     <TemplatePreviewDeviceContext value={{ device, setDevice }}>
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <TemplateDetailSidebar />
+        <MessageDetailSidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <DesktopTitleBar
             className="gap-2 border-b border-border px-4 py-3"
             end={
-              template ? (
+              message ? (
                 <>
                   <Button
                     size="sm"
                     variant="outline"
                     nativeButton={false}
-                    render={<Link href={messageTemplateEditHref(messageTemplateId)} />}
+                    render={<Link href={messageEditHref(messageId)} />}
                   >
                     <Pencil className="size-3.5" aria-hidden />
                     Edit
                   </Button>
-                  <TemplateUseActions />
+                  <MessageUseActions />
                 </>
               ) : null
             }
           >
             <div
               className={cn(
-                "relative flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
+                "relative flex min-w-0 flex-1 flex-col justify-center gap-1 sm:gap-3",
                 noDragClassName,
               )}
               {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
             >
-              <h1 className="min-w-0 truncate text-sm font-semibold tracking-tight">{title}</h1>
-              {template ? (
+              <div className="flex min-w-0 items-center gap-2 pr-24 sm:pr-32">
+                <h1 className="min-w-0 truncate text-sm font-semibold tracking-tight">{title}</h1>
+              </div>
+              {message?.linkedOwner ? (
+                <MessageLinkedOwnerBadge owner={message.linkedOwner} className="w-fit max-w-full" />
+              ) : null}
+              {message ? (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="pointer-events-auto">
                     <TemplatePreviewDeviceToggle />

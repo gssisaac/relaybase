@@ -9,15 +9,17 @@ import {
   type PreviewPersonaId,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import {
+  applyTemplateVariablesToComposeContent,
   applyTemplateVariablesToHtml,
+  applyTemplateVariablesToPlainText,
   resolveTemplateVariableDefaults,
 } from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
 import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
 import { NewsletterComposeForm } from "@/studio/pages/newsletters/NewsletterComposeForm";
-import { useTemplateDetail } from "@/studio/pages/templates/TemplateDetailContext";
-import { useTemplateEditChrome } from "@/studio/pages/templates/template-edit-chrome";
+import { useMessageDetail } from "@/studio/pages/messages/MessageDetailContext";
+import { useTemplateEditChrome } from "@/studio/pages/messages/template-edit-chrome";
 import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
@@ -42,16 +44,16 @@ function mapSaveStatus(status: SaveStatus | null): "idle" | "saving" | "error" {
   return "idle";
 }
 
-export function TemplateContentView() {
+export function MessageContentView() {
   const {
-    messageTemplateId,
-    template,
+    messageId,
+    message,
     layouts,
     syncDraft,
     persistDraft,
     getLastSavedDraft,
     refreshLayouts,
-  } = useTemplateDetail();
+  } = useMessageDetail();
   const { name, setName, setSubjectFallback, setSaveState, registerSave } =
     useTemplateEditChrome();
 
@@ -66,16 +68,16 @@ export function TemplateContentView() {
   const [previewText, setPreviewText] = useState("");
   const [bodyMarkdown, setBodyMarkdown] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
-  const [templateId, setTemplateId] = useState("");
+  const [layoutId, setLayoutId] = useState("");
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewPersonaId, setPreviewPersonaId] = useState<PreviewPersonaId>("sample-named");
 
-  const editable = Boolean(template);
+  const editable = Boolean(message);
 
   const bridge = useMemo<NewsletterPersistBridge>(
     () => ({
-      getDraft: () => ({ subject, bodyMarkdown, templateId, templateVariables }),
+      getDraft: () => ({ subject, bodyMarkdown, templateId: layoutId, templateVariables }),
       setBodyMarkdown: (body) => setBodyMarkdown(body),
       getLastPersistedBody: () => getLastSavedDraft().bodyMarkdown,
       persist: async () => {
@@ -83,12 +85,12 @@ export function TemplateContentView() {
         if (!ok) throw new Error("persist failed");
       },
     }),
-    [subject, bodyMarkdown, templateId, templateVariables, getLastSavedDraft, persistDraft],
+    [subject, bodyMarkdown, layoutId, templateVariables, getLastSavedDraft, persistDraft],
   );
 
   const { editorRef, ingestBody, checkpoint, saveStatus } = useNewsletterEditorPersistence({
-    newsletterId: messageTemplateId,
-    beaconPath: `templates/${messageTemplateId}`,
+    newsletterId: messageId,
+    beaconPath: `messages/${messageId}`,
     editable,
     bridge,
   });
@@ -100,15 +102,15 @@ export function TemplateContentView() {
   }, [saveState, setSaveState]);
 
   useEffect(() => {
-    if (!template) return;
-    setName(template.name);
-    setSubject(template.subject);
-    setSubjectFallback(template.subject);
-    setPreviewText(template.previewText ?? "");
-    setBodyMarkdown(template.bodyMarkdown);
-    setTemplateId(template.layoutId ?? layouts[0]?.id ?? "");
-    setTemplateVariables(template.templateVariables ?? {});
-  }, [template?.id, template, layouts, setName, setSubjectFallback]);
+    if (!message) return;
+    setName(message.name);
+    setSubject(message.subject);
+    setSubjectFallback(message.subject);
+    setPreviewText(message.previewText ?? "");
+    setBodyMarkdown(message.bodyMarkdown);
+    setLayoutId(message.layoutId ?? layouts[0]?.id ?? "");
+    setTemplateVariables(message.templateVariables ?? {});
+  }, [message?.id, message, layouts, setName, setSubjectFallback]);
 
   useEffect(() => {
     setSubjectFallback(subject);
@@ -130,7 +132,7 @@ export function TemplateContentView() {
 
   useEffect(() => {
     void refreshComplianceContext();
-  }, [refreshComplianceContext, messageTemplateId]);
+  }, [refreshComplianceContext, messageId]);
 
   const personaOptions = useMemo(() => previewPersonaOptions([]), []);
   const previewRecipient = useMemo(
@@ -144,21 +146,21 @@ export function TemplateContentView() {
       subject,
       previewText,
       bodyMarkdown,
-      templateId,
+      templateId: layoutId,
       templateVariables,
     });
-  }, [name, subject, previewText, bodyMarkdown, templateId, templateVariables, syncDraft]);
+  }, [name, subject, previewText, bodyMarkdown, layoutId, templateVariables, syncDraft]);
 
   useEffect(() => {
-    if (!template) return;
+    if (!message) return;
     const timer = setTimeout(() => {
       void persistDraft();
     }, 3000);
     return () => clearTimeout(timer);
-  }, [name, subject, previewText, templateId, templateVariables, template, persistDraft]);
+  }, [name, subject, previewText, layoutId, templateVariables, message, persistDraft]);
 
-  const layout = layouts.find((t) => t.id === templateId);
-  const plainTextTemplate = isPlainTextTemplate(templateId);
+  const layout = layouts.find((t) => t.id === layoutId);
+  const plainTextTemplate = isPlainTextTemplate(layoutId);
   const previewMergeOptions = useMemo(
     () => ({
       compliancePreviewPlaceholders: true,
@@ -172,11 +174,6 @@ export function TemplateContentView() {
     [compliance, plainTextTemplate],
   );
 
-  const previewSubject = useMemo(
-    () => applyNewsletterMergeTags(subject, previewRecipient, previewMergeOptions),
-    [subject, previewRecipient, previewMergeOptions],
-  );
-
   const resolvedTemplateVariables = useMemo(
     () =>
       resolveTemplateVariableDefaults({
@@ -187,22 +184,50 @@ export function TemplateContentView() {
     [layout?.variablesSchema, templateVariables, compliance?.organizationName],
   );
 
+  const previewSubject = useMemo(() => {
+    const withLayoutVars = applyTemplateVariablesToPlainText(
+      subject,
+      layout?.variablesSchema ?? null,
+      resolvedTemplateVariables,
+    );
+    return applyNewsletterMergeTags(withLayoutVars, previewRecipient, previewMergeOptions);
+  }, [
+    subject,
+    layout?.variablesSchema,
+    resolvedTemplateVariables,
+    previewRecipient,
+    previewMergeOptions,
+  ]);
+
   const preparedTemplateHtml = useMemo(() => {
-    const shell = prepareLayoutTemplateHtml(layout?.htmlSource ?? "", templateId);
+    const shell = prepareLayoutTemplateHtml(layout?.htmlSource ?? "", layoutId);
     return applyTemplateVariablesToHtml(
       shell,
       layout?.variablesSchema ?? null,
       resolvedTemplateVariables,
     );
-  }, [layout?.htmlSource, layout?.variablesSchema, templateId, resolvedTemplateVariables]);
+  }, [layout?.htmlSource, layout?.variablesSchema, layoutId, resolvedTemplateVariables]);
 
   const renderedPreview = useMemo(() => {
+    const schema = layout?.variablesSchema ?? null;
+    const contentVarsInput = {
+      plainText: plainTextTemplate,
+      schema,
+      values: resolvedTemplateVariables,
+    };
     if (plainTextTemplate) {
-      const body = plainEmailBodyFromMarkdown(bodyMarkdown);
+      const body = applyTemplateVariablesToComposeContent(
+        plainEmailBodyFromMarkdown(bodyMarkdown),
+        contentVarsInput,
+      );
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyNewsletterMergeTags(wrapped, previewRecipient, previewMergeOptions);
     }
-    const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const rawContent = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const content = applyTemplateVariablesToComposeContent(rawContent, {
+      ...contentVarsInput,
+      plainText: false,
+    });
     if (!layout) {
       return applyNewsletterMergeTags(content, previewRecipient, previewMergeOptions);
     }
@@ -216,6 +241,7 @@ export function TemplateContentView() {
     previewHtml,
     previewRecipient,
     previewMergeOptions,
+    resolvedTemplateVariables,
   ]);
 
   const handleSave = useCallback(async () => {
@@ -229,17 +255,17 @@ export function TemplateContentView() {
     registerSave(handleSave);
   }, [registerSave, handleSave]);
 
-  if (!template) return null;
+  if (!message) return null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <NewsletterComposeForm
-        newsletterId={messageTemplateId}
-        assetOwner="template"
+        newsletterId={messageId}
+        assetOwner="message"
         editorRef={editorRef}
         templates={layouts}
-        templateId={templateId}
-        setTemplateId={setTemplateId}
+        templateId={layoutId}
+        setTemplateId={setLayoutId}
         templateVariables={templateVariables}
         setTemplateVariables={setTemplateVariables}
         subject={subject}
@@ -248,7 +274,7 @@ export function TemplateContentView() {
         onBodyChange={({ markdown, html }) => {
           setPreviewHtml(html);
           setBodyMarkdown((prev) => {
-            if (prev !== markdown) ingestBody(markdown, messageTemplateId);
+            if (prev !== markdown) ingestBody(markdown, messageId);
             return markdown;
           });
         }}
@@ -278,12 +304,13 @@ export function TemplateContentView() {
         onComplianceIdentitySaved={() => void refreshComplianceContext()}
         onTemplateImported={(id) => {
           void refreshLayouts();
-          setTemplateId(id);
+          setLayoutId(id);
         }}
         onTemplateSourceSaved={({ templateId: nextId, forked }) => {
           void refreshLayouts();
-          if (forked) setTemplateId(nextId);
+          if (forked) setLayoutId(nextId);
         }}
+        layoutVariablesSchema={layout?.variablesSchema ?? null}
       />
     </div>
   );

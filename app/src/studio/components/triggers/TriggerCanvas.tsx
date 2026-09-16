@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { TriggerNodeCard } from "@/studio/components/triggers/nodes/TriggerNodeCard";
-import { TemplateNodeCard } from "@/studio/components/triggers/nodes/TemplateNodeCard";
+import { MessageNodeCard } from "@/studio/components/triggers/nodes/MessageNodeCard";
 import { WorkflowConnector } from "@/studio/components/triggers/nodes/WorkflowConnector";
 import type { Trigger } from "@/lib/studio/api";
 import { TRIGGER_CONFIG_INSPECTOR_WIDTH_PX } from "@/studio/lib/triggers/trigger-config-inspector";
@@ -53,7 +53,7 @@ function targetCanvasWidth(rowWidth: number, inspectorOpen: boolean): number {
 export function TriggerCanvas({
   triggerId,
   trigger,
-  templateName,
+  messageName,
   selected,
   onSelect,
   onClearSelection,
@@ -61,7 +61,7 @@ export function TriggerCanvas({
 }: {
   triggerId: string;
   trigger: Trigger;
-  templateName: string | null;
+  messageName: string | null;
   selected: TriggerCanvasSelection;
   onSelect: (node: Exclude<TriggerCanvasSelection, null>) => void;
   onClearSelection: () => void;
@@ -111,7 +111,7 @@ export function TriggerCanvas({
     ro.observe(flow);
     ro.observe(viewport);
     return () => ro.disconnect();
-  }, [inspectorOpen, triggerId, templateName, trigger.status, trigger.name]);
+  }, [inspectorOpen, triggerId, messageName, trigger.status, trigger.name]);
 
   const scaledWidth = fit.contentWidth * fit.scale;
   const scaledHeight = fit.contentHeight * fit.scale;
@@ -153,10 +153,10 @@ export function TriggerCanvas({
               onSelect={() => onSelect("trigger")}
             />
             <WorkflowConnector active={flowActive} />
-            <TemplateNodeCard
+            <MessageNodeCard
               triggerId={triggerId}
               trigger={trigger}
-              templateName={templateName}
+              messageName={messageName}
               selected={selected === "template"}
               flowActive={flowActive}
               onSelect={() => onSelect("template")}

@@ -9,27 +9,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { studioApi, type MessageTemplate } from "@/lib/studio/api";
+import { studioApi, type StudioMessage } from "@/lib/studio/api";
 
 const NONE = "__none__";
 
-export function MessageTemplatePicker({
+export function MessagePicker({
   value,
   disabled,
   onApplied,
 }: {
   value: string | null;
   disabled?: boolean;
-  onApplied: (template: MessageTemplate | null) => void;
+  onApplied: (message: StudioMessage | null) => void;
 }) {
-  const [rows, setRows] = useState<MessageTemplate[]>([]);
+  const [rows, setRows] = useState<StudioMessage[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { templates } = await studioApi.listMessageTemplates();
-      setRows(templates);
+      const { messages } = await studioApi.listMessages();
+      setRows(messages);
     } catch {
       setRows([]);
     } finally {
@@ -50,18 +50,18 @@ export function MessageTemplatePicker({
           onApplied(null);
           return;
         }
-        const row = rows.find((t) => t.id === next);
+        const row = rows.find((m) => m.id === next);
         if (row) onApplied(row);
       }}
     >
       <SelectTrigger className="w-full">
-        <SelectValue placeholder={loading ? "Loading templates…" : "Link message template"} />
+        <SelectValue placeholder={loading ? "Loading messages…" : "Insert from saved message"} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={NONE}>Custom content (no template)</SelectItem>
-        {rows.map((t) => (
-          <SelectItem key={t.id} value={t.id}>
-            {t.name}
+        <SelectItem value={NONE}>Custom content only</SelectItem>
+        {rows.map((m) => (
+          <SelectItem key={m.id} value={m.id}>
+            {m.name}
           </SelectItem>
         ))}
       </SelectContent>

@@ -2,7 +2,11 @@ import { store } from "../../db/store";
 import type { AudienceMember, Newsletter } from "../../db/types";
 import { sendMail } from "../mail/sender";
 import { resolveWorkerSendCredentials } from "../mail/credentials";
-import { buildListUnsubscribeUrl, renderNewsletterForRecipient } from "../render/render";
+import {
+  buildListUnsubscribeUrl,
+  renderNewsletterForRecipient,
+  resolveBroadcastSubject,
+} from "../render/render";
 import { STUDIO_PUBLIC_BASE_URL } from "../shared/studio-url";
 import { newId } from "../shared/ids";
 import { DISPATCH_BATCH_SIZE } from "./dispatch-progress";
@@ -124,7 +128,7 @@ async function runBroadcastDispatchBatch(
     return { sent: 0, failed: 0, skipped: 0, completed: true };
   }
 
-  const message = requireMessage(store.read(), broadcast.templateId);
+  const message = requireMessage(store.read(), broadcast.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
 
@@ -223,12 +227,21 @@ async function runBroadcastDispatchBatch(
       broadcast.id,
       member.unsubscribeToken,
     );
+    const subject = resolveBroadcastSubject({
+      subject: message.subject,
+      templateVariablesSchema: getNewsletterLayoutSchema(layoutId),
+      templateVariables: message.templateVariables ?? {},
+      recipient: { email: recipient.email, name: recipient.name },
+      broadcastId: broadcast.id,
+      unsubscribeToken: member.unsubscribeToken,
+      studioBaseUrl: STUDIO_PUBLIC_BASE_URL,
+    });
     const result = await sendMail({
       to: recipient.email,
       from: fromEmail,
       fromName: broadcast.fromName,
       replyTo: broadcast.replyTo,
-      subject: message.subject,
+      subject,
       html,
       listUnsubscribeUrl,
     });

@@ -136,4 +136,15 @@ describe("shouldProxyRequestToStudio", () => {
       true,
     );
   });
+
+  it("serves messages UI without API header", () => {
+    assert.equal(shouldProxyRequestToStudio("/studio/messages", "GET", headers()), false);
+  });
+
+  it("proxies message detail with Studio API header", () => {
+    assert.equal(
+      shouldProxyRequestToStudio("/studio/messages/msg_abc", "GET", headers(true)),
+      true,
+    );
+  });
 });

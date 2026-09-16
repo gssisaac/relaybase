@@ -5,7 +5,7 @@ import { buildNewsletterDispatchProgress, type NewsletterDispatchProgress } from
 import { emptyNewsletterStats } from "./stats";
 
 function resolveNewsletterSubject(row: Newsletter): string {
-  return requireMessage(store.read(), row.templateId).subject;
+  return requireMessage(store.read(), row.messageId).subject;
 }
 
 export type SerializedNewsletter = {
@@ -22,7 +22,7 @@ export type SerializedNewsletter = {
   fromEmail: string | null;
   replyTo: string | null;
   listStatus: string;
-  messageTemplateId: string;
+  messageId: string;
   layoutId: string | null;
   subject: string;
   previewText: string | null;

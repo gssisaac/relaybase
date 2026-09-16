@@ -10,10 +10,15 @@ import {
   type ReactNode,
 } from "react";
 
-import { upsertTemplateSidebarListRow } from "@/studio/lib/templates/template-sidebar-list";
-import { studioApi, type MessageTemplate, type StudioLayout } from "@/lib/studio/api";
+import { upsertMessageSidebarListRow } from "@/studio/lib/messages/message-sidebar-list";
+import {
+  studioApi,
+  StudioApiError,
+  type StudioMessage,
+  type StudioLayout,
+} from "@/lib/studio/api";
 
-export type TemplateDraftFields = {
+export type MessageDraftFields = {
   name: string;
   subject: string;
   previewText: string;
@@ -22,15 +27,15 @@ export type TemplateDraftFields = {
   templateVariables: Record<string, string>;
 };
 
-type DraftFields = TemplateDraftFields;
+type DraftFields = MessageDraftFields;
 
 type Ctx = {
-  messageTemplateId: string;
-  template: MessageTemplate | null;
+  messageId: string;
+  message: StudioMessage | null;
   layouts: StudioLayout[];
   loading: boolean;
   notFound: boolean;
-  setTemplate: (template: MessageTemplate) => void;
+  setMessage: (message: StudioMessage) => void;
   refresh: () => Promise<void>;
   refreshLayouts: () => Promise<void>;
   syncDraft: (fields: DraftFields) => void;
@@ -39,7 +44,7 @@ type Ctx = {
   getLastSavedDraft: () => DraftFields;
 };
 
-const TemplateDetailCtx = createContext<Ctx | null>(null);
+const MessageDetailCtx = createContext<Ctx | null>(null);
 
 function templateVariablesEqual(a: Record<string, string>, b: Record<string, string>): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
@@ -49,14 +54,14 @@ function templateVariablesEqual(a: Record<string, string>, b: Record<string, str
   return true;
 }
 
-export function TemplateDetailProvider({
-  messageTemplateId,
+export function MessageDetailProvider({
+  messageId,
   children,
 }: {
-  messageTemplateId: string;
+  messageId: string;
   children: ReactNode;
 }) {
-  const [template, setTemplate] = useState<MessageTemplate | null>(null);
+  const [message, setMessage] = useState<StudioMessage | null>(null);
   const [layouts, setLayouts] = useState<StudioLayout[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -71,8 +76,8 @@ export function TemplateDetailProvider({
   });
   const lastSaved = useRef<DraftFields | null>(null);
   const persistInFlight = useRef<Promise<boolean> | null>(null);
-  const templateRef = useRef<MessageTemplate | null>(null);
-  templateRef.current = template;
+  const messageRef = useRef<StudioMessage | null>(null);
+  messageRef.current = message;
 
   const refreshLayouts = useCallback(async () => {
     const t = await studioApi.listLayouts();
@@ -82,39 +87,42 @@ export function TemplateDetailProvider({
   const refresh = useCallback(async () => {
     try {
       const [detail, layoutList] = await Promise.all([
-        studioApi.getMessageTemplate(messageTemplateId),
+        studioApi.getMessage(messageId),
         studioApi.listLayouts(),
       ]);
-      setTemplate(detail.template);
-      upsertTemplateSidebarListRow(detail.template);
+      if (!detail.message?.id) {
+        throw new StudioApiError(502, "Invalid message response", null);
+      }
+      setMessage(detail.message);
+      upsertMessageSidebarListRow(detail.message);
       setLayouts(layoutList.layouts);
       setNotFound(false);
       const fields: DraftFields = {
-        name: detail.template.name,
-        subject: detail.template.subject,
-        previewText: detail.template.previewText ?? "",
-        bodyMarkdown: detail.template.bodyMarkdown,
-        templateId: detail.template.layoutId ?? layoutList.layouts[0]?.id ?? "",
-        templateVariables: detail.template.templateVariables ?? {},
+        name: detail.message.name,
+        subject: detail.message.subject,
+        previewText: detail.message.previewText ?? "",
+        bodyMarkdown: detail.message.bodyMarkdown,
+        templateId: detail.message.layoutId ?? layoutList.layouts[0]?.id ?? "",
+        templateVariables: detail.message.templateVariables ?? {},
       };
       draftRef.current = fields;
       lastSaved.current = fields;
     } catch (err) {
       const status = err && typeof err === "object" && "status" in err ? err.status : null;
       if (status === 404) setNotFound(true);
-      setTemplate(null);
+      setMessage(null);
     } finally {
       setLoading(false);
     }
-  }, [messageTemplateId]);
+  }, [messageId]);
 
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
-    setTemplate(null);
+    setMessage(null);
     lastSaved.current = null;
     void refresh();
-  }, [messageTemplateId, refresh]);
+  }, [messageId, refresh]);
 
   const syncDraft = useCallback((fields: DraftFields) => {
     draftRef.current = fields;
@@ -127,7 +135,7 @@ export function TemplateDetailProvider({
   }, []);
 
   const persistDraft = useCallback((): Promise<boolean> => {
-    if (!templateRef.current) return Promise.resolve(false);
+    if (!messageRef.current) return Promise.resolve(false);
     if (persistInFlight.current) return persistInFlight.current;
 
     const next = draftRef.current;
@@ -145,7 +153,7 @@ export function TemplateDetailProvider({
     }
 
     const run = studioApi
-      .updateMessageTemplate(messageTemplateId, {
+      .updateMessage(messageId, {
         name: next.name.trim(),
         subject: next.subject,
         previewText: next.previewText.trim() || null,
@@ -153,10 +161,10 @@ export function TemplateDetailProvider({
         layoutId: next.templateId || null,
         templateVariables: next.templateVariables,
       })
-      .then(({ template: updated }) => {
+      .then(({ message: updated }) => {
         lastSaved.current = next;
-        setTemplate(updated);
-        upsertTemplateSidebarListRow(updated);
+        setMessage(updated);
+        upsertMessageSidebarListRow(updated);
         return true;
       })
       .catch(() => false)
@@ -165,17 +173,17 @@ export function TemplateDetailProvider({
       });
     persistInFlight.current = run;
     return run;
-  }, [messageTemplateId]);
+  }, [messageId]);
 
   return (
-    <TemplateDetailCtx.Provider
+    <MessageDetailCtx.Provider
       value={{
-        messageTemplateId,
-        template,
+        messageId,
+        message,
         layouts,
         loading,
         notFound,
-        setTemplate,
+        setMessage,
         refresh,
         refreshLayouts,
         syncDraft,
@@ -185,12 +193,12 @@ export function TemplateDetailProvider({
       }}
     >
       {children}
-    </TemplateDetailCtx.Provider>
+    </MessageDetailCtx.Provider>
   );
 }
 
-export function useTemplateDetail() {
-  const ctx = useContext(TemplateDetailCtx);
-  if (!ctx) throw new Error("useTemplateDetail must be used inside TemplateDetailProvider");
+export function useMessageDetail() {
+  const ctx = useContext(MessageDetailCtx);
+  if (!ctx) throw new Error("useMessageDetail must be used inside MessageDetailProvider");
   return ctx;
 }

@@ -4,6 +4,7 @@ import { isPlainTextTemplate } from "../templates/builtin-templates";
 import { prepareBroadcastTemplateHtml } from "../templates/standard-footer";
 import {
   applyTemplateVariablesToHtml,
+  applyTemplateVariablesToPlainText,
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
 import { applyGmailContentLinkStyles } from "../render/gmail-link-style";
@@ -112,7 +113,7 @@ export function renderTriggerForSend(input: RenderAutomationInput): string {
   const { automation, triggerSendId, templateHtml, studioBaseUrl } = input;
   const triggerId = automation.id;
   const data = store.read();
-  const message = requireMessage(data, automation.templateId);
+  const message = requireMessage(data, automation.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
 
   let shell = prepareBroadcastTemplateHtml(templateHtml, layoutId);
@@ -124,14 +125,18 @@ export function renderTriggerForSend(input: RenderAutomationInput): string {
   );
 
   const openPixel = `${studioBaseUrl}/studio/t/a/o/${triggerId}/${triggerSendId}`;
+  const varContext = { broadcastId: triggerId, studioBaseUrl };
 
   if (isPlainTextTemplate(layoutId)) {
     const plainBody = markdownToPlainEmailText(message.bodyMarkdown ?? "");
-    const merged = applyAllMergeTags(
-      shell.replaceAll("{{content}}", plainBody),
-      input.recipient,
-      input.payload,
+    let merged = shell.replaceAll("{{content}}", plainBody);
+    merged = applyTemplateVariablesToPlainText(
+      merged,
+      input.templateVariablesSchema,
+      message.templateVariables,
+      varContext,
     );
+    merged = applyAllMergeTags(merged, input.recipient, input.payload);
     let html = `<div style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">${escapeHtml(merged)}</div>`;
     html = applyTriggerComplianceMergeTags(html, triggerId);
     return `${html}<img src="${openPixel}" width="1" height="1" alt="" style="display:none;border:0;" />`;
@@ -147,6 +152,12 @@ export function renderTriggerForSend(input: RenderAutomationInput): string {
   );
 
   let html = shell.replaceAll("{{content}}", contentHtml);
+  html = applyTemplateVariablesToHtml(
+    html,
+    input.templateVariablesSchema,
+    message.templateVariables,
+    varContext,
+  );
   html = applyAllMergeTags(html, input.recipient, input.payload);
   html = applyTriggerComplianceMergeTags(html, triggerId);
 

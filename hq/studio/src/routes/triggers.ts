@@ -2,7 +2,7 @@ import { Hono } from "hono";
 
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { TriggerPurpose, Trigger, TriggerSource } from "../db/types";
-import { createMessageTemplate, patchMessageTemplate } from "../lib/messages/message-template";
+import { createMessageForOwner, patchMessage } from "../lib/messages/message";
 import { triggerSource } from "../lib/messages/resolve";
 import { findAudienceGroup } from "../lib/audience-groups/group";
 import { dispatchTriggerSend } from "../lib/triggers/dispatch";
@@ -112,13 +112,12 @@ studioTriggers.post("/", async (c) => {
   const now = new Date().toISOString();
   let created: Trigger | null = null;
   store.update((draft) => {
-    const messageTemplate = createMessageTemplate(
+    const message = createMessageForOwner(
       draft,
       {
         ownerId: id,
         accountLinkId: DEV_ACCOUNT_LINK_ID,
         name,
-        category: purpose === "marketing" ? "marketing" : purpose === "conversational" ? "conversational" : "transactional",
         layoutId: "tpl-minimal",
       },
       now,
@@ -141,7 +140,7 @@ studioTriggers.post("/", async (c) => {
       audienceGroupId: null,
       cooldownSeconds: source.type === "mailbox_inbound" ? 3600 : 86_400,
       applyMarketingSuppression: purpose !== "transactional",
-      templateId: messageTemplate.id,
+      messageId: message.id,
       stats: emptyTriggerStats(),
       lastTriggeredAt: null,
       lastSentAt: null,
@@ -183,7 +182,7 @@ studioTriggers.patch("/:id", async (c) => {
     subject?: string;
     previewText?: string | null;
     bodyMarkdown?: string;
-    templateId?: string | null;
+    layoutId?: string | null;
     templateVariables?: Record<string, string>;
   };
   try {
@@ -219,15 +218,15 @@ studioTriggers.patch("/:id", async (c) => {
     const row = draft.triggers[idx]!;
     const purpose = body.purpose ?? row.purpose;
     const existingSource = triggerSource(row);
-    patchMessageTemplate(
+    patchMessage(
       draft,
-      row.templateId,
+      row.messageId,
       {
         name: body.name?.trim(),
         subject: body.subject,
         previewText: body.previewText,
         bodyMarkdown: body.bodyMarkdown,
-        layoutId: body.templateId !== undefined ? body.templateId : undefined,
+        layoutId: body.layoutId !== undefined ? body.layoutId : undefined,
         templateVariables:
           body.templateVariables !== undefined
             ? sanitizeTemplateVariables(body.templateVariables)

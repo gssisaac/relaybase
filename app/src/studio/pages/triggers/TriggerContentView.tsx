@@ -5,9 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { MessageTemplatePicker } from "@/studio/components/templates/MessageTemplatePicker";
-import { messageTemplateDetailHref } from "@/studio/lib/template-paths";
-import type { MessageTemplate } from "@/lib/studio/api";
+import { MessagePicker } from "@/studio/components/messages/MessagePicker";
+import { messageDetailHref } from "@/studio/lib/message-paths";
+import type { StudioMessage } from "@/lib/studio/api";
 
 import {
   applyTriggerPreviewMergeTags,
@@ -15,7 +15,9 @@ import {
   sampleTriggerPreviewValues,
 } from "@/studio/lib/triggers/trigger-merge-tags";
 import {
+  applyTemplateVariablesToComposeContent,
   applyTemplateVariablesToHtml,
+  applyTemplateVariablesToPlainText,
   resolveTemplateVariableDefaults,
 } from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
@@ -132,7 +134,7 @@ export function TriggerContentView() {
     void refreshComplianceContext();
   }, [refreshComplianceContext, triggerId]);
 
-  const messageTemplateId = trigger?.messageTemplateId ?? null;
+  const messageId = trigger?.messageId ?? null;
 
   useEffect(() => {
     syncDraft({
@@ -141,7 +143,7 @@ export function TriggerContentView() {
       templateId,
       templateVariables,
       previewText: trigger?.previewText ?? "",
-      messageTemplateId,
+      messageId,
     });
   }, [
     subject,
@@ -149,32 +151,27 @@ export function TriggerContentView() {
     templateId,
     templateVariables,
     trigger?.previewText,
-    messageTemplateId,
+    messageId,
     syncDraft,
   ]);
 
-  async function applyMessageTemplate(template: MessageTemplate | null) {
-    if (!editable || !trigger) return;
+  async function applySavedMessage(source: StudioMessage | null) {
+    if (!editable || !trigger || !source) return;
     try {
-      if (!template) {
-        const updated = await studioApi.updateTrigger(triggerId, { messageTemplateId: null });
-        setTrigger(updated);
-        return;
-      }
-      setSubject(template.subject);
-      setBodyMarkdown(template.bodyMarkdown);
-      if (template.layoutId) setTemplateId(template.layoutId);
-      ingestBody(template.bodyMarkdown, triggerId);
+      setSubject(source.subject);
+      setBodyMarkdown(source.bodyMarkdown);
+      if (source.layoutId) setTemplateId(source.layoutId);
+      ingestBody(source.bodyMarkdown, triggerId);
       const updated = await studioApi.updateTrigger(triggerId, {
-        messageTemplateId: template.id,
-        subject: template.subject,
-        bodyMarkdown: template.bodyMarkdown,
-        layoutId: template.layoutId ?? undefined,
+        subject: source.subject,
+        bodyMarkdown: source.bodyMarkdown,
+        layoutId: source.layoutId ?? undefined,
+        templateVariables: source.templateVariables,
       });
       setTrigger(updated);
-      toast.success(`Linked “${template.name}”`);
+      toast.success(`Inserted “${source.name}”`);
     } catch {
-      toast.error("Could not link template");
+      toast.error("Could not insert message");
     }
   }
 
@@ -190,8 +187,11 @@ export function TriggerContentView() {
   const plainTextTemplate = isPlainTextTemplate(templateId);
 
   const mergeTagSections = useMemo(
-    () => (trigger ? composeMergeTagSectionsForTrigger(trigger.source) : []),
-    [trigger?.source],
+    () =>
+      trigger
+        ? composeMergeTagSectionsForTrigger(trigger.source, template?.variablesSchema ?? null)
+        : [],
+    [trigger?.source, template?.variablesSchema],
   );
 
   const triggerPreviewValues = useMemo(
@@ -214,11 +214,6 @@ export function TriggerContentView() {
     [compliance, plainTextTemplate, trigger?.source, triggerPreviewValues],
   );
 
-  const previewSubject = useMemo(
-    () => applyTriggerPreviewMergeTags(subject, PREVIEW_RECIPIENT, previewMergeOptions),
-    [subject, previewMergeOptions],
-  );
-
   const resolvedTemplateVariables = useMemo(
     () =>
       resolveTemplateVariableDefaults({
@@ -228,6 +223,20 @@ export function TriggerContentView() {
       }),
     [template?.variablesSchema, templateVariables, compliance?.organizationName],
   );
+
+  const previewSubject = useMemo(() => {
+    const withLayoutVars = applyTemplateVariablesToPlainText(
+      subject,
+      template?.variablesSchema ?? null,
+      resolvedTemplateVariables,
+    );
+    return applyTriggerPreviewMergeTags(withLayoutVars, PREVIEW_RECIPIENT, previewMergeOptions);
+  }, [
+    subject,
+    template?.variablesSchema,
+    resolvedTemplateVariables,
+    previewMergeOptions,
+  ]);
 
   const preparedTemplateHtml = useMemo(() => {
     const shell = prepareLayoutTemplateHtml(template?.htmlSource ?? "", templateId);
@@ -239,12 +248,25 @@ export function TriggerContentView() {
   }, [template?.htmlSource, template?.variablesSchema, templateId, resolvedTemplateVariables]);
 
   const renderedPreview = useMemo(() => {
+    const schema = template?.variablesSchema ?? null;
+    const contentVarsInput = {
+      plainText: plainTextTemplate,
+      schema,
+      values: resolvedTemplateVariables,
+    };
     if (plainTextTemplate) {
-      const body = plainEmailBodyFromMarkdown(bodyMarkdown);
+      const body = applyTemplateVariablesToComposeContent(
+        plainEmailBodyFromMarkdown(bodyMarkdown),
+        contentVarsInput,
+      );
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyTriggerPreviewMergeTags(wrapped, PREVIEW_RECIPIENT, previewMergeOptions);
     }
-    const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const rawContent = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const content = applyTemplateVariablesToComposeContent(rawContent, {
+      ...contentVarsInput,
+      plainText: false,
+    });
     if (!template) {
       return applyTriggerPreviewMergeTags(content, PREVIEW_RECIPIENT, previewMergeOptions);
     }
@@ -257,6 +279,7 @@ export function TriggerContentView() {
     bodyMarkdown,
     previewHtml,
     previewMergeOptions,
+    resolvedTemplateVariables,
   ]);
 
   async function handleSave() {
@@ -273,20 +296,17 @@ export function TriggerContentView() {
       {editable ? (
         <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-border px-4 py-3">
           <div className="min-w-[220px] flex-1 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Message template</p>
-            <MessageTemplatePicker
-              value={messageTemplateId}
-              onApplied={(t) => void applyMessageTemplate(t)}
-            />
+            <p className="text-xs font-medium text-muted-foreground">Saved message</p>
+            <MessagePicker value={messageId} onApplied={(m) => void applySavedMessage(m)} />
           </div>
-          {messageTemplateId ? (
+          {messageId ? (
             <Button
               size="sm"
               variant="outline"
               nativeButton={false}
-              render={<Link href={messageTemplateDetailHref(messageTemplateId)} />}
+              render={<Link href={messageDetailHref(messageId)} />}
             >
-              Edit template
+              Edit message
             </Button>
           ) : null}
         </div>

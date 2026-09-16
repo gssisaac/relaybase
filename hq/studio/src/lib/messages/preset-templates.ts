@@ -1,12 +1,12 @@
 import type { Template } from "../../db/types";
 
-/** Built-in message templates shown when `data/store.json` has no user templates yet. */
-export function getPresetMessageTemplates(now: string): Template[] {
+/** Built-in catalog blueprints seeded into `data/template-catalog/`. */
+export function getPresetTemplates(now: string): Template[] {
   return [
     {
       id: "msgtpl_preset_product_update",
-      accountLinkId: "dev",
       name: "Product update (starter)",
+      description: "A short release note your subscribers can skim in under a minute.",
       subject: "What's new in {{vars.brand.organization_name}}",
       previewText: "A short release note your subscribers can skim in under a minute.",
       bodyMarkdown:
@@ -14,14 +14,14 @@ export function getPresetMessageTemplates(now: string): Template[] {
       layoutId: "tpl-minimal",
       templateVariables: {},
       category: "newsletter",
-      isPreset: true,
+      isBuiltin: true,
       createdAt: now,
       updatedAt: now,
     },
     {
       id: "msgtpl_preset_verify_email",
-      accountLinkId: "dev",
       name: "Verify email (transactional)",
+      description: "Confirm this address to finish creating an account.",
       subject: "Verify your email",
       previewText: "Confirm this address to finish creating your account",
       bodyMarkdown:
@@ -29,7 +29,7 @@ export function getPresetMessageTemplates(now: string): Template[] {
       layoutId: "tpl-minimal",
       templateVariables: {},
       category: "transactional",
-      isPreset: true,
+      isBuiltin: true,
       createdAt: now,
       updatedAt: now,
     },

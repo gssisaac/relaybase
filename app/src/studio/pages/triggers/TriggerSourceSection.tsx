@@ -39,6 +39,12 @@ import {
 import { FieldCheck } from "@/components/ui/field-check";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts";
+import {
+  applyRecipientPathsToWebhookPayload,
+  buildWebhookIntegrationAiInstructions,
+  buildWebhookSamplePayload,
+  webhookTriggerFieldPaths,
+} from "@/studio/lib/triggers/trigger-webhook-integration";
 import { useTriggerDetail } from "@/studio/pages/triggers/TriggerDetailContext";
 import { getStudioApiBase } from "@/lib/studio/api-base";
 import { studioApi, StudioApiError, type TriggerSource } from "@/lib/studio/api";
@@ -64,37 +70,13 @@ function triggerTypeSelectLabel(type: TriggerSource["type"]): string {
   return type === "mailbox_inbound" ? "Mailbox inbound" : "HTTP webhook";
 }
 
-function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown) {
-  const parts = path.split(".").map((s) => s.trim()).filter(Boolean);
-  if (parts.length === 0) return;
-  let current: Record<string, unknown> = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i]!;
-    if (typeof current[part] !== "object" || current[part] === null) {
-      current[part] = {};
-    }
-    current = current[part] as Record<string, unknown>;
-  }
-  current[parts[parts.length - 1]!] = value;
-}
-
 function generateSnippets(params: {
   url: string;
   secret: string;
-  emailPath: string;
-  namePath: string;
+  sampleBody: Record<string, unknown>;
 }) {
-  const { url, secret, emailPath, namePath } = params;
+  const { url, secret, sampleBody } = params;
   const token = secret && !secret.startsWith("••") ? secret : "YOUR_WEBHOOK_SECRET";
-
-  const sampleBody: Record<string, unknown> = {};
-  const ePath = emailPath.trim() || "email";
-  const nPath = namePath.trim() || "name";
-
-  setNestedValue(sampleBody, ePath, "alex@example.com");
-  setNestedValue(sampleBody, nPath, "Alex Kim");
-  sampleBody.verifyUrl = "https://yourdomain.com/verify?token=xyz123";
-  sampleBody.code = "849201";
 
   const jsonString = JSON.stringify(sampleBody, null, 2);
 
@@ -134,7 +116,7 @@ print(response.status_code, response.json())`;
 }
 
 export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) {
-  const { triggerId, trigger, setTrigger, refresh } = useTriggerDetail();
+  const { triggerId, trigger, setTrigger, refresh, getLastSavedDraft } = useTriggerDetail();
   const {
     availableAddresses,
     loading: addressesLoading,
@@ -160,6 +142,7 @@ export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) 
 
   const [selectedLang, setSelectedLang] = useState<CodeLanguage>("curl");
   const [copiedLang, setCopiedLang] = useState(false);
+  const [copiedAiInstructions, setCopiedAiInstructions] = useState(false);
   const [integrationOpen, setIntegrationOpen] = useState(false);
 
   useEffect(() => {
@@ -205,23 +188,86 @@ export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) 
     return `${getStudioApiBase()}/studio/hooks/trigger/${trigger.id}`;
   }, [trigger]);
 
+  const templateTextsForIntegration = useMemo(() => {
+    const draft = getLastSavedDraft();
+    return {
+      subject: draft.subject || trigger?.subject || "",
+      bodyMarkdown: draft.bodyMarkdown || trigger?.bodyMarkdown || "",
+    };
+  }, [
+    getLastSavedDraft,
+    integrationOpen,
+    trigger?.subject,
+    trigger?.bodyMarkdown,
+    trigger?.updatedAt,
+  ]);
+
+  const webhookTriggerFieldPathsList = useMemo(() => {
+    const requiredFields =
+      trigger?.source.type === "http_webhook" ? trigger.source.requiredFields : undefined;
+    return webhookTriggerFieldPaths({
+      requiredFields,
+      templateTexts: [
+        templateTextsForIntegration.subject,
+        templateTextsForIntegration.bodyMarkdown,
+      ],
+    });
+  }, [trigger?.source, templateTextsForIntegration.subject, templateTextsForIntegration.bodyMarkdown]);
+
+  const webhookSamplePayload = useMemo(() => {
+    return buildWebhookSamplePayload({
+      emailPath,
+      namePath,
+      triggerFieldPaths: webhookTriggerFieldPathsList,
+    });
+  }, [emailPath, namePath, webhookTriggerFieldPathsList]);
+
   const snippets = useMemo(() => {
     return generateSnippets({
       url: webhookUrl,
       secret: webhookSecretHint ?? "",
+      sampleBody: webhookSamplePayload,
+    });
+  }, [webhookUrl, webhookSecretHint, webhookSamplePayload]);
+
+  const samplePayloadJson = useMemo(
+    () => JSON.stringify(webhookSamplePayload, null, 2),
+    [webhookSamplePayload],
+  );
+
+  const webhookSecretForCopy = useMemo(() => {
+    const hint = webhookSecretHint?.trim();
+    if (hint && !hint.startsWith("••")) return hint;
+    if (trigger?.source.type === "http_webhook") {
+      const stored = trigger.source.secret?.trim();
+      if (stored && !stored.startsWith("••")) return stored;
+    }
+    return "YOUR_WEBHOOK_SECRET";
+  }, [webhookSecretHint, trigger?.source]);
+
+  const aiIntegrationInstructions = useMemo(() => {
+    if (!trigger) return "";
+    return buildWebhookIntegrationAiInstructions({
+      triggerName: trigger.name,
+      triggerId: trigger.id,
+      url: webhookUrl,
+      secretPlaceholder: webhookSecretForCopy,
       emailPath,
       namePath,
+      triggerFieldPaths: webhookTriggerFieldPathsList,
+      samplePayload: webhookSamplePayload,
+      curlSnippet: snippets.curl,
     });
-  }, [webhookUrl, webhookSecretHint, emailPath, namePath]);
-
-  const samplePayloadJson = useMemo(() => {
-    const sampleBody: Record<string, unknown> = {};
-    setNestedValue(sampleBody, emailPath.trim() || "email", "alex@example.com");
-    setNestedValue(sampleBody, namePath.trim() || "name", "Alex Kim");
-    sampleBody.verifyUrl = "https://yourdomain.com/verify?token=xyz123";
-    sampleBody.code = "849201";
-    return JSON.stringify(sampleBody, null, 2);
-  }, [emailPath, namePath]);
+  }, [
+    trigger,
+    webhookUrl,
+    webhookSecretForCopy,
+    emailPath,
+    namePath,
+    webhookTriggerFieldPathsList,
+    webhookSamplePayload,
+    snippets.curl,
+  ]);
 
   function resolveInboundMailbox(): { domain: string; localPart: string } | null {
     const email =
@@ -257,7 +303,10 @@ export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) 
           secret: webhookSecretHint ?? (trigger.source.type === "http_webhook" ? trigger.source.secret : "pending-rotate"),
           emailPath: emailPath.trim() || "email",
           namePath: namePath.trim() || "name",
-          requiredFields: [],
+          requiredFields:
+            trigger.source.type === "http_webhook"
+              ? (trigger.source.requiredFields ?? [])
+              : [],
         };
       }
 
@@ -338,12 +387,19 @@ export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) 
               subject: "Sample Inquiry Subject",
               snippet: "Hello, I am asking about your service setup and pricing.",
             }
-          : {
-              email,
-              name: testName.trim() || "Test User",
-              verifyUrl: "https://yourdomain.com/verify?token=test_preview",
-              code: "849201",
-            };
+          : applyRecipientPathsToWebhookPayload(
+              buildWebhookSamplePayload({
+                emailPath,
+                namePath,
+                triggerFieldPaths: webhookTriggerFieldPathsList,
+              }),
+              {
+                emailPath,
+                namePath,
+                email,
+                name: testName.trim() || "Test User",
+              },
+            );
 
       await studioApi.testSendTrigger(triggerId, {
         email,
@@ -366,6 +422,13 @@ export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) 
     setCopiedLang(true);
     toast.success("Code snippet copied to clipboard");
     setTimeout(() => setCopiedLang(false), 2000);
+  }
+
+  function copyAiInstructions() {
+    void navigator.clipboard.writeText(aiIntegrationInstructions);
+    setCopiedAiInstructions(true);
+    toast.success("Integration instructions copied — paste into your AI assistant");
+    setTimeout(() => setCopiedAiInstructions(false), 2000);
   }
 
   if (!trigger) return null;
@@ -645,12 +708,35 @@ export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) 
 
       <Dialog open={integrationOpen} onOpenChange={setIntegrationOpen}>
         <DialogContent className="flex max-h-[min(90vh,720px)] flex-col gap-0 overflow-hidden sm:max-w-2xl">
-          <DialogHeader className="shrink-0">
-            <DialogTitle>Integration guide</DialogTitle>
-            <DialogDescription>
-              Connect your backend to this trigger with a single POST request. Save trigger settings
-              first so field paths match your payload.
-            </DialogDescription>
+          <DialogHeader className="shrink-0 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3 pr-8">
+              <div className="min-w-0 space-y-1.5">
+                <DialogTitle>Integration guide</DialogTitle>
+                <DialogDescription>
+                  Payload example and sample request are built from this trigger&apos;s template merge
+                  tags and required fields. Save trigger settings so recipient JSON paths stay in sync.
+                </DialogDescription>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={copyAiInstructions}
+              >
+                {copiedAiInstructions ? (
+                  <>
+                    <Check className="size-3.5 text-green-500" aria-hidden />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3.5" aria-hidden />
+                    Copy instruction for AI
+                  </>
+                )}
+              </Button>
+            </div>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2">
             <ol className="list-decimal space-y-2 pl-4 text-sm text-muted-foreground">
@@ -672,10 +758,28 @@ export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) 
                 change paths under Advanced).
               </li>
               <li>
-                Reference any JSON key in the email body as{" "}
-                <code className="rounded bg-muted px-1 font-mono text-xs">{"{{trigger.fieldName}}"}</code>{" "}
-                (nested keys use dots, e.g.{" "}
-                <code className="rounded bg-muted px-1 font-mono text-xs">{"{{trigger.user.id}}"}</code>).
+                {webhookTriggerFieldPathsList.length > 0 ? (
+                  <>
+                    Include these payload fields (used in your email as{" "}
+                    <code className="rounded bg-muted px-1 font-mono text-xs">{"{{trigger.*}}"}</code>
+                    ):{" "}
+                    {webhookTriggerFieldPathsList.map((path, i) => (
+                      <span key={path}>
+                        {i > 0 ? ", " : null}
+                        <code className="rounded bg-muted px-1 font-mono text-xs">{path}</code>
+                      </span>
+                    ))}
+                    .
+                  </>
+                ) : (
+                  <>
+                    Add JSON keys for each{" "}
+                    <code className="rounded bg-muted px-1 font-mono text-xs">{"{{trigger.fieldName}}"}</code>{" "}
+                    in your template (nested keys use dots, e.g.{" "}
+                    <code className="rounded bg-muted px-1 font-mono text-xs">{"{{trigger.user.id}}"}</code>
+                    ).
+                  </>
+                )}
               </li>
               <li>
                 Optional: send{" "}

@@ -5,12 +5,12 @@ import { createContext, useContext, type ReactNode } from "react";
 type Ctx = {
   addOpen: boolean;
   setAddOpen: (open: boolean) => void;
-  onCreated: (templateId: string) => void;
+  onCreated: (messageId: string) => void;
 };
 
 const TemplateSidebarNewCtx = createContext<Ctx | null>(null);
 
-export function TemplateSidebarNewProvider({
+export function MessageSidebarNewProvider({
   addOpen,
   setAddOpen,
   onCreated,
@@ -23,6 +23,6 @@ export function TemplateSidebarNewProvider({
   );
 }
 
-export function useTemplateSidebarNew() {
+export function useMessageSidebarNew() {
   return useContext(TemplateSidebarNewCtx);
 }

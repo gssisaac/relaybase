@@ -1,4 +1,4 @@
-import type { MessageTemplateThumbnailSource } from "@/studio/lib/templates/render-message-template-thumbnail-html";
+import type { TemplateThumbnailSource } from "@/studio/lib/templates/render-message-template-thumbnail-html";
 import type { TemplateVariablesSchema } from "@/studio/lib/layouts/layout-template-variables";
 
 /** Bump when capture dimensions/HTML wrapper change to invalidate stale blobs. */
@@ -37,7 +37,7 @@ async function hashSource(text: string): Promise<string> {
 
 export async function messageTemplateThumbnailCacheKey(input: {
   templateId: string;
-  template: MessageTemplateThumbnailSource;
+  template: TemplateThumbnailSource;
   layoutId: string;
   layoutHtmlSource: string;
   variablesSchema: TemplateVariablesSchema | null | undefined;

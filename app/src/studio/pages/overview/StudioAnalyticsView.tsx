@@ -47,7 +47,7 @@ export function StudioAnalyticsView() {
 
   useEffect(() => {
     void studioApi
-      .listMessageTemplates()
+      .listTemplates()
       .then((res) => setTemplateCount(res.templates.length))
       .catch(() => setTemplateCount(0));
   }, [data?.generatedAt]);

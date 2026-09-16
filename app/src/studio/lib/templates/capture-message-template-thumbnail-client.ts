@@ -1,7 +1,7 @@
 import { toPng } from "html-to-image";
 
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
-import type { MessageTemplate, StudioLayout } from "@/lib/studio/api";
+import type { StudioMessage, StudioLayout } from "@/lib/studio/api";
 
 import { renderMessageTemplateThumbnailHtml } from "./render-message-template-thumbnail-html";
 
@@ -91,7 +91,7 @@ function wrapRenderedHtml(bodyHtml: string, layoutId: string): string {
 }
 
 export async function captureMessageTemplateThumbnailBlob(input: {
-  template: Pick<MessageTemplate, "bodyMarkdown" | "layoutId" | "templateVariables" | "subject">;
+  template: Pick<StudioMessage, "bodyMarkdown" | "layoutId" | "templateVariables" | "subject">;
   layout: StudioLayout | null;
 }): Promise<Blob> {
   const layoutId = input.template.layoutId ?? input.layout?.id ?? "";

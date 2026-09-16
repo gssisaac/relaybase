@@ -4,6 +4,10 @@ import { requireMessage } from "../messages/resolve";
 import { sendMail } from "../mail/sender";
 import { STUDIO_PUBLIC_BASE_URL } from "../shared/studio-url";
 import { newId, newToken } from "../shared/ids";
+import {
+  applyTemplateVariablesToPlainText,
+  resolveTemplateVariableDefaults,
+} from "../templates/variable-schema";
 import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "./merge-tags";
 import { triggerSendMailOptions, buildTriggerListUnsubscribeUrl, renderTriggerForSend } from "./render";
 import { getTriggerLayoutHtml, getTriggerLayoutSchema } from "./serialize";
@@ -14,7 +18,7 @@ export async function dispatchTriggerSend(
   send: TriggerSend,
   payload: Record<string, unknown>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const message = requireMessage(store.read(), automation.templateId);
+  const message = requireMessage(store.read(), automation.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml =
     getTriggerLayoutHtml(layoutId) ?? getTriggerLayoutHtml("tpl-minimal") ?? "{{content}}";
@@ -30,7 +34,18 @@ export async function dispatchTriggerSend(
   });
 
   const from = automation.fromEmail?.trim() ?? "";
-  const subject = applySubjectMergeTags(message.subject, send, payload);
+  const layoutSchema = getTriggerLayoutSchema(layoutId);
+  const resolvedTemplateVariables = resolveTemplateVariableDefaults({
+    schema: layoutSchema,
+    values: message.templateVariables,
+  });
+  const subjectWithLayoutVars = applyTemplateVariablesToPlainText(
+    message.subject,
+    layoutSchema,
+    resolvedTemplateVariables,
+    { broadcastId: automation.id, studioBaseUrl: STUDIO_PUBLIC_BASE_URL },
+  );
+  const subject = applySubjectMergeTags(subjectWithLayoutVars, send, payload);
 
   const mailOpts = triggerSendMailOptions(automation);
   let listUnsubscribeUrl: string | undefined;

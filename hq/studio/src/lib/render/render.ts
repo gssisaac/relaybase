@@ -5,6 +5,7 @@ import { prepareBroadcastTemplateHtml } from "../templates/standard-footer";
 import { isPlainTextTemplate } from "../templates/builtin-templates";
 import {
   applyTemplateVariablesToHtml,
+  applyTemplateVariablesToPlainText,
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
 import { resolveStudioAssetUrl } from "../assets/resolve-url";
@@ -106,7 +107,7 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function applyRecipientMergeTags(
+export function applyRecipientMergeTags(
   text: string,
   recipient: RenderRecipientInput,
   unsubscribeUrl: string,
@@ -138,6 +139,29 @@ export function buildListUnsubscribeUrl(
   return `${studioBaseUrl}/studio/unsubscribe/${broadcastId}/${unsubscribeToken}`;
 }
 
+export function resolveBroadcastSubject(input: {
+  subject: string;
+  templateVariablesSchema?: TemplateVariablesSchema | null;
+  templateVariables?: Record<string, string> | null;
+  recipient: RenderRecipientInput;
+  broadcastId: string;
+  unsubscribeToken: string;
+  studioBaseUrl: string;
+}): string {
+  const unsubscribeUrl = buildListUnsubscribeUrl(
+    input.studioBaseUrl,
+    input.broadcastId,
+    input.unsubscribeToken,
+  );
+  let out = applyTemplateVariablesToPlainText(
+    input.subject,
+    input.templateVariablesSchema,
+    input.templateVariables,
+    { broadcastId: input.broadcastId, studioBaseUrl: input.studioBaseUrl },
+  );
+  return applyRecipientMergeTags(out, input.recipient, unsubscribeUrl);
+}
+
 export function renderNewsletterForRecipient(input: RenderBroadcastInput): string {
   const unsubscribeUrl = buildListUnsubscribeUrl(
     input.studioBaseUrl,
@@ -157,13 +181,21 @@ export function renderNewsletterForRecipient(input: RenderBroadcastInput): strin
     { broadcastId: input.broadcastId, studioBaseUrl: input.studioBaseUrl },
   );
 
+  const varContext = {
+    broadcastId: input.broadcastId,
+    studioBaseUrl: input.studioBaseUrl,
+  };
+
   if (isPlainTextTemplate(input.templateId)) {
     const plainBody = markdownToPlainEmailText(input.bodyMarkdown ?? "");
-    const merged = applyRecipientMergeTags(
-      templateHtml.replaceAll("{{content}}", plainBody),
-      input.recipient,
-      unsubscribeUrl,
+    let merged = templateHtml.replaceAll("{{content}}", plainBody);
+    merged = applyTemplateVariablesToPlainText(
+      merged,
+      input.templateVariablesSchema,
+      input.templateVariables,
+      varContext,
     );
+    merged = applyRecipientMergeTags(merged, input.recipient, unsubscribeUrl);
     let html = `<div style="white-space:pre-wrap;font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">${escapeHtml(merged)}</div>`;
     html = applyComplianceMergeTags(html, input.broadcastId);
     const pixelUrl = `${input.studioBaseUrl}/studio/t/o/${input.broadcastId}/${input.recipientId}`;
@@ -183,6 +215,12 @@ export function renderNewsletterForRecipient(input: RenderBroadcastInput): strin
     .replaceAll("{{content}}", contentHtml)
     .replaceAll("{{unsubscribe_url}}", unsubscribeUrl);
 
+  html = applyTemplateVariablesToHtml(
+    html,
+    input.templateVariablesSchema,
+    input.templateVariables,
+    varContext,
+  );
   html = applyRecipientMergeTags(html, input.recipient, unsubscribeUrl);
   html = applyComplianceMergeTags(html, input.broadcastId);
 

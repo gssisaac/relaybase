@@ -22,31 +22,31 @@ function TriggerConfigViewBody() {
   const { inspectorOpen, openInspector, closeInspector } = useTriggerConfigUiRequired();
   const [selection, setSelection] = useState<TriggerCanvasSelection>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [templateName, setTemplateName] = useState<string | null>(null);
+  const [messageName, setMessageName] = useState<string | null>(null);
 
   useEffect(() => {
     setSelection(null);
   }, [triggerId]);
 
   useEffect(() => {
-    const messageTemplateId = trigger?.messageTemplateId;
-    if (!messageTemplateId) {
-      setTemplateName(null);
+    const messageId = trigger?.messageId;
+    if (!messageId) {
+      setMessageName(null);
       return;
     }
     let cancelled = false;
-    void studioApi.getMessageTemplate(messageTemplateId).then(
+    void studioApi.getMessage(messageId).then(
       (res) => {
-        if (!cancelled) setTemplateName(res.template.name);
+        if (!cancelled) setMessageName(res.message.name);
       },
       () => {
-        if (!cancelled) setTemplateName(null);
+        if (!cancelled) setMessageName(null);
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [trigger?.messageTemplateId]);
+  }, [trigger?.messageId]);
 
   const onCanvasBackgroundClick = useCallback(() => {
     if (selection !== null) {
@@ -67,7 +67,7 @@ function TriggerConfigViewBody() {
         <TriggerCanvas
           triggerId={triggerId}
           trigger={trigger}
-          templateName={templateName}
+          messageName={messageName}
           selected={selection}
           onSelect={(node) => {
             setSelection(node);

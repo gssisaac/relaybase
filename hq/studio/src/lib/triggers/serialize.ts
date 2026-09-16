@@ -1,7 +1,13 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
 import type { Trigger, TriggerSource } from "../../db/types";
 import { findAudienceGroup } from "../audience-groups/group";
-import { getLayoutHtml, getLayoutSchema, resolveMessage, triggerSource } from "../messages/resolve";
+import {
+  getLayoutHtml,
+  getLayoutSchema,
+  resolveMessage,
+  rowMessageId,
+  triggerSource,
+} from "../messages/resolve";
 
 export function findTrigger(id: string): Trigger | undefined {
   return store.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
@@ -31,7 +37,7 @@ export function serializeTrigger(row: Trigger, options?: { revealTriggerSecret?:
     options?.revealTriggerSecret || source.type !== "http_webhook"
       ? source
       : maskTriggerSecret(source);
-  const message = resolveMessage(data, row.templateId);
+  const message = resolveMessage(data, rowMessageId(row));
 
   return {
     id: row.id,
@@ -51,7 +57,7 @@ export function serializeTrigger(row: Trigger, options?: { revealTriggerSecret?:
     audienceGroupName: group?.name ?? null,
     cooldownSeconds: row.cooldownSeconds,
     applyMarketingSuppression: row.applyMarketingSuppression,
-    messageTemplateId: row.templateId,
+    messageId: rowMessageId(row),
     layoutId: message?.layoutId ?? null,
     subject: message?.subject ?? "",
     previewText: message?.previewText ?? null,

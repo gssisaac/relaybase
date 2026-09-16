@@ -4,6 +4,8 @@ import {
   BROADCAST_MERGE_TAGS,
   type ApplyBroadcastMergeTagsOptions,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
+import { layoutVariableMergeTagSection } from "@/studio/lib/layouts/compose-merge-tag-sections";
+import type { TemplateVariablesSchema } from "@/studio/lib/layouts/layout-template-variables";
 import type { TriggerSource } from "@/lib/studio/api";
 
 export type ComposeMergeTag = {
@@ -118,6 +120,7 @@ export function triggerMergeTagsForAutomation(source: TriggerSource): ComposeMer
 
 export function composeMergeTagSectionsForTrigger(
   source: TriggerSource,
+  layoutSchema?: TemplateVariablesSchema | null,
 ): ComposeMergeTagSection[] {
   const contactTags: ComposeMergeTag[] = BROADCAST_MERGE_TAGS.map((t) => ({
     id: t.id,
@@ -130,6 +133,8 @@ export function composeMergeTagSectionsForTrigger(
   if (triggerTags.length) {
     sections.push({ title: "Trigger payload", tags: triggerTags });
   }
+  const layoutSection = layoutVariableMergeTagSection(layoutSchema);
+  if (layoutSection) sections.push(layoutSection);
   return sections;
 }
 

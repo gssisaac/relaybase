@@ -132,6 +132,56 @@ export function resolveTemplateVariableDefaults(input: {
   return out;
 }
 
+/** Substitute `{{vars.*}}` in plain text (subject, plain-text body) without HTML escaping. */
+export function applyTemplateVariablesToPlainText(
+  text: string,
+  schema: TemplateVariablesSchema | null | undefined,
+  values: Record<string, string> | null | undefined,
+  options?: { defaultBrandLogoUrl?: string },
+): string {
+  if (!schema?.fields.length) return text;
+  const map = values ?? {};
+  let out = text;
+
+  for (const field of schema.fields) {
+    const raw = map[field.key]?.trim() ?? "";
+    let replacement = "";
+    if (field.type === "text") {
+      replacement = raw;
+    } else if (field.type === "image") {
+      const isBrandLogoField = field.key === "brand.logo" || field.key === "header.logo";
+      let src = raw;
+      if (!src && isBrandLogoField) {
+        src = options?.defaultBrandLogoUrl ?? defaultBrandLogoUrl();
+      }
+      replacement = src;
+    }
+    out = out.replaceAll(templateVariableToken(field.key), replacement);
+  }
+
+  return out;
+}
+
+/** Apply layout variables to markdown body HTML or plain-text body before preview/send merge. */
+export function applyTemplateVariablesToComposeContent(
+  content: string,
+  input: {
+    plainText: boolean;
+    schema: TemplateVariablesSchema | null | undefined;
+    values: Record<string, string> | null | undefined;
+    defaultBrandLogoUrl?: string;
+  },
+): string {
+  if (input.plainText) {
+    return applyTemplateVariablesToPlainText(content, input.schema, input.values, {
+      defaultBrandLogoUrl: input.defaultBrandLogoUrl,
+    });
+  }
+  return applyTemplateVariablesToHtml(content, input.schema, input.values, {
+    defaultBrandLogoUrl: input.defaultBrandLogoUrl,
+  });
+}
+
 export function missingRequiredTemplateVariables(
   schema: TemplateVariablesSchema | null | undefined,
   values: Record<string, string> | null | undefined,

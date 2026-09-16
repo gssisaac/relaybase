@@ -51,8 +51,8 @@ function ImageVariableField({
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
       const contentBase64 = btoa(binary);
       const res =
-        assetOwner === "template"
-          ? await studioApi.uploadMessageTemplateAsset(contentOwnerId, {
+        assetOwner === "message"
+          ? await studioApi.uploadMessageAsset(contentOwnerId, {
               filename: file.name,
               mimeType: file.type,
               contentBase64,

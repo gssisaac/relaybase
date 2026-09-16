@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
 import type { Newsletter } from "../db/types";
-import { createMessageTemplate, patchMessageTemplate } from "../lib/messages/message-template";
+import { createMessageForOwner, patchMessage } from "../lib/messages/message";
 import { requireMessage } from "../lib/messages/resolve";
 import { resolveActiveAudienceContacts } from "../lib/audience-groups/resolver";
 import { findAudienceGroup } from "../lib/audience-groups/group";
@@ -19,7 +19,11 @@ import {
 } from "../lib/newsletters/serialize";
 import { emptyNewsletterStats } from "../lib/newsletters/stats";
 import { sendMail } from "../lib/mail/sender";
-import { buildListUnsubscribeUrl, renderNewsletterForRecipient } from "../lib/render/render";
+import {
+  buildListUnsubscribeUrl,
+  renderNewsletterForRecipient,
+  resolveBroadcastSubject,
+} from "../lib/render/render";
 import { STUDIO_PUBLIC_BASE_URL } from "../lib/shared/studio-url";
 import { newId, newToken } from "../lib/shared/ids";
 import { studioNewsletterAudience } from "./newsletter-audience";
@@ -123,7 +127,7 @@ studioNewsletters.post("/", async (c) => {
     fromName?: string;
     fromEmail?: string;
     replyTo?: string;
-    defaultTemplateId?: string;
+    defaultLayoutId?: string;
   } = {};
   try {
     body = await c.req.json();
@@ -164,14 +168,13 @@ studioNewsletters.post("/", async (c) => {
   const now = new Date().toISOString();
   let created: Newsletter | null = null;
   store.update((draft) => {
-    const messageTemplate = createMessageTemplate(
+    const message = createMessageForOwner(
       draft,
       {
         ownerId: id,
         accountLinkId: DEV_ACCOUNT_LINK_ID,
         name,
-        category: "marketing",
-        layoutId: body.defaultTemplateId || "tpl-minimal",
+        layoutId: body.defaultLayoutId || "tpl-minimal",
       },
       now,
     );
@@ -186,7 +189,7 @@ studioNewsletters.post("/", async (c) => {
       fromName: body.fromName?.trim() || null,
       fromEmail: body.fromEmail?.trim() || audienceGroup.defaultFrom || null,
       replyTo: body.replyTo?.trim() || null,
-      templateId: messageTemplate.id,
+      messageId: message.id,
       listStatus: "active",
       status: "draft",
       scheduledAt: null,
@@ -228,13 +231,13 @@ studioNewsletters.patch("/:id", async (c) => {
     fromName?: string | null;
     fromEmail?: string | null;
     replyTo?: string | null;
-    defaultTemplateId?: string | null;
     complianceIdentityId?: string | null;
     listStatus?: "active" | "archived";
     subject?: string;
     previewText?: string;
     bodyMarkdown?: string;
-    templateId?: string;
+    layoutId?: string | null;
+    defaultLayoutId?: string | null;
     templateVariables?: Record<string, string>;
     audienceGroupId?: string;
   };
@@ -312,7 +315,7 @@ studioNewsletters.patch("/:id", async (c) => {
     body.subject !== undefined ||
     body.previewText !== undefined ||
     body.bodyMarkdown !== undefined ||
-    body.templateId !== undefined ||
+    body.layoutId !== undefined ||
     body.templateVariables !== undefined;
 
   if (contentTouched && existing.status !== "draft") {
@@ -322,7 +325,7 @@ studioNewsletters.patch("/:id", async (c) => {
   if (body.listStatus === "archived" && existing.listStatus !== "archived") {
     const sending = store.read().newsletters.find((b) => b.id === id && b.status === "sending");
     if (sending) {
-      const sendingMessage = requireMessage(store.read(), sending.templateId);
+      const sendingMessage = requireMessage(store.read(), sending.messageId);
       return c.json(
         {
           error: `Cannot archive broadcast while '${sendingMessage.subject || sending.name}' is currently sending.`,
@@ -344,19 +347,19 @@ studioNewsletters.patch("/:id", async (c) => {
     const idx = draft.newsletters.findIndex((r) => r.id === id);
     if (idx < 0) return;
     const prev = draft.newsletters[idx]!;
-    patchMessageTemplate(
+    patchMessage(
       draft,
-      prev.templateId,
+      prev.messageId,
       {
         name: body.name?.trim(),
         subject: body.subject,
         previewText: body.previewText,
         bodyMarkdown: body.bodyMarkdown,
         layoutId:
-          body.templateId !== undefined
-            ? body.templateId
-            : body.defaultTemplateId !== undefined
-              ? body.defaultTemplateId
+          body.layoutId !== undefined
+            ? body.layoutId
+            : body.defaultLayoutId !== undefined
+              ? body.defaultLayoutId
               : undefined,
         templateVariables:
           body.templateVariables !== undefined
@@ -437,7 +440,7 @@ studioNewsletters.post("/:id/test-send", async (c) => {
     return c.json({ error: sendAuth.error }, 502);
   }
 
-  const message = requireMessage(store.read(), broadcast.templateId);
+  const message = requireMessage(store.read(), broadcast.messageId);
   const layoutId = message.layoutId ?? "tpl-minimal";
   const templateHtml = getNewsletterLayoutHtml(layoutId) ?? "<div>{{content}}</div>";
   const unsubscribeToken = resolveTestSendUnsubscribeToken(broadcast, to);
@@ -458,12 +461,21 @@ studioNewsletters.post("/:id/test-send", async (c) => {
     broadcast.id,
     unsubscribeToken,
   );
+  const resolvedSubject = resolveBroadcastSubject({
+    subject: message.subject,
+    templateVariablesSchema: getNewsletterLayoutSchema(layoutId),
+    templateVariables: message.templateVariables ?? {},
+    recipient: { email: to, name: "Test Recipient" },
+    broadcastId: broadcast.id,
+    unsubscribeToken,
+    studioBaseUrl: STUDIO_PUBLIC_BASE_URL,
+  });
   const result = await sendMail({
     to,
     from: broadcast.fromEmail.trim(),
     fromName: broadcast.fromName,
     replyTo: broadcast.replyTo,
-    subject: `[Test] ${message.subject}`,
+    subject: `[Test] ${resolvedSubject}`,
     html,
     listUnsubscribeUrl,
   });
@@ -483,7 +495,7 @@ studioNewsletters.post("/:id/send", async (c) => {
     }
     return c.json({ error: `cannot send from status "${existing.status}"` }, 409);
   }
-  const existingMessage = requireMessage(store.read(), existing.templateId);
+  const existingMessage = requireMessage(store.read(), existing.messageId);
   if (!existingMessage.subject.trim()) {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
   }
@@ -521,7 +533,7 @@ studioNewsletters.post("/:id/schedule", async (c) => {
   if (broadcast.status !== "draft") {
     return c.json({ error: `cannot schedule from status "${broadcast.status}"` }, 409);
   }
-  const scheduleMessage = requireMessage(store.read(), broadcast.templateId);
+  const scheduleMessage = requireMessage(store.read(), broadcast.messageId);
   if (!scheduleMessage.subject.trim()) {
     return c.json({ error: "Subject is required before sending. Enter a subject in the Content tab." }, 400);
   }
@@ -605,21 +617,20 @@ studioNewsletters.post("/:id/duplicate", (c) => {
 
   let created: Newsletter | null = null;
   store.update((draft) => {
-    const sourceMessage = requireMessage(draft, source.templateId);
-    const messageTemplate = createMessageTemplate(
+    const sourceMessage = requireMessage(draft, source.messageId);
+    const message = createMessageForOwner(
       draft,
       {
         ownerId: id,
         accountLinkId: DEV_ACCOUNT_LINK_ID,
         name: `${source.name} (copy)`,
-        category: "marketing",
         layoutId: sourceMessage.layoutId,
       },
       now,
     );
-    patchMessageTemplate(
+    patchMessage(
       draft,
-      messageTemplate.id,
+      message.id,
       {
         subject: sourceMessage.subject,
         previewText: sourceMessage.previewText,
@@ -633,7 +644,7 @@ studioNewsletters.post("/:id/duplicate", (c) => {
       id,
       name: `${source.name} (copy)`,
       slug,
-      templateId: messageTemplate.id,
+      messageId: message.id,
       status: "draft",
       scheduledAt: null,
       sentAt: null,

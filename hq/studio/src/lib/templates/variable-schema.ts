@@ -153,6 +153,40 @@ export type ApplyTemplateVariablesContext = {
   studioBaseUrl: string;
 };
 
+/** Substitute `{{vars.*}}` in plain text (subject, plain-text body) without HTML escaping. */
+export function applyTemplateVariablesToPlainText(
+  text: string,
+  schema: TemplateVariablesSchema | null | undefined,
+  values: Record<string, string> | null | undefined,
+  context?: ApplyTemplateVariablesContext,
+): string {
+  if (!schema?.fields.length) return text;
+  const map = values ?? {};
+  let out = text;
+
+  for (const field of schema.fields) {
+    const raw = map[field.key]?.trim() ?? "";
+    let replacement = "";
+    if (field.type === "text") {
+      replacement = raw;
+    } else if (field.type === "image") {
+      const isBrandLogoField = field.key === "brand.logo" || field.key === "header.logo";
+      let src = raw;
+      if (!src && isBrandLogoField) {
+        src = defaultBrandLogoUrl(context?.studioBaseUrl);
+      }
+      if (src && context && !/^(https?:|data:|blob:)/i.test(src)) {
+        const resolved = resolveStudioAssetUrl(context.broadcastId, context.studioBaseUrl, src);
+        if (resolved) src = resolved;
+      }
+      replacement = src;
+    }
+    out = out.replaceAll(templateVariableToken(field.key), replacement);
+  }
+
+  return out;
+}
+
 /** Substitute `{{vars.*}}` in the template shell (before body merge). */
 export function applyTemplateVariablesToHtml(
   html: string,

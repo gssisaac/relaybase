@@ -8,7 +8,9 @@ import {
   sampleTriggerPreviewValues,
 } from "@/studio/lib/triggers/trigger-merge-tags";
 import {
+  applyTemplateVariablesToComposeContent,
   applyTemplateVariablesToHtml,
+  applyTemplateVariablesToPlainText,
   resolveTemplateVariableDefaults,
 } from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
@@ -73,8 +75,11 @@ export function useTriggerRenderedPreview({
   const plainTextTemplate = isPlainTextTemplate(templateId);
 
   const mergeTagSections = useMemo(
-    () => (trigger ? composeMergeTagSectionsForTrigger(trigger.source) : []),
-    [trigger?.source],
+    () =>
+      trigger
+        ? composeMergeTagSectionsForTrigger(trigger.source, template?.variablesSchema ?? null)
+        : [],
+    [trigger?.source, template?.variablesSchema],
   );
 
   const triggerPreviewValues = useMemo(
@@ -97,11 +102,6 @@ export function useTriggerRenderedPreview({
     [compliance, plainTextTemplate, trigger?.source, triggerPreviewValues],
   );
 
-  const previewSubject = useMemo(
-    () => applyTriggerPreviewMergeTags(subject, PREVIEW_RECIPIENT, previewMergeOptions),
-    [subject, previewMergeOptions],
-  );
-
   const resolvedTemplateVariables = useMemo(
     () =>
       resolveTemplateVariableDefaults({
@@ -111,6 +111,15 @@ export function useTriggerRenderedPreview({
       }),
     [template?.variablesSchema, templateVariables, compliance?.organizationName],
   );
+
+  const previewSubject = useMemo(() => {
+    const withLayoutVars = applyTemplateVariablesToPlainText(
+      subject,
+      template?.variablesSchema ?? null,
+      resolvedTemplateVariables,
+    );
+    return applyTriggerPreviewMergeTags(withLayoutVars, PREVIEW_RECIPIENT, previewMergeOptions);
+  }, [subject, template?.variablesSchema, resolvedTemplateVariables, previewMergeOptions]);
 
   const preparedTemplateHtml = useMemo(() => {
     const shell = prepareLayoutTemplateHtml(template?.htmlSource ?? "", templateId);
@@ -122,12 +131,25 @@ export function useTriggerRenderedPreview({
   }, [template?.htmlSource, template?.variablesSchema, templateId, resolvedTemplateVariables]);
 
   const renderedPreview = useMemo(() => {
+    const schema = template?.variablesSchema ?? null;
+    const contentVarsInput = {
+      plainText: plainTextTemplate,
+      schema,
+      values: resolvedTemplateVariables,
+    };
     if (plainTextTemplate) {
-      const body = plainEmailBodyFromMarkdown(bodyMarkdown);
+      const body = applyTemplateVariablesToComposeContent(
+        plainEmailBodyFromMarkdown(bodyMarkdown),
+        contentVarsInput,
+      );
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyTriggerPreviewMergeTags(wrapped, PREVIEW_RECIPIENT, previewMergeOptions);
     }
-    const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const rawContent = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const content = applyTemplateVariablesToComposeContent(rawContent, {
+      ...contentVarsInput,
+      plainText: false,
+    });
     if (!template) {
       return applyTriggerPreviewMergeTags(content, PREVIEW_RECIPIENT, previewMergeOptions);
     }
@@ -140,6 +162,7 @@ export function useTriggerRenderedPreview({
     bodyMarkdown,
     previewHtml,
     previewMergeOptions,
+    resolvedTemplateVariables,
   ]);
 
   return {

@@ -12,9 +12,10 @@ import {
 import { ComposeMergeTagInsertList } from "@/studio/components/ComposeMergeTagInsertList";
 import { NewsletterEmailPreview } from "@/studio/components/newsletters/NewsletterEmailPreview";
 import { NewsletterComposeSidebar } from "@/studio/pages/newsletters/NewsletterComposeSidebar";
+import { composeBroadcastMergeTagSections } from "@/studio/lib/layouts/compose-merge-tag-sections";
+import type { TemplateVariablesSchema } from "@/studio/lib/layouts/layout-template-variables";
 import type { ComposeMergeTagSection } from "@/studio/lib/triggers/trigger-merge-tags";
 import {
-  BROADCAST_MERGE_TAGS,
   type PreviewPersonaId,
   type PreviewRecipient,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
@@ -62,6 +63,7 @@ export function NewsletterComposeForm({
   onTemplateImported,
   onTemplateSourceSaved,
   mergeTagSections,
+  layoutVariablesSchema,
   triggerPreviewValues,
   hideSaveButton,
 }: {
@@ -102,6 +104,8 @@ export function NewsletterComposeForm({
   onTemplateSourceSaved?: (result: { templateId: string; forked: boolean }) => void;
   /** When set (automations), subject/body tag pickers include trigger payload tags. */
   mergeTagSections?: ComposeMergeTagSection[];
+  /** Active layout schema — adds `{{vars.*}}` to the tag picker when mergeTagSections is omitted. */
+  layoutVariablesSchema?: TemplateVariablesSchema | null;
   /** Sample values for pre-flight preview of `{{trigger.*}}` tags. */
   triggerPreviewValues?: Record<string, string>;
   /** Hide the subject-row Save control (e.g. template edit saves from the page header). */
@@ -153,17 +157,7 @@ export function NewsletterComposeForm({
           : "Saved";
 
   const tagSections: ComposeMergeTagSection[] =
-    mergeTagSections ??
-    [
-      {
-        title: "Recipient",
-        tags: BROADCAST_MERGE_TAGS.map((t) => ({
-          id: t.id,
-          token: t.token,
-          label: t.label,
-        })),
-      },
-    ];
+    mergeTagSections ?? composeBroadcastMergeTagSections(layoutVariablesSchema);
 
   return (
     <div
@@ -304,7 +298,7 @@ export function NewsletterComposeForm({
           <NewsletterComposeSidebar
             newsletterId={newsletterId}
             assetOwner={assetOwner}
-            preflightSettingsHref={assetOwner === "template" ? null : undefined}
+            preflightSettingsHref={assetOwner === "message" ? null : undefined}
             templates={templates}
             templateId={templateId}
             setTemplateId={setTemplateId}

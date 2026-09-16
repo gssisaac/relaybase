@@ -30,13 +30,36 @@ export type StudioLayout = {
   createdAt: string;
 };
 
-export type MessageTemplateCategory =
+export type TemplateCategory =
   | "transactional"
   | "marketing"
   | "newsletter"
   | "conversational";
 
-export type MessageTemplate = {
+/** Read-only catalog blueprint (`/studio/templates`). */
+export type StudioTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  subject: string;
+  previewText: string | null;
+  bodyMarkdown: string;
+  layoutId: string;
+  templateVariables: Record<string, string>;
+  category: TemplateCategory | null;
+  isBuiltin: true;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MessageLinkedOwner = {
+  kind: "trigger" | "newsletter";
+  id: string;
+  name: string;
+};
+
+/** Editable message copy (`/studio/messages`). */
+export type StudioMessage = {
   id: string;
   name: string;
   subject: string;
@@ -44,8 +67,8 @@ export type MessageTemplate = {
   bodyMarkdown: string;
   layoutId: string | null;
   templateVariables: Record<string, string>;
-  category: MessageTemplateCategory | null;
-  isPreset: boolean;
+  forkedFromTemplateId: string | null;
+  linkedOwner: MessageLinkedOwner | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -87,7 +110,7 @@ export type Newsletter = {
   previewText: string | null;
   bodyMarkdown: string;
   layoutId: string | null;
-  messageTemplateId: string | null;
+  messageId: string | null;
   templateVariables: Record<string, string>;
   status: NewsletterStatus;
   scheduledAt: string | null;
@@ -483,23 +506,30 @@ export const studioApi = {
       },
     ),
 
-  listMessageTemplates: () =>
-    studioFetch<{ templates: MessageTemplate[] }>("/studio/templates"),
-  getMessageTemplate: (id: string) =>
-    studioFetch<{ template: MessageTemplate }>(`/studio/templates/${id}`),
-  createMessageTemplate: (input: {
+  listTemplates: () => studioFetch<{ templates: StudioTemplate[] }>("/studio/templates"),
+  getTemplate: (id: string) =>
+    studioFetch<{ template: StudioTemplate }>(`/studio/templates/${id}`),
+  useTemplate: (templateId: string, input?: { name?: string }) =>
+    studioFetch<{ message: StudioMessage }>(`/studio/templates/${templateId}/use`, {
+      method: "POST",
+      body: JSON.stringify(input ?? {}),
+    }),
+
+  listMessages: () => studioFetch<{ messages: StudioMessage[] }>("/studio/messages"),
+  getMessage: (id: string) => studioFetch<{ message: StudioMessage }>(`/studio/messages/${id}`),
+  createMessage: (input: {
     name: string;
     subject?: string;
     previewText?: string | null;
     bodyMarkdown?: string;
     layoutId?: string | null;
-    category?: MessageTemplateCategory;
+    forkedFromTemplateId?: string | null;
   }) =>
-    studioFetch<{ template: MessageTemplate }>("/studio/templates", {
+    studioFetch<{ message: StudioMessage }>("/studio/messages", {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  updateMessageTemplate: (
+  updateMessage: (
     id: string,
     input: Partial<{
       name: string;
@@ -510,20 +540,20 @@ export const studioApi = {
       templateVariables: Record<string, string>;
     }>,
   ) =>
-    studioFetch<{ template: MessageTemplate }>(`/studio/templates/${id}`, {
+    studioFetch<{ message: StudioMessage }>(`/studio/messages/${id}`, {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
-  uploadMessageTemplateAsset: (
-    templateId: string,
+  uploadMessageAsset: (
+    messageId: string,
     input: { filename: string; mimeType: string; contentBase64: string },
   ) =>
-    studioFetch<{ url: string; key: string }>(`/studio/templates/${templateId}/assets`, {
+    studioFetch<{ url: string; key: string }>(`/studio/messages/${messageId}/assets`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  testSendMessageTemplate: (
-    templateId: string,
+  testSendMessage: (
+    messageId: string,
     input: {
       to: string;
       fromEmail: string;
@@ -532,12 +562,12 @@ export const studioApi = {
       mergeTags?: Record<string, string>;
     },
   ) =>
-    studioFetch<{ ok: true }>(`/studio/templates/${templateId}/test-send`, {
+    studioFetch<{ ok: true }>(`/studio/messages/${messageId}/test-send`, {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  deleteMessageTemplate: (id: string) =>
-    studioFetch<{ ok: true }>(`/studio/templates/${id}`, { method: "DELETE" }),
+  deleteMessage: (id: string) =>
+    studioFetch<{ ok: true }>(`/studio/messages/${id}`, { method: "DELETE" }),
 
   getOverview: () => studioFetch<StudioOverview>("/studio/overview"),
   listNewsletters: () => studioFetch<{ newsletters: Newsletter[] }>("/studio/newsletters"),
@@ -572,8 +602,8 @@ export const studioApi = {
       subject: string;
       previewText: string;
       bodyMarkdown: string;
-      layoutId: string;
-      messageTemplateId: string | null;
+      layoutId: string | null;
+      messageId: string | null;
       templateVariables: Record<string, string>;
       audienceGroupId: string;
     }>,
@@ -681,7 +711,6 @@ export const studioApi = {
       previewText: string | null;
       bodyMarkdown: string;
       layoutId: string | null;
-      messageTemplateId: string | null;
       templateVariables: Record<string, string>;
     }>,
   ) =>
@@ -778,7 +807,7 @@ export type Trigger = {
   previewText: string | null;
   bodyMarkdown: string;
   layoutId: string | null;
-  messageTemplateId: string | null;
+  messageId: string | null;
   templateVariables: Record<string, string>;
   stats: TriggerStats;
   lastTriggeredAt: string | null;

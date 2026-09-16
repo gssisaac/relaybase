@@ -712,9 +712,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_d63712e3-2630-42fa-8706-04255e013a90",
       "createdAt": "2026-09-14T21:57:32.495Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_d63712e3-2630-42fa-8706-04255e013a90"
     },
     {
       "id": "broadcast_sent_july_recap",
@@ -747,9 +747,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sent_july_recap",
       "createdAt": "2026-07-20T10:00:00.000Z",
-      "updatedAt": "2026-09-15T17:06:19.039Z"
+      "updatedAt": "2026-09-15T17:06:19.039Z",
+      "messageId": "msgtpl_broadcast_sent_july_recap"
     },
     {
       "id": "broadcast_sent_aug_launch",
@@ -782,9 +782,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sent_aug_launch",
       "createdAt": "2026-08-01T09:00:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_sent_aug_launch"
     },
     {
       "id": "broadcast_sent_aug_security",
@@ -817,9 +817,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sent_aug_security",
       "createdAt": "2026-08-18T11:00:00.000Z",
-      "updatedAt": "2026-09-15T17:06:48.261Z"
+      "updatedAt": "2026-09-15T17:06:48.261Z",
+      "messageId": "msgtpl_broadcast_sent_aug_security"
     },
     {
       "id": "broadcast_sent_sep_welcome",
@@ -852,9 +852,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sent_sep_welcome",
       "createdAt": "2026-08-28T12:00:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_sent_sep_welcome"
     },
     {
       "id": "broadcast_sent_sep_digest",
@@ -887,9 +887,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sent_sep_digest",
       "createdAt": "2026-09-07T09:00:00.000Z",
-      "updatedAt": "2026-09-16T00:00:03.674Z"
+      "updatedAt": "2026-09-16T00:00:03.674Z",
+      "messageId": "msgtpl_broadcast_sent_sep_digest"
     },
     {
       "id": "broadcast_failed_smtp",
@@ -922,9 +922,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_failed_smtp",
       "createdAt": "2026-09-10T08:30:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_failed_smtp"
     },
     {
       "id": "broadcast_sending_demo_001",
@@ -957,9 +957,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sending_demo_001",
       "createdAt": "2026-09-15T10:00:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_sending_demo_001"
     },
     {
       "id": "broadcast_sending_product_wave",
@@ -992,9 +992,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sending_product_wave",
       "createdAt": "2026-09-15T11:00:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_sending_product_wave"
     },
     {
       "id": "broadcast_sending_partner",
@@ -1027,9 +1027,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_sending_partner",
       "createdAt": "2026-09-15T12:20:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_sending_partner"
     },
     {
       "id": "broadcast_scheduled_ama",
@@ -1062,9 +1062,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_scheduled_ama",
       "createdAt": "2026-09-14T18:00:00.000Z",
-      "updatedAt": "2026-09-16T00:00:03.674Z"
+      "updatedAt": "2026-09-16T00:00:03.674Z",
+      "messageId": "msgtpl_broadcast_scheduled_ama"
     },
     {
       "id": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
@@ -1097,9 +1097,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "createdAt": "2026-09-14T21:58:55.873Z",
-      "updatedAt": "2026-09-16T00:00:03.674Z"
+      "updatedAt": "2026-09-16T00:00:03.674Z",
+      "messageId": "msgtpl_broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c"
     },
     {
       "id": "broadcast_5ac032ef-d7d8-40c6-8486-665fa4f1ff88",
@@ -1132,9 +1132,9 @@
         "totalClicks": 0,
         "unsubscribed": 0
       },
-      "templateId": "msgtpl_broadcast_5ac032ef-d7d8-40c6-8486-665fa4f1ff88",
       "createdAt": "2026-09-14T23:06:35.602Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T03:08:16.042Z",
+      "messageId": "msgtpl_broadcast_5ac032ef-d7d8-40c6-8486-665fa4f1ff88"
     }
   ],
   "recipients": [],
@@ -1165,7 +1165,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 300,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_verify_email",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1185,7 +1184,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-01T10:00:00.000Z",
-      "updatedAt": "2026-09-01T10:00:00.000Z"
+      "updatedAt": "2026-09-01T10:00:00.000Z",
+      "messageId": "msgtpl_automation_verify_email"
     },
     {
       "id": "automation_welcome",
@@ -1213,7 +1213,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 86400,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_welcome",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1233,7 +1232,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-01T10:05:00.000Z",
-      "updatedAt": "2026-09-01T10:05:00.000Z"
+      "updatedAt": "2026-09-01T10:05:00.000Z",
+      "messageId": "msgtpl_automation_welcome"
     },
     {
       "id": "automation_password_reset",
@@ -1262,7 +1262,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 300,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_password_reset",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1282,7 +1281,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-02T09:00:00.000Z",
-      "updatedAt": "2026-09-02T09:00:00.000Z"
+      "updatedAt": "2026-09-02T09:00:00.000Z",
+      "messageId": "msgtpl_automation_password_reset"
     },
     {
       "id": "automation_magic_link",
@@ -1311,7 +1311,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 90,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_magic_link",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1331,7 +1330,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-02T09:10:00.000Z",
-      "updatedAt": "2026-09-02T09:10:00.000Z"
+      "updatedAt": "2026-09-02T09:10:00.000Z",
+      "messageId": "msgtpl_automation_magic_link"
     },
     {
       "id": "automation_contact_us",
@@ -1359,7 +1359,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 86400,
       "applyMarketingSuppression": true,
-      "templateId": "msgtpl_automation_contact_us",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1379,7 +1378,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-05T12:00:00.000Z",
-      "updatedAt": "2026-09-05T12:00:00.000Z"
+      "updatedAt": "2026-09-05T12:00:00.000Z",
+      "messageId": "msgtpl_automation_contact_us"
     },
     {
       "id": "automation_waitlist",
@@ -1405,7 +1405,6 @@
       "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
       "cooldownSeconds": 86400,
       "applyMarketingSuppression": true,
-      "templateId": "msgtpl_automation_waitlist",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1425,7 +1424,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-05T12:10:00.000Z",
-      "updatedAt": "2026-09-05T12:10:00.000Z"
+      "updatedAt": "2026-09-05T12:10:00.000Z",
+      "messageId": "msgtpl_automation_waitlist"
     },
     {
       "id": "automation_demo_request",
@@ -1453,7 +1453,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 86400,
       "applyMarketingSuppression": true,
-      "templateId": "msgtpl_automation_demo_request",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1473,7 +1472,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-06T11:00:00.000Z",
-      "updatedAt": "2026-09-06T11:00:00.000Z"
+      "updatedAt": "2026-09-06T11:00:00.000Z",
+      "messageId": "msgtpl_automation_demo_request"
     },
     {
       "id": "automation_inbox_support",
@@ -1499,7 +1499,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 3600,
       "applyMarketingSuppression": true,
-      "templateId": "msgtpl_automation_inbox_support",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1519,7 +1518,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-10T08:00:00.000Z",
-      "updatedAt": "2026-09-16T16:00:22.288Z"
+      "updatedAt": "2026-09-16T16:00:22.288Z",
+      "messageId": "msgtpl_automation_inbox_support"
     },
     {
       "id": "automation_invoice_receipt",
@@ -1550,7 +1550,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 60,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_invoice_receipt",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1570,7 +1569,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-08T10:00:00.000Z",
-      "updatedAt": "2026-09-08T10:00:00.000Z"
+      "updatedAt": "2026-09-08T10:00:00.000Z",
+      "messageId": "msgtpl_automation_invoice_receipt"
     },
     {
       "id": "automation_team_invite",
@@ -1600,7 +1600,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 3600,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_team_invite",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1620,7 +1619,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-08T10:15:00.000Z",
-      "updatedAt": "2026-09-16T16:13:05.413Z"
+      "updatedAt": "2026-09-16T16:13:05.413Z",
+      "messageId": "msgtpl_automation_team_invite"
     },
     {
       "id": "automation_trial_started",
@@ -1649,7 +1649,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 86400,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_trial_started",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1669,7 +1668,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-09T09:00:00.000Z",
-      "updatedAt": "2026-09-16T05:56:47.221Z"
+      "updatedAt": "2026-09-16T05:56:47.221Z",
+      "messageId": "msgtpl_automation_trial_started"
     },
     {
       "id": "automation_6aaa0458-ebbb-4336-995b-2856e1d1e277",
@@ -1695,7 +1695,6 @@
       "audienceGroupId": null,
       "cooldownSeconds": 86400,
       "applyMarketingSuppression": false,
-      "templateId": "msgtpl_automation_6aaa0458-ebbb-4336-995b-2856e1d1e277",
       "stats": {
         "triggered": 0,
         "matched": 0,
@@ -1715,7 +1714,8 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-15T17:22:56.541Z",
-      "updatedAt": "2026-09-15T17:23:05.623Z"
+      "updatedAt": "2026-09-15T17:23:05.623Z",
+      "messageId": "msgtpl_automation_6aaa0458-ebbb-4336-995b-2856e1d1e277"
     }
   ],
   "triggerEvents": [
@@ -1766,37 +1766,36 @@
   "activities": [],
   "scheduledJobs": [
     {
-      "id": "job_0d9bb356-8479-4657-8f5c-db750725ec33",
+      "id": "job_f8d2d37f-0ea8-46e4-a0d4-643547c95e05",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_scheduled_ama",
       "runAt": "2026-09-17T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T16:14:32.739Z"
+      "createdAt": "2026-09-16T17:41:58.840Z"
     },
     {
-      "id": "job_f5abe3e9-ffc4-4828-9894-2f39993d9c6b",
+      "id": "job_22e45d39-5fa1-476e-8efa-372d14d08290",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_sent_sep_digest",
       "runAt": "2026-09-23T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T16:14:32.739Z"
+      "createdAt": "2026-09-16T17:41:58.840Z"
     },
     {
-      "id": "job_c73b596a-93f9-46d6-a32c-549a67c4ed55",
+      "id": "job_0fcea14b-3600-444f-9734-418b0ba7d01f",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "runAt": "2026-09-30T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T16:14:32.739Z"
+      "createdAt": "2026-09-16T17:41:58.840Z"
     }
   ],
   "trackingEvents": [],
   "newsletterAssets": [],
   "triggerAssets": [],
-  "templateAssets": [],
   "audienceGroups": [
     {
       "id": "audience_10425087-e030-4656-88cc-4872cc34d497",
@@ -2366,5 +2365,6 @@
         }
       ]
     }
-  ]
+  ],
+  "messageAssets": []
 }

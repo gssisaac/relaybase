@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import { NewsletterEmailPreview } from "@/studio/components/newsletters/NewsletterEmailPreview";
-import { useTemplateDetail } from "@/studio/pages/templates/TemplateDetailContext";
-import { useTemplatePreviewDevice } from "@/studio/pages/templates/TemplatePreviewShell";
-import { useTemplateRenderedPreview } from "@/studio/pages/templates/use-template-rendered-preview";
+import { useMessageDetail } from "@/studio/pages/messages/MessageDetailContext";
+import { useTemplatePreviewDevice } from "@/studio/pages/messages/MessagePreviewShell";
+import { useMessageRenderedPreview } from "@/studio/pages/messages/use-message-rendered-preview";
 import MarkdownEditor from "@/lib/markdown-editor/components/MarkdownEditor";
 
 const PREVIEW_FROM = {
@@ -13,20 +13,20 @@ const PREVIEW_FROM = {
   email: "hello@yourdomain.com",
 };
 
-export function TemplatePreviewView() {
-  const { messageTemplateId, template, layouts } = useTemplateDetail();
+export function MessagePreviewView() {
+  const { messageId, message, layouts } = useMessageDetail();
   const { device } = useTemplatePreviewDevice();
   const [previewHtml, setPreviewHtml] = useState("");
   const editorRef = useRef(null);
 
-  const subject = template?.subject ?? "";
-  const bodyMarkdown = template?.bodyMarkdown ?? "";
-  const templateId = template?.layoutId ?? layouts[0]?.id ?? "";
-  const templateVariables = template?.templateVariables ?? {};
+  const subject = message?.subject ?? "";
+  const bodyMarkdown = message?.bodyMarkdown ?? "";
+  const templateId = message?.layoutId ?? layouts[0]?.id ?? "";
+  const templateVariables = message?.templateVariables ?? {};
 
   const { plainTextTemplate, previewSubject, renderedPreview, PREVIEW_RECIPIENT } =
-    useTemplateRenderedPreview({
-      messageTemplateId,
+    useMessageRenderedPreview({
+      messageId,
       layouts,
       subject,
       bodyMarkdown,
@@ -37,9 +37,9 @@ export function TemplatePreviewView() {
 
   useEffect(() => {
     setPreviewHtml("");
-  }, [messageTemplateId, bodyMarkdown, templateId]);
+  }, [messageId, bodyMarkdown, templateId]);
 
-  if (!template) return null;
+  if (!message) return null;
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -47,10 +47,11 @@ export function TemplatePreviewView() {
         {!plainTextTemplate ? (
           <div className="pointer-events-none absolute h-0 w-0 overflow-hidden opacity-0" aria-hidden>
             <MarkdownEditor
+              key={messageId}
               ref={editorRef}
-              newsletterId={messageTemplateId}
-              documentId={messageTemplateId}
-              assetOwner="template"
+              newsletterId={messageId}
+              documentId={messageId}
+              assetOwner="message"
               value={bodyMarkdown}
               editable={false}
               onChange={({ html }) => setPreviewHtml(html)}

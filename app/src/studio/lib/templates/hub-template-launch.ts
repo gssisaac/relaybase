@@ -9,19 +9,8 @@ export type HubTemplateSnapshot = {
   templateVariables: Record<string, string>;
 };
 
-export function patchBodyFromHubTemplate(
-  hubTemplateId: string,
-  snapshot: HubTemplateSnapshot,
-): {
-  messageTemplateId: string;
-  subject: string;
-  previewText?: string;
-  bodyMarkdown: string;
-  layoutId?: string;
-  templateVariables: Record<string, string>;
-} {
+export function patchBodyFromHubTemplate(_hubTemplateId: string, snapshot: HubTemplateSnapshot) {
   return {
-    messageTemplateId: hubTemplateId,
     subject: snapshot.subject,
     previewText: snapshot.previewText.trim() || undefined,
     bodyMarkdown: snapshot.bodyMarkdown,

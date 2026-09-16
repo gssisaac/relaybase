@@ -1,6 +1,6 @@
 import { studioApi } from "@/lib/studio/api";
 
-export type CrmContentAssetOwner = "newsletter" | "trigger" | "template";
+export type CrmContentAssetOwner = "newsletter" | "trigger" | "message";
 
 /** Upload optimized image bytes; returns a public URL for BlockNote `resolveFileUrl`. */
 export async function uploadNewsletterAsset(
@@ -14,8 +14,8 @@ export async function uploadNewsletterAsset(
   const res =
     owner === "trigger"
       ? await studioApi.uploadTriggerAsset(newsletterId, payload)
-      : owner === "template"
-        ? await studioApi.uploadMessageTemplateAsset(newsletterId, payload)
+      : owner === "message"
+        ? await studioApi.uploadMessageAsset(newsletterId, payload)
         : await studioApi.uploadNewsletterAsset(newsletterId, payload);
   return res.url;
 }

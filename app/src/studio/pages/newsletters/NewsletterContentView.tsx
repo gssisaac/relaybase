@@ -15,16 +15,18 @@ import {
   type PreviewPersonaId,
 } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import {
+  applyTemplateVariablesToComposeContent,
   applyTemplateVariablesToHtml,
+  applyTemplateVariablesToPlainText,
   resolveTemplateVariableDefaults,
 } from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
 import { isPlainTextTemplate } from "@/studio/lib/layouts/layout-catalog";
 import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
-import { MessageTemplatePicker } from "@/studio/components/templates/MessageTemplatePicker";
+import { MessagePicker } from "@/studio/components/messages/MessagePicker";
 import { NewsletterComposeForm } from "@/studio/pages/newsletters/NewsletterComposeForm";
-import { messageTemplateDetailHref } from "@/studio/lib/template-paths";
-import type { MessageTemplate } from "@/lib/studio/api";
+import { messageDetailHref } from "@/studio/lib/message-paths";
+import type { StudioMessage } from "@/lib/studio/api";
 import { useNewsletterDetail } from "@/studio/pages/newsletters/NewsletterDetailContext";
 import {
   complianceFromIdentity,
@@ -154,7 +156,7 @@ export function NewsletterContentView() {
     [previewPersonaId, audienceMembers],
   );
 
-  const messageTemplateId = newsletter?.messageTemplateId ?? null;
+  const messageId = newsletter?.messageId ?? null;
 
   useEffect(() => {
     syncDraft({
@@ -162,46 +164,35 @@ export function NewsletterContentView() {
       bodyMarkdown,
       templateId,
       templateVariables,
-      messageTemplateId,
+      messageId,
     });
-  }, [subject, bodyMarkdown, templateId, templateVariables, messageTemplateId, syncDraft]);
+  }, [subject, bodyMarkdown, templateId, templateVariables, messageId, syncDraft]);
 
-  async function applyMessageTemplate(template: MessageTemplate | null) {
+  async function applySavedMessage(source: StudioMessage | null) {
     if (!editable || !newsletter) return;
     try {
-      if (!template) {
-        const updated = await studioApi.updateNewsletter(newsletterId, { messageTemplateId: null });
-        setNewsletter(updated);
-        syncDraft({
-          subject,
-          bodyMarkdown,
-          templateId,
-          templateVariables,
-          messageTemplateId: null,
-        });
-        return;
-      }
-      setSubject(template.subject);
-      setBodyMarkdown(template.bodyMarkdown);
-      if (template.layoutId) setTemplateId(template.layoutId);
-      ingestBody(template.bodyMarkdown, newsletterId);
+      if (!source) return;
+      setSubject(source.subject);
+      setBodyMarkdown(source.bodyMarkdown);
+      if (source.layoutId) setTemplateId(source.layoutId);
+      ingestBody(source.bodyMarkdown, newsletterId);
       const updated = await studioApi.updateNewsletter(newsletterId, {
-        messageTemplateId: template.id,
-        subject: template.subject,
-        bodyMarkdown: template.bodyMarkdown,
-        layoutId: template.layoutId ?? undefined,
+        subject: source.subject,
+        bodyMarkdown: source.bodyMarkdown,
+        layoutId: source.layoutId ?? undefined,
+        templateVariables: source.templateVariables,
       });
       setNewsletter(updated);
       syncDraft({
-        subject: template.subject,
-        bodyMarkdown: template.bodyMarkdown,
-        templateId: template.layoutId ?? templateId,
-        templateVariables,
-        messageTemplateId: template.id,
+        subject: source.subject,
+        bodyMarkdown: source.bodyMarkdown,
+        templateId: source.layoutId ?? templateId,
+        templateVariables: source.templateVariables,
+        messageId: newsletter.messageId,
       });
-      toast.success(`Linked “${template.name}”`);
+      toast.success(`Inserted “${source.name}”`);
     } catch {
-      toast.error("Could not link template");
+      toast.error("Could not insert message");
     }
   }
 
@@ -229,11 +220,6 @@ export function NewsletterContentView() {
     [newsletterId, previewPersonaId, audienceMembers, compliance, plainTextTemplate],
   );
 
-  const previewSubject = useMemo(
-    () => applyNewsletterMergeTags(subject, previewRecipient, previewMergeOptions),
-    [subject, previewRecipient, previewMergeOptions],
-  );
-
   const resolvedTemplateVariables = useMemo(
     () =>
       resolveTemplateVariableDefaults({
@@ -243,6 +229,21 @@ export function NewsletterContentView() {
       }),
     [template?.variablesSchema, templateVariables, compliance?.organizationName],
   );
+
+  const previewSubject = useMemo(() => {
+    const withLayoutVars = applyTemplateVariablesToPlainText(
+      subject,
+      template?.variablesSchema ?? null,
+      resolvedTemplateVariables,
+    );
+    return applyNewsletterMergeTags(withLayoutVars, previewRecipient, previewMergeOptions);
+  }, [
+    subject,
+    template?.variablesSchema,
+    resolvedTemplateVariables,
+    previewRecipient,
+    previewMergeOptions,
+  ]);
 
   const preparedTemplateHtml = useMemo(() => {
     const shell = prepareLayoutTemplateHtml(template?.htmlSource ?? "", templateId);
@@ -254,12 +255,25 @@ export function NewsletterContentView() {
   }, [template?.htmlSource, template?.variablesSchema, templateId, resolvedTemplateVariables]);
 
   const renderedPreview = useMemo(() => {
+    const schema = template?.variablesSchema ?? null;
+    const contentVarsInput = {
+      plainText: plainTextTemplate,
+      schema,
+      values: resolvedTemplateVariables,
+    };
     if (plainTextTemplate) {
-      const body = plainEmailBodyFromMarkdown(bodyMarkdown);
+      const body = applyTemplateVariablesToComposeContent(
+        plainEmailBodyFromMarkdown(bodyMarkdown),
+        contentVarsInput,
+      );
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyNewsletterMergeTags(wrapped, previewRecipient, previewMergeOptions);
     }
-    const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const rawContent = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const content = applyTemplateVariablesToComposeContent(rawContent, {
+      ...contentVarsInput,
+      plainText: false,
+    });
     if (!template) {
       return applyNewsletterMergeTags(content, previewRecipient, previewMergeOptions);
     }
@@ -273,6 +287,7 @@ export function NewsletterContentView() {
     previewHtml,
     previewRecipient,
     previewMergeOptions,
+    resolvedTemplateVariables,
   ]);
 
   async function handleSave() {
@@ -316,15 +331,12 @@ export function NewsletterContentView() {
       {editable ? (
         <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-border px-4 py-3">
           <div className="min-w-[220px] flex-1 space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Message template</p>
-            <MessageTemplatePicker
-              value={messageTemplateId}
-              onApplied={(t) => void applyMessageTemplate(t)}
-            />
+            <p className="text-xs font-medium text-muted-foreground">Saved message</p>
+            <MessagePicker value={messageId} onApplied={(m) => void applySavedMessage(m)} />
           </div>
-          {messageTemplateId ? (
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={messageTemplateDetailHref(messageTemplateId)} />}>
-              Edit template
+          {messageId ? (
+            <Button size="sm" variant="outline" nativeButton={false} render={<Link href={messageDetailHref(messageId)} />}>
+              Edit message
             </Button>
           ) : null}
         </div>
@@ -381,6 +393,7 @@ export function NewsletterContentView() {
           void refreshTemplates();
           if (forked) setTemplateId(templateId);
         }}
+        layoutVariablesSchema={template?.variablesSchema ?? null}
       />
     </div>
   );

@@ -33,7 +33,7 @@ export function validateTriggerSource(trigger: TriggerSource): TriggerActivation
 
 export function validateTriggerForActivation(automation: Trigger): TriggerActivationIssue[] {
   const issues: TriggerActivationIssue[] = [];
-  const message = requireMessage(store.read(), automation.templateId);
+  const message = requireMessage(store.read(), automation.messageId);
   if (!message.subject.trim()) {
     issues.push({ field: "subject", message: "Subject is required" });
   }

@@ -4,27 +4,30 @@ import { wrapLayoutBodyHtml } from "@/studio/lib/layouts/layout-content-theme";
 import { LAYOUT_PREVIEW_FIXTURES } from "@/studio/lib/layouts/layout-preview-sample-values";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
 import {
+  applyTemplateVariablesToComposeContent,
   applyTemplateVariablesToHtml,
   resolveTemplateVariableDefaults,
 } from "@/studio/lib/layouts/layout-template-variables";
 import { markdownToEmailHtml } from "@/studio/lib/markdown/markdown-to-email-html";
 import { plainEmailBodyFromMarkdown } from "@/studio/lib/markdown/markdown-to-plain-email-text";
 import { applyNewsletterMergeTags } from "@/studio/lib/newsletters/newsletter-merge-tags";
-import type { MessageTemplate, StudioLayout } from "@/lib/studio/api";
+import type { StudioLayout, StudioTemplate } from "@/lib/studio/api";
 
 const PREVIEW_RECIPIENT = {
   email: LAYOUT_PREVIEW_FIXTURES.contactEmail,
   name: LAYOUT_PREVIEW_FIXTURES.contactName,
 };
 
-export type MessageTemplateThumbnailSource = Pick<
-  MessageTemplate,
-  "bodyMarkdown" | "layoutId" | "templateVariables" | "subject"
->;
+export type TemplateThumbnailSource = {
+  bodyMarkdown: string;
+  layoutId: string | null;
+  templateVariables: Record<string, string>;
+  subject: string;
+};
 
-/** Full HTML document body for message-template thumbnail capture (layout + markdown body). */
-export function renderMessageTemplateThumbnailHtml(input: {
-  template: MessageTemplateThumbnailSource;
+/** Full HTML document body for catalog template thumbnail capture (layout + markdown body). */
+export function renderTemplateThumbnailHtml(input: {
+  template: TemplateThumbnailSource;
   layout: StudioLayout | null;
   defaultBrandLogoUrl?: string;
 }): string {
@@ -55,17 +58,32 @@ export function renderMessageTemplateThumbnailHtml(input: {
     { defaultBrandLogoUrl: input.defaultBrandLogoUrl },
   );
 
+  const schema = input.layout?.variablesSchema ?? null;
+  const contentVarsInput = {
+    plainText: plainText,
+    schema,
+    values: resolvedTemplateVariables,
+    defaultBrandLogoUrl: input.defaultBrandLogoUrl,
+  };
+
   let contentHtml: string;
   if (plainText) {
-    contentHtml = plainEmailBodyFromMarkdown(input.template.bodyMarkdown);
+    contentHtml = applyTemplateVariablesToComposeContent(
+      plainEmailBodyFromMarkdown(input.template.bodyMarkdown),
+      contentVarsInput,
+    );
   } else {
     const md = input.template.bodyMarkdown.trim();
-    contentHtml = md
+    const rawContent = md
       ? wrapLayoutBodyHtml(
           applyGmailContentLinkStyles(markdownToEmailHtml(md)),
           layoutId,
         )
       : "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    contentHtml = applyTemplateVariablesToComposeContent(rawContent, {
+      ...contentVarsInput,
+      plainText: false,
+    });
   }
 
   if (!input.layout && !plainText) {
@@ -75,3 +93,5 @@ export function renderMessageTemplateThumbnailHtml(input: {
   const wrapped = preparedTemplateHtml.replaceAll("{{content}}", contentHtml);
   return applyNewsletterMergeTags(wrapped, PREVIEW_RECIPIENT, previewMergeOptions);
 }
+
+export const renderMessageTemplateThumbnailHtml = renderTemplateThumbnailHtml;

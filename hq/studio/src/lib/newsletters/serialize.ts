@@ -2,7 +2,7 @@ import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
 import type { Newsletter } from "../../db/types";
 import { findAudienceGroup } from "../audience-groups/group";
 import { audienceActiveCountForNewsletter } from "../audience-groups/resolver";
-import { getLayoutHtml, getLayoutSchema, resolveMessage } from "../messages/resolve";
+import { getLayoutHtml, getLayoutSchema, resolveMessage, rowMessageId } from "../messages/resolve";
 
 export function findNewsletter(id: string): Newsletter | undefined {
   return store.read().newsletters.find((b) => b.id === id && b.accountLinkId === DEV_ACCOUNT_LINK_ID);
@@ -19,7 +19,7 @@ export function getNewsletterLayoutSchema(layoutId: string | null | undefined) {
 export function serializeNewsletter(row: Newsletter) {
   const data = store.read();
   const group = row.audienceGroupId ? findAudienceGroup(row.audienceGroupId) : undefined;
-  const message = resolveMessage(data, row.templateId);
+  const message = resolveMessage(data, rowMessageId(row));
   return {
     id: row.id,
     name: row.name,
@@ -35,7 +35,7 @@ export function serializeNewsletter(row: Newsletter) {
     replyTo: row.replyTo ?? null,
     complianceIdentityId: row.complianceIdentityId ?? null,
     listStatus: row.listStatus,
-    messageTemplateId: row.templateId,
+    messageId: rowMessageId(row),
     layoutId: message?.layoutId ?? null,
     subject: message?.subject ?? "",
     previewText: message?.previewText ?? null,

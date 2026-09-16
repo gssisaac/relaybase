@@ -30,6 +30,7 @@ export function useStudioPaths() {
   const newslettersSent = "/studio/newsletters/sent";
   const newslettersInProgress = "/studio/newsletters/in-progress";
   const templates = "/studio/templates";
+  const messages = "/studio/messages";
   const layouts = "/studio/layouts";
   const triggers = "/studio/triggers";
   const schedule = "/studio/schedule";
@@ -42,6 +43,7 @@ export function useStudioPaths() {
     { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
     { href: analytics, label: "Analytics", icon: BarChart3 },
     { href: templates, label: "Templates", icon: LayoutTemplate },
+    { href: messages, label: "Messages", icon: Mail },
     { href: triggers, label: "Triggers", icon: Zap },
     { href: newsletters, label: "Newsletters", icon: Mail },
     { href: schedule, label: "Schedule", icon: CalendarDays },
@@ -56,6 +58,7 @@ export function useStudioPaths() {
     newslettersSent,
     newslettersInProgress,
     templates,
+    messages,
     layouts,
     triggers,
     schedule,

@@ -19,7 +19,7 @@ type DraftFields = {
   templateId: string;
   templateVariables: Record<string, string>;
   previewText: string;
-  messageTemplateId: string | null;
+  messageId: string | null;
 };
 
 type Ctx = {
@@ -64,7 +64,7 @@ export function TriggerDetailProvider({
     templateId: "",
     templateVariables: {},
     previewText: "",
-    messageTemplateId: null,
+    messageId: null,
   });
   const lastSaved = useRef<DraftFields | null>(null);
   const persistInFlight = useRef<Promise<boolean> | null>(null);
@@ -92,7 +92,7 @@ export function TriggerDetailProvider({
         templateId: row.layoutId ?? "",
         templateVariables: row.templateVariables ?? {},
         previewText: row.previewText ?? "",
-        messageTemplateId: row.messageTemplateId ?? null,
+        messageId: row.messageId ?? null,
       };
       draftRef.current = fields;
       lastSaved.current = fields;
@@ -133,7 +133,7 @@ export function TriggerDetailProvider({
       prev.bodyMarkdown === next.bodyMarkdown &&
       prev.templateId === next.templateId &&
       prev.previewText === next.previewText &&
-      prev.messageTemplateId === next.messageTemplateId &&
+      prev.messageId === next.messageId &&
       templateVariablesEqual(prev.templateVariables, next.templateVariables)
     ) {
       return Promise.resolve(true);
@@ -146,7 +146,6 @@ export function TriggerDetailProvider({
         layoutId: next.templateId || null,
         templateVariables: next.templateVariables,
         previewText: next.previewText || null,
-        messageTemplateId: next.messageTemplateId,
       })
       .then((updated) => {
         lastSaved.current = next;

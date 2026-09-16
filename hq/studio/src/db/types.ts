@@ -1,7 +1,8 @@
 /**
- * Studio dev store types (`data/store.json` + `data/templates/*.yaml`).
+ * Studio dev store types (`data/store.json` + `data/template-catalog/*.yaml` + `data/messages/*.yaml`).
  *
- * Layout — HTML frame · Template — message copy · Trigger — event send · Newsletter — audience send.
+ * Layout — HTML frame · Template — read-only catalog blueprint · Message — editable copy ·
+ * Trigger — event send · Newsletter — audience send.
  */
 
 // ============================================================================
@@ -65,7 +66,7 @@ export type Layout = {
 };
 
 // ============================================================================
-// Templates (reusable message content — persisted as `data/templates/<id>.yaml` in dev)
+// Templates (read-only catalog — `data/template-catalog/<id>.yaml`)
 // ============================================================================
 
 export type TemplateCategory =
@@ -74,7 +75,27 @@ export type TemplateCategory =
   | "marketing"
   | "newsletter";
 
+/** Blueprint in the template gallery — not user-editable. */
 export type Template = {
+  id: string;
+  name: string;
+  description?: string | null;
+  subject: string;
+  previewText?: string | null;
+  bodyMarkdown: string;
+  layoutId: string;
+  templateVariables?: Record<string, string>;
+  category?: TemplateCategory;
+  isBuiltin: true;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// ============================================================================
+// Messages (editable copies — `data/messages/<id>.yaml`)
+// ============================================================================
+
+export type Message = {
   id: string;
   accountLinkId: string;
   name: string;
@@ -83,8 +104,8 @@ export type Template = {
   bodyMarkdown: string;
   layoutId?: string | null;
   templateVariables?: Record<string, string>;
-  category?: TemplateCategory;
-  isPreset?: boolean;
+  /** Catalog template this was forked from (`Use template`). */
+  forkedFromTemplateId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -121,7 +142,8 @@ export type Newsletter = {
   fromName?: string | null;
   fromEmail?: string | null;
   replyTo?: string | null;
-  templateId: string;
+  /** Editable message body/subject used for this send. */
+  messageId: string;
   complianceIdentityId?: string | null;
   listStatus: NewsletterListStatus;
   status: NewsletterStatus;
@@ -311,7 +333,8 @@ export type Trigger = {
   audienceGroupId?: string | null;
   cooldownSeconds: number;
   applyMarketingSuppression: boolean;
-  templateId: string;
+  /** Editable message body/subject sent by this automation. */
+  messageId: string;
   stats: TriggerStats;
   lastTriggeredAt?: string | null;
   lastSentAt?: string | null;
@@ -408,15 +431,17 @@ export type TriggerAsset = {
   createdAt: string;
 };
 
-export type MessageTemplateAsset = {
+export type MessageAsset = {
   id: string;
   key: string;
-  templateId: string;
+  messageId: string;
   filename: string;
   mimeType: string;
   contentBase64: string;
   createdAt: string;
 };
+
+/** @deprecated Renamed to MessageAsset — migrated on store load. */
 
 // ============================================================================
 // Audience
@@ -483,7 +508,10 @@ export type StudioDataStore = {
   account: AccountLink;
   complianceIdentities: ComplianceIdentity[];
   layouts: Layout[];
+  /** Hydrated catalog blueprints (not persisted in store.json). */
   templates: Template[];
+  /** Hydrated user messages (not persisted in store.json). */
+  messages: Message[];
   newsletters: Newsletter[];
   recipients: Recipient[];
   triggers: Trigger[];
@@ -497,6 +525,6 @@ export type StudioDataStore = {
   trackingEvents: TrackingEvent[];
   newsletterAssets: NewsletterAsset[];
   triggerAssets: TriggerAsset[];
-  templateAssets: MessageTemplateAsset[];
+  messageAssets: MessageAsset[];
   audienceGroups: AudienceGroup[];
 };

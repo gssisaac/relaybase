@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { applyNewsletterMergeTags } from "@/studio/lib/newsletters/newsletter-merge-tags";
 import {
+  applyTemplateVariablesToComposeContent,
   applyTemplateVariablesToHtml,
+  applyTemplateVariablesToPlainText,
   resolveTemplateVariableDefaults,
 } from "@/studio/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/studio/lib/layouts/layout-standard-footer";
@@ -23,8 +25,8 @@ const PREVIEW_RECIPIENT = {
   label: "Sample recipient",
 };
 
-export function useTemplateRenderedPreview({
-  messageTemplateId,
+export function useMessageRenderedPreview({
+  messageId,
   layouts,
   subject,
   bodyMarkdown,
@@ -32,7 +34,7 @@ export function useTemplateRenderedPreview({
   templateId,
   templateVariables,
 }: {
-  messageTemplateId: string;
+  messageId: string;
   layouts: StudioLayout[];
   subject: string;
   bodyMarkdown: string;
@@ -64,7 +66,7 @@ export function useTemplateRenderedPreview({
 
   useEffect(() => {
     void refreshComplianceContext();
-  }, [refreshComplianceContext, messageTemplateId]);
+  }, [refreshComplianceContext, messageId]);
 
   const layout = layouts.find((t) => t.id === templateId);
   const plainTextTemplate = isPlainTextTemplate(templateId);
@@ -82,11 +84,6 @@ export function useTemplateRenderedPreview({
     [compliance, plainTextTemplate],
   );
 
-  const previewSubject = useMemo(
-    () => applyNewsletterMergeTags(subject, PREVIEW_RECIPIENT, previewMergeOptions),
-    [subject, previewMergeOptions],
-  );
-
   const resolvedTemplateVariables = useMemo(
     () =>
       resolveTemplateVariableDefaults({
@@ -96,6 +93,15 @@ export function useTemplateRenderedPreview({
       }),
     [layout?.variablesSchema, templateVariables, compliance?.organizationName],
   );
+
+  const previewSubject = useMemo(() => {
+    const withLayoutVars = applyTemplateVariablesToPlainText(
+      subject,
+      layout?.variablesSchema ?? null,
+      resolvedTemplateVariables,
+    );
+    return applyNewsletterMergeTags(withLayoutVars, PREVIEW_RECIPIENT, previewMergeOptions);
+  }, [subject, layout?.variablesSchema, resolvedTemplateVariables, previewMergeOptions]);
 
   const preparedTemplateHtml = useMemo(() => {
     const shell = prepareLayoutTemplateHtml(layout?.htmlSource ?? "", templateId);
@@ -107,12 +113,25 @@ export function useTemplateRenderedPreview({
   }, [layout?.htmlSource, layout?.variablesSchema, templateId, resolvedTemplateVariables]);
 
   const renderedPreview = useMemo(() => {
+    const schema = layout?.variablesSchema ?? null;
+    const contentVarsInput = {
+      plainText: plainTextTemplate,
+      schema,
+      values: resolvedTemplateVariables,
+    };
     if (plainTextTemplate) {
-      const body = plainEmailBodyFromMarkdown(bodyMarkdown);
+      const body = applyTemplateVariablesToComposeContent(
+        plainEmailBodyFromMarkdown(bodyMarkdown),
+        contentVarsInput,
+      );
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyNewsletterMergeTags(wrapped, PREVIEW_RECIPIENT, previewMergeOptions);
     }
-    const content = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const rawContent = previewHtml || "<p style='color:#94a3b8'>Nothing to preview yet</p>";
+    const content = applyTemplateVariablesToComposeContent(rawContent, {
+      ...contentVarsInput,
+      plainText: false,
+    });
     if (!layout) {
       return applyNewsletterMergeTags(content, PREVIEW_RECIPIENT, previewMergeOptions);
     }
@@ -125,6 +144,7 @@ export function useTemplateRenderedPreview({
     bodyMarkdown,
     previewHtml,
     previewMergeOptions,
+    resolvedTemplateVariables,
   ]);
 
   return {

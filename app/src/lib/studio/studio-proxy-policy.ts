@@ -14,6 +14,8 @@ const STUDIO_UI_GET_PATHS = new Set([
   "/studio/triggers/edit",
   "/studio/templates",
   "/studio/templates/edit",
+  "/studio/messages",
+  "/studio/messages/edit",
   "/studio/layouts",
   "/studio/schedule",
 ]);
@@ -60,6 +62,13 @@ export function shouldProxyRequestToStudio(pathname: string, method: string, hea
   }
 
   if (pathname.startsWith("/studio/templates")) {
+    if (method !== "GET" && method !== "HEAD") return true;
+    if (isStudioApiRequest(headers)) return true;
+    if (STUDIO_UI_GET_PATHS.has(pathname)) return false;
+    return true;
+  }
+
+  if (pathname.startsWith("/studio/messages")) {
     if (method !== "GET" && method !== "HEAD") return true;
     if (isStudioApiRequest(headers)) return true;
     if (STUDIO_UI_GET_PATHS.has(pathname)) return false;

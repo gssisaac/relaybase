@@ -6,9 +6,10 @@ import { normalizeTriggerStats } from "../lib/triggers/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
 import { ensureDevScheduleFixtures } from "../lib/newsletters/dev-schedule-fixtures";
-import { templateFileStore } from "../lib/templates/template-file-store";
+import { messageFileStore } from "../lib/messages/message-file-store";
+import { templateCatalogStore } from "../lib/templates/template-catalog-store";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
-import type { AccountComplianceSettings, StudioDataStore, Template } from "./types";
+import type { AccountComplianceSettings, Message, StudioDataStore, Template } from "./types";
 
 /** Single-account dev stand-in for real HQ ops login (§1.3 auth). */
 export const DEV_ACCOUNT_LINK_ID = "dev";
@@ -63,7 +64,8 @@ function defaultStore(): StudioDataStore {
       isBuiltin: true,
       createdAt: now,
     })),
-    templates: templateFileStore.listAll(),
+    templates: templateCatalogStore.listAll(),
+    messages: messageFileStore.listAll(),
     newsletters: [],
     recipients: [],
     triggers: [],
@@ -77,7 +79,7 @@ function defaultStore(): StudioDataStore {
     trackingEvents: [],
     newsletterAssets: [],
     triggerAssets: [],
-    templateAssets: [],
+    messageAssets: [],
     audienceGroups: [],
   };
 }
@@ -100,15 +102,17 @@ function normalizeStore(store: StudioDataStore): StudioDataStore {
   }
 
   if (!store.layouts) store.layouts = [];
-  if (!store.templates) store.templates = templateFileStore.listAll();
+  if (!store.templates) store.templates = templateCatalogStore.listAll();
+  if (!store.messages) store.messages = messageFileStore.listAll();
   if (!store.newsletters) store.newsletters = [];
+
+  if (!store.messageAssets) store.messageAssets = [];
   if (!store.triggers) store.triggers = [];
   if (!store.triggerEvents) store.triggerEvents = [];
   if (!store.triggerSends) store.triggerSends = [];
   if (!store.triggerTrackingEvents) store.triggerTrackingEvents = [];
   if (!store.newsletterAssets) store.newsletterAssets = [];
   if (!store.triggerAssets) store.triggerAssets = [];
-  if (!store.templateAssets) store.templateAssets = [];
 
   for (const job of store.scheduledJobs) {
     if (job.kind === "broadcast") job.kind = "newsletter";
@@ -250,7 +254,31 @@ function readStore(): StudioDataStore {
     const parsed = JSON.parse(raw) as StudioDataStore;
     let migratedLegacyTemplates = false;
     if (Array.isArray(parsed.templates) && parsed.templates.length > 0) {
-      templateFileStore.importFromLegacyRows(parsed.templates);
+      const legacy = parsed.templates as (Template & {
+        isPreset?: boolean;
+        accountLinkId?: string;
+      })[];
+      const messageRows = legacy
+        .filter((row) => !row.isPreset)
+        .map(
+          (row): Message => ({
+            id: row.id,
+            accountLinkId: row.accountLinkId ?? DEV_ACCOUNT_LINK_ID,
+            name: row.name,
+            subject: row.subject,
+            previewText: row.previewText ?? null,
+            bodyMarkdown: row.bodyMarkdown,
+            layoutId: row.layoutId ?? null,
+            templateVariables: row.templateVariables ?? {},
+            forkedFromTemplateId: null,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          }),
+        );
+      if (messageRows.length > 0) {
+        messageFileStore.importFromLegacyRows(messageRows);
+      }
+      templateCatalogStore.listAll();
       delete (parsed as { templates?: Template[] }).templates;
       migratedLegacyTemplates = true;
     }
@@ -268,12 +296,17 @@ function readStore(): StudioDataStore {
 
 function writeStore(store: StudioDataStore) {
   ensureDataDir();
-  const { templates: _templates, ...persisted } = store;
+  const {
+    templates: _templates,
+    messages: _messages,
+    ...persisted
+  } = store;
   fs.writeFileSync(STORE_FILE, `${JSON.stringify(persisted, null, 2)}\n`, "utf8");
 }
 
 function hydrateTemplates(store: StudioDataStore): StudioDataStore {
-  store.templates = templateFileStore.listAll();
+  store.templates = templateCatalogStore.listAll();
+  store.messages = messageFileStore.listAll();
   return store;
 }
 

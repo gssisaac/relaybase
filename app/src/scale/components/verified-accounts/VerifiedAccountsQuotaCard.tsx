@@ -1,9 +1,13 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import { ExternalLink, ShieldCheck } from "lucide-react";
 
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+/** Quota-free sends to Cloudflare verified destination addresses. */
+export const CF_VERIFIED_DESTINATIONS_LIMITS_URL =
+  "https://developers.cloudflare.com/email-service/platform/limits/#verified-destination-addresses";
 
 export function VerifiedAccountsQuotaCard({ className }: { className?: string }) {
   return (
@@ -24,9 +28,18 @@ export function VerifiedAccountsQuotaCard({ className }: { className?: string })
               Cloudflare verified accounts
             </CardTitle>
             <p className="text-xs leading-snug text-emerald-950/85 dark:text-emerald-100/85">
-              Subscribers verified as Email Routing destination addresses receive mail
-              without counting toward your Cloudflare daily send quota. Add an account,
-              open the verification email, then click the link to activate free sending.
+              <a
+                href={CF_VERIFIED_DESTINATIONS_LIMITS_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-0.5 font-medium underline-offset-2 hover:underline"
+              >
+                Verified destination addresses
+                <ExternalLink className="size-3 opacity-70" aria-hidden />
+              </a>{" "}
+              do not count toward your daily or monthly send quota (up to 200 verified destinations
+              per account). Add a subscriber, open Cloudflare&apos;s verification email, and click
+              the link.
             </p>
           </div>
         </div>

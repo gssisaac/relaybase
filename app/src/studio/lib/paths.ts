@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   CalendarDays,
   Layers,
   LayoutDashboard,
@@ -17,6 +18,8 @@ export type AudienceDetailTab = "contacts" | "history" | "settings";
 
 export type NewslettersSection = "list" | "sent" | "in-progress";
 
+export type StudioInsightSection = "dashboard" | "analytics";
+
 /** Studio UI route for subscriber groups (list + detail query routes). */
 export const STUDIO_SUBSCRIBERS_PATH = "/studio/subscribers";
 
@@ -30,10 +33,14 @@ export function useStudioPaths() {
   const layouts = "/studio/layouts";
   const triggers = "/studio/triggers";
   const schedule = "/studio/schedule";
+  const dashboard = "/studio/dashboard";
+  const analytics = "/studio/analytics";
+  /** Legacy entry — redirects to dashboard. */
   const overview = "/studio/overview";
 
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
-    { href: overview, label: "Overview", icon: LayoutDashboard },
+    { href: dashboard, label: "Dashboard", icon: LayoutDashboard },
+    { href: analytics, label: "Analytics", icon: BarChart3 },
     { href: templates, label: "Templates", icon: LayoutTemplate },
     { href: triggers, label: "Triggers", icon: Zap },
     { href: newsletters, label: "Newsletters", icon: Mail },
@@ -52,9 +59,16 @@ export function useStudioPaths() {
     layouts,
     triggers,
     schedule,
+    dashboard,
+    analytics,
     overview,
     tabs,
   };
+}
+
+export function studioInsightSectionHref(section: StudioInsightSection = "dashboard"): string {
+  if (section === "analytics") return "/studio/analytics";
+  return "/studio/dashboard";
 }
 
 export function newslettersSectionHref(section: NewslettersSection = "list"): string {

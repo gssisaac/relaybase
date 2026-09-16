@@ -2,7 +2,7 @@ export type SidebarMode = "email" | "dashboard" | "studio";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
-export const DEFAULT_STUDIO_PATH = "/studio/overview";
+export const DEFAULT_STUDIO_PATH = "/studio/dashboard";
 
 const BLOCKED_PATH_PREFIXES = [
   "/login",

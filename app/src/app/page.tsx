@@ -27,13 +27,13 @@ export default function HomePage() {
     let active = true;
     async function routeWebHome() {
       if (hasHqSession()) {
-        router.replace("/studio/overview");
+        router.replace("/studio/dashboard");
         return;
       }
       const hqOk = await hqRefreshSession();
       if (!active) return;
       if (hqOk) {
-        router.replace("/studio/overview");
+        router.replace("/studio/dashboard");
         return;
       }
       if (hasWebOwnerSession()) {

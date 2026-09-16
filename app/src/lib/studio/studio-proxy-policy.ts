@@ -3,6 +3,8 @@ import { isStudioApiRequest } from "./studio-origin";
 const STUDIO_UI_GET_PATHS = new Set([
   "/studio",
   "/studio/overview",
+  "/studio/dashboard",
+  "/studio/analytics",
   "/studio/subscribers",
   "/studio/newsletters",
   "/studio/newsletters/sent",

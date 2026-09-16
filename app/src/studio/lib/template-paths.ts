@@ -1,5 +1,10 @@
 "use client";
 
+/** Template gallery — full thumbnail grid (no preview selection). */
+export function messageTemplatesRootHref(): string {
+  return "/studio/templates";
+}
+
 export function messageTemplatePreviewHref(id: string): string {
   const params = new URLSearchParams();
   params.set("id", id.trim());

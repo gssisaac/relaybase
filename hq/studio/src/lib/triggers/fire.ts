@@ -64,11 +64,11 @@ function extractRecipientFromTrigger(
   }
 
   const emailPath =
-    trigger.type === "http_webhook" || trigger.type === "form_submit"
+    trigger.type === "http_webhook"
       ? trigger.emailPath
       : "email";
   const namePath =
-    trigger.type === "http_webhook" || trigger.type === "form_submit"
+    trigger.type === "http_webhook"
       ? (trigger.namePath ?? "name")
       : "name";
 
@@ -78,7 +78,7 @@ function extractRecipientFromTrigger(
 }
 
 function requiredFieldsForTrigger(trigger: TriggerSource): string[] | undefined {
-  if (trigger.type === "http_webhook" || trigger.type === "form_submit") {
+  if (trigger.type === "http_webhook") {
     return trigger.requiredFields;
   }
   return undefined;

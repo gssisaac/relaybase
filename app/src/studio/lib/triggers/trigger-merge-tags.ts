@@ -18,6 +18,39 @@ export type ComposeMergeTagSection = {
   tags: ComposeMergeTag[];
 };
 
+const MAILBOX_INBOUND_TAGS: ComposeMergeTag[] = [
+  {
+    id: "trigger-inbound-from-name",
+    token: "{{trigger.fromName}}",
+    label: "Sender name",
+    description: "The name of the person who sent the email.",
+  },
+  {
+    id: "trigger-inbound-from-email",
+    token: "{{trigger.fromEmail}}",
+    label: "Sender email",
+    description: "The email address of the person who sent the email.",
+  },
+  {
+    id: "trigger-inbound-subject",
+    token: "{{trigger.subject}}",
+    label: "Inbound subject",
+    description: "The subject line of the incoming email.",
+  },
+  {
+    id: "trigger-inbound-snippet",
+    token: "{{trigger.snippet}}",
+    label: "Inbound summary / snippet",
+    description: "A short preview snippet of the incoming email body.",
+  },
+  {
+    id: "trigger-inbound-body",
+    token: "{{trigger.body}}",
+    label: "Inbound body",
+    description: "The full text body of the incoming email.",
+  },
+];
+
 const WEBHOOK_STANDARD_TAGS: ComposeMergeTag[] = [
   {
     id: "trigger-verify-url",
@@ -76,6 +109,9 @@ function dedupeTags(tags: ComposeMergeTag[]): ComposeMergeTag[] {
 
 /** Suggested `{{trigger.*}}` tags for the automation's trigger configuration. */
 export function triggerMergeTagsForAutomation(source: TriggerSource): ComposeMergeTag[] {
+  if (source.type === "mailbox_inbound") {
+    return [...MAILBOX_INBOUND_TAGS];
+  }
   const extra = (source.type === "http_webhook" && source.requiredFields ? source.requiredFields : []).map(tagFromPayloadPath);
   return dedupeTags([...WEBHOOK_STANDARD_TAGS, ...extra]);
 }

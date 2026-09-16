@@ -1,13 +1,12 @@
 import { Hono } from "hono";
 
 import { DEV_ACCOUNT_LINK_ID, store } from "../db/store";
-import type { TriggerPurpose, InternalTriggerEvent, Trigger, TriggerSource } from "../db/types";
+import type { TriggerPurpose, Trigger, TriggerSource } from "../db/types";
 import { createMessageTemplate, patchMessageTemplate } from "../lib/messages/message-template";
 import { triggerSource } from "../lib/messages/resolve";
 import { findAudienceGroup } from "../lib/audience-groups/group";
 import { dispatchTriggerSend } from "../lib/triggers/dispatch";
 import { fireTrigger } from "../lib/triggers/fire";
-import { findTriggerByInternalEvent } from "../lib/triggers/matcher";
 import {
   findTrigger,
   serializeTrigger,
@@ -16,7 +15,11 @@ import {
 } from "../lib/triggers/serialize";
 import { slugifyTrigger } from "../lib/triggers/slug";
 import { emptyTriggerStats, normalizeTriggerStats } from "../lib/triggers/stats";
-import { defaultHttpWebhookTrigger, defaultTriggerForPurpose } from "../lib/triggers/trigger-defaults";
+import {
+  defaultHttpWebhookTrigger,
+  defaultMailboxInboundTrigger,
+  defaultTriggerForPurpose,
+} from "../lib/triggers/trigger-defaults";
 import { buildTriggerStatsOverview } from "../lib/triggers/trigger-stats-overview";
 import { validateTriggerForActivation } from "../lib/triggers/validate";
 import { newId, newToken } from "../lib/shared/ids";
@@ -74,6 +77,7 @@ studioTriggers.post("/", async (c) => {
     domain?: string;
     purpose?: TriggerPurpose;
     triggerType?: TriggerSource["type"];
+    sourceType?: TriggerSource["type"];
   } = {};
   try {
     body = await c.req.json();
@@ -87,7 +91,13 @@ studioTriggers.post("/", async (c) => {
   if (!domain) return c.json({ error: "Select a sending domain for this automation" }, 400);
 
   const purpose = purposeFromInput(body.purpose);
-  const source: TriggerSource = defaultHttpWebhookTrigger();
+  const requestedType = body.triggerType || body.sourceType;
+  let source: TriggerSource;
+  if (requestedType === "mailbox_inbound" || (!requestedType && purpose === "conversational")) {
+    source = defaultMailboxInboundTrigger(domain, "support");
+  } else {
+    source = defaultHttpWebhookTrigger();
+  }
 
   const data = store.read();
   const baseSlug = slugifyTrigger(name) || newId("automation").slice(0, 12);
@@ -129,7 +139,7 @@ studioTriggers.post("/", async (c) => {
       status: "draft",
       source,
       audienceGroupId: null,
-      cooldownSeconds: 86_400,
+      cooldownSeconds: source.type === "mailbox_inbound" ? 3600 : 86_400,
       applyMarketingSuppression: purpose !== "transactional",
       templateId: messageTemplate.id,
       stats: emptyTriggerStats(),
@@ -142,35 +152,6 @@ studioTriggers.post("/", async (c) => {
   });
 
   return c.json(serializeTrigger(created!, { revealTriggerSecret: true }), 201);
-});
-
-studioTriggers.post("/fire/internal/:event", async (c) => {
-  const event = c.req.param("event") as InternalTriggerEvent;
-  if (event !== "account.verify_email" && event !== "account.created") {
-    return c.json({ error: "unknown internal event" }, 400);
-  }
-
-  const automation = findTriggerByInternalEvent(event);
-  if (!automation) {
-    return c.json({ error: "no active automation for this event" }, 404);
-  }
-
-  let payload: Record<string, unknown> = {};
-  try {
-    payload = (await c.req.json()) as Record<string, unknown>;
-  } catch {
-    /* empty object ok */
-  }
-
-  const idempotencyKey = c.req.header("Idempotency-Key")?.trim() || null;
-  const result = await fireTrigger({
-    automation,
-    triggerType: "internal_event",
-    payload,
-    idempotencyKey,
-  });
-
-  return c.json(result, result.skipReason && result.status === "skipped" ? 202 : 200);
 });
 
 studioTriggers.get("/:id", (c) => {

@@ -8,10 +8,10 @@ export function triggerListRelativeDate(row: Trigger): string {
 }
 
 export function triggerSourceSummary(source: TriggerSource): string {
-  if (source.type === "http_webhook") {
-    return `Webhook · ${source.emailPath}`;
+  if (source.type === "mailbox_inbound") {
+    return `Inbox · ${source.localPart}@${source.domain}`;
   }
-  return "HTTP Webhook";
+  return `Webhook · ${source.emailPath || "email"}`;
 }
 
 export function triggerStatsLine(row: Trigger): string {

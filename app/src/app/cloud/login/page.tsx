@@ -18,13 +18,13 @@ function CloudLoginInner() {
 
     async function boot() {
       if (hasHqSession()) {
-        router.replace(next?.startsWith("/") ? next : "/studio/overview");
+        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
         return;
       }
       const hqOk = await hqRefreshSession();
       if (!active) return;
       if (hqOk) {
-        router.replace(next?.startsWith("/") ? next : "/studio/overview");
+        router.replace(next?.startsWith("/") ? next : "/studio/dashboard");
         return;
       }
       setReady(true);

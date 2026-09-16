@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "seed:store": "node scripts/migrate-store-from-origin.mjs",
-    "migrate:templates-yaml": "node scripts/migrate-templates-to-yaml.mjs"
+    "migrate:templates-yaml": "node scripts/migrate-templates-to-yaml.mjs",
+    "generate:message-template-thumbnails": "pnpm -C ../../app run generate:message-template-thumbnails"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

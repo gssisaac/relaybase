@@ -36,6 +36,8 @@ describe("shouldProxyRequestToStudio", () => {
 
   it("serves overview UI without API header", () => {
     assert.equal(shouldProxyRequestToStudio("/studio/overview", "GET", headers()), false);
+    assert.equal(shouldProxyRequestToStudio("/studio/dashboard", "GET", headers()), false);
+    assert.equal(shouldProxyRequestToStudio("/studio/analytics", "GET", headers()), false);
   });
 
   it("proxies overview JSON with Studio API header", () => {

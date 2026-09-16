@@ -10,34 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { NewsletterStatusBadge } from "@/studio/components/newsletters/NewsletterStatusBadge";
 import { CF_EMAIL_SENDING_LIMITS_URL } from "@/studio/components/newsletters/NewsletterCloudflareSendingLimitsCard";
 import { studioApi, type StudioOverview } from "@/lib/studio/api";
 import { newsletterDetailHref, useStudioPaths } from "@/studio/lib/paths";
 import { cn } from "@/lib/utils";
 
 import { OverviewExpandableBody } from "./OverviewExpandableBody";
+import { formatOverviewWhen, overviewInsetItemClassName } from "./overview-inset-styles";
+import { StudioInsightSectionNav } from "./StudioInsightSectionNav";
 import { StudioOverviewTopSection } from "./StudioOverviewTopSection";
 
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-/**
- * Inset rows inside section cards. Dark theme sets --muted == --card, so use --secondary/--accent
- * for a visible lift above the card surface (see globals.css).
- */
-const overviewInsetItemClassName =
-  "rounded-xl bg-secondary/70 px-3 py-2.5 transition-colors hover:bg-secondary dark:bg-accent/90 dark:hover:bg-accent";
-
-const overviewInsetHighlightClassName = "rounded-xl bg-secondary px-3 py-2.5 dark:bg-accent";
-
-export function StudioOverviewView() {
+export function StudioAnalyticsView() {
   const { schedule, templates, triggers, newsletters, subscribers } = useStudioPaths();
   const [data, setData] = useState<StudioOverview | null>(null);
   const [templateCount, setTemplateCount] = useState(0);
@@ -51,7 +34,7 @@ export function StudioOverviewView() {
       const next = await studioApi.getOverview();
       setData(next);
     } catch {
-      toast.error("Could not load Studio overview — is hq/studio running on port 32831?");
+      toast.error("Could not load Studio analytics — is hq/studio running on port 32831?");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -69,46 +52,39 @@ export function StudioOverviewView() {
       .catch(() => setTemplateCount(0));
   }, [data?.generatedAt]);
 
-  const summary = data?.summary;
-
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar
         className="shrink-0 px-4 py-3"
         end={
-          <div className="flex items-center gap-2">
-            <Link href={templates} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              Templates
-            </Link>
-            <Link href={`${newsletters}?new=1`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              New newsletter
-            </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void load(true)}
-              disabled={refreshing || loading}
-            >
-              <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden />
-              Refresh
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load(true)}
+            disabled={refreshing || loading}
+          >
+            <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden />
+            Refresh
+          </Button>
         }
       >
-        <div className="min-w-0 space-y-1">
-          <h1 className="truncate text-lg font-semibold tracking-tight">Overview</h1>
-          <p className="text-sm text-muted-foreground">
-            Schedule, triggers, newsletters, and subscribers at a glance.
-          </p>
+        <div className="min-w-0 space-y-2">
+          <StudioInsightSectionNav active="analytics" />
+          <div className="space-y-1">
+            <h1 className="truncate text-lg font-semibold tracking-tight">Analytics</h1>
+            <p className="text-sm text-muted-foreground">
+              Send volume, engagement, triggers, and recent activity.
+            </p>
+          </div>
         </div>
       </DesktopTitleBar>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
           {loading && !data ? (
-            <p className="text-sm text-muted-foreground">Loading overview…</p>
+            <p className="text-sm text-muted-foreground">Loading analytics…</p>
           ) : null}
 
-          {summary ? (
+          {data ? (
             <>
               <StudioOverviewTopSection
                 data={data}
@@ -116,55 +92,6 @@ export function StudioOverviewView() {
               />
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-                    <div>
-                      <CardTitle className="text-base">Upcoming schedule</CardTitle>
-                      <CardDescription>{data.schedule.upcomingCount} in the next 7 days</CardDescription>
-                    </div>
-                    <Link href={schedule} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                      Open schedule
-                    </Link>
-                  </CardHeader>
-                  <CardContent>
-                    <OverviewExpandableBody className="space-y-3">
-                      {data.schedule.nextUpcoming ? (
-                        <div className={overviewInsetHighlightClassName}>
-                          <p className="text-xs font-medium text-muted-foreground">Next up</p>
-                          <p className="font-medium">{data.schedule.nextUpcoming.name}</p>
-                          <p className="text-xs text-muted-foreground">{data.schedule.nextUpcoming.subject}</p>
-                          <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                            {formatWhen(data.schedule.nextUpcoming.scheduledAt)} ·{" "}
-                            {data.schedule.nextUpcoming.audienceGroupName ?? "Subscriber group"} ·{" "}
-                            {data.schedule.nextUpcoming.recipientCount.toLocaleString()} subscribers
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Nothing scheduled yet.</p>
-                      )}
-                      <ul className="space-y-2">
-                        {data.schedule.upcomingList.map((row) => (
-                          <li key={row.id}>
-                            <Link
-                              href={newsletterDetailHref(row.id, "publish", row.status)}
-                              className={cn(
-                                overviewInsetItemClassName,
-                                "flex items-center justify-between gap-2 text-sm",
-                              )}
-                            >
-                              <span className="min-w-0 truncate font-medium">{row.name}</span>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <NewsletterStatusBadge status={row.status} />
-                                <span className="text-xs text-muted-foreground">{formatWhen(row.scheduledAt)}</span>
-                              </div>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    </OverviewExpandableBody>
-                  </CardContent>
-                </Card>
-
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div>
@@ -211,7 +138,7 @@ export function StudioOverviewView() {
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="truncate text-sm font-medium">{row.name}</p>
                                   <span className="shrink-0 text-xs text-muted-foreground">
-                                    {formatWhen(row.sentAt)}
+                                    {formatOverviewWhen(row.sentAt)}
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
@@ -261,61 +188,10 @@ export function StudioOverviewView() {
                                 <Badge variant="secondary" className="text-[10px]">
                                   {row.status}
                                 </Badge>
-                                <p className="mt-1 text-[11px] text-muted-foreground">{formatWhen(row.occurredAt)}</p>
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {formatOverviewWhen(row.occurredAt)}
+                                </p>
                               </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </OverviewExpandableBody>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-                    <div>
-                      <CardTitle className="text-base">Subscriber groups</CardTitle>
-                      <CardDescription>
-                        {data.audience.groupCount} groups
-                        {data.audience.recentSyncStatus.failedGroupsCount > 0
-                          ? ` · ${data.audience.recentSyncStatus.failedGroupsCount} sync errors`
-                          : ""}
-                      </CardDescription>
-                    </div>
-                    <Link href={subscribers} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                      Subscribers
-                    </Link>
-                  </CardHeader>
-                  <CardContent>
-                    <OverviewExpandableBody>
-                      {data.audience.groups.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Create a group to start collecting contacts.</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {data.audience.groups.map((group) => (
-                            <li key={group.id}>
-                              <Link
-                                href={`${subscribers}?id=${encodeURIComponent(group.id)}`}
-                                className={cn(
-                                  overviewInsetItemClassName,
-                                  "flex items-center justify-between gap-2",
-                                )}
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium">{group.name}</p>
-                                  <p className="text-xs text-muted-foreground">{group.domain}</p>
-                                </div>
-                                <div className="shrink-0 text-right">
-                                  <p className="text-sm tabular-nums font-medium">
-                                    {group.contactCount.toLocaleString()}
-                                  </p>
-                                  {group.lastSyncStatus === "error" ? (
-                                    <Badge variant="destructive" className="mt-0.5 text-[10px]">
-                                      Sync error
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                              </Link>
                             </li>
                           ))}
                         </ul>
@@ -330,7 +206,7 @@ export function StudioOverviewView() {
           {!loading && !data ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Overview unavailable. Start hq/studio and refresh.
+                Analytics unavailable. Start hq/studio and refresh.
               </CardContent>
             </Card>
           ) : null}

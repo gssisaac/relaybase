@@ -1,5 +1,5 @@
-import { StudioOverviewView } from "@/studio/pages/overview/StudioOverviewView";
+import { redirect } from "next/navigation";
 
-export default function Page() {
-  return <StudioOverviewView />;
+export default function StudioOverviewRedirectPage() {
+  redirect("/studio/dashboard");
 }

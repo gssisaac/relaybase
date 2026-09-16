@@ -1154,8 +1154,13 @@
       "listStatus": "active",
       "status": "active",
       "source": {
-        "type": "internal_event",
-        "event": "account.verify_email"
+        "type": "http_webhook",
+        "secret": "dev_hook_verify_sample",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "verifyUrl"
+        ]
       },
       "audienceGroupId": null,
       "cooldownSeconds": 300,
@@ -1197,8 +1202,13 @@
       "listStatus": "active",
       "status": "active",
       "source": {
-        "type": "internal_event",
-        "event": "account.created"
+        "type": "http_webhook",
+        "secret": "dev_hook_welcome_sample",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "welcomeUrl"
+        ]
       },
       "audienceGroupId": null,
       "cooldownSeconds": 86400,
@@ -1338,8 +1348,8 @@
       "listStatus": "active",
       "status": "active",
       "source": {
-        "type": "form_submit",
-        "formKey": "contact",
+        "type": "http_webhook",
+        "secret": "dev_hook_contact_sample",
         "emailPath": "email",
         "namePath": "name",
         "requiredFields": [
@@ -1386,8 +1396,8 @@
       "listStatus": "active",
       "status": "active",
       "source": {
-        "type": "form_submit",
-        "formKey": "waitlist",
+        "type": "http_webhook",
+        "secret": "dev_hook_waitlist_sample",
         "emailPath": "email",
         "namePath": "name",
         "requiredFields": []
@@ -1432,8 +1442,8 @@
       "listStatus": "active",
       "status": "active",
       "source": {
-        "type": "form_submit",
-        "formKey": "demo",
+        "type": "http_webhook",
+        "secret": "dev_hook_demo_sample",
         "emailPath": "email",
         "namePath": "name",
         "requiredFields": [
@@ -1497,7 +1507,7 @@
         "sent": 0,
         "delivered": 0,
         "bounced": 0,
-        "failed": 0,
+        "failed": 1,
         "skipped": 0,
         "complained": 0,
         "opened": 0,
@@ -1509,7 +1519,7 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-10T08:00:00.000Z",
-      "updatedAt": "2026-09-15T17:03:18.377Z"
+      "updatedAt": "2026-09-16T16:00:22.288Z"
     },
     {
       "id": "automation_invoice_receipt",
@@ -1578,7 +1588,7 @@
       "status": "active",
       "source": {
         "type": "http_webhook",
-        "secret": "dev_hook_team_invite_sample",
+        "secret": "yL4mL4mEWxCY46Dr84W2apNBimpwFrjmyKbfPWpMZ9k",
         "emailPath": "email",
         "namePath": "name",
         "requiredFields": [
@@ -1610,7 +1620,7 @@
       "lastTriggeredAt": null,
       "lastSentAt": null,
       "createdAt": "2026-09-08T10:15:00.000Z",
-      "updatedAt": "2026-09-08T10:15:00.000Z"
+      "updatedAt": "2026-09-16T16:13:05.413Z"
     },
     {
       "id": "automation_trial_started",
@@ -1676,8 +1686,11 @@
       "listStatus": "archived",
       "status": "draft",
       "source": {
-        "type": "internal_event",
-        "event": "account.verify_email"
+        "type": "http_webhook",
+        "secret": "dev_hook_archive_sample",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": []
       },
       "audienceGroupId": null,
       "cooldownSeconds": 86400,
@@ -1705,39 +1718,79 @@
       "updatedAt": "2026-09-15T17:23:05.623Z"
     }
   ],
-  "triggerEvents": [],
-  "triggerSends": [],
+  "triggerEvents": [
+    {
+      "id": "triggerevent_28c21a59-4042-49e3-ad6e-94a139604683",
+      "accountLinkId": "dev",
+      "triggerId": "automation_inbox_support",
+      "triggerType": "mailbox_inbound",
+      "idempotencyKey": "test_2026-09-16T16:00:20.614Z_gssisaac@gmail.com",
+      "recipientEmail": "gssisaac@gmail.com",
+      "recipientName": "Alex Kim",
+      "payload": {
+        "email": "gssisaac@gmail.com",
+        "name": "Alex Kim",
+        "verifyUrl": "https://yourdomain.com/verify?token=test_preview",
+        "message": "This is a test message from Studio automations.",
+        "code": "849201"
+      },
+      "status": "queued",
+      "skipReason": null,
+      "occurredAt": "2026-09-16T16:00:20.614Z"
+    }
+  ],
+  "triggerSends": [
+    {
+      "id": "autosend_8929d2d3-af3f-4769-b78c-f5ddca872593",
+      "triggerId": "automation_inbox_support",
+      "triggerEventId": "triggerevent_28c21a59-4042-49e3-ad6e-94a139604683",
+      "audienceMemberId": null,
+      "email": "gssisaac@gmail.com",
+      "name": "Alex Kim",
+      "status": "failed",
+      "errorMessage": "From address must be on agentool.io",
+      "bounceReason": null,
+      "sentAt": null,
+      "deliveredAt": null,
+      "openedAt": null,
+      "clickedAt": null,
+      "unsubscribedAt": null,
+      "openCount": 0,
+      "clickCount": 0,
+      "createdAt": "2026-09-16T16:00:20.614Z"
+    }
+  ],
   "triggerTrackingEvents": [],
   "accountSuppressions": [],
   "pipelineCards": [],
   "activities": [],
   "scheduledJobs": [
     {
-      "id": "job_23ae0f82-c759-4e07-95d1-ba4892945fc2",
+      "id": "job_0d9bb356-8479-4657-8f5c-db750725ec33",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_scheduled_ama",
       "runAt": "2026-09-17T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T12:49:34.985Z"
+      "createdAt": "2026-09-16T16:14:32.739Z"
     },
     {
-      "id": "job_581b900e-eb62-4899-94d5-a2db8b1564ba",
+      "id": "job_f5abe3e9-ffc4-4828-9894-2f39993d9c6b",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_sent_sep_digest",
       "runAt": "2026-09-23T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T12:49:34.985Z"
+      "createdAt": "2026-09-16T16:14:32.739Z"
     },
     {
-      "id": "job_b5a4ad26-3ebb-4a9b-ba98-b58c5982e810",
+      "id": "job_c73b596a-93f9-46d6-a32c-549a67c4ed55",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "runAt": "2026-09-30T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T12:49:34.985Z"
+      "createdAt": "2026-09-16T16:14:32.739Z"
     }
   ],
   "trackingEvents": [],

@@ -1,5 +1,5 @@
 import { DEV_ACCOUNT_LINK_ID, store } from "../../db/store";
-import type { InternalTriggerEvent, Trigger, TriggerSource } from "../../db/types";
+import type { Trigger, TriggerSource } from "../../db/types";
 import { triggerSource } from "../messages/resolve";
 
 function isActiveTrigger(row: Trigger): boolean {
@@ -8,23 +8,6 @@ function isActiveTrigger(row: Trigger): boolean {
 
 export function findTriggerById(id: string): Trigger | undefined {
   return store.read().triggers.find((a) => a.id === id && a.accountLinkId === DEV_ACCOUNT_LINK_ID);
-}
-
-export function findTriggerByFormKey(formKey: string): Trigger | undefined {
-  const key = formKey.trim();
-  return store.read().triggers.find((a) => {
-    if (!isActiveTrigger(a)) return false;
-    const source = triggerSource(a);
-    return source.type === "form_submit" && source.formKey === key;
-  });
-}
-
-export function findTriggerByInternalEvent(event: InternalTriggerEvent): Trigger | undefined {
-  return store.read().triggers.find((a) => {
-    if (!isActiveTrigger(a)) return false;
-    const source = triggerSource(a);
-    return source.type === "internal_event" && source.event === event;
-  });
 }
 
 export function findTriggerForInbound(input: {

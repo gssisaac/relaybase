@@ -22,7 +22,7 @@ function redirectAfterAuth(router: ReturnType<typeof useRouter>, next: string | 
     router.push(next);
     return;
   }
-  router.push("/studio/overview");
+  router.push("/studio/dashboard");
 }
 
 type VerifiedWorker = {

@@ -17,25 +17,12 @@ export function validateTriggerSource(trigger: TriggerSource): TriggerActivation
         issues.push({ field: "trigger.emailPath", message: "Email field path is required" });
       }
       break;
-    case "form_submit":
-      if (!trigger.formKey?.trim()) {
-        issues.push({ field: "trigger.formKey", message: "Form key is required" });
-      }
-      if (!trigger.emailPath?.trim()) {
-        issues.push({ field: "trigger.emailPath", message: "Email field path is required" });
-      }
-      break;
     case "mailbox_inbound":
       if (!trigger.domain?.trim()) {
         issues.push({ field: "trigger.domain", message: "Domain is required" });
       }
       if (!trigger.localPart?.trim()) {
         issues.push({ field: "trigger.localPart", message: "Local-part is required" });
-      }
-      break;
-    case "internal_event":
-      if (!trigger.event) {
-        issues.push({ field: "trigger.event", message: "Internal event is required" });
       }
       break;
     default:

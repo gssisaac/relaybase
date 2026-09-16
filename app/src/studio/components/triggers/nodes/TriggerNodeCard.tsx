@@ -8,11 +8,13 @@ import { triggerSourceSummary } from "@/studio/lib/triggers/trigger-label";
 import type { Trigger } from "@/lib/studio/api";
 import { cn } from "@/lib/utils";
 
-function sourceIcon(_type: Trigger["source"]["type"]) {
+function sourceIcon(type: Trigger["source"]["type"]) {
+  if (type === "mailbox_inbound") return Inbox;
   return Webhook;
 }
 
-function sourceTypeLabel(_type: Trigger["source"]["type"]): string {
+function sourceTypeLabel(type: Trigger["source"]["type"]): string {
+  if (type === "mailbox_inbound") return "Mailbox Inbound";
   return "HTTP Webhook";
 }
 

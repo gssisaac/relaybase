@@ -731,8 +731,6 @@ export type TriggerListStatus = "active" | "archived";
 export type TriggerStatus = "draft" | "active" | "paused";
 export type TriggerPurpose = "transactional" | "conversational" | "marketing";
 
-export type InternalTriggerEvent = "account.verify_email" | "account.created";
-
 export type TriggerSource =
   | {
       type: "http_webhook";
@@ -750,17 +748,6 @@ export type TriggerSource =
         subjectContains?: string | null;
         fromDomain?: string | null;
       } | null;
-    }
-  | {
-      type: "internal_event";
-      event: InternalTriggerEvent;
-    }
-  | {
-      type: "form_submit";
-      formKey: string;
-      emailPath: string;
-      namePath?: string | null;
-      requiredFields?: string[];
     };
 
 export type TriggerStats = NewsletterStats & {

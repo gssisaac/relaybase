@@ -83,7 +83,7 @@ export function TriggerConfigInspector({ selection }: { selection: TriggerCanvas
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {selection === "trigger" ? (
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
               <TriggerSourceSection embedded />
             </div>
           ) : null}

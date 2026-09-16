@@ -28,7 +28,7 @@ function ResetPasswordForm() {
     setError(null);
     try {
       await hqResetPassword(token, password);
-      router.replace("/studio/overview");
+      router.replace("/studio/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset failed");
     } finally {

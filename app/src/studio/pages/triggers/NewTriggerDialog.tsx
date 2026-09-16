@@ -40,12 +40,14 @@ export function NewTriggerDialog({
   const [newSenderEmail, setNewSenderEmail] = useState<string | null>(null);
   const [newDomain, setNewDomain] = useState<string | null>(null);
   const [newPurpose, setNewPurpose] = useState<TriggerPurpose>("transactional");
+  const [newSourceType, setNewSourceType] = useState<"http_webhook" | "mailbox_inbound">("http_webhook");
 
   function resetForm() {
     setNewName("");
     setNewSenderEmail(null);
     setNewDomain(null);
     setNewPurpose("transactional");
+    setNewSourceType("http_webhook");
     setCreating(false);
   }
 
@@ -58,7 +60,12 @@ export function NewTriggerDialog({
     }
     setCreating(true);
     try {
-      const created = await studioApi.createTrigger({ name, domain, purpose: newPurpose });
+      const created = await studioApi.createTrigger({
+        name,
+        domain,
+        purpose: newPurpose,
+        sourceType: newSourceType,
+      });
       upsertTriggerSidebarListRow(created);
       onOpenChange(false);
       resetForm();
@@ -82,7 +89,7 @@ export function NewTriggerDialog({
         <DialogHeader>
           <DialogTitle>New trigger</DialogTitle>
           <DialogDescription>
-            One webhook, one email — verify links, password resets, receipts, or transactional alerts.
+            Send automated 1:1 emails triggered by API webhooks or incoming mailbox emails.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -92,8 +99,28 @@ export function NewTriggerDialog({
               id="trigger-name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={examplePlaceholder("Verify Email")}
+              placeholder={examplePlaceholder(newSourceType === "mailbox_inbound" ? "Support Auto-reply" : "Verify Email")}
               autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Trigger type</Label>
+            <CmdDropdown
+              triggerClassName="min-w-0"
+              value={newSourceType}
+              enableSearch={false}
+              options={[
+                { value: "http_webhook", label: "HTTP Webhook (API Send)" },
+                { value: "mailbox_inbound", label: "Mailbox Inbound (Auto-reply)" },
+              ]}
+              onValueChange={(v) => {
+                if (v === "http_webhook" || v === "mailbox_inbound") {
+                  setNewSourceType(v);
+                  if (v === "mailbox_inbound") {
+                    setNewPurpose("conversational");
+                  }
+                }
+              }}
             />
           </div>
           <div className="space-y-1.5">

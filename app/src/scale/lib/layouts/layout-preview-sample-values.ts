@@ -1,3 +1,4 @@
+import { layoutContentParagraphStyle } from "@/scale/lib/layouts/layout-content-theme";
 import type { TemplateVariablesSchema } from "@/scale/lib/layouts/layout-template-variables";
 
 /** Fixed preview fixtures — not editable in the UI. */
@@ -14,9 +15,6 @@ export const LAYOUT_PREVIEW_FIXTURES = {
 Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.`,
 } as const;
 
-const CONTENT_PARAGRAPH_STYLE =
-  "margin:0 0 12px;font-family:sans-serif;font-size:15px;line-height:1.5;color:#334155";
-
 function escapeHtml(text: string): string {
   return text
     .replaceAll("&", "&amp;")
@@ -25,10 +23,14 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-export function layoutPreviewContentAsHtml(plainBody: string): string {
+export function layoutPreviewContentAsHtml(
+  plainBody: string,
+  layoutId?: string | null,
+): string {
+  const paragraphStyle = layoutContentParagraphStyle(layoutId);
   const trimmed = plainBody.trim();
   if (!trimmed) {
-    return `<p style='${CONTENT_PARAGRAPH_STYLE}'>Nothing to preview yet</p>`;
+    return `<p style='${paragraphStyle}'>Nothing to preview yet</p>`;
   }
   return trimmed
     .split(/\n\n+/)
@@ -36,7 +38,7 @@ export function layoutPreviewContentAsHtml(plainBody: string): string {
     .filter(Boolean)
     .map((block) => {
       const lines = block.split(/\n/).map((line) => escapeHtml(line.trim())).join("<br />");
-      return `<p style='${CONTENT_PARAGRAPH_STYLE}'>${lines}</p>`;
+      return `<p style='${paragraphStyle}'>${lines}</p>`;
     })
     .join("");
 }

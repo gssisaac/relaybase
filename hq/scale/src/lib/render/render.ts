@@ -9,6 +9,7 @@ import {
 } from "../templates/variable-schema";
 import { resolveScaleAssetUrl } from "../assets/resolve-url";
 import { applyGmailContentLinkStyles } from "./gmail-link-style";
+import { wrapLayoutBodyHtml } from "./layout-content-theme";
 import { markdownToPlainEmailText } from "./markdown-to-plain-email-text";
 
 /**
@@ -169,10 +170,13 @@ export function renderNewsletterForRecipient(input: RenderBroadcastInput): strin
     return `${html}<img src="${pixelUrl}" width="1" height="1" alt="" style="display:none;border:0;" />`;
   }
 
-  const contentHtml = sanitizeNewsletterContentImages(
-    applyGmailContentLinkStyles(markdownToHtml(input.bodyMarkdown)),
-    input.broadcastId,
-    input.scaleBaseUrl,
+  const contentHtml = wrapLayoutBodyHtml(
+    sanitizeNewsletterContentImages(
+      applyGmailContentLinkStyles(markdownToHtml(input.bodyMarkdown)),
+      input.broadcastId,
+      input.scaleBaseUrl,
+    ),
+    input.templateId,
   );
 
   let html = templateHtml

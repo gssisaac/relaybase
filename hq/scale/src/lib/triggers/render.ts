@@ -7,6 +7,7 @@ import {
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
 import { applyGmailContentLinkStyles } from "../render/gmail-link-style";
+import { wrapLayoutBodyHtml } from "../render/layout-content-theme";
 import { markdownToPlainEmailText } from "../render/markdown-to-plain-email-text";
 import { applyTriggerComplianceMergeTags, shouldIncludeListUnsubscribe } from "./compliance";
 import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "./merge-tags";
@@ -136,10 +137,13 @@ export function renderTriggerForSend(input: RenderAutomationInput): string {
     return `${html}<img src="${openPixel}" width="1" height="1" alt="" style="display:none;border:0;" />`;
   }
 
-  const contentHtml = sanitizeTriggerContentImages(
-    applyGmailContentLinkStyles(markdownToHtml(message.bodyMarkdown)),
-    triggerId,
-    scaleBaseUrl,
+  const contentHtml = wrapLayoutBodyHtml(
+    sanitizeTriggerContentImages(
+      applyGmailContentLinkStyles(markdownToHtml(message.bodyMarkdown)),
+      triggerId,
+      scaleBaseUrl,
+    ),
+    layoutId,
   );
 
   let html = shell.replaceAll("{{content}}", contentHtml);

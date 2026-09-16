@@ -31,7 +31,7 @@ export function renderLayoutPreviewHtml({
   });
   const sampleBody = plainTextTemplate
     ? LAYOUT_PREVIEW_FIXTURES.contentBody
-    : layoutPreviewContentAsHtml(LAYOUT_PREVIEW_FIXTURES.contentBody);
+    : layoutPreviewContentAsHtml(LAYOUT_PREVIEW_FIXTURES.contentBody, layoutId);
   const wrapped = withVars.replaceAll("{{content}}", sampleBody);
   return applyNewsletterMergeTags(
     wrapped,

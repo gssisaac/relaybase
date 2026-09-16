@@ -147,7 +147,7 @@
       "id": "tpl-dark-obsidian",
       "accountLinkId": null,
       "name": "Dark Obsidian",
-      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#09090b;\">\n  <tr><td align=\"center\" style=\"padding:32px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#121316;border:1px solid #27272a;border-radius:12px;overflow:hidden;\">\n      <tr><td style=\"padding:20px 28px;border-bottom:1px solid #27272a;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-scale-header-logo=\"1\" style=\"vertical-align:middle;padding-right:12px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:600;color:#fafafa;line-height:1.3;\">\n                    {{vars.brand.organization_name}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#a1a1aa;\">\n              {{vars.header.badge_text}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e4e4e7;font-size:15px;line-height:1.65;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 28px;text-align:center;font-size:12px;color:#71717a;line-height:1.6;border-top:1px solid #27272a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-crm-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#a1a1aa;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#a1a1aa;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#09090b;\">\n  <tr><td align=\"center\" style=\"padding:32px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#121316;border:1px solid #27272a;border-radius:12px;overflow:hidden;\">\n      <tr><td style=\"padding:20px 28px;border-bottom:1px solid #27272a;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-scale-header-logo=\"1\" style=\"vertical-align:middle;padding-right:12px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:600;color:#fafafa;line-height:1.3;\">\n                    {{vars.brand.organization_name}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#a1a1aa;\">\n              {{vars.header.badge_text}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e4e4e7;font-size:15px;line-height:1.65;\">\n        <div style=\"color:#e4e4e7;font-size:15px;line-height:1.65;\">{{content}}</div>\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 28px;text-align:center;font-size:12px;color:#a1a1aa;line-height:1.6;border-top:1px solid #27272a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-crm-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#a1a1aa;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#a1a1aa;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
       "variablesSchema": {
         "fields": [
           {
@@ -502,8 +502,10 @@
       "subject": "What's new in {{vars.brand.organization_name}}",
       "previewText": "A short release note your subscribers can skim in under a minute.",
       "bodyMarkdown": "Hello {{contact.name}},\n\nWe shipped a few improvements this week:\n\n* **Feature one** — one sentence on the outcome.\n\n* **Feature two** — who it helps and how to turn it on.\n\nThanks for reading,\\\n The team\n",
-      "layoutId": "tpl-minimal",
-      "templateVariables": {},
+      "layoutId": "tpl-dark-obsidian",
+      "templateVariables": {
+        "header.badge_text": "RELEASE NOTE"
+      },
       "category": "newsletter",
       "isPreset": true,
       "createdAt": "2026-09-15T16:51:06.849Z",
@@ -530,7 +532,7 @@
       "subject": "Introducing Relaybase Scale v2.0",
       "previewText": "Broadcast stats, audience groups, and a calmer send pipeline",
       "bodyMarkdown": "Hello {{contact.name}},\n\nWe just shipped **Relaybase Scale v2.0** — the first version built for teams who send product email from their own domain, not a shared marketing subdomain.\n\n### What is new\n\n* **Broadcast stats** — delivery, opens, clicks, and unsubscribes roll up per send without leaving the dashboard.\n\n* **Audience groups** — link a list once; recipients are resolved at send time so late subscribers still receive scheduled mail.\n\n* **Compliance footers** — CAN-SPAM blocks pull from a reusable sender identity instead of one-off copy/paste.\n\n### Why it matters\n\nIf you have been stitching together spreadsheets, BCC tests, and manual unsubscribe replies, this release is meant to replace that loop with something you can audit.\n\nThanks for reading,\\\n The Relaybase team\n",
-      "layoutId": "tpl-minimal",
+      "layoutId": "tpl-product-launch",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
@@ -544,8 +546,11 @@
       "subject": "What shipped in July",
       "previewText": "Deliverability tooling, faster inbox sync, and Scale groundwork",
       "bodyMarkdown": "Hi {{contact.name}},\n\nJuly was mostly infrastructure — the kind of work that does not show up in a screenshot but keeps mail landing in the inbox.\n\n**Highlights**\n\n1. **Domain onboarding** — clearer DNS checks and routing status in Console.\n\n1. **Send logs** — dual-write to ops logs so failed API sends surface in the dashboard.\n\n1. **CRM prototype** — audience + broadcast models landed behind the feature flag you are on.\n\nWe also fixed a handful of edge cases around partial bounces and local inbox delivery for `@relaybase.email` test addresses.\n\n— Isaac & the Relaybase crew\n",
-      "layoutId": "tpl-card",
-      "templateVariables": {},
+      "layoutId": "tpl-editorial-serif",
+      "templateVariables": {
+        "publication.title": "Relaybase Chronicle",
+        "publication.issue_meta": "July recap · Infrastructure edition"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-07-20T10:00:00.000Z",
@@ -558,7 +563,7 @@
       "subject": "Relaybase 2.0 is live",
       "previewText": "Your domain, your keys, your broadcast pipeline",
       "bodyMarkdown": "Hello {{contact.name}},\n\n**Relaybase 2.0** is live for early access accounts. The headline change: everything runs on **your** Cloudflare Worker and verified domain — we do not sit in the SMTP path as a shared sender.\n\n### Three things to try this week\n\n* Send a **test broadcast** to your own `@relaybase.email` inbox.\n\n* Rotate to a **domain-scoped API key** labeled for Scale sends.\n\n* Open **Sent statistics** after a send and confirm rollups match the recipient list.\n\n[Launch notes](https://relaybase.com/blog/v2) · [Watch the 8-minute demo](https://relaybase.com/demo)\n\nIf you hit a blocker, reply to this thread — we are actively pairing with design partners.\n\nCheers,\\\n Relaybase\n",
-      "layoutId": "tpl-header",
+      "layoutId": "tpl-product-launch",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
@@ -572,8 +577,10 @@
       "subject": "Rotate your domain-scoped API keys",
       "previewText": "A short security note for accounts using Scale send keys",
       "bodyMarkdown": "Hi {{contact.name}},\n\nWe are asking all early Scale testers to **rotate domain-scoped API keys** this week.\n\n**Why now**\n\n* Scale stores a send key to call `POST /v1/send` on your Worker.\n\n* Keys issued before August may have been copied into local dev stores or shared in screenshots.\n\n**What to do**\n\n1. Console → **API Keys** → revoke the old `CRM Broadcast` key if present.\n\n1. Send a test mail from Scale — the app will issue a fresh key automatically.\n\n1. Confirm the `from` address matches the key domain (`@relaybase.xyz`).\n\nThis takes about two minutes and prevents stale credentials from lingering in JSON fixtures.\n\nStay safe,\\\n Relaybase Security\n",
-      "layoutId": "tpl-minimal",
-      "templateVariables": {},
+      "layoutId": "tpl-dark-obsidian",
+      "templateVariables": {
+        "header.badge_text": "SECURITY"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-08-18T11:00:00.000Z",
@@ -586,8 +593,10 @@
       "subject": "Welcome to the product list",
       "previewText": "What to expect from Product Updates and how to opt out",
       "bodyMarkdown": "Welcome, {{contact.name}} —\n\nYou are on **Product Updates**, our low-frequency list for release notes, beta invites, and occasional roadmap context. We typically send **once or twice a month**, never daily blasts.\n\n**What you will get**\n\n- Shipped features with enough detail to decide whether to turn them on.\n- Links to docs — not vague marketing fluff.\n- Clear unsubscribe on every message (one click, no login).\n\n**What you will not get**\n\n- Re-forwarded newsletters from other tools.\n- Purchased lists or “growth hack” sequences.\n\nWhile you are here, skim the [getting started guide](https://relaybase.com/docs/start) if you have not connected a domain yet.\n\nGlad you are along for the ride,\nProduct team @ Relaybase\n",
-      "layoutId": "tpl-minimal",
-      "templateVariables": {},
+      "layoutId": "tpl-warm-sand",
+      "templateVariables": {
+        "header.greeting_tag": "Welcome to Product Updates"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-08-28T12:00:00.000Z",
@@ -600,8 +609,12 @@
       "subject": "Digest #36 — queue drain and rollups",
       "previewText": "Scheduler batches, stat reconciliation, and a Scale send preview",
       "bodyMarkdown": "Hello {{contact.name}},\n\n**Weekly Digest #36** — a concise read for engineers following the Scale broadcast workstream.\n\n### Shipped\n\n* **Queue drain** — large audiences send in batches instead of blocking the HTTP request.\n\n* **Stats rollup** — recipient ledger reconciles opens/clicks from tracking pixels.\n\n* **Send credentials sync** — desktop app provisions a Worker key before dispatch.\n\n### In progress\n\n* List-Unsubscribe headers through `/v1/send`\n\n* Webhook path for async bounces\n\n### Worth your time\n\n \n\nReply if you want early access to the bounce webhook — we are testing with three design partners.\n\n— Engineering updates\n",
-      "layoutId": "tpl-minimal",
-      "templateVariables": {},
+      "layoutId": "tpl-curated-digest",
+      "templateVariables": {
+        "digest.title": "Engineering Digest",
+        "digest.read_time": "4 min read",
+        "digest.edition": "Weekly edition #36"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-07T09:00:00.000Z",
@@ -628,8 +641,12 @@
       "subject": "This week in platform engineering",
       "previewText": "Worker send API, Scale dispatch, and inbox test accounts",
       "bodyMarkdown": "Hey {{contact.name}},\n\nWelcome to **Engineering Weekly** — a short note on what the platform team shipped and what is landing next.\n\n**This week**\n\n* Wired Scale `sendMail` to your Worker `POST /v1/send` with domain-scoped keys.\n\n* Registered `@relaybase.email` mailboxes on the shared dev Worker for realistic inbox tests.\n\n* Reset demo `store.json` fixtures to draft so you can re-run sends without seed noise.\n\n**Next week**\n\n* Public `SCALE_PUBLIC_BASE_URL` for tracking pixels outside localhost.\n\n* Bounce webhook ingestion from Worker events.\n\nQuestions? Drop a note in `#eng-relaybase` or reply here.\n\n— Platform engineering\n",
-      "layoutId": "tpl-minimal",
-      "templateVariables": {},
+      "layoutId": "tpl-curated-digest",
+      "templateVariables": {
+        "digest.title": "Engineering Weekly",
+        "digest.read_time": "3 min read",
+        "digest.edition": "Platform team · This week"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-15T10:00:00.000Z",
@@ -642,7 +659,7 @@
       "subject": "Wave 2 — onboarding checklist",
       "previewText": "Five steps before your first real broadcast",
       "bodyMarkdown": "Hi {{contact.name}},\n\nYou are in **Wave 2** of the Scale beta. Before you press **Send Now**, walk through this checklist:\n\n1. **Verify domain** — Console shows `ready` for `relaybase.xyz`.\n2. **Create a sender** — pick `hello@` or `jon@` on that domain.\n3. **Compliance sender** — organization name + postal address filled in.\n4. **Audience** — at least one active contact (your test inbox counts).\n5. **Test send** — Publish tab → send to yourself; confirm HTML + footer.\n\n[Open the onboarding checklist](https://relaybase.com/start)\n\nOnce green, duplicate this broadcast and send to the full Product Updates group.\n\nThanks for helping us harden the pipeline,\nCustomer success\n",
-      "layoutId": "tpl-header",
+      "layoutId": "tpl-product-launch",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
@@ -656,10 +673,10 @@
       "subject": "A note for design partners",
       "previewText": "How we want feedback during the Scale send beta",
       "bodyMarkdown": "Hello {{contact.name}},\n\nThank you for being a **design partner** on Relaybase Scale. This note sets expectations for the next two weeks of testing.\n\n**We need from you**\n\n* One **test send** and one **small real send** (≤10 recipients) with notes on anything confusing.\n\n* Screenshots or Loom if the UI blocks you — especi{{contact.name}}ally Publish and Stats tabs.\n\n* Honest feedback on copy, footers, and unsubscribe flow.\n\n**We owe you**\n\n* Same-day replies on blocking bugs during business hours (UTC+7).\n\n* A written changelog when we flip List-Unsubscribe headers on the Worker.\n\nNo NDA beyond what you already agreed — feel free to talk about the experience, not other customers’ data.\n\nGratefully,\\\n Isaac\n",
-      "layoutId": "tpl-plain-text",
+      "layoutId": "tpl-founder-letter",
       "templateVariables": {
-        "event.date_badge": "19 sep",
-        "event.time_location": "2026"
+        "author.name": "Isaac",
+        "author.title": "Founder & CEO"
       },
       "category": "marketing",
       "isPreset": false,
@@ -673,8 +690,12 @@
       "subject": "Join Thursday's AMA on Scale broadcasts",
       "previewText": "Live Q&A — scheduling, stats, and send credentials",
       "bodyMarkdown": "Hi {{contact.name}},\n\nYou are invited to a **live AMA** about Scale broadcasts this **Thursday, 4:00 PM UTC+7**.\n\n**Agenda**\n\n- How scheduled sends resolve audience at dispatch time\n- Reading delivery vs. open stats (and what is still stubbed)\n- Q&A — bring your strangest edge cases\n\n**Join**\n\n- Video link will be posted in Console → Notifications the morning of the event.\n- Cannot make it? Reply with questions and we will answer async.\n\n[Add to calendar](https://relaybase.com/events/crm-ama) (placeholder link)\n\nSee you Thursday,\nRelaybase\n",
-      "layoutId": "tpl-minimal",
-      "templateVariables": {},
+      "layoutId": "tpl-event-ticket",
+      "templateVariables": {
+        "event.title": "Scale Broadcasts AMA",
+        "event.date_badge": "THU 16",
+        "event.time_location": "Thu 4:00 PM UTC+7 · Live video"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-14T18:00:00.000Z",
@@ -687,8 +708,12 @@
       "subject": "Engineering Weekly — Scale send preview",
       "previewText": "Template variables, merge tags, and a real Worker handoff",
       "bodyMarkdown": "Hello {{contact.name}},\n\nThis is the **Engineering Weekly** template we use for internal send tests. It exercises merge tags, markdown links, and the built-in compliance footer.\n\n### In this edition\n\n- **Merge tags** — `{{contact.name}}` and `{{contact.email}}` resolve per recipient at send time.\n- **Templates** — header logo and organization name come from template variables + compliance sender.\n- **Tracking** — open pixel and wrapped links point at the Scale public base URL (set `SCALE_PUBLIC_BASE_URL` for non-local tests).\n\nTry clicking through to [Relaybase](https://relaybase.xyz) and confirm the redirect lands correctly.\n\nIf something looks off in Gmail or Apple Mail, forward the raw message — we are still tuning image guards and footer HTML.\n\nThanks,\nEngineering Weekly editors\n",
-      "layoutId": "tpl-plain-text",
-      "templateVariables": {},
+      "layoutId": "tpl-curated-digest",
+      "templateVariables": {
+        "digest.title": "Engineering Weekly",
+        "digest.read_time": "5 min read",
+        "digest.edition": "Internal send test"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-14T21:58:55.873Z",
@@ -701,10 +726,12 @@
       "subject": "Product Update — broadcast stats are here",
       "previewText": "Duplicate draft for A/B copy tests on Product Updates",
       "bodyMarkdown": "Hi {{contact.name}},\n\nThis is a **duplicate draft** of our September product note, kept on the **Product Updates** audience so you can A/B subject lines or footer copy without touching the Engineering list.\n\n### September highlights\n\n- **Sent overview** — account-level rollups across broadcasts.\n- **In-progress view** — see scheduled and sending jobs in one place.\n- **Recipient ledger** — per-contact delivery status after Worker accept.\n\nWe are keeping this copy slightly shorter than the Engineering version on purpose. Swap the hero paragraph, send a test, and compare open rates.\n\n[Compare with the primary draft](https://relaybase.com/blog/v2)\n\n— Product marketing\n",
-      "layoutId": "tpl-plain-text",
+      "layoutId": "tpl-spotlight-minimal",
       "templateVariables": {
         "header.organization_name": "",
-        "header.logo": "https://relaybase.xyz/icon.png"
+        "header.logo": "https://relaybase.xyz/icon.png",
+        "spotlight.issue": "NO. 09",
+        "spotlight.tagline": "PRODUCT UPDATE · A/B COPY"
       },
       "category": "marketing",
       "isPreset": false,
@@ -732,8 +759,10 @@
       "subject": "Welcome to Relaybase",
       "previewText": "Your account is live — three things to do before you invite the team",
       "bodyMarkdown": "Welcome, {{contact.name}} —\n\nYour Relaybase account is live. Mail you send from here uses **your** verified domain and Worker — not a shared marketing subdomain.\n\n### Do these three things first\n\n1. Connect DNS for your sending domain if you have not already.\n2. Create an audience group and import people who already opted in.\n3. Send a test broadcast to your own inbox before you invite the team.\n\n[Open the getting started guide](https://relaybase.com/docs/start) · [Watch the 8-minute demo](https://relaybase.com/demo)\n\nYou will also get a separate verification email if this address is not confirmed yet. That message is only for the click — this one is the map.\n\nIf you want a walkthrough, reply to this thread. We still onboard early accounts by hand.\n\nGlad you are here,  \nThe Relaybase team",
-      "layoutId": "tpl-header",
-      "templateVariables": {},
+      "layoutId": "tpl-warm-sand",
+      "templateVariables": {
+        "header.greeting_tag": "Welcome aboard"
+      },
       "category": "transactional",
       "isPreset": false,
       "createdAt": "2026-09-01T10:05:00.000Z",
@@ -788,8 +817,10 @@
       "subject": "You are on the product list",
       "previewText": "Release notes and beta invites — once or twice a month",
       "bodyMarkdown": "Hi {{contact.name}},\n\nYou are on the **Relaybase product list**. We use it for release notes, beta invites, and occasional roadmap context — typically once or twice a month, never daily blasts.\n\n**What you will get**\n\n- Shipped features with enough detail to decide whether to turn them on\n- Links to docs, not vague launch fluff\n- A one-click unsubscribe on every message (no login)\n\n**What you will not get**\n\n- Re-forwarded newsletters from other tools\n- Purchased lists or “growth hack” sequences\n\nWhile you wait for the next note, the [getting started guide](https://relaybase.com/docs/start) is the shortest path if you already have a domain.\n\nGlad you are along for the ride,  \nProduct team @ Relaybase",
-      "layoutId": "tpl-card",
-      "templateVariables": {},
+      "layoutId": "tpl-warm-sand",
+      "templateVariables": {
+        "header.greeting_tag": "You are on the list"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-05T12:10:00.000Z",
@@ -830,8 +861,11 @@
       "subject": "Receipt for invoice {{trigger.invoiceNumber}}",
       "previewText": "Payment received — download the PDF for your records",
       "bodyMarkdown": "Hi {{contact.name}},\n\nThanks — we received payment for **{{trigger.planName}}**.\n\n**Invoice {{trigger.invoiceNumber}}**\n\n- Amount: {{trigger.amount}}\n- Period: {{trigger.periodLabel}}\n- Paid: {{trigger.paidAt}}\n\n[Download the invoice (PDF)]({{trigger.invoiceUrl}})\n\nThis receipt is for your records. The charge appears on your statement as **STRUM / RELAYBASE**. If the amount looks wrong, reply to this email before the next renewal.\n\nManage plan and payment method: [Billing portal](https://relaybase.com/account/billing)\n\n— Relaybase Billing",
-      "layoutId": "tpl-card",
-      "templateVariables": {},
+      "layoutId": "tpl-receipt-invoice",
+      "templateVariables": {
+        "receipt.title": "Payment Receipt",
+        "receipt.number": "INV-2026-0901"
+      },
       "category": "transactional",
       "isPreset": false,
       "createdAt": "2026-09-08T10:00:00.000Z",
@@ -844,8 +878,12 @@
       "subject": "{{trigger.inviterName}} invited you to {{trigger.workspaceName}}",
       "previewText": "Accept to join the workspace — you do not need to reconnect DNS",
       "bodyMarkdown": "Hi {{contact.name}},\n\n**{{trigger.inviterName}}** invited you to the **{{trigger.workspaceName}}** workspace on Relaybase.\n\n[Accept the invite]({{trigger.inviteUrl}})\n\nThis link expires in **{{trigger.expiresInDays}} days**. After you accept, you can send from the workspace domain and see the same audience groups — you do not need to reconnect DNS.\n\nIf you were not expecting this, you can ignore the email. Nobody is added to the workspace until you click.\n\nQuestions? Reply and we will loop in {{trigger.inviterName}}.\n\n— Relaybase",
-      "layoutId": "tpl-header",
-      "templateVariables": {},
+      "layoutId": "tpl-event-ticket",
+      "templateVariables": {
+        "event.title": "Workspace invite",
+        "event.date_badge": "INVITE",
+        "event.time_location": "Accept within 7 days"
+      },
       "category": "transactional",
       "isPreset": false,
       "createdAt": "2026-09-08T10:15:00.000Z",
@@ -858,7 +896,7 @@
       "subject": "Your {{trigger.planName}} trial is on",
       "previewText": "Full access until the trial end date — we will not charge early",
       "bodyMarkdown": "Hi {{contact.name}},\n\nYour **{{trigger.planName}}** trial is on. You have full product access until **{{trigger.trialEndsAt}}**.\n\n### Make the trial count\n\n1. Verify the sending domain you actually want to use in production.\n\n1. Import one real audience (people who opted in), not a test dump.\n\n1. Send a small broadcast and open **Sent statistics** — delivery, opens, and unsubscribes should match the recipient list.\n\n[Open the workspace]({{trigger.workspaceUrl}}) · [Trial checklist](https://relaybase.com/docs/trial)\n\nWe will not charge the card on file until the trial ends. If you decide Relaybase is not a fit, cancel in billing before {{trigger.trialEndsAt}} and the trial just expires.\n\nNeed a pairing session? Reply with two times.\n\n— Relaybase\n",
-      "layoutId": "tpl-header",
+      "layoutId": "tpl-card",
       "templateVariables": {},
       "category": "transactional",
       "isPreset": false,
@@ -1899,31 +1937,31 @@
   "activities": [],
   "scheduledJobs": [
     {
-      "id": "job_2d2b288a-b30f-476f-958e-374b056f0d28",
+      "id": "job_5b05ab65-fd1a-4b3f-9272-dbac62c350f9",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_scheduled_ama",
       "runAt": "2026-09-17T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T07:05:45.949Z"
+      "createdAt": "2026-09-16T07:18:14.213Z"
     },
     {
-      "id": "job_0ec11348-62f1-438c-a7ee-6b8ab2f1fcd5",
+      "id": "job_01e574b2-988f-4a3a-a266-a29acd1606ae",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_sent_sep_digest",
       "runAt": "2026-09-23T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T07:05:45.949Z"
+      "createdAt": "2026-09-16T07:18:14.213Z"
     },
     {
-      "id": "job_2e959128-c9e9-4aa2-8aae-5317792b0420",
+      "id": "job_880db62b-71d7-4c2a-9702-2bba9aebb658",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "runAt": "2026-09-30T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T07:05:45.949Z"
+      "createdAt": "2026-09-16T07:18:14.213Z"
     }
   ],
   "trackingEvents": [],

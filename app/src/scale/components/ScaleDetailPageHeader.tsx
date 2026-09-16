@@ -14,11 +14,14 @@ export function ScaleDetailPageHeader({
   backHref,
   backLabel = "Back",
   title,
+  titleNode,
   end,
 }: {
   backHref: string;
   backLabel?: string;
-  title: string;
+  title?: string;
+  /** Replaces the default truncated title heading when set. */
+  titleNode?: ReactNode;
   end?: ReactNode;
 }) {
   const { noDragClassName, isDesktop } = useDesktopChrome();
@@ -42,7 +45,9 @@ export function ScaleDetailPageHeader({
         >
           <ArrowLeft className="size-4" aria-hidden />
         </Button>
-        <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>
+        {titleNode ?? (
+          <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>
+        )}
       </div>
     </DesktopTitleBar>
   );

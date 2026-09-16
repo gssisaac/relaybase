@@ -2,9 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   applyNewsletterMergeTags,
   previewPersonaOptions,
@@ -19,6 +16,7 @@ import { prepareLayoutTemplateHtml } from "@/scale/lib/layouts/layout-standard-f
 import { isPlainTextTemplate } from "@/scale/lib/layouts/layout-catalog";
 import { NewsletterComposeForm } from "@/scale/pages/newsletters/NewsletterComposeForm";
 import { useTemplateDetail } from "@/scale/pages/templates/TemplateDetailContext";
+import { useTemplateEditChrome } from "@/scale/pages/templates/template-edit-chrome";
 import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
@@ -53,6 +51,8 @@ export function TemplateContentView() {
     getLastSavedDraft,
     refreshLayouts,
   } = useTemplateDetail();
+  const { name, setName, setSubjectFallback, setSaveState, registerSave } =
+    useTemplateEditChrome();
 
   const [compliance, setCompliance] = useState<ScaleAccountCompliance | null>(null);
   const [accountDefaultComplianceIdentityId, setAccountDefaultComplianceIdentityId] = useState<
@@ -61,7 +61,6 @@ export function TemplateContentView() {
   const [previewComplianceIdentityId, setPreviewComplianceIdentityId] = useState<string | null>(
     null,
   );
-  const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [previewText, setPreviewText] = useState("");
   const [bodyMarkdown, setBodyMarkdown] = useState("");
@@ -96,14 +95,23 @@ export function TemplateContentView() {
   const saveState = mapSaveStatus(saveStatus);
 
   useEffect(() => {
+    setSaveState(saveState);
+  }, [saveState, setSaveState]);
+
+  useEffect(() => {
     if (!template) return;
     setName(template.name);
     setSubject(template.subject);
+    setSubjectFallback(template.subject);
     setPreviewText(template.previewText ?? "");
     setBodyMarkdown(template.bodyMarkdown);
     setTemplateId(template.layoutId ?? layouts[0]?.id ?? "");
     setTemplateVariables(template.templateVariables ?? {});
-  }, [template?.id, template, layouts]);
+  }, [template?.id, template, layouts, setName, setSubjectFallback]);
+
+  useEffect(() => {
+    setSubjectFallback(subject);
+  }, [subject, setSubjectFallback]);
 
   const refreshComplianceContext = useCallback(async () => {
     try {
@@ -209,44 +217,21 @@ export function TemplateContentView() {
     previewMergeOptions,
   ]);
 
-  async function handleSave() {
+  const handleSave = useCallback(async () => {
     await checkpoint("manual-save");
     const saved = await persistDraft();
     if (saved) toast.success("Template saved");
     else toast.error("Could not save template");
-  }
+  }, [checkpoint, persistDraft]);
+
+  useEffect(() => {
+    registerSave(handleSave);
+  }, [registerSave, handleSave]);
 
   if (!template) return null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-[180px] flex-1 space-y-1">
-          <Label htmlFor="msg-tpl-name" className="text-xs text-muted-foreground">
-            Template name
-          </Label>
-          <Input
-            id="msg-tpl-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={!editable}
-            className="h-9"
-          />
-        </div>
-        <div className="min-w-[180px] flex-1 space-y-1">
-          <Label htmlFor="msg-tpl-preview-text" className="text-xs text-muted-foreground">
-            Preview text
-          </Label>
-          <Input
-            id="msg-tpl-preview-text"
-            value={previewText}
-            onChange={(e) => setPreviewText(e.target.value)}
-            disabled={!editable}
-            placeholder="Inbox snippet (optional)"
-            className="h-9"
-          />
-        </div>
-      </div>
       <NewsletterComposeForm
         newsletterId={messageTemplateId}
         assetOwner="template"
@@ -277,6 +262,7 @@ export function TemplateContentView() {
         editable={editable}
         saveState={saveState}
         onSave={() => void handleSave()}
+        hideSaveButton
         previewPersonaId={previewPersonaId}
         setPreviewPersonaId={setPreviewPersonaId}
         previewRecipient={previewRecipient}

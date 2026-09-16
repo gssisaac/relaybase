@@ -63,6 +63,7 @@ export function NewsletterComposeForm({
   onTemplateSourceSaved,
   mergeTagSections,
   triggerPreviewValues,
+  hideSaveButton,
 }: {
   /** Newsletter id — asset upload namespace (`/scale/newsletters/:id/assets`). */
   newsletterId: string;
@@ -103,6 +104,8 @@ export function NewsletterComposeForm({
   mergeTagSections?: ComposeMergeTagSection[];
   /** Sample values for pre-flight preview of `{{trigger.*}}` tags. */
   triggerPreviewValues?: Record<string, string>;
+  /** Hide the subject-row Save control (e.g. template edit saves from the page header). */
+  hideSaveButton?: boolean;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const subjectInputRef = useRef<HTMLInputElement>(null);
@@ -224,7 +227,7 @@ export function NewsletterComposeForm({
                 {draftStatus}
               </span>
             ) : null}
-            {editable ? (
+            {editable && !hideSaveButton ? (
               <Button
                 size="sm"
                 onClick={onSave}

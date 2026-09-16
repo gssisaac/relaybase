@@ -188,6 +188,9 @@ export function templateThumbnailVariant(
   if (key.includes("event-ticket") || key.includes("ticket")) return "ticket";
   if (key.includes("founder-letter") || key.includes("letter")) return "letter";
   if (key.includes("spotlight")) return "spotlight";
+  if (key.includes("publication-post") || key.includes("post")) return "post";
+  if (key.includes("keynote-banner") || key.includes("keynote")) return "keynote";
+  if (key.includes("event-invite") || key.includes("invite")) return "invite";
   if (key.includes("header")) return "header";
   if (key.includes("card")) return "card";
   return "minimal";

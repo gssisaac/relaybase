@@ -81,7 +81,7 @@ export type CmdDropdownProps<Value extends string = string> =
 
 function optionFilterKeywords(option: CmdDropdownOption): string[] {
   return [option.label, option.keywords]
-    .filter(Boolean)
+    .filter((part): part is string => Boolean(part))
     .flatMap((part) => part.trim().split(/\s+/))
     .filter(Boolean)
 }

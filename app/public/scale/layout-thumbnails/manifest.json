@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-16T07:20:47.806Z",
+  "generatedAt": "2026-09-16T07:44:32.639Z",
   "layouts": [
     {
       "id": "tpl-minimal",
@@ -65,6 +65,21 @@
       "id": "tpl-spotlight-minimal",
       "name": "Spotlight Minimal",
       "file": "tpl-spotlight-minimal.png"
+    },
+    {
+      "id": "tpl-publication-post",
+      "name": "Publication Post",
+      "file": "tpl-publication-post.png"
+    },
+    {
+      "id": "tpl-keynote-banner",
+      "name": "Keynote Banner",
+      "file": "tpl-keynote-banner.png"
+    },
+    {
+      "id": "tpl-event-invite",
+      "name": "Event Invite",
+      "file": "tpl-event-invite.png"
     }
   ]
 }

@@ -206,7 +206,12 @@ export function ImportSubscribersDialog({
 
             <div className="space-y-2">
               <Label>Email column</Label>
-              <Select value={emailColumn} onValueChange={setEmailColumn}>
+              <Select
+                value={emailColumn}
+                onValueChange={(val) => {
+                  if (val) setEmailColumn(val);
+                }}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select column" />
                 </SelectTrigger>
@@ -222,7 +227,12 @@ export function ImportSubscribersDialog({
 
             <div className="space-y-2">
               <Label>Name column (optional)</Label>
-              <Select value={nameColumn} onValueChange={setNameColumn}>
+              <Select
+                value={nameColumn}
+                onValueChange={(val) => {
+                  if (val) setNameColumn(val);
+                }}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select column" />
                 </SelectTrigger>

@@ -89,9 +89,9 @@ export function applyTemplateVariablesToHtml(
               ? footerBrandLogoImageHtml(safeSrc)
               : field.key === "hero.image"
                 ? heroBannerImageHtml(safeSrc)
-                : field.key === "author.avatar"
-                  ? authorAvatarImageHtml(safeSrc)
-                  : defaultVariableImageHtml(safeSrc);
+              : field.key === "author.avatar" || field.key === "host.avatar"
+                ? authorAvatarImageHtml(safeSrc)
+                : defaultVariableImageHtml(safeSrc);
       }
     }
     out = out.replaceAll(templateVariableToken(field.key), replacement);

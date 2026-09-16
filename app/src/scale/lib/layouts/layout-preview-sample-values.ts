@@ -48,6 +48,12 @@ export function hardcodedLayoutTemplateVariables(
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const field of schema?.fields ?? []) {
+    if (field.type === "image") {
+      if (field.key === "hero.image") {
+        out[field.key] = "/scale/sample-banners/keynote-hero.png";
+      }
+      continue;
+    }
     if (field.type !== "text") continue;
     if (
       field.key === "brand.organization_name" ||
@@ -102,6 +108,45 @@ export function hardcodedLayoutTemplateVariables(
     }
     if (field.key === "digest.edition") {
       out[field.key] = "Weekly edition #14";
+    }
+    if (field.key === "post.title") {
+      out[field.key] = "The Architecture Behind Next-Gen Distributed Platforms";
+    }
+    if (field.key === "post.subtitle") {
+      out[field.key] = "A deep dive into edge networks, durable objects, and full-stack performance.";
+    }
+    if (field.key === "post.date") {
+      out[field.key] = "September 07, 2026";
+    }
+    if (field.key === "event.headline") {
+      out[field.key] = "Relaybase Keynote 2026: Built for Global Scale";
+    }
+    if (field.key === "invite.title") {
+      out[field.key] = "THE DEAL LOUNGE - CHAMPIONSHIP EDITION";
+    }
+    if (field.key === "invite.kicker") {
+      out[field.key] = "You're invited to";
+    }
+    if (field.key === "host.name") {
+      out[field.key] = "Dwayne Campbell";
+    }
+    if (field.key === "invite.month") {
+      out[field.key] = "AUG";
+    }
+    if (field.key === "invite.day") {
+      out[field.key] = "24";
+    }
+    if (field.key === "invite.date_title") {
+      out[field.key] = "Monday, August 24";
+    }
+    if (field.key === "invite.time_details") {
+      out[field.key] = "9:00 AM - Aug 27, 9:30 PM PDT";
+    }
+    if (field.key === "invite.location_name") {
+      out[field.key] = "Hwy17 Studios ↗";
+    }
+    if (field.key === "invite.location_address") {
+      out[field.key] = "Santa Cruz, CA";
     }
   }
   return out;

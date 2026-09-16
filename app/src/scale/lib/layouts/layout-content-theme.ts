@@ -1,9 +1,18 @@
-/** Must match `public/templates/dark-obsidian/meta.yaml`. */
+/** Must match `public/templates/dark-obsidian/meta.yaml` and `keynote-banner/meta.yaml`. */
 export const DARK_OBSIDIAN_TEMPLATE_ID = "tpl-dark-obsidian";
+export const KEYNOTE_BANNER_TEMPLATE_ID = "tpl-keynote-banner";
 
-export function isDarkObsidianLayout(layoutId: string | null | undefined): boolean {
-  return layoutId === DARK_OBSIDIAN_TEMPLATE_ID;
+export function isDarkEmailLayout(layoutId: string | null | undefined): boolean {
+  if (!layoutId) return false;
+  return (
+    layoutId === DARK_OBSIDIAN_TEMPLATE_ID ||
+    layoutId === KEYNOTE_BANNER_TEMPLATE_ID ||
+    layoutId.includes("dark-obsidian") ||
+    layoutId.includes("keynote-banner")
+  );
 }
+
+export const isDarkObsidianLayout = isDarkEmailLayout;
 
 const DARK_BODY_COLOR = "#e4e4e7";
 
@@ -13,7 +22,7 @@ export const DEFAULT_CONTENT_PARAGRAPH_STYLE =
 export const DARK_OBSIDIAN_CONTENT_PARAGRAPH_STYLE = `margin:0 0 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.65;color:${DARK_BODY_COLOR}`;
 
 export function layoutContentParagraphStyle(layoutId: string | null | undefined): string {
-  return isDarkObsidianLayout(layoutId)
+  return isDarkEmailLayout(layoutId)
     ? DARK_OBSIDIAN_CONTENT_PARAGRAPH_STYLE
     : DEFAULT_CONTENT_PARAGRAPH_STYLE;
 }
@@ -23,7 +32,7 @@ export function wrapLayoutBodyHtml(
   contentHtml: string,
   layoutId: string | null | undefined,
 ): string {
-  if (!isDarkObsidianLayout(layoutId)) return contentHtml;
+  if (!isDarkEmailLayout(layoutId)) return contentHtml;
   const trimmed = contentHtml.trim();
   if (!trimmed) return contentHtml;
   return `<div style="color:${DARK_BODY_COLOR};font-size:15px;line-height:1.65;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${contentHtml}</div>`;

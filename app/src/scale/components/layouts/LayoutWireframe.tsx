@@ -15,7 +15,10 @@ export type LayoutWireframeVariant =
   | "receipt"
   | "ticket"
   | "letter"
-  | "spotlight";
+  | "spotlight"
+  | "post"
+  | "keynote"
+  | "invite";
 
 export function LayoutWireframe({
   variant,
@@ -40,11 +43,13 @@ export function LayoutWireframe({
     "pointer-events-none overflow-hidden rounded border border-border/80",
     variant === "card" && "p-1 bg-muted/30",
     variant === "dark" && "border-zinc-700/80 bg-zinc-950",
+    variant === "keynote" && "border-zinc-800 bg-black",
     variant === "warm" && "border-amber-900/10 bg-[#f7f5f0]",
     variant === "letter" && "border-stone-200 bg-[#fafaf9]",
     variant === "spotlight" && "border-zinc-800 bg-[#f5f5f4]",
     variant !== "card" &&
       variant !== "dark" &&
+      variant !== "keynote" &&
       variant !== "warm" &&
       variant !== "letter" &&
       variant !== "spotlight" &&
@@ -55,7 +60,10 @@ export function LayoutWireframe({
     "rounded-sm p-2",
     variant === "card" && "border border-border/60 bg-background",
     variant === "dark" && "bg-zinc-900",
+    variant === "keynote" && "bg-black p-1.5",
     variant === "editorial" && "border border-border/40 bg-background",
+    variant === "post" && "border border-border/30 bg-background p-2",
+    variant === "invite" && "border border-border/30 bg-background p-2",
     variant === "launch" && "overflow-hidden bg-background p-0",
     variant === "warm" && "border border-amber-900/10 bg-white",
     variant === "letter" && "border border-stone-200/80 bg-white",
@@ -65,7 +73,10 @@ export function LayoutWireframe({
     variant === "spotlight" && "border-2 border-zinc-900 bg-background p-0",
     variant !== "card" &&
       variant !== "dark" &&
+      variant !== "keynote" &&
       variant !== "editorial" &&
+      variant !== "post" &&
+      variant !== "invite" &&
       variant !== "launch" &&
       variant !== "warm" &&
       variant !== "letter" &&
@@ -76,6 +87,8 @@ export function LayoutWireframe({
       "bg-background",
   );
 
+  const isDark = variant === "dark" || variant === "keynote";
+
   const bodyLines = (
     <div
       className={cn(
@@ -83,24 +96,25 @@ export function LayoutWireframe({
         (variant === "launch" || variant === "ticket") && "p-2 pt-1.5",
         variant === "digest" && "p-2",
         variant === "spotlight" && "p-2",
+        variant === "keynote" && "px-1",
       )}
     >
       <div
         className={cn(
           "h-1 w-full rounded",
-          variant === "dark" ? "bg-zinc-500/40" : "bg-muted-foreground/20",
+          isDark ? "bg-zinc-500/40" : "bg-muted-foreground/20",
         )}
       />
       <div
         className={cn(
           "h-1 w-[80%] rounded",
-          variant === "dark" ? "bg-zinc-500/30" : "bg-muted-foreground/15",
+          isDark ? "bg-zinc-500/30" : "bg-muted-foreground/15",
         )}
       />
       <div
         className={cn(
           "h-1 w-[60%] rounded",
-          variant === "dark" ? "bg-zinc-500/20" : "bg-muted-foreground/10",
+          isDark ? "bg-zinc-500/20" : "bg-muted-foreground/10",
         )}
       />
     </div>
@@ -113,6 +127,49 @@ export function LayoutWireframe({
           <div className="mb-1.5 flex items-center gap-1 px-0.5">
             <div className="size-2.5 shrink-0 rounded-sm bg-muted-foreground/25" />
             <div className="h-1 flex-1 rounded-sm bg-muted-foreground/20" />
+          </div>
+        ) : null}
+        {variant === "post" ? (
+          <div className="mb-1.5 space-y-1">
+            <div className="flex justify-end">
+              <div className="h-0.5 w-10 rounded-sm bg-muted-foreground/30" />
+            </div>
+            <div className="h-2 w-[85%] rounded-sm bg-foreground/80" />
+            <div className="h-1 w-[60%] rounded-sm bg-muted-foreground/30" />
+            <div className="flex items-center gap-1 py-0.5">
+              <div className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40" />
+              <div className="h-1 w-12 rounded-sm bg-foreground/60" />
+            </div>
+            <div className="flex items-center justify-between border-y border-border/50 py-0.5">
+              <div className="h-1 w-4 rounded-full bg-muted-foreground/25" />
+              <div className="h-1 w-5 rounded-full bg-muted-foreground/25" />
+            </div>
+          </div>
+        ) : null}
+        {variant === "invite" ? (
+          <div className="mb-1.5 space-y-1">
+            <div className="flex items-center gap-1">
+              <div className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40" />
+              <div className="h-1 w-10 rounded-sm bg-muted-foreground/50" />
+            </div>
+            <div className="h-0.5 w-8 rounded-sm bg-muted-foreground/30" />
+            <div className="h-1.5 w-[85%] rounded-sm bg-foreground/80" />
+            <div className="border-t border-border/50 py-0.5">
+              <div className="flex items-center gap-1">
+                <div className="size-3 shrink-0 rounded border border-border/60 bg-muted/40" />
+                <div className="space-y-0.5 flex-1">
+                  <div className="h-1 w-12 rounded-sm bg-foreground/60" />
+                  <div className="h-0.5 w-8 rounded-sm bg-muted-foreground/30" />
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-border/50" />
+          </div>
+        ) : null}
+        {variant === "keynote" ? (
+          <div className="mb-1.5 space-y-1.5">
+            <div className="h-6 w-full rounded-md bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500" />
+            <div className="mx-auto h-1.5 w-[75%] rounded-sm bg-white/90" />
           </div>
         ) : null}
         {variant === "letter" ? (

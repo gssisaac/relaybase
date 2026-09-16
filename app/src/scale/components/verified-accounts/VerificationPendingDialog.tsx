@@ -51,23 +51,21 @@ export function VerificationPendingDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Verification pending</DialogTitle>
-          <DialogDescription asChild>
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                Cloudflare sent a verification email to{" "}
-                <span className="font-medium text-foreground">{trimmed}</span>.
-              </p>
-              <ol className="list-decimal space-y-1 pl-4 text-xs">
-                <li>Open that inbox (Relaybase Mailbox if it is your domain address).</li>
-                <li>Click <span className="font-medium">Verify email address</span>.</li>
-                <li>Return here and choose Check status.</li>
-              </ol>
-              {store.actionError ? (
-                <p className="text-xs text-destructive">{store.actionError}</p>
-              ) : null}
-            </div>
+          <DialogDescription>
+            Cloudflare sent a verification email to{" "}
+            <span className="font-medium text-foreground">{trimmed}</span>.
           </DialogDescription>
         </DialogHeader>
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <ol className="list-decimal space-y-1 pl-4 text-xs">
+            <li>Open that inbox (Relaybase Mailbox if it is your domain address).</li>
+            <li>Click <span className="font-medium">Verify email address</span>.</li>
+            <li>Return here and choose Check status.</li>
+          </ol>
+          {store.actionError ? (
+            <p className="text-xs text-destructive">{store.actionError}</p>
+          ) : null}
+        </div>
         <DialogFooter className="gap-2 sm:justify-between">
           <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void resend()}>
             {busy ? "Sending…" : "Resend email"}

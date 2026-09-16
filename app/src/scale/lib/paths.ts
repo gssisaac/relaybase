@@ -35,11 +35,11 @@ export function useScalePaths() {
   const tabs: { href: string; label: string; icon: LucideIcon }[] = [
     { href: overview, label: "Overview", icon: LayoutDashboard },
     { href: templates, label: "Templates", icon: LayoutTemplate },
-    { href: layouts, label: "Layouts", icon: Layers },
     { href: triggers, label: "Triggers", icon: Zap },
     { href: newsletters, label: "Newsletters", icon: Mail },
     { href: schedule, label: "Schedule", icon: CalendarDays },
     { href: subscribers, label: "Subscribers", icon: Users },
+    { href: layouts, label: "Layouts", icon: Layers },
   ];
 
   return {

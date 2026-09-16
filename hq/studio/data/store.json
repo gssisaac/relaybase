@@ -1766,31 +1766,31 @@
   "activities": [],
   "scheduledJobs": [
     {
-      "id": "job_f8d2d37f-0ea8-46e4-a0d4-643547c95e05",
+      "id": "job_e426e1b4-f526-4721-bd04-af584e7327c9",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_scheduled_ama",
       "runAt": "2026-09-17T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T17:41:58.840Z"
+      "createdAt": "2026-09-16T17:42:11.009Z"
     },
     {
-      "id": "job_22e45d39-5fa1-476e-8efa-372d14d08290",
+      "id": "job_3b978162-1cf4-46ba-8e1f-30f718d2524c",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_sent_sep_digest",
       "runAt": "2026-09-23T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T17:41:58.840Z"
+      "createdAt": "2026-09-16T17:42:11.009Z"
     },
     {
-      "id": "job_0fcea14b-3600-444f-9734-418b0ba7d01f",
+      "id": "job_4ebeb390-7984-4ce5-b59a-42e74ca20206",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "runAt": "2026-09-30T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T17:41:58.840Z"
+      "createdAt": "2026-09-16T17:42:11.009Z"
     }
   ],
   "trackingEvents": [],

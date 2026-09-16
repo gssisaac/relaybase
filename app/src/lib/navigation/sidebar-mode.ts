@@ -6,7 +6,7 @@ import {
   SIDEBAR_WIDTH,
 } from "@/lib/navigation/sidebar-width";
 import {
-  DEFAULT_SCALE_PATH,
+  DEFAULT_STUDIO_PATH,
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,
   isRestorablePath,
@@ -17,7 +17,7 @@ import {
 
 export type { SidebarMode };
 export {
-  DEFAULT_SCALE_PATH,
+  DEFAULT_STUDIO_PATH,
   DEFAULT_DASHBOARD_PATH,
   DEFAULT_EMAIL_PATH,
   isRestorablePath,
@@ -29,7 +29,7 @@ export type SidebarUiState = {
   mode: SidebarMode | null;
   lastEmailPath: string | null;
   lastDashboardPath: string | null;
-  lastScalePath: string | null;
+  lastStudioPath: string | null;
   collapsed: boolean;
   width: number;
 };
@@ -37,28 +37,26 @@ export type SidebarUiState = {
 const MODE_PREFIX = "relaybase:sidebar:mode:";
 const LAST_EMAIL_PREFIX = "relaybase:sidebar:lastPath:email:";
 const LAST_DASHBOARD_PREFIX = "relaybase:sidebar:lastPath:dashboard:";
-const LAST_SCALE_PREFIX = "relaybase:sidebar:lastPath:scale:";
-const LEGACY_LAST_CRM_PREFIX = "relaybase:sidebar:lastPath:crm:";
+const LAST_STUDIO_PREFIX = "relaybase:sidebar:lastPath:studio:";
 const COLLAPSED_PREFIX = "relaybase:sidebar-collapsed:";
 const WIDTH_PREFIX = "relaybase:sidebar-width:";
 
 const DEFAULT_PATH_BY_MODE: Record<SidebarMode, string> = {
   email: DEFAULT_EMAIL_PATH,
   dashboard: DEFAULT_DASHBOARD_PATH,
-  scale: DEFAULT_SCALE_PATH,
+  studio: DEFAULT_STUDIO_PATH,
 };
 
-type LastPathField = "lastEmailPath" | "lastDashboardPath" | "lastScalePath";
+type LastPathField = "lastEmailPath" | "lastDashboardPath" | "lastStudioPath";
 
 function lastPathField(mode: SidebarMode): LastPathField {
   if (mode === "email") return "lastEmailPath";
-  if (mode === "scale") return "lastScalePath";
+  if (mode === "studio") return "lastStudioPath";
   return "lastDashboardPath";
 }
 
 function normalizeSidebarMode(value: unknown): SidebarMode | null {
-  if (value === "crm") return "scale";
-  if (value === "email" || value === "dashboard" || value === "scale") return value;
+  if (value === "email" || value === "dashboard" || value === "studio") return value;
   return null;
 }
 
@@ -71,7 +69,7 @@ function readLocalSidebar(userId: string): SidebarUiState {
     mode: null,
     lastEmailPath: null,
     lastDashboardPath: null,
-    lastScalePath: null,
+    lastStudioPath: null,
     collapsed: false,
     width: SIDEBAR_WIDTH.default,
   };
@@ -81,9 +79,7 @@ function readLocalSidebar(userId: string): SidebarUiState {
     const mode = normalizeSidebarMode(modeRaw);
     const emailRaw = localStorage.getItem(`${LAST_EMAIL_PREFIX}${userId}`);
     const dashRaw = localStorage.getItem(`${LAST_DASHBOARD_PREFIX}${userId}`);
-    const crmRaw =
-      localStorage.getItem(`${LAST_SCALE_PREFIX}${userId}`) ??
-      localStorage.getItem(`${LEGACY_LAST_CRM_PREFIX}${userId}`);
+    const studioRaw = localStorage.getItem(`${LAST_STUDIO_PREFIX}${userId}`);
     const collapsed =
       localStorage.getItem(`${COLLAPSED_PREFIX}${userId}`) === "1";
     const widthRaw = localStorage.getItem(`${WIDTH_PREFIX}${userId}`);
@@ -97,7 +93,8 @@ function readLocalSidebar(userId: string): SidebarUiState {
         emailRaw && isRestorablePath(emailRaw, "email") ? emailRaw : null,
       lastDashboardPath:
         dashRaw && isRestorablePath(dashRaw, "dashboard") ? dashRaw : null,
-      lastScalePath: crmRaw && isRestorablePath(crmRaw, "scale") ? crmRaw : null,
+      lastStudioPath:
+        studioRaw && isRestorablePath(studioRaw, "studio") ? studioRaw : null,
       collapsed,
       width: Number.isFinite(width) ? width : SIDEBAR_WIDTH.default,
     };
@@ -125,8 +122,8 @@ function writeLocalSidebar(userId: string, state: SidebarUiState) {
         state.lastDashboardPath,
       );
     }
-    if (state.lastScalePath) {
-      localStorage.setItem(`${LAST_SCALE_PREFIX}${userId}`, state.lastScalePath);
+    if (state.lastStudioPath) {
+      localStorage.setItem(`${LAST_STUDIO_PREFIX}${userId}`, state.lastStudioPath);
     }
     localStorage.setItem(
       `${COLLAPSED_PREFIX}${userId}`,
@@ -208,7 +205,7 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
     mode: null,
     lastEmailPath: null,
     lastDashboardPath: null,
-    lastScalePath: null,
+    lastStudioPath: null,
     collapsed: false,
     width: SIDEBAR_WIDTH.default,
   };
@@ -228,22 +225,18 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
       typeof disk.lastDashboardPath === "string"
         ? normalizeEntryPath(disk.lastDashboardPath)
         : null;
-    const legacyScalePath =
-      typeof disk.lastScalePath === "string"
-        ? disk.lastScalePath
-        : typeof (disk as { lastCrmPath?: string }).lastCrmPath === "string"
-          ? (disk as { lastCrmPath: string }).lastCrmPath
-          : null;
-    const crmPath =
-      legacyScalePath !== null ? normalizeEntryPath(legacyScalePath) : null;
+    const studioPathRaw =
+      typeof disk.lastStudioPath === "string" ? disk.lastStudioPath : null;
+    const studioPath =
+      studioPathRaw !== null ? normalizeEntryPath(studioPathRaw) : null;
     const state: SidebarUiState = {
       mode,
       lastEmailPath:
         emailPath && isRestorablePath(emailPath, "email") ? emailPath : null,
       lastDashboardPath:
         dashPath && isRestorablePath(dashPath, "dashboard") ? dashPath : null,
-      lastScalePath:
-        crmPath && isRestorablePath(crmPath, "scale") ? crmPath : null,
+      lastStudioPath:
+        studioPath && isRestorablePath(studioPath, "studio") ? studioPath : null,
       collapsed: Boolean(disk.collapsed),
       width:
         parseSidebarWidth((disk as { width?: unknown }).width) ??
@@ -262,15 +255,15 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
     lastDashboardPath: local.lastDashboardPath
       ? normalizeEntryPath(local.lastDashboardPath)
       : null,
-    lastScalePath: local.lastScalePath
-      ? normalizeEntryPath(local.lastScalePath)
+    lastStudioPath: local.lastStudioPath
+      ? normalizeEntryPath(local.lastStudioPath)
       : null,
   };
   if (
     migrated.mode ||
     migrated.lastEmailPath ||
     migrated.lastDashboardPath ||
-    migrated.lastScalePath ||
+    migrated.lastStudioPath ||
     migrated.collapsed ||
     migrated.width !== SIDEBAR_WIDTH.default
   ) {
@@ -280,7 +273,7 @@ export async function hydrateSidebarState(userId: string): Promise<SidebarUiStat
   return migrated;
 }
 
-/** App entry is always the last mail path. Dashboard/Scale last path is sidebar-only. */
+/** App entry is always the last mail path. Dashboard/Studio last path is sidebar-only. */
 export function resolveEntryPath(userId: string): string {
   return readLastPath(userId, "email");
 }

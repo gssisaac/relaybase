@@ -46,7 +46,7 @@ import {
   normalizeNewsletterAssetUrl,
   normalizeNewsletterAssetUrlsInHtml,
 } from "@/lib/markdown-editor/utils/asset-url";
-import { getScaleApiBase } from "@/lib/scale/api-base";
+import { getStudioApiBase } from "@/lib/studio/api-base";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +57,7 @@ import "@/lib/markdown-editor/css/markdown-shared.css";
 export type MarkdownEditorHandle = EditorSnapshotProvider;
 
 type MarkdownEditorProps = {
-  /** Real newsletter id — asset upload/resolution namespace (`/scale/newsletters/:newsletterId/assets`). */
+  /** Real newsletter id — asset upload/resolution namespace (`/studio/newsletters/:newsletterId/assets`). */
   newsletterId: string;
   /**
    * Document identity for the persistence snapshot's `filePath` binding —
@@ -67,7 +67,7 @@ type MarkdownEditorProps = {
    * same entity (e.g. template vs newsletter send record).
    */
   documentId?: string;
-  /** Which Scale asset namespace receives uploads (newsletter, trigger, or message template). */
+  /** Which Studio asset namespace receives uploads (newsletter, trigger, or message template). */
   assetOwner?: CrmContentAssetOwner;
   value: string;
   editable?: boolean;
@@ -260,12 +260,12 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(fun
       const filename = rest.join("/");
       if (!cid || !filename) return url;
       if (assetOwnerRef.current === "trigger") {
-        return `${getScaleApiBase()}/scale/assets/trigger/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+        return `${getStudioApiBase()}/studio/assets/trigger/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
       }
       if (assetOwnerRef.current === "template") {
-        return `${getScaleApiBase()}/scale/assets/template/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+        return `${getStudioApiBase()}/studio/assets/template/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
       }
-      return `${getScaleApiBase()}/scale/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
+      return `${getStudioApiBase()}/studio/assets/${encodeURIComponent(cid)}/${encodeURIComponent(filename)}`;
     },
     pasteHandler: ({ event, editor: pasteEditor, defaultPasteHandler }) => {
       const clipboard = event.clipboardData;

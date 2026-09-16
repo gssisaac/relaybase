@@ -1,0 +1,2740 @@
+{
+  "account": {
+    "id": "dev",
+    "workerUrl": "https://relaybase-api.gssisaac.workers.dev",
+    "domain": "agentool.io",
+    "createdAt": "2026-09-14T21:33:15.802Z",
+    "compliance": {
+      "organizationName": "Strum Corp",
+      "postalAddress": "123 Main city",
+      "contactEmail": "complience@relaybase.xyz",
+      "updatedAt": "2026-09-15T00:35:53.802Z"
+    },
+    "defaultComplianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+    "sendApiKey": "rb_dBKN_0Sd_ujIbwb4yNW1aKnAkjHznfc5OmF_78S4KVk"
+  },
+  "complianceIdentities": [
+    {
+      "id": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "accountLinkId": "dev",
+      "name": "Strum",
+      "organizationName": "Strum Corp",
+      "postalAddress": "123 Main city",
+      "contactEmail": "complience@relaybase.xyz",
+      "createdAt": "2026-09-15T00:31:51.580Z",
+      "updatedAt": "2026-09-15T00:35:53.802Z"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "tpl-minimal",
+      "accountLinkId": null,
+      "name": "Minimal",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f8fafc;\">\n  <tr><td align=\"center\" style=\"padding:32px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:8px;\">\n      <tr><td style=\"padding:32px;font-family:sans-serif;color:#0f172a;font-size:15px;line-height:1.6;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:28px 32px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-family:sans-serif;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown beside your organization name in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "derivedFromLayoutId": null,
+      "createdAt": "2026-09-14T21:33:15.802Z"
+    },
+    {
+      "id": "tpl-header",
+      "accountLinkId": null,
+      "name": "Header",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f8fafc;\">\n  <tr><td align=\"center\" style=\"padding:32px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;\">\n      <tr><td style=\"padding:20px 32px;border-bottom:1px solid #e2e8f0;\">\n        <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td data-studio-header-logo=\"1\" style=\"vertical-align:middle;padding-right:12px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n            <td style=\"vertical-align:middle;font-family:sans-serif;font-size:18px;font-weight:600;color:#0f172a;line-height:1.3;\">\n              {{vars.brand.organization_name}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:32px;font-family:sans-serif;color:#0f172a;font-size:15px;line-height:1.6;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:28px 32px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-family:sans-serif;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the header and footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "derivedFromLayoutId": null,
+      "createdAt": "2026-09-14T21:33:15.802Z"
+    },
+    {
+      "id": "tpl-card",
+      "accountLinkId": null,
+      "name": "Card",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#e2e8f0;\">\n  <tr><td align=\"center\" style=\"padding:40px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;\">\n      <tr><td style=\"padding:32px;font-family:sans-serif;color:#0f172a;font-size:15px;line-height:1.6;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:28px 32px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-family:sans-serif;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown beside your organization name in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "derivedFromLayoutId": null,
+      "createdAt": "2026-09-14T21:33:15.802Z"
+    },
+    {
+      "id": "tpl-plain-text",
+      "accountLinkId": null,
+      "name": "Plain text",
+      "htmlSource": "{{content}}\n\nSent by {{organization_name}}\n{{postal_address}}\n{{compliance_contact_email}}\nUnsubscribe: {{unsubscribe_url}}",
+      "variablesSchema": null,
+      "isBuiltin": true,
+      "derivedFromLayoutId": null,
+      "createdAt": "2026-09-14T23:29:33.552Z"
+    },
+    {
+      "id": "template_a2957884-6e3f-4723-a730-1263a68cd77c",
+      "accountLinkId": "dev",
+      "name": "Header (custom)",
+      "htmlSource": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Relaybase</title>\n</head>\n<body style=\"margin:0;padding:0;background-color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">\n  <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color:#f1f5f9;\">\n    <tr>\n      <td align=\"center\" style=\"padding:40px 16px;\">\n        <!-- Main card -->\n        <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05),0 2px 4px -2px rgba(0,0,0,0.05);\">\n          \n          <!-- Header -->\n          <tr>\n            <td style=\"padding:28px 40px;border-bottom:1px solid #e2e8f0;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\">\n                <tr>\n                  <td data-studio-header-logo=\"1\" style=\"vertical-align:middle;padding-right:14px;line-height:0;font-size:0;\">\n                    {{vars.header.logo}}\n                  </td>\n                  <td style=\"vertical-align:middle;\">\n                    <div style=\"font-size:18px;font-weight:600;color:#0f172a;letter-spacing:-0.02em;line-height:1.3;\">\n                      {{vars.header.organization_name}}\n                    </div>\n                    <div style=\"font-size:13px;color:#64748b;margin-top:2px;\">\n                      The inbox for your Cloudflare domains\n                    </div>\n                  </td>\n                </tr>\n              </table>\n            </td>\n          </tr>\n\n          <!-- Body content -->\n          <tr>\n            <td style=\"padding:40px 40px 36px;font-size:15px;line-height:1.65;color:#1e293b;\">\n              {{content}}\n            </td>\n          </tr>\n\n          <!-- Footer -->\n          <tr>\n            <td style=\"background-color:#f8fafc;border-top:1px solid #e2e8f0;padding:32px 40px;\">\n              \n              <!-- Brand + tagline -->\n              <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:24px;\">\n                <tr>\n                  <td>\n                    <div style=\"font-size:15px;font-weight:600;color:#0f172a;margin-bottom:4px;\">\n                      Relaybase\n                    </div>\n                    <div style=\"font-size:13px;color:#64748b;line-height:1.5;\">\n                      A keyboard-first Mac inbox for every domain on your Cloudflare account.<br>\n                      Your mail stays in <strong>your</strong> Worker, D1 &amp; R2 — we never host it.\n                    </div>\n                  </td>\n                </tr>\n              </table>\n\n              <!-- Links -->\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:24px;\">\n                <tr>\n                  <td style=\"padding-right:20px;\">\n                    <a href=\"https://relaybase.xyz\" style=\"font-size:13px;color:#4f46e5;text-decoration:none;font-weight:500;\">Website</a>\n                  </td>\n                  <td style=\"padding-right:20px;\">\n                    <a href=\"https://github.com/strum-us/relaybase-worker\" style=\"font-size:13px;color:#4f46e5;text-decoration:none;font-weight:500;\">GitHub</a>\n                  </td>\n                  <td style=\"padding-right:20px;\">\n                    <a href=\"https://relaybase.xyz\" style=\"font-size:13px;color:#4f46e5;text-decoration:none;font-weight:500;\">Docs</a>\n                  </td>\n                  <td>\n                    <a href=\"mailto:{{compliance_contact_email}}\" style=\"font-size:13px;color:#4f46e5;text-decoration:none;font-weight:500;\">Support</a>\n                  </td>\n                </tr>\n              </table>\n\n              <!-- Divider -->\n              <div style=\"height:1px;background-color:#e2e8f0;margin:0 0 20px;\"></div>\n\n              <!-- Legal / address -->\n              <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td style=\"font-size:12px;color:#64748b;line-height:1.6;\">\n                    <p style=\"margin:0 0 8px;\">\n                      Sent by <strong style=\"color:#475569;\">{{organization_name}}</strong>\n                    </p>\n                    <p style=\"margin:0 0 8px;white-space:pre-line;\">\n                      {{postal_address}}\n                    </p>\n                    <p style=\"margin:0 0 14px;\">\n                      {{compliance_contact_email}}\n                    </p>\n                    <p style=\"margin:0;\">\n                      <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n                      from this type of email · \n                      <a href=\"https://relaybase.xyz\" style=\"color:#64748b;text-decoration:underline;\">relaybase.xyz</a>\n                    </p>\n                  </td>\n                </tr>\n              </table>\n\n            </td>\n          </tr>\n        </table>\n\n        <!-- Tiny bottom note -->\n        <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;\">\n          <tr>\n            <td style=\"padding:20px 16px 0;text-align:center;font-size:11px;color:#94a3b8;line-height:1.5;\">\n              Open-source Worker · Runs entirely in your Cloudflare account\n            </td>\n          </tr>\n        </table>\n\n      </td>\n    </tr>\n  </table>\n</body>\n</html>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "header.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "header.logo",
+            "type": "image",
+            "label": "Logo",
+            "description": "Shown beside the organization name in the header row."
+          }
+        ]
+      },
+      "isBuiltin": false,
+      "derivedFromLayoutId": null,
+      "createdAt": "2026-09-15T01:02:18.017Z"
+    },
+    {
+      "id": "tpl-dark-obsidian",
+      "accountLinkId": null,
+      "name": "Dark Obsidian",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#09090b;\">\n  <tr><td align=\"center\" style=\"padding:32px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#121316;border:1px solid #27272a;border-radius:12px;overflow:hidden;\">\n      <tr><td style=\"padding:20px 28px;border-bottom:1px solid #27272a;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-studio-header-logo=\"1\" style=\"vertical-align:middle;padding-right:12px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:600;color:#fafafa;line-height:1.3;\">\n                    {{vars.brand.organization_name}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#a1a1aa;\">\n              {{vars.header.badge_text}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e4e4e7;font-size:15px;line-height:1.65;\">\n        <div style=\"color:#e4e4e7;font-size:15px;line-height:1.65;\">{{content}}</div>\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 28px;text-align:center;font-size:12px;color:#a1a1aa;line-height:1.6;border-top:1px solid #27272a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#a1a1aa;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#a1a1aa;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the header and footer. Uses the Relaybase icon when unset."
+          },
+          {
+            "key": "header.badge_text",
+            "type": "text",
+            "label": "Header badge",
+            "description": "Short label in the top-right (e.g. Release note, Changelog)."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:48:19.695Z"
+    },
+    {
+      "id": "tpl-editorial-serif",
+      "accountLinkId": null,
+      "name": "Editorial Serif",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f8f9fa;\">\n  <tr><td align=\"center\" style=\"padding:36px 16px;\">\n    <table role=\"presentation\" width=\"620\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:620px;width:100%;background:#ffffff;border:1px solid #e5e7eb;\">\n      <tr><td style=\"padding:36px 40px 24px;text-align:center;border-bottom:3px double #0f172a;\">\n        <p style=\"margin:0 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:700;letter-spacing:0.02em;color:#0f172a;line-height:1.2;\">\n          {{vars.publication.title}}\n        </p>\n        <p style=\"margin:0;font-family:Georgia,'Times New Roman',serif;font-size:13px;font-style:italic;color:#64748b;line-height:1.4;\">\n          {{vars.publication.issue_meta}}\n        </p>\n      </td></tr>\n      <tr><td style=\"padding:36px 40px;font-family:Georgia,'Times New Roman',serif;color:#1e293b;font-size:16px;line-height:1.75;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:28px 40px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "publication.title",
+            "type": "text",
+            "label": "Publication title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "publication.issue_meta",
+            "type": "text",
+            "label": "Issue or date line",
+            "description": "Shown under the masthead (e.g. Issue"
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:48:19.695Z"
+    },
+    {
+      "id": "tpl-product-launch",
+      "accountLinkId": null,
+      "name": "Product Launch",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f1f5f9;\">\n  <tr><td align=\"center\" style=\"padding:40px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;\">\n      <tr>\n        <td align=\"center\" style=\"padding:0;line-height:0;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#ec4899 100%);min-height:160px;\">\n          {{vars.hero.image}}\n        </td>\n      </tr>\n      <tr><td style=\"padding:36px 32px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;font-size:15px;line-height:1.65;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:20px 32px 32px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "hero.image",
+            "type": "image",
+            "label": "Hero banner",
+            "description": "Full-width image above the body. Gradient shows when unset."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:48:19.695Z"
+    },
+    {
+      "id": "tpl-warm-sand",
+      "accountLinkId": null,
+      "name": "Warm Sand",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f7f5f0;\">\n  <tr><td align=\"center\" style=\"padding:40px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;border:1px solid #e8e4dc;border-radius:16px;\">\n      <tr><td style=\"padding:28px 32px 8px;border-bottom:1px solid #efeae2;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-studio-header-logo=\"1\" style=\"vertical-align:middle;padding-right:10px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:#1f1e1d;line-height:1.3;\">\n                    {{vars.brand.organization_name}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n          </tr>\n          <tr><td style=\"padding-top:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#78716c;line-height:1.4;\">\n            {{vars.header.greeting_tag}}\n          </td></tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#3b3a36;font-size:15px;line-height:1.7;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:28px 32px;text-align:center;font-size:12px;color:#78716c;line-height:1.6;border-top:1px solid #efeae2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#57534e;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#78716c;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the header and footer. Uses the Relaybase icon when unset."
+          },
+          {
+            "key": "header.greeting_tag",
+            "type": "text",
+            "label": "Greeting line",
+            "description": "Subtitle under the header (e.g. Community letter, Welcome aboard)."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:48:20.390Z"
+    },
+    {
+      "id": "tpl-curated-digest",
+      "accountLinkId": null,
+      "name": "Curated Digest",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#edf2f7;\">\n  <tr><td align=\"center\" style=\"padding:36px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;\">\n      <tr><td style=\"height:4px;line-height:4px;font-size:0;background:#4f46e5;\">&nbsp;</td></tr>\n      <tr><td style=\"padding:20px 28px 16px;border-bottom:1px solid #e2e8f0;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;line-height:1.2;\">\n              {{vars.digest.title}}\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;font-weight:500;color:#64748b;line-height:1.3;white-space:nowrap;\">\n              {{vars.digest.read_time}}\n            </td>\n          </tr>\n          <tr><td colspan=\"2\" style=\"padding-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:#94a3b8;line-height:1.4;\">\n            {{vars.digest.edition}}\n          </td></tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#334155;font-size:15px;line-height:1.65;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 28px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from this type of email.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "digest.title",
+            "type": "text",
+            "label": "Digest title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "digest.read_time",
+            "type": "text",
+            "label": "Read time",
+            "description": "Shown top-right (e.g. 4 min read)."
+          },
+          {
+            "key": "digest.edition",
+            "type": "text",
+            "label": "Edition line",
+            "description": "Subtitle under the title (e.g. Weekly edition"
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:48:25.391Z"
+    },
+    {
+      "id": "tpl-receipt-invoice",
+      "accountLinkId": null,
+      "name": "Receipt / Invoice",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f4f5;\">\n  <tr><td align=\"center\" style=\"padding:36px 16px;\">\n    <table role=\"presentation\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:580px;width:100%;background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden;\">\n      <tr><td style=\"padding:28px 32px 20px;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-studio-header-logo=\"1\" style=\"vertical-align:middle;padding-right:10px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:700;color:#18181b;line-height:1.2;\">\n                    {{vars.receipt.title}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;\">\n              <span style=\"display:inline-block;padding:4px 10px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;font-weight:600;color:#52525b;letter-spacing:0.02em;\">\n                {{vars.receipt.number}}\n              </span>\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:0 32px;\"><div style=\"border-top:2px dashed #e4e4e7;height:1px;line-height:1px;font-size:0;\">&nbsp;</div></td></tr>\n      <tr><td style=\"padding:28px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#27272a;font-size:14px;line-height:1.6;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 32px;text-align:center;font-size:12px;color:#71717a;line-height:1.6;border-top:1px solid #f4f4f5;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:12px;font-weight:600;color:#52525b;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 10px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#71717a;text-decoration:underline;\">Unsubscribe</a>\n            from billing and account notices.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "receipt.title",
+            "type": "text",
+            "label": "Receipt title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Main header text (e.g. Payment Receipt, Order Summary)."
+          },
+          {
+            "key": "receipt.number",
+            "type": "text",
+            "label": "Reference / Invoice",
+            "description": "Reference ID badge shown top-right (e.g. INV-2026-0901)."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in header and footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:10.198Z"
+    },
+    {
+      "id": "tpl-event-ticket",
+      "accountLinkId": null,
+      "name": "Event Ticket",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f1f5f9;\">\n  <tr><td align=\"center\" style=\"padding:40px 16px;\">\n    <table role=\"presentation\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:580px;width:100%;background:#ffffff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden;\">\n      <tr>\n        <td style=\"background:#0f172a;padding:28px 28px 24px;\">\n          <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n            <tr>\n              <td style=\"vertical-align:middle;width:80px;padding-right:16px;\">\n                <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.22);width:76px;text-align:center;\">\n                  <tr>\n                    <td style=\"padding:10px 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#ffffff;line-height:1.2;\">\n                      {{vars.event.date_badge}}\n                    </td>\n                  </tr>\n                </table>\n              </td>\n              <td style=\"vertical-align:middle;\">\n                <p style=\"margin:0 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:18px;font-weight:700;color:#ffffff;line-height:1.3;\">\n                  {{vars.event.title}}\n                </p>\n                <p style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#94a3b8;line-height:1.4;\">\n                  {{vars.event.time_location}}\n                </p>\n              </td>\n            </tr>\n          </table>\n        </td>\n      </tr>\n      <tr>\n        <td style=\"padding:0;background:#0f172a;\">\n          <div style=\"border-top:2px dashed rgba(255,255,255,0.2);height:1px;line-height:1px;font-size:0;\">&nbsp;</div>\n        </td>\n      </tr>\n      <tr><td style=\"padding:32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1e293b;font-size:15px;line-height:1.65;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 28px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 12px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from event updates and invitations.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "event.title",
+            "type": "text",
+            "label": "Event title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Main headline of the event or webinar."
+          },
+          {
+            "key": "event.date_badge",
+            "type": "text",
+            "label": "Date badge",
+            "description": "Short date stamp in ticket header (e.g. SEP 24, NOV 02)."
+          },
+          {
+            "key": "event.time_location",
+            "type": "text",
+            "label": "Time & location",
+            "description": "Subtitle under event title (e.g. Thu 10:00 AM UTC · Online / Zoom)."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:15.089Z"
+    },
+    {
+      "id": "tpl-founder-letter",
+      "accountLinkId": null,
+      "name": "Founder Letter",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#fafaf9;\">\n  <tr><td align=\"center\" style=\"padding:40px 16px;\">\n    <table role=\"presentation\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:580px;width:100%;background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;\">\n      <tr><td style=\"padding:28px 32px 20px;border-bottom:1px solid #f5f5f4;\">\n        <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;padding-right:12px;line-height:0;font-size:0;\">\n              {{vars.author.avatar}}\n            </td>\n            <td style=\"vertical-align:middle;\">\n              <p style=\"margin:0 0 2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;font-weight:600;color:#1c1917;line-height:1.2;\">\n                {{vars.author.name}}\n              </p>\n              <p style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:#78716c;line-height:1.3;\">\n                {{vars.author.title}}\n              </p>\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#292524;font-size:15px;line-height:1.75;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 32px;text-align:center;font-size:12px;color:#78716c;line-height:1.6;border-top:1px solid #f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:12px;font-weight:600;color:#57534e;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 10px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#78716c;text-decoration:underline;\">Unsubscribe</a>\n            from personal founder notes.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "author.name",
+            "type": "text",
+            "label": "Author name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Name of the sender (e.g. Alex River)."
+          },
+          {
+            "key": "author.title",
+            "type": "text",
+            "label": "Author title / role",
+            "description": "Subtitle under author name (e.g. Founder & CEO)."
+          },
+          {
+            "key": "author.avatar",
+            "type": "image",
+            "label": "Author photo / avatar",
+            "description": "Small 44px circular avatar next to the name."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:25.089Z"
+    },
+    {
+      "id": "tpl-spotlight-minimal",
+      "accountLinkId": null,
+      "name": "Spotlight Minimal",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f5f4;\">\n  <tr><td align=\"center\" style=\"padding:36px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;border:2px solid #18181b;\">\n      <tr><td style=\"padding:16px 24px;border-bottom:2px solid #18181b;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-studio-header-logo=\"1\" style=\"vertical-align:middle;padding-right:10px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:800;letter-spacing:-0.03em;text-transform:uppercase;color:#18181b;line-height:1.2;\">\n                    {{vars.brand.organization_name}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;font-size:12px;font-weight:700;letter-spacing:0.04em;color:#18181b;white-space:nowrap;\">\n              {{vars.spotlight.issue}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:8px 24px;background:#f4f4f5;border-bottom:1px solid #18181b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#52525b;line-height:1.3;\">\n        {{vars.spotlight.tagline}}\n      </td></tr>\n      <tr><td style=\"padding:32px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#18181b;font-size:15px;line-height:1.65;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px;text-align:center;font-size:11px;color:#71717a;line-height:1.6;border-top:2px solid #18181b;background:#fafafa;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:12px;font-weight:700;color:#18181b;line-height:1.3;text-align:left;font-family:-apple-system,BlinkMacSystemFont,sans-serif;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 6px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 8px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#18181b;font-weight:600;text-decoration:underline;\">Unsubscribe</a>\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "spotlight.issue",
+            "type": "text",
+            "label": "Issue badge",
+            "description": "Top-right issue indicator (e.g. NO. 08 / VOL. 3)."
+          },
+          {
+            "key": "spotlight.tagline",
+            "type": "text",
+            "label": "Top tagline",
+            "description": "Sub-header marquee tagline (e.g. CURATED SIGNALS & DISPATCHES)."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the header and footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:35.087Z"
+    },
+    {
+      "id": "tpl-publication-post",
+      "accountLinkId": null,
+      "name": "Publication Post",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#ffffff;\">\n  <tr><td align=\"center\" style=\"padding:24px 16px 40px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;\">\n      <tr><td style=\"padding:0 0 20px;text-align:right;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;color:#71717a;\">\n        <span>{{vars.post.date}}</span>\n        <span style=\"padding:0 6px;color:#d4d4d8;\">|</span>\n        <a href=\"{{unsubscribe_url}}\" style=\"color:#71717a;text-decoration:underline;\">Read online</a>\n      </td></tr>\n      <tr><td style=\"padding:0 0 12px;\">\n        <h1 style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;font-size:28px;font-weight:750;letter-spacing:-0.03em;color:#09090b;line-height:1.25;\">\n          {{vars.post.title}}\n        </h1>\n      </td></tr>\n      <tr><td style=\"padding:0 0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;color:#52525b;\">\n        {{vars.post.subtitle}}\n      </td></tr>\n      <tr><td style=\"padding:0 0 16px;\">\n        <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;padding-right:12px;line-height:0;font-size:0;\">\n              {{vars.author.avatar}}\n            </td>\n            <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;font-weight:600;color:#18181b;line-height:1.3;\">\n              {{vars.author.name}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:12px 0;border-top:1px solid #e4e4e7;border-bottom:1px solid #e4e4e7;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;font-size:16px;line-height:1;color:#a1a1aa;\">\n              <span style=\"display:inline-block;padding:6px 10px;border:1px solid #e4e4e7;border-radius:20px;font-size:12px;color:#71717a;font-family:-apple-system,sans-serif;\">♡ Like</span>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:#71717a;\">\n              <span style=\"display:inline-block;padding:6px 10px;border:1px solid #e4e4e7;border-radius:20px;margin-left:4px;\">Share</span>\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:28px 0 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#18181b;font-size:16px;line-height:1.7;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 0 0;text-align:center;font-size:12px;color:#71717a;line-height:1.6;border-top:1px solid #e4e4e7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#3f3f46;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 10px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#71717a;text-decoration:underline;\">Unsubscribe</a>\n            from this publication.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "post.title",
+            "type": "text",
+            "label": "Post title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Large headline at the top of the post."
+          },
+          {
+            "key": "post.subtitle",
+            "type": "text",
+            "label": "Subtitle / Dek",
+            "description": "Descriptive subtitle under the headline."
+          },
+          {
+            "key": "post.date",
+            "type": "text",
+            "label": "Post date",
+            "description": "Date stamp shown in the top right (e.g. September 07, 2026)."
+          },
+          {
+            "key": "author.name",
+            "type": "text",
+            "label": "Author name(s)",
+            "description": "Name(s) of the post author(s)."
+          },
+          {
+            "key": "author.avatar",
+            "type": "image",
+            "label": "Author avatar",
+            "description": "Circular photo next to the author name."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T07:35:34.188Z"
+    },
+    {
+      "id": "tpl-keynote-banner",
+      "accountLinkId": null,
+      "name": "Keynote Banner",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#000000;\">\n  <tr><td align=\"center\" style=\"padding:32px 16px 48px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#000000;\">\n      <tr>\n        <td align=\"center\" style=\"padding:0 0 32px;line-height:0;\">\n          <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 30%,#6366f1 60%,#a855f7 85%,#ec4899 100%);\">\n            <tr>\n              <td align=\"center\" style=\"padding:0;min-height:180px;\">\n                {{vars.hero.image}}\n              </td>\n            </tr>\n          </table>\n        </td>\n      </tr>\n      <tr><td style=\"padding:0 12px 24px;text-align:center;\">\n        <h1 style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.03em;color:#ffffff;line-height:1.3;\">\n          {{vars.event.headline}}\n        </h1>\n      </td></tr>\n      <tr><td style=\"padding:0 12px 36px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#e4e4e7;font-size:15px;line-height:1.7;\">\n        <div style=\"color:#e4e4e7;font-size:15px;line-height:1.7;\">{{content}}</div>\n      </td></tr>\n      <tr>\n        <td style=\"padding:28px 12px 0;text-align:center;font-size:12px;color:#71717a;line-height:1.6;border-top:1px solid #27272a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 12px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#a1a1aa;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 10px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 14px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#a1a1aa;text-decoration:underline;\">Unsubscribe</a>\n            from keynote and event announcements.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "hero.image",
+            "type": "image",
+            "label": "Hero banner image",
+            "description": "Large rounded 16:9 banner image. Glowing gradient shows when unset."
+          },
+          {
+            "key": "event.headline",
+            "type": "text",
+            "label": "Keynote headline",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Prominent bold title centered below the hero banner."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T07:35:44.200Z"
+    },
+    {
+      "id": "tpl-event-invite",
+      "accountLinkId": null,
+      "name": "Event Invite",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#ffffff;\">\n  <tr><td align=\"center\" style=\"padding:32px 16px 44px;\">\n    <table role=\"presentation\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:580px;width:100%;background:#ffffff;\">\n      <tr><td style=\"padding:0 0 14px;\">\n        <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;padding-right:10px;line-height:0;font-size:0;\">\n              {{vars.host.avatar}}\n            </td>\n            <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;font-weight:500;color:#52525b;line-height:1.2;\">\n              {{vars.host.name}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:0 0 6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;color:#71717a;line-height:1.3;\">\n        {{vars.invite.kicker}}\n      </td></tr>\n      <tr><td style=\"padding:0 0 18px;\">\n        <h1 style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.02em;text-transform:uppercase;color:#09090b;line-height:1.3;\">\n          {{vars.invite.title}}\n        </h1>\n      </td></tr>\n      <tr><td style=\"padding:0;border-top:1px solid #e4e4e7;\"></td></tr>\n      <tr><td style=\"padding:18px 0 14px;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:top;width:48px;padding-right:14px;\">\n              <table role=\"presentation\" width=\"48\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:48px;border:1px solid #e4e4e7;border-radius:8px;overflow:hidden;text-align:center;background:#ffffff;\">\n                <tr><td style=\"padding:3px 2px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#71717a;border-bottom:1px solid #e4e4e7;line-height:1;\">\n                  {{vars.invite.month}}\n                </td></tr>\n                <tr><td style=\"padding:6px 2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:700;color:#18181b;line-height:1;\">\n                  {{vars.invite.day}}\n                </td></tr>\n              </table>\n            </td>\n            <td style=\"vertical-align:middle;\">\n              <p style=\"margin:0 0 3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;font-weight:600;color:#18181b;line-height:1.25;\">\n                {{vars.invite.date_title}}\n              </p>\n              <p style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#71717a;line-height:1.35;\">\n                {{vars.invite.time_details}}\n              </p>\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:0 0 18px;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:top;width:48px;padding-right:14px;\">\n              <table role=\"presentation\" width=\"48\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:48px;height:44px;border:1px solid #e4e4e7;border-radius:8px;text-align:center;background:#ffffff;\">\n                <tr><td style=\"padding:10px 0;font-size:16px;line-height:1;color:#71717a;\">\n                  📍\n                </td></tr>\n              </table>\n            </td>\n            <td style=\"vertical-align:middle;\">\n              <p style=\"margin:0 0 3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;font-weight:600;color:#18181b;line-height:1.25;\">\n                {{vars.invite.location_name}}\n              </p>\n              <p style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#71717a;line-height:1.35;\">\n                {{vars.invite.location_address}}\n              </p>\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:0;border-top:1px solid #e4e4e7;\"></td></tr>\n      <tr><td style=\"padding:24px 0 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#18181b;font-size:15px;line-height:1.7;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 0 0;text-align:center;font-size:12px;color:#71717a;line-height:1.6;border-top:1px solid #e4e4e7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-studio-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#3f3f46;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 10px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#71717a;text-decoration:underline;\">Unsubscribe</a>\n            from event invitations.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "invite.title",
+            "type": "text",
+            "label": "Event title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Main headline of the event in uppercase."
+          },
+          {
+            "key": "invite.kicker",
+            "type": "text",
+            "label": "Top kicker line",
+            "description": "Subtitle above the event title (e.g. You're invited to)."
+          },
+          {
+            "key": "host.name",
+            "type": "text",
+            "label": "Host name",
+            "description": "Name of the event host."
+          },
+          {
+            "key": "host.avatar",
+            "type": "image",
+            "label": "Host avatar",
+            "description": "Circular photo next to the host name."
+          },
+          {
+            "key": "invite.month",
+            "type": "text",
+            "label": "Date badge month",
+            "description": "Short month abbreviation (e.g. AUG, SEP, OCT)."
+          },
+          {
+            "key": "invite.day",
+            "type": "text",
+            "label": "Date badge day",
+            "description": "Day number (e.g. 24, 05, 18)."
+          },
+          {
+            "key": "invite.date_title",
+            "type": "text",
+            "label": "Date headline",
+            "description": "Full date text (e.g. Monday, August 24)."
+          },
+          {
+            "key": "invite.time_details",
+            "type": "text",
+            "label": "Time details",
+            "description": "Time window and timezone (e.g. 9:00 AM - 9:30 PM PDT)."
+          },
+          {
+            "key": "invite.location_name",
+            "type": "text",
+            "label": "Venue name",
+            "description": "Event venue or host location (e.g. Hwy17 Studios ↗)."
+          },
+          {
+            "key": "invite.location_address",
+            "type": "text",
+            "label": "Venue address",
+            "description": "City, state or full street address (e.g. Santa Cruz, CA)."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T07:37:05.334Z"
+    }
+  ],
+  "templates": [
+    {
+      "id": "msgtpl_preset_product_update",
+      "accountLinkId": "dev",
+      "name": "Product update (starter)",
+      "subject": "What's new in {{vars.brand.organization_name}}",
+      "previewText": "A short release note your subscribers can skim in under a minute.",
+      "bodyMarkdown": "Hello {{contact.name}},\n\nWe shipped a few improvements this week:\n\n* **Feature one** — one sentence on the outcome.\n\n* **Feature two** — who it helps and how to turn it on.\n\nThanks for reading,\\\n The team\n",
+      "layoutId": "tpl-dark-obsidian",
+      "templateVariables": {
+        "header.badge_text": "RELEASE NOTE"
+      },
+      "category": "newsletter",
+      "isPreset": true,
+      "createdAt": "2026-09-15T16:51:06.849Z",
+      "updatedAt": "2026-09-16T01:38:32.236Z"
+    },
+    {
+      "id": "msgtpl_preset_verify_email",
+      "accountLinkId": "dev",
+      "name": "Verify email (transactional)",
+      "subject": "Verify your email",
+      "previewText": "Confirm this address to finish creating your account",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nConfirm this address to finish creating your account.\n\nIf you did not sign up, ignore this message.\n\n— Relaybase\n",
+      "layoutId": "tpl-minimal",
+      "templateVariables": {},
+      "category": "transactional",
+      "isPreset": true,
+      "createdAt": "2026-09-15T16:51:06.849Z",
+      "updatedAt": "2026-09-16T01:36:44.453Z"
+    },
+    {
+      "id": "msgtpl_broadcast_d63712e3-2630-42fa-8706-04255e013a90",
+      "accountLinkId": "dev",
+      "name": "September Product Update",
+      "subject": "Introducing Relaybase Scale v2.0",
+      "previewText": "Broadcast stats, audience groups, and a calmer send pipeline",
+      "bodyMarkdown": "Hello {{contact.name}},\n\nWe just shipped **Relaybase Scale v2.0** — the first version built for teams who send product email from their own domain, not a shared marketing subdomain.\n\n### What is new\n\n* **Broadcast stats** — delivery, opens, clicks, and unsubscribes roll up per send without leaving the dashboard.\n\n* **Audience groups** — link a list once; recipients are resolved at send time so late subscribers still receive scheduled mail.\n\n* **Compliance footers** — CAN-SPAM blocks pull from a reusable sender identity instead of one-off copy/paste.\n\n### Why it matters\n\nIf you have been stitching together spreadsheets, BCC tests, and manual unsubscribe replies, this release is meant to replace that loop with something you can audit.\n\nThanks for reading,\\\n The Relaybase team\n",
+      "layoutId": "tpl-product-launch",
+      "templateVariables": {
+        "hero.image": "/studio/sample-banners/keynote-hero.png"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-14T21:57:32.495Z",
+      "updatedAt": "2026-09-15T17:20:19.991Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sent_july_recap",
+      "accountLinkId": "dev",
+      "name": "July Recap",
+      "subject": "What shipped in July",
+      "previewText": "Deliverability tooling, faster inbox sync, and Scale groundwork",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nJuly was mostly infrastructure — the kind of work that does not show up in a screenshot but keeps mail landing in the inbox.\n\n**Highlights**\n\n1. **Domain onboarding** — clearer DNS checks and routing status in Console.\n\n1. **Send logs** — dual-write to ops logs so failed API sends surface in the dashboard.\n\n1. **Studio prototype** — audience + broadcast models landed behind the feature flag you are on.\n\nWe also fixed a handful of edge cases around partial bounces and local inbox delivery for `@relaybase.email` test addresses.\n\n— Isaac & the Relaybase crew\n",
+      "layoutId": "tpl-editorial-serif",
+      "templateVariables": {
+        "publication.title": "Relaybase Chronicle",
+        "publication.issue_meta": "July recap · Infrastructure edition"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-07-20T10:00:00.000Z",
+      "updatedAt": "2026-09-15T17:20:43.248Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sent_aug_launch",
+      "accountLinkId": "dev",
+      "name": "August Launch",
+      "subject": "Relaybase 2.0 is live",
+      "previewText": "Your domain, your keys, your broadcast pipeline",
+      "bodyMarkdown": "Hello {{contact.name}},\n\n**Relaybase 2.0** is live for early access accounts. The headline change: everything runs on **your** Cloudflare Worker and verified domain — we do not sit in the SMTP path as a shared sender.\n\n### Three things to try this week\n\n* Send a **test broadcast** to your own `@relaybase.email` inbox.\n\n* Rotate to a **domain-scoped API key** labeled for Scale sends.\n\n* Open **Sent statistics** after a send and confirm rollups match the recipient list.\n\n[Launch notes](https://relaybase.com/blog/v2) · [Watch the 8-minute demo](https://relaybase.com/demo)\n\nIf you hit a blocker, reply to this thread — we are actively pairing with design partners.\n\nCheers,\\\n Relaybase\n",
+      "layoutId": "tpl-keynote-banner",
+      "templateVariables": {
+        "hero.image": "/studio/sample-banners/keynote-hero.png",
+        "event.headline": "Relaybase 2.0 is Live: Built for Global Scale"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-09-15T17:19:33.562Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sent_aug_security",
+      "accountLinkId": "dev",
+      "name": "Mid-August Security Note",
+      "subject": "Rotate your domain-scoped API keys",
+      "previewText": "A short security note for accounts using Scale send keys",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nWe are asking all early Scale testers to **rotate domain-scoped API keys** this week.\n\n**Why now**\n\n* Scale stores a send key to call `POST /v1/send` on your Worker.\n\n* Keys issued before August may have been copied into local dev stores or shared in screenshots.\n\n**What to do**\n\n1. Console → **API Keys** → revoke the old `Studio Newsletter` key if present.\n\n1. Send a test mail from Scale — the app will issue a fresh key automatically.\n\n1. Confirm the `from` address matches the key domain (`@relaybase.xyz`).\n\nThis takes about two minutes and prevents stale credentials from lingering in JSON fixtures.\n\nStay safe,\\\n Relaybase Security\n",
+      "layoutId": "tpl-dark-obsidian",
+      "templateVariables": {
+        "header.badge_text": "SECURITY"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-08-18T11:00:00.000Z",
+      "updatedAt": "2026-09-15T17:06:48.261Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sent_sep_welcome",
+      "accountLinkId": "dev",
+      "name": "September Welcome",
+      "subject": "Welcome to the product list",
+      "previewText": "What to expect from Product Updates and how to opt out",
+      "bodyMarkdown": "Welcome, {{contact.name}} —\n\nYou are on **Product Updates**, our low-frequency list for release notes, beta invites, and occasional roadmap context. We typically send **once or twice a month**, never daily blasts.\n\n**What you will get**\n\n- Shipped features with enough detail to decide whether to turn them on.\n- Links to docs — not vague marketing fluff.\n- Clear unsubscribe on every message (one click, no login).\n\n**What you will not get**\n\n- Re-forwarded newsletters from other tools.\n- Purchased lists or “growth hack” sequences.\n\nWhile you are here, skim the [getting started guide](https://relaybase.com/docs/start) if you have not connected a domain yet.\n\nGlad you are along for the ride,\nProduct team @ Relaybase\n",
+      "layoutId": "tpl-warm-sand",
+      "templateVariables": {
+        "header.greeting_tag": "Welcome to Product Updates"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-08-28T12:00:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sent_sep_digest",
+      "accountLinkId": "dev",
+      "name": "Weekly Digest #36",
+      "subject": "Digest #36 — queue drain and rollups",
+      "previewText": "Scheduler batches, stat reconciliation, and a Scale send preview",
+      "bodyMarkdown": "Hello {{contact.name}},\n\n**Weekly Digest #36** — a concise read for engineers following the Scale broadcast workstream.\n\n### Shipped\n\n* **Queue drain** — large audiences send in batches instead of blocking the HTTP request.\n\n* **Stats rollup** — recipient ledger reconciles opens/clicks from tracking pixels.\n\n* **Send credentials sync** — desktop app provisions a Worker key before dispatch.\n\n### In progress\n\n* List-Unsubscribe headers through `/v1/send`\n\n* Webhook path for async bounces\n\n### Worth your time\n\n \n\nReply if you want early access to the bounce webhook — we are testing with three design partners.\n\n— Engineering updates\n",
+      "layoutId": "tpl-curated-digest",
+      "templateVariables": {
+        "digest.title": "Engineering Digest",
+        "digest.read_time": "4 min read",
+        "digest.edition": "Weekly edition #36"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-07T09:00:00.000Z",
+      "updatedAt": "2026-09-15T17:02:01.487Z"
+    },
+    {
+      "id": "msgtpl_broadcast_failed_smtp",
+      "accountLinkId": "dev",
+      "name": "Broken SMTP test",
+      "subject": "[Internal] Deliverability probe — do not forward",
+      "previewText": "Synthetic send used to validate SMTP error handling",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nThis message is part of an **internal deliverability probe**. It intentionally exercises failure paths (invalid routes, key mismatch, or synthetic SMTP errors) so Scale can mark recipients as `failed` without affecting production stats.\n\n**You can ignore this broadcast** unless you are actively debugging send pipelines.\n\nIf you received this in error, use the unsubscribe link — we will remove probe addresses from the Engineering list.\n\n— Relaybase QA\n",
+      "layoutId": "tpl-minimal",
+      "templateVariables": {},
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-10T08:30:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sending_demo_001",
+      "accountLinkId": "dev",
+      "name": "Weekly Engineering Digest",
+      "subject": "This week in platform engineering",
+      "previewText": "Worker send API, Scale dispatch, and inbox test accounts",
+      "bodyMarkdown": "Hey {{contact.name}},\n\nWelcome to **Engineering Weekly** — a short note on what the platform team shipped and what is landing next.\n\n**This week**\n\n* Wired Scale `sendMail` to your Worker `POST /v1/send` with domain-scoped keys.\n\n* Registered `@relaybase.email` mailboxes on the shared dev Worker for realistic inbox tests.\n\n* Reset demo `store.json` fixtures to draft so you can re-run sends without seed noise.\n\n**Next week**\n\n* Public `STUDIO_PUBLIC_BASE_URL` for tracking pixels outside localhost.\n\n* Bounce webhook ingestion from Worker events.\n\nQuestions? Drop a note in `#eng-relaybase` or reply here.\n\n— Platform engineering\n",
+      "layoutId": "tpl-publication-post",
+      "templateVariables": {
+        "post.title": "Weekly Engineering Digest",
+        "post.subtitle": "Worker send API, Scale dispatch, and inbox test accounts",
+        "post.date": "September 16, 2026",
+        "author.name": "Isaac Lee",
+        "author.avatar": "https://avatars.githubusercontent.com/u/4336264?v=4"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-15T10:00:00.000Z",
+      "updatedAt": "2026-09-16T07:40:10.830Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sending_product_wave",
+      "accountLinkId": "dev",
+      "name": "Product Launch Wave",
+      "subject": "Wave 2 — onboarding checklist",
+      "previewText": "Five steps before your first real broadcast",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nYou are in **Wave 2** of the Scale beta. Before you press **Send Now**, walk through this checklist:\n\n1. **Verify domain** — Console shows `ready` for `relaybase.xyz`.\n2. **Create a sender** — pick `hello@` or `jon@` on that domain.\n3. **Compliance sender** — organization name + postal address filled in.\n4. **Audience** — at least one active contact (your test inbox counts).\n5. **Test send** — Publish tab → send to yourself; confirm HTML + footer.\n\n[Open the onboarding checklist](https://relaybase.com/start)\n\nOnce green, duplicate this broadcast and send to the full Product Updates group.\n\nThanks for helping us harden the pipeline,\nCustomer success\n",
+      "layoutId": "tpl-product-launch",
+      "templateVariables": {},
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-15T11:00:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "msgtpl_broadcast_sending_partner",
+      "accountLinkId": "dev",
+      "name": "Partner note",
+      "subject": "A note for design partners",
+      "previewText": "How we want feedback during the Scale send beta",
+      "bodyMarkdown": "Hello {{contact.name}},\n\nThank you for being a **design partner** on Relaybase Scale. This note sets expectations for the next two weeks of testing.\n\n**We need from you**\n\n* One **test send** and one **small real send** (≤10 recipients) with notes on anything confusing.\n\n* Screenshots or Loom if the UI blocks you — especi{{contact.name}}ally Publish and Stats tabs.\n\n* Honest feedback on copy, footers, and unsubscribe flow.\n\n**We owe you**\n\n* Same-day replies on blocking bugs during business hours (UTC+7).\n\n* A written changelog when we flip List-Unsubscribe headers on the Worker.\n\nNo NDA beyond what you already agreed — feel free to talk about the experience, not other customers’ data.\n\nGratefully,\\\n Isaac\n",
+      "layoutId": "tpl-founder-letter",
+      "templateVariables": {
+        "author.name": "Isaac",
+        "author.title": "Founder & CEO"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-15T12:20:00.000Z",
+      "updatedAt": "2026-09-16T07:05:26.781Z"
+    },
+    {
+      "id": "msgtpl_broadcast_scheduled_ama",
+      "accountLinkId": "dev",
+      "name": "Thursday AMA invite",
+      "subject": "Join Thursday's AMA on Scale broadcasts",
+      "previewText": "Live Q&A — scheduling, stats, and send credentials",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nYou are invited to a **live AMA** about Scale broadcasts this **Thursday, 4:00 PM UTC+7**.\n\n**Agenda**\n\n- How scheduled sends resolve audience at dispatch time\n- Reading delivery vs. open stats (and what is still stubbed)\n- Q&A — bring your strangest edge cases\n\n**Join**\n\n- Video link will be posted in Console → Notifications the morning of the event.\n- Cannot make it? Reply with questions and we will answer async.\n\n[Add to calendar](https://relaybase.com/events/studio-ama) (placeholder link)\n\nSee you Thursday,\nRelaybase\n",
+      "layoutId": "tpl-event-invite",
+      "templateVariables": {
+        "invite.title": "THE DEAL LOUNGE - CHAMPIONSHIP EDITION",
+        "invite.kicker": "You're invited to",
+        "host.name": "Dwayne Campbell",
+        "invite.month": "AUG",
+        "invite.day": "24",
+        "invite.date_title": "Monday, August 24",
+        "invite.time_details": "9:00 AM - Aug 27, 9:30 PM PDT",
+        "invite.location_name": "Hwy17 Studios ↗",
+        "invite.location_address": "Santa Cruz, CA"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-14T18:00:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "msgtpl_broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
+      "accountLinkId": "dev",
+      "name": "News letter",
+      "subject": "Engineering Weekly — Scale send preview",
+      "previewText": "Template variables, merge tags, and a real Worker handoff",
+      "bodyMarkdown": "Hello {{contact.name}},\n\nThis is the **Engineering Weekly** template we use for internal send tests. It exercises merge tags, markdown links, and the built-in compliance footer.\n\n### In this edition\n\n- **Merge tags** — `{{contact.name}}` and `{{contact.email}}` resolve per recipient at send time.\n- **Templates** — header logo and organization name come from template variables + compliance sender.\n- **Tracking** — open pixel and wrapped links point at the Scale public base URL (set `STUDIO_PUBLIC_BASE_URL` for non-local tests).\n\nTry clicking through to [Relaybase](https://relaybase.xyz) and confirm the redirect lands correctly.\n\nIf something looks off in Gmail or Apple Mail, forward the raw message — we are still tuning image guards and footer HTML.\n\nThanks,\nEngineering Weekly editors\n",
+      "layoutId": "tpl-curated-digest",
+      "templateVariables": {
+        "digest.title": "Engineering Weekly",
+        "digest.read_time": "5 min read",
+        "digest.edition": "Internal send test"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-14T21:58:55.873Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "msgtpl_broadcast_5ac032ef-d7d8-40c6-8486-665fa4f1ff88",
+      "accountLinkId": "dev",
+      "name": "September Product Update (copy)",
+      "subject": "Product Update — broadcast stats are here",
+      "previewText": "Duplicate draft for A/B copy tests on Product Updates",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nThis is a **duplicate draft** of our September product note, kept on the **Product Updates** audience so you can A/B subject lines or footer copy without touching the Engineering list.\n\n### September highlights\n\n- **Sent overview** — account-level rollups across broadcasts.\n- **In-progress view** — see scheduled and sending jobs in one place.\n- **Recipient ledger** — per-contact delivery status after Worker accept.\n\nWe are keeping this copy slightly shorter than the Engineering version on purpose. Swap the hero paragraph, send a test, and compare open rates.\n\n[Compare with the primary draft](https://relaybase.com/blog/v2)\n\n— Product marketing\n",
+      "layoutId": "tpl-spotlight-minimal",
+      "templateVariables": {
+        "header.organization_name": "",
+        "header.logo": "https://relaybase.xyz/icon.png",
+        "spotlight.issue": "NO. 09",
+        "spotlight.tagline": "PRODUCT UPDATE · A/B COPY"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-14T23:06:35.602Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "msgtpl_automation_verify_email",
+      "accountLinkId": "dev",
+      "name": "Verify email",
+      "subject": "Verify your email",
+      "previewText": "Confirm this address to finish creating your account",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nConfirm this address so we can finish creating your Relaybase account.\n\n[Verify email]({{trigger.verifyUrl}})\n\nThis link expires in **30 minutes**. If the button does not work, paste this URL into your browser:\n\n{{trigger.verifyUrl}}\n\nIf you did not create an account, you can ignore this message — nothing will be activated on {{contact.email}}.\n\n— Relaybase",
+      "layoutId": "tpl-minimal",
+      "templateVariables": {},
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-01T10:00:00.000Z",
+      "updatedAt": "2026-09-01T10:00:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_welcome",
+      "accountLinkId": "dev",
+      "name": "Welcome after signup",
+      "subject": "Welcome to Relaybase",
+      "previewText": "Your account is live — three things to do before you invite the team",
+      "bodyMarkdown": "Welcome, {{contact.name}} —\n\nYour Relaybase account is live. Mail you send from here uses **your** verified domain and Worker — not a shared marketing subdomain.\n\n### Do these three things first\n\n1. Connect DNS for your sending domain if you have not already.\n2. Create an audience group and import people who already opted in.\n3. Send a test broadcast to your own inbox before you invite the team.\n\n[Open the getting started guide](https://relaybase.com/docs/start) · [Watch the 8-minute demo](https://relaybase.com/demo)\n\nYou will also get a separate verification email if this address is not confirmed yet. That message is only for the click — this one is the map.\n\nIf you want a walkthrough, reply to this thread. We still onboard early accounts by hand.\n\nGlad you are here,  \nThe Relaybase team",
+      "layoutId": "tpl-warm-sand",
+      "templateVariables": {
+        "header.greeting_tag": "Welcome aboard"
+      },
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-01T10:05:00.000Z",
+      "updatedAt": "2026-09-01T10:05:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_password_reset",
+      "accountLinkId": "dev",
+      "name": "Password reset",
+      "subject": "Reset your Relaybase password",
+      "previewText": "This link expires soon and can be used once",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nWe received a request to reset the password for **{{contact.email}}**.\n\n[Reset your password]({{trigger.resetUrl}})\n\nThis link expires in **{{trigger.expiresInMinutes}} minutes** and can be used once. If the button does not work, paste this URL:\n\n{{trigger.resetUrl}}\n\nIf you did not ask for a reset, you can ignore this message — your current password stays the same. Someone may have typed your address by mistake.\n\nWe will never ask you to forward this email or paste the link into a chat, ticket, or “support” form.\n\n— Relaybase Security",
+      "layoutId": "tpl-plain-text",
+      "templateVariables": {},
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-02T09:00:00.000Z",
+      "updatedAt": "2026-09-02T09:00:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_magic_link",
+      "accountLinkId": "dev",
+      "name": "Magic link sign-in",
+      "subject": "Your Relaybase sign-in link",
+      "previewText": "One-time link — expires in a few minutes",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nUse this one-time link to sign in to Relaybase:\n\n[Continue to Relaybase]({{trigger.loginUrl}})\n\nThe link expires in **{{trigger.expiresInMinutes}} minutes**. After that you will need to request a new one from the sign-in screen.\n\n**Request details**\n\n- Account: {{contact.email}}\n- Device: {{trigger.deviceSummary}}\n- When: {{trigger.requestedAt}}\n\nIf you did not try to sign in, you can ignore this email. Do not forward the link — it signs in whoever opens it.\n\n— Relaybase",
+      "layoutId": "tpl-minimal",
+      "templateVariables": {},
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-02T09:10:00.000Z",
+      "updatedAt": "2026-09-02T09:10:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_contact_us",
+      "accountLinkId": "dev",
+      "name": "Contact us auto-reply",
+      "subject": "We received your message",
+      "previewText": "A person will follow up within one business day",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nThanks for writing in. We received your note and logged it for the team.\n\n> {{trigger.message}}\n\nSomeone will follow up at **{{contact.email}}** within one business day. If this is about a live send (bounces, a stuck broadcast, or a domain that will not verify), reply to this email with the domain and we will jump the queue.\n\nIn the meantime:\n\n- [DNS and domain setup](https://relaybase.com/docs/domains)\n- [Broadcast troubleshooting](https://relaybase.com/docs/broadcasts)\n\n— Strum Corp / Relaybase",
+      "layoutId": "tpl-card",
+      "templateVariables": {},
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-05T12:00:00.000Z",
+      "updatedAt": "2026-09-05T12:00:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_waitlist",
+      "accountLinkId": "dev",
+      "name": "Waitlist confirmation",
+      "subject": "You are on the product list",
+      "previewText": "Release notes and beta invites — once or twice a month",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nYou are on the **Relaybase product list**. We use it for release notes, beta invites, and occasional roadmap context — typically once or twice a month, never daily blasts.\n\n**What you will get**\n\n- Shipped features with enough detail to decide whether to turn them on\n- Links to docs, not vague launch fluff\n- A one-click unsubscribe on every message (no login)\n\n**What you will not get**\n\n- Re-forwarded newsletters from other tools\n- Purchased lists or “growth hack” sequences\n\nWhile you wait for the next note, the [getting started guide](https://relaybase.com/docs/start) is the shortest path if you already have a domain.\n\nGlad you are along for the ride,  \nProduct team @ Relaybase",
+      "layoutId": "tpl-warm-sand",
+      "templateVariables": {
+        "header.greeting_tag": "You are on the list"
+      },
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-05T12:10:00.000Z",
+      "updatedAt": "2026-09-05T12:10:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_demo_request",
+      "accountLinkId": "dev",
+      "name": "Demo request confirmation",
+      "subject": "We received your demo request",
+      "previewText": "We will reply with times within one business day",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nWe received your demo request for **{{trigger.company}}**.\n\nSomeone on the team will reply to **{{contact.email}}** within one business day with two or three times that work. If you already know when you are free, reply with a window in your timezone.\n\n**What we captured**\n\n- Company: {{trigger.company}}\n- Role: {{trigger.role}}\n- Preferred time: {{trigger.preferredTime}}\n- Notes: {{trigger.message}}\n\nThe session is usually **25 minutes**: domain + Worker setup, one test broadcast, and questions. No deck unless you ask for one.\n\nIf you would rather self-serve first, start here: [docs/start](https://relaybase.com/docs/start)\n\n— Relaybase",
+      "layoutId": "tpl-header",
+      "templateVariables": {},
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-06T11:00:00.000Z",
+      "updatedAt": "2026-09-06T11:00:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_inbox_support",
+      "accountLinkId": "dev",
+      "name": "Support inbox auto-reply",
+      "subject": "Re: {{trigger.subject}}",
+      "previewText": "We received your note and a person will reply on this thread",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nThanks for emailing **support@relaybase.xyz**. We received your message and a person will reply on this thread.\n\n**Subject we saw:** {{trigger.subject}}\n\nMost replies land within one business day. If a send is stuck or a domain will not verify, say so in the first line and include the domain — we treat those as urgent.\n\nThis address is for account and product help. For billing receipts or invoice questions, write **billing@relaybase.xyz**. For sales / demos, use the form on the site so it is routed correctly.\n\n— Relaybase Support\n",
+      "layoutId": "tpl-minimal",
+      "templateVariables": {},
+      "category": "marketing",
+      "isPreset": false,
+      "createdAt": "2026-09-10T08:00:00.000Z",
+      "updatedAt": "2026-09-15T17:03:18.377Z"
+    },
+    {
+      "id": "msgtpl_automation_invoice_receipt",
+      "accountLinkId": "dev",
+      "name": "Invoice receipt",
+      "subject": "Receipt for invoice {{trigger.invoiceNumber}}",
+      "previewText": "Payment received — download the PDF for your records",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nThanks — we received payment for **{{trigger.planName}}**.\n\n**Invoice {{trigger.invoiceNumber}}**\n\n- Amount: {{trigger.amount}}\n- Period: {{trigger.periodLabel}}\n- Paid: {{trigger.paidAt}}\n\n[Download the invoice (PDF)]({{trigger.invoiceUrl}})\n\nThis receipt is for your records. The charge appears on your statement as **STRUM / RELAYBASE**. If the amount looks wrong, reply to this email before the next renewal.\n\nManage plan and payment method: [Billing portal](https://relaybase.com/account/billing)\n\n— Relaybase Billing",
+      "layoutId": "tpl-receipt-invoice",
+      "templateVariables": {
+        "receipt.title": "Payment Receipt",
+        "receipt.number": "INV-2026-0901"
+      },
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-08T10:00:00.000Z",
+      "updatedAt": "2026-09-08T10:00:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_team_invite",
+      "accountLinkId": "dev",
+      "name": "Team invite",
+      "subject": "{{trigger.inviterName}} invited you to {{trigger.workspaceName}}",
+      "previewText": "Accept to join the workspace — you do not need to reconnect DNS",
+      "bodyMarkdown": "Hi {{contact.name}},\n\n**{{trigger.inviterName}}** invited you to the **{{trigger.workspaceName}}** workspace on Relaybase.\n\n[Accept the invite]({{trigger.inviteUrl}})\n\nThis link expires in **{{trigger.expiresInDays}} days**. After you accept, you can send from the workspace domain and see the same audience groups — you do not need to reconnect DNS.\n\nIf you were not expecting this, you can ignore the email. Nobody is added to the workspace until you click.\n\nQuestions? Reply and we will loop in {{trigger.inviterName}}.\n\n— Relaybase",
+      "layoutId": "tpl-event-ticket",
+      "templateVariables": {
+        "event.title": "Workspace invite",
+        "event.date_badge": "INVITE",
+        "event.time_location": "Accept within 7 days"
+      },
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-08T10:15:00.000Z",
+      "updatedAt": "2026-09-08T10:15:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_trial_started",
+      "accountLinkId": "dev",
+      "name": "Trial started",
+      "subject": "Your {{trigger.planName}} trial is on",
+      "previewText": "Full access until the trial end date — we will not charge early",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nYour **{{trigger.planName}}** trial is on. You have full product access until **{{trigger.trialEndsAt}}**.\n\n### Make the trial count\n\n1. Verify the sending domain you actually want to use in production.\n\n1. Import one real audience (people who opted in), not a test dump.\n\n1. Send a small broadcast and open **Sent statistics** — delivery, opens, and unsubscribes should match the recipient list.\n\n[Open the workspace]({{trigger.workspaceUrl}}) · [Trial checklist](https://relaybase.com/docs/trial)\n\nWe will not charge the card on file until the trial ends. If you decide Relaybase is not a fit, cancel in billing before {{trigger.trialEndsAt}} and the trial just expires.\n\nNeed a pairing session? Reply with two times.\n\n— Relaybase\n",
+      "layoutId": "tpl-card",
+      "templateVariables": {},
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-09T09:00:00.000Z",
+      "updatedAt": "2026-09-16T05:54:34.822Z"
+    }
+  ],
+  "newsletters": [
+    {
+      "id": "broadcast_d63712e3-2630-42fa-8706-04255e013a90",
+      "accountLinkId": "dev",
+      "name": "September Product Update",
+      "slug": "september-product-update",
+      "description": null,
+      "audienceGroupId": "audience_10425087-e030-4656-88cc-4872cc34d497",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_d63712e3-2630-42fa-8706-04255e013a90",
+      "createdAt": "2026-09-14T21:57:32.495Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "broadcast_sent_july_recap",
+      "accountLinkId": "dev",
+      "name": "July Recap",
+      "slug": "july-recap",
+      "description": null,
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sent_july_recap",
+      "createdAt": "2026-07-20T10:00:00.000Z",
+      "updatedAt": "2026-09-15T17:06:19.039Z"
+    },
+    {
+      "id": "broadcast_sent_aug_launch",
+      "accountLinkId": "dev",
+      "name": "August Launch",
+      "slug": "august-launch",
+      "description": null,
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sent_aug_launch",
+      "createdAt": "2026-08-01T09:00:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "broadcast_sent_aug_security",
+      "accountLinkId": "dev",
+      "name": "Mid-August Security Note",
+      "slug": "mid-august-security-note",
+      "description": null,
+      "audienceGroupId": "audience_10425087-e030-4656-88cc-4872cc34d497",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sent_aug_security",
+      "createdAt": "2026-08-18T11:00:00.000Z",
+      "updatedAt": "2026-09-15T17:06:48.261Z"
+    },
+    {
+      "id": "broadcast_sent_sep_welcome",
+      "accountLinkId": "dev",
+      "name": "September Welcome",
+      "slug": "september-welcome",
+      "description": null,
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sent_sep_welcome",
+      "createdAt": "2026-08-28T12:00:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "broadcast_sent_sep_digest",
+      "accountLinkId": "dev",
+      "name": "Weekly Digest #36",
+      "slug": "weekly-digest-36",
+      "description": null,
+      "audienceGroupId": "audience_10425087-e030-4656-88cc-4872cc34d497",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "scheduled",
+      "scheduledAt": "2026-09-23T03:00:00.000Z",
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sent_sep_digest",
+      "createdAt": "2026-09-07T09:00:00.000Z",
+      "updatedAt": "2026-09-16T00:00:03.674Z"
+    },
+    {
+      "id": "broadcast_failed_smtp",
+      "accountLinkId": "dev",
+      "name": "Broken SMTP test",
+      "slug": "broken-smtp-test",
+      "description": null,
+      "audienceGroupId": "audience_10425087-e030-4656-88cc-4872cc34d497",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_failed_smtp",
+      "createdAt": "2026-09-10T08:30:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "broadcast_sending_demo_001",
+      "accountLinkId": "dev",
+      "name": "Weekly Engineering Digest",
+      "slug": "weekly-engineering-digest",
+      "description": null,
+      "audienceGroupId": "audience_10425087-e030-4656-88cc-4872cc34d497",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sending_demo_001",
+      "createdAt": "2026-09-15T10:00:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "broadcast_sending_product_wave",
+      "accountLinkId": "dev",
+      "name": "Product Launch Wave",
+      "slug": "product-launch-wave",
+      "description": null,
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sending_product_wave",
+      "createdAt": "2026-09-15T11:00:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "broadcast_sending_partner",
+      "accountLinkId": "dev",
+      "name": "Partner note",
+      "slug": "partner-note",
+      "description": null,
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_sending_partner",
+      "createdAt": "2026-09-15T12:20:00.000Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    },
+    {
+      "id": "broadcast_scheduled_ama",
+      "accountLinkId": "dev",
+      "name": "Thursday AMA invite",
+      "slug": "thursday-ama-invite",
+      "description": null,
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "scheduled",
+      "scheduledAt": "2026-09-17T03:00:00.000Z",
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_scheduled_ama",
+      "createdAt": "2026-09-14T18:00:00.000Z",
+      "updatedAt": "2026-09-16T00:00:03.674Z"
+    },
+    {
+      "id": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
+      "accountLinkId": "dev",
+      "name": "News letter",
+      "slug": "news-letter",
+      "description": null,
+      "audienceGroupId": "audience_10425087-e030-4656-88cc-4872cc34d497",
+      "domain": "relaybase.xyz",
+      "fromName": "Jon",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "scheduled",
+      "scheduledAt": "2026-09-30T03:00:00.000Z",
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
+      "createdAt": "2026-09-14T21:58:55.873Z",
+      "updatedAt": "2026-09-16T00:00:03.674Z"
+    },
+    {
+      "id": "broadcast_5ac032ef-d7d8-40c6-8486-665fa4f1ff88",
+      "accountLinkId": "dev",
+      "name": "September Product Update (copy)",
+      "slug": "news-letter-copy",
+      "description": null,
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "domain": "relaybase.xyz",
+      "fromName": "Jon",
+      "fromEmail": "jon@relaybase.xyz",
+      "replyTo": "complience@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "listStatus": "active",
+      "status": "draft",
+      "scheduledAt": null,
+      "sentAt": null,
+      "startedAt": null,
+      "finishedAt": null,
+      "stats": {
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "templateId": "msgtpl_broadcast_5ac032ef-d7d8-40c6-8486-665fa4f1ff88",
+      "createdAt": "2026-09-14T23:06:35.602Z",
+      "updatedAt": "2026-09-15T03:08:16.042Z"
+    }
+  ],
+  "recipients": [],
+  "triggers": [
+    {
+      "id": "automation_verify_email",
+      "accountLinkId": "dev",
+      "name": "Verify email",
+      "slug": "verify-email",
+      "description": "Transactional confirm-your-address mail when a user starts signup or changes email.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "noreply@relaybase.xyz",
+      "replyTo": null,
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "internal_event",
+        "event": "account.verify_email"
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 300,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_verify_email",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-01T10:00:00.000Z",
+      "updatedAt": "2026-09-01T10:00:00.000Z"
+    },
+    {
+      "id": "automation_welcome",
+      "accountLinkId": "dev",
+      "name": "Welcome after signup",
+      "slug": "welcome-after-signup",
+      "description": "Sent on account.created — the map after verify, not the confirmation click itself.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "hello@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "internal_event",
+        "event": "account.created"
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 86400,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_welcome",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-01T10:05:00.000Z",
+      "updatedAt": "2026-09-01T10:05:00.000Z"
+    },
+    {
+      "id": "automation_password_reset",
+      "accountLinkId": "dev",
+      "name": "Password reset",
+      "slug": "password-reset",
+      "description": "Auth service calls this webhook when a user requests a password reset.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "noreply@relaybase.xyz",
+      "replyTo": null,
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "http_webhook",
+        "secret": "dev_hook_password_reset_sample",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "resetUrl",
+          "expiresInMinutes"
+        ]
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 300,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_password_reset",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-02T09:00:00.000Z",
+      "updatedAt": "2026-09-02T09:00:00.000Z"
+    },
+    {
+      "id": "automation_magic_link",
+      "accountLinkId": "dev",
+      "name": "Magic link sign-in",
+      "slug": "magic-link-sign-in",
+      "description": "Passwordless login from the app or desktop client. Short cooldown; do not suppress.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "noreply@relaybase.xyz",
+      "replyTo": null,
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "http_webhook",
+        "secret": "dev_hook_magic_link_sample",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "loginUrl",
+          "expiresInMinutes"
+        ]
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 90,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_magic_link",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-02T09:10:00.000Z",
+      "updatedAt": "2026-09-02T09:10:00.000Z"
+    },
+    {
+      "id": "automation_contact_us",
+      "accountLinkId": "dev",
+      "name": "Contact us auto-reply",
+      "slug": "contact-us-auto-reply",
+      "description": "Thanks visitors after the marketing-site contact form submits.",
+      "domain": "relaybase.xyz",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "hello@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "conversational",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "form_submit",
+        "formKey": "contact",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "message"
+        ]
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 86400,
+      "applyMarketingSuppression": true,
+      "templateId": "msgtpl_automation_contact_us",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-05T12:00:00.000Z",
+      "updatedAt": "2026-09-05T12:00:00.000Z"
+    },
+    {
+      "id": "automation_waitlist",
+      "accountLinkId": "dev",
+      "name": "Waitlist confirmation",
+      "slug": "waitlist-confirmation",
+      "description": "Confirms product-list signup from the marketing site and upserts the contact onto Product Updates.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "hello@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "marketing",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "form_submit",
+        "formKey": "waitlist",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": []
+      },
+      "audienceGroupId": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "cooldownSeconds": 86400,
+      "applyMarketingSuppression": true,
+      "templateId": "msgtpl_automation_waitlist",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-05T12:10:00.000Z",
+      "updatedAt": "2026-09-05T12:10:00.000Z"
+    },
+    {
+      "id": "automation_demo_request",
+      "accountLinkId": "dev",
+      "name": "Demo request confirmation",
+      "slug": "demo-request-confirmation",
+      "description": "Confirms a sales/demo form submit and restates what the team captured.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "hello@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "conversational",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "form_submit",
+        "formKey": "demo",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "company"
+        ]
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 86400,
+      "applyMarketingSuppression": true,
+      "templateId": "msgtpl_automation_demo_request",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-06T11:00:00.000Z",
+      "updatedAt": "2026-09-06T11:00:00.000Z"
+    },
+    {
+      "id": "automation_inbox_support",
+      "accountLinkId": "dev",
+      "name": "Support inbox auto-reply",
+      "slug": "support-inbox-auto-reply",
+      "description": "Replies when mail arrives at support@relaybase.xyz so the thread is acknowledged.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase Support",
+      "fromEmail": "support@relaybase.xyz",
+      "replyTo": "support@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "conversational",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "mailbox_inbound",
+        "domain": "relaybase.xyz",
+        "localPart": "support",
+        "replyToSender": true,
+        "match": null
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 3600,
+      "applyMarketingSuppression": true,
+      "templateId": "msgtpl_automation_inbox_support",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-10T08:00:00.000Z",
+      "updatedAt": "2026-09-15T17:03:18.377Z"
+    },
+    {
+      "id": "automation_invoice_receipt",
+      "accountLinkId": "dev",
+      "name": "Invoice receipt",
+      "slug": "invoice-receipt",
+      "description": "Billing provider webhook after a successful charge — PDF link in the payload.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase Billing",
+      "fromEmail": "billing@relaybase.xyz",
+      "replyTo": "billing@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "http_webhook",
+        "secret": "dev_hook_invoice_sample",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "invoiceNumber",
+          "amount",
+          "invoiceUrl",
+          "planName"
+        ]
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 60,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_invoice_receipt",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-08T10:00:00.000Z",
+      "updatedAt": "2026-09-08T10:00:00.000Z"
+    },
+    {
+      "id": "automation_team_invite",
+      "accountLinkId": "dev",
+      "name": "Team invite",
+      "slug": "team-invite",
+      "description": "Workspace invite from an existing member. Auth/app posts inviteUrl and workspace name.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "hello@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "active",
+      "status": "active",
+      "source": {
+        "type": "http_webhook",
+        "secret": "dev_hook_team_invite_sample",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "inviteUrl",
+          "workspaceName",
+          "inviterName"
+        ]
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 3600,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_team_invite",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-08T10:15:00.000Z",
+      "updatedAt": "2026-09-08T10:15:00.000Z"
+    },
+    {
+      "id": "automation_trial_started",
+      "accountLinkId": "dev",
+      "name": "Trial started",
+      "slug": "trial-started",
+      "description": "Billing webhook when a trial begins. Paused in this seed until the billing hook is wired.",
+      "domain": "relaybase.xyz",
+      "fromName": "Relaybase",
+      "fromEmail": "hello@relaybase.xyz",
+      "replyTo": "hello@relaybase.xyz",
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "active",
+      "status": "paused",
+      "source": {
+        "type": "http_webhook",
+        "secret": "14OonzHFm8Zo2n1duNRC_UqC7sDdY7dbxz1IYCeCzhM",
+        "emailPath": "email",
+        "namePath": "name",
+        "requiredFields": [
+          "planName",
+          "trialEndsAt"
+        ]
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 86400,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_trial_started",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-09T09:00:00.000Z",
+      "updatedAt": "2026-09-16T05:56:47.221Z"
+    },
+    {
+      "id": "automation_6aaa0458-ebbb-4336-995b-2856e1d1e277",
+      "accountLinkId": "dev",
+      "name": "ㄹㅇㅁ",
+      "slug": "automation_2",
+      "description": null,
+      "domain": "kloyapp.com",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@kloyapp.com",
+      "replyTo": null,
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "archived",
+      "status": "draft",
+      "source": {
+        "type": "internal_event",
+        "event": "account.verify_email"
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 86400,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_6aaa0458-ebbb-4336-995b-2856e1d1e277",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-15T17:22:56.541Z",
+      "updatedAt": "2026-09-15T17:23:05.623Z"
+    }
+  ],
+  "triggerEvents": [],
+  "triggerSends": [],
+  "triggerTrackingEvents": [],
+  "accountSuppressions": [],
+  "pipelineCards": [],
+  "activities": [],
+  "scheduledJobs": [
+    {
+      "id": "job_19e659aa-6831-469e-b7ab-1f39a4a27f65",
+      "accountLinkId": "dev",
+      "kind": "newsletter",
+      "refId": "broadcast_scheduled_ama",
+      "runAt": "2026-09-17T03:00:00.000Z",
+      "status": "pending",
+      "createdAt": "2026-09-16T11:32:13.089Z"
+    },
+    {
+      "id": "job_a0ea0c3e-c0b7-4e40-82c5-380e9b9f112a",
+      "accountLinkId": "dev",
+      "kind": "newsletter",
+      "refId": "broadcast_sent_sep_digest",
+      "runAt": "2026-09-23T03:00:00.000Z",
+      "status": "pending",
+      "createdAt": "2026-09-16T11:32:13.089Z"
+    },
+    {
+      "id": "job_808e2695-9752-4332-8cfc-937a0e76ad7f",
+      "accountLinkId": "dev",
+      "kind": "newsletter",
+      "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
+      "runAt": "2026-09-30T03:00:00.000Z",
+      "status": "pending",
+      "createdAt": "2026-09-16T11:32:13.089Z"
+    }
+  ],
+  "trackingEvents": [],
+  "newsletterAssets": [],
+  "triggerAssets": [],
+  "templateAssets": [],
+  "audienceGroups": [
+    {
+      "id": "audience_10425087-e030-4656-88cc-4872cc34d497",
+      "accountLinkId": "dev",
+      "name": "Engineering Weekly",
+      "domain": "relaybase.email",
+      "createdAt": "2026-09-14T21:33:22.778Z",
+      "defaultFrom": "isaac@relaybase.email",
+      "dataSource": null,
+      "cronEnabled": false,
+      "cronIntervalMinutes": 60,
+      "lastSyncAt": null,
+      "lastSyncStatus": null,
+      "lastSyncError": null,
+      "lastSyncCount": null,
+      "syncHistory": [],
+      "contacts": [
+        {
+          "id": "member_eng_01",
+          "email": "marcus.whitfield@relaybase.email",
+          "name": "Marcus Whitfield",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "sWb1k7huV7yQgMOks9Dfza70g2iOZemSwiO9Mh9lOVM",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T03:02:07.156Z"
+        },
+        {
+          "id": "member_eng_02",
+          "email": "priya.kapoor@relaybase.email",
+          "name": "Priya Kapoor",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "JxWYCGbKbeUSiYyZk7LIfYHuO1juGAXsHMaQThM8R0Q",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_eng_03",
+          "email": "james.connor@relaybase.email",
+          "name": "James O'Connor",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "rQ9n7WXXZWXOysDTtRf5wFsw9me7t3qcJgpA7zhUFv0",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T03:02:07.156Z"
+        },
+        {
+          "id": "member_eng_04",
+          "email": "elena.vasquez@relaybase.email",
+          "name": "Elena Vasquez",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "6ZEs9kVwpgHrdGxMcV42S0AlTCOiLRtG8u0XbiEMJbk",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T03:02:07.156Z"
+        },
+        {
+          "id": "member_eng_05",
+          "email": "david.kim@relaybase.email",
+          "name": "David Kim",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "Uf2d9WsMFtfwnxhPwatxnP_GIbDRYD8aD7YqE4j5uV0",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T03:02:07.156Z"
+        },
+        {
+          "id": "member_eng_06",
+          "email": "amara.okonkwo@relaybase.email",
+          "name": "Amara Okonkwo",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "qD5uX64Q91htfkDaetH6-tRkDNFeBnqF4c0ZLbP0X3Y",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_eng_07",
+          "email": "ryan.mitchell@relaybase.email",
+          "name": "Ryan Mitchell",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "FXvfpeGJTWzqO2YJ3GCUNZePNv_KXc2nPz5_AlBUILM",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_eng_08",
+          "email": "sophie.laurent@relaybase.email",
+          "name": "Sophie Laurent",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "cUM0LtziDV19mhxgdvUVU8642B3vIW1KtJ2aoSgAJNg",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T03:02:07.156Z"
+        },
+        {
+          "id": "member_eng_09",
+          "email": "noah.bergstrom@relaybase.email",
+          "name": "Noah Bergstrom",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "VAL9hF_u3LJaM7wG3dDG_vqHLZ1IKVQ5wWinQzjzAnU",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_eng_10",
+          "email": "hannah.reeves@relaybase.email",
+          "name": "Hannah Reeves",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "UjbXGHcH7WUKkHROQ9NNhKScWhmcOkBlMzX4Dr6f5BI",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_eng_11",
+          "email": "tyler.brooks@relaybase.email",
+          "name": "Tyler Brooks",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "Hdi3_3up7HpAgprVwsAI8jpYtqPxTWyrptlAN1DmuXA",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_eng_12",
+          "email": "mei.lin@relaybase.email",
+          "name": "Mei Lin",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "ZzEWpbIoFUyQ1DB52PAlHV84u10xM-bQG_BH5IEgzUI",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_1cd9a383-7655-418c-b83d-c2c3356f4c98",
+          "email": "tozerlewis@naver.com",
+          "name": null,
+          "source": "manual",
+          "addedAt": "2026-09-16T03:23:36.574Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "99HsDS3Nkow7vLLv69_mXxjblsmhyAXGiO2chbtm1kg",
+          "consentSource": "manual",
+          "consentedAt": "2026-09-16T03:23:36.574Z",
+          "bouncedAt": null,
+          "bounceReason": null
+        }
+      ]
+    },
+    {
+      "id": "audience_bb00cf06-031e-49f2-b43d-aeecbb51eeb0",
+      "accountLinkId": "dev",
+      "name": "Product Updates",
+      "domain": "relaybase.xyz",
+      "createdAt": "2026-09-14T21:33:30.379Z",
+      "defaultFrom": "jon@relaybase.xyz",
+      "dataSource": null,
+      "cronEnabled": false,
+      "cronIntervalMinutes": 60,
+      "lastSyncAt": null,
+      "lastSyncStatus": null,
+      "lastSyncError": null,
+      "lastSyncCount": null,
+      "syncHistory": [],
+      "contacts": [
+        {
+          "id": "member_product_01",
+          "email": "olivia.martinez@relaybase.email",
+          "name": "Olivia Martinez",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "cRizLy7E-ehDB8JmEwjjtNx-8WFn0E-OOo8DsfgYZg0",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_02",
+          "email": "ethan.nguyen@relaybase.email",
+          "name": "Ethan Nguyen",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "QZmLsPu4-Gzj0HbADdDd4bRH6Tr0DYAVT5K5uMI_DZk",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_03",
+          "email": "chloe.anderson@relaybase.email",
+          "name": "Chloe Anderson",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "nc0Re69JnrbwW9ELAiAJs9LDQ4T8bHpMDglni3J39ls",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_04",
+          "email": "daniel.fischer@relaybase.email",
+          "name": "Daniel Fischer",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "l0ZmdkZMrebjMlGYJ41Ow--dWPvSICflWloWtGia03Q",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_05",
+          "email": "isabella.romano@relaybase.email",
+          "name": "Isabella Romano",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "nnaG4pJLMB6q3nNt48QaCQipaeIxbTK2YQGAZvoo-Og",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_06",
+          "email": "michael.torres@relaybase.email",
+          "name": "Michael Torres",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "OSUWFYTuSzJMjwZI7Ax_GJ1WNoFACtrer5VrddyRVtM",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_07",
+          "email": "ava.thompson@relaybase.email",
+          "name": "Ava Thompson",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "PkZE4glFK0CX28G5wJr3NmChKwjcDhmAVrY1sEpcCuw",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_08",
+          "email": "lucas.dubois@relaybase.email",
+          "name": "Lucas Dubois",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "EgyiMgHfyQTgudql-WP0KjzYia-k4anMCwt2lj6DGc8",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_09",
+          "email": "emily.nakamura@relaybase.email",
+          "name": "Emily Nakamura",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "NLBHWbBNQj_YoKP072PKdvZlwwmZVRavC0kBAvSesEg",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_10",
+          "email": "benjamin.clarke@relaybase.email",
+          "name": "Benjamin Clarke",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "nTnux5Hkw8Si6MUmWO-I8oSC7a2xXj78Eq7uRdXfVWo",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_11",
+          "email": "sofia.alvarez@relaybase.email",
+          "name": "Sofia Alvarez",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "2qkvAUasGBHzlR0Ti-Snd1yU-C39vVGyQ23SlzR1om0",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_12",
+          "email": "christopher.walsh@relaybase.email",
+          "name": "Christopher Walsh",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "moK4vhzzJ4xMkI9DsmGKHICNS2irQHWoDEpSwtS6L3I",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_13",
+          "email": "mia.johansson@relaybase.email",
+          "name": "Mia Johansson",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "-1Tm9FuNDtSPHJ_dJwBQm-g-EFP1ZRY8cPRTaaCNpME",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_14",
+          "email": "alexander.patel@relaybase.email",
+          "name": "Alexander Patel",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "q2t_tU2MMzfFjbIM7LM7Oi0gsW2U-ium4x0fmyY5A9s",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_15",
+          "email": "charlotte.brooks@relaybase.email",
+          "name": "Charlotte Brooks",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "mgWGns0xGcXyZ0REcZw2SblP_tEHFLfiCOdDdE_biqM",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_16",
+          "email": "nathaniel.hayes@relaybase.email",
+          "name": "Nathaniel Hayes",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "BJZuDg3bQBwFIy2IfnIHHHfesUyVJNem98TepdS22UI",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_17",
+          "email": "grace.sullivan@relaybase.email",
+          "name": "Grace Sullivan",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "pwAcJW93WMorSSVrI8UAI4Xwwpz6k14Wl8U7PO-r5GY",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_18",
+          "email": "samuel.okafor@relaybase.email",
+          "name": "Samuel Okafor",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "p4SENtSn0_ErnU0ErXtRUulHBG8mxlDhNamr7v1eLUk",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_19",
+          "email": "victoria.chen@relaybase.email",
+          "name": "Victoria Chen",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "KqXlqFarwtlWpBdVnhrWfRDUtJwLDC7q9ArzoHjfOj0",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_20",
+          "email": "jacob.morrison@relaybase.email",
+          "name": "Jacob Morrison",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "sMM-bnorMgtI68GcDXBq0Y2Tsn_-jSMR9EBXEEhk_mc",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_21",
+          "email": "lily.henderson@relaybase.email",
+          "name": "Lily Henderson",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "wUWu2ARGVqVEEpf5Vrcl0an7rgu-jx3eJ4nznoQAeNo",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_22",
+          "email": "andrew.schmidt@relaybase.email",
+          "name": "Andrew Schmidt",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "CGGf4CirvN3hJgJIoiq28us-3umNvIA6v88-mzxaCq0",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_23",
+          "email": "zoe.williams@relaybase.email",
+          "name": "Zoe Williams",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "sTF5KyPicMjY43z55shfHSaIipTSyrx8IVST03wkbag",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_24",
+          "email": "kevin.park@relaybase.email",
+          "name": "Kevin Park",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "bZ2iSTaJnc0VulkX11VIj1vemGUKIOV9EYbwmIYKgqs",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        },
+        {
+          "id": "member_product_25",
+          "email": "natalie.foster@relaybase.email",
+          "name": "Natalie Foster",
+          "source": "manual",
+          "addedAt": "2026-09-15T00:00:00.000Z",
+          "sendStatus": "active",
+          "unsubscribedAt": null,
+          "unsubscribeToken": "NsAB-LvCHvTC5Eh6Z7R0pGrJk_P4PiVf-ruWm0aZ450",
+          "bouncedAt": null,
+          "bounceReason": null,
+          "consentSource": "manual",
+          "consentedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}

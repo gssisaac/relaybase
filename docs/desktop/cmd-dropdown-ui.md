@@ -1,6 +1,6 @@
 # CmdDropdown — searchable domain & account pickers
 
-**Audience:** humans and coding agents changing Scale/CRM/email forms that pick Worker domains or Console account addresses.
+**Audience:** humans and coding agents changing Studio/email forms that pick Worker domains or Console account addresses.
 
 **Component:** `app/src/components/ui/cmd-dropdown.tsx` — export `CmdDropdown`, `CmdDropdownOption`.
 

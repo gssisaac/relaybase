@@ -1,4 +1,4 @@
-/** Page-adjacent asset paths (ported from Railmark; Scale resolves to public URLs). */
+/** Page-adjacent asset paths (ported from Railmark; Studio resolves to public URLs). */
 
 export type PageAssetKind = "image" | "video" | "audio" | "document" | "file";
 
@@ -21,7 +21,7 @@ export function slugify(input: string): string {
     .slice(0, 80);
 }
 
-/** Matches hq/scale newsletter/trigger asset folder stems (legacy id prefixes stripped). */
+/** Matches hq/studio newsletter/trigger asset folder stems (legacy id prefixes stripped). */
 export function newsletterAssetStem(newsletterId: string): string {
   return (
     newsletterId

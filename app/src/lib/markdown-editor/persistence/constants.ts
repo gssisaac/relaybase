@@ -20,12 +20,12 @@ export const EDITOR_SYNC_INTERVAL_MS = 5_000;
 export const CHECKPOINT_TIMEOUT_MS = 2_000;
 
 /** IndexedDB outbox database / store names. */
-export const OUTBOX_DB_NAME = "relaybase-scale-editor-persistence";
+export const OUTBOX_DB_NAME = "relaybase-studio-editor-persistence";
 export const OUTBOX_STORE_NAME = "save-outbox";
 export const OUTBOX_DB_VERSION = 2;
 
 /** localStorage key for emergency per-file drafts (mirrors `PREFERENCE_KEYS.fileDrafts`). */
-export const EMERGENCY_DRAFTS_KEY = "relaybase-scale:newsletter-drafts";
+export const EMERGENCY_DRAFTS_KEY = "relaybase-studio:newsletter-drafts";
 
 /** Maximum number of retry attempts for a failed disk flush. */
 export const SAVE_RETRY_MAX_ATTEMPTS = 5;
@@ -34,7 +34,7 @@ export const SAVE_RETRY_MAX_ATTEMPTS = 5;
 export const SAVE_RETRY_BACKOFF_MS = [1_000, 3_000, 10_000, 30_000, 30_000];
 
 /** localStorage key for the persistence module's own outbox drain flag. */
-export const OUTBOX_DRAIN_FLAG_KEY = "relaybase-scale:outbox-drain";
+export const OUTBOX_DRAIN_FLAG_KEY = "relaybase-studio:outbox-drain";
 
 export const SAVE_STATUS = {
   IDLE: "idle",

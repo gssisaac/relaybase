@@ -79,7 +79,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useScalePaths } from "@/scale/lib/paths";
+import { useStudioPaths } from "@/studio/lib/paths";
 import { SendingWarningIcon } from "@/console/components/SendingWarningIcon";
 import { useDashboardDomain } from "@/console/hooks/useDashboardDomain";
 import { useDomain } from "@/lib/dashboard/DomainContext";
@@ -145,7 +145,7 @@ function ModeIcon({
   if (mode === "email") {
     return <Mails {...accentIconProps} />;
   }
-  if (mode === "scale") {
+  if (mode === "studio") {
     return <Megaphone {...accentIconProps} />;
   }
   return (
@@ -165,7 +165,7 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
 
 function sidebarTitleForMode(mode: SidebarMode) {
   if (mode === "email") return "Mailbox";
-  if (mode === "scale") return "Studio";
+  if (mode === "studio") return "Studio";
   return "Console";
 }
 
@@ -219,9 +219,9 @@ function TitleMenuItems({
       />
       <ModeMenuItem
         label="Studio"
-        mode="scale"
-        active={mode === "scale"}
-        onClick={() => onSwitchTo("scale")}
+        mode="studio"
+        active={mode === "studio"}
+        onClick={() => onSwitchTo("studio")}
       />
       {teamMode ? null : (
         <ModeMenuItem
@@ -767,9 +767,9 @@ function DashboardModeNav({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-function ScaleModeNav({ collapsed }: { collapsed: boolean }) {
+function StudioModeNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
-  const { tabs } = useScalePaths();
+  const { tabs } = useStudioPaths();
 
   return (
     <>
@@ -830,11 +830,11 @@ export function UserSidebar({
     readSidebarCollapsed(userId),
   );
   const detectedMode = useMemo(() => modeFromPathname(pathname), [pathname]);
-  // Team mode can reach Email and Scale, never Console — fall back to email
+  // Team mode can reach Email and Studio, never Console — fall back to email
   // even on a dashboard URL (team users can't reach those routes anyway).
   const mode: SidebarMode = isTeam
-    ? detectedMode === "scale"
-      ? "scale"
+    ? detectedMode === "studio"
+      ? "studio"
       : "email"
     : detectedMode;
   const {
@@ -1062,8 +1062,8 @@ export function UserSidebar({
             collapsed={sidebarCollapsed}
             onAddAccount={() => setAddOpen(true)}
           />
-        ) : mode === "scale" ? (
-          <ScaleModeNav collapsed={sidebarCollapsed} />
+        ) : mode === "studio" ? (
+          <StudioModeNav collapsed={sidebarCollapsed} />
         ) : (
           <DashboardModeNav collapsed={sidebarCollapsed} />
         )}

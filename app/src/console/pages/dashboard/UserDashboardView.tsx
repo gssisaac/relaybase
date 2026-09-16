@@ -82,13 +82,13 @@ const KPI_CARDS = [
   {
     key: "broadcasts" as const,
     label: "Broadcasts",
-    description: "Scale broadcasts and audience",
+    description: "Studio broadcasts and audience",
     path: "broadcasts" as const,
   },
   {
     key: "audience" as const,
     label: "Audience",
-    description: "Contact groups for Scale",
+    description: "Contact groups for Studio",
     path: "audience" as const,
   },
 ];
@@ -234,9 +234,9 @@ export function UserDashboardView() {
               const value = stats?.totals?.[card.key] ?? 0;
               const href =
                 card.path === "broadcasts"
-                  ? "/scale/newsletters"
+                  ? "/studio/newsletters"
                   : card.path === "audience"
-                    ? "/scale/subscribers"
+                    ? "/studio/subscribers"
                     : paths[card.path];
               return (
                 <Card

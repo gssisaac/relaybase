@@ -74,7 +74,7 @@ export async function rasterImageDimensions(
 /**
  * Sample the decoded bitmap for a non-opaque pixel. Email clients (Gmail,
  * Outlook) mangle transparency in JPEG/WebP, so any alpha use forces PNG
- * output (docs/features/crm-email-image-asset-cdn-spec.md §1.2/§6.3).
+ * output (docs/features/studio-email-image-asset-cdn-spec.md §1.2/§6.3).
  */
 async function hasTransparency(blob: Blob): Promise<boolean> {
   try {
@@ -112,7 +112,7 @@ export type OptimizeForEmailResult = {
  * photos/banners, PNG when transparency is present, GIF passthrough for
  * animations. WebP/SVG/AVIF inputs are always converted — they are silently
  * mangled or stripped by Gmail and classic Outlook.
- * (docs/features/crm-email-image-asset-cdn-spec.md §1.2, §2, UC-4)
+ * (docs/features/studio-email-image-asset-cdn-spec.md §1.2, §2, UC-4)
  */
 export async function optimizeForEmail(
   file: File,

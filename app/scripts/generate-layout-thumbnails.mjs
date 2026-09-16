@@ -1,7 +1,7 @@
 /**
- * Renders built-in layout previews to PNG under public/scale/layout-thumbnails/.
+ * Renders built-in layout previews to PNG under public/studio/layout-thumbnails/.
  *
- * Re-run when hq/scale layout HTML changes (e.g. after editing hq/scale/data/store.json).
+ * Re-run when hq/studio layout HTML changes (e.g. after editing hq/studio/data/store.json).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const appRoot = fileURLToPath(new URL("../", import.meta.url));
-const storePath = path.join(appRoot, "../hq/scale/data/store.json");
-const brandLogoPath = path.join(appRoot, "../hq/scale/public/brand/relaybase-icon.png");
-const outDir = path.join(appRoot, "public/scale/layout-thumbnails");
+const storePath = path.join(appRoot, "../hq/studio/data/store.json");
+const brandLogoPath = path.join(appRoot, "../hq/studio/public/brand/relaybase-icon.png");
+const outDir = path.join(appRoot, "public/studio/layout-thumbnails");
 
 const VIEWPORT_WIDTH = 640;
 const CLIP_HEIGHT = 420;
@@ -60,9 +60,9 @@ async function main() {
   const defaultBrandLogoUrl = await loadDefaultBrandLogoDataUrl();
 
   const { renderLayoutPreviewHtml } = await import(
-    "../src/scale/lib/layouts/render-layout-preview-html.ts"
+    "../src/studio/lib/layouts/render-layout-preview-html.ts"
   );
-  const { isPlainTextTemplate } = await import("../src/scale/lib/layouts/layout-catalog.ts");
+  const { isPlainTextTemplate } = await import("../src/studio/lib/layouts/layout-catalog.ts");
 
   const storeRaw = await fs.readFile(storePath, "utf8");
   const store = JSON.parse(storeRaw);
@@ -126,7 +126,7 @@ async function main() {
     "utf8",
   );
 
-  console.log(`Done — ${manifest.layouts.length} thumbnails in public/scale/layout-thumbnails/`);
+  console.log(`Done — ${manifest.layouts.length} thumbnails in public/studio/layout-thumbnails/`);
 }
 
 main().catch((err) => {

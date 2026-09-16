@@ -6,7 +6,7 @@ import {
   browserTimeZone,
   readPersistedScheduleTimeZone,
   writePersistedScheduleTimeZone,
-} from "@/scale/lib/schedule-timezone";
+} from "@/studio/lib/schedule-timezone";
 
 export function usePersistedScheduleTimeZone() {
   const deviceTimeZone = useMemo(() => browserTimeZone(), []);

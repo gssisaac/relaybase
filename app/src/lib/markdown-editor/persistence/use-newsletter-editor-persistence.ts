@@ -10,13 +10,13 @@ import {
   type NewsletterPersistBridge,
 } from "./newsletter-persist-adapter";
 import { useEditorSnapshotRef } from "./editor-capture";
-import { SCALE_PERSIST_ROOT, type EditorSnapshotProvider, type Mode, type SaveStatus } from "./types";
+import { STUDIO_PERSIST_ROOT, type EditorSnapshotProvider, type Mode, type SaveStatus } from "./types";
 
 export type UseNewsletterEditorPersistenceOptions = {
   /** Document identity / local persistence key (e.g. newsletter id). */
   newsletterId: string;
   /**
-   * `/scale/newsletters/…` suffix for the tab-close beacon PATCH, when it
+   * `/studio/newsletters/…` suffix for the tab-close beacon PATCH, when it
    * differs from `newsletterId` (e.g. nested workspace path under the newsletter).
    * Defaults to `newsletterId`.
    */
@@ -47,7 +47,7 @@ export function useNewsletterEditorPersistence(
 
   const getEditContext = useCallback(
     () => ({
-      root: SCALE_PERSIST_ROOT,
+      root: STUDIO_PERSIST_ROOT,
       path: newsletterIdRef.current,
       beaconPath: beaconPathRef.current ?? newsletterIdRef.current,
       mode: (editableRef.current ? "edit" : "read") as Mode,

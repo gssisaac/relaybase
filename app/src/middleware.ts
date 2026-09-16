@@ -1,32 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { shouldProxyRequestToScale } from "@/lib/scale/scale-proxy-policy";
+import { shouldProxyRequestToStudio } from "@/lib/studio/studio-proxy-policy";
 
-const DEFAULT_SCALE_UPSTREAM = "http://127.0.0.1:32831";
+const DEFAULT_STUDIO_UPSTREAM = "http://127.0.0.1:32831";
 
-function scaleUpstreamOrigin(): string {
+function studioUpstreamOrigin(): string {
   return (
-    process.env.SCALE_UPSTREAM_URL?.replace(/\/$/, "") ??
-    process.env.SCALE_INTERNAL_URL?.replace(/\/$/, "") ??
-    process.env.CRM_UPSTREAM_URL?.replace(/\/$/, "") ??
-    process.env.CRM_INTERNAL_URL?.replace(/\/$/, "") ??
-    DEFAULT_SCALE_UPSTREAM
+    process.env.STUDIO_UPSTREAM_URL?.replace(/\/$/, "") ??
+    process.env.STUDIO_INTERNAL_URL?.replace(/\/$/, "") ??
+    DEFAULT_STUDIO_UPSTREAM
   );
 }
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/crm" || pathname.startsWith("/crm/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.replace(/^\/crm(?=\/|$)/, "/scale");
-    return NextResponse.redirect(url, 308);
-  }
 
-  if (!shouldProxyRequestToScale(pathname, request.method, request.headers)) {
+  if (!shouldProxyRequestToStudio(pathname, request.method, request.headers)) {
     return NextResponse.next();
   }
 
-  const upstream = scaleUpstreamOrigin();
+  const upstream = studioUpstreamOrigin();
   const target = `${upstream}${pathname}${request.nextUrl.search}`;
 
   const headers = new Headers(request.headers);
@@ -46,7 +39,7 @@ export async function middleware(request: NextRequest) {
     upstreamRes = await fetch(target, init);
   } catch {
     return NextResponse.json(
-      { error: "Scale upstream unreachable — start hq/scale or set SCALE_UPSTREAM_URL" },
+      { error: "Studio upstream unreachable — start hq/studio or set STUDIO_UPSTREAM_URL" },
       { status: 502 },
     );
   }
@@ -60,5 +53,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/crm", "/crm/:path*", "/scale/:path*"],
+  matcher: ["/studio/:path*"],
 };

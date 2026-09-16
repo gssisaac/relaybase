@@ -4,7 +4,7 @@ export const SIDEBAR_WIDTH = {
   max: 480,
 } as const;
 
-/** Automation detail list panel (inside Scale automations). */
+/** Automation detail list panel (inside Studio triggers). */
 export const AUTOMATION_DETAIL_SIDEBAR_WIDTH = {
   default: 300,
   min: SIDEBAR_WIDTH.min,

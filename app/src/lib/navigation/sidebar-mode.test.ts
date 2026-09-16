@@ -15,9 +15,9 @@ describe("modeFromPathname", () => {
     assert.equal(modeFromPathname("/email/inbox"), "email");
   });
 
-  it("treats /scale as scale mode", () => {
-    assert.equal(modeFromPathname("/scale/subscribers"), "scale");
-    assert.equal(modeFromPathname("/scale/newsletters"), "scale");
+  it("treats /studio as studio mode", () => {
+    assert.equal(modeFromPathname("/studio/subscribers"), "studio");
+    assert.equal(modeFromPathname("/studio/newsletters"), "studio");
   });
 
   it("treats everything else as dashboard", () => {
@@ -81,55 +81,55 @@ describe("normalizeEntryPath", () => {
   it("rewrites subscriber and broadcast path details into ?id=&tab=", () => {
     assert.equal(
       normalizeEntryPath("/audience/grp1/settings"),
-      "/scale/subscribers?id=grp1&tab=settings",
+      "/studio/subscribers?id=grp1&tab=settings",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/bc1/progress"),
-      "/scale/newsletters?id=bc1&tab=stats",
+      "/studio/newsletters?id=bc1&tab=stats",
     );
-    assert.equal(normalizeEntryPath("/broadcasts/new"), "/scale/newsletters?new=1");
+    assert.equal(normalizeEntryPath("/broadcasts/new"), "/studio/newsletters?new=1");
   });
 
   it("rewrites automation nested tabs into ?id=&tab= for last-path restore", () => {
     assert.equal(
-      normalizeEntryPath("/scale/triggers/automation_abc/settings"),
-      "/scale/triggers?id=automation_abc&tab=config",
+      normalizeEntryPath("/studio/triggers/automation_abc/settings"),
+      "/studio/triggers?id=automation_abc&tab=config",
     );
     assert.equal(
-      normalizeEntryPath("/scale/triggers/automation_abc/preview"),
-      "/scale/triggers?id=automation_abc&tab=config",
+      normalizeEntryPath("/studio/triggers/automation_abc/preview"),
+      "/studio/triggers?id=automation_abc&tab=config",
     );
     assert.equal(
-      normalizeEntryPath("/scale/triggers/automation_abc/config"),
-      "/scale/triggers?id=automation_abc&tab=config",
+      normalizeEntryPath("/studio/triggers/automation_abc/config"),
+      "/studio/triggers?id=automation_abc&tab=config",
     );
     assert.equal(
-      normalizeEntryPath("/scale/triggers/automation_abc/edit"),
-      "/scale/triggers/edit?id=automation_abc",
+      normalizeEntryPath("/studio/triggers/automation_abc/edit"),
+      "/studio/triggers/edit?id=automation_abc",
     );
   });
 
-  it("rewrites legacy /scale/broadcasts paths to /scale/newsletters", () => {
-    assert.equal(normalizeEntryPath("/scale/broadcasts/sent"), "/scale/newsletters?view=sent");
-    assert.equal(normalizeEntryPath("/scale/automations/edit"), "/scale/triggers/edit");
+  it("rewrites legacy /studio/broadcasts paths to /studio/newsletters", () => {
+    assert.equal(normalizeEntryPath("/studio/broadcasts/sent"), "/studio/newsletters?view=sent");
+    assert.equal(normalizeEntryPath("/studio/automations/edit"), "/studio/triggers/edit");
   });
 
   it("rewrites reserved broadcast section paths into ?view=", () => {
     assert.equal(
-      normalizeEntryPath("/scale/newsletters/sent"),
-      "/scale/newsletters?view=sent",
+      normalizeEntryPath("/studio/newsletters/sent"),
+      "/studio/newsletters?view=sent",
     );
     assert.equal(
-      normalizeEntryPath("/scale/newsletters/in-progress"),
-      "/scale/newsletters?view=in-progress",
+      normalizeEntryPath("/studio/newsletters/in-progress"),
+      "/studio/newsletters?view=in-progress",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/sent"),
-      "/scale/newsletters?view=sent",
+      "/studio/newsletters?view=sent",
     );
     assert.equal(
-      normalizeEntryPath("/scale/newsletters/broadcast_abc/stats"),
-      "/scale/newsletters?id=broadcast_abc&tab=stats",
+      normalizeEntryPath("/studio/newsletters/broadcast_abc/stats"),
+      "/studio/newsletters?id=broadcast_abc&tab=stats",
     );
   });
 

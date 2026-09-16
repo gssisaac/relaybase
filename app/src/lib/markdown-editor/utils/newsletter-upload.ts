@@ -1,4 +1,4 @@
-import { scaleApi } from "@/lib/scale/api";
+import { studioApi } from "@/lib/studio/api";
 
 export type CrmContentAssetOwner = "newsletter" | "trigger" | "template";
 
@@ -13,9 +13,9 @@ export async function uploadNewsletterAsset(
   const payload = { filename, mimeType, contentBase64 };
   const res =
     owner === "trigger"
-      ? await scaleApi.uploadTriggerAsset(newsletterId, payload)
+      ? await studioApi.uploadTriggerAsset(newsletterId, payload)
       : owner === "template"
-        ? await scaleApi.uploadMessageTemplateAsset(newsletterId, payload)
-        : await scaleApi.uploadNewsletterAsset(newsletterId, payload);
+        ? await studioApi.uploadMessageTemplateAsset(newsletterId, payload)
+        : await studioApi.uploadNewsletterAsset(newsletterId, payload);
   return res.url;
 }

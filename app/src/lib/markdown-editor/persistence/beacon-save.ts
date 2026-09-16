@@ -1,5 +1,5 @@
-import { getScaleApiBase } from "@/lib/scale/api-base";
-import { SCALE_API_REQUEST_HEADER } from "@/lib/scale/scale-origin";
+import { getStudioApiBase } from "@/lib/studio/api-base";
+import { STUDIO_API_REQUEST_HEADER } from "@/lib/studio/studio-origin";
 
 /**
  * Best-effort body PATCH on tab close (fetch keepalive). `path` is
@@ -14,11 +14,11 @@ export function tryNewsletterBeaconSave(path: string, bodyMarkdown: string): boo
         ? segments[0]
         : "newsletters";
     const id = segments.length > 1 ? segments[segments.length - 1]! : path;
-    void fetch(`${getScaleApiBase()}/scale/${kind}/${encodeURIComponent(id)}`, {
+    void fetch(`${getStudioApiBase()}/studio/${kind}/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        [SCALE_API_REQUEST_HEADER]: "1",
+        [STUDIO_API_REQUEST_HEADER]: "1",
       },
       body: JSON.stringify({ bodyMarkdown }),
       keepalive: true,

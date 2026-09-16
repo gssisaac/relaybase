@@ -10,12 +10,12 @@
  * FileStore draft-merge logic continues to work on reload.
  */
 
-import type { ScalePersistRoot } from "./types";
+import type { StudioPersistRoot } from "./types";
 import { readScopedItem, removeScopedItem, writeScopedItem } from "./workspace-storage";
 import { EMERGENCY_DRAFTS_KEY } from "./constants";
 
 export type FileDraft = {
-  root: ScalePersistRoot;
+  root: StudioPersistRoot;
   path: string;
   content: string;
   updatedAt: number;
@@ -23,7 +23,7 @@ export type FileDraft = {
 
 type FileDraftsMap = Record<string, FileDraft>;
 
-function fileCacheKey(root: ScalePersistRoot, filePath: string): string {
+function fileCacheKey(root: StudioPersistRoot, filePath: string): string {
   return `${root}:${filePath}`;
 }
 
@@ -58,7 +58,7 @@ function writeDraftsMap(map: FileDraftsMap): void {
  * quota failures are swallowed so the pipeline continues to the outbox
  * and disk flush.
  */
-export function syncEmergencyDraft(root: ScalePersistRoot, filePath: string, content: string): void {
+export function syncEmergencyDraft(root: StudioPersistRoot, filePath: string, content: string): void {
   const map = readDraftsMap();
   map[fileCacheKey(root, filePath)] = {
     root,
@@ -70,7 +70,7 @@ export function syncEmergencyDraft(root: ScalePersistRoot, filePath: string, con
 }
 
 /** Remove a draft after a successful disk persist. */
-export function clearEmergencyDraft(root: ScalePersistRoot, filePath: string): void {
+export function clearEmergencyDraft(root: StudioPersistRoot, filePath: string): void {
   const map = readDraftsMap();
   const key = fileCacheKey(root, filePath);
   if (!(key in map)) return;
@@ -79,7 +79,7 @@ export function clearEmergencyDraft(root: ScalePersistRoot, filePath: string): v
 }
 
 /** Read the draft for a file, or null. */
-export function readEmergencyDraft(root: ScalePersistRoot, filePath: string): FileDraft | null {
+export function readEmergencyDraft(root: StudioPersistRoot, filePath: string): FileDraft | null {
   return readDraftsMap()[fileCacheKey(root, filePath)] ?? null;
 }
 

@@ -1,26 +1,26 @@
-import { getScaleApiBase } from "@/lib/scale/api-base";
+import { getStudioApiBase } from "@/lib/studio/api-base";
 
-const SCALE_ASSET_PATH_RE = /^\/scale\/assets(\/|$)/;
+const STUDIO_ASSET_PATH_RE = /^\/studio\/assets(\/|$)/;
 
 /**
- * Editor/preview should load assets via the same origin as `scaleFetch` (local Next
- * proxy in dev). Upload responses use `SCALE_PUBLIC_BASE_URL` (relaybase.email),
- * which 404s for assets that only exist in local hq/scale store.json.
+ * Editor/preview should load assets via the same origin as `studioFetch` (local Next
+ * proxy in dev). Upload responses use `STUDIO_PUBLIC_BASE_URL` (relaybase.email),
+ * which 404s for assets that only exist in local hq/studio store.json.
  */
 export function normalizeNewsletterAssetUrl(url: string): string {
   if (!/^https?:/i.test(url)) return url;
   try {
     const u = new URL(url);
-    if (SCALE_ASSET_PATH_RE.test(u.pathname)) {
-      return `${getScaleApiBase()}${u.pathname}${u.search}`;
+    if (STUDIO_ASSET_PATH_RE.test(u.pathname)) {
+      return `${getStudioApiBase()}${u.pathname}${u.search}`;
     }
-    const legacy = u.pathname.match(/^\/(?:crm|scale)\/assets\/([^/]+)$/);
+    const legacy = u.pathname.match(/^\/studio\/assets\/([^/]+)$/);
     if (legacy?.[1]?.includes("%2F")) {
       const parts = decodeURIComponent(legacy[1]).split("/");
       const newsletterId = parts[0];
       const filename = parts.slice(1).join("/");
       if (newsletterId && filename) {
-        return `${getScaleApiBase()}/scale/assets/${encodeURIComponent(newsletterId)}/${encodeURIComponent(filename)}`;
+        return `${getStudioApiBase()}/studio/assets/${encodeURIComponent(newsletterId)}/${encodeURIComponent(filename)}`;
       }
     }
   } catch {

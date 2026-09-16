@@ -9,7 +9,7 @@ import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts"
 import {
   accountCmdGroups,
   domainOf,
-} from "@/scale/lib/triggers/trigger-account-cmd-groups";
+} from "@/studio/lib/triggers/trigger-account-cmd-groups";
 
 export type AccountCmdDropdownChangeContext = {
   address?: Address;

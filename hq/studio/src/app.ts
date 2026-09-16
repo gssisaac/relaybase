@@ -1,0 +1,41 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { studioAccountLink } from "./routes/account-link";
+import { studioComplianceIdentities } from "./routes/compliance-identities";
+import { studioAudience } from "./routes/audience-groups";
+import { studioNewsletters } from "./routes/newsletters";
+import { studioTemplates } from "./routes/templates";
+import { studioMessageTemplates } from "./routes/message-templates";
+import { studioTracking } from "./routes/tracking";
+import { studioAssets } from "./routes/assets";
+import { studioUnsubscribe } from "./routes/unsubscribe";
+import { studioWebhooks } from "./routes/webhooks";
+import { studioTriggers } from "./routes/triggers";
+import { studioTriggerHooks } from "./routes/trigger-hooks";
+import { studioTriggerTracking } from "./routes/trigger-tracking";
+import { studioOverview } from "./routes/overview";
+import { studioApiAuthMiddleware } from "./lib/auth/studio-api-auth";
+
+const app = new Hono();
+
+app.use("*", cors({ origin: "*" }));
+app.use("*", studioApiAuthMiddleware());
+
+app.get("/health", (c) => c.json({ ok: true, service: "relaybase-studio" }));
+
+app.route("/studio/account-link", studioAccountLink);
+app.route("/studio/compliance-identities", studioComplianceIdentities);
+app.route("/studio/overview", studioOverview);
+app.route("/studio/newsletters", studioNewsletters);
+app.route("/studio/triggers", studioTriggers);
+app.route("/studio/hooks", studioTriggerHooks);
+app.route("/studio/t/a", studioTriggerTracking);
+app.route("/studio/audience-groups", studioAudience);
+app.route("/studio/layouts", studioTemplates);
+app.route("/studio/templates", studioMessageTemplates);
+app.route("/studio/t", studioTracking);
+app.route("/studio/unsubscribe", studioUnsubscribe);
+app.route("/studio/webhooks", studioWebhooks);
+app.route("/studio", studioAssets);
+
+export default app;

@@ -1,8 +1,8 @@
-export type SidebarMode = "email" | "dashboard" | "scale";
+export type SidebarMode = "email" | "dashboard" | "studio";
 
 export const DEFAULT_EMAIL_PATH = "/email/inbox";
 export const DEFAULT_DASHBOARD_PATH = "/dashboard";
-export const DEFAULT_SCALE_PATH = "/scale/overview";
+export const DEFAULT_STUDIO_PATH = "/studio/overview";
 
 const BLOCKED_PATH_PREFIXES = ["/login", "/register", "/setup", "/api"] as const;
 
@@ -25,13 +25,13 @@ function isEmailPathname(pathname: string): boolean {
   );
 }
 
-function isScalePathname(pathname: string): boolean {
-  return pathname === "/scale" || pathname.startsWith("/scale/");
+function isStudioPathname(pathname: string): boolean {
+  return pathname === "/studio" || pathname.startsWith("/studio/");
 }
 
 export function modeFromPathname(pathname: string): SidebarMode {
   if (isEmailPathname(pathname)) return "email";
-  if (isScalePathname(pathname)) return "scale";
+  if (isStudioPathname(pathname)) return "studio";
   return "dashboard";
 }
 
@@ -50,15 +50,11 @@ export function normalizeEntryPath(path: string): string {
   let pathname = pathnamePart || "/";
   const params = new URLSearchParams(query);
 
-  if (pathname === "/crm" || pathname.startsWith("/crm/")) {
-    pathname = pathname.replace(/^\/crm(?=\/|$)/, "/scale");
+  if (pathname === "/studio/broadcasts" || pathname.startsWith("/studio/broadcasts/")) {
+    pathname = pathname.replace(/^\/studio\/broadcasts(?=\/|$)/, "/studio/newsletters");
   }
-
-  if (pathname === "/scale/broadcasts" || pathname.startsWith("/scale/broadcasts/")) {
-    pathname = pathname.replace(/^\/scale\/broadcasts(?=\/|$)/, "/scale/newsletters");
-  }
-  if (pathname === "/scale/automations" || pathname.startsWith("/scale/automations/")) {
-    pathname = pathname.replace(/^\/scale\/automations(?=\/|$)/, "/scale/triggers");
+  if (pathname === "/studio/automations" || pathname.startsWith("/studio/automations/")) {
+    pathname = pathname.replace(/^\/studio\/automations(?=\/|$)/, "/studio/triggers");
   }
 
   const emailSection = pathname.match(
@@ -108,11 +104,11 @@ export function normalizeEntryPath(path: string): string {
     }
   }
 
-  const scaleSubscribersNested = pathname.match(
-    /^\/scale\/subscribers\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  const studioSubscribersNested = pathname.match(
+    /^\/studio\/subscribers\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
   );
-  if (scaleSubscribersNested) {
-    let groupId = scaleSubscribersNested[1]!;
+  if (studioSubscribersNested) {
+    let groupId = studioSubscribersNested[1]!;
     try {
       groupId = decodeURIComponent(groupId);
     } catch {
@@ -120,18 +116,18 @@ export function normalizeEntryPath(path: string): string {
     }
     const next = new URLSearchParams();
     next.set("id", groupId);
-    const tabSeg = scaleSubscribersNested[2];
+    const tabSeg = studioSubscribersNested[2];
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/scale/subscribers?${next.toString()}`;
+    return `/studio/subscribers?${next.toString()}`;
   }
 
-  const scaleAudienceLegacyNested = pathname.match(
-    /^\/scale\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  const studioAudienceLegacyNested = pathname.match(
+    /^\/studio\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
   );
-  if (scaleAudienceLegacyNested) {
-    let groupId = scaleAudienceLegacyNested[1]!;
+  if (studioAudienceLegacyNested) {
+    let groupId = studioAudienceLegacyNested[1]!;
     try {
       groupId = decodeURIComponent(groupId);
     } catch {
@@ -139,11 +135,11 @@ export function normalizeEntryPath(path: string): string {
     }
     const next = new URLSearchParams();
     next.set("id", groupId);
-    const tabSeg = scaleAudienceLegacyNested[2];
+    const tabSeg = studioAudienceLegacyNested[2];
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/scale/subscribers?${next.toString()}`;
+    return `/studio/subscribers?${next.toString()}`;
   }
 
   const subscribersMatch = pathname.match(
@@ -162,7 +158,7 @@ export function normalizeEntryPath(path: string): string {
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/scale/subscribers?${next.toString()}`;
+    return `/studio/subscribers?${next.toString()}`;
   }
 
   const audienceMatch = pathname.match(
@@ -181,7 +177,7 @@ export function normalizeEntryPath(path: string): string {
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/scale/subscribers?${next.toString()}`;
+    return `/studio/subscribers?${next.toString()}`;
   }
 
   if (
@@ -191,22 +187,22 @@ export function normalizeEntryPath(path: string): string {
     pathname.startsWith("/audience/")
   ) {
     const qs = params.toString();
-    return qs ? `/scale/subscribers?${qs}` : "/scale/subscribers";
+    return qs ? `/studio/subscribers?${qs}` : "/studio/subscribers";
   }
 
   if (pathname === "/broadcasts/new") {
-    return "/scale/newsletters?new=1";
+    return "/studio/newsletters?new=1";
   }
-  const scaleNewsletterSection = pathname.match(/^\/scale\/newsletters\/(sent|in-progress)\/?$/);
-  if (scaleNewsletterSection) {
-    return `/scale/newsletters?view=${scaleNewsletterSection[1]}`;
+  const studioNewsletterSection = pathname.match(/^\/studio\/newsletters\/(sent|in-progress)\/?$/);
+  if (studioNewsletterSection) {
+    return `/studio/newsletters?view=${studioNewsletterSection[1]}`;
   }
 
-  const scaleNewsletterMatch = pathname.match(
-    /^\/scale\/newsletters\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  const studioNewsletterMatch = pathname.match(
+    /^\/studio\/newsletters\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
-  if (scaleNewsletterMatch) {
-    const segment = scaleNewsletterMatch[1]!;
+  if (studioNewsletterMatch) {
+    const segment = studioNewsletterMatch[1]!;
     if (segment !== "sent" && segment !== "in-progress" && segment !== "edit") {
       let newsletterId = segment;
       try {
@@ -216,7 +212,7 @@ export function normalizeEntryPath(path: string): string {
       }
       const next = new URLSearchParams();
       next.set("id", newsletterId);
-      const tabSeg = scaleNewsletterMatch[2];
+      const tabSeg = studioNewsletterMatch[2];
       if (tabSeg === "audience" || tabSeg === "recipients") {
         next.set("tab", "recipients");
       } else if (
@@ -227,13 +223,13 @@ export function normalizeEntryPath(path: string): string {
       ) {
         next.set("tab", tabSeg);
       }
-      return `/scale/newsletters?${next.toString()}`;
+      return `/studio/newsletters?${next.toString()}`;
     }
   }
 
-  const scaleTriggerEditMatch = pathname.match(/^\/scale\/triggers\/([^/]+)\/(content|edit)\/?$/);
-  if (scaleTriggerEditMatch) {
-    let triggerId = scaleTriggerEditMatch[1]!;
+  const studioTriggerEditMatch = pathname.match(/^\/studio\/triggers\/([^/]+)\/(content|edit)\/?$/);
+  if (studioTriggerEditMatch) {
+    let triggerId = studioTriggerEditMatch[1]!;
     if (triggerId !== "edit") {
       try {
         triggerId = decodeURIComponent(triggerId);
@@ -242,26 +238,26 @@ export function normalizeEntryPath(path: string): string {
       }
       const next = new URLSearchParams();
       next.set("id", triggerId);
-      return `/scale/triggers/edit?${next.toString()}`;
+      return `/studio/triggers/edit?${next.toString()}`;
     }
   }
 
-  const scaleTriggerMatch = pathname.match(
-    /^\/scale\/triggers\/([^/]+)(?:\/(config|preview|content|trigger|activity|stats|settings))?\/?$/,
+  const studioTriggerMatch = pathname.match(
+    /^\/studio\/triggers\/([^/]+)(?:\/(config|preview|content|trigger|activity|stats|settings))?\/?$/,
   );
-  if (scaleTriggerMatch) {
-    let triggerId = scaleTriggerMatch[1]!;
+  if (studioTriggerMatch) {
+    let triggerId = studioTriggerMatch[1]!;
     if (triggerId !== "edit") {
       try {
         triggerId = decodeURIComponent(triggerId);
       } catch {
         /* keep raw */
       }
-      const tabSeg = scaleTriggerMatch[2];
+      const tabSeg = studioTriggerMatch[2];
       if (tabSeg === "content") {
         const next = new URLSearchParams();
         next.set("id", triggerId);
-        return `/scale/triggers/edit?${next.toString()}`;
+        return `/studio/triggers/edit?${next.toString()}`;
       }
       const next = new URLSearchParams();
       next.set("id", triggerId);
@@ -277,21 +273,17 @@ export function normalizeEntryPath(path: string): string {
       ) {
         next.set("tab", "config");
       }
-      return `/scale/triggers?${next.toString()}`;
+      return `/studio/triggers?${next.toString()}`;
     }
   }
 
-  const scaleBroadcastSection = pathname.match(/^\/scale\/broadcasts\/(sent|in-progress)\/?$/);
-  if (scaleBroadcastSection) {
-    return `/scale/newsletters?view=${scaleBroadcastSection[1]}`;
-  }
-  const legacyCrmBroadcastSection = pathname.match(/^\/crm\/broadcasts\/(sent|in-progress)\/?$/);
-  if (legacyCrmBroadcastSection) {
-    return `/scale/newsletters?view=${legacyCrmBroadcastSection[1]}`;
+  const studioBroadcastSection = pathname.match(/^\/studio\/broadcasts\/(sent|in-progress)\/?$/);
+  if (studioBroadcastSection) {
+    return `/studio/newsletters?view=${studioBroadcastSection[1]}`;
   }
   const legacyBroadcastSection = pathname.match(/^\/broadcasts\/(sent|in-progress)\/?$/);
   if (legacyBroadcastSection) {
-    return `/scale/newsletters?view=${legacyBroadcastSection[1]}`;
+    return `/studio/newsletters?view=${legacyBroadcastSection[1]}`;
   }
   const broadcastMatch = pathname.match(
     /^\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|progress|overview))?\/?$/,
@@ -311,14 +303,14 @@ export function normalizeEntryPath(path: string): string {
     } else if (tabSeg === "content" || tabSeg === "progress") {
       next.set("tab", tabSeg === "progress" ? "stats" : tabSeg);
     }
-    return `/scale/newsletters?${next.toString()}`;
+    return `/studio/newsletters?${next.toString()}`;
   }
 
-  const scaleBroadcastMatch = pathname.match(
-    /^\/scale\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  const studioBroadcastMatch = pathname.match(
+    /^\/studio\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
   );
-  if (scaleBroadcastMatch) {
-    let newsletterId = scaleBroadcastMatch[1]!;
+  if (studioBroadcastMatch) {
+    let newsletterId = studioBroadcastMatch[1]!;
     try {
       newsletterId = decodeURIComponent(newsletterId);
     } catch {
@@ -326,7 +318,7 @@ export function normalizeEntryPath(path: string): string {
     }
     const next = new URLSearchParams();
     next.set("id", newsletterId);
-    const tabSeg = scaleBroadcastMatch[2];
+    const tabSeg = studioBroadcastMatch[2];
     if (tabSeg === "audience" || tabSeg === "recipients") {
       next.set("tab", "recipients");
     } else if (
@@ -337,40 +329,14 @@ export function normalizeEntryPath(path: string): string {
     ) {
       next.set("tab", tabSeg);
     }
-    return `/scale/newsletters?${next.toString()}`;
+    return `/studio/newsletters?${next.toString()}`;
   }
 
-  const legacyCrmBroadcastMatch = pathname.match(
-    /^\/crm\/broadcasts\/([^/]+)(?:\/(audience|recipients|content|publish|stats|settings))?\/?$/,
+  const studioAutomationEditMatch = pathname.match(
+    /^\/studio\/automations\/([^/]+)\/(content|edit)\/?$/,
   );
-  if (legacyCrmBroadcastMatch) {
-    let newsletterId = legacyCrmBroadcastMatch[1]!;
-    try {
-      newsletterId = decodeURIComponent(newsletterId);
-    } catch {
-      /* keep raw */
-    }
-    const next = new URLSearchParams();
-    next.set("id", newsletterId);
-    const tabSeg = legacyCrmBroadcastMatch[2];
-    if (tabSeg === "audience" || tabSeg === "recipients") {
-      next.set("tab", "recipients");
-    } else if (
-      tabSeg === "content" ||
-      tabSeg === "publish" ||
-      tabSeg === "stats" ||
-      tabSeg === "settings"
-    ) {
-      next.set("tab", tabSeg);
-    }
-    return `/scale/newsletters?${next.toString()}`;
-  }
-
-  const scaleAutomationEditMatch = pathname.match(
-    /^\/scale\/automations\/([^/]+)\/(content|edit)\/?$/,
-  );
-  if (scaleAutomationEditMatch) {
-    let triggerId = scaleAutomationEditMatch[1]!;
+  if (studioAutomationEditMatch) {
+    let triggerId = studioAutomationEditMatch[1]!;
     if (triggerId !== "edit") {
       try {
         triggerId = decodeURIComponent(triggerId);
@@ -379,26 +345,26 @@ export function normalizeEntryPath(path: string): string {
       }
       const next = new URLSearchParams();
       next.set("id", triggerId);
-      return `/scale/triggers/edit?${next.toString()}`;
+      return `/studio/triggers/edit?${next.toString()}`;
     }
   }
 
-  const scaleAutomationMatch = pathname.match(
-    /^\/scale\/automations\/([^/]+)(?:\/(preview|content|trigger|activity|stats|settings))?\/?$/,
+  const studioAutomationMatch = pathname.match(
+    /^\/studio\/automations\/([^/]+)(?:\/(preview|content|trigger|activity|stats|settings))?\/?$/,
   );
-  if (scaleAutomationMatch) {
-    let triggerId = scaleAutomationMatch[1]!;
+  if (studioAutomationMatch) {
+    let triggerId = studioAutomationMatch[1]!;
     if (triggerId !== "edit") {
       try {
         triggerId = decodeURIComponent(triggerId);
       } catch {
         /* keep raw */
       }
-      const tabSeg = scaleAutomationMatch[2];
+      const tabSeg = studioAutomationMatch[2];
       if (tabSeg === "content") {
         const next = new URLSearchParams();
         next.set("id", triggerId);
-        return `/scale/triggers/edit?${next.toString()}`;
+        return `/studio/triggers/edit?${next.toString()}`;
       }
       const next = new URLSearchParams();
       next.set("id", triggerId);
@@ -407,59 +373,13 @@ export function normalizeEntryPath(path: string): string {
       } else if (tabSeg === "activity") {
         next.set("tab", "stats");
       }
-      return `/scale/triggers?${next.toString()}`;
+      return `/studio/triggers?${next.toString()}`;
     }
-  }
-
-  const legacyCrmAutomationMatch = pathname.match(
-    /^\/crm\/automations\/([^/]+)(?:\/(content|preview|trigger|activity|stats|settings))?\/?$/,
-  );
-  if (legacyCrmAutomationMatch) {
-    let triggerId = legacyCrmAutomationMatch[1]!;
-    try {
-      triggerId = decodeURIComponent(triggerId);
-    } catch {
-      /* keep raw */
-    }
-    const tabSeg = legacyCrmAutomationMatch[2];
-    if (tabSeg === "content") {
-      const next = new URLSearchParams();
-      next.set("id", triggerId);
-      return `/scale/triggers/edit?${next.toString()}`;
-    }
-    const next = new URLSearchParams();
-    next.set("id", triggerId);
-    if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
-      next.set("tab", tabSeg);
-    } else if (tabSeg === "activity") {
-      next.set("tab", "stats");
-    }
-    return `/scale/triggers?${next.toString()}`;
   }
 
   if (pathname === "/automations" || pathname.startsWith("/automations/")) {
     const qs = params.toString();
-    return qs ? `/scale/triggers?${qs}` : "/scale/triggers";
-  }
-
-  const legacyCrmNewsletterMatch = pathname.match(
-    /^\/crm\/newsletters(?:\/([^/]+))?(?:\/(content|publish|progress|overview))?\/?$/,
-  );
-  if (legacyCrmNewsletterMatch) {
-    const next = new URLSearchParams();
-    const legacyId = legacyCrmNewsletterMatch[1];
-    if (legacyId) {
-      try {
-        next.set("id", decodeURIComponent(legacyId));
-      } catch {
-        next.set("id", legacyId);
-      }
-    }
-    const tabSeg = legacyCrmNewsletterMatch[2];
-    if (tabSeg === "content" || tabSeg === "publish" || tabSeg === "progress") {
-      next.set("tab", tabSeg === "progress" ? "publish" : tabSeg);
-    }
-    return `/scale/newsletters?${next.toString()}`;
+    return qs ? `/studio/triggers?${qs}` : "/studio/triggers";
   }
 
   // Settings: /settings/{tab} are real nested routes now. Collapse
@@ -522,6 +442,6 @@ export function isRestorablePath(path: string, mode: SidebarMode): boolean {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return false;
   }
   if (mode === "email") return isEmailPathname(pathname);
-  if (mode === "scale") return isScalePathname(pathname);
-  return !isEmailPathname(pathname) && !isScalePathname(pathname);
+  if (mode === "studio") return isStudioPathname(pathname);
+  return !isEmailPathname(pathname) && !isStudioPathname(pathname);
 }

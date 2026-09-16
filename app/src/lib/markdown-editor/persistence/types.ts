@@ -1,18 +1,18 @@
 /**
- * Scale newsletter editor persistence (adapted from Railmark editor-persistence).
+ * Studio newsletter editor persistence (adapted from Railmark editor-persistence).
  */
 
-export type ScalePersistRoot = "scale";
-export const SCALE_PERSIST_ROOT: ScalePersistRoot = "scale";
+export type StudioPersistRoot = "studio";
+export const STUDIO_PERSIST_ROOT: StudioPersistRoot = "studio";
 
 export type Mode = "read" | "edit";
 
 export type EditContext = {
-  root: ScalePersistRoot | null;
+  root: StudioPersistRoot | null;
   /** Local snapshot/draft storage key — the document identity (e.g. newsletter or template id). */
   path: string | null;
   /**
-   * `/scale/newsletters/…` suffix used by the tab-close beacon PATCH — may
+   * `/studio/newsletters/…` suffix used by the tab-close beacon PATCH — may
    * differ from `path` when the document lives under a parent resource
    * (e.g. a nested workspace path under the newsletter id). Falls back to `path`.
    */

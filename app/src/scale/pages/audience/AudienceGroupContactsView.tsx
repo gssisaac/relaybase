@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, Plus, Users } from "lucide-react";
+import { MoreHorizontal, Plus, Upload, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,7 @@ import {
 } from "@/scale/pages/audience/AudienceGroupDetailContext";
 import { audienceContactDisplayName } from "@/lib/audience-display";
 import { ScaleApiError, scaleAudienceApi } from "@/lib/scale/audience-api";
+import { ImportSubscribersDialog } from "@/scale/components/audience/ImportSubscribersDialog";
 import { AddVerifiedAccountDialog } from "@/scale/components/verified-accounts/AddVerifiedAccountDialog";
 import { VerificationPendingDialog } from "@/scale/components/verified-accounts/VerificationPendingDialog";
 import { VerificationStatusBadge } from "@/scale/components/verified-accounts/VerificationStatusBadge";
@@ -147,36 +148,9 @@ export function AudienceGroupContactsView() {
     <div className="space-y-4">
       <VerifiedAccountsQuotaCard />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Group</CardTitle>
-          <CardDescription>
-            Subscribers in this group. Cloudflare verification unlocks quota-free sending to that
-            address.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{group.domain}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {contacts.length.toLocaleString()} account{contacts.length === 1 ? "" : "s"}
-              {" · "}
-              {verificationCounts.verified} verified
-              {verificationCounts.pending > 0
-                ? ` · ${verificationCounts.pending} pending`
-                : ""}
-              {group.dataSource
-                ? group.cronEnabled
-                  ? " · Synced · scheduled"
-                  : " · Synced"
-                : " · Manual"}
-            </p>
-          </div>
-          {verifiedStore.destinationError ? (
-            <p className="text-xs text-destructive">{verifiedStore.destinationError}</p>
-          ) : null}
-        </CardContent>
-      </Card>
+      {verifiedStore.destinationError ? (
+        <p className="text-xs text-destructive">{verifiedStore.destinationError}</p>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -185,19 +159,34 @@ export function AudienceGroupContactsView() {
             {verificationCounts.verified} of {verificationCounts.total} verified with Cloudflare.
           </p>
         </div>
-        <AddVerifiedAccountDialog
-          groupId={groupId}
-          onAdded={() => {
-            clearAudienceGroupDetailCache("", groupId);
-            void refresh(true);
-          }}
-          trigger={
-            <Button size="sm">
-              <Plus className="size-4" />
-              Add verified account
-            </Button>
-          }
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportSubscribersDialog
+            groupId={groupId}
+            onImported={() => {
+              clearAudienceGroupDetailCache("", groupId);
+              void refresh(true);
+            }}
+            trigger={
+              <Button size="sm" variant="outline">
+                <Upload className="size-4" />
+                Import
+              </Button>
+            }
+          />
+          <AddVerifiedAccountDialog
+            groupId={groupId}
+            onAdded={() => {
+              clearAudienceGroupDetailCache("", groupId);
+              void refresh(true);
+            }}
+            trigger={
+              <Button size="sm">
+                <Plus className="size-4" />
+                Add verified account
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       {contacts.length === 0 ? (

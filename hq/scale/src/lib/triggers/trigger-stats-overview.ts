@@ -23,11 +23,11 @@ function formatDayLabel(dayKey: string): string {
   });
 }
 
-function sumTriggerStats(rows: Trigger[]): TriggerStats & { automations: number } {
+function sumTriggerStats(rows: Trigger[]): TriggerStats & { triggers: number } {
   const totals = normalizeTriggerStats(undefined);
-  let automations = 0;
+  let triggers = 0;
   for (const row of rows) {
-    automations += 1;
+    triggers += 1;
     const stats = normalizeTriggerStats(row.stats);
     totals.triggered += stats.triggered;
     totals.matched += stats.matched;
@@ -44,7 +44,7 @@ function sumTriggerStats(rows: Trigger[]): TriggerStats & { automations: number 
     totals.totalClicks += stats.totalClicks;
     totals.unsubscribed += stats.unsubscribed;
   }
-  return { ...totals, automations };
+  return { ...totals, triggers };
 }
 
 export type TriggerStatsOverview = {
@@ -52,10 +52,10 @@ export type TriggerStatsOverview = {
   period: { from: string; to: string };
   triggers24h: number;
   triggers7d: number;
-  totals: TriggerStats & { automations: number };
+  totals: TriggerStats & { triggers: number };
   rates: { delivery: number; open: number; click: number; bounce: number };
   byDay: { day: string; label: string; count: number }[];
-  byAutomation: Array<{
+  byTrigger: Array<{
     id: string;
     name: string;
     status: Trigger["status"];
@@ -65,8 +65,8 @@ export type TriggerStatsOverview = {
   recentEvents: Array<{
     id: string;
     triggerId: string | null;
-    automationName: string;
-    triggerType: TriggerEvent["triggerType"];
+    triggerName: string;
+    sourceType: TriggerEvent["triggerType"];
     recipientEmail: string;
     status: TriggerEvent["status"];
     occurredAt: string;
@@ -113,7 +113,7 @@ export function buildTriggerStatsOverview(): TriggerStatsOverview {
     triggerDayMap.set(key, (triggerDayMap.get(key) ?? 0) + 1);
   }
 
-  const byAutomation = automations
+  const byTrigger = automations
     .map((row) => ({
       id: row.id,
       name: row.name,
@@ -136,8 +136,8 @@ export function buildTriggerStatsOverview(): TriggerStatsOverview {
       return {
         id: row.id,
         triggerId: row.triggerId,
-        automationName: automation?.name ?? "Unknown automation",
-        triggerType: row.triggerType,
+        triggerName: automation?.name ?? "Unknown trigger",
+        sourceType: row.triggerType,
         recipientEmail: row.recipientEmail,
         status: row.status,
         occurredAt: row.occurredAt,
@@ -169,7 +169,7 @@ export function buildTriggerStatsOverview(): TriggerStatsOverview {
       label: formatDayLabel(day),
       count,
     })),
-    byAutomation,
+    byTrigger,
     recentEvents,
   };
 }

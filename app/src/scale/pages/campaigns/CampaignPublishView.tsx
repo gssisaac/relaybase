@@ -26,13 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AudienceGroupCmdDropdown } from "@/scale/components/AudienceGroupCmdDropdown";
 import { CampaignSendingProgressPanel } from "@/scale/components/campaigns/CampaignSendingProgressPanel";
 import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
 import { scaleAudienceDetailHref, campaignDetailHref } from "@/scale/lib/paths";
@@ -170,15 +164,6 @@ export function CampaignPublishView() {
     if (!d) return [];
     return audienceGroups.filter((g) => g.domain.toLowerCase() === d);
   }, [audienceGroups, sendDomain]);
-
-  const audienceSelectItems = useMemo(
-    () =>
-      groupsForDomain.map((g) => ({
-        value: g.id,
-        label: `${g.name} · ${g.contactCount} contacts`,
-      })),
-    [groupsForDomain],
-  );
 
   if (!campaign) return null;
 
@@ -390,39 +375,21 @@ export function CampaignPublishView() {
           {canChangeAudience ? (
             <div className="space-y-1.5">
               <Label htmlFor="publish-audience">Audience group</Label>
-              {!sendDomain ? (
-                <p className="text-sm text-muted-foreground">
-                  Set a sending domain on Settings before choosing an audience.
-                </p>
-              ) : audienceGroupsLoading ? (
-                <p className="text-sm text-muted-foreground">Loading audience groups…</p>
-              ) : groupsForDomain.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No audience groups on {sendDomain} — create one in Audience first.
-                </p>
-              ) : (
-                <div className="flex max-w-lg flex-wrap items-center gap-2">
-                  <Select
-                    items={audienceSelectItems}
-                    value={campaign.audienceGroupId || null}
-                    onValueChange={(value) => {
-                      if (value) openAudienceChangeConfirm(value);
-                    }}
-                  >
-                    <SelectTrigger id="publish-audience" className="min-w-0 flex-1">
-                      <SelectValue placeholder="Select audience group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groupsForDomain.map((g) => {
-                        const label = `${g.name} · ${g.contactCount} contacts`;
-                        return (
-                          <SelectItem key={g.id} value={g.id} label={label}>
-                            {label}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
+              <div className="flex max-w-lg flex-wrap items-center gap-2">
+                <AudienceGroupCmdDropdown
+                  triggerId="publish-audience"
+                  triggerClassName="min-w-0 flex-1"
+                  groups={audienceGroups}
+                  loading={audienceGroupsLoading}
+                  domainFilter={sendDomain}
+                  value={campaign.audienceGroupId || null}
+                  pinnedGroupIds={
+                    campaign.audienceGroupId ? [campaign.audienceGroupId] : []
+                  }
+                  onValueChange={(value) => {
+                    if (value) openAudienceChangeConfirm(value);
+                  }}
+                />
                   <Button
                     type="button"
                     size="sm"
@@ -435,7 +402,12 @@ export function CampaignPublishView() {
                     View contacts
                   </Button>
                 </div>
-              )}
+              {!sendDomain ? (
+                <p className="text-sm text-muted-foreground">
+                  Pick an audience group below, or set a sender on Settings to narrow the list to
+                  one domain.
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">

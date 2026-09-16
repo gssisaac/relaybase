@@ -18,13 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
+import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { TriggerStatusBadge } from "@/scale/components/triggers/TriggerStatusBadge";
 import {
@@ -38,7 +33,6 @@ import {
 } from "@/scale/lib/triggers/trigger-sidebar-list";
 import { triggerDetailHref } from "@/scale/lib/paths";
 import { TriggersOverviewTopSection } from "@/scale/pages/triggers/TriggersOverviewTopSection";
-import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import {
   scaleApi,
   ScaleApiError,
@@ -68,8 +62,6 @@ const FILTER_OPTIONS: { value: TriggerFilter; label: string }[] = [
 
 export function TriggersListView() {
   const router = useRouter();
-  const { readyDomains, loading: domainsLoading, refresh: refreshWorkerDomains } =
-    useWorkerDomains();
   const [rows, setRows] = useState<Trigger[]>([]);
   const [overview, setOverview] = useState<ScaleOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +72,7 @@ export function TriggersListView() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newSenderEmail, setNewSenderEmail] = useState<string | null>(null);
   const [newDomain, setNewDomain] = useState<string | null>(null);
   const [newPurpose, setNewPurpose] = useState<TriggerPurpose>("transactional");
 
@@ -118,16 +111,11 @@ export function TriggersListView() {
 
   function resetCreate() {
     setNewName("");
-    setNewDomain(readyDomains[0]?.domain ?? null);
+    setNewSenderEmail(null);
+    setNewDomain(null);
     setNewPurpose("transactional");
     setCreating(false);
   }
-
-  useEffect(() => {
-    if (!createOpen) return;
-    void refreshWorkerDomains();
-    resetCreate();
-  }, [createOpen, refreshWorkerDomains]);
 
   const counts = useMemo(() => {
     const visible = rows.filter((r) => r.listStatus !== "archived");
@@ -159,7 +147,7 @@ export function TriggersListView() {
     const name = newName.trim();
     const domain = newDomain?.trim().toLowerCase();
     if (!name || !domain) {
-      toast.error("Name and domain are required");
+      toast.error("Name and sending account are required");
       return;
     }
     setCreating(true);
@@ -233,37 +221,36 @@ export function TriggersListView() {
             </div>
             <div className="space-y-1.5">
               <Label>Purpose</Label>
-              <Select
+              <CmdDropdown
+                triggerClassName="min-w-0"
                 value={newPurpose}
-                onValueChange={(v) => setNewPurpose(v as TriggerPurpose)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="transactional">Transactional</SelectItem>
-                  <SelectItem value="conversational">Conversational</SelectItem>
-                  <SelectItem value="marketing">Marketing</SelectItem>
-                </SelectContent>
-              </Select>
+                enableSearch={false}
+                options={[
+                  { value: "transactional", label: "Transactional" },
+                  { value: "conversational", label: "Conversational" },
+                  { value: "marketing", label: "Marketing" },
+                ]}
+                onValueChange={(v) => {
+                  if (v === "transactional" || v === "conversational" || v === "marketing") {
+                    setNewPurpose(v);
+                  }
+                }}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Domain</Label>
-              <Select value={newDomain} onValueChange={setNewDomain}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select domain" />
-                </SelectTrigger>
-                <SelectContent>
-                  {readyDomains.map((d) => (
-                    <SelectItem key={d.domain} value={d.domain}>
-                      {d.domain}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {domainsLoading ? (
-                <p className="text-xs text-muted-foreground">Loading domains…</p>
-              ) : null}
+              <Label htmlFor="trigger-create-sender">Sending account</Label>
+              <AccountCmdDropdown
+                triggerId="trigger-create-sender"
+                triggerClassName="min-w-0"
+                value={newSenderEmail}
+                onValueChange={(email, ctx) => {
+                  setNewSenderEmail(email ?? null);
+                  setNewDomain(ctx?.domain ?? null);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Sending domain is taken from the account you pick.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -279,7 +266,7 @@ export function TriggersListView() {
             <Button
               type="button"
               size="sm"
-              disabled={creating || !newName.trim() || !newDomain}
+              disabled={creating || !newName.trim() || !newDomain?.trim()}
               onClick={() => void handleCreate()}
             >
               {creating ? "Creating…" : "Create"}

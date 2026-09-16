@@ -89,7 +89,7 @@ export function TemplatesListView() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar
         className="px-4 py-3"
         end={
@@ -145,16 +145,17 @@ export function TemplatesListView() {
             </Button>
           </div>
         }
-      />
-
-      <div className={dashboardScrollBodyClassName("flex min-h-0 flex-1 flex-col gap-3 p-4")}>
-        <div>
+      >
+        <div className="min-w-0 space-y-1">
           <h1 className="truncate text-lg font-semibold tracking-tight">Templates</h1>
           <p className="text-sm text-muted-foreground">
             Message content linked from campaigns and triggers. HTML frames live under Layouts.
           </p>
         </div>
+      </DesktopTitleBar>
 
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+        <div className={dashboardScrollBodyClassName("flex min-h-0 flex-1 flex-col gap-3")}>
         <ListToolbar search={search} onSearchChange={setSearch} searchPlaceholder="Search templates…" />
 
         <EmailListContainer>
@@ -193,6 +194,7 @@ export function TemplatesListView() {
             ))
           )}
         </EmailListContainer>
+        </div>
       </div>
     </div>
   );

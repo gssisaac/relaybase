@@ -18,15 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
-import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
+import { AudienceGroupCmdDropdown } from "@/scale/components/AudienceGroupCmdDropdown";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { CampaignCloudflareSendingLimitsCard } from "@/scale/components/campaigns/CampaignCloudflareSendingLimitsCard";
 import { CampaignStatusBadge } from "@/scale/components/campaigns/CampaignStatusBadge";
@@ -127,11 +120,6 @@ function statsLine(b: Campaign): string {
 
 export function CampaignsListView() {
   const router = useRouter();
-  const {
-    readyDomains,
-    loading: workerDomainsLoading,
-    refresh: refreshWorkerDomains,
-  } = useWorkerDomains();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,7 +128,6 @@ export function CampaignsListView() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newDomain, setNewDomain] = useState<string | null>(null);
   const [newAudienceGroupId, setNewAudienceGroupId] = useState<string>("");
   const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
   const [audienceLoading, setAudienceLoading] = useState(false);
@@ -179,14 +166,13 @@ export function CampaignsListView() {
 
   useEffect(() => {
     if (!createOpen) return;
-    void refreshWorkerDomains();
     setAudienceLoading(true);
     scaleAudienceApi
       .listGroups()
       .then(({ groups }) => setAudienceGroups(groups))
       .catch(() => toast.error("Could not load audience groups"))
       .finally(() => setAudienceLoading(false));
-  }, [createOpen, refreshWorkerDomains]);
+  }, [createOpen]);
 
   const counts = useMemo(() => {
     const visible = campaigns.filter((b) => b.listStatus !== "archived");
@@ -216,24 +202,8 @@ export function CampaignsListView() {
     });
   }, [campaigns, filter, search]);
 
-  const groupsForDomain = useMemo(() => {
-    const d = newDomain?.toLowerCase();
-    if (!d) return [];
-    return audienceGroups.filter((g) => g.domain.toLowerCase() === d);
-  }, [audienceGroups, newDomain]);
-
-  const audienceSelectItems = useMemo(
-    () =>
-      groupsForDomain.map((g) => ({
-        value: g.id,
-        label: `${g.name} · ${g.contactCount} contacts`,
-      })),
-    [groupsForDomain],
-  );
-
   function resetCreate() {
     setNewName("");
-    setNewDomain(readyDomains[0]?.domain ?? null);
     setNewAudienceGroupId("");
     setCreateError(null);
     setCreating(false);
@@ -242,15 +212,13 @@ export function CampaignsListView() {
   async function handleCreate() {
     const name = newName.trim();
     const audienceGroupId = newAudienceGroupId.trim();
+    const group = audienceGroups.find((g) => g.id === audienceGroupId);
+    const domain = group?.domain.trim().toLowerCase();
     if (!name) {
       setCreateError("Campaign name is required");
       return;
     }
-    if (!newDomain) {
-      setCreateError("Select a sending domain");
-      return;
-    }
-    if (!audienceGroupId) {
+    if (!audienceGroupId || !domain) {
       setCreateError("Select an audience group");
       return;
     }
@@ -260,7 +228,7 @@ export function CampaignsListView() {
       const workerUrl = resolveEmailApiBase();
       const created = await scaleApi.createCampaign({
         name,
-        domain: newDomain,
+        domain,
         audienceGroupId,
         ...(workerUrl ? { workerUrl } : {}),
       });
@@ -323,7 +291,7 @@ export function CampaignsListView() {
           <DialogHeader>
             <DialogTitle>New campaign</DialogTitle>
             <DialogDescription>
-              Pick a domain from your Worker, then an audience group on that domain.
+              Choose an audience group — sending domain comes from the group.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -339,64 +307,14 @@ export function CampaignsListView() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="campaign-domain">Domain</Label>
-              <Select
-                value={newDomain}
-                onValueChange={(value) => {
-                  setNewDomain(value);
-                  setNewAudienceGroupId("");
-                }}
-              >
-                <SelectTrigger id="campaign-domain" className="w-full">
-                  <SelectValue placeholder="Select domain" />
-                </SelectTrigger>
-                <SelectContent>
-                  {readyDomains.map((d) => (
-                    <SelectItem key={d.domain} value={d.domain}>
-                      {d.domain}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {workerDomainsLoading ? (
-                <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
-              ) : readyDomains.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  No domains on your Worker yet — add one in Console → Domains.
-                </p>
-              ) : null}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="campaign-audience">Audience</Label>
-              {audienceLoading ? (
-                <p className="text-sm text-muted-foreground">Loading audience groups…</p>
-              ) : !newDomain ? (
-                <p className="text-sm text-muted-foreground">Select a domain first.</p>
-              ) : groupsForDomain.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No audience groups on this domain — create one in Audience first.
-                </p>
-              ) : (
-                <Select
-                  items={audienceSelectItems}
-                  value={newAudienceGroupId || null}
-                  onValueChange={(value) => setNewAudienceGroupId(value ?? "")}
-                >
-                  <SelectTrigger id="campaign-audience" className="w-full">
-                    <SelectValue placeholder="Select audience group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groupsForDomain.map((g) => {
-                      const label = `${g.name} · ${g.contactCount} contacts`;
-                      return (
-                        <SelectItem key={g.id} value={g.id} label={label}>
-                          {label}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              )}
+              <Label htmlFor="campaign-audience">Audience group</Label>
+              <AudienceGroupCmdDropdown
+                triggerId="campaign-audience"
+                groups={audienceGroups}
+                loading={audienceLoading}
+                value={newAudienceGroupId || null}
+                onValueChange={(id) => setNewAudienceGroupId(id ?? "")}
+              />
               {createError ? <p className="text-xs text-destructive">{createError}</p> : null}
             </div>
           </div>
@@ -413,9 +331,7 @@ export function CampaignsListView() {
             <Button
               type="button"
               size="sm"
-              disabled={
-                creating || !newName.trim() || !newDomain || !newAudienceGroupId.trim()
-              }
+              disabled={creating || !newName.trim() || !newAudienceGroupId.trim()}
               onClick={() => void handleCreate()}
             >
               {creating ? "Creating…" : "Create campaign"}

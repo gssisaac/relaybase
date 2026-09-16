@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
+import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { ScaleDetailPageHeader } from "@/scale/components/ScaleDetailPageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,7 +27,6 @@ import { prepareLayoutTemplateHtml } from "@/scale/lib/layouts/layout-standard-f
 import { useScalePaths } from "@/scale/lib/paths";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError, type ScaleLayout } from "@/lib/scale/api";
-import { cn } from "@/lib/utils";
 
 const SAMPLE_BODY_HTML =
   "<p style='margin:0 0 12px;font-family:sans-serif;font-size:15px;line-height:1.5;color:#334155'>Sample message body — merge tags and markdown render here in campaigns.</p>";
@@ -123,65 +123,75 @@ export function LayoutDetailView({ layoutId }: { layoutId: string }) {
   }
 
   if (loading && !row) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading layout…</p>;
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <ScaleDetailPageHeader backHref={layoutsPath} backLabel="Back to layouts" title="Loading…" />
+        <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
+          Loading layout…
+        </div>
+      </div>
+    );
   }
 
   if (!row) {
     return (
-      <div className="p-4 text-sm">
-        Layout not found.{" "}
-        <Link href={layoutsPath} className="text-primary underline-offset-4 hover:underline">
-          Back to layouts
-        </Link>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <ScaleDetailPageHeader
+          backHref={layoutsPath}
+          backLabel="Back to layouts"
+          title="Layout not found"
+        />
+        <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
+          This layout does not exist or was removed.{" "}
+          <Link href={layoutsPath} className="text-primary underline-offset-4 hover:underline">
+            Back to layouts
+          </Link>
+        </div>
       </div>
     );
   }
 
   const isCustom = !row.isBuiltin;
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      {isCustom ? (
+        <AlertDialog>
+          <AlertDialogTrigger
+            render={
+              <Button size="sm" variant="outline" disabled={deleting}>
+                Delete
+              </Button>
+            }
+          />
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete layout?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes &quot;{row.name}&quot; permanently. Message templates still using this
+                frame must be updated first.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => void remove()}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
+      <Button size="sm" disabled={saving} onClick={() => void save()}>
+        {saving ? "Saving…" : row.isBuiltin ? "Save as custom copy" : "Save"}
+      </Button>
+    </div>
+  );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <DesktopTitleBar
-        className="px-4 py-2"
-        end={
-          <div className="flex items-center gap-2">
-            {isCustom ? (
-              <AlertDialog>
-                <AlertDialogTrigger
-                  render={
-                    <Button size="sm" variant="outline" disabled={deleting}>
-                      Delete
-                    </Button>
-                  }
-                />
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete layout?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This removes &quot;{row.name}&quot; permanently. Message templates still
-                      using this frame must be updated first.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => void remove()}>
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : null}
-            <Button size="sm" disabled={saving} onClick={() => void save()}>
-              {saving ? "Saving…" : row.isBuiltin ? "Save as custom copy" : "Save"}
-            </Button>
-          </div>
-        }
-      >
-        <Link href={layoutsPath} className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
-          Layouts
-        </Link>
-        <span className="truncate text-sm font-medium">{row.name}</span>
-      </DesktopTitleBar>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <ScaleDetailPageHeader
+        backHref={layoutsPath}
+        backLabel="Back to layouts"
+        title={row.name.trim() || "Untitled layout"}
+        end={headerActions}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto border-b border-border p-4 lg:border-b-0 lg:border-r">

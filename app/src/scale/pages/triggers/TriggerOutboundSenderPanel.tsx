@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CmdDropdown } from "@/components/ui/cmd-dropdown";
+import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/popover";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts";
-import { accountCmdGroups } from "@/scale/lib/triggers/trigger-account-cmd-groups";
 import { resolveTriggerSendingDomain } from "@/scale/lib/triggers/trigger-sending-domain";
 import { displayNameForAddress } from "@/scale/lib/use-domain-addresses";
 import { useTriggerDetail } from "@/scale/pages/triggers/TriggerDetailContext";
@@ -63,37 +62,18 @@ export function TriggerOutboundSenderPanel({
     [availableAddresses],
   );
 
-  const senderAccountGroups = useMemo(
-    () =>
-      accountCmdGroups(
-        senderCandidates,
-        [fromEmail ?? "", useReplyTo ? (replyTo ?? "") : ""].filter(Boolean),
-      ),
-    [senderCandidates, fromEmail, replyTo, useReplyTo],
+  const pinnedSenderEmails = useMemo(
+    () => [fromEmail ?? "", useReplyTo ? (replyTo ?? "") : ""].filter(Boolean),
+    [fromEmail, replyTo, useReplyTo],
   );
 
   const allowedSenderEmails = useMemo(
-    () => new Set(senderAccountGroups.flatMap((g) => g.options.map((o) => o.value))),
-    [senderAccountGroups],
+    () => new Set(senderCandidates.map((a) => a.email.toLowerCase())),
+    [senderCandidates],
   );
 
-  const fromEmailValue =
-    fromEmail?.trim().toLowerCase() && allowedSenderEmails.has(fromEmail.trim().toLowerCase())
-      ? fromEmail.trim().toLowerCase()
-      : fromEmail?.trim().toLowerCase() || null;
-
-  const replyToValue =
-    replyTo?.trim().toLowerCase() && allowedSenderEmails.has(replyTo.trim().toLowerCase())
-      ? replyTo.trim().toLowerCase()
-      : replyTo?.trim().toLowerCase() || null;
-
-  const hasSenderAccounts = senderAccountGroups.length > 0;
-
-  const senderPlaceholder = addressesLoading
-    ? "Loading accounts…"
-    : !hasSenderAccounts
-      ? "No sender accounts in Console"
-      : "Select sender address";
+  const fromEmailValue = fromEmail?.trim().toLowerCase() || null;
+  const replyToValue = replyTo?.trim().toLowerCase() || null;
 
   async function saveSender() {
     if (!trigger) return;
@@ -145,25 +125,22 @@ export function TriggerOutboundSenderPanel({
         {addressesError ? <p className="text-sm text-destructive">{addressesError}</p> : null}
         <div className="space-y-2">
           <Label htmlFor="preview-from-email">From email</Label>
-          <CmdDropdown
+          <AccountCmdDropdown
             triggerId="preview-from-email"
             triggerClassName="min-w-0"
+            addresses={senderCandidates}
+            autoRefresh={false}
+            pinnedEmails={pinnedSenderEmails}
             value={fromEmailValue}
-            placeholder={senderPlaceholder}
-            searchPlaceholder="Search by email or domain…"
-            groups={senderAccountGroups}
-            disabled={disabled || addressesLoading || !hasSenderAccounts}
-            onValueChange={(email) => {
+            disabled={disabled || addressesLoading}
+            onValueChange={(email, ctx) => {
               if (!email) {
                 onDraftChange({ fromEmail: null, fromName: null });
                 return;
               }
-              const match = senderCandidates.find(
-                (a) => a.email.toLowerCase() === email.toLowerCase(),
-              );
               onDraftChange({
                 fromEmail: email,
-                fromName: match ? displayNameForAddress(match) : null,
+                fromName: ctx?.address ? displayNameForAddress(ctx.address) : null,
               });
             }}
           />
@@ -223,14 +200,14 @@ export function TriggerOutboundSenderPanel({
           {useReplyTo ? (
             <div className="space-y-2">
               <Label htmlFor="preview-reply-to">Reply-To</Label>
-              <CmdDropdown
+              <AccountCmdDropdown
                 triggerId="preview-reply-to"
                 triggerClassName="min-w-0"
+                addresses={senderCandidates}
+                autoRefresh={false}
+                pinnedEmails={pinnedSenderEmails}
                 value={replyToValue}
-                placeholder={senderPlaceholder}
-                searchPlaceholder="Search by email or domain…"
-                groups={senderAccountGroups}
-                disabled={disabled || addressesLoading || !hasSenderAccounts}
+                disabled={disabled || addressesLoading}
                 onValueChange={(email) => onDraftChange({ replyTo: email ?? null })}
               />
             </div>

@@ -151,13 +151,13 @@
       "name": "Product update (starter)",
       "subject": "What's new in {{vars.brand.organization_name}}",
       "previewText": "A short release note your subscribers can skim in under a minute.",
-      "bodyMarkdown": "Hello {{contact.name}},\n\nWe shipped a few improvements this week:\n\n* **Feature one** — one sentence on the outcome.\n\n* **Feature two** — who it helps and how to turn it on.\n\n \n\nThanks for reading,\\\n The team\n",
+      "bodyMarkdown": "Hello {{contact.name}},\n\nWe shipped a few improvements this week:\n\n* **Feature one** — one sentence on the outcome.\n\n* **Feature two** — who it helps and how to turn it on.\n\nThanks for reading,\\\n The team\n",
       "layoutId": "tpl-minimal",
       "templateVariables": {},
       "category": "newsletter",
       "isPreset": true,
       "createdAt": "2026-09-15T16:51:06.849Z",
-      "updatedAt": "2026-09-15T17:03:53.243Z"
+      "updatedAt": "2026-09-16T01:38:32.236Z"
     },
     {
       "id": "msgtpl_preset_verify_email",
@@ -165,13 +165,13 @@
       "name": "Verify email (transactional)",
       "subject": "Verify your email",
       "previewText": "Confirm this address to finish creating your account",
-      "bodyMarkdown": "Hi {{contact.name}},\n\nConfirm this address to finish creating your account.\n\n[Verify email]({{trigger.verifyUrl}})\n\nIf you did not sign up, ignore this message.\n\n— Relaybase",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nConfirm this address to finish creating your account.\n\nIf you did not sign up, ignore this message.\n\n— Relaybase\n",
       "layoutId": "tpl-minimal",
       "templateVariables": {},
       "category": "transactional",
       "isPreset": true,
       "createdAt": "2026-09-15T16:51:06.849Z",
-      "updatedAt": "2026-09-15T16:51:06.849Z"
+      "updatedAt": "2026-09-16T01:36:44.453Z"
     },
     {
       "id": "msgtpl_broadcast_d63712e3-2630-42fa-8706-04255e013a90",
@@ -179,13 +179,13 @@
       "name": "September Product Update",
       "subject": "Introducing Relaybase Scale v2.0",
       "previewText": "Broadcast stats, audience groups, and a calmer send pipeline",
-      "bodyMarkdown": "Hello {{contact.name}},\n\nWe just shipped **Relaybase Scale v2.0** — the first version built for teams who send product email from their own domain, not a shared marketing subdomain.\n\n### What is new\n\n* **Broadcast stats** — delivery, opens, clicks, and unsubscribes roll up per send without leaving the dashboard.\n\n* **Audience groups** — link a list once; recipients are resolved at send time so late subscribers still receive scheduled mail.\n\n* **Compliance footers** — CAN-SPAM blocks pull from a reusable sender identity instead of one-off copy/paste.\n\n### Why it matters\n\nIf you have been stitching together spreadsheets, BCC tests, and manual unsubscribe replies, this release is meant to replace that loop with something you can audit.\n\n \n\nThanks for reading,\\\n The Relaybase team\n",
+      "bodyMarkdown": "Hello {{contact.name}},\n\nWe just shipped **Relaybase Scale v2.0** — the first version built for teams who send product email from their own domain, not a shared marketing subdomain.\n\n### What is new\n\n* **Broadcast stats** — delivery, opens, clicks, and unsubscribes roll up per send without leaving the dashboard.\n\n* **Audience groups** — link a list once; recipients are resolved at send time so late subscribers still receive scheduled mail.\n\n* **Compliance footers** — CAN-SPAM blocks pull from a reusable sender identity instead of one-off copy/paste.\n\n### Why it matters\n\nIf you have been stitching together spreadsheets, BCC tests, and manual unsubscribe replies, this release is meant to replace that loop with something you can audit.\n\nThanks for reading,\\\n The Relaybase team\n",
       "layoutId": "tpl-minimal",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-14T21:57:32.495Z",
-      "updatedAt": "2026-09-15T17:01:51.484Z"
+      "updatedAt": "2026-09-15T17:20:19.991Z"
     },
     {
       "id": "msgtpl_broadcast_sent_july_recap",
@@ -193,13 +193,13 @@
       "name": "July Recap",
       "subject": "What shipped in July",
       "previewText": "Deliverability tooling, faster inbox sync, and Scale groundwork",
-      "bodyMarkdown": "Hi {{contact.name}},\n\nJuly was mostly infrastructure — the kind of work that does not show up in a screenshot but keeps mail landing in the inbox.\n\n**Highlights**\n\n1. **Domain onboarding** — clearer DNS checks and routing status in Console.\n\n1. **Send logs** — dual-write to ops logs so failed API sends surface in the dashboard.\n\n1. **CRM prototype** — audience + broadcast models landed behind the feature flag you are on.\n\nWe also fixed a handful of edge cases around partial bounces and local inbox delivery for `@relaybase.email` test addresses.\n\n \n\n— Isaac & the Relaybase crew\n",
+      "bodyMarkdown": "Hi {{contact.name}},\n\nJuly was mostly infrastructure — the kind of work that does not show up in a screenshot but keeps mail landing in the inbox.\n\n**Highlights**\n\n1. **Domain onboarding** — clearer DNS checks and routing status in Console.\n\n1. **Send logs** — dual-write to ops logs so failed API sends surface in the dashboard.\n\n1. **CRM prototype** — audience + broadcast models landed behind the feature flag you are on.\n\nWe also fixed a handful of edge cases around partial bounces and local inbox delivery for `@relaybase.email` test addresses.\n\n— Isaac & the Relaybase crew\n",
       "layoutId": "tpl-card",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-07-20T10:00:00.000Z",
-      "updatedAt": "2026-09-15T17:06:19.039Z"
+      "updatedAt": "2026-09-15T17:20:43.248Z"
     },
     {
       "id": "msgtpl_broadcast_sent_aug_launch",
@@ -207,13 +207,13 @@
       "name": "August Launch",
       "subject": "Relaybase 2.0 is live",
       "previewText": "Your domain, your keys, your broadcast pipeline",
-      "bodyMarkdown": "Hello {{contact.name}},\n\n**Relaybase 2.0** is live for early access accounts. The headline change: everything runs on **your** Cloudflare Worker and verified domain — we do not sit in the SMTP path as a shared sender.\n\n### Three things to try this week\n\n- Send a **test broadcast** to your own `@relaybase.email` inbox.\n- Rotate to a **domain-scoped API key** labeled for Scale sends.\n- Open **Sent statistics** after a send and confirm rollups match the recipient list.\n\n[Launch notes](https://relaybase.com/blog/v2) · [Watch the 8-minute demo](https://relaybase.com/demo)\n\nIf you hit a blocker, reply to this thread — we are actively pairing with design partners.\n\nCheers,\nRelaybase\n",
+      "bodyMarkdown": "Hello {{contact.name}},\n\n**Relaybase 2.0** is live for early access accounts. The headline change: everything runs on **your** Cloudflare Worker and verified domain — we do not sit in the SMTP path as a shared sender.\n\n### Three things to try this week\n\n* Send a **test broadcast** to your own `@relaybase.email` inbox.\n\n* Rotate to a **domain-scoped API key** labeled for Scale sends.\n\n* Open **Sent statistics** after a send and confirm rollups match the recipient list.\n\n[Launch notes](https://relaybase.com/blog/v2) · [Watch the 8-minute demo](https://relaybase.com/demo)\n\nIf you hit a blocker, reply to this thread — we are actively pairing with design partners.\n\nCheers,\\\n Relaybase\n",
       "layoutId": "tpl-header",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-08-01T09:00:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T17:19:33.562Z"
     },
     {
       "id": "msgtpl_broadcast_sent_aug_security",
@@ -277,13 +277,13 @@
       "name": "Weekly Engineering Digest",
       "subject": "This week in platform engineering",
       "previewText": "Worker send API, Scale dispatch, and inbox test accounts",
-      "bodyMarkdown": "Hey {{contact.name}},\n\nWelcome to **Engineering Weekly** — a short note on what the platform team shipped and what is landing next.\n\n**This week**\n\n- Wired Scale **`sendMail`** to your Worker `POST /v1/send` with domain-scoped keys.\n- Registered `@relaybase.email` mailboxes on the shared dev Worker for realistic inbox tests.\n- Reset demo `store.json` fixtures to draft so you can re-run sends without seed noise.\n\n**Next week**\n\n- Public `SCALE_PUBLIC_BASE_URL` for tracking pixels outside localhost.\n- Bounce webhook ingestion from Worker events.\n\nQuestions? Drop a note in `#eng-relaybase` or reply here.\n\n— Platform engineering\n",
+      "bodyMarkdown": "Hey {{contact.name}},\n\nWelcome to **Engineering Weekly** — a short note on what the platform team shipped and what is landing next.\n\n**This week**\n\n* Wired Scale `sendMail` to your Worker `POST /v1/send` with domain-scoped keys.\n\n* Registered `@relaybase.email` mailboxes on the shared dev Worker for realistic inbox tests.\n\n* Reset demo `store.json` fixtures to draft so you can re-run sends without seed noise.\n\n**Next week**\n\n* Public `SCALE_PUBLIC_BASE_URL` for tracking pixels outside localhost.\n\n* Bounce webhook ingestion from Worker events.\n\nQuestions? Drop a note in `#eng-relaybase` or reply here.\n\n— Platform engineering\n",
       "layoutId": "tpl-minimal",
       "templateVariables": {},
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-15T10:00:00.000Z",
-      "updatedAt": "2026-09-15T03:08:16.042Z"
+      "updatedAt": "2026-09-15T17:22:31.173Z"
     },
     {
       "id": "msgtpl_broadcast_sending_product_wave",
@@ -511,6 +511,20 @@
       "isPreset": false,
       "createdAt": "2026-09-09T09:00:00.000Z",
       "updatedAt": "2026-09-09T09:00:00.000Z"
+    },
+    {
+      "id": "msgtpl_automation_6aaa0458-ebbb-4336-995b-2856e1d1e277",
+      "accountLinkId": "dev",
+      "name": "ㄹㅇㅁ",
+      "subject": "",
+      "previewText": null,
+      "bodyMarkdown": "",
+      "layoutId": "tpl-minimal",
+      "templateVariables": {},
+      "category": "transactional",
+      "isPreset": false,
+      "createdAt": "2026-09-15T17:22:56.541Z",
+      "updatedAt": "2026-09-15T17:23:05.623Z"
     }
   ],
   "campaigns": [
@@ -703,7 +717,7 @@
       "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
       "listStatus": "active",
       "status": "scheduled",
-      "scheduledAt": "2026-09-22T03:00:00.000Z",
+      "scheduledAt": "2026-09-23T03:00:00.000Z",
       "sentAt": null,
       "startedAt": null,
       "finishedAt": null,
@@ -722,7 +736,7 @@
       },
       "templateId": "msgtpl_broadcast_sent_sep_digest",
       "createdAt": "2026-09-07T09:00:00.000Z",
-      "updatedAt": "2026-09-15T16:51:08.073Z"
+      "updatedAt": "2026-09-16T00:00:03.674Z"
     },
     {
       "id": "broadcast_failed_smtp",
@@ -878,7 +892,7 @@
       "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
       "listStatus": "active",
       "status": "scheduled",
-      "scheduledAt": "2026-09-16T03:00:00.000Z",
+      "scheduledAt": "2026-09-17T03:00:00.000Z",
       "sentAt": null,
       "startedAt": null,
       "finishedAt": null,
@@ -897,7 +911,7 @@
       },
       "templateId": "msgtpl_broadcast_scheduled_ama",
       "createdAt": "2026-09-14T18:00:00.000Z",
-      "updatedAt": "2026-09-15T16:51:08.073Z"
+      "updatedAt": "2026-09-16T00:00:03.674Z"
     },
     {
       "id": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
@@ -913,7 +927,7 @@
       "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
       "listStatus": "active",
       "status": "scheduled",
-      "scheduledAt": "2026-09-29T03:00:00.000Z",
+      "scheduledAt": "2026-09-30T03:00:00.000Z",
       "sentAt": null,
       "startedAt": null,
       "finishedAt": null,
@@ -932,7 +946,7 @@
       },
       "templateId": "msgtpl_broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "createdAt": "2026-09-14T21:58:55.873Z",
-      "updatedAt": "2026-09-15T16:51:08.073Z"
+      "updatedAt": "2026-09-16T00:00:03.674Z"
     },
     {
       "id": "broadcast_5ac032ef-d7d8-40c6-8486-665fa4f1ff88",
@@ -1493,6 +1507,49 @@
       "lastSentAt": null,
       "createdAt": "2026-09-09T09:00:00.000Z",
       "updatedAt": "2026-09-09T09:00:00.000Z"
+    },
+    {
+      "id": "automation_6aaa0458-ebbb-4336-995b-2856e1d1e277",
+      "accountLinkId": "dev",
+      "name": "ㄹㅇㅁ",
+      "slug": "automation_2",
+      "description": null,
+      "domain": "kloyapp.com",
+      "fromName": "Strum Corp",
+      "fromEmail": "hello@kloyapp.com",
+      "replyTo": null,
+      "complianceIdentityId": "compliance_e852a498-6f42-4c26-9172-a71c237d23a8",
+      "purpose": "transactional",
+      "listStatus": "archived",
+      "status": "draft",
+      "source": {
+        "type": "internal_event",
+        "event": "account.verify_email"
+      },
+      "audienceGroupId": null,
+      "cooldownSeconds": 86400,
+      "applyMarketingSuppression": false,
+      "templateId": "msgtpl_automation_6aaa0458-ebbb-4336-995b-2856e1d1e277",
+      "stats": {
+        "triggered": 0,
+        "matched": 0,
+        "deduped": 0,
+        "sent": 0,
+        "delivered": 0,
+        "bounced": 0,
+        "failed": 0,
+        "skipped": 0,
+        "complained": 0,
+        "opened": 0,
+        "totalOpens": 0,
+        "clicked": 0,
+        "totalClicks": 0,
+        "unsubscribed": 0
+      },
+      "lastTriggeredAt": null,
+      "lastSentAt": null,
+      "createdAt": "2026-09-15T17:22:56.541Z",
+      "updatedAt": "2026-09-15T17:23:05.623Z"
     }
   ],
   "triggerEvents": [],
@@ -1503,31 +1560,31 @@
   "activities": [],
   "scheduledJobs": [
     {
-      "id": "job_4c56244a-786c-49c1-bcc8-b4331f40b2e9",
+      "id": "job_3301042f-3593-49fa-9b93-d712ad4a2408",
       "accountLinkId": "dev",
       "kind": "campaign",
       "refId": "broadcast_scheduled_ama",
-      "runAt": "2026-09-16T03:00:00.000Z",
+      "runAt": "2026-09-17T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-15T17:12:22.079Z"
+      "createdAt": "2026-09-16T01:43:36.289Z"
     },
     {
-      "id": "job_f6359a56-760c-40e9-8989-9294a9d133e6",
+      "id": "job_0b1f38b6-7149-4242-873f-c8b13e6b47bd",
       "accountLinkId": "dev",
       "kind": "campaign",
       "refId": "broadcast_sent_sep_digest",
-      "runAt": "2026-09-22T03:00:00.000Z",
+      "runAt": "2026-09-23T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-15T17:12:22.079Z"
+      "createdAt": "2026-09-16T01:43:36.289Z"
     },
     {
-      "id": "job_54ff2993-eeda-4f5c-ade7-89c38f5234f7",
+      "id": "job_04d7c439-77d8-4864-84e2-a99ba1ced38f",
       "accountLinkId": "dev",
       "kind": "campaign",
       "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
-      "runAt": "2026-09-29T03:00:00.000Z",
+      "runAt": "2026-09-30T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-15T17:12:22.079Z"
+      "createdAt": "2026-09-16T01:43:36.289Z"
     }
   ],
   "trackingEvents": [],

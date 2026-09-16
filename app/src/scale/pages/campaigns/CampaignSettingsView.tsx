@@ -23,11 +23,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CmdDropdown } from "@/components/ui/cmd-dropdown";
-import {
-  displayNameForAddress,
-  useDomainAddresses,
-} from "@/scale/lib/use-domain-addresses";
+import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
+import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
+import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts";
+import { displayNameForAddress } from "@/scale/lib/use-domain-addresses";
+import { domainOf } from "@/scale/lib/triggers/trigger-account-cmd-groups";
 import {
   Select,
   SelectContent,
@@ -39,19 +39,15 @@ import Link from "next/link";
 
 import { scaleAudienceDetailHref } from "@/scale/lib/paths";
 import { useCampaignDetail } from "@/scale/pages/campaigns/CampaignDetailContext";
-import { useWorkerDomains } from "@/scale/lib/use-worker-domains";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { ComplianceIdentityEditor } from "@/scale/components/ComplianceIdentityEditor";
 import { scaleApi, ScaleApiError } from "@/lib/scale/api";
 
 export function CampaignSettingsView() {
   const { campaignId, campaign, templates, setCampaign } = useCampaignDetail();
-  const { readyDomainNames, loading: domainsLoading, refresh: refreshWorkerDomains } =
-    useWorkerDomains();
+  const { availableAddresses, loading: addressesLoading, refreshAddresses } = useMailAccounts();
 
   const [sendDomain, setSendDomain] = useState<string | null>(null);
-  const { domainAddresses, displayNameOptions, loading: addressesLoading } =
-    useDomainAddresses(sendDomain);
 
   const [fromName, setFromName] = useState<string | null>(campaign?.fromName ?? null);
   const [fromEmail, setFromEmail] = useState<string | null>(campaign?.fromEmail ?? null);
@@ -86,82 +82,52 @@ export function CampaignSettingsView() {
   }, [campaignId]);
 
   useEffect(() => {
-    void refreshWorkerDomains();
-  }, [refreshWorkerDomains]);
+    void refreshAddresses();
+  }, [refreshAddresses]);
 
-  const domainOptionValues = useMemo(() => {
-    const values = new Set(readyDomainNames);
-    const pinned = (sendDomain ?? campaign?.domain ?? campaign?.audienceGroupDomain)?.trim();
-    if (pinned) values.add(pinned);
-    return [...values].sort((a, b) => a.localeCompare(b));
-  }, [readyDomainNames, sendDomain, campaign?.domain, campaign?.audienceGroupDomain]);
+  const audienceDomain = campaign?.audienceGroupDomain?.trim().toLowerCase() ?? null;
 
   const domainMismatch =
-    Boolean(sendDomain && campaign?.audienceGroupDomain) &&
-    sendDomain!.toLowerCase() !== campaign!.audienceGroupDomain!.toLowerCase();
+    Boolean(sendDomain && audienceDomain) && sendDomain!.toLowerCase() !== audienceDomain;
 
   const domainLocked = campaign?.status !== "draft";
-  const domainSelectDisabled =
-    domainLocked || (domainsLoading && domainOptionValues.length === 0);
-
-  const emailOptions = useMemo(() => {
-    const emails = domainAddresses.map((a) => a.email);
-    if (fromEmail && !emails.some((e) => e.toLowerCase() === fromEmail.toLowerCase())) {
-      emails.unshift(fromEmail);
-    }
-    return emails;
-  }, [domainAddresses, fromEmail]);
 
   const nameOptions = useMemo(() => {
-    const names = [...displayNameOptions];
-    if (fromName && !names.includes(fromName)) names.unshift(fromName);
-    return names;
-  }, [displayNameOptions, fromName]);
+    const d = sendDomain?.trim().toLowerCase();
+    const names = new Set<string>();
+    if (fromName?.trim()) names.add(fromName.trim());
+    if (d) {
+      for (const address of sortAddressesByLocalPart(availableAddresses)) {
+        if (domainOf(address.email, address.domain) !== d) continue;
+        names.add(displayNameForAddress(address));
+      }
+    }
+    return [...names];
+  }, [availableAddresses, fromName, sendDomain]);
 
   const allowedEmails = useMemo(
-    () => new Set(emailOptions.map((e) => e.toLowerCase())),
-    [emailOptions],
+    () => new Set(availableAddresses.map((a) => a.email.toLowerCase())),
+    [availableAddresses],
   );
-
-  const domainSelectOptions = useMemo(
-    () => domainOptionValues.map((d) => ({ value: d, label: d })),
-    [domainOptionValues],
-  );
-
-  const accountEmailOptions = useMemo(
-    () => emailOptions.map((email) => ({ value: email, label: email })),
-    [emailOptions],
-  );
-
-  const domainPlaceholder =
-    domainsLoading && domainOptionValues.length === 0
-      ? "Loading domains…"
-      : domainOptionValues.length === 0
-        ? "No domains in Console"
-        : "Select sending domain";
-
-  const fromEmailPlaceholder =
-    addressesLoading
-      ? "Loading accounts…"
-      : emailOptions.length === 0
-        ? "No senders on this domain"
-        : "Select sender address";
 
   if (!campaign) return null;
 
   async function saveIdentity() {
-    if (!sendDomain) {
-      setFromEmailError("Select a sending domain");
+    const resolvedDomain =
+      sendDomain?.trim().toLowerCase() ||
+      (fromEmail?.includes("@") ? fromEmail.slice(fromEmail.indexOf("@") + 1).toLowerCase() : "");
+    if (!resolvedDomain) {
+      setFromEmailError("Select a sender account");
       return;
     }
-    if (domainMismatch) {
+    if (audienceDomain && resolvedDomain !== audienceDomain) {
       setFromEmailError(
-        `Audience is on ${campaign?.audienceGroupDomain}. Match that domain or change the linked audience.`,
+        `Audience is on ${campaign?.audienceGroupDomain}. Pick a sender on that domain.`,
       );
       return;
     }
     if (fromEmail && !allowedEmails.has(fromEmail.toLowerCase())) {
-      setFromEmailError("Select a sender address from your accounts on this domain");
+      setFromEmailError("Select a sender address from your Console accounts");
       return;
     }
     setFromEmailError(null);
@@ -169,7 +135,7 @@ export function CampaignSettingsView() {
     try {
       const workerUrl = resolveEmailApiBase();
       const updated = await scaleApi.updateCampaign(campaignId, {
-        domain: sendDomain,
+        domain: resolvedDomain,
         ...(workerUrl ? { workerUrl } : {}),
         fromName: fromName?.trim() || null,
         fromEmail: fromEmail?.trim() || null,
@@ -261,66 +227,47 @@ export function CampaignSettingsView() {
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="send-domain">Domain</Label>
-            <CmdDropdown
-              triggerId="send-domain"
+            <Label htmlFor="from-email">Sender account</Label>
+            <AccountCmdDropdown
+              triggerId="from-email"
               triggerClassName="min-w-0"
-              value={sendDomain}
-              placeholder={domainPlaceholder}
-              searchPlaceholder="Search domains…"
-              options={domainSelectOptions}
-              disabled={domainSelectDisabled}
-              onValueChange={(next) => {
-                if (!next) {
-                  setSendDomain(null);
+              value={fromEmail}
+              domainFilter={audienceDomain}
+              pinnedEmails={fromEmail ? [fromEmail] : []}
+              disabled={domainLocked || addressesLoading}
+              onValueChange={(email, ctx) => {
+                if (!email) {
+                  setFromEmail(null);
+                  setFromName(null);
                   return;
                 }
-                setSendDomain(next);
-                setFromEmail(null);
-                setFromName(null);
+                setFromEmail(email);
+                if (ctx?.domain) setSendDomain(ctx.domain);
+                if (ctx?.address) setFromName(displayNameForAddress(ctx.address));
               }}
             />
             {domainLocked ? (
               <p className="text-xs text-muted-foreground">
-                Domain can only be changed while the campaign is a draft (current status:{" "}
-                {campaign.status}). Duplicate the campaign to pick a different domain.
+                Sender can only be changed while the campaign is a draft (current status:{" "}
+                {campaign.status}).
               </p>
-            ) : domainsLoading ? (
-              <p className="text-xs text-muted-foreground">Loading domains from Worker…</p>
-            ) : domainOptionValues.length === 0 ? (
+            ) : audienceDomain ? (
               <p className="text-xs text-muted-foreground">
-                No domains on your Worker — add one in Console → Domains.
+                Sending domain is set from the account you pick (must match audience on{" "}
+                {campaign.audienceGroupDomain}).
               </p>
-            ) : domainMismatch ? (
-              <p className="text-xs text-destructive">
-                Audience is on {campaign.audienceGroupDomain}. Pick that domain to send.
-              </p>
+            ) : sendDomain ? (
+              <p className="text-xs text-muted-foreground">Sending domain: {sendDomain}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Same Worker domain catalog as when you create a campaign.
+                Pick a Console account — domain is inferred from the address.
               </p>
             )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="from-email">From email</Label>
-            <CmdDropdown
-              triggerId="from-email"
-              triggerClassName="min-w-0"
-              value={fromEmail}
-              placeholder={fromEmailPlaceholder}
-              searchPlaceholder="Search accounts…"
-              options={accountEmailOptions}
-              disabled={addressesLoading || emailOptions.length === 0}
-              onValueChange={(email) => {
-                if (!email) {
-                  setFromEmail(null);
-                  return;
-                }
-                setFromEmail(email);
-                const match = domainAddresses.find((a) => a.email === email);
-                if (match) setFromName(displayNameForAddress(match));
-              }}
-            />
+            {domainMismatch ? (
+              <p className="text-xs text-destructive">
+                Audience is on {campaign.audienceGroupDomain}. Pick a sender on that domain.
+              </p>
+            ) : null}
             {fromEmailError ? <p className="text-xs text-destructive">{fromEmailError}</p> : null}
           </div>
           <div className="space-y-1.5">
@@ -342,11 +289,7 @@ export function CampaignSettingsView() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Senders come from Accounts on{" "}
-              {sendDomain ?? "the audience domain"}.
-              {domainAddresses.length === 0 && !addressesLoading
-                ? " Add an address in Console → Accounts first."
-                : null}
+              Display name for {fromEmail ?? "the selected sender"}.
             </p>
           </div>
           <div className="space-y-1.5">

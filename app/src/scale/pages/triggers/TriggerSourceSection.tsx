@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CmdDropdown } from "@/components/ui/cmd-dropdown";
+import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -34,7 +34,6 @@ import { FieldCheck } from "@/components/ui/field-check";
 import { useMailAccounts } from "@/email/components/accounts/MailAccountsContext";
 import { sortAddressesByLocalPart } from "@/email/lib/accounts/enabled-accounts";
 import { useTriggerDetail } from "@/scale/pages/triggers/TriggerDetailContext";
-import { accountCmdGroups } from "@/scale/lib/triggers/trigger-account-cmd-groups";
 import { getScaleApiBase } from "@/lib/scale/api-base";
 import { scaleApi, ScaleApiError, type TriggerSource } from "@/lib/scale/api";
 
@@ -118,18 +117,9 @@ export function TriggerSourceSection() {
     return sortAddressesByLocalPart(inboundCapable);
   }, [availableAddresses]);
 
-  const inboundAccountGroups = useMemo(
-    () => accountCmdGroups(inboundAccountCandidates, [inboundAccountEmail]),
-    [inboundAccountCandidates, inboundAccountEmail],
-  );
-
   const inboundAccountEmails = useMemo(
-    () =>
-      new Set(
-        accountCmdGroups(inboundAccountCandidates, [inboundAccountEmail])
-          .flatMap((g) => g.options.map((o) => o.value)),
-      ),
-    [inboundAccountCandidates, inboundAccountEmail],
+    () => new Set(inboundAccountCandidates.map((a) => a.email.toLowerCase())),
+    [inboundAccountCandidates],
   );
 
   const inboundAccountValue = inboundAccountEmail.trim().toLowerCase() || null;
@@ -139,7 +129,7 @@ export function TriggerSourceSection() {
       ? inboundAccountValue
       : null;
 
-  const hasInboundAccounts = inboundAccountGroups.length > 0;
+  const hasInboundAccounts = inboundAccountCandidates.length > 0;
 
   const webhookUrl = useMemo(() => {
     if (!trigger) return "";
@@ -460,13 +450,13 @@ export function TriggerSourceSection() {
               ) : (
                 <>
                   <Label htmlFor="inbound-account">Account</Label>
-                  <CmdDropdown
+                  <AccountCmdDropdown
                     triggerId="inbound-account"
                     triggerClassName="min-w-0"
+                    addresses={inboundAccountCandidates}
+                    autoRefresh={false}
+                    pinnedEmails={[inboundAccountEmail]}
                     value={selectedInboundAccountEmail}
-                    placeholder="Select account"
-                    searchPlaceholder="Search by email or domain…"
-                    groups={inboundAccountGroups}
                     required
                     onValueChange={(value) => setInboundAccountEmail(value ?? "")}
                   />

@@ -67,7 +67,7 @@ export function TriggerStatsOverviewView() {
             )}
           >
             <ArrowLeft className="size-3.5" aria-hidden />
-            Automations
+            Triggers
           </Link>
           <h1 className="truncate text-lg font-semibold tracking-tight">Trigger statistics</h1>
           <p className="text-sm text-muted-foreground">
@@ -142,23 +142,23 @@ export function TriggerStatsOverviewView() {
                   <CardDescription className="text-xs">Last 7 days</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <ScaleOverviewTriggersChart data={data.byDay} />
+                  <ScaleOverviewTriggersChart data={data.byDay ?? []} />
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">By automation</CardTitle>
+                  <CardTitle className="text-base">By trigger</CardTitle>
                   <CardDescription>
-                    {data.totals.triggers} automations · sorted by lifetime triggers
+                    {data.totals.triggers} triggers · sorted by lifetime fires
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
-                  {data.byTrigger.length === 0 ? (
+                  {(data.byTrigger ?? []).length === 0 ? (
                     <p className="px-6 pb-6 text-sm text-muted-foreground">No triggers yet.</p>
                   ) : (
                     <ul className="divide-y divide-border">
-                      {data.byTrigger.map((row) => (
+                      {(data.byTrigger ?? []).map((row) => (
                         <li key={row.id}>
                           <Link
                             href={triggerDetailHref(row.id, "stats", row.status)}
@@ -184,11 +184,11 @@ export function TriggerStatsOverviewView() {
                   <CardDescription>Latest fires across all triggers</CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
-                  {data.recentEvents.length === 0 ? (
+                  {(data.recentEvents ?? []).length === 0 ? (
                     <p className="px-6 pb-6 text-sm text-muted-foreground">No trigger events yet.</p>
                   ) : (
                     <ul className="divide-y divide-border">
-                      {data.recentEvents.map((row) => (
+                      {(data.recentEvents ?? []).map((row) => (
                         <li
                           key={row.id}
                           className="flex flex-wrap items-center gap-2 px-6 py-2.5 text-sm"

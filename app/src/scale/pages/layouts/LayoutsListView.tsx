@@ -8,7 +8,6 @@ import { toast } from "sonner";
 
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { LayoutImportDialog } from "@/scale/components/layouts/LayoutImportDialog";
 import { LayoutWireframe } from "@/scale/components/layouts/LayoutWireframe";
 import { templateThumbnailVariant } from "@/scale/lib/campaigns/campaign-merge-tags";
@@ -17,6 +16,7 @@ import { layoutDetailHref } from "@/scale/lib/layout-paths";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { scaleApi, type ScaleLayout } from "@/lib/scale/api";
 import { cn } from "@/lib/utils";
+import { ListToolbar } from "@/email/components/mailbox/EmailListShell";
 
 export function LayoutsListView() {
   const router = useRouter();
@@ -56,7 +56,7 @@ export function LayoutsListView() {
   const custom = filtered.filter((t) => !t.isBuiltin);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <DesktopTitleBar
         className="px-4 py-3"
         end={
@@ -84,13 +84,12 @@ export function LayoutsListView() {
         </div>
       </DesktopTitleBar>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className={dashboardScrollBodyClassName("space-y-6")}>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search layouts…"
-            className="max-w-sm"
+          <ListToolbar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search layouts…"
           />
 
           {loading && rows.length === 0 ? (

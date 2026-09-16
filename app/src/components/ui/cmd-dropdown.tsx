@@ -79,8 +79,34 @@ export type CmdDropdownProps<Value extends string = string> =
         }
     )
 
-function optionSearchValue(option: CmdDropdownOption): string {
-  return [option.label, option.keywords].filter(Boolean).join(" ")
+function optionFilterKeywords(option: CmdDropdownOption): string[] {
+  return [option.label, option.keywords]
+    .filter(Boolean)
+    .flatMap((part) => part.trim().split(/\s+/))
+    .filter(Boolean)
+}
+
+/** Substring match — cmdk's default fuzzy filter matches unrelated labels (e.g. "reading" → "reola"). */
+function cmdDropdownSearchFilter(
+  value: string,
+  search: string,
+  keywords?: string[],
+): number {
+  const query = search.trim().toLowerCase()
+  if (!query) return 1
+
+  const haystacks = [value, ...(keywords ?? [])]
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean)
+
+  const tokens = query.split(/\s+/).filter(Boolean)
+
+  for (const haystack of haystacks) {
+    if (tokens.every((token) => haystack.includes(token))) {
+      return haystack.includes(query) ? 1 : 0.85
+    }
+  }
+  return 0
 }
 
 function CmdDropdown<Value extends string = string>({
@@ -142,7 +168,8 @@ function CmdDropdown<Value extends string = string>({
     return (
       <CommandItem
         key={option.value}
-        value={optionSearchValue(option)}
+        value={option.value}
+        keywords={optionFilterKeywords(option)}
         disabled={option.disabled}
         data-checked={isSelected ? true : undefined}
         className={cn(
@@ -318,17 +345,28 @@ function CmdDropdown<Value extends string = string>({
       <PopoverContent
         align={contentAlign}
         className={cn(
-          "w-(--anchor-width) min-w-[var(--anchor-width)] max-w-[min(24rem,calc(100vw-2rem))] gap-0 p-1",
+          "w-(--anchor-width) min-w-[var(--anchor-width)] max-w-[min(24rem,calc(100vw-2rem))] gap-0 p-0.5",
           contentClassName,
         )}
       >
-        <Command shouldFilter={enableSearch}>
+        <Command
+          shouldFilter={enableSearch}
+          filter={cmdDropdownSearchFilter}
+          className={cn(
+            "gap-0 p-0",
+            "[&_[data-slot=command-input-wrapper]]:m-0.5 [&_[data-slot=command-input-wrapper]]:p-0",
+            "[&_[data-slot=input-group]]:h-8! [&_[data-slot=input-group]]:rounded-lg! [&_[data-slot=input-group]]:border-border/80! [&_[data-slot=input-group]]:bg-card! [&_[data-slot=input-group]]:shadow-[0_1px_1px_0_rgba(0,0,0,0.02)]! [&_[data-slot=input-group]]:transition-all dark:[&_[data-slot=input-group]]:border-border/60! dark:[&_[data-slot=input-group]]:bg-input/10!",
+            "[&_[data-slot=input-group]:focus-within]:border-primary! [&_[data-slot=input-group]:focus-within]:ring-2! [&_[data-slot=input-group]:focus-within]:ring-primary/10!",
+            "[&_[data-slot=command-group]]:p-0 [&_[data-slot=command-group]]:**:[[cmdk-group-heading]]:px-1.5 [&_[data-slot=command-group]]:**:[[cmdk-group-heading]]:py-1 [&_[data-slot=command-group]]:**:[[cmdk-group-items]]:pl-0.5",
+            "[&_[data-slot=command-item]]:gap-1.5 [&_[data-slot=command-item]]:px-1.5 [&_[data-slot=command-item]]:py-1",
+          )}
+        >
           {enableSearch ? (
             <CommandInput
               placeholder={searchPlaceholder ?? placeholder ?? "Search…"}
             />
           ) : null}
-          <CommandList>
+          <CommandList className="max-h-60 scroll-py-0.5 [scrollbar-width:thin] [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent">
             <CommandEmpty>{emptyMessage}</CommandEmpty>
             {groups?.length ? (
               groups.map((group) => (
@@ -353,7 +391,7 @@ function CmdDropdown<Value extends string = string>({
                       setOpen(false)
                     }
                   }}
-                  className="justify-center text-center text-xs text-muted-foreground"
+                  className="justify-center px-1.5 py-1 text-center text-xs text-muted-foreground"
                 >
                   {clearLabel}
                 </CommandItem>

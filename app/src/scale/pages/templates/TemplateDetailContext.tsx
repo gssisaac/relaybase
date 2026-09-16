@@ -12,7 +12,7 @@ import {
 
 import { scaleApi, type MessageTemplate, type ScaleLayout } from "@/lib/scale/api";
 
-type DraftFields = {
+export type TemplateDraftFields = {
   name: string;
   subject: string;
   previewText: string;
@@ -20,6 +20,8 @@ type DraftFields = {
   templateId: string;
   templateVariables: Record<string, string>;
 };
+
+type DraftFields = TemplateDraftFields;
 
 type Ctx = {
   messageTemplateId: string;
@@ -32,6 +34,7 @@ type Ctx = {
   refreshLayouts: () => Promise<void>;
   syncDraft: (fields: DraftFields) => void;
   persistDraft: () => Promise<boolean>;
+  getDraft: () => DraftFields;
   getLastSavedDraft: () => DraftFields;
 };
 
@@ -115,6 +118,8 @@ export function TemplateDetailProvider({
     draftRef.current = fields;
   }, []);
 
+  const getDraft = useCallback((): DraftFields => ({ ...draftRef.current }), []);
+
   const getLastSavedDraft = useCallback((): DraftFields => {
     return lastSaved.current ?? draftRef.current;
   }, []);
@@ -172,6 +177,7 @@ export function TemplateDetailProvider({
         refreshLayouts,
         syncDraft,
         persistDraft,
+        getDraft,
         getLastSavedDraft,
       }}
     >

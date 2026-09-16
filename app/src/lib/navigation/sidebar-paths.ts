@@ -247,7 +247,7 @@ export function normalizeEntryPath(path: string): string {
   }
 
   const scaleTriggerMatch = pathname.match(
-    /^\/scale\/triggers\/([^/]+)(?:\/(preview|content|trigger|activity|stats|settings))?\/?$/,
+    /^\/scale\/triggers\/([^/]+)(?:\/(config|preview|content|trigger|activity|stats|settings))?\/?$/,
   );
   if (scaleTriggerMatch) {
     let triggerId = scaleTriggerMatch[1]!;
@@ -265,10 +265,17 @@ export function normalizeEntryPath(path: string): string {
       }
       const next = new URLSearchParams();
       next.set("id", triggerId);
-      if (tabSeg === "preview" || tabSeg === "trigger" || tabSeg === "stats" || tabSeg === "settings") {
-        next.set("tab", tabSeg);
+      if (tabSeg === "stats") {
+        next.set("tab", "stats");
       } else if (tabSeg === "activity") {
         next.set("tab", "stats");
+      } else if (
+        tabSeg === "config" ||
+        tabSeg === "preview" ||
+        tabSeg === "trigger" ||
+        tabSeg === "settings"
+      ) {
+        next.set("tab", "config");
       }
       return `/scale/triggers?${next.toString()}`;
     }

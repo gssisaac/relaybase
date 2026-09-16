@@ -1,5 +1,8 @@
+import { store } from "../../db/store";
 import {
+  accountDefaultComplianceIdentityId,
   complianceSettingsFromIdentity,
+  findComplianceIdentity,
   resolveComplianceIdentityForBroadcast,
 } from "./identity";
 
@@ -8,7 +11,11 @@ export function complianceMergeValues(broadcastId?: string): {
   postalAddress: string;
   complianceContactEmail: string;
 } {
-  const identity = broadcastId ? resolveComplianceIdentityForBroadcast(broadcastId) : undefined;
+  let identity = broadcastId ? resolveComplianceIdentityForBroadcast(broadcastId) : undefined;
+  if (!identity && broadcastId?.startsWith("msgtpl_")) {
+    const defaultId = accountDefaultComplianceIdentityId(store.read());
+    identity = defaultId ? findComplianceIdentity(defaultId) : undefined;
+  }
   const compliance = complianceSettingsFromIdentity(identity);
   return {
     organizationName: compliance.organizationName?.trim() || "",

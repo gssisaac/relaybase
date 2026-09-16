@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RefreshCw, Zap } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -8,18 +8,19 @@ import { toast } from "sonner";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AccountCmdDropdown } from "@/components/AccountCmdDropdown";
-import { CmdDropdown } from "@/components/ui/cmd-dropdown";
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
 import { TriggerStatusBadge } from "@/scale/components/triggers/TriggerStatusBadge";
 import {
@@ -29,19 +30,16 @@ import {
 } from "@/scale/lib/triggers/trigger-label";
 import {
   replaceTriggerSidebarList,
-  upsertTriggerSidebarListRow,
+  removeTriggerSidebarListRow,
 } from "@/scale/lib/triggers/trigger-sidebar-list";
 import { triggerDetailHref } from "@/scale/lib/paths";
-import { TriggersOverviewTopSection } from "@/scale/pages/triggers/TriggersOverviewTopSection";
+import { NewTriggerDialog } from "@/scale/pages/triggers/NewTriggerDialog";
 import {
   scaleApi,
   ScaleApiError,
   type Trigger,
-  type TriggerPurpose,
   type TriggerStatus,
-  type ScaleOverview,
 } from "@/lib/scale/api";
-import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { cn } from "@/lib/utils";
 import {
   EmailListContainer,
@@ -60,62 +58,39 @@ const FILTER_OPTIONS: { value: TriggerFilter; label: string }[] = [
   { value: "draft", label: "Draft" },
 ];
 
+function triggerRowLabel(row: Trigger): string {
+  return row.name?.trim() || row.subject?.trim() || "Untitled trigger";
+}
+
 export function TriggersListView() {
   const router = useRouter();
   const [rows, setRows] = useState<Trigger[]>([]);
-  const [overview, setOverview] = useState<ScaleOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [overviewLoading, setOverviewLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TriggerFilter>("all");
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newSenderEmail, setNewSenderEmail] = useState<string | null>(null);
-  const [newDomain, setNewDomain] = useState<string | null>(null);
-  const [newPurpose, setNewPurpose] = useState<TriggerPurpose>("transactional");
+  const [addOpen, setAddOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Trigger | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async (force?: boolean) => {
     if (force) setRefreshing(true);
-    else {
-      setLoading(true);
-      setOverviewLoading(true);
-    }
-    const [listResult, overviewResult] = await Promise.allSettled([
-      scaleApi.listTriggers(),
-      scaleApi.getOverview(),
-    ]);
-
-    if (listResult.status === "fulfilled") {
-      setRows(listResult.value.triggers);
-      replaceTriggerSidebarList(listResult.value.triggers);
-    } else {
+    else setLoading(true);
+    try {
+      const { triggers } = await scaleApi.listTriggers();
+      setRows(triggers);
+      replaceTriggerSidebarList(triggers);
+    } catch {
       toast.error("Could not load triggers");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-
-    if (overviewResult.status === "fulfilled") {
-      setOverview(overviewResult.value);
-    } else if (!force) {
-      toast.error("Could not load overview stats — is hq/scale running on port 32831?");
-    }
-
-    setLoading(false);
-    setOverviewLoading(false);
-    setRefreshing(false);
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  function resetCreate() {
-    setNewName("");
-    setNewSenderEmail(null);
-    setNewDomain(null);
-    setNewPurpose("transactional");
-    setCreating(false);
-  }
 
   const counts = useMemo(() => {
     const visible = rows.filter((r) => r.listStatus !== "archived");
@@ -143,151 +118,60 @@ export function TriggersListView() {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }, [rows, search, filter]);
 
-  async function handleCreate() {
-    const name = newName.trim();
-    const domain = newDomain?.trim().toLowerCase();
-    if (!name || !domain) {
-      toast.error("Name and sending account are required");
-      return;
-    }
-    setCreating(true);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      const created = await scaleApi.createTrigger({ name, domain, purpose: newPurpose });
-      upsertTriggerSidebarListRow(created);
-      toast.success(`Trigger '${created.name}' created`);
-      setCreateOpen(false);
-      resetCreate();
-      router.push(triggerDetailHref(created.id, "preview", created.status));
-    } catch (e) {
-      toast.error(e instanceof ScaleApiError ? e.message : "Could not create trigger");
-      setCreating(false);
+      await scaleApi.updateTrigger(deleteTarget.id, { listStatus: "archived" });
+      removeTriggerSidebarListRow(deleteTarget.id);
+      setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+      toast.success(`Deleted “${triggerRowLabel(deleteTarget)}”`);
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err instanceof ScaleApiError ? err.message : "Could not delete trigger");
+    } finally {
+      setDeleting(false);
     }
   }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <Dialog
-        open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-          if (open) resetCreate();
-        }}
-      >
-        <DesktopTitleBar
-          className="px-4 py-3"
-          end={
-            <>
-              <DialogTrigger
-                render={<Button size="sm" />}
-                onClick={() => resetCreate()}
-              >
-                <Plus className="size-4" />
-                Add trigger
-              </DialogTrigger>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void load(true)}
-                disabled={refreshing}
-              >
-                <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-              </Button>
-            </>
-          }
-        >
-          <div className="min-w-0 space-y-1">
-            <h1 className="truncate text-lg font-semibold tracking-tight">Triggers</h1>
-            <p className="text-sm text-muted-foreground">Send email when something happens</p>
-          </div>
-        </DesktopTitleBar>
-
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add trigger</DialogTitle>
-            <DialogDescription>
-              One trigger, one email — verify links, form replies, or inbox auto-responses.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="auto-name">Name</Label>
-              <Input
-                id="auto-name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder={examplePlaceholder("Verify Email")}
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Purpose</Label>
-              <CmdDropdown
-                triggerClassName="min-w-0"
-                value={newPurpose}
-                enableSearch={false}
-                options={[
-                  { value: "transactional", label: "Transactional" },
-                  { value: "conversational", label: "Conversational" },
-                  { value: "marketing", label: "Marketing" },
-                ]}
-                onValueChange={(v) => {
-                  if (v === "transactional" || v === "conversational" || v === "marketing") {
-                    setNewPurpose(v);
-                  }
-                }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="trigger-create-sender">Sending account</Label>
-              <AccountCmdDropdown
-                triggerId="trigger-create-sender"
-                triggerClassName="min-w-0"
-                value={newSenderEmail}
-                onValueChange={(email, ctx) => {
-                  setNewSenderEmail(email ?? null);
-                  setNewDomain(ctx?.domain ?? null);
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Sending domain is taken from the account you pick.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
+      <DesktopTitleBar
+        className="px-4 py-3"
+        end={
+          <div className="flex items-center gap-2">
+            <NewTriggerDialog
+              open={addOpen}
+              onOpenChange={setAddOpen}
+              onCreated={(id) => router.push(triggerDetailHref(id, "config"))}
+              trigger={
+                <Button size="sm">
+                  <Plus className="size-4" />
+                  New trigger
+                </Button>
+              }
+            />
             <Button
-              type="button"
               variant="outline"
               size="sm"
-              disabled={creating}
-              onClick={() => setCreateOpen(false)}
+              disabled={refreshing || loading}
+              onClick={() => void load(true)}
             >
-              Cancel
+              <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={creating || !newName.trim() || !newDomain?.trim()}
-              onClick={() => void handleCreate()}
-            >
-              {creating ? "Creating…" : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        }
+      >
+        <div className="min-w-0 space-y-1">
+          <h1 className="truncate text-lg font-semibold tracking-tight">Triggers</h1>
+          <p className="text-sm text-muted-foreground">
+            Send email when something happens — webhooks, forms, inbox, or internal events.
+          </p>
+        </div>
+      </DesktopTitleBar>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-        <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
-          {overviewLoading && !overview ? (
-            <p className="text-sm text-muted-foreground">Loading stats…</p>
-          ) : null}
-          {overview ? (
-            <TriggersOverviewTopSection
-              data={overview}
-              filter={filter}
-              onFilterChange={setFilter}
-            />
-          ) : null}
-
+        <div className={dashboardScrollBodyClassName("flex flex-col gap-3")}>
           <EmailListContainer>
             <ListToolbar
               search={search}
@@ -320,57 +204,27 @@ export function TriggersListView() {
                 </div>
               }
             />
-            {filtered.length > 0 ? (
-              <>
-                <EmailTableHeader>
-                  <span>Trigger</span>
-                  <span className="hidden sm:block">Stats</span>
-                  <span className="hidden sm:block">Updated</span>
-                  <span className="text-right">Status</span>
-                </EmailTableHeader>
-                <div>
-                  {filtered.map((row) => (
-                    <EmailTableRow
-                      key={row.id}
-                      href={triggerDetailHref(row.id, undefined, row.status)}
-                      primary={row.name}
-                      subject={triggerStatsLine(row)}
-                      preview={triggerSourceSummary(row.source)}
-                      date={triggerListRelativeDate(row)}
-                      status={
-                        <TriggerStatusBadge
-                          status={row.status}
-                          listStatus={row.listStatus}
-                        />
-                      }
-                    />
-                  ))}
-                </div>
-              </>
-            ) : !loading ? (
-              rows.filter((r) => r.listStatus !== "archived").length === 0 ? (
-                <EmptyListState
-                  icon={Zap}
-                  title="No triggers yet"
-                  description="Create an trigger for verify email, contact forms, or inbox replies."
-                  action={
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        resetCreate();
-                        setCreateOpen(true);
-                      }}
-                    >
-                      Add trigger
+            {loading ? (
+              <div className="min-h-[200px]" />
+            ) : filtered.length === 0 ? (
+              <EmptyListState
+                icon={Zap}
+                title={
+                  rows.filter((r) => r.listStatus !== "archived").length === 0
+                    ? "No triggers yet"
+                    : "No matching triggers"
+                }
+                description={
+                  rows.filter((r) => r.listStatus !== "archived").length === 0
+                    ? "Create a trigger for verify email, contact forms, or inbox replies."
+                    : "Try a different filter or search term."
+                }
+                action={
+                  rows.filter((r) => r.listStatus !== "archived").length === 0 ? (
+                    <Button size="sm" onClick={() => setAddOpen(true)}>
+                      New trigger
                     </Button>
-                  }
-                />
-              ) : (
-                <EmptyListState
-                  icon={Zap}
-                  title="No matching triggers"
-                  description="Try a different filter or search term."
-                  action={
+                  ) : (
                     <Button
                       variant="outline"
                       size="sm"
@@ -381,15 +235,86 @@ export function TriggersListView() {
                     >
                       Reset filters
                     </Button>
-                  }
-                />
-              )
+                  )
+                }
+              />
             ) : (
-              <div className="min-h-[200px]" />
+              <>
+                <EmailTableHeader>
+                  <span>Trigger</span>
+                  <span className="hidden sm:block">Stats</span>
+                  <span className="hidden sm:block">Updated</span>
+                  <span className="text-right">Status</span>
+                </EmailTableHeader>
+                <div>
+                  {filtered.map((row) => (
+                    <ContextMenu key={row.id}>
+                      <ContextMenuTrigger render={<div className="contents" />}>
+                        <EmailTableRow
+                          href={triggerDetailHref(row.id, undefined, row.status)}
+                          primary={row.name}
+                          subject={triggerStatsLine(row)}
+                          preview={triggerSourceSummary(row.source)}
+                          date={triggerListRelativeDate(row)}
+                          status={
+                            <TriggerStatusBadge
+                              status={row.status}
+                              listStatus={row.listStatus}
+                            />
+                          }
+                        />
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="min-w-44">
+                        <ContextMenuItem
+                          variant="destructive"
+                          onClick={() => setDeleteTarget(row)}
+                        >
+                          <Trash2 className="size-4" />
+                          Delete trigger
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  ))}
+                </div>
+              </>
             )}
           </EmailListContainer>
         </div>
       </div>
+
+      <Dialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete trigger?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget ? (
+                <>
+                  <span className="font-medium text-foreground">{triggerRowLabel(deleteTarget)}</span>{" "}
+                  will be removed from the list and sends will stop.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={deleting}
+              onClick={() => void confirmDelete()}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

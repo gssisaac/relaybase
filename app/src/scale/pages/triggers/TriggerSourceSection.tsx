@@ -59,7 +59,7 @@ function triggerTypeLabel(type: TriggerSource["type"]): string {
   }
 }
 
-export function TriggerSourceSection() {
+export function TriggerSourceSection({ embedded }: { embedded?: boolean } = {}) {
   const { triggerId, trigger, setTrigger, refresh } = useTriggerDetail();
   const {
     availableAddresses,
@@ -284,17 +284,8 @@ export function TriggerSourceSection() {
 
   if (!trigger) return null;
 
-  return (
+  const formBody = (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Trigger</CardTitle>
-          <CardDescription>
-            Choose what starts this trigger. Only one active trigger should match each
-            trigger key.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Trigger type</Label>
             <Select
@@ -527,8 +518,25 @@ export function TriggerSourceSection() {
               Test send
             </Button>
           </div>
-        </CardContent>
-      </Card>
+    </>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        <div className="space-y-4">{formBody}</div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Trigger</CardTitle>
+            <CardDescription>
+              Choose what starts this trigger. Only one active trigger should match each trigger
+              key.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">{formBody}</CardContent>
+        </Card>
+      )}
 
       <Dialog open={testOpen} onOpenChange={setTestOpen}>
         <DialogContent className="sm:max-w-md">

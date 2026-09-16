@@ -518,6 +518,22 @@ export const scaleApi = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  testSendMessageTemplate: (
+    templateId: string,
+    input: {
+      to: string;
+      fromEmail: string;
+      fromName?: string | null;
+      replyTo?: string | null;
+      mergeTags?: Record<string, string>;
+    },
+  ) =>
+    scaleFetch<{ ok: true }>(`/scale/templates/${templateId}/test-send`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  deleteMessageTemplate: (id: string) =>
+    scaleFetch<{ ok: true }>(`/scale/templates/${id}`, { method: "DELETE" }),
 
   getOverview: () => scaleFetch<ScaleOverview>("/scale/overview"),
   listNewsletters: () => scaleFetch<{ newsletters: Newsletter[] }>("/scale/newsletters"),

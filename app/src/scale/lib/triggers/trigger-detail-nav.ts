@@ -3,19 +3,25 @@ import type { TriggerDetailTab } from "@/scale/lib/paths";
 
 /** Landing tab when the URL has no tab segment (sidebar switches keep the current tab). */
 export function defaultTriggerDetailTab(_status: TriggerStatus): TriggerDetailTab {
-  return "preview";
+  return "config";
 }
 
 export function normalizeTriggerDetailTab(
-  tab: TriggerDetailTab | "activity" | "content",
+  tab: TriggerDetailTab | "activity" | "content" | "preview" | "trigger" | "settings",
   _status: TriggerStatus,
 ): TriggerDetailTab {
   if (tab === "activity") return "stats";
-  if (tab === "content") return "preview";
-  if (tab === "trigger") return "settings";
+  if (
+    tab === "content" ||
+    tab === "preview" ||
+    tab === "trigger" ||
+    tab === "settings"
+  ) {
+    return "config";
+  }
   return tab;
 }
 
 export function triggerDetailNavTabs(_status: TriggerStatus): TriggerDetailTab[] {
-  return ["preview", "stats", "settings"];
+  return ["config", "stats"];
 }

@@ -11,8 +11,7 @@ import {
 } from "@/scale/lib/triggers/trigger-detail-nav";
 import { triggerDetailHref, type TriggerDetailTab } from "@/scale/lib/paths";
 import { TriggerDetailShell } from "@/scale/pages/triggers/TriggerDetailShell";
-import { TriggerPreviewView } from "@/scale/pages/triggers/TriggerPreviewView";
-import { TriggerSettingsView } from "@/scale/pages/triggers/TriggerSettingsView";
+import { TriggerConfigView } from "@/scale/pages/triggers/TriggerConfigView";
 import { TriggerStatsView } from "@/scale/pages/triggers/TriggerStatsView";
 import { useTriggerDetail } from "@/scale/pages/triggers/TriggerDetailContext";
 
@@ -54,7 +53,7 @@ export function TriggerDetailSwitch({ tab }: { tab: TriggerDetailTab | null }) {
         tab ?? defaultTriggerDetailTab(trigger.status),
         trigger.status,
       )
-    : normalizeTriggerDetailTab(tab ?? "preview", "draft");
+    : normalizeTriggerDetailTab(tab ?? "config", "draft");
 
   useEffect(() => {
     if (!trigger || tab === null) return;
@@ -63,7 +62,7 @@ export function TriggerDetailSwitch({ tab }: { tab: TriggerDetailTab | null }) {
     }
   }, [trigger, triggerId, resolvedTab, router, tab]);
 
-  const fill = resolvedTab === "preview";
+  const fill = resolvedTab === "config";
 
   return (
     <TriggerDetailShell section={resolvedTab} fill={fill}>
@@ -80,9 +79,8 @@ export function TriggerDetailSwitch({ tab }: { tab: TriggerDetailTab | null }) {
         </div>
       ) : (
         <>
-          {resolvedTab === "preview" ? <TriggerPreviewView /> : null}
+          {resolvedTab === "config" ? <TriggerConfigView /> : null}
           {resolvedTab === "stats" ? <TriggerStatsView /> : null}
-          {resolvedTab === "settings" ? <TriggerSettingsView /> : null}
         </>
       )}
     </TriggerDetailShell>

@@ -11,11 +11,16 @@ import { newId } from "../lib/shared/ids";
 
 export const scaleAssets = new Hono();
 
+/** Fallback when `public/brand/relaybase-icon.png` is missing (local dev). */
+const FALLBACK_BRAND_LOGO_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9Qz0AEYBxVSF+FABJADveWkH6AAAAAElFTkSuQmCC",
+  "base64",
+);
+
 // GET /scale/brand/relaybase-icon.png — default template logo when none uploaded
 scaleAssets.get("/brand/relaybase-icon.png", (c) => {
   const filePath = path.join(process.cwd(), "public", "brand", DEFAULT_BRAND_LOGO_FILENAME);
-  if (!fs.existsSync(filePath)) return c.text("not found", 404);
-  const buf = fs.readFileSync(filePath);
+  const buf = fs.existsSync(filePath) ? fs.readFileSync(filePath) : FALLBACK_BRAND_LOGO_PNG;
   return new Response(buf, {
     headers: {
       "content-type": "image/png",

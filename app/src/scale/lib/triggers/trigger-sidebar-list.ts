@@ -40,6 +40,14 @@ export function replaceTriggerSidebarList(automations: Trigger[]) {
   emitSidebarListChange();
 }
 
+export function removeTriggerSidebarListRow(triggerId: string) {
+  if (!cachedRows) return;
+  const next = cachedRows.filter((r) => r.id !== triggerId);
+  if (next.length === cachedRows.length) return;
+  cachedRows = next;
+  emitSidebarListChange();
+}
+
 export function upsertTriggerSidebarListRow(row: Trigger) {
   if (!cachedRows) return;
   const idx = cachedRows.findIndex((r) => r.id === row.id);

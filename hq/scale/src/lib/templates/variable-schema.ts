@@ -1,3 +1,4 @@
+import { resolveScaleAssetUrl } from "../assets/resolve-url";
 import {
   defaultBrandLogoUrl,
   footerBrandLogoImageHtml,
@@ -168,11 +169,7 @@ export function applyTemplateVariablesToHtml(
       }
       if (src) {
         if (context && !/^(https?:|data:|blob:)/i.test(src)) {
-          const resolved = resolveRelativeNewsletterAssetUrl(
-            context.broadcastId,
-            context.scaleBaseUrl,
-            src,
-          );
+          const resolved = resolveScaleAssetUrl(context.broadcastId, context.scaleBaseUrl, src);
           if (resolved) src = resolved;
         }
         const safeSrc = escapeHtml(src);
@@ -208,24 +205,6 @@ function applyHeaderSlotLogoSizing(html: string): string {
       return `<td${tdAttrs}>${headerLogoImageHtml(src)}</td>`;
     },
   );
-}
-
-function newsletterAssetStem(broadcastId: string): string {
-  return broadcastId.replace(/^broadcast_/, "").slice(0, 32) || "broadcast";
-}
-
-function resolveRelativeNewsletterAssetUrl(
-  broadcastId: string,
-  scaleBaseUrl: string,
-  href: string,
-): string | null {
-  if (!href || /^(https?:|data:|blob:)/i.test(href)) return null;
-  const relative = href.replace(/^\.\//, "");
-  const folder = `.${newsletterAssetStem(broadcastId)}`;
-  if (!relative.startsWith(`${folder}/`)) return null;
-  const filename = relative.slice(folder.length + 1);
-  if (!filename || filename.includes("..")) return null;
-  return `${scaleBaseUrl}/scale/assets/${encodeURIComponent(broadcastId)}/${encodeURIComponent(filename)}`;
 }
 
 export function resolveTemplateVariableDefaults(input: {

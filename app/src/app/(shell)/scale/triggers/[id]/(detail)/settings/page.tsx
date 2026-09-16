@@ -1,5 +1,5 @@
-import { TriggerSettingsView } from "@/scale/pages/triggers/TriggerSettingsView";
+import { TriggerConfigView } from "@/scale/pages/triggers/TriggerConfigView";
 
-export default function AutomationSettingsPage() {
-  return <TriggerSettingsView />;
+export default function AutomationSettingsLegacyPage() {
+  return <TriggerConfigView />;
 }

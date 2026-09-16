@@ -141,12 +141,24 @@ export function newsletterDetailFromSearch(searchParams: {
   return { newsletterId, tab };
 }
 
-export const TRIGGER_DETAIL_TABS = ["preview", "trigger", "stats", "settings"] as const;
+export const TRIGGER_DETAIL_TABS = ["config", "stats"] as const;
+
+/** Legacy URL segments that resolve to Config. */
+export const TRIGGER_DETAIL_LEGACY_CONFIG_TABS = [
+  "preview",
+  "trigger",
+  "settings",
+  "content",
+] as const;
 
 export type TriggerDetailTab = (typeof TRIGGER_DETAIL_TABS)[number];
 
 export function isTriggerDetailTab(value: string): value is TriggerDetailTab {
   return (TRIGGER_DETAIL_TABS as readonly string[]).includes(value);
+}
+
+function isLegacyTriggerConfigTab(value: string): boolean {
+  return (TRIGGER_DETAIL_LEGACY_CONFIG_TABS as readonly string[]).includes(value);
 }
 
 function encodeTriggerPathId(id: string): string {
@@ -162,11 +174,12 @@ function decodeTriggerPathId(raw: string): string {
 }
 
 export function resolveTriggerDetailTab(
-  tab: TriggerDetailTab | null | undefined,
+  tab: TriggerDetailTab | "preview" | "trigger" | "settings" | null | undefined,
   _status?: TriggerStatus,
 ): TriggerDetailTab {
+  if (tab === "preview" || tab === "trigger" || tab === "settings") return "config";
   if (tab) return tab;
-  return "preview";
+  return "config";
 }
 
 export function triggerDetailHref(
@@ -192,7 +205,7 @@ export type TriggerPathDetail = {
   isEdit: boolean;
 };
 
-/** Nested `/scale/triggers/{id}/{preview|trigger|stats|settings|edit}`. */
+/** Nested `/scale/triggers/{id}/{config|stats|edit|…}`. */
 export function triggerDetailFromPathname(pathname: string): TriggerPathDetail | null {
   const match = pathname.match(/^\/scale\/triggers\/([^/]+)(?:\/([^/]+))?\/?$/);
   if (!match) return null;
@@ -205,19 +218,23 @@ export function triggerDetailFromPathname(pathname: string): TriggerPathDetail |
     return { triggerId, tab: null, isEdit: false };
   }
   if (rawSeg === "edit" || rawSeg === "content") {
-    return { triggerId, tab: "preview", isEdit: true };
+    return { triggerId, tab: "config", isEdit: true };
   }
   if (rawSeg === "activity") {
     return { triggerId, tab: "stats", isEdit: false };
   }
+  if (isLegacyTriggerConfigTab(rawSeg)) {
+    return { triggerId, tab: "config", isEdit: false };
+  }
   if (isTriggerDetailTab(rawSeg)) {
     return { triggerId, tab: rawSeg, isEdit: false };
   }
-  return { triggerId, tab: "preview", isEdit: false };
+  return { triggerId, tab: "config", isEdit: false };
 }
 
 export function triggerTabFromPathname(pathname: string): TriggerDetailTab {
-  return triggerDetailFromPathname(pathname)?.tab ?? "preview";
+  const tab = triggerDetailFromPathname(pathname)?.tab;
+  return tab ?? "config";
 }
 
 export function triggerDetailFromSearch(searchParams: {
@@ -229,11 +246,11 @@ export function triggerDetailFromSearch(searchParams: {
   if (!raw) {
     return { triggerId, tab: null };
   }
-  let tab: TriggerDetailTab = "preview";
+  let tab: TriggerDetailTab = "config";
   if (raw === "activity") {
     tab = "stats";
-  } else if (raw === "content") {
-    tab = "preview";
+  } else if (raw === "content" || raw === "preview" || raw === "trigger" || raw === "settings") {
+    tab = "config";
   } else if (isTriggerDetailTab(raw)) {
     tab = raw;
   }

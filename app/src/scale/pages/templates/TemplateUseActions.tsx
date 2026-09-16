@@ -36,8 +36,21 @@ import {
   createTriggerFromHubTemplate,
   type HubTemplateSnapshot,
 } from "@/scale/lib/templates/hub-template-launch";
+import {
+  BROADCAST_MERGE_TAGS,
+  type BroadcastMergeTag,
+} from "@/scale/lib/newsletters/newsletter-merge-tags";
 import { syncScaleSendCredentials } from "@/scale/lib/sync-scale-send-credentials";
 import { useTemplateDetail } from "@/scale/pages/templates/TemplateDetailContext";
+
+function mergeTagKey(token: string): string {
+  return token.replace(/^\{\{|\}\}$/g, "").trim();
+}
+
+function mergeTagsUsedInContent(subject: string, bodyMarkdown: string): BroadcastMergeTag[] {
+  const haystack = `${subject}\n${bodyMarkdown}`;
+  return BROADCAST_MERGE_TAGS.filter((tag) => haystack.includes(tag.token));
+}
 
 type NewsletterDialogMode = "draft" | "schedule";
 
@@ -71,15 +84,6 @@ function resolveGroupDomain(
   return group?.domain.trim().toLowerCase() || null;
 }
 
-function resolveAudienceGroupForSendingDomain(
-  groups: AudienceGroupSummary[],
-  domain: string,
-): AudienceGroupSummary | null {
-  const normalized = domain.trim().toLowerCase();
-  if (!normalized) return null;
-  return groups.find((g) => g.domain.trim().toLowerCase() === normalized) ?? null;
-}
-
 export function TemplateUseActions() {
   const router = useRouter();
   const { apiBase } = useEmailPaths();
@@ -102,6 +106,8 @@ export function TemplateUseActions() {
 
   const [testFromEmail, setTestFromEmail] = useState<string | null>(null);
   const [testToEmail, setTestToEmail] = useState("");
+  const [testMergeTagFields, setTestMergeTagFields] = useState<BroadcastMergeTag[]>([]);
+  const [testMergeValues, setTestMergeValues] = useState<Record<string, string>>({});
 
   const [audienceGroups, setAudienceGroups] = useState<AudienceGroupSummary[]>([]);
   const [audienceLoading, setAudienceLoading] = useState(false);
@@ -139,6 +145,14 @@ export function TemplateUseActions() {
     setTestFromEmail(null);
     setTestToEmail("");
     setFormError(null);
+    const draft = getDraft();
+    const fields = mergeTagsUsedInContent(draft.subject, draft.bodyMarkdown);
+    setTestMergeTagFields(fields);
+    const values: Record<string, string> = {};
+    for (const field of fields) {
+      values[mergeTagKey(field.token)] = field.example;
+    }
+    setTestMergeValues(values);
   }
 
   async function ensureTemplateSaved(): Promise<HubTemplateSnapshot | null> {
@@ -244,7 +258,7 @@ export function TemplateUseActions() {
       });
       toast.success(`Trigger “${trigger.name}” created`);
       setTriggerOpen(false);
-      router.push(triggerDetailHref(trigger.id, "preview", trigger.status));
+      router.push(triggerDetailHref(trigger.id, "config", trigger.status));
     } catch (err) {
       setFormError(err instanceof ScaleApiError ? err.message : "Could not create trigger");
     } finally {
@@ -264,29 +278,25 @@ export function TemplateUseActions() {
       return;
     }
     const domain = from.slice(from.indexOf("@") + 1).toLowerCase();
-    const audienceGroup = resolveAudienceGroupForSendingDomain(audienceGroups, domain);
-    if (!audienceGroup) {
-      setFormError(`No subscriber group is linked to ${domain}. Create one or choose another sender.`);
-      return;
-    }
 
     setBusy(true);
     setFormError(null);
     try {
-      const snapshot = await ensureTemplateSaved();
-      if (!snapshot) return;
+      const saved = await persistDraft();
+      if (!saved) {
+        toast.error("Could not save template");
+        return;
+      }
       if (!(await prepareCredentials(domain))) return;
 
-      const newsletter = await createNewsletterFromHubTemplate({
-        name: `Test: ${defaultTitle}`.slice(0, 120),
-        domain,
-        audienceGroupId: audienceGroup.id,
-        hubTemplateId: messageTemplateId,
-        snapshot,
+      await scaleApi.testSendMessageTemplate(messageTemplateId, {
+        to,
         fromEmail: from,
+        mergeTags: {
+          ...testMergeValues,
+          "contact.email": to,
+        },
       });
-
-      await scaleApi.testSendNewsletter(newsletter.id, to);
       toast.success(`Test email sent to ${to}`);
       setTestOpen(false);
     } catch (err) {
@@ -354,8 +364,7 @@ export function TemplateUseActions() {
           <DialogHeader>
             <DialogTitle>Send test email</DialogTitle>
             <DialogDescription>
-              Creates a draft newsletter with this template, sends one message, and leaves the draft in
-              Newsletters.
+              Sends one message with this template’s current content. Nothing is saved to Newsletters.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -377,6 +386,24 @@ export function TemplateUseActions() {
                 onChange={(e) => setTestToEmail(e.target.value)}
               />
             </div>
+            {testMergeTagFields
+              .filter((field) => mergeTagKey(field.token) !== "contact.email")
+              .map((field) => {
+                const key = mergeTagKey(field.token);
+                return (
+                  <div key={key} className="space-y-1.5">
+                    <Label htmlFor={`template-test-merge-${key}`}>{field.label}</Label>
+                    <Input
+                      id={`template-test-merge-${key}`}
+                      value={testMergeValues[key] ?? ""}
+                      onChange={(e) =>
+                        setTestMergeValues((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      placeholder={examplePlaceholder(field.example)}
+                    />
+                  </div>
+                );
+              })}
             {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
           </div>
           <DialogFooter>

@@ -93,11 +93,15 @@ describe("normalizeEntryPath", () => {
   it("rewrites automation nested tabs into ?id=&tab= for last-path restore", () => {
     assert.equal(
       normalizeEntryPath("/scale/triggers/automation_abc/settings"),
-      "/scale/triggers?id=automation_abc&tab=settings",
+      "/scale/triggers?id=automation_abc&tab=config",
     );
     assert.equal(
       normalizeEntryPath("/scale/triggers/automation_abc/preview"),
-      "/scale/triggers?id=automation_abc&tab=preview",
+      "/scale/triggers?id=automation_abc&tab=config",
+    );
+    assert.equal(
+      normalizeEntryPath("/scale/triggers/automation_abc/config"),
+      "/scale/triggers?id=automation_abc&tab=config",
     );
     assert.equal(
       normalizeEntryPath("/scale/triggers/automation_abc/edit"),

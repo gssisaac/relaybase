@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Eye, Settings } from "lucide-react";
+import { BarChart3, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -21,9 +21,8 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 const NAV: { id: TriggerDetailTab; label: string; icon: LucideIcon }[] = [
-  { id: "preview", label: "Preview", icon: Eye },
+  { id: "config", label: "Config", icon: SlidersHorizontal },
   { id: "stats", label: "Stats", icon: BarChart3 },
-  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 export function TriggerDetailShell({
@@ -113,7 +112,7 @@ export function TriggerDetailSectionLayout({ children }: { children: ReactNode }
   const pathname = usePathname();
   const section = triggerTabFromPathname(pathname);
   return (
-    <TriggerDetailShell section={section} fill={section === "preview"}>
+    <TriggerDetailShell section={section} fill={section === "config"}>
       {children}
     </TriggerDetailShell>
   );

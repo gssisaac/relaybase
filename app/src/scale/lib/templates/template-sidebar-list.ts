@@ -35,6 +35,14 @@ export function replaceTemplateSidebarList(templates: MessageTemplate[]) {
   emitSidebarListChange();
 }
 
+export function removeTemplateSidebarListRow(templateId: string) {
+  if (!cachedRows) return;
+  const next = cachedRows.filter((r) => r.id !== templateId);
+  if (next.length === cachedRows.length) return;
+  cachedRows = next;
+  emitSidebarListChange();
+}
+
 export function upsertTemplateSidebarListRow(row: MessageTemplate) {
   if (!cachedRows) {
     cachedRows = [row];

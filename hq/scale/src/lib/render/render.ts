@@ -7,6 +7,7 @@ import {
   applyTemplateVariablesToHtml,
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
+import { resolveScaleAssetUrl } from "../assets/resolve-url";
 import { applyGmailContentLinkStyles } from "./gmail-link-style";
 
 /**
@@ -25,19 +26,12 @@ function newsletterAssetStem(broadcastId: string): string {
   return broadcastId.replace(/^broadcast_/, "").slice(0, 32) || "broadcast";
 }
 
-/** Resolve a page-relative `./.{stem}/{filename}` href to an absolute CDN asset URL, or null if not one. */
 function resolveRelativeNewsletterAssetUrl(
   broadcastId: string,
   scaleBaseUrl: string,
   href: string,
 ): string | null {
-  if (!href || /^(https?:|data:|blob:)/i.test(href)) return null;
-  const relative = href.replace(/^\.\//, "");
-  const folder = `.${newsletterAssetStem(broadcastId)}`;
-  if (!relative.startsWith(`${folder}/`)) return null;
-  const filename = relative.slice(folder.length + 1);
-  if (!filename || filename.includes("..")) return null;
-  return `${scaleBaseUrl}/scale/assets/${encodeURIComponent(broadcastId)}/${encodeURIComponent(filename)}`;
+  return resolveScaleAssetUrl(broadcastId, scaleBaseUrl, href);
 }
 
 const IMG_TAG_RE = /<img\b[^>]*>/gi;

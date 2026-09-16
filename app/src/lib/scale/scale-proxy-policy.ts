@@ -17,6 +17,7 @@ const SCALE_UI_GET_PATHS = new Set([
 ]);
 
 const TRIGGER_UI_TAB_SEGMENTS = new Set([
+  "config",
   "preview",
   "trigger",
   "stats",

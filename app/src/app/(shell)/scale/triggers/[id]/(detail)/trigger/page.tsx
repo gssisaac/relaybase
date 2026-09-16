@@ -1,9 +1,5 @@
-import { TriggerSourceSection } from "@/scale/pages/triggers/TriggerSourceSection";
+import { TriggerConfigView } from "@/scale/pages/triggers/TriggerConfigView";
 
-export default function TriggerTabPage() {
-  return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 p-4">
-      <TriggerSourceSection />
-    </div>
-  );
+export default function AutomationTriggerLegacyPage() {
+  return <TriggerConfigView />;
 }

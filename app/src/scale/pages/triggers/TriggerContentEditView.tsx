@@ -27,7 +27,7 @@ export function TriggerContentEditInner() {
     (notFound ? "Trigger not found" : "Untitled trigger");
 
   const backHref = trigger
-    ? triggerDetailHref(triggerId, "preview", trigger.status)
+    ? triggerDetailHref(triggerId, "config", trigger.status)
     : "/scale/triggers";
 
   if (loading && !trigger) {
@@ -75,7 +75,7 @@ export function TriggerContentEditInner() {
             size="icon-sm"
             className="-ml-2 shrink-0"
             nativeButton={false}
-            aria-label="Back to preview"
+            aria-label="Back to config"
             render={<Link href={backHref} />}
           >
             <ArrowLeft className="size-4" aria-hidden />

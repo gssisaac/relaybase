@@ -68,6 +68,10 @@ describe("shouldProxyRequestToScale", () => {
 
   it("serves trigger detail tab UI without API header", () => {
     assert.equal(
+      shouldProxyRequestToScale("/scale/triggers/trigger_abc/config", "GET", headers()),
+      false,
+    );
+    assert.equal(
       shouldProxyRequestToScale("/scale/triggers/trigger_abc/settings", "GET", headers()),
       false,
     );

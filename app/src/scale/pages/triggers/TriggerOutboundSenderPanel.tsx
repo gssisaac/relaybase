@@ -31,10 +31,13 @@ export function TriggerOutboundSenderPanel({
   draft,
   onDraftChange,
   disabled,
+  embedded,
 }: {
   draft: OutboundSenderDraft;
   onDraftChange: (patch: Partial<OutboundSenderDraft>) => void;
   disabled?: boolean;
+  /** Full-height inspector column inside Config (no fixed aside width). */
+  embedded?: boolean;
 }) {
   const { triggerId, trigger, setTrigger } = useTriggerDetail();
   const {
@@ -113,12 +116,18 @@ export function TriggerOutboundSenderPanel({
     }
   }
 
+  const shellClass = embedded
+    ? "flex min-h-0 min-w-0 flex-1 flex-col bg-background"
+    : "flex w-[min(100%,20rem)] shrink-0 flex-col border-l border-border bg-background";
+
+  const Shell = embedded ? "div" : "aside";
+
   return (
-    <aside className="flex w-[min(100%,20rem)] shrink-0 flex-col border-l border-border bg-background">
-      <div className="border-b border-border px-4 py-3">
+    <Shell className={shellClass}>
+      <div className={embedded ? "shrink-0 px-4 py-3" : "border-b border-border px-4 py-3"}>
         <h2 className="text-sm font-semibold text-foreground">Outbound sender</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Shown on sent emails in the preview—not the trigger inbox or webhook.
+          From name and address on emails this trigger sends.
         </p>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -215,7 +224,7 @@ export function TriggerOutboundSenderPanel({
         </div>
         {identityError ? <p className="text-xs text-destructive">{identityError}</p> : null}
         <p className="text-xs text-muted-foreground">
-          Compliance footer identity is edited in the content editor (Edit).
+          Compliance footer identity is edited in the message editor (Edit on the template node).
         </p>
         {!disabled ? (
           <Button className="w-full" onClick={() => void saveSender()} disabled={saving}>
@@ -223,6 +232,6 @@ export function TriggerOutboundSenderPanel({
           </Button>
         ) : null}
       </div>
-    </aside>
+    </Shell>
   );
 }

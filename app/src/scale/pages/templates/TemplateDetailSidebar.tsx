@@ -1,20 +1,47 @@
 "use client";
 
-import { LayoutTemplate, Plus, Search } from "lucide-react";
+import { LayoutTemplate, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { memo, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { memo, useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { PanelSplitHandle } from "@/components/ui/panel-split-handle";
 import { usePersistedTemplateDetailSidebarWidth } from "@/hooks/use-persisted-template-detail-sidebar-width";
+import { scaleApi, ScaleApiError, type MessageTemplate } from "@/lib/scale/api";
+import { useScalePaths } from "@/scale/lib/paths";
 import { messageTemplatePreviewHref } from "@/scale/lib/template-paths";
+import {
+  getTemplateSidebarListSnapshot,
+  removeTemplateSidebarListRow,
+} from "@/scale/lib/templates/template-sidebar-list";
 import { NewTemplateDialog } from "@/scale/pages/templates/NewTemplateDialog";
 import { useTemplateSidebarNew } from "@/scale/pages/templates/TemplateSidebarNewContext";
 import { useTemplateDetail } from "@/scale/pages/templates/TemplateDetailContext";
 import { useTemplateSidebarList } from "@/scale/pages/templates/use-template-sidebar-list";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import type { MessageTemplate } from "@/lib/scale/api";
 import { cn } from "@/lib/utils";
 
 function templateListRelativeDate(row: MessageTemplate): string {
@@ -28,31 +55,58 @@ function templateListRelativeDate(row: MessageTemplate): string {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function templateRowLabel(row: MessageTemplate): string {
+  return row.name?.trim() || row.subject?.trim() || "Untitled template";
+}
+
+function TemplateSidebarDeleteActions({
+  onDelete,
+}: {
+  onDelete: () => void;
+}) {
+  return (
+    <>
+      <DropdownMenuItem variant="destructive" onClick={onDelete}>
+        <Trash2 className="size-4" />
+        Delete template
+      </DropdownMenuItem>
+    </>
+  );
+}
+
 const TemplateSidebarRow = memo(function TemplateSidebarRow({
   row,
   active,
+  onRequestDelete,
 }: {
   row: MessageTemplate;
   active: boolean;
+  onRequestDelete: (row: MessageTemplate) => void;
 }) {
-  const label = row.name?.trim() || row.subject?.trim() || "Untitled template";
+  const label = templateRowLabel(row);
   const href = messageTemplatePreviewHref(row.id);
+  const deletable = !row.isPreset;
 
-  return (
-    <li>
+  const rowBody = (
+    <div
+      className={cn(
+        "relative flex min-w-0 rounded-md transition-colors",
+        active ? "bg-accent text-accent-foreground" : "text-foreground hover:bg-accent/60",
+      )}
+    >
       <Link
         href={href}
-        className={cn(
-          "flex min-w-0 flex-col gap-1 rounded-md px-2.5 py-2 text-left transition-colors",
-          active
-            ? "bg-accent text-accent-foreground"
-            : "text-foreground hover:bg-accent/60",
-        )}
+        className="flex min-w-0 flex-1 flex-col gap-1 px-2.5 py-2 pr-8 text-left"
         aria-current={active ? "page" : undefined}
       >
         <div className="flex min-w-0 items-baseline justify-between gap-2">
           <span className="min-w-0 flex-1 truncate text-xs font-medium">{label}</span>
-          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+          <span
+            className={cn(
+              "shrink-0 text-[10px] tabular-nums text-muted-foreground",
+              deletable && "group-hover/sidebar-row:invisible",
+            )}
+          >
             {templateListRelativeDate(row)}
           </span>
         </div>
@@ -60,6 +114,54 @@ const TemplateSidebarRow = memo(function TemplateSidebarRow({
           <span className="truncate text-[10px] text-muted-foreground">{row.subject}</span>
         ) : null}
       </Link>
+      {deletable ? (
+        <div className="absolute right-0.5 top-1/2 -translate-y-1/2">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground opacity-0 transition-opacity group-hover/sidebar-row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
+                  aria-label={`Actions for ${label}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                />
+              }
+            >
+              <MoreHorizontal className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-44">
+              <TemplateSidebarDeleteActions onDelete={() => onRequestDelete(row)} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (!deletable) {
+    return (
+      <li className="group/sidebar-row">
+        {rowBody}
+      </li>
+    );
+  }
+
+  return (
+    <li className="group/sidebar-row">
+      <ContextMenu>
+        <ContextMenuTrigger render={<div className="contents" />}>{rowBody}</ContextMenuTrigger>
+        <ContextMenuContent className="min-w-44">
+          <ContextMenuItem variant="destructive" onClick={() => onRequestDelete(row)}>
+            <Trash2 className="size-4" />
+            Delete template
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </li>
   );
 });
@@ -90,10 +192,14 @@ function TemplateSidebarHeader() {
 }
 
 function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: string | null }) {
+  const router = useRouter();
+  const { templates: templatesPath } = useScalePaths();
   const userId = useProductId();
   const { width, onResize, persist } = usePersistedTemplateDetailSidebarWidth(userId);
   const { rows, loading } = useTemplateSidebarList();
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<MessageTemplate | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -108,6 +214,33 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
         );
       });
   }, [rows, search]);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget || deleteTarget.isPreset) return;
+    setDeleting(true);
+    try {
+      await scaleApi.deleteMessageTemplate(deleteTarget.id);
+      removeTemplateSidebarListRow(deleteTarget.id);
+
+      if (activeTemplateId === deleteTarget.id) {
+        const remaining = getTemplateSidebarListSnapshot()
+          .filter((r) => r.id !== deleteTarget.id)
+          .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+        if (remaining[0]) {
+          router.replace(messageTemplatePreviewHref(remaining[0].id));
+        } else {
+          router.replace(templatesPath);
+        }
+      }
+
+      toast.success(`Deleted “${templateRowLabel(deleteTarget)}”`);
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error(err instanceof ScaleApiError ? err.message : "Could not delete template");
+    } finally {
+      setDeleting(false);
+    }
+  }, [activeTemplateId, deleteTarget, router, templatesPath]);
 
   const aside = (
     <aside
@@ -146,6 +279,7 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
                 key={row.id}
                 row={row}
                 active={activeTemplateId != null && row.id === activeTemplateId}
+                onRequestDelete={setDeleteTarget}
               />
             ))}
           </ul>
@@ -155,10 +289,47 @@ function TemplateListSidebarInner({ activeTemplateId }: { activeTemplateId: stri
   );
 
   return (
-    <div className="flex h-full shrink-0 overflow-hidden" style={{ width: width + 4 }}>
-      {aside}
-      <PanelSplitHandle onResize={onResize} onResizeEnd={persist} />
-    </div>
+    <>
+      <div className="flex h-full shrink-0 overflow-hidden" style={{ width: width + 4 }}>
+        {aside}
+        <PanelSplitHandle onResize={onResize} onResizeEnd={persist} />
+      </div>
+
+      <Dialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete template?</DialogTitle>
+            <DialogDescription>
+              {deleteTarget ? (
+                <>
+                  <span className="font-medium text-foreground">{templateRowLabel(deleteTarget)}</span>{" "}
+                  will be removed permanently. Newsletters and triggers that already used this template
+                  are not affected.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={deleting}
+              onClick={() => void confirmDelete()}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

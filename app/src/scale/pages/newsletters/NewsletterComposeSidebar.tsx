@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LayoutThumbnailPreview } from "@/scale/components/layouts/LayoutThumbnailPreview";
 import {
   displayNameForRecipient,
   templateThumbnailVariant,
@@ -31,48 +32,6 @@ import type { ScaleAccountCompliance } from "@/lib/scale/api";
 import type { ScaleLayout } from "@/lib/scale/api";
 import type { CrmContentAssetOwner } from "@/lib/markdown-editor/utils/newsletter-upload";
 import { cn } from "@/lib/utils";
-
-function TemplateWireframe({ variant }: { variant: "minimal" | "header" | "card" | "plain" }) {
-  if (variant === "plain") {
-    return (
-      <div className="pointer-events-none mb-2 px-0.5" aria-hidden>
-        <div className="space-y-1.5">
-          <div className="h-1 w-full rounded bg-muted-foreground/25" />
-          <div className="h-1 w-[92%] rounded bg-muted-foreground/20" />
-          <div className="h-1 w-[75%] rounded bg-muted-foreground/15" />
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div
-      className={cn(
-        "pointer-events-none mb-2 overflow-hidden rounded border border-border/80 bg-muted/30",
-        variant === "card" && "p-1",
-      )}
-      aria-hidden
-    >
-      <div
-        className={cn(
-          "rounded-sm bg-background p-2",
-          variant === "card" && "border border-border/60",
-        )}
-      >
-        {variant === "header" ? (
-          <div className="mb-1.5 flex items-center gap-1">
-            <div className="size-2.5 shrink-0 rounded-sm bg-muted-foreground/25" />
-            <div className="h-1 flex-1 rounded-sm bg-muted-foreground/20" />
-          </div>
-        ) : null}
-        <div className="space-y-1">
-          <div className="h-1 w-full rounded bg-muted-foreground/20" />
-          <div className="h-1 w-[80%] rounded bg-muted-foreground/15" />
-          <div className="h-1 w-[60%] rounded bg-muted-foreground/10" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function NewsletterComposeSidebar({
   newsletterId,
@@ -240,7 +199,14 @@ export function NewsletterComposeSidebar({
                             "hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60",
                           )}
                         >
-                        <TemplateWireframe variant={variant} />
+                        <LayoutThumbnailPreview
+                          layoutId={t.id}
+                          isBuiltin={t.isBuiltin}
+                          htmlSource={t.htmlSource}
+                          variablesSchema={t.variablesSchema}
+                          variant={variant}
+                          className="mb-2"
+                        />
                         <span className="block text-sm font-medium leading-snug">{t.name}</span>
                         {t.isBuiltin ? (
                           <span className="mt-1 block text-[10px] text-muted-foreground">

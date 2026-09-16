@@ -184,6 +184,10 @@ export function templateThumbnailVariant(
   if (key.includes("product-launch")) return "launch";
   if (key.includes("warm-sand")) return "warm";
   if (key.includes("curated-digest")) return "digest";
+  if (key.includes("receipt-invoice") || key.includes("receipt")) return "receipt";
+  if (key.includes("event-ticket") || key.includes("ticket")) return "ticket";
+  if (key.includes("founder-letter") || key.includes("letter")) return "letter";
+  if (key.includes("spotlight")) return "spotlight";
   if (key.includes("header")) return "header";
   if (key.includes("card")) return "card";
   return "minimal";

@@ -47,6 +47,10 @@ function heroBannerImageHtml(src: string): string {
   return `<img src="${src}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;" />`;
 }
 
+function authorAvatarImageHtml(src: string): string {
+  return `<img src="${src}" alt="" width="44" height="44" style="display:block;width:44px;height:44px;border-radius:50%;object-fit:cover;border:0;outline:none;text-decoration:none;" />`;
+}
+
 function escapeHtml(text: string): string {
   return text
     .replaceAll("&", "&amp;")
@@ -59,6 +63,7 @@ export function applyTemplateVariablesToHtml(
   html: string,
   schema: TemplateVariablesSchema | null | undefined,
   values: Record<string, string> | null | undefined,
+  options?: { defaultBrandLogoUrl?: string },
 ): string {
   if (!schema?.fields.length) return html;
   const map = values ?? {};
@@ -73,7 +78,7 @@ export function applyTemplateVariablesToHtml(
       const isBrandLogoField = field.key === "brand.logo" || field.key === "header.logo";
       let src = raw;
       if (!src && isBrandLogoField) {
-        src = defaultBrandLogoUrl();
+        src = options?.defaultBrandLogoUrl ?? defaultBrandLogoUrl();
       }
       if (src) {
         const safeSrc = escapeHtml(src);
@@ -84,7 +89,9 @@ export function applyTemplateVariablesToHtml(
               ? footerBrandLogoImageHtml(safeSrc)
               : field.key === "hero.image"
                 ? heroBannerImageHtml(safeSrc)
-                : defaultVariableImageHtml(safeSrc);
+                : field.key === "author.avatar"
+                  ? authorAvatarImageHtml(safeSrc)
+                  : defaultVariableImageHtml(safeSrc);
       }
     }
     out = out.replaceAll(templateVariableToken(field.key), replacement);

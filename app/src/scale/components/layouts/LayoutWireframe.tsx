@@ -11,7 +11,11 @@ export type LayoutWireframeVariant =
   | "editorial"
   | "launch"
   | "warm"
-  | "digest";
+  | "digest"
+  | "receipt"
+  | "ticket"
+  | "letter"
+  | "spotlight";
 
 export function LayoutWireframe({
   variant,
@@ -37,8 +41,14 @@ export function LayoutWireframe({
     variant === "card" && "p-1 bg-muted/30",
     variant === "dark" && "border-zinc-700/80 bg-zinc-950",
     variant === "warm" && "border-amber-900/10 bg-[#f7f5f0]",
-    variant === "digest" && "bg-muted/30",
-    variant !== "card" && variant !== "dark" && variant !== "warm" && variant !== "digest" && "bg-muted/30",
+    variant === "letter" && "border-stone-200 bg-[#fafaf9]",
+    variant === "spotlight" && "border-zinc-800 bg-[#f5f5f4]",
+    variant !== "card" &&
+      variant !== "dark" &&
+      variant !== "warm" &&
+      variant !== "letter" &&
+      variant !== "spotlight" &&
+      "bg-muted/30",
   );
 
   const innerClass = cn(
@@ -48,18 +58,33 @@ export function LayoutWireframe({
     variant === "editorial" && "border border-border/40 bg-background",
     variant === "launch" && "overflow-hidden bg-background p-0",
     variant === "warm" && "border border-amber-900/10 bg-white",
+    variant === "letter" && "border border-stone-200/80 bg-white",
     variant === "digest" && "overflow-hidden bg-background p-0",
+    variant === "ticket" && "overflow-hidden bg-background p-0",
+    variant === "receipt" && "border border-border/70 bg-background",
+    variant === "spotlight" && "border-2 border-zinc-900 bg-background p-0",
     variant !== "card" &&
       variant !== "dark" &&
       variant !== "editorial" &&
       variant !== "launch" &&
       variant !== "warm" &&
+      variant !== "letter" &&
       variant !== "digest" &&
+      variant !== "ticket" &&
+      variant !== "receipt" &&
+      variant !== "spotlight" &&
       "bg-background",
   );
 
   const bodyLines = (
-    <div className={cn("space-y-1", variant === "launch" && "p-2 pt-1.5", variant === "digest" && "p-2")}>
+    <div
+      className={cn(
+        "space-y-1",
+        (variant === "launch" || variant === "ticket") && "p-2 pt-1.5",
+        variant === "digest" && "p-2",
+        variant === "spotlight" && "p-2",
+      )}
+    >
       <div
         className={cn(
           "h-1 w-full rounded",
@@ -88,6 +113,47 @@ export function LayoutWireframe({
           <div className="mb-1.5 flex items-center gap-1 px-0.5">
             <div className="size-2.5 shrink-0 rounded-sm bg-muted-foreground/25" />
             <div className="h-1 flex-1 rounded-sm bg-muted-foreground/20" />
+          </div>
+        ) : null}
+        {variant === "letter" ? (
+          <div className="mb-1.5 flex items-center gap-1.5 border-b border-border/40 pb-1.5">
+            <div className="size-3 shrink-0 rounded-full bg-stone-400/40" />
+            <div className="space-y-0.5 flex-1">
+              <div className="h-1 w-12 rounded-sm bg-stone-700/40" />
+              <div className="h-0.5 w-8 rounded-sm bg-stone-400/30" />
+            </div>
+          </div>
+        ) : null}
+        {variant === "receipt" ? (
+          <div className="mb-1.5 space-y-1">
+            <div className="flex items-center justify-between gap-1">
+              <div className="h-1.5 w-10 rounded-sm bg-muted-foreground/30" />
+              <div className="h-1 w-6 rounded-sm bg-muted-foreground/20" />
+            </div>
+            <div className="border-t border-dashed border-border/70" />
+          </div>
+        ) : null}
+        {variant === "ticket" ? (
+          <div className="bg-slate-900 p-1.5 text-slate-100">
+            <div className="flex items-center gap-1.5">
+              <div className="size-3.5 shrink-0 border border-white/20 bg-white/15" />
+              <div className="flex-1 space-y-0.5">
+                <div className="h-1 w-14 rounded-sm bg-white/40" />
+                <div className="h-0.5 w-8 rounded-sm bg-white/20" />
+              </div>
+            </div>
+            <div className="mt-1 border-t border-dashed border-white/20" />
+          </div>
+        ) : null}
+        {variant === "spotlight" ? (
+          <div>
+            <div className="flex items-center justify-between border-b-2 border-zinc-900 px-2 py-1">
+              <div className="h-1.5 w-12 rounded-sm bg-zinc-900" />
+              <div className="h-1 w-5 rounded-sm bg-zinc-700" />
+            </div>
+            <div className="border-b border-zinc-900 bg-zinc-100 px-2 py-0.5">
+              <div className="h-0.5 w-16 rounded-sm bg-zinc-500" />
+            </div>
           </div>
         ) : null}
         {variant === "dark" ? (

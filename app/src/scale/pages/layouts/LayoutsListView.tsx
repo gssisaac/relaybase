@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { DesktopTitleBar } from "@/components/layout/DesktopTitleBar";
 import { Button } from "@/components/ui/button";
 import { LayoutImportDialog } from "@/scale/components/layouts/LayoutImportDialog";
-import { LayoutWireframe } from "@/scale/components/layouts/LayoutWireframe";
+import { LayoutThumbnailPreview } from "@/scale/components/layouts/LayoutThumbnailPreview";
 import { templateThumbnailVariant } from "@/scale/lib/newsletters/newsletter-merge-tags";
 import { isPlainTextTemplate } from "@/scale/lib/layouts/layout-catalog";
 import { layoutDetailHref } from "@/scale/lib/layout-paths";
@@ -167,7 +167,14 @@ function LayoutCardGrid({
                 onSelect(t.id);
               }}
             >
-              <LayoutWireframe variant={variant} className="mb-3" />
+              <LayoutThumbnailPreview
+                layoutId={t.id}
+                isBuiltin={t.isBuiltin}
+                htmlSource={t.htmlSource}
+                variablesSchema={t.variablesSchema}
+                variant={variant}
+                className="mb-3"
+              />
               <span className="text-sm font-medium leading-snug">{t.name}</span>
               <span className="mt-1 block text-[10px] text-muted-foreground">
                 {t.isBuiltin

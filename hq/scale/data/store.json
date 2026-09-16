@@ -322,6 +322,176 @@
       },
       "isBuiltin": true,
       "createdAt": "2026-09-16T06:48:25.391Z"
+    },
+    {
+      "id": "tpl-receipt-invoice",
+      "accountLinkId": null,
+      "name": "Receipt / Invoice",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f4f4f5;\">\n  <tr><td align=\"center\" style=\"padding:36px 16px;\">\n    <table role=\"presentation\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:580px;width:100%;background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden;\">\n      <tr><td style=\"padding:28px 32px 20px;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-scale-header-logo=\"1\" style=\"vertical-align:middle;padding-right:10px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:700;color:#18181b;line-height:1.2;\">\n                    {{vars.receipt.title}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;\">\n              <span style=\"display:inline-block;padding:4px 10px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:6px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;font-weight:600;color:#52525b;letter-spacing:0.02em;\">\n                {{vars.receipt.number}}\n              </span>\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:0 32px;\"><div style=\"border-top:2px dashed #e4e4e7;height:1px;line-height:1px;font-size:0;\">&nbsp;</div></td></tr>\n      <tr><td style=\"padding:28px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#27272a;font-size:14px;line-height:1.6;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 32px;text-align:center;font-size:12px;color:#71717a;line-height:1.6;border-top:1px solid #f4f4f5;background:#fafafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-crm-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:12px;font-weight:600;color:#52525b;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 10px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#71717a;text-decoration:underline;\">Unsubscribe</a>\n            from billing and account notices.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "receipt.title",
+            "type": "text",
+            "label": "Receipt title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Main header text (e.g. Payment Receipt, Order Summary)."
+          },
+          {
+            "key": "receipt.number",
+            "type": "text",
+            "label": "Reference / Invoice",
+            "description": "Reference ID badge shown top-right (e.g. INV-2026-0901)."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in header and footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:10.198Z"
+    },
+    {
+      "id": "tpl-event-ticket",
+      "accountLinkId": null,
+      "name": "Event Ticket",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f1f5f9;\">\n  <tr><td align=\"center\" style=\"padding:40px 16px;\">\n    <table role=\"presentation\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:580px;width:100%;background:#ffffff;border-radius:14px;border:1px solid #e2e8f0;overflow:hidden;\">\n      <tr>\n        <td style=\"background:#0f172a;padding:28px 28px 24px;\">\n          <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n            <tr>\n              <td style=\"vertical-align:middle;width:80px;padding-right:16px;\">\n                <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.22);width:76px;text-align:center;\">\n                  <tr>\n                    <td style=\"padding:10px 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#ffffff;line-height:1.2;\">\n                      {{vars.event.date_badge}}\n                    </td>\n                  </tr>\n                </table>\n              </td>\n              <td style=\"vertical-align:middle;\">\n                <p style=\"margin:0 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:18px;font-weight:700;color:#ffffff;line-height:1.3;\">\n                  {{vars.event.title}}\n                </p>\n                <p style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#94a3b8;line-height:1.4;\">\n                  {{vars.event.time_location}}\n                </p>\n              </td>\n            </tr>\n          </table>\n        </td>\n      </tr>\n      <tr>\n        <td style=\"padding:0;background:#0f172a;\">\n          <div style=\"border-top:2px dashed rgba(255,255,255,0.2);height:1px;line-height:1px;font-size:0;\">&nbsp;</div>\n        </td>\n      </tr>\n      <tr><td style=\"padding:32px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1e293b;font-size:15px;line-height:1.65;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 28px;text-align:center;font-size:12px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-crm-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:13px;font-weight:600;color:#334155;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 12px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#64748b;text-decoration:underline;\">Unsubscribe</a>\n            from event updates and invitations.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "event.title",
+            "type": "text",
+            "label": "Event title",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Main headline of the event or webinar."
+          },
+          {
+            "key": "event.date_badge",
+            "type": "text",
+            "label": "Date badge",
+            "description": "Short date stamp in ticket header (e.g. SEP 24, NOV 02)."
+          },
+          {
+            "key": "event.time_location",
+            "type": "text",
+            "label": "Time & location",
+            "description": "Subtitle under event title (e.g. Thu 10:00 AM UTC · Online / Zoom)."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:15.089Z"
+    },
+    {
+      "id": "tpl-founder-letter",
+      "accountLinkId": null,
+      "name": "Founder Letter",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#fafaf9;\">\n  <tr><td align=\"center\" style=\"padding:40px 16px;\">\n    <table role=\"presentation\" width=\"580\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:580px;width:100%;background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;\">\n      <tr><td style=\"padding:28px 32px 20px;border-bottom:1px solid #f5f5f4;\">\n        <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;padding-right:12px;line-height:0;font-size:0;\">\n              {{vars.author.avatar}}\n            </td>\n            <td style=\"vertical-align:middle;\">\n              <p style=\"margin:0 0 2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;font-weight:600;color:#1c1917;line-height:1.2;\">\n                {{vars.author.name}}\n              </p>\n              <p style=\"margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;color:#78716c;line-height:1.3;\">\n                {{vars.author.title}}\n              </p>\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;color:#292524;font-size:15px;line-height:1.75;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px 32px;text-align:center;font-size:12px;color:#78716c;line-height:1.6;border-top:1px solid #f5f5f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-crm-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:12px;font-weight:600;color:#57534e;line-height:1.3;text-align:left;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 8px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 10px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#78716c;text-decoration:underline;\">Unsubscribe</a>\n            from personal founder notes.\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "author.name",
+            "type": "text",
+            "label": "Author name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName",
+            "description": "Name of the sender (e.g. Alex River)."
+          },
+          {
+            "key": "author.title",
+            "type": "text",
+            "label": "Author title / role",
+            "description": "Subtitle under author name (e.g. Founder & CEO)."
+          },
+          {
+            "key": "author.avatar",
+            "type": "image",
+            "label": "Author photo / avatar",
+            "description": "Small 44px circular avatar next to the name."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:25.089Z"
+    },
+    {
+      "id": "tpl-spotlight-minimal",
+      "accountLinkId": null,
+      "name": "Spotlight Minimal",
+      "htmlSource": "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f5f5f4;\">\n  <tr><td align=\"center\" style=\"padding:36px 16px;\">\n    <table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:600px;width:100%;background:#ffffff;border:2px solid #18181b;\">\n      <tr><td style=\"padding:16px 24px;border-bottom:2px solid #18181b;\">\n        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">\n          <tr>\n            <td style=\"vertical-align:middle;\">\n              <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\">\n                <tr>\n                  <td data-scale-header-logo=\"1\" style=\"vertical-align:middle;padding-right:10px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n                  <td style=\"vertical-align:middle;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;font-weight:800;letter-spacing:-0.03em;text-transform:uppercase;color:#18181b;line-height:1.2;\">\n                    {{vars.brand.organization_name}}\n                  </td>\n                </tr>\n              </table>\n            </td>\n            <td align=\"right\" style=\"vertical-align:middle;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;font-size:12px;font-weight:700;letter-spacing:0.04em;color:#18181b;white-space:nowrap;\">\n              {{vars.spotlight.issue}}\n            </td>\n          </tr>\n        </table>\n      </td></tr>\n      <tr><td style=\"padding:8px 24px;background:#f4f4f5;border-bottom:1px solid #18181b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#52525b;line-height:1.3;\">\n        {{vars.spotlight.tagline}}\n      </td></tr>\n      <tr><td style=\"padding:32px 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#18181b;font-size:15px;line-height:1.65;\">\n        {{content}}\n      </td></tr>\n      <tr>\n        <td style=\"padding:24px;text-align:center;font-size:11px;color:#71717a;line-height:1.6;border-top:2px solid #18181b;background:#fafafa;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;\">\n          <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"margin:0 auto 10px;\">\n            <tr>\n              <td data-crm-footer-logo=\"1\" style=\"vertical-align:middle;padding-right:8px;line-height:0;font-size:0;\">{{vars.brand.logo}}</td>\n              <td style=\"vertical-align:middle;font-size:12px;font-weight:700;color:#18181b;line-height:1.3;text-align:left;font-family:-apple-system,BlinkMacSystemFont,sans-serif;\">{{vars.brand.organization_name}}</td>\n            </tr>\n          </table>\n          <p style=\"margin:0 0 6px;white-space:pre-line;\">{{postal_address}}</p>\n          <p style=\"margin:0 0 8px;\">{{compliance_contact_email}}</p>\n          <p style=\"margin:0;\">\n            <a href=\"{{unsubscribe_url}}\" style=\"color:#18181b;font-weight:600;text-decoration:underline;\">Unsubscribe</a>\n          </p>\n        </td>\n      </tr>\n    </table>\n  </td></tr>\n</table>",
+      "variablesSchema": {
+        "fields": [
+          {
+            "key": "spotlight.issue",
+            "type": "text",
+            "label": "Issue badge",
+            "description": "Top-right issue indicator (e.g. NO. 08 / VOL. 3)."
+          },
+          {
+            "key": "spotlight.tagline",
+            "type": "text",
+            "label": "Top tagline",
+            "description": "Sub-header marquee tagline (e.g. CURATED SIGNALS & DISPATCHES)."
+          },
+          {
+            "key": "brand.organization_name",
+            "type": "text",
+            "label": "Organization name",
+            "required": true,
+            "defaultFrom": "compliance.organizationName"
+          },
+          {
+            "key": "brand.logo",
+            "type": "image",
+            "label": "Logo",
+            "required": true,
+            "description": "Shown in the header and footer. Uses the Relaybase icon when unset."
+          }
+        ]
+      },
+      "isBuiltin": true,
+      "createdAt": "2026-09-16T06:57:35.087Z"
     }
   ],
   "templates": [
@@ -485,13 +655,16 @@
       "name": "Partner note",
       "subject": "A note for design partners",
       "previewText": "How we want feedback during the Scale send beta",
-      "bodyMarkdown": "Hello {{contact.name}},\n\nThank you for being a **design partner** on Relaybase Scale. This note sets expectations for the next two weeks of testing.\n\n**We need from you**\n\n* One **test send** and one **small real send** (≤10 recipients) with notes on anything confusing.\n\n* Screenshots or Loom if the UI blocks you — especially Publish and Stats tabs.\n\n* Honest feedback on copy, footers, and unsubscribe flow.\n\n**We owe you**\n\n* Same-day replies on blocking bugs during business hours (UTC+7).\n\n* A written changelog when we flip List-Unsubscribe headers on the Worker.\n\nNo NDA beyond what you already agreed — feel free to talk about the experience, not other customers’ data.\n\nGratefully,\\\n Isaac\n",
-      "layoutId": "tpl-minimal",
-      "templateVariables": {},
+      "bodyMarkdown": "Hello {{contact.name}},\n\nThank you for being a **design partner** on Relaybase Scale. This note sets expectations for the next two weeks of testing.\n\n**We need from you**\n\n* One **test send** and one **small real send** (≤10 recipients) with notes on anything confusing.\n\n* Screenshots or Loom if the UI blocks you — especi{{contact.name}}ally Publish and Stats tabs.\n\n* Honest feedback on copy, footers, and unsubscribe flow.\n\n**We owe you**\n\n* Same-day replies on blocking bugs during business hours (UTC+7).\n\n* A written changelog when we flip List-Unsubscribe headers on the Worker.\n\nNo NDA beyond what you already agreed — feel free to talk about the experience, not other customers’ data.\n\nGratefully,\\\n Isaac\n",
+      "layoutId": "tpl-plain-text",
+      "templateVariables": {
+        "event.date_badge": "19 sep",
+        "event.time_location": "2026"
+      },
       "category": "marketing",
       "isPreset": false,
       "createdAt": "2026-09-15T12:20:00.000Z",
-      "updatedAt": "2026-09-16T02:07:05.613Z"
+      "updatedAt": "2026-09-16T07:05:26.781Z"
     },
     {
       "id": "msgtpl_broadcast_scheduled_ama",
@@ -1726,31 +1899,31 @@
   "activities": [],
   "scheduledJobs": [
     {
-      "id": "job_434c92a4-4f1a-4414-9440-929818b49c3e",
+      "id": "job_2d2b288a-b30f-476f-958e-374b056f0d28",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_scheduled_ama",
       "runAt": "2026-09-17T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T06:49:15.106Z"
+      "createdAt": "2026-09-16T07:05:45.949Z"
     },
     {
-      "id": "job_f2082604-293c-41ac-b112-ce8a39f63d0a",
+      "id": "job_0ec11348-62f1-438c-a7ee-6b8ab2f1fcd5",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_sent_sep_digest",
       "runAt": "2026-09-23T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T06:49:15.106Z"
+      "createdAt": "2026-09-16T07:05:45.949Z"
     },
     {
-      "id": "job_4fd0efa1-845b-429c-a7ff-91022dd27061",
+      "id": "job_2e959128-c9e9-4aa2-8aae-5317792b0420",
       "accountLinkId": "dev",
       "kind": "newsletter",
       "refId": "broadcast_6335f85b-01f5-4ccb-a2c7-37980c32f53c",
       "runAt": "2026-09-30T03:00:00.000Z",
       "status": "pending",
-      "createdAt": "2026-09-16T06:49:15.106Z"
+      "createdAt": "2026-09-16T07:05:45.949Z"
     }
   ],
   "trackingEvents": [],

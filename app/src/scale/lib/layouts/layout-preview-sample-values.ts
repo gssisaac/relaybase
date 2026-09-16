@@ -52,9 +52,39 @@ export function hardcodedLayoutTemplateVariables(
       field.key === "header.organization_name" ||
       field.key === "publication.title" ||
       field.key === "digest.title" ||
+      field.key === "receipt.title" ||
+      field.key === "event.title" ||
+      field.key === "author.name" ||
       field.defaultFrom === "compliance.organizationName"
     ) {
       out[field.key] = LAYOUT_PREVIEW_FIXTURES.organizationName;
+    }
+    if (field.key === "author.name") {
+      out[field.key] = "Alex River";
+    }
+    if (field.key === "author.title") {
+      out[field.key] = "Founder & CEO";
+    }
+    if (field.key === "receipt.title") {
+      out[field.key] = "Payment Receipt";
+    }
+    if (field.key === "receipt.number") {
+      out[field.key] = "INV-2026-0901";
+    }
+    if (field.key === "event.title") {
+      out[field.key] = "Scale 2026 Product Keynote";
+    }
+    if (field.key === "event.date_badge") {
+      out[field.key] = "SEP 24";
+    }
+    if (field.key === "event.time_location") {
+      out[field.key] = "Thu 10:00 AM UTC · Online / Zoom";
+    }
+    if (field.key === "spotlight.issue") {
+      out[field.key] = "NO. 08";
+    }
+    if (field.key === "spotlight.tagline") {
+      out[field.key] = "CURATED SIGNALS & DISPATCHES";
     }
     if (field.key === "publication.issue_meta") {
       out[field.key] = "Issue #48 · Sep 16, 2026";

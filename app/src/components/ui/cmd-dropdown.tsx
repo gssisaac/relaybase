@@ -87,6 +87,27 @@ function optionFilterKeywords(option: CmdDropdownOption): string[] {
 }
 
 /** Substring match — cmdk's default fuzzy filter matches unrelated labels (e.g. "reading" → "reola"). */
+/** Align the selected row near the top of the list (cmdk defaults to `nearest`, which pins to the bottom). */
+function scrollCmdItemNearTop(
+  listEl: HTMLElement,
+  itemValue: string,
+  insetPx = 4,
+): void {
+  const escaped = itemValue.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+  const item = listEl.querySelector(
+    `[cmdk-item][data-value="${escaped}"]`,
+  ) as HTMLElement | null
+  if (!item) return
+
+  const group = item.closest("[cmdk-group]")
+  const heading = group?.querySelector("[cmdk-group-heading]") as HTMLElement | null
+  const anchor = heading ?? item
+
+  const listTop = listEl.getBoundingClientRect().top
+  const anchorTop = anchor.getBoundingClientRect().top
+  listEl.scrollTop = Math.max(0, listEl.scrollTop + anchorTop - listTop - insetPx)
+}
+
 function cmdDropdownSearchFilter(
   value: string,
   search: string,
@@ -139,6 +160,7 @@ function CmdDropdown<Value extends string = string>({
 
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false)
   const open = openProp ?? uncontrolledOpen
+  const listRef = React.useRef<HTMLDivElement>(null)
 
   const setOpen = React.useCallback(
     (next: boolean) => {
@@ -162,6 +184,25 @@ function CmdDropdown<Value extends string = string>({
     () => flatOptions.filter((option) => selectedValues.has(option.value)),
     [flatOptions, selectedValues],
   )
+
+  const commandInitialValue = React.useMemo((): Value | undefined => {
+    if (selectedValues.size === 0) return undefined
+    return [...selectedValues][0] as Value
+  }, [selectedValues])
+
+  React.useLayoutEffect(() => {
+    if (!open || !commandInitialValue) return
+    const list = listRef.current
+    if (!list) return
+
+    const applyScroll = () => scrollCmdItemNearTop(list, commandInitialValue)
+    applyScroll()
+    const frame = requestAnimationFrame(() => {
+      applyScroll()
+      requestAnimationFrame(applyScroll)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [open, commandInitialValue])
 
   const renderOption = (option: CmdDropdownOption<Value>) => {
     const isSelected = selectedValues.has(option.value)
@@ -349,56 +390,63 @@ function CmdDropdown<Value extends string = string>({
           contentClassName,
         )}
       >
-        <Command
-          shouldFilter={enableSearch}
-          filter={cmdDropdownSearchFilter}
-          className={cn(
-            "gap-0 p-0",
-            "[&_[data-slot=command-input-wrapper]]:m-0.5 [&_[data-slot=command-input-wrapper]]:p-0",
-            "[&_[data-slot=input-group]]:h-8! [&_[data-slot=input-group]]:rounded-lg! [&_[data-slot=input-group]]:border-border/80! [&_[data-slot=input-group]]:bg-card! [&_[data-slot=input-group]]:shadow-[0_1px_1px_0_rgba(0,0,0,0.02)]! [&_[data-slot=input-group]]:transition-all dark:[&_[data-slot=input-group]]:border-border/60! dark:[&_[data-slot=input-group]]:bg-input/10!",
-            "[&_[data-slot=input-group]:focus-within]:border-primary! [&_[data-slot=input-group]:focus-within]:ring-2! [&_[data-slot=input-group]:focus-within]:ring-primary/10!",
-            "[&_[data-slot=command-group]]:p-0 [&_[data-slot=command-group]]:**:[[cmdk-group-heading]]:px-1.5 [&_[data-slot=command-group]]:**:[[cmdk-group-heading]]:py-1 [&_[data-slot=command-group]]:**:[[cmdk-group-items]]:pl-0.5",
-            "[&_[data-slot=command-item]]:gap-1.5 [&_[data-slot=command-item]]:px-1.5 [&_[data-slot=command-item]]:py-1",
-          )}
-        >
-          {enableSearch ? (
-            <CommandInput
-              placeholder={searchPlaceholder ?? placeholder ?? "Search…"}
-            />
-          ) : null}
-          <CommandList className="max-h-60 scroll-py-0.5 [scrollbar-width:thin] [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent">
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
-            {groups?.length ? (
-              groups.map((group) => (
-                <CommandGroup key={group.heading} heading={group.heading}>
-                  {group.options.map((option) => renderOption(option))}
-                </CommandGroup>
-              ))
-            ) : (
-              <CommandGroup>
-                {flatOptions.map((option) => renderOption(option))}
-              </CommandGroup>
+        {open ? (
+          <Command
+            key={commandInitialValue ?? "__none__"}
+            {...(commandInitialValue ? { defaultValue: commandInitialValue } : {})}
+            shouldFilter={enableSearch}
+            filter={cmdDropdownSearchFilter}
+            className={cn(
+              "gap-0 p-0",
+              "[&_[data-slot=command-input-wrapper]]:m-0.5 [&_[data-slot=command-input-wrapper]]:p-0",
+              "[&_[data-slot=input-group]]:h-8! [&_[data-slot=input-group]]:rounded-lg! [&_[data-slot=input-group]]:border-border/80! [&_[data-slot=input-group]]:bg-card! [&_[data-slot=input-group]]:shadow-[0_1px_1px_0_rgba(0,0,0,0.02)]! [&_[data-slot=input-group]]:transition-all dark:[&_[data-slot=input-group]]:border-border/60! dark:[&_[data-slot=input-group]]:bg-input/10!",
+              "[&_[data-slot=input-group]:focus-within]:border-primary! [&_[data-slot=input-group]:focus-within]:ring-2! [&_[data-slot=input-group]:focus-within]:ring-primary/10!",
+              "[&_[data-slot=command-group]]:p-0 [&_[data-slot=command-group]]:**:[[cmdk-group-heading]]:px-1.5 [&_[data-slot=command-group]]:**:[[cmdk-group-heading]]:py-1 [&_[data-slot=command-group]]:**:[[cmdk-group-items]]:flex [&_[data-slot=command-group]]:**:[[cmdk-group-items]]:flex-col [&_[data-slot=command-group]]:**:[[cmdk-group-items]]:gap-1 [&_[data-slot=command-group]]:**:[[cmdk-group-items]]:pl-0.5",
+              "[&_[data-slot=command-item]]:gap-1.5 [&_[data-slot=command-item]]:px-1.5 [&_[data-slot=command-item]]:py-1",
             )}
-          </CommandList>
-          {!required && selectedOptions.length > 0 ? (
-            <>
-              <CommandSeparator />
-              <CommandGroup>
-                <CommandItem
-                  onSelect={() => {
-                    clearAll()
-                    if (!multiple) {
-                      setOpen(false)
-                    }
-                  }}
-                  className="justify-center px-1.5 py-1 text-center text-xs text-muted-foreground"
-                >
-                  {clearLabel}
-                </CommandItem>
-              </CommandGroup>
-            </>
-          ) : null}
-        </Command>
+          >
+            {enableSearch ? (
+              <CommandInput
+                placeholder={searchPlaceholder ?? placeholder ?? "Search…"}
+              />
+            ) : null}
+            <CommandList
+              ref={listRef}
+              className="max-h-60 scroll-py-0.5 [scrollbar-width:thin] [&::-webkit-scrollbar]:block [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent"
+            >
+              <CommandEmpty>{emptyMessage}</CommandEmpty>
+              {groups?.length ? (
+                groups.map((group) => (
+                  <CommandGroup key={group.heading} heading={group.heading}>
+                    {group.options.map((option) => renderOption(option))}
+                  </CommandGroup>
+                ))
+              ) : (
+                <CommandGroup>
+                  {flatOptions.map((option) => renderOption(option))}
+                </CommandGroup>
+              )}
+            </CommandList>
+            {!required && selectedOptions.length > 0 ? (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => {
+                      clearAll()
+                      if (!multiple) {
+                        setOpen(false)
+                      }
+                    }}
+                    className="justify-center px-1.5 py-1 text-center text-xs text-muted-foreground"
+                  >
+                    {clearLabel}
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            ) : null}
+          </Command>
+        ) : null}
       </PopoverContent>
     </Popover>
   )

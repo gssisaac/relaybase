@@ -132,6 +132,10 @@ function defaultVariableImageHtml(src: string): string {
   return `<img src="${src}" alt="" style="${DEFAULT_VARIABLE_IMAGE_STYLE}" />`;
 }
 
+function heroBannerImageHtml(src: string): string {
+  return `<img src="${src}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;" />`;
+}
+
 function escapeHtml(text: string): string {
   return text
     .replaceAll("&", "&amp;")
@@ -178,7 +182,9 @@ export function applyTemplateVariablesToHtml(
             ? headerLogoImageHtml(safeSrc)
             : field.key === "brand.logo"
               ? footerBrandLogoImageHtml(safeSrc)
-              : defaultVariableImageHtml(safeSrc);
+              : field.key === "hero.image"
+                ? heroBannerImageHtml(safeSrc)
+                : defaultVariableImageHtml(safeSrc);
       }
     }
     out = out.replaceAll(templateVariableToken(field.key), replacement);

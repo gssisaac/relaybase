@@ -2,11 +2,22 @@
 
 import { cn } from "@/lib/utils";
 
+export type LayoutWireframeVariant =
+  | "minimal"
+  | "header"
+  | "card"
+  | "plain"
+  | "dark"
+  | "editorial"
+  | "launch"
+  | "warm"
+  | "digest";
+
 export function LayoutWireframe({
   variant,
   className,
 }: {
-  variant: "minimal" | "header" | "card" | "plain";
+  variant: LayoutWireframeVariant;
   className?: string;
 }) {
   if (variant === "plain") {
@@ -20,32 +31,93 @@ export function LayoutWireframe({
       </div>
     );
   }
-  return (
-    <div
-      className={cn(
-        "pointer-events-none overflow-hidden rounded border border-border/80 bg-muted/30",
-        variant === "card" && "p-1",
-        className,
-      )}
-      aria-hidden
-    >
+
+  const shellClass = cn(
+    "pointer-events-none overflow-hidden rounded border border-border/80",
+    variant === "card" && "p-1 bg-muted/30",
+    variant === "dark" && "border-zinc-700/80 bg-zinc-950",
+    variant === "warm" && "border-amber-900/10 bg-[#f7f5f0]",
+    variant === "digest" && "bg-muted/30",
+    variant !== "card" && variant !== "dark" && variant !== "warm" && variant !== "digest" && "bg-muted/30",
+  );
+
+  const innerClass = cn(
+    "rounded-sm p-2",
+    variant === "card" && "border border-border/60 bg-background",
+    variant === "dark" && "bg-zinc-900",
+    variant === "editorial" && "border border-border/40 bg-background",
+    variant === "launch" && "overflow-hidden bg-background p-0",
+    variant === "warm" && "border border-amber-900/10 bg-white",
+    variant === "digest" && "overflow-hidden bg-background p-0",
+    variant !== "card" &&
+      variant !== "dark" &&
+      variant !== "editorial" &&
+      variant !== "launch" &&
+      variant !== "warm" &&
+      variant !== "digest" &&
+      "bg-background",
+  );
+
+  const bodyLines = (
+    <div className={cn("space-y-1", variant === "launch" && "p-2 pt-1.5", variant === "digest" && "p-2")}>
       <div
         className={cn(
-          "rounded-sm bg-background p-2",
-          variant === "card" && "border border-border/60",
+          "h-1 w-full rounded",
+          variant === "dark" ? "bg-zinc-500/40" : "bg-muted-foreground/20",
         )}
-      >
-        {variant === "header" ? (
-          <div className="mb-1.5 flex items-center gap-1">
+      />
+      <div
+        className={cn(
+          "h-1 w-[80%] rounded",
+          variant === "dark" ? "bg-zinc-500/30" : "bg-muted-foreground/15",
+        )}
+      />
+      <div
+        className={cn(
+          "h-1 w-[60%] rounded",
+          variant === "dark" ? "bg-zinc-500/20" : "bg-muted-foreground/10",
+        )}
+      />
+    </div>
+  );
+
+  return (
+    <div className={cn(shellClass, className)} aria-hidden>
+      <div className={innerClass}>
+        {variant === "header" || variant === "warm" ? (
+          <div className="mb-1.5 flex items-center gap-1 px-0.5">
             <div className="size-2.5 shrink-0 rounded-sm bg-muted-foreground/25" />
             <div className="h-1 flex-1 rounded-sm bg-muted-foreground/20" />
           </div>
         ) : null}
-        <div className="space-y-1">
-          <div className="h-1 w-full rounded bg-muted-foreground/20" />
-          <div className="h-1 w-[80%] rounded bg-muted-foreground/15" />
-          <div className="h-1 w-[60%] rounded bg-muted-foreground/10" />
-        </div>
+        {variant === "dark" ? (
+          <div className="mb-1.5 flex items-center justify-between gap-1 px-0.5">
+            <div className="flex flex-1 items-center gap-1">
+              <div className="size-2.5 shrink-0 rounded-sm bg-zinc-500/50" />
+              <div className="h-1 flex-1 rounded-sm bg-zinc-500/35" />
+            </div>
+            <div className="h-1.5 w-6 shrink-0 rounded-sm bg-zinc-600/50" />
+          </div>
+        ) : null}
+        {variant === "editorial" ? (
+          <div className="mb-1.5 space-y-1 border-b border-double border-foreground/25 pb-1.5 text-center">
+            <div className="mx-auto h-1.5 w-[70%] rounded-sm bg-muted-foreground/30" />
+            <div className="mx-auto h-1 w-[45%] rounded-sm bg-muted-foreground/15" />
+          </div>
+        ) : null}
+        {variant === "launch" ? (
+          <div className="mb-0 h-6 w-full bg-gradient-to-r from-indigo-400/50 via-violet-400/40 to-pink-400/40" />
+        ) : null}
+        {variant === "digest" ? (
+          <>
+            <div className="h-0.5 w-full bg-indigo-500/70" />
+            <div className="flex items-center justify-between gap-1 border-b border-border/50 px-2 py-1">
+              <div className="h-1.5 flex-1 rounded-sm bg-muted-foreground/25" />
+              <div className="h-1 w-5 shrink-0 rounded-sm bg-muted-foreground/15" />
+            </div>
+          </>
+        ) : null}
+        {bodyLines}
       </div>
     </div>
   );

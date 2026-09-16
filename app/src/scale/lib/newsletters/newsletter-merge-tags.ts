@@ -2,6 +2,7 @@ import {
   COMPLIANCE_PREVIEW_PLACEHOLDERS,
   resolveComplianceFieldForPreview,
 } from "@/scale/lib/compliance-preview-values";
+import type { LayoutWireframeVariant } from "@/scale/components/layouts/LayoutWireframe";
 import { PLAIN_TEXT_TEMPLATE_ID } from "@/scale/lib/layouts/layout-catalog";
 import type { NewsletterMember } from "@/lib/scale/api";
 
@@ -175,9 +176,14 @@ export function previewPersonaOptions(members: NewsletterMember[]): {
 export function templateThumbnailVariant(
   templateId: string,
   derivedFromTemplateId?: string | null,
-): "minimal" | "header" | "card" | "plain" {
+): LayoutWireframeVariant {
   const key = derivedFromTemplateId ?? templateId;
   if (key === PLAIN_TEXT_TEMPLATE_ID) return "plain";
+  if (key.includes("dark-obsidian")) return "dark";
+  if (key.includes("editorial")) return "editorial";
+  if (key.includes("product-launch")) return "launch";
+  if (key.includes("warm-sand")) return "warm";
+  if (key.includes("curated-digest")) return "digest";
   if (key.includes("header")) return "header";
   if (key.includes("card")) return "card";
   return "minimal";

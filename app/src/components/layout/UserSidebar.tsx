@@ -95,7 +95,7 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 import { Settings } from "lucide-react";
 
-/** Matches the product mail mark (orange), as a Lucide stroke — Mailbox & Scale. */
+/** Matches the product mail mark (orange), as a Lucide stroke — Mailbox & Studio. */
 const MODE_TITLE_ICON_COLOR = "#D8663B";
 
 function OfflineSidebarBadge({ collapsed }: { collapsed: boolean }) {
@@ -165,7 +165,7 @@ function TitleIcon({ mode }: { mode: SidebarMode }) {
 
 function sidebarTitleForMode(mode: SidebarMode) {
   if (mode === "email") return "Mailbox";
-  if (mode === "scale") return "Scale";
+  if (mode === "scale") return "Studio";
   return "Console";
 }
 
@@ -218,7 +218,7 @@ function TitleMenuItems({
         onClick={() => onSwitchTo("email")}
       />
       <ModeMenuItem
-        label="Scale"
+        label="Studio"
         mode="scale"
         active={mode === "scale"}
         onClick={() => onSwitchTo("scale")}

@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { Monitor, Smartphone } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { dashboardScrollBodyClassName } from "@/console/lib/page-layout";
+import { LayoutHtmlCodeEditor } from "@/scale/components/layouts/LayoutHtmlCodeEditor";
 import { ScaleDetailPageHeader } from "@/scale/components/ScaleDetailPageHeader";
+import { NewsletterEmailPreview } from "@/scale/components/newsletters/NewsletterEmailPreview";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,15 +24,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { layoutDetailHref } from "@/scale/lib/layout-paths";
-import { prepareLayoutTemplateHtml } from "@/scale/lib/layouts/layout-standard-footer";
+import { useLayoutRenderedPreview } from "@/scale/pages/layouts/use-layout-rendered-preview";
 import { useScalePaths } from "@/scale/lib/paths";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { scaleApi, ScaleApiError, type ScaleLayout } from "@/lib/scale/api";
-
-const SAMPLE_BODY_HTML =
-  "<p style='margin:0 0 12px;font-family:sans-serif;font-size:15px;line-height:1.5;color:#334155'>Sample message body — merge tags and markdown render here in newsletters.</p>";
 
 export function LayoutDetailView({ layoutId }: { layoutId: string }) {
   const router = useRouter();
@@ -41,6 +40,7 @@ export function LayoutDetailView({ layoutId }: { layoutId: string }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,11 +66,12 @@ export function LayoutDetailView({ layoutId }: { layoutId: string }) {
     void load();
   }, [load]);
 
-  const previewHtml = useMemo(() => {
-    if (!row) return "";
-    const shell = prepareLayoutTemplateHtml(htmlSource, row.id);
-    return shell.replaceAll("{{content}}", SAMPLE_BODY_HTML);
-  }, [htmlSource, row]);
+  const { renderedPreview, plainTextTemplate, previewRecipientEmail, previewFromEmail } =
+    useLayoutRenderedPreview({
+      layoutId: row?.id ?? layoutId,
+      htmlSource,
+      variablesSchema: row?.variablesSchema,
+    });
 
   async function save() {
     if (!row) return;
@@ -194,52 +195,78 @@ export function LayoutDetailView({ layoutId }: { layoutId: string }) {
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto border-b border-border p-4 lg:border-b-0 lg:border-r">
-          <p className="text-xs text-muted-foreground">
-            {row.isBuiltin
-              ? "Built-in layouts are read-only — saving creates a custom copy you can edit and delete."
-              : "Update the frame HTML. Newsletters and templates reference this layout by id."}
-          </p>
-          {isCustom ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="layout-name">Name</Label>
-              <Input
-                id="layout-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={examplePlaceholder("Company newsletter")}
-              />
-            </div>
-          ) : null}
-          <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
-            <Label htmlFor="layout-html">HTML source</Label>
-            <Textarea
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+            {isCustom ? (
+              <>
+                <Label htmlFor="layout-name" className="sr-only">
+                  Layout name
+                </Label>
+                <Input
+                  id="layout-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={examplePlaceholder("Company newsletter")}
+                  className="h-8 max-w-[min(100%,14rem)] shrink-0 text-xs"
+                />
+              </>
+            ) : null}
+            <p className="min-w-0 flex-1 text-right text-[11px] leading-snug text-muted-foreground">
+              {row.isBuiltin
+                ? "Built-in · Save forks an editable copy"
+                : "Frame HTML · referenced by id"}
+            </p>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3 pt-2">
+            <LayoutHtmlCodeEditor
               id="layout-html"
               value={htmlSource}
-              onChange={(e) => setHtmlSource(e.target.value)}
-              className="min-h-[min(480px,55vh)] flex-1 font-mono text-xs leading-relaxed"
-              spellCheck={false}
+              onChange={setHtmlSource}
             />
+            {error ? <p className="mt-2 shrink-0 text-xs text-destructive">{error}</p> : null}
           </div>
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#f6f8fc]">
-          <div className="shrink-0 border-b border-border bg-background px-4 py-2 text-xs font-medium text-muted-foreground">
-            Preview (sample body)
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto p-4">
-            <div
-              className="mx-auto max-w-[600px] overflow-hidden rounded-md border border-border bg-white shadow-sm"
-              style={{ colorScheme: "light" }}
-            >
-              <iframe
-                title="Layout preview"
-                className="h-[min(640px,70vh)] w-full border-0 bg-white"
-                sandbox=""
-                srcDoc={previewHtml}
-              />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="relative flex shrink-0 items-center justify-center border-b border-border px-3 py-2">
+            <div className="flex items-center gap-0.5">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant={device === "desktop" ? "secondary" : "ghost"}
+                aria-label="Desktop preview"
+                aria-pressed={device === "desktop"}
+                onClick={() => setDevice("desktop")}
+              >
+                <Monitor className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant={device === "mobile" ? "secondary" : "ghost"}
+                aria-label="Mobile preview"
+                aria-pressed={device === "mobile"}
+                onClick={() => setDevice("mobile")}
+              >
+                <Smartphone className="size-4" />
+              </Button>
             </div>
+          </div>
+
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f6f8fc]"
+            style={{ colorScheme: "light" }}
+          >
+            <NewsletterEmailPreview
+              subject="Sample layout preview"
+              fromName={null}
+              fromEmail={previewFromEmail}
+              toEmail={previewRecipientEmail}
+              bodyHtml={renderedPreview}
+              bodyPlainText={renderedPreview}
+              previewIsPlainText={plainTextTemplate}
+              device={device}
+            />
           </div>
         </div>
       </div>

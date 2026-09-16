@@ -51,7 +51,7 @@ export function ScaleOverviewView() {
       const next = await scaleApi.getOverview();
       setData(next);
     } catch {
-      toast.error("Could not load Scale overview — is hq/scale running on port 32831?");
+      toast.error("Could not load Studio overview — is hq/scale running on port 32831?");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -181,7 +181,7 @@ export function ScaleOverviewView() {
                     <OverviewExpandableBody className="space-y-3">
                       <div className="space-y-1">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Sent today (Scale)</span>
+                          <span className="text-muted-foreground">Sent today (Studio)</span>
                           <span className="tabular-nums font-medium">
                             {data.newsletters.cloudflareQuota.usedToday}
                           </span>

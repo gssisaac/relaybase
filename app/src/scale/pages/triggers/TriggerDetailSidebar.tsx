@@ -49,8 +49,17 @@ import { NewTriggerDialog } from "@/scale/pages/triggers/NewTriggerDialog";
 import { useTriggerDetail } from "@/scale/pages/triggers/TriggerDetailContext";
 import { useTriggerSidebarList } from "@/scale/pages/triggers/use-trigger-sidebar-list";
 import { useProductId } from "@/lib/dashboard/shared/ProductContext";
-import { scaleApi, ScaleApiError, type Trigger } from "@/lib/scale/api";
+import { scaleApi, ScaleApiError, type Trigger, type TriggerStatus } from "@/lib/scale/api";
 import { cn } from "@/lib/utils";
+
+type TriggerSidebarFilter = "all" | TriggerStatus;
+
+const SIDEBAR_FILTER_OPTIONS: { value: TriggerSidebarFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "draft", label: "Draft" },
+  { value: "paused", label: "Paused" },
+];
 
 function triggerRowLabel(row: Trigger): string {
   return row.name?.trim() || row.subject?.trim() || "Untitled trigger";
@@ -189,13 +198,24 @@ function TriggerDetailSidebarInner() {
   const { width, onResize, persist } = usePersistedTriggerDetailSidebarWidth(userId);
   const { rows, loading } = useTriggerSidebarList();
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<TriggerSidebarFilter>("all");
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Trigger | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  const counts = useMemo(() => {
+    return {
+      all: rows.length,
+      active: rows.filter((r) => r.status === "active").length,
+      draft: rows.filter((r) => r.status === "draft").length,
+      paused: rows.filter((r) => r.status === "paused").length,
+    };
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return [...rows]
+      .filter((row) => (filter === "all" ? true : row.status === filter))
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
       .filter((row) => {
         if (!q) return true;
@@ -205,7 +225,7 @@ function TriggerDetailSidebarInner() {
           triggerSourceSummary(row.source).toLowerCase().includes(q)
         );
       });
-  }, [rows, search]);
+  }, [rows, search, filter]);
 
   const onCreated = useCallback(
     (id: string) => {
@@ -248,7 +268,7 @@ function TriggerDetailSidebarInner() {
       aria-label="Triggers"
     >
       <TriggerSidebarHeader addOpen={addOpen} setAddOpen={setAddOpen} onCreated={onCreated} />
-      <div className="shrink-0 border-b border-border px-2.5 py-2">
+      <div className="shrink-0 space-y-2 border-b border-border px-2.5 py-2">
         <div className="relative">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
@@ -262,6 +282,34 @@ function TriggerDetailSidebarInner() {
             autoComplete="off"
             className="h-8 border-border/60 bg-background pl-8 text-xs shadow-none"
           />
+        </div>
+        <div
+          className="flex w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5"
+          role="tablist"
+          aria-label="Filter triggers"
+        >
+          {SIDEBAR_FILTER_OPTIONS.map((opt) => {
+            const selected = filter === opt.value;
+            const count = counts[opt.value];
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setFilter(opt.value)}
+                className={cn(
+                  "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-1.5 py-1 text-[10px] transition-colors",
+                  selected
+                    ? "bg-background font-medium text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span>{opt.label}</span>
+                <span className="tabular-nums text-muted-foreground/70">{count}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5">

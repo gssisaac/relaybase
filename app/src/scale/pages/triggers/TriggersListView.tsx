@@ -54,8 +54,8 @@ type TriggerFilter = "all" | TriggerStatus;
 const FILTER_OPTIONS: { value: TriggerFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "active", label: "Active" },
-  { value: "paused", label: "Paused" },
   { value: "draft", label: "Draft" },
+  { value: "paused", label: "Paused" },
 ];
 
 function triggerRowLabel(row: Trigger): string {

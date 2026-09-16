@@ -20,6 +20,7 @@ import {
 } from "@/scale/lib/layouts/layout-template-variables";
 import { prepareLayoutTemplateHtml } from "@/scale/lib/layouts/layout-standard-footer";
 import { isPlainTextTemplate } from "@/scale/lib/layouts/layout-catalog";
+import { plainEmailBodyFromMarkdown } from "@/scale/lib/markdown/markdown-to-plain-email-text";
 import {
   complianceFromIdentity,
   effectiveComplianceIdentityId,
@@ -239,7 +240,7 @@ export function TriggerContentView() {
 
   const renderedPreview = useMemo(() => {
     if (plainTextTemplate) {
-      const body = bodyMarkdown.trim() || "Nothing to preview yet";
+      const body = plainEmailBodyFromMarkdown(bodyMarkdown);
       const wrapped = preparedTemplateHtml.replaceAll("{{content}}", body);
       return applyTriggerPreviewMergeTags(wrapped, PREVIEW_RECIPIENT, previewMergeOptions);
     }

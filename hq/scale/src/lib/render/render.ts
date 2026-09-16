@@ -9,6 +9,7 @@ import {
 } from "../templates/variable-schema";
 import { resolveScaleAssetUrl } from "../assets/resolve-url";
 import { applyGmailContentLinkStyles } from "./gmail-link-style";
+import { markdownToPlainEmailText } from "./markdown-to-plain-email-text";
 
 /**
  * P0-6 rendering pipeline: markdown → HTML fragment, merge into template's
@@ -156,8 +157,9 @@ export function renderNewsletterForRecipient(input: RenderBroadcastInput): strin
   );
 
   if (isPlainTextTemplate(input.templateId)) {
+    const plainBody = markdownToPlainEmailText(input.bodyMarkdown ?? "");
     const merged = applyRecipientMergeTags(
-      templateHtml.replaceAll("{{content}}", input.bodyMarkdown ?? ""),
+      templateHtml.replaceAll("{{content}}", plainBody),
       input.recipient,
       unsubscribeUrl,
     );

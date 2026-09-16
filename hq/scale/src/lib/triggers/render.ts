@@ -7,6 +7,7 @@ import {
   type TemplateVariablesSchema,
 } from "../templates/variable-schema";
 import { applyGmailContentLinkStyles } from "../render/gmail-link-style";
+import { markdownToPlainEmailText } from "../render/markdown-to-plain-email-text";
 import { applyTriggerComplianceMergeTags, shouldIncludeListUnsubscribe } from "./compliance";
 import { applyAutomationRecipientMergeTags, applyTriggerMergeTags } from "./merge-tags";
 import { store } from "../../db/store";
@@ -124,8 +125,9 @@ export function renderTriggerForSend(input: RenderAutomationInput): string {
   const openPixel = `${scaleBaseUrl}/scale/t/a/o/${triggerId}/${triggerSendId}`;
 
   if (isPlainTextTemplate(layoutId)) {
+    const plainBody = markdownToPlainEmailText(message.bodyMarkdown ?? "");
     const merged = applyAllMergeTags(
-      shell.replaceAll("{{content}}", message.bodyMarkdown ?? ""),
+      shell.replaceAll("{{content}}", plainBody),
       input.recipient,
       input.payload,
     );

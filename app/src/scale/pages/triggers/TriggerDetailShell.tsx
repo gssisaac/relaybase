@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, SlidersHorizontal } from "lucide-react";
+import { BarChart3, Settings, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -16,7 +16,12 @@ import {
   type TriggerDetailTab,
 } from "@/scale/lib/paths";
 import { TriggerDetailSidebar } from "@/scale/pages/triggers/TriggerDetailSidebar";
+import {
+  TriggerConfigUiProvider,
+  useTriggerConfigUi,
+} from "@/scale/pages/triggers/TriggerConfigUiContext";
 import { useTriggerDetail } from "@/scale/pages/triggers/TriggerDetailContext";
+import { Button } from "@/components/ui/button";
 import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +30,7 @@ const NAV: { id: TriggerDetailTab; label: string; icon: LucideIcon }[] = [
   { id: "stats", label: "Stats", icon: BarChart3 },
 ];
 
-export function TriggerDetailShell({
+function TriggerDetailShellInner({
   section,
   fill,
   children,
@@ -36,6 +41,7 @@ export function TriggerDetailShell({
 }) {
   const { noDragClassName, isDesktop } = useDesktopChrome();
   const { triggerId, trigger } = useTriggerDetail();
+  const configUi = useTriggerConfigUi();
 
   const navOrder = triggerDetailNavTabs(trigger?.status ?? "draft");
   const navById = new Map(NAV.map((item) => [item.id, item]));
@@ -43,68 +49,114 @@ export function TriggerDetailShell({
     .map((id) => navById.get(id))
     .filter((item): item is (typeof NAV)[number] => item != null);
 
+  const showConfigSettingsToggle =
+    section === "config" && configUi != null && !configUi.inspectorOpen;
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <TriggerDetailSidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <DesktopTitleBar className="gap-2 px-4 py-3">
+        <DesktopTitleBar
+          className="gap-2 px-4 py-3"
+          end={
+            showConfigSettingsToggle ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className={noDragClassName}
+                aria-label="Open settings panel"
+                onClick={() => configUi.openInspector()}
+                {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+              >
+                <Settings className="size-4" aria-hidden />
+              </Button>
+            ) : null
+          }
+        >
+          <div
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
+              noDragClassName,
+            )}
+            {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
+              <nav className="flex shrink-0 gap-0.5 overflow-x-auto" aria-label="Automation">
+                {navItems.map((item) => {
+                  const href = triggerDetailHref(triggerId, item.id);
+                  const Icon = item.icon;
+                  const active = item.id === section;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={href}
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                        active
+                          ? "bg-accent text-accent-foreground"
+                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="size-3.5" aria-hidden />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              {trigger ? (
+                <TriggerStatusBadge
+                  status={trigger.status}
+                  listStatus={trigger.listStatus}
+                  className="shrink-0"
+                />
+              ) : null}
+            </div>
+          </div>
+        </DesktopTitleBar>
+
         <div
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-2 sm:gap-3",
-            noDragClassName,
+            "flex min-h-0 min-w-0 flex-1 flex-col",
+            fill ? "overflow-hidden" : "overflow-auto",
           )}
-          {...(isDesktop ? { "data-tauri-drag-region": "false" } : {})}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
-            <nav className="flex shrink-0 gap-0.5 overflow-x-auto" aria-label="Automation">
-              {navItems.map((item) => {
-                const href = triggerDetailHref(triggerId, item.id);
-                const Icon = item.icon;
-                const active = item.id === section;
-                return (
-                  <Link
-                    key={item.id}
-                    href={href}
-                    className={cn(
-                      "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                      active
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-                    )}
-                  >
-                    <Icon className="size-3.5" aria-hidden />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-            {trigger ? (
-              <TriggerStatusBadge
-                status={trigger.status}
-                listStatus={trigger.listStatus}
-                className="shrink-0"
-              />
-            ) : null}
+          <div
+            className={cn(
+              fill ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : dashboardScrollBodyClassName(),
+            )}
+          >
+            {children}
           </div>
         </div>
-      </DesktopTitleBar>
-
-      <div
-        className={cn(
-          "flex min-h-0 min-w-0 flex-1 flex-col",
-          fill ? "overflow-hidden" : "overflow-auto",
-        )}
-      >
-        <div
-          className={cn(
-            fill ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : dashboardScrollBodyClassName(),
-          )}
-        >
-          {children}
-        </div>
-      </div>
       </div>
     </div>
+  );
+}
+
+export function TriggerDetailShell({
+  section,
+  fill,
+  children,
+}: {
+  section: TriggerDetailTab;
+  fill?: boolean;
+  children: ReactNode;
+}) {
+  if (section === "config") {
+    return (
+      <TriggerConfigUiProvider>
+        <TriggerDetailShellInner section={section} fill={fill}>
+          {children}
+        </TriggerDetailShellInner>
+      </TriggerConfigUiProvider>
+    );
+  }
+
+  return (
+    <TriggerDetailShellInner section={section} fill={fill}>
+      {children}
+    </TriggerDetailShellInner>
   );
 }
 

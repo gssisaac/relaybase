@@ -34,11 +34,13 @@ import {
 } from "@/scale/lib/triggers/trigger-sidebar-list";
 import { triggerDetailHref } from "@/scale/lib/paths";
 import { NewTriggerDialog } from "@/scale/pages/triggers/NewTriggerDialog";
+import { TriggersOverviewTopSection } from "@/scale/pages/triggers/TriggersOverviewTopSection";
 import {
   scaleApi,
   ScaleApiError,
   type Trigger,
   type TriggerStatus,
+  type ScaleOverview,
 } from "@/lib/scale/api";
 import { cn } from "@/lib/utils";
 import {
@@ -65,7 +67,9 @@ function triggerRowLabel(row: Trigger): string {
 export function TriggersListView() {
   const router = useRouter();
   const [rows, setRows] = useState<Trigger[]>([]);
+  const [overview, setOverview] = useState<ScaleOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [overviewLoading, setOverviewLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<TriggerFilter>("all");
@@ -75,17 +79,31 @@ export function TriggersListView() {
 
   const load = useCallback(async (force?: boolean) => {
     if (force) setRefreshing(true);
-    else setLoading(true);
-    try {
-      const { triggers } = await scaleApi.listTriggers();
-      setRows(triggers);
-      replaceTriggerSidebarList(triggers);
-    } catch {
-      toast.error("Could not load triggers");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    else {
+      setLoading(true);
+      setOverviewLoading(true);
     }
+    const [listResult, overviewResult] = await Promise.allSettled([
+      scaleApi.listTriggers(),
+      scaleApi.getOverview(),
+    ]);
+
+    if (listResult.status === "fulfilled") {
+      setRows(listResult.value.triggers);
+      replaceTriggerSidebarList(listResult.value.triggers);
+    } else {
+      toast.error("Could not load triggers");
+    }
+
+    if (overviewResult.status === "fulfilled") {
+      setOverview(overviewResult.value);
+    } else if (!force) {
+      toast.error("Could not load overview stats — is hq/scale running on port 32831?");
+    }
+
+    setLoading(false);
+    setOverviewLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => {
@@ -171,7 +189,18 @@ export function TriggersListView() {
       </DesktopTitleBar>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-        <div className={dashboardScrollBodyClassName("flex flex-col gap-3")}>
+        <div className={dashboardScrollBodyClassName("flex flex-col gap-4")}>
+          {overviewLoading && !overview ? (
+            <p className="text-sm text-muted-foreground">Loading stats…</p>
+          ) : null}
+          {overview ? (
+            <TriggersOverviewTopSection
+              data={overview}
+              filter={filter}
+              onFilterChange={setFilter}
+            />
+          ) : null}
+
           <EmailListContainer>
             <ListToolbar
               search={search}

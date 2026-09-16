@@ -38,7 +38,7 @@ const overviewInsetItemClassName =
 const overviewInsetHighlightClassName = "rounded-xl bg-secondary px-3 py-2.5 dark:bg-accent";
 
 export function ScaleOverviewView() {
-  const { schedule, templates, triggers, campaigns, audience } = useScalePaths();
+  const { schedule, templates, triggers, campaigns, subscribers } = useScalePaths();
   const [data, setData] = useState<ScaleOverview | null>(null);
   const [templateCount, setTemplateCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -98,7 +98,7 @@ export function ScaleOverviewView() {
         <div className="min-w-0 space-y-1">
           <h1 className="truncate text-lg font-semibold tracking-tight">Overview</h1>
           <p className="text-sm text-muted-foreground">
-            Schedule, triggers, campaigns, and audience at a glance.
+            Schedule, triggers, campaigns, and subscribers at a glance.
           </p>
         </div>
       </DesktopTitleBar>
@@ -112,7 +112,7 @@ export function ScaleOverviewView() {
             <>
               <ScaleOverviewTopSection
                 data={data}
-                paths={{ schedule, templates, triggers, campaigns, audience, templateCount }}
+                paths={{ schedule, templates, triggers, campaigns, subscribers, templateCount }}
               />
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -135,8 +135,8 @@ export function ScaleOverviewView() {
                           <p className="text-xs text-muted-foreground">{data.schedule.nextUpcoming.subject}</p>
                           <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                             {formatWhen(data.schedule.nextUpcoming.scheduledAt)} ·{" "}
-                            {data.schedule.nextUpcoming.audienceGroupName ?? "Audience"} ·{" "}
-                            {data.schedule.nextUpcoming.recipientCount.toLocaleString()} recipients
+                            {data.schedule.nextUpcoming.audienceGroupName ?? "Subscriber group"} ·{" "}
+                            {data.schedule.nextUpcoming.recipientCount.toLocaleString()} subscribers
                           </p>
                         </div>
                       ) : (
@@ -274,7 +274,7 @@ export function ScaleOverviewView() {
                 <Card>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div>
-                      <CardTitle className="text-base">Audience groups</CardTitle>
+                      <CardTitle className="text-base">Subscriber groups</CardTitle>
                       <CardDescription>
                         {data.audience.groupCount} groups
                         {data.audience.recentSyncStatus.failedGroupsCount > 0
@@ -282,8 +282,8 @@ export function ScaleOverviewView() {
                           : ""}
                       </CardDescription>
                     </div>
-                    <Link href={audience} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                      Audience
+                    <Link href={subscribers} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                      Subscribers
                     </Link>
                   </CardHeader>
                   <CardContent>
@@ -295,7 +295,7 @@ export function ScaleOverviewView() {
                           {data.audience.groups.map((group) => (
                             <li key={group.id}>
                               <Link
-                                href={`${audience}?id=${encodeURIComponent(group.id)}`}
+                                href={`${subscribers}?id=${encodeURIComponent(group.id)}`}
                                 className={cn(
                                   overviewInsetItemClassName,
                                   "flex items-center justify-between gap-2",

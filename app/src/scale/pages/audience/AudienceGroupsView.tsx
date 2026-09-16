@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RefreshCw, Users } from "lucide-react";
+import { Plus, RefreshCw, ShieldCheck, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -11,6 +11,12 @@ import { useAudienceRoutes } from "@/scale/pages/audience/AudienceRouteContext";
 import { resolveEmailApiBase } from "@/lib/desktop/api";
 import { dashboardScrollBodyClassName, DashboardTableScroll } from "@/console/lib/page-layout";
 import { EmailAlerts } from "@/email/components/mailbox/EmailShared";
+import { useVerifiedAccounts } from "@/lib/scale/VerifiedAccountsContext";
+import { VerifiedAccountsQuotaCard } from "@/scale/components/verified-accounts/VerifiedAccountsQuotaCard";
+import {
+  formatOverviewCompact,
+  OverviewKpiCard,
+} from "@/scale/pages/overview/OverviewKpiCard";
 import type { AudienceGroupSummary } from "@/email/components/mailbox/types";
 import { examplePlaceholder } from "@/lib/ui/example-placeholder";
 import { ScaleApiError, scaleAudienceApi } from "@/lib/scale/audience-api";
@@ -83,6 +89,7 @@ function friendlyCrmError(e: unknown, fallback: string): string {
 
 export function AudienceGroupsView() {
   const router = useRouter();
+  const verifiedStore = useVerifiedAccounts();
   const { audienceDetailHref } = useAudienceRoutes();
   const {
     readyDomains,
@@ -106,6 +113,8 @@ export function AudienceGroupsView() {
   const [credentialHeader, setCredentialHeader] = useState("");
   const [testState, setTestState] = useState<TestState>({ status: "idle" });
   const [registering, setRegistering] = useState(false);
+  const [emailsByGroupId, setEmailsByGroupId] = useState<Record<string, string[]>>({});
+  const [emailsLoading, setEmailsLoading] = useState(false);
 
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
@@ -129,6 +138,62 @@ export function AudienceGroupsView() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (groups.length === 0) {
+      setEmailsByGroupId({});
+      return;
+    }
+    let cancelled = false;
+    setEmailsLoading(true);
+    void (async () => {
+      const entries = await Promise.all(
+        groups.map(async (g) => {
+          try {
+            const detail = await scaleAudienceApi.getGroup(g.id);
+            return [
+              g.id,
+              detail.contacts.map((c) => c.email.trim().toLowerCase()).filter(Boolean),
+            ] as const;
+          } catch {
+            return [g.id, [] as string[]] as const;
+          }
+        }),
+      );
+      if (!cancelled) {
+        setEmailsByGroupId(Object.fromEntries(entries));
+        setEmailsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [groups]);
+
+  const allRecipientEmails = useMemo(() => {
+    const unique = new Set<string>();
+    for (const emails of Object.values(emailsByGroupId)) {
+      for (const email of emails) unique.add(email);
+    }
+    return [...unique];
+  }, [emailsByGroupId]);
+
+  const globalRecipientCounts = useMemo(() => {
+    if (allRecipientEmails.length > 0) {
+      return verifiedStore.countsForEmails(allRecipientEmails);
+    }
+    const total = groups.reduce((sum, g) => sum + g.contactCount, 0);
+    return { verified: 0, pending: 0, unverified: total, total };
+  }, [allRecipientEmails, groups, verifiedStore, verifiedStore.lastRefreshedAt]);
+
+  function verifiedFractionLabel(groupId: string, contactCount: number): string {
+    const emails = emailsByGroupId[groupId];
+    const total = emails?.length ?? contactCount;
+    if (emailsLoading && !emails) return `—/${total}`;
+    if (!emails || emails.length === 0) return `0/${total}`;
+    const { verified } = verifiedStore.countsForEmails(emails);
+    return `${verified}/${total}`;
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -231,13 +296,16 @@ export function AudienceGroupsView() {
             <>
               <DialogTrigger render={<Button size="sm" />}>
                 <Plus className="size-4" />
-                Add audience group
+                Add subscriber group
               </DialogTrigger>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => refresh(true)}
-                disabled={refreshing}
+                onClick={() => {
+                  void refresh(true);
+                  void verifiedStore.refreshDestinations();
+                }}
+                disabled={refreshing || verifiedStore.loadingDestinations}
               >
                 <RefreshCw
                   className={refreshing ? "size-4 animate-spin" : "size-4"}
@@ -247,17 +315,17 @@ export function AudienceGroupsView() {
           }
         >
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight">Audience</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Subscribers</h1>
             <p className="text-sm text-muted-foreground">
-              Groups of subscribers, optionally synced from an external data
-              source.
+              Subscriber groups and Cloudflare verification. Verified addresses send
+              without daily quota limits.
             </p>
           </div>
         </DesktopTitleBar>
 
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add audience group</DialogTitle>
+            <DialogTitle>Add subscriber group</DialogTitle>
             <DialogDescription>
               Choose a sending domain from your Worker, then optionally sync
               contacts from an external endpoint.
@@ -450,9 +518,34 @@ export function AudienceGroupsView() {
             onDismissMessage={() => setMessage(null)}
           />
 
+          <VerifiedAccountsQuotaCard />
+
+          {verifiedStore.destinationError ? (
+            <p className="text-xs text-destructive">{verifiedStore.destinationError}</p>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <OverviewKpiCard
+              icon={ShieldCheck}
+              label="Verified"
+              value={formatOverviewCompact(globalRecipientCounts.verified)}
+              hint={
+                globalRecipientCounts.pending > 0
+                  ? `${globalRecipientCounts.pending} pending verification`
+                  : "Cloudflare destination addresses confirmed"
+              }
+            />
+            <OverviewKpiCard
+              icon={Users}
+              label="Total subscribers"
+              value={formatOverviewCompact(globalRecipientCounts.total)}
+              hint={`${groups.length} group${groups.length === 1 ? "" : "s"} across your domains`}
+            />
+          </div>
+
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Audience groups</CardTitle>
+              <CardTitle className="text-sm">Subscriber groups</CardTitle>
               <CardDescription>
                 {groups.length} group{groups.length === 1 ? "" : "s"}
               </CardDescription>
@@ -467,7 +560,7 @@ export function AudienceGroupsView() {
                 />
               </div>
               {filtered.length > 0 ? (
-                <DashboardTableScroll minWidthClassName="min-w-[640px]">
+                <DashboardTableScroll minWidthClassName="min-w-[720px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -479,6 +572,9 @@ export function AudienceGroupsView() {
                       </TableHead>
                       <TableHead className="h-9 text-xs font-normal text-muted-foreground">
                         Contacts
+                      </TableHead>
+                      <TableHead className="h-9 text-xs font-normal text-muted-foreground">
+                        Verified
                       </TableHead>
                       <TableHead className="h-9 text-xs font-normal text-muted-foreground">
                         Data source
@@ -504,6 +600,9 @@ export function AudienceGroupsView() {
                           {group.domain}
                         </TableCell>
                         <TableCell>{group.contactCount}</TableCell>
+                        <TableCell className="tabular-nums text-xs">
+                          {verifiedFractionLabel(group.id, group.contactCount)}
+                        </TableCell>
                         <TableCell>
                           {group.dataSource ? (
                             <Badge
@@ -538,14 +637,14 @@ export function AudienceGroupsView() {
                     className="size-8 text-muted-foreground"
                     aria-hidden
                   />
-                  <p className="text-sm font-medium">No audience groups yet</p>
+                  <p className="text-sm font-medium">No subscriber groups yet</p>
                   <p className="max-w-sm text-xs text-muted-foreground">
                     Create a group to start collecting subscribers manually, or
                     by syncing an external endpoint.
                   </p>
                   <Button size="sm" onClick={() => setAddOpen(true)}>
                     <Plus className="size-4" />
-                    Add audience group
+                    Add subscriber group
                   </Button>
                 </div>
               ) : (

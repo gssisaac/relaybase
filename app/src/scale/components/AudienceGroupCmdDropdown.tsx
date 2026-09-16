@@ -41,7 +41,7 @@ export function AudienceGroupCmdDropdown({
   pinnedGroupIds = [],
   domainFilter,
   placeholder,
-  searchPlaceholder = "Search audience by name or domain…",
+  searchPlaceholder = "Search subscriber groups by name or domain…",
   disabled,
   ...cmdProps
 }: AudienceGroupCmdDropdownProps) {
@@ -66,10 +66,10 @@ export function AudienceGroupCmdDropdown({
   const resolvedPlaceholder =
     placeholder ??
     (loading
-      ? "Loading audience groups…"
+      ? "Loading subscriber groups…"
       : !hasGroups
-        ? "No audience groups"
-        : "Select audience group");
+        ? "No subscriber groups"
+        : "Select subscriber group");
 
   return (
     <CmdDropdown

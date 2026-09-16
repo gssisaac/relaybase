@@ -100,6 +100,7 @@ export type CfApiTokenPermissions = {
   zoneRead: CfTokenPermissionStatus;
   emailRoutingRead: CfTokenPermissionStatus;
   emailRoutingEdit: CfTokenPermissionStatus;
+  emailRoutingAddressesEdit: CfTokenPermissionStatus;
   emailSendingEdit: CfTokenPermissionStatus;
   dnsEdit: CfTokenPermissionStatus;
 };
@@ -107,6 +108,7 @@ export type CfApiTokenPermissions = {
 export type CfTokenPermissionCheckId =
   | "emailRoutingRead"
   | "emailRoutingEdit"
+  | "emailRoutingAddressesEdit"
   | "emailSendingEdit"
   | "zoneRead"
   | "dnsEdit";
@@ -114,7 +116,13 @@ export type CfTokenPermissionCheckId =
 export type CfTokenPermissionCheck = {
   id: CfTokenPermissionCheckId;
   category: "Zone" | "Account";
-  name: "Email Routing" | "Email Routing Rules" | "Email Sending" | "Zone" | "DNS";
+  name:
+    | "Email Routing"
+    | "Email Routing Rules"
+    | "Email Routing Addresses"
+    | "Email Sending"
+    | "Zone"
+    | "DNS";
   requiredAccess: "Edit" | "Read";
   status: CfTokenPermissionStatus;
 };
@@ -133,6 +141,12 @@ export const CF_TOKEN_PERMISSION_DEFS: readonly Omit<
     id: "emailRoutingEdit",
     category: "Zone",
     name: "Email Routing Rules",
+    requiredAccess: "Edit",
+  },
+  {
+    id: "emailRoutingAddressesEdit",
+    category: "Account",
+    name: "Email Routing Addresses",
     requiredAccess: "Edit",
   },
   {
@@ -196,6 +210,7 @@ export function parseCfApiTokenPermissions(
     zoneRead: asCfTokenPermissionStatus(raw.zoneRead),
     emailRoutingRead: asCfTokenPermissionStatus(raw.emailRoutingRead),
     emailRoutingEdit: asCfTokenPermissionStatus(raw.emailRoutingEdit),
+    emailRoutingAddressesEdit: asCfTokenPermissionStatus(raw.emailRoutingAddressesEdit),
     emailSendingEdit: asCfTokenPermissionStatus(raw.emailSendingEdit),
     dnsEdit: asCfTokenPermissionStatus(raw.dnsEdit),
   };

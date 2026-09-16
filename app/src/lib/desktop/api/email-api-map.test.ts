@@ -42,6 +42,14 @@ describe("mapEmailApiToWorker", () => {
       "/console/sending-onboard",
     );
     assert.equal(
+      mapEmailApiToWorker("/api/email/email-routing/addresses"),
+      "/console/email-routing/addresses",
+    );
+    assert.equal(
+      mapEmailApiToWorker("/api/email/email-routing/addresses/abc123"),
+      "/console/email-routing/addresses/abc123",
+    );
+    assert.equal(
       mapEmailApiToWorker("/api/email/config"),
       "/console/mailbox/config",
     );

@@ -3,7 +3,7 @@ import { isScaleApiRequest } from "./scale-origin";
 const SCALE_UI_GET_PATHS = new Set([
   "/scale",
   "/scale/overview",
-  "/scale/audience",
+  "/scale/subscribers",
   "/scale/campaigns",
   "/scale/campaigns/sent",
   "/scale/campaigns/in-progress",

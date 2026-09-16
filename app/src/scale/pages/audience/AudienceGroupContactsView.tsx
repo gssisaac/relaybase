@@ -1,11 +1,17 @@
 "use client";
 
-import { Plus, Users } from "lucide-react";
-import { useState } from "react";
+import { MoreHorizontal, Plus, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -14,16 +20,18 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useVerifiedAccounts } from "@/lib/scale/VerifiedAccountsContext";
 import {
   clearAudienceGroupDetailCache,
   useAudienceGroupDetail,
 } from "@/scale/pages/audience/AudienceGroupDetailContext";
 import { audienceContactDisplayName } from "@/lib/audience-display";
 import { ScaleApiError, scaleAudienceApi } from "@/lib/scale/audience-api";
+import { AddVerifiedAccountDialog } from "@/scale/components/verified-accounts/AddVerifiedAccountDialog";
+import { VerificationPendingDialog } from "@/scale/components/verified-accounts/VerificationPendingDialog";
+import { VerificationStatusBadge } from "@/scale/components/verified-accounts/VerificationStatusBadge";
+import { VerifiedAccountsQuotaCard } from "@/scale/components/verified-accounts/VerifiedAccountsQuotaCard";
 
 import { cn } from "@/lib/utils";
 
@@ -51,41 +59,40 @@ function friendlyCrmError(e: unknown, fallback: string): string {
 
 export function AudienceGroupContactsView() {
   const { groupId, detail, refresh } = useAudienceGroupDetail();
-  const [addOpen, setAddOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactName, setContactName] = useState("");
+  const verifiedStore = useVerifiedAccounts();
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [pendingOpen, setPendingOpen] = useState(false);
   const [unsubConfirm, setUnsubConfirm] = useState<{ contactId: string; email: string } | null>(
     null,
   );
   const [unsubSubmitting, setUnsubSubmitting] = useState(false);
 
-  if (!detail) return null;
+  const contacts = detail?.contacts ?? [];
+  const group = detail?.group;
 
-  const contacts = detail.contacts;
-  const group = detail.group;
+  const verificationCounts = useMemo(
+    () => verifiedStore.countsForEmails(contacts.map((c) => c.email)),
+    [contacts, verifiedStore, verifiedStore.lastRefreshedAt],
+  );
 
-  async function addContact() {
-    setSaving(true);
-    try {
-      const data = await scaleAudienceApi.addContact(groupId, {
-        email: contactEmail,
-        name: contactName || undefined,
-      });
-      setContactEmail("");
-      setContactName("");
-      setAddOpen(false);
-      toast.success(`Added ${data.contact.email}`);
-      clearAudienceGroupDetailCache("", groupId);
-      await refresh(true);
-    } catch (e) {
-      toast.error(friendlyCrmError(e, "Failed to add contact"));
-    } finally {
-      setSaving(false);
+  useEffect(() => {
+    for (const c of contacts) {
+      const status = verifiedStore.statusForEmail(c.email);
+      if (status === "pending") {
+        verifiedStore.startPolling(c.email, () => {
+          void refresh(true);
+        });
+      }
     }
-  }
+  }, [contacts, verifiedStore, refresh]);
 
-  async function setSendStatus(contactId: string, sendStatus: "active" | "unsubscribed", email: string) {
+  if (!detail || !group) return null;
+
+  async function setSendStatus(
+    contactId: string,
+    sendStatus: "active" | "unsubscribed",
+    email: string,
+  ) {
     try {
       await scaleAudienceApi.updateContactSendStatus(groupId, contactId, sendStatus);
       toast.success(
@@ -96,7 +103,7 @@ export function AudienceGroupContactsView() {
       clearAudienceGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
-      toast.error(friendlyCrmError(e, "Failed to update contact"));
+      toast.error(friendlyCrmError(e, "Failed to update account"));
     }
   }
 
@@ -118,25 +125,46 @@ export function AudienceGroupContactsView() {
       clearAudienceGroupDetailCache("", groupId);
       await refresh(true);
     } catch (e) {
-      toast.error(friendlyCrmError(e, "Failed to remove contact"));
+      toast.error(friendlyCrmError(e, "Failed to remove account"));
+    }
+  }
+
+  async function startVerification(email: string) {
+    try {
+      const status = await verifiedStore.requestCloudflareVerification(email);
+      if (status === "verified") {
+        toast.success(`${email} is verified`);
+      } else {
+        setPendingEmail(email);
+        setPendingOpen(true);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not start verification");
     }
   }
 
   return (
     <div className="space-y-4">
+      <VerifiedAccountsQuotaCard />
+
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Audience group</CardTitle>
+          <CardTitle className="text-sm">Group</CardTitle>
           <CardDescription>
-            Contacts live here. Unsubscribe status is shared with linked campaigns — remove
-            deletes the contact entirely.
+            Subscribers in this group. Cloudflare verification unlocks quota-free sending to that
+            address.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{group.domain}</p>
             <p className="truncate text-xs text-muted-foreground">
-              {contacts.length.toLocaleString()} contact{contacts.length === 1 ? "" : "s"}
+              {contacts.length.toLocaleString()} account{contacts.length === 1 ? "" : "s"}
+              {" · "}
+              {verificationCounts.verified} verified
+              {verificationCounts.pending > 0
+                ? ` · ${verificationCounts.pending} pending`
+                : ""}
               {group.dataSource
                 ? group.cronEnabled
                   ? " · Synced · scheduled"
@@ -144,141 +172,160 @@ export function AudienceGroupContactsView() {
                 : " · Manual"}
             </p>
           </div>
+          {verifiedStore.destinationError ? (
+            <p className="text-xs text-destructive">{verifiedStore.destinationError}</p>
+          ) : null}
         </CardContent>
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold">Contacts</h2>
+          <h2 className="text-sm font-semibold">Subscribers</h2>
           <p className="text-xs text-muted-foreground">
-            {contacts.length.toLocaleString()} contact{contacts.length === 1 ? "" : "s"}.
+            {verificationCounts.verified} of {verificationCounts.total} verified with Cloudflare.
           </p>
         </div>
-        <Dialog
-          open={addOpen}
-          onOpenChange={(open) => {
-            setAddOpen(open);
-            if (!open) {
-              setContactEmail("");
-              setContactName("");
-            }
+        <AddVerifiedAccountDialog
+          groupId={groupId}
+          onAdded={() => {
+            clearAudienceGroupDetailCache("", groupId);
+            void refresh(true);
           }}
-        >
-          <DialogTrigger render={<Button size="sm" />}>
-            <Plus className="size-4" />
-            Add contact
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Add contact</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Email</Label>
-                <Input
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Name (optional)</Label>
-                <Input
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                />
-              </div>
-              <Button
-                className="w-full"
-                size="sm"
-                disabled={saving || !contactEmail.trim()}
-                onClick={() => void addContact()}
-              >
-                {saving ? "Adding…" : "Add"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+          trigger={
+            <Button size="sm">
+              <Plus className="size-4" />
+              Add verified account
+            </Button>
+          }
+        />
       </div>
 
       {contacts.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Users className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">No contacts yet</p>
+            <p className="text-sm font-medium">No accounts yet</p>
             <p className="text-xs text-muted-foreground">
-              Add contacts manually, or sync a data source from Settings.
+              Add a verified account to start sending without daily quota limits.
             </p>
-            <Button size="sm" className="mt-2" onClick={() => setAddOpen(true)}>
-              Add contact
-            </Button>
+            <AddVerifiedAccountDialog
+              groupId={groupId}
+              onAdded={() => {
+                clearAudienceGroupDetailCache("", groupId);
+                void refresh(true);
+              }}
+              trigger={
+                <Button size="sm" className="mt-2">
+                  Add verified account
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardContent className="divide-y divide-border p-0">
-            {contacts.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">
-                    {audienceContactDisplayName(c.email, c.name)}
-                  </p>
-                  {c.name ? (
-                    <p className="truncate text-xs text-muted-foreground">{c.email}</p>
-                  ) : null}
+            {contacts.map((c) => {
+              const verification = verifiedStore.statusForEmail(c.email);
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">
+                      {audienceContactDisplayName(c.email, c.name)}
+                    </p>
+                    {c.name ? (
+                      <p className="truncate text-xs text-muted-foreground">{c.email}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <VerificationStatusBadge status={verification} />
+                    <SendStatusBadge status={c.sendStatus ?? "active"} />
+                    {verification !== "verified" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          if (verification === "pending") {
+                            setPendingEmail(c.email);
+                            setPendingOpen(true);
+                          } else {
+                            void startVerification(c.email);
+                          }
+                        }}
+                      >
+                        {verification === "pending" ? "Pending…" : "Verify"}
+                      </Button>
+                    ) : null}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="text-muted-foreground"
+                            aria-label={`More actions for ${c.email}`}
+                          />
+                        }
+                      >
+                        <MoreHorizontal className="size-3.5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-44">
+                        {(c.sendStatus ?? "active") === "active" ? (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              setUnsubConfirm({ contactId: c.id, email: c.email })
+                            }
+                          >
+                            Unsubscribe
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={() => void setSendStatus(c.id, "active", c.email)}
+                          >
+                            Resubscribe
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => void removeContact(c.id, c.email)}
+                        >
+                          Remove from group
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-                <Badge variant="outline" className="text-[10px] capitalize">
-                  {c.source}
-                </Badge>
-                <SendStatusBadge status={c.sendStatus ?? "active"} />
-                <div className="flex shrink-0 items-center gap-1">
-                  {(c.sendStatus ?? "active") === "active" ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setUnsubConfirm({ contactId: c.id, email: c.email })}
-                    >
-                      Unsubscribe
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => void setSendStatus(c.id, "active", c.email)}
-                    >
-                      Resubscribe
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => void removeContact(c.id, c.email)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}
 
+      <VerificationPendingDialog
+        email={pendingEmail}
+        open={pendingOpen}
+        onOpenChange={setPendingOpen}
+        onVerified={() => {
+          clearAudienceGroupDetailCache("", groupId);
+          void refresh(true);
+        }}
+      />
+
       <Dialog open={Boolean(unsubConfirm)} onOpenChange={(open) => !open && setUnsubConfirm(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Unsubscribe this contact?</DialogTitle>
+            <DialogTitle>Unsubscribe this account?</DialogTitle>
             <DialogDescription>
               {unsubConfirm ? (
                 <>
                   <span className="font-medium text-foreground">{unsubConfirm.email}</span> will be
-                  marked unsubscribed for this audience group. They will be excluded from future
-                  campaigns linked to this group. This does not delete the contact — use Remove if
-                  you want them off the list entirely.
+                  marked unsubscribed for this group. They will be excluded from future campaigns
+                  linked here.
                 </>
               ) : null}
             </DialogDescription>

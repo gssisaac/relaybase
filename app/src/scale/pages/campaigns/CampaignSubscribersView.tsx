@@ -29,7 +29,7 @@ function StatusBadge({ status }: { status: CampaignMemberStatus }) {
 
 export function CampaignSubscribersView() {
   const { campaignId, campaign, audienceMembers, refreshAudience, refresh } = useCampaignDetail();
-  const { audience: audienceHref } = useScalePaths();
+  const { subscribers: subscribersHref } = useScalePaths();
   const [syncing, setSyncing] = useState(false);
 
   if (!campaign) return null;
@@ -39,7 +39,7 @@ export function CampaignSubscribersView() {
     try {
       const result = await scaleApi.syncCampaignAudience(campaignId);
       toast.success(
-        `Recipients refreshed: ${result.contactCount ?? 0} contacts (${result.activeCount ?? 0} active)`,
+        `Subscribers refreshed: ${result.contactCount ?? 0} contacts (${result.activeCount ?? 0} active)`,
       );
       await Promise.all([refreshAudience(), refresh()]);
     } catch (err) {
@@ -51,16 +51,16 @@ export function CampaignSubscribersView() {
 
   const activeCount = audienceMembers.filter((m) => m.status === "active").length;
   const groupId = campaign.audienceGroupId;
-  const groupLabel = campaign.audienceGroupName ?? "Audience group";
+  const groupLabel = campaign.audienceGroupName ?? "Subscriber group";
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Linked audience</CardTitle>
+          <CardTitle className="text-sm">Linked subscriber group</CardTitle>
           <CardDescription>
-            Recipients are resolved from the linked audience group at send time. To unsubscribe a
-            contact, use Audience — not this read-only list.
+            Subscribers are resolved from the linked group at send time. To unsubscribe a contact,
+            use Subscribers — not this read-only list.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
@@ -75,21 +75,21 @@ export function CampaignSubscribersView() {
               </p>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No audience linked.</p>
+            <p className="text-sm text-muted-foreground">No subscriber group linked.</p>
           )}
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
               render={
-                <Link href={groupId ? scaleAudienceDetailHref(groupId) : audienceHref} />
+                <Link href={groupId ? scaleAudienceDetailHref(groupId) : subscribersHref} />
               }
             >
-              Manage audience
+              Manage subscribers
             </Button>
             <Button size="sm" onClick={() => void handleSync()} disabled={syncing || !groupId}>
               <RefreshCw className={cn("size-4", syncing && "animate-spin")} />
-              Refresh recipients
+              Refresh subscribers
             </Button>
           </div>
         </CardContent>
@@ -97,9 +97,9 @@ export function CampaignSubscribersView() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold">Recipients</h2>
+          <h2 className="text-sm font-semibold">Send list</h2>
           <p className="text-xs text-muted-foreground">
-            {activeCount.toLocaleString()} active recipient{activeCount === 1 ? "" : "s"} at send time
+            {activeCount.toLocaleString()} active subscriber{activeCount === 1 ? "" : "s"} at send time
             (unsubscribed and bounced are excluded).
           </p>
         </div>
@@ -109,12 +109,12 @@ export function CampaignSubscribersView() {
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Users className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium">No recipients in linked group</p>
+            <p className="text-sm font-medium">No subscribers in linked group</p>
             <p className="text-xs text-muted-foreground">
-              Add contacts in Audience, then refresh recipients.
+              Add subscribers in Subscribers, then refresh the send list.
             </p>
             <Button size="sm" className="mt-2" onClick={() => void handleSync()} disabled={!groupId || syncing}>
-              Refresh recipients
+              Refresh subscribers
             </Button>
           </CardContent>
         </Card>

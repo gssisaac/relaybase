@@ -108,11 +108,11 @@ export function normalizeEntryPath(path: string): string {
     }
   }
 
-  const scaleAudienceMatch = pathname.match(
-    /^\/scale\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  const scaleSubscribersNested = pathname.match(
+    /^\/scale\/subscribers\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
   );
-  if (scaleAudienceMatch) {
-    let groupId = scaleAudienceMatch[1]!;
+  if (scaleSubscribersNested) {
+    let groupId = scaleSubscribersNested[1]!;
     try {
       groupId = decodeURIComponent(groupId);
     } catch {
@@ -120,11 +120,49 @@ export function normalizeEntryPath(path: string): string {
     }
     const next = new URLSearchParams();
     next.set("id", groupId);
-    const tabSeg = scaleAudienceMatch[2];
+    const tabSeg = scaleSubscribersNested[2];
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/scale/audience?${next.toString()}`;
+    return `/scale/subscribers?${next.toString()}`;
+  }
+
+  const scaleAudienceLegacyNested = pathname.match(
+    /^\/scale\/audience\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  );
+  if (scaleAudienceLegacyNested) {
+    let groupId = scaleAudienceLegacyNested[1]!;
+    try {
+      groupId = decodeURIComponent(groupId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", groupId);
+    const tabSeg = scaleAudienceLegacyNested[2];
+    if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
+      next.set("tab", tabSeg);
+    }
+    return `/scale/subscribers?${next.toString()}`;
+  }
+
+  const subscribersMatch = pathname.match(
+    /^\/subscribers\/([^/]+)(?:\/(contacts|history|settings))?\/?$/,
+  );
+  if (subscribersMatch) {
+    let groupId = subscribersMatch[1]!;
+    try {
+      groupId = decodeURIComponent(groupId);
+    } catch {
+      /* keep raw */
+    }
+    const next = new URLSearchParams();
+    next.set("id", groupId);
+    const tabSeg = subscribersMatch[2];
+    if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
+      next.set("tab", tabSeg);
+    }
+    return `/scale/subscribers?${next.toString()}`;
   }
 
   const audienceMatch = pathname.match(
@@ -143,12 +181,17 @@ export function normalizeEntryPath(path: string): string {
     if (tabSeg === "contacts" || tabSeg === "history" || tabSeg === "settings") {
       next.set("tab", tabSeg);
     }
-    return `/scale/audience?${next.toString()}`;
+    return `/scale/subscribers?${next.toString()}`;
   }
 
-  if (pathname === "/audience" || pathname.startsWith("/audience/")) {
+  if (
+    pathname === "/subscribers" ||
+    pathname.startsWith("/subscribers/") ||
+    pathname === "/audience" ||
+    pathname.startsWith("/audience/")
+  ) {
     const qs = params.toString();
-    return qs ? `/scale/audience?${qs}` : "/scale/audience";
+    return qs ? `/scale/subscribers?${qs}` : "/scale/subscribers";
   }
 
   if (pathname === "/broadcasts/new") {

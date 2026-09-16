@@ -16,7 +16,7 @@ import { useDesktopChrome } from "@/lib/desktop/shell";
 import { cn } from "@/lib/utils";
 
 const NAV: { id: AudienceDetailTab; label: string; icon: LucideIcon }[] = [
-  { id: "contacts", label: "Contacts", icon: Users },
+  { id: "contacts", label: "Subscribers", icon: Users },
   { id: "history", label: "History", icon: History },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -59,7 +59,7 @@ export function AudienceGroupDetailShell({
             <h1 className="min-w-0 shrink truncate text-sm font-semibold">{title}</h1>
             <nav
               className="flex shrink-0 gap-0.5 overflow-x-auto"
-              aria-label="Audience group"
+              aria-label="Subscriber group"
             >
               {NAV.map((item) => {
                 const href = audienceDetailHref(groupId, item.id);

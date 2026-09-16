@@ -12,7 +12,7 @@ function pinGroups(
     if (!trimmed || byId.has(trimmed)) continue;
     pinned.push({
       id: trimmed,
-      name: "Audience group",
+      name: "Subscriber group",
       domain: "",
       contactCount: 0,
       createdAt: "",

@@ -170,7 +170,7 @@ export function CampaignsListView() {
     scaleAudienceApi
       .listGroups()
       .then(({ groups }) => setAudienceGroups(groups))
-      .catch(() => toast.error("Could not load audience groups"))
+      .catch(() => toast.error("Could not load subscriber groups"))
       .finally(() => setAudienceLoading(false));
   }, [createOpen]);
 
@@ -219,7 +219,7 @@ export function CampaignsListView() {
       return;
     }
     if (!audienceGroupId || !domain) {
-      setCreateError("Select an audience group");
+      setCreateError("Select a subscriber group");
       return;
     }
     setCreating(true);
@@ -291,7 +291,7 @@ export function CampaignsListView() {
           <DialogHeader>
             <DialogTitle>New campaign</DialogTitle>
             <DialogDescription>
-              Choose an audience group — sending domain comes from the group.
+              Choose a subscriber group — sending domain comes from the group.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -307,7 +307,7 @@ export function CampaignsListView() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="campaign-audience">Audience group</Label>
+              <Label htmlFor="campaign-audience">Subscriber group</Label>
               <AudienceGroupCmdDropdown
                 triggerId="campaign-audience"
                 groups={audienceGroups}

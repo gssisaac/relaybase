@@ -155,7 +155,7 @@ export function CampaignPublishView() {
     scaleAudienceApi
       .listGroups()
       .then(({ groups }) => setAudienceGroups(groups))
-      .catch(() => toast.error("Could not load audience groups"))
+      .catch(() => toast.error("Could not load subscriber groups"))
       .finally(() => setAudienceGroupsLoading(false));
   }, [campaign, sendDomain]);
 
@@ -222,7 +222,7 @@ export function CampaignPublishView() {
       setCampaign(updated);
       await refreshAudience();
       closeAudienceContactsDialog();
-      toast.success("Audience updated for this campaign");
+      toast.success("Subscriber group updated for this campaign");
     } catch (err) {
       toast.error(err instanceof ScaleApiError ? err.message : "Could not update audience");
     } finally {
@@ -237,7 +237,7 @@ export function CampaignPublishView() {
         (campaign.audienceGroupId === dialogGroupId
           ? {
               id: dialogGroupId,
-              name: campaign.audienceGroupName ?? "Audience group",
+              name: campaign.audienceGroupName ?? "Subscriber group",
               domain: campaign.audienceGroupDomain ?? sendDomain ?? "",
               contactCount: campaign.audienceContactCount ?? dialogContacts.length,
               createdAt: "",
@@ -364,17 +364,17 @@ export function CampaignPublishView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Audience</CardTitle>
+          <CardTitle className="text-sm">Subscriber group</CardTitle>
           <CardDescription>
             {canChangeAudience
               ? "Choose who receives this campaign. Only groups on the same sending domain are listed."
-              : "Linked audience at send time (unsubscribed and bounced excluded)."}
+              : "Linked subscriber group at send time (unsubscribed and bounced excluded)."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {canChangeAudience ? (
             <div className="space-y-1.5">
-              <Label htmlFor="publish-audience">Audience group</Label>
+              <Label htmlFor="publish-audience">Subscriber group</Label>
               <div className="flex max-w-lg flex-wrap items-center gap-2">
                 <AudienceGroupCmdDropdown
                   triggerId="publish-audience"
@@ -404,7 +404,7 @@ export function CampaignPublishView() {
                 </div>
               {!sendDomain ? (
                 <p className="text-sm text-muted-foreground">
-                  Pick an audience group below, or set a sender on Settings to narrow the list to
+                  Pick a subscriber group below, or set a sender on Settings to narrow the list to
                   one domain.
                 </p>
               ) : null}
@@ -413,7 +413,7 @@ export function CampaignPublishView() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">
-                  {campaign.audienceGroupName ?? "Audience group"}
+                  {campaign.audienceGroupName ?? "Subscriber group"}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {campaign.audienceGroupDomain ?? sendDomain ?? "—"}
@@ -440,7 +440,7 @@ export function CampaignPublishView() {
                       }
                     >
                       <ExternalLink className="size-3.5" />
-                      Open in Audience
+                      Open in Subscribers
                     </Button>
                   </>
                 ) : null}
@@ -514,12 +514,12 @@ export function CampaignPublishView() {
           ) : null}
           {editable && campaign.subject.trim() && !hasLinkedAudience ? (
             <p className="w-full text-xs text-muted-foreground">
-              Select an audience group above before sending.
+              Select a subscriber group above before sending.
             </p>
           ) : null}
           {editable && hasLinkedAudience && recipientCount === 0 ? (
             <p className="w-full text-xs text-muted-foreground">
-              Linked audience has no active contacts — add subscribers in Audience or pick another
+              Linked subscriber group has no active contacts — add subscribers in Subscribers or pick another
               group.
             </p>
           ) : null}
@@ -558,17 +558,17 @@ export function CampaignPublishView() {
           <DialogHeader>
             <DialogTitle>
               {audienceContactsDialog?.mode === "confirm"
-                ? "Switch audience for this campaign?"
+                ? "Switch subscriber group for this campaign?"
                 : dialogGroup
                   ? `Contacts in “${dialogGroup.name}”`
-                  : "Audience contacts"}
+                  : "Group subscribers"}
             </DialogTitle>
             <DialogDescription>
               {dialogGroup
                 ? audienceContactsDialog?.mode === "confirm"
                   ? `Send to “${dialogGroup.name}” on ${dialogGroup.domain} — ${dialogGroup.contactCount.toLocaleString()} contacts in the group. Review the list before confirming.`
-                  : `${recipientCount.toLocaleString()} active recipient${recipientCount === 1 ? "" : "s"} at send time (unsubscribed excluded).`
-                : "Review contacts in this audience group."}
+                  : `${recipientCount.toLocaleString()} active subscriber${recipientCount === 1 ? "" : "s"} at send time (unsubscribed excluded).`
+                : "Review subscribers in this group."}
             </DialogDescription>
           </DialogHeader>
           <AudienceContactsList contacts={dialogContacts} loading={dialogContactsLoading} />
@@ -588,7 +588,7 @@ export function CampaignPublishView() {
                   disabled={savingAudience || dialogContactsLoading}
                   onClick={() => void confirmAudienceChange()}
                 >
-                  {savingAudience ? "Saving…" : "Use this audience"}
+                  {savingAudience ? "Saving…" : "Use this group"}
                 </Button>
               </>
             ) : (
@@ -600,7 +600,7 @@ export function CampaignPublishView() {
                     nativeButton={false}
                     render={<Link href={scaleAudienceDetailHref(dialogGroupId)} />}
                   >
-                    Open in Audience
+                    Open in Subscribers
                   </Button>
                 ) : null}
                 <Button size="sm" onClick={() => closeAudienceContactsDialog()}>

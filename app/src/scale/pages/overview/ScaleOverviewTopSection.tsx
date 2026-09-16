@@ -18,7 +18,7 @@ type ScaleOverviewPaths = {
   templates: string;
   triggers: string;
   campaigns: string;
-  audience: string;
+  subscribers: string;
   templateCount: number;
 };
 
@@ -67,9 +67,9 @@ export function ScaleOverviewTopSection({
           }
         />
         <OverviewKpiCard
-          href={paths.audience}
+          href={paths.subscribers}
           icon={Users}
-          label="Audience"
+          label="Subscribers"
           value={formatOverviewCompact(summary.totalContacts)}
           hint={`${summary.deliverableRate}% deliverable contacts`}
         />
@@ -108,7 +108,7 @@ export function ScaleOverviewTopSection({
 
         <Card size="sm">
           <CardHeader className="gap-0.5 pb-1">
-            <CardTitle className="text-sm">Audience health</CardTitle>
+            <CardTitle className="text-sm">Subscriber health</CardTitle>
             <CardDescription className="text-xs">Active, unsubscribed, bounced</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">

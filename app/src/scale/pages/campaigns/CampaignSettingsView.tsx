@@ -122,7 +122,7 @@ export function CampaignSettingsView() {
     }
     if (audienceDomain && resolvedDomain !== audienceDomain) {
       setFromEmailError(
-        `Audience is on ${campaign?.audienceGroupDomain}. Pick a sender on that domain.`,
+        `Subscriber group is on ${campaign?.audienceGroupDomain}. Pick a sender on that domain.`,
       );
       return;
     }
@@ -194,15 +194,15 @@ export function CampaignSettingsView() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Audience</CardTitle>
+          <CardTitle className="text-sm">Subscriber group</CardTitle>
           <CardDescription>
-            Contacts and data sources are managed in Audience. Send eligibility is on the Audience tab.
+            Contacts and data sources are managed in Subscribers. Send eligibility is on the Subscribers tab.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">
-              {campaign.audienceGroupName ?? "No audience linked"}
+              {campaign.audienceGroupName ?? "No subscriber group linked"}
             </p>
             {campaign.audienceGroupDomain ? (
               <p className="truncate text-xs text-muted-foreground">{campaign.audienceGroupDomain}</p>
@@ -214,7 +214,7 @@ export function CampaignSettingsView() {
               variant="outline"
               render={<Link href={scaleAudienceDetailHref(campaign.audienceGroupId)} />}
             >
-              Open audience
+              Open subscribers
             </Button>
           ) : null}
         </CardContent>
@@ -265,7 +265,7 @@ export function CampaignSettingsView() {
             )}
             {domainMismatch ? (
               <p className="text-xs text-destructive">
-                Audience is on {campaign.audienceGroupDomain}. Pick a sender on that domain.
+                Subscriber group is on {campaign.audienceGroupDomain}. Pick a sender on that domain.
               </p>
             ) : null}
             {fromEmailError ? <p className="text-xs text-destructive">{fromEmailError}</p> : null}

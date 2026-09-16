@@ -34,7 +34,7 @@ function AudienceGroupNotFound() {
         </div>
       </DesktopTitleBar>
       <div className={dashboardScrollBodyClassName("text-sm text-muted-foreground")}>
-        This audience group does not exist or was removed.
+        This subscriber group does not exist or was removed.
       </div>
     </div>
   );

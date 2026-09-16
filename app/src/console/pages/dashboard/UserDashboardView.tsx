@@ -236,7 +236,7 @@ export function UserDashboardView() {
                 card.path === "broadcasts"
                   ? "/scale/campaigns"
                   : card.path === "audience"
-                    ? "/scale/audience"
+                    ? "/scale/subscribers"
                     : paths[card.path];
               return (
                 <Card

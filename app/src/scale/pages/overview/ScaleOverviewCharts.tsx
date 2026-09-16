@@ -86,7 +86,7 @@ export function ScaleOverviewAudienceChart({ data }: { data: ScaleOverview["char
   }));
 
   if (chartData.every((row) => row.count === 0)) {
-    return <p className="text-xs text-muted-foreground">Add audience groups to see contact health.</p>;
+    return <p className="text-xs text-muted-foreground">Add subscriber groups to see contact health.</p>;
   }
 
   return (

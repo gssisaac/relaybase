@@ -286,7 +286,7 @@ export function AudienceGroupSettingsView() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Sending domain from your Worker catalog (same as campaign create). Recipient
+              Sending domain from your Worker catalog (same as campaign create). Subscriber
               contact addresses are unrelated.
             </p>
           </div>
@@ -485,12 +485,12 @@ export function AudienceGroupSettingsView() {
             size="sm"
             onClick={() => setDeleteOpen(true)}
           >
-            Delete audience group
+            Delete subscriber group
           </Button>
           <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <DialogContent className="sm:max-w-md" showCloseButton={!deleting}>
               <DialogHeader>
-                <DialogTitle>Delete audience group</DialogTitle>
+                <DialogTitle>Delete subscriber group</DialogTitle>
                 <DialogDescription>
                   Delete{" "}
                   <span className="font-medium text-foreground">

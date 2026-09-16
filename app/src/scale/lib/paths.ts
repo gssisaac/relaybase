@@ -17,9 +17,12 @@ export type AudienceDetailTab = "contacts" | "history" | "settings";
 
 export type CampaignsSection = "list" | "sent" | "in-progress";
 
+/** Scale UI route for subscriber groups (list + detail query routes). */
+export const SCALE_SUBSCRIBERS_PATH = "/scale/subscribers";
+
 export function useScalePaths() {
   const base = "/scale";
-  const audience = "/scale/audience";
+  const subscribers = SCALE_SUBSCRIBERS_PATH;
   const campaigns = "/scale/campaigns";
   const campaignsSent = "/scale/campaigns/sent";
   const campaignsInProgress = "/scale/campaigns/in-progress";
@@ -36,12 +39,12 @@ export function useScalePaths() {
     { href: triggers, label: "Triggers", icon: Zap },
     { href: campaigns, label: "Campaigns", icon: Mail },
     { href: schedule, label: "Schedule", icon: CalendarDays },
-    { href: audience, label: "Audience", icon: Users },
+    { href: subscribers, label: "Subscribers", icon: Users },
   ];
 
   return {
     base,
-    audience,
+    subscribers,
     campaigns,
     campaignsSent,
     campaignsInProgress,
@@ -79,7 +82,7 @@ export function scaleAudienceDetailHref(
   const params = new URLSearchParams();
   params.set("id", groupId.trim());
   if (tab !== "contacts") params.set("tab", tab);
-  return `/scale/audience?${params.toString()}`;
+  return `${SCALE_SUBSCRIBERS_PATH}?${params.toString()}`;
 }
 
 export function audienceDetailFromSearch(searchParams: {

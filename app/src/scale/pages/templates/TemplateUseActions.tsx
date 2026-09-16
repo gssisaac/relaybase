@@ -167,7 +167,7 @@ export function TemplateUseActions() {
       return;
     }
     if (!audienceGroupId || !domain) {
-      setFormError("Select an audience group");
+      setFormError("Select a subscriber group");
       return;
     }
     if (campaignMode === "schedule") {
@@ -256,7 +256,7 @@ export function TemplateUseActions() {
     const from = testFromEmail?.trim() ?? "";
     const to = testToEmail.trim();
     if (!audienceGroupId || !domain) {
-      setFormError("Select an audience group");
+      setFormError("Select a subscriber group");
       return;
     }
     if (!from.includes("@")) {
@@ -265,7 +265,7 @@ export function TemplateUseActions() {
     }
     const fromDomain = from.slice(from.indexOf("@") + 1).toLowerCase();
     if (fromDomain !== domain) {
-      setFormError(`Sender must be on ${domain} (same as the audience group)`);
+      setFormError(`Sender must be on ${domain} (same as the subscriber group)`);
       return;
     }
     if (!to.includes("@")) {
@@ -371,7 +371,7 @@ export function TemplateUseActions() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="template-test-audience">Audience group</Label>
+              <Label htmlFor="template-test-audience">Subscriber group</Label>
               <AudienceGroupCmdDropdown
                 triggerId="template-test-audience"
                 groups={audienceGroups}
@@ -390,7 +390,7 @@ export function TemplateUseActions() {
               />
               {testAudienceDomain ? (
                 <p className="text-xs text-muted-foreground">
-                  Senders on {testAudienceDomain} (matches the audience group domain).
+                  Senders on {testAudienceDomain} (matches the subscriber group domain).
                 </p>
               ) : null}
             </div>
@@ -446,7 +446,7 @@ export function TemplateUseActions() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="template-campaign-audience">Audience group</Label>
+              <Label htmlFor="template-campaign-audience">Subscriber group</Label>
               <AudienceGroupCmdDropdown
                 triggerId="template-campaign-audience"
                 groups={audienceGroups}

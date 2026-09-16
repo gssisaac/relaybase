@@ -22,7 +22,7 @@ export const BROADCAST_MERGE_TAGS: BroadcastMergeTag[] = [
     id: "contact-name",
     token: "{{contact.name}}",
     label: "Contact name",
-    description: "Recipient display name from the audience group.",
+    description: "Subscriber display name from the subscriber group.",
     category: "contact",
     example: "Alex Kim",
     fallbackHint: "Uses the email local-part when name is empty.",

@@ -171,7 +171,7 @@ export function CampaignInProgressView() {
                 <CardHeader>
                   <CardTitle className="text-sm">Scheduled</CardTitle>
                   <CardDescription>
-                    Upcoming dispatches. Recipients resolve from the linked audience at send time.
+                    Upcoming dispatches. Subscribers resolve from the linked group at send time.
                   </CardDescription>
                 </CardHeader>
                 {data.scheduled.length === 0 ? (

@@ -18,7 +18,7 @@ type AudienceRouteContextValue = {
   audienceDetailFromSearch: typeof defaultDetailFromSearch;
 };
 
-const defaultRoot = "/scale/audience";
+const defaultRoot = "/scale/subscribers";
 
 function makeDetailHref(root: string, groupId: string, tab: AudienceDetailTab = "contacts") {
   const params = new URLSearchParams();

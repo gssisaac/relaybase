@@ -16,7 +16,7 @@ describe("modeFromPathname", () => {
   });
 
   it("treats /scale as scale mode", () => {
-    assert.equal(modeFromPathname("/scale/audience"), "scale");
+    assert.equal(modeFromPathname("/scale/subscribers"), "scale");
     assert.equal(modeFromPathname("/scale/campaigns"), "scale");
   });
 
@@ -78,10 +78,10 @@ describe("normalizeEntryPath", () => {
     );
   });
 
-  it("rewrites audience and broadcast path details into ?id=&tab=", () => {
+  it("rewrites subscriber and broadcast path details into ?id=&tab=", () => {
     assert.equal(
       normalizeEntryPath("/audience/grp1/settings"),
-      "/scale/audience?id=grp1&tab=settings",
+      "/scale/subscribers?id=grp1&tab=settings",
     );
     assert.equal(
       normalizeEntryPath("/broadcasts/bc1/progress"),

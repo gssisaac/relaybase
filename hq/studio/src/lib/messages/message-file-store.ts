@@ -34,10 +34,16 @@ function messageFilePath(dir: string, id: string): string {
 
 function readMessageFile(filePath: string): Message | null {
   try {
+    if (!fs.existsSync(filePath)) return null;
     const parsed = parseYaml(fs.readFileSync(filePath, "utf8"));
     if (!isMessageRecord(parsed)) return null;
     return normalizeMessage(parsed);
   } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? (err as NodeJS.ErrnoException).code
+        : undefined;
+    if (code === "ENOENT") return null;
     console.error(`[message-store] Failed to parse ${filePath}:`, err);
     return null;
   }

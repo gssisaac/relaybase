@@ -6,6 +6,7 @@ import { normalizeTriggerStats } from "../lib/triggers/stats";
 import { newId, newToken } from "../lib/shared/ids";
 import { getBuiltinTemplates } from "../lib/templates/builtin-templates";
 import { ensureDevScheduleFixtures } from "../lib/newsletters/dev-schedule-fixtures";
+import { ensureOwnerMessageFiles } from "../lib/messages/ensure-owner-message-files";
 import { messageFileStore } from "../lib/messages/message-file-store";
 import { templateCatalogStore } from "../lib/templates/template-catalog-store";
 import { ensureComplianceIdentitiesFromLegacy } from "../lib/compliance/identity";
@@ -282,8 +283,10 @@ function readStore(): StudioDataStore {
       delete (parsed as { templates?: Template[] }).templates;
       migratedLegacyTemplates = true;
     }
-    const store = hydrateTemplates(normalizeStore(parsed));
-    if (migratedLegacyTemplates || ensureDevScheduleFixtures(store)) {
+    const normalized = normalizeStore(parsed);
+    const repairedOwnerMessages = ensureOwnerMessageFiles(normalized);
+    const store = hydrateTemplates(normalized);
+    if (migratedLegacyTemplates || ensureDevScheduleFixtures(store) || repairedOwnerMessages) {
       writeStore(store);
     }
     return store;
